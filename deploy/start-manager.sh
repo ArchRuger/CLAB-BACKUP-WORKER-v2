@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# One host-side entry point for fresh setup and upgrades. Existing keys are retained.
+set -euo pipefail
+[[ $EUID -eq 0 && $# -le 1 ]] || { echo 'Usage: sudo bash deploy/start-manager.sh [discovery-public-key.pub]' >&2; exit 1; }
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(dirname -- "$script_dir")
+command -v docker >/dev/null || { echo 'Install Docker first; see FRESH-VM-GUIDE.md.' >&2; exit 1; }
+docker compose version >/dev/null
+docker info >/dev/null
+if [[ $# -eq 1 ]]; then
+  # Installing with a key is for a fresh account only; rotation remains explicit.
+  if id clab-discovery >/dev/null 2>&1; then
+    echo 'Discovery account already exists. Rerun without the public-key argument to retain its key.' >&2
+    exit 1
+  fi
+  bash "$script_dir/setup-discovery.sh" "$1"
+else
+  if ! id clab-discovery >/dev/null 2>&1; then
+    echo 'First launch requires your discovery public key: sudo bash deploy/start-manager.sh /absolute/path/to/key.pub' >&2
+    exit 1
+  fi
+  bash "$script_dir/setup-discovery.sh" --update-helper
+fi
+# Fail before recreation if the installed helper cannot return file-transfer data.
+# Only the version is printed: its response may contain inventory credentials.
+expected=$(tr -d '\r\n' < "$repo_dir/clab-backup-ui/VERSION")
+/usr/local/sbin/clab-manager-inspect | /usr/bin/python3 "$script_dir/verify-helper.py" "$expected"
+bash "$script_dir/setup-vm.sh"
+cd -- "$repo_dir"
+docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
+# Avoid starting a second manager over data owned by a docker-run installation.
+running_containers=$(docker ps -q)
+for container in $running_containers; do
+  uses_data=$(docker inspect --format '{{json .Mounts}}' "$container" | /usr/bin/python3 -c '
+import json, sys
+mounts = json.load(sys.stdin)
+print("yes" if any(m.get("Source", "").rstrip("/") == "/srv/containerlab-node-manager/data" for m in mounts) else "no")
+')
+  [[ "$uses_data" == yes ]] || continue
+  project=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$container")
+  service=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' "$container")
+  if [[ "$project" != containerlab-node-manager || "$service" != backup-ui ]]; then
+    echo 'Another running container uses the manager data. Follow the Docker-run migration in FRESH-VM-GUIDE.md before starting Compose.' >&2
+    exit 1
+  fi
+done
+docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
+docker compose -f clab-backup-ui/compose.yml ps
+echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery key are retained.'
+echo 'View the access token: sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui'

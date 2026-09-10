@@ -42,10 +42,20 @@ class VMFilesTests(unittest.TestCase):
     host = discovery_tests.DiscoveryTests.host
     register = discovery_tests.DiscoveryTests.register
 
-    def poll(self, value=None):
+    def confirm_import(self, name='training'):
+        preview = self.client.post('/api/discovery/import-preview', headers=self.auth, json={'name': name})
+        self.assertEqual(preview.status_code, 200, preview.text)
+        result = self.client.post('/api/discovery/import', headers=self.auth, json={'name': name, 'token': preview.json()['token']})
+        self.assertEqual(result.status_code, 200, result.text)
+        return result.json()
+
+    def poll(self, value=None, confirm=True):
         value = envelope() if value is None else value
         with patch('app.discovery.inspect_host', return_value=(parse_snapshot(json.dumps(value).encode()), 'SHA256:fixture')):
-            return self.service.refresh()
+            result = self.service.refresh()
+            if confirm:
+                for name in list(result.get('pending_imports', {})): self.confirm_import(name)
+            return self.service.public()
 
     def sync(self, lab, value):
         with patch('app.discovery.inspect_host', return_value=(parse_snapshot(json.dumps(value).encode()), 'SHA256:fixture')):
@@ -185,23 +195,21 @@ class VMFilesTests(unittest.TestCase):
     def test_import_action_retries_before_manual_fallback(self):
         self.host()
         with patch('app.discovery.inspect_host', return_value=(parse_snapshot(json.dumps(envelope(definition=None)).encode()), 'SHA256:fixture')):
-            result = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'training'})
+            result = self.client.post('/api/discovery/import-preview', headers=self.auth, json={'name': 'training'})
         self.assertEqual(result.status_code, 409)
         self.assertIn('Original lab YAML', result.text)
         with patch('app.discovery.inspect_host', return_value=(parse_snapshot(json.dumps(envelope()).encode()), 'SHA256:fixture')):
-            result = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'training'})
-            again = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'training'})
-        self.assertEqual(result.status_code, 200, result.text)
-        self.assertEqual(result.json()['id'], again.json()['id'])
+            result = self.confirm_import()
         self.assertEqual(len(self.store.state['labs']), 1)
-        self.assertEqual(self.client.post('/api/discovery/import', json={'name': 'training'}).status_code, 401)
+        self.assertEqual(self.client.post('/api/discovery/import-preview', json={'name': 'training'}).status_code, 401)
 
     def test_legacy_helper_import_reports_upgrade(self):
         self.host()
         with patch('app.discovery.inspect_host', return_value=(parse_snapshot(response()), 'SHA256:fixture')):
-            result = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'training'})
+            result = self.client.post('/api/discovery/import-preview', headers=self.auth, json={'name': 'training'})
         self.assertEqual(result.status_code, 409)
-        self.assertIn('Update the installed VM helper', result.text)
+        self.assertIn('start-manager.sh', result.text)
+        self.assertTrue(self.service.public()['helper_update_required'])
 
     def test_file_diagnostics_are_sanitized(self):
         from app.vm_files import source_reports

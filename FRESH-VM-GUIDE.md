@@ -1,4 +1,4 @@
-# Containerlab Node Manager 1.9.1 — a fresh VM to a working lab
+# Containerlab Node Manager 1.10.0 — a fresh VM to a working lab
 
 This guide starts with a fresh **Ubuntu Server 24.04 LTS VM**, a normal user with
 `sudo` access, and an internet connection for installation. Run one manager per
@@ -23,16 +23,16 @@ sudo apt install -y ca-certificates curl git openssh-server python3 sudo
 sudo systemctl enable --now ssh
 mkdir -p "$HOME/projects"
 cd "$HOME/projects"
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.9.1
-cd v1.9.1
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.10.0
+cd v1.10.0
 cat clab-backup-ui/VERSION
 ```
 
-This guide requires **1.9.1** source, including `clab-backup-ui/app/host_files.py`.
-If the clone reports an older version, obtain the 1.9.1 source package or the
+This guide requires **1.10.0** source, including `clab-backup-ui/app/host_files.py`.
+If the clone reports an older version, obtain the 1.10.0 source package or the
 matching release commit before proceeding. Local source delivery does not mean
 the GitHub repository has already been updated. For a delivered ZIP, extract it
-and place its contents in `~/projects/v1.9.1` so that `clab-backup-ui/` and
+and place its contents in `~/projects/v1.10.0` so that `clab-backup-ui/` and
 `deploy/` are directly inside that folder. This is the version-folder convention
 used throughout this guide.
 All later relative paths start at the directory containing `deploy/` and
@@ -168,15 +168,19 @@ permissions private; the setup script still takes the `.pub` file.
 **VM, repository root:**
 
 ```bash
-sudo docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
-sudo docker compose -f clab-backup-ui/compose.yml up -d
-sudo docker compose -f clab-backup-ui/compose.yml ps
+sudo bash deploy/start-manager.sh
 sudo docker compose -f clab-backup-ui/compose.yml exec backup-ui \
   python -c 'from app import __version__; print(__version__)'
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui
 ```
 
-Expect **1.9.1**. The startup log prints the UI access token. To retrieve the
+The launch script refreshes the already configured helper, verifies its protocol
+and version, prepares storage, builds and starts the manager. A helper failure
+stops the launch before recreation. For first setup where step 5 was not run, pass
+your public key: `sudo bash deploy/start-manager.sh "$HOME/clab-manager-discovery.pub"`.
+An existing account uses no argument; it retains its authorized key.
+
+Expect **1.10.0**. The startup log prints the UI access token. To retrieve the
 persisted token directly:
 
 ```bash
@@ -214,7 +218,7 @@ and use it in the browser. Default access is HTTP for the isolated lab network.
 An equivalent **image-only build** from the repository root is:
 
 ```bash
-sudo docker build --pull --no-cache -t clab-backup:1.9.1 ./clab-backup-ui
+sudo docker build --pull --no-cache -t clab-backup:1.10.0 ./clab-backup-ui
 ```
 
 If already inside `clab-backup-ui`, use `.` as the last argument instead. That
@@ -299,16 +303,20 @@ For example, a topology at `/etc/containerlab/BGP_TheoryToPractice/BGP_TheoryToP
 leads to generated files under `/etc/containerlab/BGP_TheoryToPractice/clab-BGP_TheoryToPractice/`.
 
 If a detected lab has not imported, click its sidebar entry to retry automatically.
-Only after a failed attempt does the manual upload form open, with a retry button.
+A successful read opens the import confirmation. Only after a failed attempt does
+the manual upload form open, with a retry button.
 Expand **Discovery file details** to see found, missing or permission-denied paths.
 The general **Import a lab** dialog also offers automatic import when an unimported
 lab has been detected. Never-deployed labs can still be uploaded manually.
 
 Within approximately 30 seconds, or after **Refresh discovery**:
 
-1. A new workspace appears for the deployed lab without uploading files.
-2. The node list shows detected addresses and deployment status.
-3. Topology shows the saved layout if annotations exist, otherwise a simple map.
+1. The detected lab appears as **Ready to import** without uploading files.
+2. Click it to preview the lab name, node/link counts, source paths and warnings.
+   Choose **Import lab** to save the workspace and credentials, or **Cancel** to
+   leave it unsaved. Discovery keeps running while confirmation is pending.
+3. After confirmation, the list shows addresses/status and Topology shows the
+   annotation layout if available, otherwise a simple generated map.
 4. The list and map retain node actions; right-click a map node for SSH, backup
    and details. Unsupported device kinds have no NOS backup adapter.
 
@@ -321,8 +329,10 @@ requirements are separate from the manager installation.
 
 ## 9. Change files, switch labs, and keep your work
 
-- **New deployment:** a valid new lab imports automatically. Schedules start in
-  Manual. Nothing automatically backs up or changes the devices.
+- **New deployment:** files are retrieved automatically, then the lab waits for
+  confirmation. Schedules start in Manual when imported. Nothing automatically
+  backs up or changes the devices. Preview confirmations expire after five minutes;
+  changed files, VM settings or exclusions require a new preview.
 - **Existing workspace:** file/path changes show **Updates available**. Choose
   **Sync from VM** to apply the current definition/layout and add/remove nodes.
   Saved matching-node identity, credentials, profiles, driver choice, backup
@@ -344,7 +354,8 @@ requirements are separate from the manager installation.
 - **Test automatic import again:** uncheck **Keep this lab excluded from automatic
   import** in that dialog, remove it, and click Refresh discovery. Or leave the
   default exclusion enabled and later click **Import again** under its name in
-  the sidebar. A valid deployed lab imports into a new workspace with a new ID;
+  the sidebar. Either path requires a new import confirmation. Cancelling Import
+  again keeps the exclusion. Confirming creates a new workspace with a new ID;
   old custom settings and history are not restored. Exclusions survive restarts.
 - **Deleted/stopped lab:** its workspace, credentials and history remain. Discovery
   only finds deployed containers; it does not scan for never-deployed YAML files.
@@ -392,35 +403,33 @@ any current data as a separate recovery copy, extract the archive under
 the data. Reconfigure the discovery key/account for the new VM; a different VM
 SSH host key needs verification before trusting it in the UI.
 
-### Upgrade an existing installation to 1.9.1
+### Upgrade an existing installation to 1.10.0
 
-For helper-based installations on 1.9.0 or earlier, update both the VM helper
-and manager image. Your SSH key does not change. Keep the original data directory
-and back it up first. Put the new source in `~/projects/v1.9.1` with
-`clab-backup-ui/` and `deploy/` directly inside it, then run:
-
-```bash
-cd "$HOME/projects/v1.9.1"
-sudo bash deploy/setup-discovery.sh --update-helper
-sudo docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
-```
-
-If the existing manager is already managed by this Compose file, recreate it:
+Keep the original data directory and back it up first. Put the new source in
+`~/projects/v1.10.0` with `clab-backup-ui/` and `deploy/` directly inside it.
+Carry forward your previous `.env` or custom UI bind/port settings. For an existing
+Compose installation, use the same entry point as a fresh launch:
 
 ```bash
-sudo docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
+cd "$HOME/projects/v1.10.0"
+sudo bash deploy/start-manager.sh
 ```
 
-If it was launched with `docker run`, skip that command and follow the separate
-container replacement instructions immediately below before starting Compose.
+This updates and verifies the VM helper, retains the existing SSH key/account,
+prepares the persistent data directory, builds `clab-backup:1.10.0`, and recreates
+the Compose service. It verifies the helper version/protocol even when no labs
+are deployed. It prints no file contents or credentials during that check.
+The browser must show v1.10.0. Refresh discovery; existing labs stay saved and new
+labs wait for import confirmation. Existing workspaces still use Sync from VM.
 
-`--update-helper` preserves your existing discovery account and authorized key.
-No new SSH key or data initialization is needed. In the UI select the installed
-helper, refresh discovery, then **Sync from VM** for existing lab workspaces.
-An older inspection-only helper continues to discover nodes but cannot import
-files. In 1.9.1, direct inspection adds SFTP file reads using the same VM account;
-it requires SFTP and read permission on the lab files and their parent directories.
-The restricted `clab-discovery` key must continue using helper mode.
+If you only run `docker build`, host files cannot be updated from that image build.
+Use the launch script for helper-based setup/upgrades. Advanced direct-SFTP users
+can continue building and running Compose manually; their existing VM account
+must have inspection and SFTP file-read permission. The restricted clab-discovery
+key must use helper mode.
+
+If a running docker-run manager uses the same data, the launch script stops after
+building and asks you to complete the following migration. It does not remove it.
 
 **If you launched the old standalone container with `docker run`**, it is not
 owned by Compose. After building the new image, stop/remove just that manager
@@ -447,13 +456,13 @@ host directory. Do not run two manager processes against the same data directory
 | Address already in use | Old manager is still running or another service occupies 8081; inspect `sudo ss -ltnp` |
 | Permission denied for `/data` | `stat` should show `10001:10001 700`; use the provided setup script for a fresh directory |
 | VM authentication fails | Username `clab-discovery`, private key without `.pub`, correct passphrase, SSH service and setup script |
-| Helper upgrade required | Run `setup-discovery.sh --update-helper` from new source, select helper mode, refresh |
+| Helper upgrade required | Run `sudo bash deploy/start-manager.sh` from current source on the VM; select helper mode and refresh |
 | Connected but file import fails | Expand Discovery file details for each attempted path and result; update the helper, verify original YAML still exists, avoid symlinks, each file <=1 MiB |
 | File locations unclear | `sudo containerlab inspect --all --format json` shows original `absLabPath`; generated files normally live in the adjacent `clab-<lab-name>` folder; verified labels can identify a custom folder |
 | Saved map did not change | Save the correct `.annotations.json` beside the original YAML, refresh, then Sync from VM |
 | Running but SSH/backup fails | NOS still booting, credentials/driver, network routing, or wrong SSH port; edit the node connection |
 | YAML uses anchors/variables | Provide a resolved, literal definition manually; manager imports data without executing templates |
-| A removed workspace reappears | Keep the exclusion checkbox enabled when removing it; unchecked allows automatic reimport for testing |
+| A removed workspace reappears | Keep the exclusion checkbox enabled when removing it; unchecked allows it to appear for a new import confirmation |
 
 Do not paste raw helper JSON into support logs: it carries base64-encoded file
 contents, which can include inventory credentials. The UI reports controlled
@@ -466,13 +475,13 @@ same architecture. Transfer the source and required Ubuntu/Docker/containerlab
 packages or use your internal package mirrors. Build the manager there and export:
 
 ```bash
-sudo docker save clab-backup:1.9.1 -o clab-backup-1.9.1.tar
+sudo docker save clab-backup:1.10.0 -o clab-backup-1.10.0.tar
 ```
 
 On the prepared offline VM:
 
 ```bash
-sudo docker load -i clab-backup-1.9.1.tar
+sudo docker load -i clab-backup-1.10.0.tar
 sudo docker compose -f clab-backup-ui/compose.yml up -d --no-build
 ```
 

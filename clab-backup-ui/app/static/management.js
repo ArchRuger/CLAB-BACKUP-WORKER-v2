@@ -2,6 +2,15 @@
 let vmSyncBusy=false;
 // All host output is rendered as text or escaped; credentials never enter state responses.
 document.body.insertAdjacentHTML('beforeend', `
+<dialog id="auto-import-dialog"><form id="auto-import-form">
+ <div class="dialog-head"><span class="eyebrow">IMPORT FROM VM</span><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
+ <h2>Import this discovered lab?</h2><p id="auto-import-summary"></p>
+ <p>The manager will save the lab definition, available layout and inventory credentials in persistent storage. The backup schedule starts as Manual.</p>
+ <div id="auto-import-files"></div><p id="auto-import-warnings" class="form-help"></p>
+ <p id="auto-import-excluded" hidden>This also removes the lab from your excluded list. Previous workspace settings and backup history are not restored.</p>
+ <p class="form-error" role="alert"></p>
+ <div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Cancel</button><button type="submit" class="button primary">Import lab</button></div>
+</form></dialog>
 <dialog id="remove-lab-dialog"><form id="remove-lab-form">
  <div class="dialog-head"><span class="eyebrow">REMOVE SAVED WORKSPACE</span><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
  <h2>Remove lab from this manager?</h2><p id="remove-lab-name"></p>
@@ -9,7 +18,7 @@ document.body.insertAdjacentHTML('beforeend', `
  <p>This removes the imported nodes, map, saved credentials, schedule and backup history entries. Saved backup files and audit logs remain on disk.</p>
  <p>Your running containers and lab files on the VM are unaffected. The VM connection and other saved labs remain available.</p>
  <label class="checkbox-label"><input id="remove-lab-exclude" type="checkbox" checked> Keep this lab excluded from automatic import</label>
- <p class="form-help">Uncheck to test discovery: the deployed lab can return on the next discovery check. Otherwise, use Import again in the sidebar when ready.</p>
+ <p class="form-help">Uncheck to test discovery: the deployed lab can return as Ready to import on the next check, and still requires confirmation. Otherwise, use Import again in the sidebar when ready.</p>
  <p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Cancel</button><button type="submit" class="button primary">Remove saved lab</button></div>
 </form></dialog>
 <dialog id="setup-dialog"><form id="setup-form">
@@ -35,7 +44,7 @@ document.body.insertAdjacentHTML('beforeend', `
  <div id="vm-key-fields" hidden><label>SSH private key<input id="vm-key" type="file"></label><label>Key passphrase<input id="vm-passphrase" type="password" autocomplete="new-password"></label></div>
  <p class="form-help">Leave credentials blank to retain them for the same account. Secrets are encrypted in persistent storage and are never displayed after saving.</p>
  <label>Inspection method<select id="vm-command"><option value="helper">Installed discovery and file helper (recommended)</option><option value="direct">Direct inspection + SFTP (existing VM account)</option></select></label>
- <p class="form-help">Install the supplied VM setup script for the helper. The restricted helper reads deployment state and the original YAML, annotations, generated inventory and topology export. New labs import automatically. Direct mode reads these files through SFTP with the same VM account. The installed helper supports root-owned lab files.</p>
+ <p class="form-help">Install the supplied VM setup script for the helper. The restricted helper reads deployment state and the original YAML, annotations, generated inventory and topology export. New labs appear for import confirmation. Direct mode reads these files through SFTP with the same VM account. The installed helper supports root-owned lab files.</p>
  <label class="checkbox-label"><input id="vm-enabled" type="checkbox" checked> Enable automatic discovery</label>
  <p id="vm-fingerprint" class="form-help"></p><p class="form-help">The first successful connection trusts and saves the VM SSH fingerprint. Later key changes block discovery.</p>
  <label class="checkbox-label"><input id="vm-reset-key" type="checkbox"> Trust a replacement SSH host key on the next connection</label>
@@ -52,8 +61,8 @@ document.querySelectorAll('[data-dismiss]').forEach(button=>button.onclick=()=>b
 
 function renderManagement(){
  const discovery=state.discovery||{}, lab=current();
- $('vm-summary').textContent=!discovery.configured?'VM discovery is not configured.':!discovery.host.enabled?'VM discovery is paused.':discovery.connected?'VM connected · checks every 30s':(discovery.error||'VM status unknown; refresh discovery.');
- $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · ${esc(discovery.file_errors?.[l.name]||'Manual upload available')}</small></button>`).join('');
+ $('vm-summary').textContent=!discovery.configured?'VM discovery is not configured.':!discovery.host.enabled?'VM discovery is paused.':discovery.helper_update_required?'VM connected · helper update required. On the VM, run sudo bash deploy/start-manager.sh from the current source.':discovery.connected?'VM connected · checks every 30s':(discovery.error||'VM status unknown; refresh discovery.');
+ $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · ${esc(discovery.file_errors?.[l.name]||(discovery.pending_imports?.[l.name]?'Ready to import · confirmation required':'Try importing VM files'))}</small></button>`).join('');
  const reports=discovery.file_reports||{};
  $('discovery-file-list').innerHTML=Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file results yet. Refresh discovery. If using an older helper, update it on the VM.</p>';
  $('excluded-labs').innerHTML=(discovery.ignored_labs||[]).length?'<p class="side-hint">Excluded from automatic import</p>'+(discovery.ignored_labs||[]).map(name=>`<button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again</small></button>`).join(''):'';
@@ -94,7 +103,7 @@ $('vm-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  const file=$('vm-key').files[0];if(file&&file.size>65536)throw new Error('SSH key must be smaller than 64 KiB');
  await json('/host','PUT',{address:$('vm-address').value,port:Number($('vm-port').value),username:$('vm-user').value,auth:$('vm-auth').value,password:$('vm-password').value,private_key:file?await file.text():'',passphrase:$('vm-passphrase').value,command_mode:$('vm-command').value,enabled:$('vm-enabled').checked,reset_fingerprint:$('vm-reset-key').checked});
  const result=await json('/discovery/refresh','POST',{});await refresh();$('vm-password').value='';$('vm-key').value='';$('vm-passphrase').value='';
- if(result.error&&!result.checking){$('vm-form').querySelector('.form-error').textContent=result.error;return;}
+ if((result.error||result.helper_update_required)&&!result.checking){$('vm-form').querySelector('.form-error').textContent=result.error||'Connected, but the installed VM helper is outdated. On the VM, run sudo bash deploy/start-manager.sh from the current source, then retry.';return;}
  $('vm-dialog').close();notify(result.connected?'VM connected. Lab discovery is active.':'VM settings saved. Check the discovery status for the connection result.');
 });};
 $('vm-refresh').onclick=async()=>{const b=$('vm-refresh');b.disabled=true;b.textContent='Checking VM…';try{const result=await json('/discovery/refresh','POST',{});await refresh();notify(result.error||(!result.configured?'Configure the VM connection first.':result.connected?'Discovery updated.':'Discovery is paused or still checking.'));}catch(e){notify(e.message);}finally{b.disabled=false;b.textContent='Refresh discovery';}};
@@ -122,25 +131,29 @@ $('remove-lab-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,as
  $('remove-lab-dialog').close();
  if(activeId===id){activeId='';sessionStorage.removeItem('activeLab');tab='inventory';if($('details-dialog').open)$('details-dialog').close();}
  await refresh();
- notify(exclude?'Saved lab removed. Use Import again to rediscover it.':'Saved lab removed. Discovery can import the deployed lab again on its next check.');
+ notify(exclude?'Saved lab removed. Use Import again to rediscover it.':'Saved lab removed. Discovery can offer it for import again; confirmation is required.');
 });};
-$('excluded-labs').onclick=async e=>{
- const button=e.target.closest('[data-allow-import]');if(!button||button.disabled)return;
- button.disabled=true;
- try{const result=await json('/discovery/allow-import','POST',{name:button.dataset.allowImport});await refresh();notify(result.error||'Automatic import enabled. Available VM files are imported during discovery.');}
- catch(error){notify(error.message);button.disabled=false;}
+$('excluded-labs').onclick=e=>{
+ const button=e.target.closest('[data-allow-import]');if(button)importDiscovered(button.dataset.allowImport);
 };
 
-let autoImportBusy=false;
+let autoImportBusy=false, importPreview=null;
+$('auto-import-dialog').addEventListener('close',()=>{importPreview=null;});
 async function importDiscovered(name){
  if(autoImportBusy)return;
  autoImportBusy=true;$('setup-auto-import').disabled=true;
  notify('Reading deployed lab files from the VM…');
  try{
-  const lab=await json('/discovery/import','POST',{name});
-  activeId=lab.id;sessionStorage.setItem('activeLab',activeId);tab='inventory';
+  const preview=await json('/discovery/import-preview','POST',{name});
   if($('setup-dialog').open)$('setup-dialog').close();
-  await refresh();notify('Lab populated from VM files.');
+  importPreview=preview;
+  $('auto-import-form').querySelector('.form-error').textContent='';
+  $('auto-import-summary').textContent=preview.name+' · '+preview.nodes+' nodes · '+preview.links+' links';
+  $('auto-import-files').innerHTML=Object.entries(preview.files).map(([kind,file])=>`<p><strong>${esc(kind)}</strong><br><small>${esc(file.path)}</small></p>`).join('');
+  $('auto-import-warnings').textContent=[...(preview.warnings||[]),preview.missing.length?'Unavailable optional files: '+preview.missing.join(', '):''].filter(Boolean).join(' ');
+  $('auto-import-excluded').hidden=!preview.excluded;
+  $('auto-import-dialog').showModal();
+  notify('Review the lab files and confirm to save this workspace.');
  }catch(error){
   if(!$('setup-dialog').open)openSetup(false,name);
   $('setup-form').querySelector('.form-error').textContent='Automatic import: '+error.message+' You can retry or upload the files below.';
@@ -148,4 +161,10 @@ async function importDiscovered(name){
   await refresh();
  }finally{autoImportBusy=false;$('setup-auto-import').disabled=false;}
 }
+$('auto-import-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
+ const preview=importPreview;if(!preview)throw new Error('Preview the lab again before importing.');
+ const lab=await json('/discovery/import','POST',{name:preview.name,token:preview.token});
+ activeId=lab.id;sessionStorage.setItem('activeLab',activeId);tab='inventory';
+ $('auto-import-dialog').close();await refresh();notify('Lab imported from VM files and saved.');
+});};
 $('setup-auto-import').onclick=()=>importDiscovered($('setup-deployed-name').value);

@@ -1,4 +1,4 @@
-# Standalone persistent Node Manager — 1.9.1
+# Standalone persistent Node Manager — 1.10.0
 
 Run one manager per engineer's Linux VM. It is a separate Docker Compose service,
 outside every containerlab topology. Lab deployment/destruction does not manage
@@ -65,17 +65,17 @@ running before discovery is configured. No migration automatically resets schedu
 
 ## 3. Build and start the independent manager
 
-From the repository root:
+After configuring the discovery account in section 4 (or the fresh VM guide),
+run from the repository root:
 
 ```bash
-docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
-docker compose -f clab-backup-ui/compose.yml up -d
+sudo bash deploy/start-manager.sh
 docker compose -f clab-backup-ui/compose.yml exec backup-ui \
   python -c "from app import __version__; print(__version__)"
 docker compose -f clab-backup-ui/compose.yml logs backup-ui
 ```
 
-Expect version **1.9.1**. The logs print the UI access token. Migrated data retains
+Expect version **1.10.0**. The logs print the UI access token. Migrated data retains
 its existing token. Open `http://VM_ADDRESS:8081` and unlock the workspace.
 Docker must start at VM boot; `restart: unless-stopped` restarts the manager with
 Docker unless you explicitly stopped it.
@@ -83,7 +83,7 @@ Docker unless you explicitly stopped it.
 Equivalent image-only build, from the repository root:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.9.1 ./clab-backup-ui
+docker build --pull --no-cache -t clab-backup:1.10.0 ./clab-backup-ui
 ```
 
 The final path is the required build context. Builds require the base image and
@@ -157,22 +157,27 @@ Use **Remove lab** to remove only a saved manager workspace, credentials, schedu
 and history entries. Backup files and audit logs stay on disk. No running container
 or VM lab file is modified. The default exclusion prevents automatic reimport;
 use **Import again** in the sidebar later, or uncheck the exclusion when removing
-if you want to test immediate rediscovery. Other labs and the VM connection remain.
+if you want to test immediate rediscovery. Both paths require confirmation before
+a new workspace is saved; cancelling Import again retains its exclusion. Other labs and the VM connection remain.
 
 
-The 1.9.1 helper automatically imports new deployed labs from their files. Existing
+The 1.10.0 helper reads deployed lab files automatically. New labs wait for
+confirmation: click Ready to import, review files, and choose Import lab or Cancel. Existing
 workspaces show Updates available and offer **Sync from VM**, preserving matching
 node settings, credentials, profiles, schedules and history. Missing files never
 delete a saved workspace. Optional files must be valid and match the YAML; invalid
 files block sync without partial changes. A missing annotation retains an existing
 map. Original YAML is required. New labs can import the YAML while reporting an
 invalid optional file; credentials from a mismatched inventory are skipped.
-Old inspection-only helpers discover nodes only. Update the helper for 1.9.1.
+Old inspection-only helpers discover nodes only. Update the helper for 1.10.0.
 The standard generated folder beside the YAML is tried even without Docker labels.
 **Discovery file details** shows paths and results; clicking a detected lab retries
 automatic import before offering manual upload.
 
-To upgrade an existing helper while keeping its installed SSH key:
+Normal setup/upgrades use `sudo bash deploy/start-manager.sh`, which updates and
+verifies the helper before building/recreating the manager. It preserves existing
+keys/data. First launch can take a public key argument when the account is absent.
+For an advanced helper-only repair while keeping its installed SSH key:
 
 ```bash
 sudo bash deploy/setup-discovery.sh --update-helper

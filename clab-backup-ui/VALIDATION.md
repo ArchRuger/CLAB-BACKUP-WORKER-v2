@@ -1,4 +1,36 @@
-# Validation — Containerlab Node Manager 1.9.1 (2026-09-10)
+# Validation — Containerlab Node Manager 1.10.0 (2026-09-10)
+
+## 1.10.0 evidence
+
+- Full Python suite: **113 tests, 108 passed, 5 skipped**. Existing platform/opt-in
+  skips remain. JavaScript regressions: **14 passed**; management script syntax checked.
+- Eight confirmation tests cover background polling/preview without saving, cancel
+  semantics, explicit token requirement, single save, changed files/VM, expiry,
+  retained exclusions on cancel, old-client bypass rejection, disk-failure rollback
+  and retry, offline/cross-name rejection, and authentication. Existing file-import
+  regression fixtures now explicitly confirm before expecting a saved workspace.
+- Two subprocess preflight tests exercise deploy/verify-helper.py with valid current
+  envelopes (including zero labs), old helpers and malformed bundles. Only controlled
+  version/status text is printed, never source contents or credentials.
+- Browser on synthetic local SSH fixture: 12-node lab appeared Ready to import.
+  Preview showed 12 nodes, 16 links and four exact source paths. Cancel followed by
+  Refresh discovery left no saved workspace. Reopening and choosing Import lab saved
+  the lab, inventory credentials and map; status was Running. No browser console errors.
+  Screenshot: import-confirmation-1.10.0.png. No live device actions performed.
+- New host-side start-manager.sh updates/installs the helper, verifies the expected
+  version/file protocol before recreation, prepares persistent storage, builds and
+  starts Compose. Existing key retained; existing account plus supplied key is
+  rejected to prevent accidental rotation. Another running data-sharing manager is
+  rejected. Scripts kept LF for Linux.
+- Latest fetched origin/main 0c0182c matches the 1.9.1 source delivery except three
+  ignore/attributes files restored here. ZIP and patches are verified against that
+  revision, previous 1.9.1 delivery and original baseline 06b8624.
+- No Linux shell, Docker engine or live VM was available here. Privileged setup,
+  shell execution, actual image build/recreation and real deployment connectivity
+  remain VM checks; preflight parser tests do not establish full installer success.
+  No GitHub push or user-VM deployment was performed.
+
+## Earlier 1.9.1 evidence (retained for context)
 
 ## 1.9.1 evidence
 

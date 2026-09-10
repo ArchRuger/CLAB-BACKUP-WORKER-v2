@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.9.1
+# Containerlab Node Manager — 1.10.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -8,20 +8,22 @@ backups as training labs are replaced.
 **Start here:** [Fresh VM installation guide](../FRESH-VM-GUIDE.md) — Ubuntu, Docker, containerlab,
 persistent storage, SSH keys, first launch, automatic imports, upgrades and backups.
 
-## What changed in 1.9.1
+## What changed in 1.10.0
 
-- Discovery follows the original YAML path from `containerlab inspect`, then checks
-  the adjacent `clab-<lab-name>` directory for generated inventory and topology data.
-  Missing Docker labels no longer prevent file import; verified labels still locate
-  custom generated directories.
-- Clicking a detected lab tries VM import before showing manual uploads. The general
-  import dialog also offers a VM retry for an unimported detected lab.
-- **Discovery file details** lists attempted paths and per-file results, including
-  missing files and permission failures.
-- Direct inspection now reads the same files through SFTP using the existing SSH
-  account. The restricted helper remains preferred for root-owned files.
-- Update the installed helper with `sudo bash deploy/setup-discovery.sh --update-helper`
-  when upgrading from 1.9.0 or earlier. This retains the installed SSH key.
+- **One launch command:** `sudo bash deploy/start-manager.sh` updates the installed
+  VM helper, verifies its file-transfer protocol and version, prepares storage,
+  builds the image and recreates the Compose service. Existing keys/data are retained.
+  First setup accepts a discovery public key argument. An old helper cannot silently
+  survive a normal upgrade; verification failures stop before container recreation.
+- **Import confirmation:** discovery reads files automatically and shows new labs as
+  Ready to import. Clicking a lab previews its name, node/link counts, source files
+  and warnings. Only **Import lab** saves the workspace and inventory credentials.
+  Cancel saves no workspace. Import again also requires confirmation and retains
+  the exclusion if cancelled. Existing saved workspaces remain available.
+- Confirmation expires after five minutes and is rejected if files, VM connection or
+  exclusion state change. Refreshes and older API clients cannot bypass confirmation.
+- Outdated inspection-only helpers now show an actionable message in VM connection
+  and the sidebar instead of appearing ready for automatic file import.
 
 ## Existing features
 
@@ -32,7 +34,7 @@ persistent storage, SSH keys, first launch, automatic imports, upgrades and back
   in the sidebar, or uncheck the exclusion in the removal dialog to test automatic
   discovery on its next check. Queued/running jobs must finish before removal.
 
-- Automatic imports of deployed lab YAML, annotations, generated inventory and topology data through the restricted VM helper.
+- Automatic retrieval of deployed lab YAML, annotations, generated inventory and topology data, followed by import confirmation.
 - File change detection and **Sync from VM**, preserving saved node settings, profiles and backup history.
 - Helper upgrade with `deploy/setup-discovery.sh --update-helper` retains the existing SSH key.
 - Standalone Compose deployment with Linux host networking and automatic restart.
@@ -57,18 +59,29 @@ Read [Standalone setup and migration](../STANDALONE-SETUP.md) first. Existing wo
 may contain all their data inside the container; copy it before removing them.
 Remove the old Backup-Worker entry from training lab YAML once migration is verified.
 
-For a fresh installation, from this repository root on the Linux VM:
+After installing Docker, containerlab and SSH as described in the guide, run from
+the repository root on the Linux VM. For first setup, supply your public key:
 
 ```bash
-sudo bash deploy/setup-vm.sh
-sudo docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
-sudo docker compose -f clab-backup-ui/compose.yml up -d
-sudo docker compose -f clab-backup-ui/compose.yml logs backup-ui
+sudo bash deploy/start-manager.sh /absolute/path/to/clab-manager-discovery.pub
 ```
+
+For upgrades with the existing discovery account/key:
+
+```bash
+cd ~/projects/v1.10.0
+sudo bash deploy/start-manager.sh
+```
+
+The script installs/updates and verifies the helper before starting the manager.
+Keep your existing `.env` or custom UI port settings when changing source folders.
+A manager launched with `docker run` must follow the migration guide first; the
+script refuses to start a second manager against its active data directory.
+Image-only `docker build` remains available but cannot update host-installed files.
 
 Open `http://VM_ADDRESS:8081`, enter the token printed in the logs, and configure
 **VM connection**. The guide includes the restricted discovery account setup and
-existing-data migration. New deployed labs import automatically. Existing workspaces offer Sync from VM;
+existing-data migration. New deployed labs appear as Ready to import; review and confirm to save them. Existing workspaces offer Sync from VM;
 manual YAML/annotation/inventory uploads remain available. Running container status does not prove NOS login/boot readiness.
 
 The manager requires no Docker socket. Host networking provides reachability;

@@ -14,6 +14,7 @@ class RemoveLabTests(unittest.TestCase):
     host = vm_tests.VMFilesTests.host
     register = vm_tests.VMFilesTests.register
     poll = vm_tests.VMFilesTests.poll
+    confirm_import = vm_tests.VMFilesTests.confirm_import
 
     def imported(self):
         self.host(); self.poll()
@@ -68,8 +69,7 @@ class RemoveLabTests(unittest.TestCase):
         from app.discovery import parse_snapshot
         import json
         with patch('app.discovery.inspect_host', return_value=(parse_snapshot(json.dumps(vm_tests.envelope()).encode()), 'SHA256:fixture')):
-            response = self.client.post('/api/discovery/allow-import', headers=self.auth, json={'name': 'training'})
-        self.assertEqual(response.status_code, 200)
+            self.confirm_import()
         self.assertEqual(self.store.state['ignored_labs'], [])
         self.assertEqual(len(self.store.state['labs']), 1)
         self.assertNotEqual(self.store.state['labs'][0]['id'], old_id)
@@ -77,6 +77,8 @@ class RemoveLabTests(unittest.TestCase):
     def test_remove_without_excluding_allows_next_poll(self):
         lab = self.imported(); old_id = lab['id']
         self.assertEqual(self.remove(lab, prevent_reimport=False).status_code, 200)
+        self.assertEqual(self.store.state['labs'], [])
+        self.poll(confirm=False)
         self.assertEqual(self.store.state['labs'], [])
         self.poll()
         self.assertNotEqual(self.store.state['labs'][0]['id'], old_id)

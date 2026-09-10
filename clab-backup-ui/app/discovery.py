@@ -112,6 +112,7 @@ class Inspection(dict):
         self.sources = sources
         self.raw = raw
         self.reader = reader
+        self.helper_version = None
 
 
 def parse_snapshot(raw):
@@ -123,7 +124,10 @@ def parse_snapshot(raw):
         sources = value.get('sources')
         if not isinstance(sources, dict) or not set(sources).issubset(labs):
             raise ValueError('Invalid file discovery response')
-        return Inspection(labs, sources, value['inspect'], 'helper')
+        snapshot = Inspection(labs, sources, value['inspect'], 'helper')
+        version = value.get('helper_version')
+        snapshot.helper_version = version if isinstance(version, str) and re.fullmatch(r'[0-9.]{1,24}', version) else None
+        return snapshot
     return Inspection(parse_inspect(raw), raw=value)
 
 
@@ -242,6 +246,7 @@ class Discovery:
         self.wake = threading.Event()
         self.thread = None
         self.sources = {}
+        self.import_previews = {}
         # A previous process's snapshot is not evidence of current deployment.
         with store.lock:
             if store.state.get('discovery'):
@@ -280,7 +285,7 @@ class Discovery:
                 previous = self.store.state.get('discovery', {})
                 info = {**previous, 'ok': not error, 'error': error, 'checked_at': stamp(), 'checked_epoch': time.time()}
                 if not error:
-                    info.update(labs=dict(labs), last_success=info['checked_at'], file_reader=getattr(labs, 'reader', 'inspect-only'))
+                    info.update(labs=dict(labs), last_success=info['checked_at'], file_reader=getattr(labs, 'reader', 'inspect-only'), helper_version=getattr(labs, 'helper_version', None))
                     self.store.state['host']['fingerprint'] = fingerprint
                 self.store.state['discovery'] = info
                 self.sources = {}
@@ -310,12 +315,16 @@ class Discovery:
         state['discovery']['file_import_supported'] = sources is not None
         state['discovery']['file_errors'] = {}
         state['discovery']['file_reports'] = {}
+        state['discovery']['pending_imports'] = {}
         for lab in state['labs']:
             if lab.get('vm_source'):
                 lab['vm_source'].update(can_sync=False, status='Files unavailable')
         if sources is None: return
         for name, source in sources.items():
-            if name in state.get('ignored_labs', []): continue
+            if name in state.get('ignored_labs', []):
+                try: self.sources[name] = decode_bundle(source)
+                except (ValueError, TypeError, AttributeError, KeyError): pass
+                continue
             state['discovery']['file_reports'][name] = source_reports(source)
             lab = next((l for l in state['labs'] if l.get('deployment_name') == name), None)
             # Reuse a unique legacy inventory workspace, but never overwrite it
@@ -341,8 +350,7 @@ class Discovery:
                 continue
             self.sources[name] = bundle
             if lab is None:
-                state['labs'].append(candidate)
-                self.store.event('lab.auto_import', 'Imported deployed lab files from VM', lab_id=candidate['id'])
+                state['discovery']['pending_imports'][name] = dict(nodes=len(candidate['nodes']), files=list(bundle['files']))
             else:
                 previous = lab.get('vm_source', {})
                 lab['vm_source'] = {**previous, **metadata(bundle), 'can_sync': True,
@@ -359,6 +367,9 @@ class Discovery:
                         error=info.get('error', ''), interval=INTERVAL,
                         file_import_supported=bool(info.get('file_import_supported')),
                         file_reader=info.get('file_reader', 'inspect-only'),
+                        helper_version=info.get('helper_version'),
+                        helper_update_required=bool(discovery_fresh(state) and host.get('command_mode') == 'helper' and not info.get('file_import_supported')),
+                        pending_imports=info.get('pending_imports', {}) if discovery_fresh(state) else {},
                         file_reports=info.get('file_reports', {}),
                         file_errors=info.get('file_errors', {}),
                         ignored_labs=state.get('ignored_labs', []),
@@ -414,33 +425,78 @@ class Discovery:
             model_config = ConfigDict(extra='forbid')
             name: str = Field(min_length=1, max_length=120)
 
-        @app.post('/api/discovery/import')
-        def import_discovered(data: AllowImport):
+        def import_candidate(name):
+            from .vm_files import prepare_lab, FileImportError
+            state = self.store.state
+            if not discovery_fresh(state):
+                raise HTTPException(409, 'A fresh VM connection is required. Refresh discovery and try again.')
+            if any(l.get('deployment_name') == name for l in state['labs']):
+                raise HTTPException(409, 'This deployment already has a saved workspace. Open it or use Sync from VM.')
+            if any(l['name'] == name for l in state['labs']):
+                raise HTTPException(409, 'A saved workspace has this name. Link its deployment and use Sync from VM.')
+            info = state.get('discovery', {})
+            bundle = self.sources.get(name)
+            if not bundle or name not in info.get('labs', {}):
+                message = info.get('file_errors', {}).get(name)
+                raise HTTPException(409, message or ('The VM helper needs updating. Run sudo bash deploy/start-manager.sh from the current source on the VM.'
+                    if not info.get('file_import_supported') else 'The deployed files are unavailable. Check Discovery file details or upload manually.'))
+            try: candidate = prepare_lab(bundle, name)
+            except (ValueError, TypeError, AttributeError, KeyError, RecursionError) as exc:
+                raise HTTPException(409, str(exc) if isinstance(exc, FileImportError) else 'The VM file bundle is invalid. Upload manually or correct the files.')
+            return candidate, bundle
+
+        @app.post('/api/discovery/import-preview')
+        def preview_import(data: AllowImport):
             self.refresh(wait=True)
             with self.store.lock:
-                if data.name in self.store.state.get('ignored_labs', []):
-                    raise HTTPException(409, 'This lab is excluded. Choose Import again in the sidebar first.')
-                lab = next((l for l in self.store.state['labs'] if l.get('deployment_name') == data.name), None)
-                if lab: return public_lab(lab)
-                info = self.store.state.get('discovery', {})
-                message = info.get('file_errors', {}).get(data.name)
-                if not message:
-                    message = ('Update the installed VM helper to enable file transfer.' if not info.get('file_import_supported')
-                               else 'The deployed lab files could not be read. Check Discovery file details.')
-                raise HTTPException(409, info.get('error') or message)
+                candidate, bundle = import_candidate(data.name)
+                state = self.store.state
+                # Previews contain no secrets and do not save a workspace. The
+                # token binds confirmation to these files, VM and exclusion state.
+                now = time.monotonic()
+                self.import_previews = {k:v for k,v in self.import_previews.items() if v['expires'] > now}
+                if len(self.import_previews) >= 100: self.import_previews.pop(next(iter(self.import_previews)))
+                token = uuid.uuid4().hex
+                excluded = data.name in state.get('ignored_labs', [])
+                self.import_previews[token] = dict(name=data.name, digest=bundle['digest'],
+                    revision=state['host']['revision'], excluded=excluded, expires=now + 300)
+                return dict(name=data.name, token=token, nodes=len(candidate['nodes']),
+                            links=len(candidate['drawing'].get('links', [])),
+                            files=bundle['manifest'], missing=candidate['vm_source']['missing'],
+                            warnings=candidate['vm_source'].get('warnings', []), excluded=excluded)
+
+        class ConfirmImport(AllowImport):
+            token: str = Field(min_length=32, max_length=32)
+
+        @app.post('/api/discovery/import')
+        def import_discovered(data: ConfirmImport):
+            self.refresh(wait=True)
+            with self.store.lock:
+                state = self.store.state
+                preview = self.import_previews.get(data.token)
+                if not preview or preview['name'] != data.name or preview['expires'] < time.monotonic():
+                    raise HTTPException(409, 'Import confirmation expired. Preview the lab again.')
+                candidate, bundle = import_candidate(data.name)
+                if (preview['revision'] != state['host']['revision'] or preview['digest'] != bundle['digest'] or
+                        preview['excluded'] != (data.name in state.get('ignored_labs', []))):
+                    raise HTTPException(409, 'The VM, lab files or import setting changed. Preview the lab again before confirming.')
+                ignored = state.get('ignored_labs', [])
+                state['labs'].append(candidate)
+                state['ignored_labs'] = [n for n in ignored if n != data.name]
+                reconcile(state)
+                try: self.store.save()
+                except OSError:
+                    state['labs'].remove(candidate); state['ignored_labs'] = ignored
+                    raise HTTPException(500, 'Could not save the imported lab. Your confirmation can be retried.')
+                self.import_previews.pop(data.token, None)
+                state['discovery'].get('pending_imports', {}).pop(data.name, None)
+                self.store.event('lab.auto_import', 'Imported VM lab files after user confirmation', lab_id=candidate['id'])
+                return public_lab(candidate)
 
         @app.post('/api/discovery/allow-import')
         def allow_import(data: AllowImport):
-            with self.store.lock:
-                ignored = self.store.state.get('ignored_labs', [])
-                if data.name not in ignored: raise HTTPException(404, 'Lab is not excluded from automatic import')
-                self.store.state['ignored_labs'] = [n for n in ignored if n != data.name]
-                try: self.store.save()
-                except OSError:
-                    self.store.state['ignored_labs'] = ignored
-                    raise HTTPException(500, 'Could not save the import setting. Try again.')
-                self.store.event('lab.allow_import', 'Automatic import enabled for a removed workspace')
-            return self.refresh(wait=True)
+            # Old clients cannot bypass confirmation or silently clear exclusions.
+            raise HTTPException(409, 'Import again now requires a preview and confirmation. Refresh the browser and choose Import again.')
 
         @app.post('/api/labs/{lab_id}/sync')
         def sync(lab_id: str):

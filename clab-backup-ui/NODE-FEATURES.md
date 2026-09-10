@@ -1,15 +1,20 @@
-# Containerlab Node Manager — 1.9.1
+# Containerlab Node Manager — 1.10.0
 
 The default deployment is now a standalone persistent manager. Follow
 [standalone setup and migration](../STANDALONE-SETUP.md); the older build/worker
 upgrade section below is historical. Linked lab discovery gates SSH and backups
 on fresh running nodes. Manual endpoints remain available as explicit overrides.
 
-The updated restricted helper imports new deployments from the topology path in
+New labs require a preview and Import lab confirmation before saving. Cancel
+leaves them unsaved, including across background checks. The normal
+`deploy/start-manager.sh` launch updates/verifies the helper while retaining the
+existing SSH key.
+
+The updated restricted helper reads new deployments from the topology path in
 inspect and the adjacent generated lab folder, with missing Docker labels allowed.
 Direct mode also reads files over SFTP with the same account. Discovery file details
 shows attempted paths and errors; detected lab clicks try automatic import before
-offering manual uploads. Upgrade the helper for 1.9.1 without changing its key. Existing labs
+offering manual uploads. Upgrade the helper for 1.10.0 without changing its key. Existing labs
 show file changes and offer Sync from VM without resetting saved node connections
 or history. Follow [the fresh VM guide](../FRESH-VM-GUIDE.md) for setup and upgrades.
 

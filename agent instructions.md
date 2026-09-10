@@ -1,5 +1,25 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.10.0 addendum — setup preflight and import confirmation
+
+User requested normal setup to avoid stale helpers and confirmation for VM imports.
+Normal host setup/upgrade entry point is deploy/start-manager.sh: existing account
+updates retain keys; first launch takes a public key and refuses replacing an
+existing account's key. It verifies installed helper protocol/version, prepares
+storage, builds and recreates Compose. It rejects another running manager using
+the same data. Docker builds alone cannot mutate the host helper. Script remains
+LF. VM connection/sidebar report inspection-only helpers before import attempts.
+Background discovery now caches bundles in memory and advertises pending imports;
+it MUST NOT save new workspaces. import-preview returns paths/counts/warnings and
+a five-minute token bound to name, bundle digest, host revision and exclusion.
+import requires that token, fresh files and a successful persistent save. Cancel
+sends no commit. Import again previews without clearing exclusion; successful
+confirmation clears it. Old allow-import endpoint returns 409 rather than bypassing
+confirmation. Existing sync/settings/history remain intact. Tests cover rollback,
+expired/changed confirmations, unauthenticated requests and old client paths.
+VM source folder: ~/projects/v1.10.0 with deploy/ and clab-backup-ui/ directly inside.
+Latest fetched origin/main 0c0182c matches 1.9.1 delivery except three ignore files.
+
 ## Release 1.9.1 addendum — automatic file lookup and UI retry
 
 Use inspect's absolute YAML path and adjacent clab-<name> folder even without
