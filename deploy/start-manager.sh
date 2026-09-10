@@ -7,8 +7,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --enable-operations) operations=true; shift;;
     --lab-root) [[ $# -ge 2 ]] || exit 64; operation_args+=("$1" "$2"); operations=true; shift 2;;
-    --allow-downloads|--allow-sharing) operation_args+=("$1"); operations=true; shift;;
-    --*) echo 'Unknown option. Use --enable-operations, --lab-root PATH, --allow-downloads or --allow-sharing.' >&2; exit 64;;
+    --allow-downloads) operation_args+=("$1"); operations=true; shift;;
+    --*) echo 'Unknown option. Use --enable-operations, --lab-root PATH or --allow-downloads.' >&2; exit 64;;
     *) [[ -z "$public_key_path" ]] || exit 64; public_key_path=$1; shift;;
   esac
 done
@@ -61,4 +61,4 @@ done
 docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
 docker compose -f clab-backup-ui/compose.yml ps
 echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery key are retained.'
-echo 'View the access token: sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui'
+echo 'The UI opens directly without a login. VM and device SSH credentials remain in persistent storage.'

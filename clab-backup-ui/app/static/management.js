@@ -36,7 +36,7 @@ document.body.insertAdjacentHTML('beforeend', `
 </form></dialog>
 <dialog id="vm-dialog"><form id="vm-form">
  <div class="dialog-head"><span class="eyebrow">VM DISCOVERY</span><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
- <h2>VM connection</h2><p>This standalone manager inspects deployed labs over SSH every 30 seconds. Device SSH credentials are configured separately.</p>
+ <h2>VM connection</h2><p><a href="/vm-connection-guide" target="_blank" rel="noopener">VM setup and troubleshooting guide ↗</a></p><p>This standalone manager inspects deployed labs over SSH every 30 seconds. Device SSH credentials are configured separately.</p>
  <div class="form-grid wide"><label>VM address<input id="vm-address" required placeholder="127.0.0.1"></label><label>SSH port<input id="vm-port" type="number" min="1" max="65535" value="22" required></label></div>
  <label>VM username<input id="vm-user" required maxlength="128" autocomplete="off"></label>
  <label>Authentication<select id="vm-auth"><option value="password">Password</option><option value="key">SSH private key</option></select></label>
@@ -65,7 +65,7 @@ function renderManagement(){
  $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · ${esc(discovery.file_errors?.[l.name]||(discovery.pending_imports?.[l.name]?'Ready to import · confirmation required':'Try importing VM files'))}</small></button>`).join('');
  const reports=discovery.file_reports||{};
  $('discovery-file-list').innerHTML=Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file results yet. Refresh discovery. If using an older helper, update it on the VM.</p>';
- $('excluded-labs').innerHTML=(discovery.ignored_labs||[]).length?'<p class="side-hint">Excluded from automatic import</p>'+(discovery.ignored_labs||[]).map(name=>`<button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again</small></button>`).join(''):'';
+ $('excluded-labs').innerHTML=(discovery.ignored_labs||[]).length?'<p class="side-hint">Excluded from automatic import</p>'+(discovery.ignored_labs||[]).map(name=>`<button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again · Right-click to clear exclusion</small></button>`).join(''):'';
  if(!lab)return;
  $('remove-lab').disabled=state.jobs.some(j=>j.lab_id===lab.id&&['queued','running'].includes(j.status));
  const source=lab.vm_source, sync=$('sync-vm');
@@ -168,3 +168,28 @@ $('auto-import-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,a
  $('auto-import-dialog').close();await refresh();notify('Lab imported from VM files and saved.');
 });};
 $('setup-auto-import').onclick=()=>importDiscovered($('setup-deployed-name').value);
+
+// Manager-only actions never invoke commands on the VM.
+$('manager-settings').onclick=()=>{
+ const dialog=opDialog('manager-settings-dialog','Manager settings',`<h3>Start fresh</h3><p>Remove all imported labs, device credentials, schedules, saved backup files, job and operation history, logs, and discovery exclusions from this manager.</p><p><strong>Your VM connection, SSH key and trusted fingerprint are retained.</strong> Running labs, original VM files and the installed helper account stay as they are.</p><p>Discovery will offer deployed labs for import again. Each import still requires confirmation.</p><p>Close SSH sessions and wait for active jobs before resetting.</p><label>Type RESET to confirm<input id="manager-reset-confirm" autocomplete="off" spellcheck="false"></label><div class="dialog-actions"><button class="button secondary" id="manager-reset-cancel">Cancel</button><button class="button primary" id="manager-reset" disabled>Start fresh</button></div>`);
+ $('manager-reset-cancel').onclick=()=>dialog.close();$('manager-reset-confirm').oninput=()=>{$('manager-reset').disabled=$('manager-reset-confirm').value!=='RESET';};
+ $('manager-reset').onclick=()=>opTask(dialog,async()=>{
+  await json('/manager/reset','POST',{confirmation:$('manager-reset-confirm').value});
+  activeId='';sessionStorage.removeItem('activeLab');tab='inventory';importPreview=null;opCaps=null;
+  document.querySelectorAll('dialog[open]').forEach(d=>d.close());
+  await refresh();notify('Manager data cleared. VM connection retained; deployed labs can be imported again.');
+ });
+};
+function openExclusionMenu(name){
+ const dialog=opDialog('exclusion-menu','Excluded lab',`<p>${esc(name)}</p><p>Clear forgets this exclusion so discovery can offer the lab again. This does not import or change the lab.</p><button class="button primary" id="clear-exclusion">Clear exclusion</button>`);
+ $('clear-exclusion').onclick=()=>opTask(dialog,async()=>{await json('/discovery/forget-exclusion','POST',{name});dialog.close();await refresh();notify('Exclusion cleared. The lab can appear for import again.');});
+}
+$('excluded-labs').addEventListener('contextmenu',e=>{const button=e.target.closest('[data-allow-import]');if(button){e.preventDefault();openExclusionMenu(button.dataset.allowImport);}});
+$('excluded-labs').addEventListener('keydown',e=>{const button=e.target.closest('[data-allow-import]');if(button&&(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10'))){e.preventDefault();openExclusionMenu(button.dataset.allowImport);}});
+$('map-ssh-all').onclick=()=>{const lab=current();if(lab)opNewTab({mode:'ssh',lab:lab.id});};
+$('map-backup-all').onclick=()=>{
+ const lab=current();if(!lab)return;
+ const ready=lab.nodes.filter(n=>n.readiness==='Ready'),skipped=lab.nodes.filter(n=>n.readiness!=='Ready');
+ const dialog=opDialog('backup-all-review','Back up all configurations',`<p>${ready.length} of ${lab.nodes.length} nodes are ready for a configuration backup. This includes ready nodes that are unchecked in the inventory.</p>${skipped.length?'<p>These nodes will be skipped:</p><ul>'+skipped.map(n=>`<li>${esc(n.short_name||n.name)} · ${esc(n.readiness)}</li>`).join('')+'</ul>':''}<button class="button primary" id="backup-all-confirm" ${ready.length&&!busy()?'':'disabled'}>Back up ${ready.length} nodes</button>`);
+ $('backup-all-confirm').onclick=()=>opTask(dialog,async()=>{await json('/labs/'+lab.id+'/jobs','POST',{operation:'backup',node_names:ready.map(n=>n.name)});dialog.close();await refresh();notify('Configuration backup started. View progress in Backup history.');});
+};

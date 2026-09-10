@@ -91,7 +91,7 @@ class LoggingTests(unittest.TestCase):
                 with self.subTest(kind=kind,value=value),self.assertRaises(ValueError): normalized(kind,value)
     def test_log_auth_filters_and_restart_persistence(self):
         self.store.event('fixture','failure',lab_id='lab',job_id='run',node='SW1',level='error')
-        self.assertEqual(self.client.get('/api/logs').status_code,401)
+        self.assertEqual(self.client.get('/api/logs', headers={'Origin':'https://other.example'}).status_code,403)
         r=self.client.get('/api/logs?lab_id=lab&job_id=run&node=sw&level=error',headers=self.auth)
         self.assertEqual(len(r.json()['events']),1)
         self.assertEqual(self.client.get('/api/logs?limit=9999',headers=self.auth).status_code,422)

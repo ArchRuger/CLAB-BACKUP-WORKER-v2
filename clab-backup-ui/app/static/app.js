@@ -6,15 +6,13 @@ const current=()=>state.labs.find(l=>l.id===activeId);
 const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status))||(state.operations||[]).some(j=>['queued','running'].includes(j.status));
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 async function api(path,options={}){
- const headers={Authorization:'Bearer '+(sessionStorage.getItem('uiToken')||''),...(options.headers||{})};
+ const headers={...(options.headers||{})};
  const response=await fetch('/api'+path,{...options,headers});
- if(response.status===401){showLogin();throw new Error('Enter the worker UI access token.');}
  if(!response.ok){let data;try{data=await response.json();}catch{data={detail:'Request failed'};}
  throw new Error(typeof data.detail==='string'?data.detail:'Check the form fields and try again.');}
  return response;
 }
 async function json(path,method,data){return (await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
-function showLogin(){if(!$('login-dialog').open)$('login-dialog').showModal();}
 async function refresh(){const response=await api('/state');state=await response.json();if(!current())activeId=state.labs[0]?.id||'';render();if(tab==='logs')await refreshLogs();}
 function selectLab(id){if($('details-dialog').open)$('details-dialog').close();activeId=id;tab='inventory';sessionStorage.setItem('activeLab',id);$('search').value='';$('log-job').value='';render();}
 function platformLabel(kind){return state.platforms[kind]?.label||(kind==='ssh'?'Generic SSH / Linux':'Unmapped');}
@@ -23,7 +21,7 @@ function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platf
 function render(){
  const lab=current();
  $('labs').innerHTML=state.labs.length?[...state.labs].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)).map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${l.favorite?'★ ':''}${esc(l.name)}<small>${l.nodes.length} nodes · ${esc(l.deployment?.status||'Unlinked')}</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
- $('app-version').textContent='v'+(state.version||'1.11.0');
+ $('app-version').textContent='v'+(state.version||'1.12.0');
  $('worker-state').textContent=busy()?'SSH job in progress':'Worker idle';
  $('empty').hidden=!!lab;$('lab-content').hidden=!lab;
  $('title').textContent=lab?.name||'Your next lab starts here.';$('breadcrumb').textContent=lab?.name||'Overview';
@@ -34,6 +32,8 @@ function render(){
  if(typeof renderLabOperations==='function')renderLabOperations();
  if(!lab)return;
  $('node-count').textContent=lab.nodes.length;
+ $('map-ssh-all').disabled=!lab.nodes.some(n=>n.ssh_ready);
+ $('map-backup-all').disabled=busy()||!lab.nodes.some(n=>n.readiness==='Ready');
  const enabled=lab.nodes.filter(n=>n.enabled), ready=enabled.filter(n=>n.readiness==='Ready');
  $('enabled-count').textContent=enabled.length;$('ready-count').textContent=ready.length;
  $('schedule-summary').textContent=lab.interval?(lab.deployment&& !['Running','Unlinked'].includes(lab.deployment.status)?'Paused · ':'')+lab.interval+' min':'Manual';
@@ -75,9 +75,6 @@ function toggleEnable(){$('enable-fields').hidden=$('profile-platform').value!==
 function toggleAuth(){toggleEnable();const isKey=$('auth-type').value==='key';$('password-fields').hidden=isKey;$('key-fields').hidden=!isKey;$('private-key').required=isKey;}
 function openNode(name){const lab=current(),n=lab.nodes.find(n=>n.name===name);if(!n)return;$('node-form').querySelector('.form-error').textContent='';$('node-title').textContent=n.name;$('node-name').value=n.name;$('node-short-name').value=n.short_name||'';$('node-address').value=n.address;$('node-port').value=n.port;$('node-endpoint-mode').value=n.endpoint_mode||'manual';$('node-endpoint-mode').disabled=!lab.deployment_name;$('node-platform').innerHTML=platformOptions(true);$('node-platform').value=n.platform;$('node-enabled').checked=n.enabled;$('node-profile').innerHTML='<option value="">NOS default / inventory credentials</option>'+lab.profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.label)} · ${esc(p.username)}</option>`).join('');$('node-profile').value=n.profile_id;$('node-dialog').showModal();}
 async function withForm(form,fn){const button=form.querySelector('button[type=submit]');button.disabled=true;const error=form.querySelector('.form-error');if(error)error.textContent='';try{await fn();}catch(e){if(error)error.textContent=e.message;else notify(e.message);}finally{button.disabled=false;}}
-$('login-dialog').addEventListener('cancel',e=>e.preventDefault());
-$('login-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{sessionStorage.setItem('uiToken',$('token').value.trim());await refresh();$('login-dialog').close();$('token').value='';});});
-$('logout').onclick=()=>{sessionStorage.removeItem('uiToken');logRequest++;logEvents=[];$('log-rows').innerHTML='';state={labs:[],jobs:[],platforms:{}};activeId='';render();showLogin();};
 $('new-lab').onclick=$('add-lab').onclick=$('import-empty').onclick=()=>openImport();$('import-top').onclick=()=>openImport(!!current());
 document.querySelectorAll('.close').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{showTab(b.dataset.tab);if(tab==='logs')refreshLogs().catch(e=>notify(e.message));});
@@ -155,5 +152,5 @@ async function refreshLogs(){
 for(const id of ['log-scope','log-level','log-node','log-job'])$(id).addEventListener('change',refreshLogs);
 $('refresh-logs').onclick=refreshLogs;
 $('download-logs').onclick=()=>{const blob=new Blob([logEvents.map(e=>JSON.stringify(e)).join('\n')+'\n'],{type:'application/x-ndjson'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='backup-action-logs.jsonl';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-if(sessionStorage.getItem('uiToken'))refresh().catch(e=>notify(e.message));else showLogin();
-setInterval(()=>{if(sessionStorage.getItem('uiToken')&&!$('login-dialog').open)refresh().catch(()=>{});},4000);
+refresh().catch(e=>notify(e.message));
+setInterval(()=>{refresh().catch(()=>{});},4000);

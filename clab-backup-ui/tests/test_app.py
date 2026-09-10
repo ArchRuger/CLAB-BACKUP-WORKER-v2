@@ -55,7 +55,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(result.status_code,200,result.text)
         return result.json()
     def test_auth_and_inventory_secret_redaction(self):
-        self.assertEqual(self.client.get('/api/state').status_code,401)
+        self.assertEqual(self.client.get('/api/state', headers={'Origin':'https://other.example'}).status_code,403)
         lab=self.upload()
         self.assertEqual(len(lab['nodes']),4)
         self.assertNotIn('test-secret',json.dumps(lab))

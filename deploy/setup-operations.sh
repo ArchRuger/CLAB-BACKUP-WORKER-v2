@@ -3,13 +3,12 @@
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-roots=(); network=false; sharing=false
+roots=(); network=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --lab-root) [[ $# -ge 2 ]] || exit 64; roots+=("$2"); shift 2;;
     --allow-downloads) network=true; shift;;
-    --allow-sharing) sharing=true; shift;;
-    *) echo 'Options: --lab-root /trusted/directory --allow-downloads --allow-sharing' >&2; exit 64;;
+    *) echo 'Options: --lab-root /trusted/directory --allow-downloads' >&2; exit 64;;
   esac
 done
 [[ -f /home/clab-discovery/.ssh/authorized_keys && -f /etc/sudoers.d/clab-manager-discovery ]] || { echo 'Set up the discovery account first.' >&2; exit 1; }
@@ -25,19 +24,19 @@ done
 [[ ! -L /etc/clab-manager && ! -L /etc/clab-manager/operations.json && ! -L /usr/local/sbin/clab-manager-operate && ! -L /usr/local/sbin/clab-manager-gateway && ! -L /usr/local/lib/clab-manager/host_operations.py ]] || exit 1
 install -d -o root -g root -m 0700 /etc/clab-manager
 install -d -o root -g root -m 0755 /srv/containerlab-node-manager/projects
-/usr/bin/python3 - "$clab_bin" "$docker_bin" "$git_bin" "$network" "$sharing" "${roots[@]}" <<'PY'
+/usr/bin/python3 - "$clab_bin" "$docker_bin" "$git_bin" "$network" "${roots[@]}" <<'PY'
 import json, os, pathlib, sys
 path=pathlib.Path('/etc/clab-manager/operations.json')
 old=json.loads(path.read_text()) if path.exists() else {}
 roots=set(old.get('roots', ['/etc/containerlab','/srv/containerlab-node-manager/projects']))
-for value in sys.argv[6:]:
+for value in sys.argv[5:]:
     p=pathlib.Path(value)
     if not p.is_absolute() or '..' in p.parts or str(p)=='/' or any(q.is_symlink() for q in (p,*p.parents)):
         sys.exit('Use absolute trusted project roots without symlinks; filesystem root is not allowed.')
     roots.add(str(p))
 value=dict(clab=sys.argv[1],docker=sys.argv[2],git=sys.argv[3] or '/usr/bin/git',roots=sorted(roots),
            projects='/srv/containerlab-node-manager/projects',network=old.get('network',False) or sys.argv[4]=='true',
-           sharing=old.get('sharing',False) or sys.argv[5]=='true',fcli_image=old.get('fcli_image','ghcr.io/srl-labs/nornir-srl:latest'))
+           )
 tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(value));os.chmod(tmp,0o600);os.replace(tmp,path)
 PY
 install -o root -g root -m 0644 "$script_dir/../clab-backup-ui/app/host_operations.py" /usr/local/lib/clab-manager/host_operations.py

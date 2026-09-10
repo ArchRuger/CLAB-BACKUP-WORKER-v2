@@ -111,4 +111,4 @@ class ImportConfirmationTests(unittest.TestCase):
 
     def test_both_import_endpoints_require_authentication(self):
         for route in ('import-preview', 'import'):
-            self.assertEqual(self.client.post('/api/discovery/' + route, json={'name': 'training', 'token': 'x'*32}).status_code, 401)
+            self.assertEqual(self.client.post('/api/discovery/' + route, headers={'Origin':'https://other.example'}, json={'name': 'training', 'token': 'x'*32}).status_code, 403)

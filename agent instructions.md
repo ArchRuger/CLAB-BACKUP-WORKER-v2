@@ -1,5 +1,22 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.12.0 addendum — approved simplification
+
+This supersedes the 1.11.0 feature inventory. Retain VM connection and document
+setup/recovery in VM-CONNECTION.md. UI token login and lock removed; retain
+same-origin API/WS protections and SSH ticket/credential handling. Remove VM YAML
+editing, path/link/folder lab shortcuts, separate layout menu, SSHX/GoTTY and fcli
+from UI/API/helper/setup. Retain New topology, VM browser, clone/catalog, source
+delete, lifecycle and favorites. Only interactive draw.io remains, with full
+editable XML export (annotations, labels, grouping, colors and coordinates).
+Inspect output is a table; topology header has SSH all / Backup all review.
+Clear exclusion forgets ignored_labs without import. Start fresh is confirmed,
+manager-only and preserves VM authentication/fingerprint. Its journal recovers
+interrupted deletion; busy jobs/discovery/SSH prevent reset. Never reset real
+user data for validation. Browser fixture and unit tests use isolated data.
+Source folder ~/projects/v1.12.0; latest fetched origin/main 7c5cef6 exactly
+matches the delivered 1.11.0 ZIP. Source packages/patches remain in ignored dist/.
+
 ## Release 1.11.0 addendum — approved lab-level operations
 
 User approved all lab-level commands in LAB-COMMANDS-PLAN.md. This supersedes

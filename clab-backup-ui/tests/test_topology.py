@@ -77,7 +77,7 @@ class TopologyTests(unittest.TestCase):
             app=create_app(tmp);app.state.store.state['labs'].append(self.lab)
             client=TestClient(app);auth={'Authorization':'Bearer '+app.state.store.token}
             path='/api/labs/lab/topology'
-            self.assertEqual(client.get(path).status_code,401)
+            self.assertEqual(client.get(path, headers={'Origin':'https://other.example'}).status_code,403)
             result=client.post(path,headers=auth,files={'annotations':('lab.annotations.json',json.dumps(self.annotations),'application/json')})
             self.assertEqual(result.status_code,200,result.text)
             self.assertNotIn('drawing',client.get('/api/state',headers=auth).json()['labs'][0])

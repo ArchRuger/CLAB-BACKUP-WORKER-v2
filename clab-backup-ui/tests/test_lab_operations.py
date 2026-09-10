@@ -10,7 +10,7 @@ from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 from app.host_operations import HostOperations, LIFECYCLE, digest, capture, stream
-from app.lab_operations import LabOperations, scrub, drawio, sharing_links
+from app.lab_operations import LabOperations, scrub, drawio
 from app.store import Store
 import test_discovery as discovery_tests
 from test_discovery import YAML
@@ -27,7 +27,7 @@ class HostOperationTests(unittest.TestCase):
             if '--help' in argv: return (1, '') if argv[1] in self.missing else (0, '--name --cleanup --graceful help')
             if argv[1:2] == ['inspect']: return 0, json.dumps(self.rows)
             return 0, 'fixture'
-        self.host = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', git='/usr/bin/git', roots=[str(self.root)], projects=str(self.root), network=True, sharing=True), run)
+        self.host = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', git='/usr/bin/git', roots=[str(self.root)], projects=str(self.root), network=True), run)
 
     def tearDown(self): self.tmp.cleanup()
     def request(self, action, **options): return dict(action=action, name='training', path=str(self.path), options=options)
@@ -77,12 +77,11 @@ class HostOperationTests(unittest.TestCase):
 
     def test_write_delete_recovery_and_deployed_delete_refusal(self):
         with self.assertRaisesRegex(ValueError,'Destroy'):self.host.plan(self.request('delete'))
-        changed=YAML.decode()+'\n# replacement\n';req=self.request('write',text=changed);req['digest']=self.host.plan(req)['digest']
-        result=self.host.execute(req,lambda _:None)
-        self.assertEqual(self.path.read_text(),changed);self.assertEqual(Path(result['recovery_path']).read_bytes(),YAML)
+        with self.assertRaisesRegex(ValueError,'Unsupported'): self.host.plan(self.request('write',text='replacement'))
+        self.assertEqual(self.path.read_bytes(),YAML)
         self.rows={};req=self.request('delete');req['digest']=self.host.plan(req)['digest']
         result=self.host.execute(req,lambda _:None)
-        self.assertFalse(self.path.exists());self.assertEqual(Path(result['recovery_path']).read_text(),changed)
+        self.assertFalse(self.path.exists());self.assertEqual(Path(result['recovery_path']).read_bytes(),YAML)
 
     def test_create_never_overwrites_and_limits_reads(self):
         req={**self.request('create',text=YAML.decode()),'path':str(self.root/'new.yaml')};req['digest']=self.host.plan(req)['digest']
@@ -98,14 +97,9 @@ class HostOperationTests(unittest.TestCase):
             with self.assertRaises(ValueError):self.host.plan(self.request('clone',url=url,project='example'))
         self.host.config['network']=False
         with self.assertRaises(ValueError):self.host.plan(req)
-        self.assertEqual(self.host.plan(self.request('gotty-attach',port=8082))['argv'][-2:],['--port','8082'])
-        with self.assertRaises(ValueError):self.host.plan(self.request('gotty-attach',port=22))
-        self.host.config['sharing']=False
-        with self.assertRaises(ValueError):self.host.plan(self.request('sshx-attach'))
-        plan=self.host.plan(self.request('fcli',query='bgp-peers --format json',network='clab'))
-        self.assertEqual(plan['argv'][-3:],['bgp-peers','--format','json']);self.assertIn('never',plan['argv'])
-        self.assertTrue(any(arg.endswith(':/topo.yml:ro') for arg in plan['argv']))
-        with self.assertRaises(ValueError):self.host.plan(self.request('fcli',query='--privileged'))
+        for action in ('write','fcli','sshx-attach','sshx-detach','sshx-reattach','gotty-attach','gotty-detach','gotty-reattach'):
+            with self.assertRaises(ValueError): self.host.plan(self.request(action))
+            self.assertNotIn(action,self.host.capabilities()['actions'])
 
     def test_inspection_stderr_does_not_corrupt_json(self):
         code, out=capture([sys.executable,'-c','import sys; print("[]"); print("INFO inspection",file=sys.stderr)'],cwd=str(self.root))
@@ -145,7 +139,7 @@ class OperationAPITests(unittest.TestCase):
 
     def test_auth_review_cancel_and_single_use_confirmation(self):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
-            self.assertEqual(self.client.get('/api/operations/capabilities').status_code,401)
+            self.assertEqual(self.client.get('/api/operations/capabilities', headers={'Origin':'https://other.example'}).status_code,403)
             preview=self.preview();self.assertEqual(self.store.state['operations'],[])
             response=self.confirm(preview['token']);self.assertEqual(response.status_code,200,response.text)
             self.assertEqual(self.confirm(preview['token']).status_code,409);submit.assert_called_once()
@@ -174,30 +168,29 @@ class OperationAPITests(unittest.TestCase):
             job=self.confirm(self.preview()['token']).json();args=submit.call_args.args
             args[0](*args[1:])
             saved=self.store.state['operations'][0];self.assertEqual(saved['status'],'succeeded');self.assertIn('first line',saved['output'])
-            for secret in ('host-secret','should-not-persist',self.store.token):self.assertNotIn(secret,saved['output'])
+            for secret in ('host-secret','should-not-persist'):self.assertNotIn(secret,saved['output'])
             self.assertNotIn('output',self.client.get('/api/state',headers=self.auth).json()['operations'][0])
             self.assertEqual(Store(self.tmp.name).state['operations'][0]['status'],'succeeded')
             saved['status']='running';self.store.save()
             second=LabOperations(self.store,self.service);second.close();self.assertEqual(saved['status'],'interrupted')
 
-    def test_yaml_validation_diff_stale_source_and_name_override(self):
-        with self.fixture():
-            changed=YAML.decode()+'\n# edit\n';preview=self.preview('write',options={'text':changed});self.assertIn('+# edit',preview['diff'])
-            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='write',lab_id=self.lab_id,options={'text':changed.replace('name: training','name: other')}))
-            self.assertEqual(response.status_code,400)
-            self.store.lab(self.lab_id)['deployment_name']='training-override'
-            preview=self.preview('write',options={'text':changed});self.assertEqual(preview['name'],'training-override')
+    def test_removed_actions_rejected_even_with_legacy_host_helper(self):
+        with self.fixture() as remote:
+            for action in ('write','fcli','sshx-attach','sshx-detach','sshx-reattach','gotty-attach','gotty-detach','gotty-reattach'):
+                response=self.client.post('/api/operations/preview',json={'action':action,'lab_id':self.lab_id})
+                self.assertEqual(response.status_code,400,response.text)
+            remote.assert_not_called()
 
     def test_layout_drawio_favorite_and_no_vm_mutation(self):
         with self.fixture():
             lab=self.store.lab(self.lab_id);alias=lab['drawing']['nodes'][0]['alias']
             response=self.client.put('/api/labs/'+self.lab_id+'/layout',headers=self.auth,json={'positions':{alias:[600,300]}})
             self.assertEqual(response.status_code,200,response.text)
-            for layout in ('interactive','horizontal','vertical'):
+            for layout in ('interactive',):
                 response=self.client.get('/api/labs/'+self.lab_id+'/drawio?layout='+layout,headers=self.auth)
                 self.assertEqual(response.status_code,200);root=ET.fromstring(response.content)
-                self.assertEqual(len(root.findall('.//mxCell[@vertex="1"]')),2)
-                self.assertEqual(len(root.findall('.//mxCell[@edge="1"]')),1)
+                self.assertEqual(len(root.findall('.//mxCell[@id="node-0"]')),1)
+                self.assertEqual(len(root.findall('.//mxCell[@id="link-0"]')),1)
             response=self.client.put('/api/labs/'+self.lab_id+'/operations-settings',headers=self.auth,json={'favorite':True})
             self.assertEqual(response.status_code,200);self.assertTrue(Store(self.tmp.name).lab(self.lab_id)['favorite'])
             self.assertEqual(self.store.state['operations'],[])
@@ -208,11 +201,6 @@ class OperationAPITests(unittest.TestCase):
         self.assertNotIn('abc',result);self.assertNotIn('verysecret',result);self.assertIn('okay',result)
         self.assertLessEqual(len(scrub('x'*600000,state)),512*1024)
 
-    def test_gotty_json_ports_and_host_ip_placeholder_links(self):
-        self.assertEqual(sharing_links('Info\n[{"port":8082}]','gotty-attach',{'address':'127.0.0.1'}),['http://HOST_IP:8082'])
-        self.assertEqual(sharing_links('http://HOST_IP:8082','gotty-reattach',{'address':'2001:db8::1'}),['http://[2001:db8::1]:8082'])
-        self.assertEqual(sharing_links('http://user:secret@example.test','sshx-attach',{'address':'host'}),[])
-
     def test_failed_persistent_save_keeps_review_and_does_not_submit(self):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
             preview=self.preview();original=list(self.store.state['operations'])
@@ -222,12 +210,7 @@ class OperationAPITests(unittest.TestCase):
             self.assertEqual(self.store.state['operations'],original)
             self.assertIn(preview['token'],self.app.state.operations.previews);submit.assert_not_called()
 
-    def test_fcli_rejects_incompatible_lab_and_uses_current_vm_network(self):
-        with self.fixture() as remote:
-            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='fcli',lab_id=self.lab_id))
-            self.assertEqual(response.status_code,400)
-            self.store.lab(self.lab_id)['nodes'][0]['kind']='nokia_srlinux'
-            self.raw=YAML+b'\nmgmt:\n  network: training-network\n'
-            self.preview('fcli',options={'query':'lldp'})
-            req=next(c.args[1] for c in reversed(remote.call_args_list) if c.args[1]['mode']=='preview')
-            self.assertEqual(req['options']['network'],'training-network')
+    def test_removed_drawio_layouts_rejected(self):
+        with self.fixture():
+            for layout in ('horizontal','vertical'):
+                self.assertEqual(self.client.get('/api/labs/'+self.lab_id+'/drawio?layout='+layout).status_code,400)

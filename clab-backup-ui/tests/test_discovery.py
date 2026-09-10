@@ -167,7 +167,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(saved['nodes'][0]['address'],'172.20.20.2')
 
     def test_authentication_and_invalid_inputs(self):
-        self.assertEqual(self.client.get('/api/discovery').status_code,401)
+        self.assertEqual(self.client.get('/api/discovery', headers={'Origin':'https://other.example'}).status_code,403)
         r=self.client.put('/api/host',headers=self.auth,json=dict(address='localhost;whoami',username='x',password='x'))
         self.assertEqual(r.status_code,400)
         r=self.client.post('/api/lab-definitions',headers=self.auth,files={'definition':('bad.yaml',b'name: x\ntopology: {}')})

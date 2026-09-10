@@ -268,7 +268,9 @@ class Discovery:
     def refresh(self, wait=False):
         if not self.lock.acquire(timeout=45 if wait else 0): return self.public()
         try:
-            with self.store.lock: host = copy.deepcopy(self.store.state.get('host', {}))
+            with self.store.lock:
+                if self.store.reset_pending: return self.public()
+                host = copy.deepcopy(self.store.state.get('host', {}))
             if not host.get('enabled'): return self.public()
             error = ''; labs = None; fingerprint = ''
             try:
@@ -498,6 +500,19 @@ class Discovery:
                 state['discovery'].get('pending_imports', {}).pop(data.name, None)
                 self.store.event('lab.auto_import', 'Imported VM lab files after user confirmation', lab_id=candidate['id'])
                 return public_lab(candidate)
+
+        @app.post('/api/discovery/forget-exclusion')
+        def forget_exclusion(data: AllowImport):
+            with self.store.lock:
+                previous = self.store.state.get('ignored_labs', [])
+                self.store.state['ignored_labs'] = [name for name in previous if name != data.name]
+                try: self.store.save()
+                except OSError:
+                    self.store.state['ignored_labs'] = previous
+                    raise HTTPException(500, 'Could not save the change. Exclusion retained.')
+                self.import_previews = {k:v for k,v in self.import_previews.items() if v['name'] != data.name}
+            self.wake.set()
+            return {'cleared': data.name}
 
         @app.post('/api/discovery/allow-import')
         def allow_import(data: AllowImport):

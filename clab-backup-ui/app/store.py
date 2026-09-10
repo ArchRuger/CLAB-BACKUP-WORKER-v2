@@ -2,7 +2,8 @@ import copy
 import json
 import os
 from pathlib import Path
-import secrets
+import shutil
+import uuid
 import threading
 from datetime import datetime, timezone
 from cryptography.fernet import Fernet
@@ -17,10 +18,9 @@ class Store:
             self.atomic(key, Fernet.generate_key())
         self.cipher = Fernet(key.read_bytes())
         token = self.root/'ui.token'
-        if not token.exists():
-            self.atomic(token, secrets.token_urlsafe(32).encode())
-        self.token = token.read_text().strip()
+        self.token = token.read_text().strip() if token.exists() else ''  # Legacy token is no longer used for access.
         self.path = self.root/'state.enc'
+        self.finish_reset()
         self.state = json.loads(self.cipher.decrypt(self.path.read_bytes())) if self.path.exists() else {'labs': [], 'jobs': []}
         for job in self.state['jobs']:
             if job['status'] in ('queued','running'):
@@ -41,6 +41,62 @@ class Store:
     def snapshot(self):
         with self.lock:
             return copy.deepcopy(self.state)
+
+    @property
+    def reset_pending(self):
+        return (self.root/'.reset-pending').exists()
+
+    def checked_tree(self, path):
+        root = self.root.resolve()
+        if path.is_symlink() or getattr(path, 'is_junction', lambda: False)() or not path.resolve().is_relative_to(root) or path.resolve() == root:
+            raise OSError('Unsafe manager storage path; reset stopped.')
+        if path.is_dir():
+            for child in path.iterdir(): self.checked_tree(child)
+
+    def finish_reset(self):
+        """Resume a durable reset journal before any worker writes new state."""
+        stage = self.root/'.reset-pending'
+        if not stage.exists(): return
+        self.checked_tree(stage)
+        prepared = stage/'new-state.enc'
+        if not prepared.exists():
+            # A failure creating the journal cannot have moved managed files yet.
+            if any(stage.iterdir()): raise OSError('Incomplete reset journal needs attention.')
+            stage.rmdir(); return
+        payload = prepared.read_bytes()
+        fresh = json.loads(self.cipher.decrypt(payload))
+        current = json.loads(self.cipher.decrypt(self.path.read_bytes())) if self.path.exists() else {}
+        if current.get('reset_id') != fresh['reset_id']:
+            for name in ('backups', 'events.jsonl', 'events.jsonl.1', 'events.jsonl.2', 'events.jsonl.3', 'ui.token'):
+                source = self.root/name
+                if source.exists():
+                    self.checked_tree(source)
+                    os.replace(source, stage/name)
+            self.atomic(self.path, payload)
+        self.state = fresh
+        # Validate the absolute staged tree again before recursive deletion.
+        self.checked_tree(stage)
+        for child in stage.iterdir():
+            if child == prepared: continue
+            if child.is_dir(): shutil.rmtree(child)
+            else: child.unlink()
+        prepared.unlink()
+        stage.rmdir()
+
+    def reset(self):
+        with self.lock:
+            if self.reset_pending:
+                self.finish_reset(); return
+            for name in ('backups', 'events.jsonl', 'events.jsonl.1', 'events.jsonl.2', 'events.jsonl.3', 'ui.token'):
+                self.checked_tree(self.root/name)
+            host = copy.deepcopy(self.state.get('host', {}))
+            if host: host['revision'] = uuid.uuid4().hex
+            fresh = {'labs': [], 'jobs': [], 'operations': [], 'ignored_labs': [],
+                     'host': host, 'reset_id': uuid.uuid4().hex}
+            stage = self.root/'.reset-pending'
+            stage.mkdir(mode=0o700)
+            self.atomic(stage/'new-state.enc', self.cipher.encrypt(json.dumps(fresh).encode()))
+            self.finish_reset()
     def lab(self, lab_id):
         return next((x for x in self.state['labs'] if x['id'] == lab_id), None)
 

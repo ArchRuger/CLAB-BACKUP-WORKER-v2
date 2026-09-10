@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import queue
 import re
-import shlex
 import signal
 import stat
 import subprocess
@@ -21,10 +20,9 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.11.0'
+VERSION = '1.12.0'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
-FCLI = ('bgp-peers', 'bgp-rib', 'ipv4-rib', 'lldp', 'mac', 'ni', 'subif', 'sys-info')
 ENV = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root',
        'GIT_TERMINAL_PROMPT': '0', 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null', 'NO_COLOR': '1'}
 
@@ -141,16 +139,9 @@ class HostOperations:
                                'graceful': '--graceful' in help_text}
         if not actions['redeploy']['available'] and actions['deploy']['available'] and actions['destroy']['available']:
             actions['redeploy'] = {**actions['destroy'], 'fallback': True}
-        for tool in ('sshx', 'gotty'):
-            available = bool(self.config.get('sharing')) and bool(self.help('tools', tool))
-            for action in ('attach', 'detach', 'reattach'):
-                actions[tool + '-' + action] = {'available': available and bool(self.help('tools', tool, action))}
-        image = self.config.get('fcli_image', 'ghcr.io/srl-labs/nornir-srl:latest')
-        code, _ = self.run([self.docker, 'image', 'inspect', image])
-        actions['fcli'] = {'available': code == 0, 'image': image}
         actions['clone'] = {'available': bool(self.config.get('network')) and os.access(self.config.get('git', '/usr/bin/git'), os.X_OK)}
         return {'protocol': PROTOCOL, 'version': VERSION, 'actions': actions, 'roots': [str(p) for p in self.roots],
-                'network': bool(self.config.get('network')), 'sharing': bool(self.config.get('sharing'))}
+                'network': bool(self.config.get('network'))}
 
     def popular(self):
         if not self.config.get('network'): raise ValueError('Enable --allow-downloads on the VM to browse the online popular-lab catalog.')
@@ -178,8 +169,10 @@ class HostOperations:
         return groups
 
     def plan(self, req):
-        action = req.get('action'); options = req.get('options') or {}
-        if not isinstance(options, dict) or set(options) - {'cleanup', 'graceful', 'network', 'query', 'port', 'url', 'project', 'text'}:
+        action = req.get('action')
+        if action not in (*LIFECYCLE, 'inspect-all', 'create', 'delete', 'clone'): raise ValueError('Unsupported lab operation.')
+        options = req.get('options') or {}
+        if not isinstance(options, dict) or set(options) - {'cleanup', 'graceful', 'url', 'project', 'text'}:
             raise ValueError('Unsupported operation options.')
         for key in ('cleanup', 'graceful'):
             if key in options and type(options[key]) is not bool: raise ValueError('Invalid boolean option.')
@@ -215,7 +208,7 @@ class HostOperations:
                 original = row.get('absLabPath') or row.get('labPath')
                 if original and Path(original).is_absolute() and Path(original) != path:
                     raise ValueError('The deployed lab name belongs to a different topology path.')
-            if action in ('write', 'delete'):
+            if action in ('delete',):
                 if action == 'delete' and rows: raise ValueError('Destroy the deployment before deleting its source YAML.')
             elif action in LIFECYCLE:
                 help_text = self.help(action)
@@ -242,30 +235,8 @@ class HostOperations:
                 if options.get('cleanup'):
                     directories = sorted({str(r.get('labdir') or (r.get('labels') or {}).get('clab-node-lab-dir') or path.parent / ('clab-' + name)) for r in rows}) or [str(path.parent / ('clab-' + name))]
                     warnings.append('Cleanup removes generated lab artifacts. Expected lab directory: ' + ', '.join(directories) + '. Check any custom lab directory configured on the VM.')
-            elif action.startswith(('sshx-', 'gotty-')):
-                tool, verb = action.split('-', 1)
-                if verb not in ('attach', 'detach', 'reattach'): raise ValueError('Unknown sharing operation.')
-                if not self.config.get('sharing'): raise ValueError('Lab sharing is disabled in host operations setup.')
-                if not self.help('tools', tool): raise ValueError('Install a Containerlab version with ' + tool + ' support.')
-                argv = [self.clab, 'tools', tool, verb, '-l', name]
-                if tool == 'gotty' and verb != 'detach':
-                    port = options.get('port', 8082)
-                    if type(port) is not int or not 1024 <= port <= 65535: raise ValueError('Choose a sharing port from 1024 to 65535.')
-                    argv += ['--port', str(port)]
-                warnings.append('Creates or changes shared terminal access. Review network reachability and who receives the link.')
-            elif action == 'fcli':
-                image = self.config.get('fcli_image', 'ghcr.io/srl-labs/nornir-srl:latest')
-                code, _ = self.run([self.docker, 'image', 'inspect', image])
-                if code: raise ValueError('Load the nornir-srl fcli image on the VM first.')
-                query = options.get('query', 'sys-info')
-                if not isinstance(query, str) or len(query) > 1000: raise ValueError('Invalid fcli query.')
-                args = shlex.split(query)
-                if not args or args[0].startswith('-') or len(args) > 32 or any(any(ord(c) < 32 for c in a) for a in args): raise ValueError('Enter an fcli subcommand and its options.')
-                network = identity(options.get('network', 'clab'))
-                argv = [self.docker, 'run', '--pull', 'never', '--rm', '--network', network,
-                        '-v', '/etc/hosts:/etc/hosts:ro', '-v', str(path) + ':/topo.yml:ro', image, '-t', '/topo.yml', *args]
             else: raise ValueError('Unknown lab operation.')
-        if action in ('create', 'write'):
+        if action in ('create',):
             text = options.get('text')
             if not isinstance(text, str) or len(text.encode()) > LIMIT: raise ValueError('YAML must be smaller than 1 MiB.')
         base = {'action': action, 'name': name, 'source_name': req.get('source_name', name), 'path': str(path) if path else '', 'options': options,
@@ -277,7 +248,7 @@ class HostOperations:
         if req.get('digest') != plan['digest']: raise ValueError('The topology or deployment changed. Preview the operation again.')
         action = plan['action']; path = Path(plan['path']) if plan['path'] else None
         result = {}; code = 0
-        if action in ('create', 'write', 'delete'):
+        if action in ('create', 'delete'):
             if action != 'create':
                 history = self.path(str(path.parent / '.clab-manager-history'), exists=False)
                 history.mkdir(mode=0o700, exist_ok=True)

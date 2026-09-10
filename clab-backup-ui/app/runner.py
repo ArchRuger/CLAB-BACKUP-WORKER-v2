@@ -100,6 +100,7 @@ class Runner:
         from .lab_operations import operation_busy
         with self.store.lock:
             if operation_busy(self.store.state,lab_id): raise ValueError('Wait for the lab operation to finish.')
+            if self.store.reset_pending: raise ValueError('Finish the manager reset before starting a job.')
             if any(j['status'] in ('queued','running') for j in self.store.state['jobs']):
                 raise ValueError('A job is already running. Wait for it to finish.')
             lab=self.store.lab(lab_id)
@@ -281,6 +282,7 @@ class Runner:
                         nodes=outcomes or [{'name':n['name'],'status':'failed','message':message} for n in nodes])
     def tick(self):
         while not self.stopping.wait(2):
+            if self.store.reset_pending: continue
             state=self.store.snapshot()
             for lab in state['labs']:
                 if lab['interval'] and lab.get('next_run') and lab['next_run']<=time.time():

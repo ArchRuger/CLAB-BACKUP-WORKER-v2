@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.11.0
+# Containerlab Node Manager — 1.12.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -8,17 +8,26 @@ backups as training labs are replaced.
 **Start here:** [Fresh VM installation guide](FRESH-VM-GUIDE.md) — Ubuntu, Docker, containerlab,
 persistent storage, SSH keys, first launch, automatic imports, upgrades and backups.
 
-## Lab commands in 1.11.0
+## Changes in 1.12.0
 
-Lab actions now covers deployment/cleanup, apply, whole-lab start/stop/restart,
-inspect/save, SSH all, VM project editing and browsing, favorites, topology layout
-editing and draw.io export. Optional repository/popular-lab acquisition, SSHX/GoTTY
-sharing and SR Linux fcli tools are included. Commands are reviewed, run through a
-restricted host helper, and recorded in persistent operation history.
+The workspace opens directly without an access-token login. VM and device SSH
+credentials remain encrypted in persistent storage. Keep VM connection enabled
+for discovery, automatic file import and reviewed lab commands.
 
-[Lab command setup, coverage and prerequisites](LAB-OPERATIONS.md) explains the upgrade.
-Enable once with `sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab`.
-The existing SSH key and data are retained. Future launches update enabled helpers.
+- Retained: lifecycle commands, inspect/save, SSH all, favorites, VM projects,
+  new project creation, optional repository downloads, backup history and SuperPuTTY.
+- Removed: existing VM YAML editing, lab path/link/folder shortcuts, separate
+  layout control, SSHX/GoTTY and fcli. VM project files open read-only.
+- One interactive draw.io editor with full editable export: nodes, connections,
+  interface labels, groups, notes, colors and positions. No online service needed.
+- Inspect results appear as a table. VM projects use an expandable vertical tree.
+- Topology header offers SSH all and Back up all configs, including expanded view.
+- Right-click an excluded lab to clear its exclusion without importing it.
+- Manager settings → Start fresh clears manager data and backup files after
+  confirmation, retaining the VM connection and leaving VM labs/files untouched.
+
+[VM connection setup and troubleshooting](VM-CONNECTION.md) covers keys, permissions,
+helper repair and upgrades. [Lab commands](LAB-OPERATIONS.md) documents retained actions.
 
 ## Setup and import improvements retained from 1.10.0
 
@@ -81,7 +90,7 @@ sudo bash deploy/start-manager.sh /absolute/path/to/clab-manager-discovery.pub -
 For upgrades with the existing discovery account/key:
 
 ```bash
-cd ~/projects/v1.11.0
+cd ~/projects/v1.12.0
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 
@@ -91,7 +100,7 @@ A manager launched with `docker run` must follow the migration guide first; the
 script refuses to start a second manager against its active data directory.
 Image-only `docker build` remains available but cannot update host-installed files.
 
-Open `http://VM_ADDRESS:8081`, enter the token printed in the logs, and configure
+Open `http://VM_ADDRESS:8081`, configure
 **VM connection**. The guide includes the restricted discovery account setup and
 existing-data migration. New deployed labs appear as Ready to import; review and confirm to save them. Existing workspaces offer Sync from VM;
 manual YAML/annotation/inventory uploads remain available. Running container status does not prove NOS login/boot readiness.

@@ -1,6 +1,6 @@
-# Containerlab Node Manager — 1.11.0
+# Containerlab Node Manager — 1.12.0
 
-Lab-level lifecycle, project, drawing, sharing and fcli controls are documented in
+Lab-level lifecycle, project and drawing controls are documented in
 [LAB-OPERATIONS.md](../LAB-OPERATIONS.md). Enable the host operations helper for
 these features. Existing node SSH/backup actions remain available.
 
@@ -18,7 +18,7 @@ The updated restricted helper reads new deployments from the topology path in
 inspect and the adjacent generated lab folder, with missing Docker labels allowed.
 Direct mode also reads files over SFTP with the same account. Discovery file details
 shows attempted paths and errors; detected lab clicks try automatic import before
-offering manual uploads. Upgrade the helper for 1.11.0 without changing its key. Existing labs
+offering manual uploads. Upgrade the helper for 1.12.0 without changing its key. Existing labs
 show file changes and offer Sync from VM without resetting saved node connections
 or history. Follow [the fresh VM guide](../FRESH-VM-GUIDE.md) for setup and upgrades.
 
@@ -55,14 +55,10 @@ interactive; the terminal does not run the backup driver's automatic enable step
 Use Disconnect or close the tab to end it; Connect / reconnect starts a new session.
 Disconnected shells are not resumed. Resize and standard terminal keys are supported.
 
-The new tab normally inherits this origin's session token from the opening tab;
-otherwise it prompts for the worker access token. No token, device password, or
-private key is placed in the URL. The backend issues single-use 30-second tickets,
-checks the WebSocket Origin, and authenticates the first WebSocket message.
-Up to 32 SSH connections (checks plus terminals) can run concurrently. Sessions
-close after 15 minutes without keyboard input or four hours total. Worker restart
-ends sessions. Locking one browser tab clears that tab's token only; explicitly
-disconnect terminal tabs when finished.
+The terminal opens directly, without a UI login. The server still requires a
+short-lived, single-use terminal ticket and checks the WebSocket origin. Device
+SSH credentials are looked up in encrypted manager storage. Closing the terminal
+tab or restarting the manager ends the connection.
 
 Only session open/close and login-check results enter action logs. Keystrokes,
 terminal output, and credentials are not recorded there. SSH host keys retain the

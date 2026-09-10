@@ -32,3 +32,18 @@ dialog.node-details{position:fixed;inset:0 0 0 auto;margin:0;width:min(560px,94v
 .op-coordinates{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.op-coordinates label{display:grid;grid-template-columns:1fr 80px 80px;align-items:center;gap:6px;font-size:12px}.op-coordinates input{width:100%;padding:8px}
 .standalone-workspace{background:#f3f6f7}.standalone-workspace main{max-width:1200px;margin:28px auto}.op-session-list{margin-top:22px}.op-session-list p{display:flex;align-items:center;gap:16px;border-bottom:1px solid #dbe3e8;padding:12px 0}.op-session-list strong{min-width:160px}.standalone-workspace .actions{margin-bottom:22px}
 @media(max-width:850px){.op-sections{grid-template-columns:1fr}.op-coordinates{grid-template-columns:1fr}.op-file-list{grid-template-columns:1fr}.operations-dialog{padding:18px}}
+
+/* A single expandable file tree, shared by the independent VM projects tab. */
+.op-file-tree{display:block;max-height:60vh;overflow:auto;padding:12px;border:1px solid var(--border,#d9e1e6);border-radius:8px;margin-top:16px}
+.op-file-tree summary{cursor:pointer;padding:10px 8px;overflow-wrap:anywhere}
+.op-tree-children{margin-left:22px;border-left:1px solid #d9e1e6;padding-left:10px}
+.op-tree-file{display:block;width:100%;text-align:left;background:transparent;border:0;padding:10px 8px;color:inherit;overflow-wrap:anywhere;cursor:pointer}
+.op-tree-file:hover,.op-file-tree summary:hover{background:#edf3f5}
+.op-inspection{overflow:auto;max-height:60vh}
+.op-inspection table{width:100%;min-width:850px}
+.op-inspection td{white-space:normal;overflow-wrap:anywhere;max-width:240px;vertical-align:top}
+.op-inspection small{display:block;margin-top:5px}
+.op-inspection caption{text-align:left;padding:12px 0}
+#topology-view .section-heading{flex-wrap:wrap;gap:12px}
+
+.vm-guide{max-width:1000px;margin:30px auto;padding:25px}.vm-guide h2{margin-top:36px}.vm-guide p{margin:5px 0;line-height:1.6}.vm-guide pre{overflow:auto;background:#152631;color:#e7eff2;padding:18px;border-radius:8px}.guide-row{display:grid;grid-template-columns:minmax(180px,1fr) 2fr;border-bottom:1px solid #d9e1e6;gap:20px;padding:12px 0;overflow-wrap:anywhere}

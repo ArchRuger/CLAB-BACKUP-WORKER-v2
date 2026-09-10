@@ -112,9 +112,9 @@ class RemoveLabTests(unittest.TestCase):
 
     def test_authentication_required_and_manual_reimport_clears_exclusion(self):
         lab = self.imported()
-        result = self.client.request('DELETE', '/api/labs/' + lab['id'], json={'name': lab['name']})
-        self.assertEqual(result.status_code, 401)
-        self.assertEqual(self.client.post('/api/discovery/allow-import', json={'name': 'training'}).status_code, 401)
+        result = self.client.request('DELETE', '/api/labs/' + lab['id'], headers={'Origin':'https://other.example'}, json={'name': lab['name']})
+        self.assertEqual(result.status_code, 403)
+        self.assertEqual(self.client.post('/api/discovery/allow-import', headers={'Origin':'https://other.example'}, json={'name': 'training'}).status_code, 403)
         self.remove(lab)
         self.register()
         self.assertEqual(self.store.state['ignored_labs'], [])

@@ -177,7 +177,7 @@ class VMFilesTests(unittest.TestCase):
             result = self.client.post('/api/labs/' + lab['id'] + '/sync', headers=self.auth, json={})
         self.assertEqual(result.status_code, 409)
         self.assertNotIn('secret', result.text)
-        self.assertEqual(self.client.post('/api/labs/' + lab['id'] + '/sync', json={}).status_code, 401)
+        self.assertEqual(self.client.post('/api/labs/' + lab['id'] + '/sync', headers={'Origin':'https://other.example'}, json={}).status_code, 403)
 
     def test_saved_display_name_still_binds_map_by_definition_identity(self):
         self.host(); self.poll(); lab = self.store.state['labs'][0]
@@ -201,7 +201,7 @@ class VMFilesTests(unittest.TestCase):
         with patch('app.discovery.inspect_host', return_value=(parse_snapshot(json.dumps(envelope()).encode()), 'SHA256:fixture')):
             result = self.confirm_import()
         self.assertEqual(len(self.store.state['labs']), 1)
-        self.assertEqual(self.client.post('/api/discovery/import-preview', json={'name': 'training'}).status_code, 401)
+        self.assertEqual(self.client.post('/api/discovery/import-preview', headers={'Origin':'https://other.example'}, json={'name': 'training'}).status_code, 403)
 
     def test_legacy_helper_import_reports_upgrade(self):
         self.host()

@@ -1,3 +1,5 @@
+> Historical 1.11.0 plan. The approved 1.12.0 simplification supersedes this inventory; see LAB-OPERATIONS.md for current features.
+
 > Approved by the user and implemented in 1.11.0. See [LAB-OPERATIONS.md](LAB-OPERATIONS.md) for delivered behavior, prerequisites and validation limits. The original proposal is retained below.
 
 # Proposed lab-level Containerlab controls

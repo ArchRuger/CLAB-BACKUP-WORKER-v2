@@ -12,12 +12,10 @@ function disconnect(){generation++;if(socket)socket.close();socket=null;get('sta
 async function connect(){
  disconnect();const request=++generation;
  if(!lab||!name){get('status').textContent='Open this terminal from a node in the dashboard.';return;}
- if(!sessionStorage.getItem('uiToken')){get('unlock').hidden=false;return;}
  get('connect').disabled=true;get('status').textContent='Connecting…';
  try{
-  const response=await fetch('/api/labs/'+encodeURIComponent(lab)+'/terminal-ticket',{method:'POST',headers:{Authorization:'Bearer '+sessionStorage.getItem('uiToken'),'Content-Type':'application/json'},body:JSON.stringify({name})});
+  const response=await fetch('/api/labs/'+encodeURIComponent(lab)+'/terminal-ticket',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
   if(request!==generation)return;
-  if(response.status===401){sessionStorage.removeItem('uiToken');get('unlock').hidden=false;throw new Error('Enter the worker access token.');}
   const data=await response.json();if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'Connection failed');
   get('endpoint').textContent=data.endpoint||'';
   if(request!==generation)return;
@@ -29,5 +27,4 @@ async function connect(){
  }catch(error){if(request===generation){get('status').textContent=error.message;get('connect').disabled=false;}}
 }
 get('connect').onclick=connect;get('disconnect').onclick=disconnect;
-get('unlock').onsubmit=event=>{event.preventDefault();sessionStorage.setItem('uiToken',get('token').value.trim());get('token').value='';get('unlock').hidden=true;connect();};
 window.addEventListener('beforeunload',disconnect);connect();

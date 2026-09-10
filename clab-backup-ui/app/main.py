@@ -1,5 +1,4 @@
 import copy
-import hmac
 import io
 import json
 import os
@@ -37,7 +36,7 @@ def create_app(data_dir=None):
     operations=LabOperations(store,discovery)
     @asynccontextmanager
     async def lifespan(app):
-        print(f'NOS Backup UI access token: {store.token}',flush=True)
+        print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
         runner.start()
         discovery.start()
         yield
@@ -59,10 +58,11 @@ def create_app(data_dir=None):
     @app.middleware('http')
     async def guard(request, call_next):
         if request.url.path.startswith('/api/'):
-            supplied=request.headers.get('authorization','').removeprefix('Bearer ')
-            expected=store.token
-            if not expected or not hmac.compare_digest(supplied.encode('utf8'),expected.encode('utf8')):
-                return JSONResponse({'detail':'Enter the UI access token from the worker startup log.'},status_code=401)
+            origin=request.headers.get('origin')
+            if request.headers.get('sec-fetch-site') == 'cross-site' or (origin and origin.rstrip('/') != str(request.base_url).rstrip('/')):
+                return JSONResponse({'detail':'Use this manager from its own browser page.'},status_code=403)
+            if store.reset_pending and request.url.path != '/api/manager/reset':
+                return JSONResponse({'detail':'A storage reset needs completion. Retry Start fresh or restart the manager.'},status_code=503)
             if request.method in ('POST','PUT','PATCH','DELETE'):
                 try: size=int(request.headers.get('content-length','0'))
                 except ValueError: return JSONResponse({'detail':'Invalid request length'},status_code=400)
@@ -109,6 +109,28 @@ def create_app(data_dir=None):
         result['deployment']=lab_status(store.state,lab)
         return result
     discovery.install(app,public_lab)
+    class ResetManager(BaseModel):
+        model_config = ConfigDict(extra='forbid')
+        confirmation: str
+
+    @app.post('/api/manager/reset')
+    def reset_manager(data: ResetManager):
+        if data.confirmation != 'RESET': raise HTTPException(400, 'Type RESET to confirm.')
+        if not discovery.lock.acquire(blocking=False):
+            raise HTTPException(409, 'Discovery is checking the VM. Retry after it finishes.')
+        try:
+            with store.lock, services.lock:
+                operations.guard()
+                if services.clients or services.checking:
+                    raise HTTPException(409, 'Close SSH sessions and wait for connection checks before resetting.')
+                try: store.reset()
+                except OSError: raise HTTPException(500, 'Storage reset could not finish. Check data directory permissions and free space, then retry Start fresh or restart the manager.')
+                services.checks.clear(); services.tickets.clear()
+                discovery.sources.clear(); discovery.import_previews.clear()
+                operations.previews.clear(); operations.cap_cache = None
+            discovery.wake.set()
+            return {'reset': True, 'vm_connection_retained': True}
+        finally: discovery.lock.release()
     @app.get('/api/state')
     def state():
         with store.lock:
@@ -331,6 +353,8 @@ def create_app(data_dir=None):
             os.unlink(path); raise
         return FileResponse(path,filename=archive_name(job),media_type='application/zip',
                             background=BackgroundTask(os.unlink,path))
+    @app.get('/vm-connection-guide')
+    def vm_guide(): return FileResponse(APP/'static/vm-connection.html')
     app.mount('/static',StaticFiles(directory=APP/'static'),name='static')
     @app.get('/')
     def index(): return FileResponse(APP/'static/index.html')

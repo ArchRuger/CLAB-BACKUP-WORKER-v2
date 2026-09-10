@@ -2,7 +2,7 @@
 
 <html lang="en">
 
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager · Network lab operations</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.11.0"><script src="/static/app.js?v=1.11.0" defer></script><script src="/static/topology-render.js?v=1.11.0" defer></script><script src="/static/topology.js?v=1.11.0" defer></script><script src="/static/management.js?v=1.11.0" defer></script><script src="/static/operations.js?v=1.11.0" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager · Network lab operations</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.12.0"><script src="/static/app.js?v=1.12.0" defer></script><script src="/static/topology-render.js?v=1.12.0" defer></script><script src="/static/topology.js?v=1.12.0" defer></script><script src="/static/management.js?v=1.12.0" defer></script><script src="/static/operations.js?v=1.12.0" defer></script></head>
 
 <body>
 
@@ -22,7 +22,7 @@
   <p id="vm-summary" class="side-hint" role="status"></p>
   <div id="discovered-labs"></div><div id="excluded-labs"></div><details id="discovery-files"><summary>Discovery file details</summary><div id="discovery-file-list"></div></details>
 
-  <div class="side-bottom"><span class="side-caption">BUILT FOR THE LAB</span><p>Junos / IOS-XR / EOS</p><small>Connections. Configurations. History.</small><button id="logout" class="text-button">Lock workspace</button></div>
+  <div class="side-bottom"><span class="side-caption">BUILT FOR THE LAB</span><p>Junos / IOS-XR / EOS</p><small>Connections. Configurations. History.</small><button id="manager-settings" class="text-button">Manager settings</button></div>
 
 </aside>
 
@@ -43,7 +43,7 @@
 
     <div class="control-row"><nav class="tabs" aria-label="Workspace views"><button class="active" data-tab="inventory" aria-selected="true">Nodes</button><button data-tab="topology" aria-selected="false">Topology</button><button data-tab="credentials" aria-selected="false">Credentials</button><button data-tab="backups" aria-selected="false">Backup history</button><button data-tab="logs" aria-selected="false">Action logs</button></nav><div class="actions"><button class="button secondary" id="export-sessions">Export sessions</button><button class="button secondary" id="test">Test NOS login</button><button class="button primary" id="backup">Back up now <span aria-hidden="true">→</span></button></div></div>
 
-    <section id="topology-view" class="view" hidden><div class="section-heading"><div><h2>Lab topology</h2><p>Right-click a node for SSH and backup actions. Click for connection details.</p></div><button id="import-map" class="button primary">Import topology</button></div><div class="map-tools"><button id="map-expand">Expand map</button><button id="map-fit">Fit map</button><button id="map-in" aria-label="Zoom in">+</button><button id="map-out" aria-label="Zoom out">-</button><span>Drag to pan · Links show imported wiring, not live status</span></div><p id="map-status" role="status"></p><svg id="topology-map" viewBox="0 0 1000 600" aria-label="Lab topology" role="group"></svg></section><section id="logs-view" class="view" hidden>
+    <section id="topology-view" class="view" hidden><div class="section-heading"><div><h2>Lab topology</h2><p>Right-click a node for SSH and backup actions. Click for connection details.</p></div><div class="actions"><button id="map-ssh-all" class="button secondary">SSH all nodes ↗</button><button id="map-backup-all" class="button secondary">Back up all configs</button><button id="import-map" class="button primary">Import topology</button></div></div><div class="map-tools"><button id="map-expand">Expand map</button><button id="map-fit">Fit map</button><button id="map-in" aria-label="Zoom in">+</button><button id="map-out" aria-label="Zoom out">-</button><span>Drag to pan · Links show imported wiring, not live status</span></div><p id="map-status" role="status"></p><svg id="topology-map" viewBox="0 0 1000 600" aria-label="Lab topology" role="group"></svg></section><section id="logs-view" class="view" hidden>
 
       <div class="section-heading"><div><h2>Action logs</h2><p>Live job steps and application actions. Refreshed every four seconds. Newest first.</p></div><button id="download-logs" class="button secondary">Download logs</button></div>
 
@@ -69,7 +69,7 @@
 
   </div>
 
-  <footer><span>Containerlab Node Manager / SSH &amp; configuration history · <span id="app-version">v1.11.0</span></span><span id="updated">No inventory loaded</span></footer>
+  <footer><span>Containerlab Node Manager / SSH &amp; configuration history · <span id="app-version">v1.12.0</span></span><span id="updated">No inventory loaded</span></footer>
 
 </div>
 
@@ -79,7 +79,7 @@
 
 <div id="toast" role="status" hidden></div>
 
-<dialog id="login-dialog"><form id="login-form"><div class="dialog-head"><span class="eyebrow">WORKER ACCESS</span><span class="tag">CONTAINERLAB NODE MANAGER</span></div><h2>Unlock your workspace</h2><p>Enter the access token printed in this worker’s startup log.</p><label for="token">UI access token</label><input id="token" type="password" required autocomplete="off"><p class="form-error" id="login-error" role="alert"></p><button class="button primary full" type="submit">Open workspace</button><p class="form-help">This token protects the UI. Your NOS credentials are configured separately.</p></form></dialog>
+
 
 <dialog id="import-dialog"><form id="import-form"><div class="dialog-head"><span class="eyebrow">INVENTORY UPLOAD</span><button type="button" class="icon-button close" aria-label="Close">×</button></div><h2 id="import-title">Import a lab</h2><p>Use containerlab’s generated Ansible inventory. No node addresses are built into this image.</p><input type="hidden" name="lab_id" id="import-lab-id"><label for="lab-name">Lab name</label><input id="lab-name" name="name" required maxlength="120" placeholder="A name for this lab"><label for="inventory-file">Ansible inventory <span class="required">required</span></label><div class="upload-field"><input id="inventory-file" name="inventory" type="file" accept=".yml,.yaml,.json" required><small>YAML or JSON · up to 1 MiB</small></div><details><summary>Optional: topology metadata</summary><p class="form-help">Upload <code>topology-data.json</code> if custom inventory groups do not identify the node kinds.</p><input name="topology" type="file" accept=".json"></details><p class="form-error" role="alert"></p><div class="dialog-actions"><button class="button secondary close" type="button">Cancel</button><button class="button primary" type="submit">Import and review</button></div></form></dialog>
 

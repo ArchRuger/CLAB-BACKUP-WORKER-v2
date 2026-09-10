@@ -1,15 +1,12 @@
-"""Authenticated lab-level actions with review tokens and persistent job output."""
+"""Reviewed lab-level actions with review tokens and persistent job output."""
 import copy
-import difflib
 import json
-from pathlib import PurePosixPath
 import re
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import quote, urlsplit
-import xml.etree.ElementTree as ET
+from urllib.parse import quote
 
 import paramiko
 from fastapi import HTTPException
@@ -17,7 +14,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from .discovery import PinnedHostKey, read_key, parse_definition, stamp
-from .topology import parse_drawing, bind_drawing
+from .topology import parse_drawing
+from .drawio_export import drawio
 
 BUSY = ('queued', 'running')
 
@@ -80,53 +78,10 @@ def scrub(text, state):
     return text[-512 * 1024:]
 
 
-def sharing_links(output, action, host):
-    if not action.startswith(('gotty-', 'sshx-')) or action.endswith('-detach'): return []
-    address = host.get('address', '')
-    if address in ('127.0.0.1', 'localhost', '::1', '0.0.0.0'): address = 'HOST_IP'
-    if ':' in address and not address.startswith('['): address = '[' + address + ']'
-    links = re.findall(r'https?://[^\s<>"\x1b]+', output)
-    if action.startswith('gotty-'):
-        for match in list(re.finditer(r'\[', output))[:100]:
-            try: rows, _ = json.JSONDecoder().raw_decode(output[match.start():])
-            except ValueError: continue
-            if not isinstance(rows, list): continue
-            for row in rows[:20]:
-                port = row.get('port') if isinstance(row, dict) else None
-                if type(port) is int and 0 < port <= 65535: links.append('http://' + address + ':' + str(port))
-    result = []
-    for link in links:
-        link = link.rstrip(".,)'").replace('HOST_IP', address)
-        try: parsed = urlsplit(link)
-        except ValueError: continue
-        if parsed.scheme in ('http', 'https') and parsed.hostname and not parsed.username and link not in result: result.append(link)
-    return result[:20]
-
-
-def drawio(lab, layout):
-    drawing = bind_drawing(lab) or {'nodes': [], 'links': []}
-    root = ET.Element('mxfile', host='Containerlab Node Manager')
-    graph = ET.SubElement(ET.SubElement(root, 'diagram', name=lab['name']), 'mxGraphModel')
-    cells = ET.SubElement(graph, 'root'); ET.SubElement(cells, 'mxCell', id='0'); ET.SubElement(cells, 'mxCell', id='1', parent='0')
-    ids = {}
-    for i, node in enumerate(drawing['nodes']):
-        alias = node['alias']; ident = 'node-' + str(i); ids[node['id']] = ident
-        cell = ET.SubElement(cells, 'mxCell', id=ident, parent='1', vertex='1', value=alias,
-                             style='rounded=1;whiteSpace=wrap;html=0;fillColor=#416377;fontColor=#ffffff;')
-        x, y = (node.get('x', 0), node.get('y', 0)) if layout == 'interactive' else ((i % 5 * 170, i // 5 * 110) if layout == 'horizontal' else (i // 5 * 170, i % 5 * 110))
-        ET.SubElement(cell, 'mxGeometry', x=str(x), y=str(y), width='110', height='52', attrib={'as': 'geometry'})
-    for i, link in enumerate(drawing['links']):
-        if len(link) != 2 or any(e['node'] not in ids for e in link): continue
-        cell = ET.SubElement(cells, 'mxCell', id='edge-' + str(i), parent='1', edge='1', source=ids[link[0]['node']],
-            target=ids[link[1]['node']], value=link[0]['interface'] + ' ↔ ' + link[1]['interface'], style='endArrow=none;html=0;')
-        ET.SubElement(cell, 'mxGeometry', relative='1', attrib={'as': 'geometry'})
-    return ET.tostring(root, encoding='utf-8', xml_declaration=True)
-
-
 class LabOperations:
     def __init__(self, store, discovery):
         self.store = store; self.discovery = discovery; self.previews = {}; self.stopping = threading.Event()
-        self.pool = ThreadPoolExecutor(max_workers=1); self.cap_cache = None
+        self.pool = ThreadPoolExecutor(max_workers=1); self.cap_cache = None; self.active = set()
         with store.lock:
             for job in store.state.setdefault('operations', []):
                 if job['status'] in BUSY:
@@ -140,7 +95,7 @@ class LabOperations:
         with self.store.lock: return copy.deepcopy(self.store.state.get('host', {}))
 
     def guard(self, lab_id=''):
-        if operation_busy(self.store.state): raise HTTPException(409, 'Wait for the current lab operation to finish.')
+        if self.active or operation_busy(self.store.state): raise HTTPException(409, 'Wait for the current lab operation to finish.')
         if any(j['status'] in BUSY and (not lab_id or j['lab_id'] == lab_id) for j in self.store.state['jobs']):
             raise HTTPException(409, 'Wait for the lab backup or login job to finish.')
 
@@ -186,6 +141,8 @@ class LabOperations:
 
         @app.post('/api/operations/preview')
         def preview(data: Request):
+            if data.action not in ("deploy", "redeploy", "destroy", "apply", "start", "stop", "restart", "save", "inspect", "inspect-all", "create", "delete", "clone"):
+                raise HTTPException(400, "This lab operation has been removed or is unsupported.")
             with self.store.lock:
                 self.guard(data.lab_id)
                 lab = copy.deepcopy(self.store.lab(data.lab_id)) if data.lab_id else None
@@ -201,23 +158,14 @@ class LabOperations:
                 try: source_name = parse_definition(source['text'].encode())['name']
                 except (ValueError, TypeError, AttributeError, RecursionError): raise HTTPException(400, 'The VM file must contain a valid literal Containerlab topology.')
                 if not lab: name = source_name
-            if data.action in ('create', 'write'):
+            if data.action == 'create':
                 try:
                     parsed = parse_definition(str(options.get('text', '')).encode())
-                    if data.action == 'write' and parsed['name'] != source_name: raise ValueError()
                     if not lab or data.action == 'create': name = parsed['name']
-                except (ValueError, TypeError, AttributeError, RecursionError): raise HTTPException(400, 'Use valid literal YAML and retain the lab name when editing. Use a new project to rename.')
-            if data.action == 'fcli' and lab:
-                if not any(n.get('kind') == 'nokia_srlinux' for n in lab['nodes']): raise HTTPException(400, 'fcli requires an SR Linux lab.')
-                from .inventory import read_data
-                options.setdefault('network', (read_data(source['text'].encode()).get('mgmt') or {}).get('network', 'clab'))
+                except (ValueError, TypeError, AttributeError, RecursionError): raise HTTPException(400, 'Use valid literal Containerlab YAML for the new project.')
             req = dict(mode='preview', action=data.action, path=path, name=name, source_name=source_name, options=options)
             result = self.invoke(req)
             if source and result.get('source_hash') != source['sha256']: raise HTTPException(409, 'Source changed during review; retry.')
-            if data.action == 'write':
-                before = self.invoke({'mode': 'read', 'path': path})
-                if before['sha256'] != result['source_hash']: raise HTTPException(409, 'Source changed during review; retry.')
-                result['diff'] = ''.join(difflib.unified_diff(before['text'].splitlines(True), options['text'].splitlines(True), fromfile='VM original', tofile='Proposed YAML'))
             with self.store.lock:
                 if self.store.state.get('host', {}).get('revision') != host_revision: raise HTTPException(409, 'VM connection changed. Preview again.')
                 self.previews = {k:v for k,v in self.previews.items() if v['expires'] > time.monotonic()}
@@ -295,7 +243,7 @@ class LabOperations:
 
         @app.get('/api/labs/{lab_id}/drawio')
         def export(lab_id: str, layout: str = 'interactive'):
-            if layout not in ('horizontal', 'vertical', 'interactive'): raise HTTPException(400, 'Choose a supported layout.')
+            if layout != 'interactive': raise HTTPException(400, 'Choose a supported layout.')
             with self.store.lock:
                 lab = self.store.lab(lab_id)
                 if not lab: raise HTTPException(404, 'Lab not found.')
@@ -305,21 +253,39 @@ class LabOperations:
         class Layout(BaseModel):
             positions: dict
 
+        def positioned(lab, positions):
+            if not lab or not lab.get('drawing'): raise HTTPException(404, 'Import a topology map first.')
+            drawing = copy.deepcopy(lab['drawing'])
+            aliases = {n['id']: n for n in drawing['nodes']}
+            if set(positions) - set(aliases): raise HTTPException(400, 'Unknown map nodes.')
+            for alias, point in positions.items():
+                if not isinstance(point, list) or len(point) != 2 or any(type(v) not in (int, float) or not -100000 <= v <= 100000 for v in point): raise HTTPException(400, 'Invalid node coordinates.')
+                aliases[alias].update(x=point[0], y=point[1])
+            return drawing
+
         @app.put('/api/labs/{lab_id}/layout')
         def layout(lab_id: str, data: Layout):
             with self.store.lock:
                 self.guard(lab_id); lab = self.store.lab(lab_id)
-                if not lab or not lab.get('drawing'): raise HTTPException(404, 'Import a topology map first.')
-                drawing = copy.deepcopy(lab['drawing'])
-                aliases = {n['id']: n for n in drawing['nodes']}
-                if set(data.positions) - set(aliases): raise HTTPException(400, 'Unknown map nodes.')
-                for alias, point in data.positions.items():
-                    if not isinstance(point, list) or len(point) != 2 or any(type(v) not in (int, float) or not -100000 <= v <= 100000 for v in point): raise HTTPException(400, 'Invalid node coordinates.')
-                    aliases[alias].update(x=point[0], y=point[1])
-                lab['drawing'] = drawing; self.store.save()
+                drawing = positioned(lab, data.positions)
+                previous = lab['drawing']; lab['drawing'] = drawing
+                try: self.store.save()
+                except OSError:
+                    lab['drawing'] = previous
+                    raise HTTPException(500, 'Could not save the layout. Try again.')
             return {'saved': True}
 
+        @app.post('/api/labs/{lab_id}/drawio')
+        def export_current(lab_id: str, data: Layout):
+            with self.store.lock:
+                lab = copy.deepcopy(self.store.lab(lab_id))
+                drawing = positioned(lab, data.positions)
+                lab['drawing'] = drawing
+                content = drawio(lab)
+            return Response(content, media_type='application/xml', headers={'Content-Disposition': "attachment; filename=topology.drawio; filename*=UTF-8''" + quote(lab['name']+'.drawio', safe='')})
+
     def execute(self, ident, host, req):
+        with self.store.lock: self.active.add(ident)
         raw_output = ''; last_save = 0
         def update(**fields):
             with self.store.lock:
@@ -330,19 +296,21 @@ class LabOperations:
             raw_output = (raw_output + chunk)[-512 * 1024:]
             if time.monotonic() - last_save > .25:
                 # Publish complete lines so split credential values cannot leak mid-chunk.
-                with self.store.lock: clean = scrub(raw_output.rpartition('\n')[0], self.store.state).replace(self.store.token, '[redacted]')
+                with self.store.lock: clean = scrub(raw_output.rpartition('\n')[0], self.store.state)
                 update(output=clean); last_save = time.monotonic()
         try:
             update(status='running', started=stamp(), message='Executing on the VM')
             result = remote(host, req, output, self.stopping)
-            with self.store.lock: clean = scrub(raw_output, self.store.state).replace(self.store.token, '[redacted]')
-            if result.get('exit_code') == 0: result['sharing_links'] = sharing_links(clean, req['action'], host)
+            with self.store.lock: clean = scrub(raw_output, self.store.state)
             update(status='succeeded' if result.get('exit_code') == 0 else 'failed', exit_code=result.get('exit_code'),
                    finished=stamp(), output=clean, result=result, message='Operation completed' if result.get('exit_code') == 0 else 'Host command returned an error')
         except Exception as exc:
             message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
-            with self.store.lock: clean = scrub(raw_output, self.store.state).replace(self.store.token, '[redacted]'); message = scrub(message, self.store.state)
+            with self.store.lock: clean = scrub(raw_output, self.store.state); message = scrub(message, self.store.state)
             update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
         finally:
             self.store.event('lab.operation', 'Lab operation finished; review its operation record', lab_id=next(j['lab_id'] for j in self.store.state['operations'] if j['id'] == ident))
-            if not self.stopping.is_set(): self.discovery.refresh()
+            try:
+                if not self.stopping.is_set(): self.discovery.refresh()
+            finally:
+                with self.store.lock: self.active.discard(ident)
