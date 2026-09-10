@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.9.0
+# Containerlab Node Manager — 1.9.1
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -8,7 +8,22 @@ backups as training labs are replaced.
 **Start here:** [Fresh VM installation guide](../FRESH-VM-GUIDE.md) — Ubuntu, Docker, containerlab,
 persistent storage, SSH keys, first launch, automatic imports, upgrades and backups.
 
-## What changed
+## What changed in 1.9.1
+
+- Discovery follows the original YAML path from `containerlab inspect`, then checks
+  the adjacent `clab-<lab-name>` directory for generated inventory and topology data.
+  Missing Docker labels no longer prevent file import; verified labels still locate
+  custom generated directories.
+- Clicking a detected lab tries VM import before showing manual uploads. The general
+  import dialog also offers a VM retry for an unimported detected lab.
+- **Discovery file details** lists attempted paths and per-file results, including
+  missing files and permission failures.
+- Direct inspection now reads the same files through SFTP using the existing SSH
+  account. The restricted helper remains preferred for root-owned files.
+- Update the installed helper with `sudo bash deploy/setup-discovery.sh --update-helper`
+  when upgrading from 1.9.0 or earlier. This retains the installed SSH key.
+
+## Existing features
 
 - **Remove lab** clears only that saved manager workspace and its history entries.
   It never stops containers or changes VM lab files. Backup files and audit logs

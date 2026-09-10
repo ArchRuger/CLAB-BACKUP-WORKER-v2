@@ -1,4 +1,38 @@
-# Validation — Containerlab Node Manager 1.9.0 (2026-09-10)
+# Validation — Containerlab Node Manager 1.9.1 (2026-09-10)
+
+## 1.9.1 evidence
+
+- Full Python suite: **103 tests, 98 passed, 5 skipped**. Existing platform/opt-in
+  skips remain. New coverage includes missing Docker labels, standard generated
+  folder lookup, grouped inspect output, absolute labPath, permission errors,
+  sanitized diagnostics, automatic-import retry and old-helper upgrade feedback.
+- Real local Paramiko server tests exercised direct inspection plus SFTP on the
+  same authenticated connection: original YAML and generated inventory read,
+  permission-denied definition, and unavailable SFTP. Discovery survives file
+  failures and no unrelated files are opened.
+- New imports retain valid YAML when optional exports/inventory are mismatched;
+  tests verify foreign credentials are discarded. Existing explicit sync remains
+  atomic and preserves the saved workspace on invalid optional files.
+- JavaScript regressions: **14 passed**. Production script syntax checked.
+- Browser: synthetic SSH helper using the production collector, with the screenshot's
+  `/etc/containerlab/<name>/clab-<name>/` layout and a sanitized 12-node BGP fixture.
+  Denied YAML access produced a detected lab; clicking it attempted automatic
+  import and then opened the manual form with a retry button. File details showed
+  the exact denied YAML path and three found companion files. Restoring fixture
+  access and clicking retry imported 12 nodes, inventory credentials and 16 map
+  links with zero unmatched nodes. No files were uploaded through the form.
+  General Import a lab offered the detected name and automatic retry. Right-click
+  PE1 showed SSH, backup and details. No browser console errors were observed.
+  Screenshot: auto-import-1.9.1.png. No live NOS actions were invoked.
+- GitHub origin/main at d84c76b matches delivered 1.9.0 except the three missing
+  ignore/attributes files restored here. Source ZIP and patches are verified against
+  that commit, the 1.9.0 delivery, and baseline 06b8624.
+- This upgrade changes the installed VM helper; --update-helper retains the current
+  account and authorized key. Docker image label and static asset versions are 1.9.1.
+- Docker builds, privileged Linux provisioning, Linux openat protections and access
+  to the user's actual VM remain untested here. No GitHub push or VM deployment.
+
+## Earlier 1.9.0 evidence (retained for context)
 
 ## 1.9.0 evidence
 

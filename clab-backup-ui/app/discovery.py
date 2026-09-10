@@ -107,9 +107,11 @@ def parse_inspect(raw):
 
 class Inspection(dict):
     """Normal lab mapping with optional versioned helper file bundles."""
-    def __init__(self, labs, sources=None):
+    def __init__(self, labs, sources=None, raw=None, reader="inspect-only"):
         super().__init__(labs)
         self.sources = sources
+        self.raw = raw
+        self.reader = reader
 
 
 def parse_snapshot(raw):
@@ -121,8 +123,8 @@ def parse_snapshot(raw):
         sources = value.get('sources')
         if not isinstance(sources, dict) or not set(sources).issubset(labs):
             raise ValueError('Invalid file discovery response')
-        return Inspection(labs, sources)
-    return Inspection(parse_inspect(raw))
+        return Inspection(labs, sources, value['inspect'], 'helper')
+    return Inspection(parse_inspect(raw), raw=value)
 
 
 def discovery_fresh(state):
@@ -221,7 +223,13 @@ def inspect_host(host, stopping=None):
             time.sleep(.01)
         if channel.recv_exit_status() != 0:
             raise ValueError('Inspection command failed. Verify containerlab and the discovery account/helper permissions on the VM.')
-        return parse_snapshot(bytes(output)), policy.fingerprint
+        snapshot = parse_snapshot(bytes(output))
+        if host['command_mode'] == 'direct' and snapshot.sources is None:
+            from .vm_files import collect_sftp
+            envelope = collect_sftp(client, snapshot.raw, deadline)
+            snapshot = parse_snapshot(json.dumps(envelope).encode())
+            snapshot.reader = 'sftp'
+        return snapshot, policy.fingerprint
     finally:
         client.close()
 
@@ -272,7 +280,7 @@ class Discovery:
                 previous = self.store.state.get('discovery', {})
                 info = {**previous, 'ok': not error, 'error': error, 'checked_at': stamp(), 'checked_epoch': time.time()}
                 if not error:
-                    info.update(labs=dict(labs), last_success=info['checked_at'])
+                    info.update(labs=dict(labs), last_success=info['checked_at'], file_reader=getattr(labs, 'reader', 'inspect-only'))
                     self.store.state['host']['fingerprint'] = fingerprint
                 self.store.state['discovery'] = info
                 self.sources = {}
@@ -297,16 +305,18 @@ class Discovery:
             self.lock.release()
 
     def update_sources(self, sources):
-        from .vm_files import decode_bundle, metadata, prepare_lab
+        from .vm_files import decode_bundle, metadata, prepare_lab, source_reports, FileImportError
         state = self.store.state
         state['discovery']['file_import_supported'] = sources is not None
         state['discovery']['file_errors'] = {}
+        state['discovery']['file_reports'] = {}
         for lab in state['labs']:
             if lab.get('vm_source'):
                 lab['vm_source'].update(can_sync=False, status='Files unavailable')
         if sources is None: return
         for name, source in sources.items():
             if name in state.get('ignored_labs', []): continue
+            state['discovery']['file_reports'][name] = source_reports(source)
             lab = next((l for l in state['labs'] if l.get('deployment_name') == name), None)
             # Reuse a unique legacy inventory workspace, but never overwrite it
             # automatically. Its first file import remains an explicit sync.
@@ -323,8 +333,8 @@ class Discovery:
                 # Validate before advertising an available sync. Preparation is
                 # side-effect-free; a bad optional file cannot half-update a lab.
                 candidate = prepare_lab(bundle, name, lab)
-            except (ValueError, TypeError, AttributeError, KeyError, RecursionError):
-                message = 'VM files are missing, invalid, or inconsistent. Check the four source files or import manually.'
+            except (ValueError, TypeError, AttributeError, KeyError, RecursionError) as exc:
+                message = str(exc) if isinstance(exc, FileImportError) else 'VM file transfer was invalid. Check Discovery file details or upload manually.'
                 state['discovery']['file_errors'][name] = message
                 if lab:
                     lab.setdefault('vm_source', {}).update(status='Files unavailable', can_sync=False, message=message)
@@ -348,6 +358,8 @@ class Discovery:
                         checked_at=info.get('checked_at'), last_success=info.get('last_success'),
                         error=info.get('error', ''), interval=INTERVAL,
                         file_import_supported=bool(info.get('file_import_supported')),
+                        file_reader=info.get('file_reader', 'inspect-only'),
+                        file_reports=info.get('file_reports', {}),
                         file_errors=info.get('file_errors', {}),
                         ignored_labs=state.get('ignored_labs', []),
                         discovered=[dict(name=name, nodes=len(nodes), running=sum(n['state']=='running' for n in nodes),
@@ -401,6 +413,21 @@ class Discovery:
         class AllowImport(BaseModel):
             model_config = ConfigDict(extra='forbid')
             name: str = Field(min_length=1, max_length=120)
+
+        @app.post('/api/discovery/import')
+        def import_discovered(data: AllowImport):
+            self.refresh(wait=True)
+            with self.store.lock:
+                if data.name in self.store.state.get('ignored_labs', []):
+                    raise HTTPException(409, 'This lab is excluded. Choose Import again in the sidebar first.')
+                lab = next((l for l in self.store.state['labs'] if l.get('deployment_name') == data.name), None)
+                if lab: return public_lab(lab)
+                info = self.store.state.get('discovery', {})
+                message = info.get('file_errors', {}).get(data.name)
+                if not message:
+                    message = ('Update the installed VM helper to enable file transfer.' if not info.get('file_import_supported')
+                               else 'The deployed lab files could not be read. Check Discovery file details.')
+                raise HTTPException(409, info.get('error') or message)
 
         @app.post('/api/discovery/allow-import')
         def allow_import(data: AllowImport):

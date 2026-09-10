@@ -14,7 +14,8 @@ document.body.insertAdjacentHTML('beforeend', `
 </form></dialog>
 <dialog id="setup-dialog"><form id="setup-form">
  <div class="dialog-head"><span class="eyebrow">PERSISTENT LAB WORKSPACE</span><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
- <h2 id="setup-title">Import a lab</h2><p>Start with the original containerlab YAML. The workspace remains saved when the lab is stopped or removed.</p>
+ <h2 id="setup-title">Import a lab</h2><p>For a detected lab, try automatic import from the VM first. Use the file fields for manual import. The workspace remains saved when the lab is stopped or removed.</p>
+ <button type="button" class="button secondary" id="setup-auto-import">Try automatic import from VM</button>
  <input type="hidden" name="lab_id" id="setup-lab-id">
  <label>Lab definition (.clab.yaml)<input name="definition" type="file" accept=".yaml,.yml" required></label>
  <label>Deployed lab name <span class="muted">optional</span><input name="deployed_name" id="setup-deployed-name" maxlength="120" placeholder="Use the name in the YAML"></label>
@@ -33,8 +34,8 @@ document.body.insertAdjacentHTML('beforeend', `
  <div id="vm-password-fields"><label>VM password<input id="vm-password" type="password" autocomplete="new-password"></label></div>
  <div id="vm-key-fields" hidden><label>SSH private key<input id="vm-key" type="file"></label><label>Key passphrase<input id="vm-passphrase" type="password" autocomplete="new-password"></label></div>
  <p class="form-help">Leave credentials blank to retain them for the same account. Secrets are encrypted in persistent storage and are never displayed after saving.</p>
- <label>Inspection method<select id="vm-command"><option value="helper">Installed discovery and file helper (recommended)</option><option value="direct">Direct containerlab inspect (account already has permission)</option></select></label>
- <p class="form-help">Install the supplied VM setup script for the helper. The restricted helper reads deployment state and the original YAML, annotations, generated inventory and topology export. New labs import automatically. Direct inspection only discovers running nodes.</p>
+ <label>Inspection method<select id="vm-command"><option value="helper">Installed discovery and file helper (recommended)</option><option value="direct">Direct inspection + SFTP (existing VM account)</option></select></label>
+ <p class="form-help">Install the supplied VM setup script for the helper. The restricted helper reads deployment state and the original YAML, annotations, generated inventory and topology export. New labs import automatically. Direct mode reads these files through SFTP with the same VM account. The installed helper supports root-owned lab files.</p>
  <label class="checkbox-label"><input id="vm-enabled" type="checkbox" checked> Enable automatic discovery</label>
  <p id="vm-fingerprint" class="form-help"></p><p class="form-help">The first successful connection trusts and saves the VM SSH fingerprint. Later key changes block discovery.</p>
  <label class="checkbox-label"><input id="vm-reset-key" type="checkbox"> Trust a replacement SSH host key on the next connection</label>
@@ -52,28 +53,32 @@ document.querySelectorAll('[data-dismiss]').forEach(button=>button.onclick=()=>b
 function renderManagement(){
  const discovery=state.discovery||{}, lab=current();
  $('vm-summary').textContent=!discovery.configured?'VM discovery is not configured.':!discovery.host.enabled?'VM discovery is paused.':discovery.connected?'VM connected · checks every 30s':(discovery.error||'VM status unknown; refresh discovery.');
- $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · ${esc(discovery.file_errors?.[l.name]||'setup required')}</small></button>`).join('');
+ $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · ${esc(discovery.file_errors?.[l.name]||'Manual upload available')}</small></button>`).join('');
+ const reports=discovery.file_reports||{};
+ $('discovery-file-list').innerHTML=Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file results yet. Refresh discovery. If using an older helper, update it on the VM.</p>';
  $('excluded-labs').innerHTML=(discovery.ignored_labs||[]).length?'<p class="side-hint">Excluded from automatic import</p>'+(discovery.ignored_labs||[]).map(name=>`<button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again</small></button>`).join(''):'';
  if(!lab)return;
  $('remove-lab').disabled=state.jobs.some(j=>j.lab_id===lab.id&&['queued','running'].includes(j.status));
  const source=lab.vm_source, sync=$('sync-vm');
  sync.hidden=!lab.deployment_name;
  sync.disabled=vmSyncBusy||!discovery.connected||!source?.can_sync;
- $('vm-files-status').textContent=!lab.deployment_name?'':!discovery.connected?'VM file sync is unavailable until discovery reconnects.':!discovery.file_import_supported?'Automatic file import requires the updated VM helper. Manual uploads remain available.':source?('VM files: '+source.status+(source.synced_at?' · Last synced '+new Date(source.synced_at).toLocaleString():'')+(source.message?' · '+source.message:'')):(discovery.file_errors?.[lab.deployment_name]||'No deployed source files found. Saved workspace retained.');
+ $('vm-files-status').textContent=!lab.deployment_name?'':!discovery.connected?'VM file sync is unavailable until discovery reconnects.':!discovery.file_import_supported?'Update the installed VM helper to enable file transfer, or use direct inspection + SFTP. Manual uploads remain available.':source?('VM files: '+source.status+(source.synced_at?' · Last synced '+new Date(source.synced_at).toLocaleString():'')+(source.message?' · '+source.message:'')):(discovery.file_errors?.[lab.deployment_name]||'No deployed source files found. Saved workspace retained.');
  $('deployment-status').textContent=lab.deployment?.status||'Unlinked';
  $('deployment-message').textContent=lab.deployment?.message||'Link this workspace to a deployed lab.';
  $('deployment-checked').textContent=lab.deployment?.last_success?'Last successful inspection: '+new Date(lab.deployment.last_success).toLocaleString():'';
 }
 function openSetup(replace=false, deployedName=''){
  const lab=replace?current():null;$('setup-form').reset();$('setup-form').querySelector('.form-error').textContent='';
+ deployedName=deployedName||(state.discovery?.discovered||[]).find(l=>!l.imported&&!l.excluded)?.name||'';
  $('setup-lab-id').value=lab?.id||'';$('setup-deployed-name').value=lab?.deployment_name||deployedName;
+ $('setup-auto-import').hidden=replace||!deployedName||!state.discovery?.configured;
  $('setup-title').textContent=lab?'Update lab definition':'Import a lab';$('setup-dialog').showModal();
 }
 $('new-lab').onclick=$('add-lab').onclick=$('import-empty').onclick=()=>openSetup();
 $('import-top').onclick=()=>current()?openImport(true):openSetup();
 $('update-definition').onclick=()=>openSetup(true);
 $('legacy-import').onclick=()=>{$('setup-dialog').close();openImport(!!$('setup-lab-id').value);};
-$('discovered-labs').onclick=e=>{const b=e.target.closest('[data-setup-name]');if(b)openSetup(false,b.dataset.setupName);};
+$('discovered-labs').onclick=e=>{const b=e.target.closest('[data-setup-name]');if(b)importDiscovered(b.dataset.setupName);};
 $('setup-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  const result=await(await api('/lab-definitions',{method:'POST',body:new FormData(e.target)})).json();
  activeId=result.id;sessionStorage.setItem('activeLab',activeId);tab='inventory';$('setup-dialog').close();$('setup-form').reset();await refresh();notify('Lab saved. Discovery updates automatic addresses when the lab is running.');
@@ -125,3 +130,22 @@ $('excluded-labs').onclick=async e=>{
  try{const result=await json('/discovery/allow-import','POST',{name:button.dataset.allowImport});await refresh();notify(result.error||'Automatic import enabled. Available VM files are imported during discovery.');}
  catch(error){notify(error.message);button.disabled=false;}
 };
+
+let autoImportBusy=false;
+async function importDiscovered(name){
+ if(autoImportBusy)return;
+ autoImportBusy=true;$('setup-auto-import').disabled=true;
+ notify('Reading deployed lab files from the VM…');
+ try{
+  const lab=await json('/discovery/import','POST',{name});
+  activeId=lab.id;sessionStorage.setItem('activeLab',activeId);tab='inventory';
+  if($('setup-dialog').open)$('setup-dialog').close();
+  await refresh();notify('Lab populated from VM files.');
+ }catch(error){
+  if(!$('setup-dialog').open)openSetup(false,name);
+  $('setup-form').querySelector('.form-error').textContent='Automatic import: '+error.message+' You can retry or upload the files below.';
+  notify('Automatic import needs attention. Check the file details or upload manually.');
+  await refresh();
+ }finally{autoImportBusy=false;$('setup-auto-import').disabled=false;}
+}
+$('setup-auto-import').onclick=()=>importDiscovered($('setup-deployed-name').value);

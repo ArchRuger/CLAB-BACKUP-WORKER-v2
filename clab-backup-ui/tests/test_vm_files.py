@@ -1,7 +1,6 @@
 import base64
 import copy
 import hashlib
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -134,17 +133,22 @@ class VMFilesTests(unittest.TestCase):
 
     def test_mismatched_inventory_does_not_import_other_lab_credentials(self):
         self.host(); result = self.poll(envelope(inventory=INVENTORY.replace(b'clab-training-', b'clab-wrong-')))
-        self.assertEqual(self.store.state['labs'], [])
-        self.assertIn('training', result['file_errors'])
+        lab = self.store.state['labs'][0]
+        self.assertEqual(len(lab['nodes']), 2)
+        self.assertEqual(lab['vm_source']['status'], 'Imported with warnings')
+        self.assertNotIn('fixture-device-secret', json.dumps(lab))
         self.assertNotIn('fixture-device-secret', json.dumps(result))
 
     def test_mismatched_export_and_bad_hash_rejected_per_lab(self):
         self.host()
         self.poll(envelope(topology=b'{"nodes":{"wrong":{"shortname":"wrong"}}}'))
-        self.assertEqual(self.store.state['labs'], [])
+        lab = self.store.state['labs'][0]
+        self.assertEqual(lab['vm_source']['status'], 'Imported with warnings')
+        original = copy.deepcopy(lab['nodes'])
         bad = envelope(); bad['sources']['training']['files']['definition']['sha256'] = '0' * 64
         self.poll(bad)
-        self.assertEqual(self.store.state['labs'], [])
+        self.assertEqual(self.store.state['labs'][0]['nodes'], original)
+        self.assertIn('training', self.service.public()['file_errors'])
         self.assertTrue(self.service.public()['connected'])
 
     def test_legacy_helper_and_legacy_workspace_are_retained(self):
@@ -178,6 +182,37 @@ class VMFilesTests(unittest.TestCase):
         node = self.store.state['labs'][0]['nodes'][0]
         self.assertEqual((node['address'], node['port'], node['endpoint_mode']), ('10.0.0.1', 2022, 'manual'))
 
+    def test_import_action_retries_before_manual_fallback(self):
+        self.host()
+        with patch('app.discovery.inspect_host', return_value=(parse_snapshot(json.dumps(envelope(definition=None)).encode()), 'SHA256:fixture')):
+            result = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'training'})
+        self.assertEqual(result.status_code, 409)
+        self.assertIn('Original lab YAML', result.text)
+        with patch('app.discovery.inspect_host', return_value=(parse_snapshot(json.dumps(envelope()).encode()), 'SHA256:fixture')):
+            result = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'training'})
+            again = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'training'})
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['id'], again.json()['id'])
+        self.assertEqual(len(self.store.state['labs']), 1)
+        self.assertEqual(self.client.post('/api/discovery/import', json={'name': 'training'}).status_code, 401)
+
+    def test_legacy_helper_import_reports_upgrade(self):
+        self.host()
+        with patch('app.discovery.inspect_host', return_value=(parse_snapshot(response()), 'SHA256:fixture')):
+            result = self.client.post('/api/discovery/import', headers=self.auth, json={'name': 'training'})
+        self.assertEqual(result.status_code, 409)
+        self.assertIn('Update the installed VM helper', result.text)
+
+    def test_file_diagnostics_are_sanitized(self):
+        from app.vm_files import source_reports
+        source = {'reports': {'definition': {'status': 'permission_denied', 'paths': ['/etc/containerlab/training.clab.yaml']},
+                             'inventory': {'status': 'secret-file-contents', 'paths': ['secret']},
+                             'topology': {'status': 'missing', 'paths': ['/bad\npath', 'relative']}}}
+        reports = source_reports(source)
+        self.assertEqual(reports['definition']['message'], 'Permission denied')
+        self.assertNotIn('inventory', reports)
+        self.assertEqual(reports['topology']['paths'], [])
+
     def test_real_ssh_transports_file_bundle(self):
         host, server, thread = ssh_tests.SSHDiscoveryTests().serve(data=json.dumps(envelope()).encode())
         try:
@@ -189,8 +224,7 @@ class VMFilesTests(unittest.TestCase):
         finally: thread.join(2)
 
 
-spec = importlib.util.spec_from_file_location('file_helper', Path(__file__).resolve().parents[2] / 'deploy/clab_manager_files.py')
-helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
+from app import host_files as helper
 
 
 class HostHelperTests(unittest.TestCase):
@@ -221,9 +255,40 @@ class HostHelperTests(unittest.TestCase):
 
     def test_conflicting_path_metadata_and_non_yaml_refused(self):
         self.labels['clab-topo-file'] = '/etc/passwd'
+        self.assertIn('definition', self.collect()['files'])
+        self.inspection['training'][0]['absLabPath'] = str(self.root / 'not-yaml.txt')
         self.assertEqual(self.collect()['files'], {})
-        self.inspection['training'][0]['absLabPath'] = '/etc/passwd'
-        self.assertEqual(self.collect()['files'], {})
+
+    def test_standard_directory_without_docker_labels_and_grouped_names(self):
+        standard = self.root / 'clab-training'; standard.mkdir()
+        (standard / 'ansible-inventory.yml').write_bytes(INVENTORY)
+        (standard / 'topology-data.json').write_bytes(b'{"nodes":{}}')
+        for row in self.inspection['training']:
+            row.pop('lab_name', None)
+            row.pop('container_id', None)
+        seen = []
+        def reader(path):
+            seen.append(path.name)
+            return helper.read_regular(path)
+        result = helper.collect(self.inspection, reader=reader)['sources']['training']
+        self.assertEqual(set(result['files']), {'definition', 'annotations', 'inventory', 'topology'})
+        self.assertEqual(set(seen), {'training.clab.yaml', 'training.clab.yaml.annotations.json', 'ansible-inventory.yml', 'topology-data.json'})
+        self.assertEqual(result['reports']['inventory']['paths'], [str(standard / 'ansible-inventory.yml')])
+
+    def test_docker_failure_does_not_block_original_and_absolute_labpath(self):
+        for row in self.inspection['training']:
+            row['labPath'] = row.pop('absLabPath')
+        def denied(ident): raise PermissionError()
+        result = helper.collect(self.inspection, denied)['sources']['training']
+        self.assertIn('definition', result['files'])
+        self.assertEqual(result['reports']['topology']['status'], 'missing')
+
+    def test_permission_error_report_keeps_inspection(self):
+        def denied(path): raise PermissionError()
+        result = helper.collect(self.inspection, reader=denied)
+        self.assertEqual(result['inspect'], self.inspection)
+        self.assertEqual(result['sources']['training']['reports']['definition']['status'], 'permission_denied')
+        self.assertEqual(result['sources']['training']['files'], {})
 
     def test_file_change_updates_digest_and_oversize_is_bounded(self):
         before = self.collect()['files']['definition']['sha256']

@@ -1,5 +1,23 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.9.1 addendum — automatic file lookup and UI retry
+
+Use inspect's absolute YAML path and adjacent clab-<name> folder even without
+Docker labels. Verified labels may supply a custom generated directory. The shared
+stdlib collector is app/host_files.py, installed root-owned by setup-discovery.sh;
+deploy/clab_manager_files.py is a development launcher only. Upgrade the installed
+helper for 1.9.1 with --update-helper, retaining the existing SSH key.
+Direct inspection also reads exact known files via SFTP over the same pinned SSH
+connection, bounded by channel timeout/watchdog. It uses existing file permissions.
+No directory scan, remote mutation or authorized_keys/Nornir reads are added.
+New lab imports can skip bad optional files with warnings; existing sync remains
+atomic and rejects inconsistent files. Never apply credentials from mismatched
+inventory. Detected lab clicks call /api/discovery/import before manual fallback.
+Expose only sanitized path/status reports. General Import a lab offers VM retry
+for an unimported detected name. Retain remove/exclusion behavior and saved data.
+VM source folder convention: ~/projects/v1.9.1 contains deploy/ and clab-backup-ui/.
+Latest fetched GitHub d84c76b matches 1.9.0 delivery except three ignore files.
+
 ## Release 1.9.0 addendum — remove saved lab
 
 Remove lab deletes only saved workspace/job metadata. Retain backup files and

@@ -45,7 +45,7 @@ exec /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbi
 EOF
 [[ ! -L /usr/local/lib/clab-manager && ! -L /usr/local/lib/clab-manager/clab_manager_files.py && ! -L /usr/local/sbin/clab-manager-inspect ]] || { echo 'Refusing symlink at helper install location.' >&2; exit 1; }
 install -d -o root -g root -m 0755 /usr/local/lib/clab-manager
-install -o root -g root -m 0644 "$script_dir/clab_manager_files.py" /usr/local/lib/clab-manager/clab_manager_files.py
+install -o root -g root -m 0644 "$script_dir/../clab-backup-ui/app/host_files.py" /usr/local/lib/clab-manager/clab_manager_files.py
 install -o root -g root -m 0755 "$tmp/helper" /usr/local/sbin/clab-manager-inspect
 if $update_only; then
   echo 'Discovery/file helper updated. Existing account and SSH key retained.'

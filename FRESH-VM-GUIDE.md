@@ -1,4 +1,4 @@
-# Containerlab Node Manager 1.9.0 — a fresh VM to a working lab
+# Containerlab Node Manager 1.9.1 — a fresh VM to a working lab
 
 This guide starts with a fresh **Ubuntu Server 24.04 LTS VM**, a normal user with
 `sudo` access, and an internet connection for installation. Run one manager per
@@ -23,16 +23,18 @@ sudo apt install -y ca-certificates curl git openssh-server python3 sudo
 sudo systemctl enable --now ssh
 mkdir -p "$HOME/projects"
 cd "$HOME/projects"
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git
-cd CLAB-BACKUP-WORKER-v2
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.9.1
+cd v1.9.1
 cat clab-backup-ui/VERSION
 ```
 
-This guide requires **1.9.0** source, including `deploy/clab_manager_files.py`.
-If the clone reports an older version, obtain the 1.9.0 source package or the
+This guide requires **1.9.1** source, including `clab-backup-ui/app/host_files.py`.
+If the clone reports an older version, obtain the 1.9.1 source package or the
 matching release commit before proceeding. Local source delivery does not mean
 the GitHub repository has already been updated. For a delivered ZIP, extract it
-and use its `CLAB-BACKUP-WORKER-v2-1.9.0` directory as the repository root instead.
+and place its contents in `~/projects/v1.9.1` so that `clab-backup-ui/` and
+`deploy/` are directly inside that folder. This is the version-folder convention
+used throughout this guide.
 All later relative paths start at the directory containing `deploy/` and
 `clab-backup-ui/`.
 
@@ -148,8 +150,9 @@ It reads deployment state and **only** these files from verified metadata:
 | `ansible-inventory.yml` | Generated lab directory; connection data and available device credentials |
 | `topology-data.json` | Generated lab directory; exported node identities/kinds |
 
-The generated directory comes from container labels, including custom lab
-directories. There is no recursive disk search. Files must be regular files with
+The generated directory normally sits beside the YAML as `clab-<lab-name>`.
+Verified container labels can identify custom lab directories; absent labels
+do not prevent the standard lookup. There is no recursive disk search. Files must be regular files with
 no symlink components, at most 1 MiB each. The helper caps file content at 8 MiB
 per inspection and examines at most 100 labs. It never executes YAML, Ansible
 inventory scripts, deploy/destroy commands, or device configuration commands.
@@ -173,7 +176,7 @@ sudo docker compose -f clab-backup-ui/compose.yml exec backup-ui \
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui
 ```
 
-Expect **1.9.0**. The startup log prints the UI access token. To retrieve the
+Expect **1.9.1**. The startup log prints the UI access token. To retrieve the
 persisted token directly:
 
 ```bash
@@ -211,7 +214,7 @@ and use it in the browser. Default access is HTTP for the isolated lab network.
 An equivalent **image-only build** from the repository root is:
 
 ```bash
-sudo docker build --pull --no-cache -t clab-backup:1.9.0 ./clab-backup-ui
+sudo docker build --pull --no-cache -t clab-backup:1.9.1 ./clab-backup-ui
 ```
 
 If already inside `clab-backup-ui`, use `.` as the last argument instead. That
@@ -276,6 +279,31 @@ YAML
 sudo containerlab deploy -t "$HOME/labs/manager-smoke/manager-smoke.clab.yaml"
 ```
 
+The manager uses JSON output from `containerlab inspect --all --format json`,
+which contains the same topology path shown in the table. It reads these four
+files without shell navigation or uploading them manually:
+
+| File | Lookup |
+|---|---|
+| Original lab YAML | Absolute `absLabPath` from inspect, or an absolute `labPath` |
+| Annotations | `<original-yaml-path>.annotations.json` |
+| Inventory | `<yaml-directory>/clab-<lab-name>/ansible-inventory.yml` |
+| Topology export | `<yaml-directory>/clab-<lab-name>/topology-data.json` |
+
+Verified Docker labels can supply a custom generated directory; missing labels
+fall back to the standard folder. `authorized_keys`, node filesystem directories
+and Nornir inventory are not read. Only supported lab data is saved in encrypted
+manager state; this is not a mirror of the whole deployment directory.
+
+For example, a topology at `/etc/containerlab/BGP_TheoryToPractice/BGP_TheoryToPractice.clab.yaml`
+leads to generated files under `/etc/containerlab/BGP_TheoryToPractice/clab-BGP_TheoryToPractice/`.
+
+If a detected lab has not imported, click its sidebar entry to retry automatically.
+Only after a failed attempt does the manual upload form open, with a retry button.
+Expand **Discovery file details** to see found, missing or permission-denied paths.
+The general **Import a lab** dialog also offers automatic import when an unimported
+lab has been detected. Never-deployed labs can still be uploaded manually.
+
 Within approximately 30 seconds, or after **Refresh discovery**:
 
 1. A new workspace appears for the deployed lab without uploading files.
@@ -304,9 +332,10 @@ requirements are separate from the manager installation.
 - **Missing annotations:** an existing map is retained. To update that map,
   restore the annotations on the VM or import the map manually. A new lab gets a
   generated map. Missing inventory does not erase existing credentials.
-- **Invalid/inconsistent files:** the workspace stays intact and sync is blocked.
-  The UI identifies the lab needing manual import/file correction. Original YAML
-  is required; optional inventory and topology export must match its nodes.
+- **Invalid/inconsistent files:** existing workspaces stay intact and sync is
+  blocked. For a new workspace, valid original YAML still imports if an optional
+  file is invalid; the UI reports the skipped file. Credentials from a mismatched
+  inventory are not applied. Correct the file and Sync from VM later.
 - **Remove lab in the manager:** open the lab and select **Remove lab**. Confirm
   the named workspace. Imported nodes, map, credentials, schedule and history
   entries are removed from manager state. Backup files under `/data/backups/<old-id>`
@@ -363,14 +392,15 @@ any current data as a separate recovery copy, extract the archive under
 the data. Reconfigure the discovery key/account for the new VM; a different VM
 SSH host key needs verification before trusting it in the UI.
 
-### Upgrade an existing 1.7.0 installation to 1.9.0
+### Upgrade an existing installation to 1.9.1
 
-For an existing 1.8.0 installation, the VM helper and SSH key need no changes;
-only rebuild/recreate the manager using the new source. For 1.7.0, also update
-the helper as below. Keep the original data directory and back it up first.
-From the updated repository root:
+For helper-based installations on 1.9.0 or earlier, update both the VM helper
+and manager image. Your SSH key does not change. Keep the original data directory
+and back it up first. Put the new source in `~/projects/v1.9.1` with
+`clab-backup-ui/` and `deploy/` directly inside it, then run:
 
 ```bash
+cd "$HOME/projects/v1.9.1"
 sudo bash deploy/setup-discovery.sh --update-helper
 sudo docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
 ```
@@ -387,7 +417,10 @@ container replacement instructions immediately below before starting Compose.
 `--update-helper` preserves your existing discovery account and authorized key.
 No new SSH key or data initialization is needed. In the UI select the installed
 helper, refresh discovery, then **Sync from VM** for existing lab workspaces.
-An older helper/direct mode continues to discover nodes but cannot import files.
+An older inspection-only helper continues to discover nodes but cannot import
+files. In 1.9.1, direct inspection adds SFTP file reads using the same VM account;
+it requires SFTP and read permission on the lab files and their parent directories.
+The restricted `clab-discovery` key must continue using helper mode.
 
 **If you launched the old standalone container with `docker run`**, it is not
 owned by Compose. After building the new image, stop/remove just that manager
@@ -415,8 +448,8 @@ host directory. Do not run two manager processes against the same data directory
 | Permission denied for `/data` | `stat` should show `10001:10001 700`; use the provided setup script for a fresh directory |
 | VM authentication fails | Username `clab-discovery`, private key without `.pub`, correct passphrase, SSH service and setup script |
 | Helper upgrade required | Run `setup-discovery.sh --update-helper` from new source, select helper mode, refresh |
-| Connected but file import fails | Original YAML still exists, labels reference it, optional files match nodes, no symlinks, each file <=1 MiB |
-| File locations unclear | `sudo containerlab inspect --all --format json` shows original `absLabPath`; generated directory comes from `clab-node-lab-dir` |
+| Connected but file import fails | Expand Discovery file details for each attempted path and result; update the helper, verify original YAML still exists, avoid symlinks, each file <=1 MiB |
+| File locations unclear | `sudo containerlab inspect --all --format json` shows original `absLabPath`; generated files normally live in the adjacent `clab-<lab-name>` folder; verified labels can identify a custom folder |
 | Saved map did not change | Save the correct `.annotations.json` beside the original YAML, refresh, then Sync from VM |
 | Running but SSH/backup fails | NOS still booting, credentials/driver, network routing, or wrong SSH port; edit the node connection |
 | YAML uses anchors/variables | Provide a resolved, literal definition manually; manager imports data without executing templates |
@@ -433,13 +466,13 @@ same architecture. Transfer the source and required Ubuntu/Docker/containerlab
 packages or use your internal package mirrors. Build the manager there and export:
 
 ```bash
-sudo docker save clab-backup:1.9.0 -o clab-backup-1.9.0.tar
+sudo docker save clab-backup:1.9.1 -o clab-backup-1.9.1.tar
 ```
 
 On the prepared offline VM:
 
 ```bash
-sudo docker load -i clab-backup-1.9.0.tar
+sudo docker load -i clab-backup-1.9.1.tar
 sudo docker compose -f clab-backup-ui/compose.yml up -d --no-build
 ```
 
