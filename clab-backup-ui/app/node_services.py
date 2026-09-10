@@ -13,6 +13,7 @@ from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from .runner import effective_credentials, now
+from .discovery import node_available
 
 
 class NodeRequest(BaseModel):
@@ -68,6 +69,8 @@ class NodeServices:
             node = next((n for n in lab['nodes'] if n['name'] == name), None)
             if not node:
                 raise HTTPException(404, 'Node not found')
+            if not node_available(self.store.state,lab,node):
+                raise HTTPException(409,'Node is unavailable; refresh VM discovery before connecting.')
             return copy.deepcopy(node), copy.deepcopy(effective_credentials(lab, node))
 
     def reserve(self):

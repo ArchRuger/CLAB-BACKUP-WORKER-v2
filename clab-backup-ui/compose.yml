@@ -1,21 +1,19 @@
+name: containerlab-node-manager
 services:
   backup-ui:
     build: .
-    image: clab-backup:1.6.1
+    image: clab-backup:1.7.0
     restart: unless-stopped
-    ports:
-      - '${UI_BIND:-0.0.0.0}:${UI_PORT:-8080}:8080'
-    networks:
-      - management
+    network_mode: host
+    command: ["uvicorn", "app.main:create_app", "--factory", "--host", "${UI_BIND:-0.0.0.0}", "--port", "${UI_PORT:-8081}", "--workers", "1"]
+    environment:
+      DATA_DIR: /data
     volumes:
-      - worker-data:/data
+      - type: bind
+        source: /srv/containerlab-node-manager/data
+        target: /data
+        bind:
+          create_host_path: false
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
-networks:
-  management:
-    external: true
-    name: ${CLAB_NETWORK:-clab}
-volumes:
-  worker-data:
-    name: nos-backup-ui-data

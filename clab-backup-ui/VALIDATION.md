@@ -1,69 +1,72 @@
-# Validation — Containerlab Node Manager 1.6.1 (2026-09-10)
+# Validation — Containerlab Node Manager 1.7.0 (2026-09-10)
 
-Source: ArchRuger/CLAB-BACKUP-WORKER-v2, baseline `06b8624` (1.6.0 upload),
-local branch `codex/map-import-fixes`.
+Repository: ArchRuger/CLAB-BACKUP-WORKER-v2. Git baseline: 06b8624 (1.6.0 upload).
+This release includes the previously delivered 1.6.1 map corrections. No changes
+were pushed to GitHub or deployed to the user's VM.
 
-## Results
+## Automated evidence
 
-- Python: 47 tests, 43 passed, 4 skipped; no failures.
-- JavaScript: 14 behavior tests passed. Application JS syntax checks passed.
-- `git diff --check` passed.
-- Source ZIP and upgrade patch verified against the baseline during packaging.
+- Across the full suite and focused reruns: 68 Python tests covered, 64 passed,
+  4 skipped. Discovery coverage includes 21 passing tests, three of which use
+  real loopback SSH. Existing JavaScript behavior tests: 14 passed.
+- All application JavaScript syntax checks passed.
+- Compose YAML structure checked for host networking, persistent bind mount,
+  create_host_path=false, and absence of Docker port publishing.
+- CRLF-aware git diff whitespace check passed. Linux shell scripts retain LF endings.
+- Full source ZIP and patches verified during packaging against the v2 baseline
+  and the delivered 1.6.1 source ZIP, ignoring checkout line-ending differences.
 
-Skipped checks: two Ansible control-node integration tests require Linux; the
-symlink test requires unavailable Windows privileges; the EOS SSH driver fixture
-is opt-in and requires Ansible collections. Portable traversal tests still run.
+Four existing skips: two Ansible control-node integrations require Linux; one
+symlink check requires Windows privileges; one EOS fixture requires the opt-in
+Ansible collections environment. No additional tests were skipped for discovery.
 
-New regression fixtures preserve the actual supplied annotation geometry and lab
-wiring with connection details and credential text removed. Tests check equivalent
-YAML/export imports, 13 nodes and 16 links, exact inventory identity, XRv9k interface
-conversion, unchanged Junos names, endpoint offsets, legacy text spacing, opacity,
-and consistent top-left node/link coordinates. Existing tests cover authentication,
-profiles, inventory, targeted backups, terminal tickets/origins, vendor backup
-parameters, downloads, and removal of resource monitoring.
+New coverage includes registration from YAML, default kinds and prefixes, exact
+node matching, multiple active labs, discovery without registration, empty and
+malformed inspect output, IPv6 addresses, partial/stopped/missing/stale conditions,
+credential exclusion/encryption, restart invalidation, manual endpoint retention,
+reimport identity/history preservation, renamed deployment linking, stale in-flight
+result rejection, unavailable node-action blocking, and scheduled-backup resumption.
 
-## Browser verification using the supplied lab
+Three tests run a real Paramiko server on loopback: the fixed inspect command and
+JSON response, rejection of a nonzero remote exit even with plausible JSON, and a
+changed SSH fingerprint blocking command execution. Other tests simulate inspection
+results. No live lab devices or actual host containerlab instance were contacted.
 
-Ran the real FastAPI application with the original annotations, generated topology
-export, and inventory in disposable local state. Replaced every connection endpoint
-and credential with a local Paramiko SSH fixture. No live lab connection was made.
+## Browser verification
 
-- Expanded map rendered 13 nodes, 16 links, and zero unmatched nodes.
-- Compared node/shape positions, notes, group labels, and interface labels against
-  the supplied VS Code screenshot. This is a compatible operational rendering,
-  not a pixel-identical copy of the full upstream editor.
-- Right-click PE1 displayed SSH, Back up configuration, and Node details.
-- SSH opened a separate tab for the exact PE1 inventory name and reached Connected
-  against the local SSH fixture.
-- Back up configuration passed through the real UI/API/queue and selected only
-  `clab-BGP_TheoryToPractice-PE1`. Background Ansible execution was stubbed for
-  this browser check; this is target-selection evidence, not a live backup result.
-- Saved screenshots of the corrected map and its right-click menu with the release.
+Ran the production FastAPI app with disposable local state and a loopback SSH
+server returning synthetic inspect JSON. The map uses sanitized copies of the
+user's actual annotation/wiring geometry.
 
-The supplied problem screenshot reports v1.5.0, which predates the context menu.
-Release 1.6.1 adds versioned static asset URLs. Confirm the running container version
-and reimport the original annotations plus topology to restore all schema 3 fields.
-Reimporting the drawing does not replace inventory, profiles, or history.
+- Saved VM password credentials through the UI and tested discovery over SSH.
+- Retested the same account with blank credential fields; retained credentials
+  worked and the UI reported "VM connected. Lab discovery is active."
+- Confirmed Running for the 13-node lab and Not deployed for a second saved lab.
+- Confirmed a discovered but unregistered lab offers setup.
+- Inspected the YAML/annotation import dialog and legacy inventory alternative;
+  multipart YAML import/reimport behavior is covered through the real API tests.
+- Saved a deployment link from the browser.
+- Set PE1's address/port to a manual endpoint, refreshed discovery, and verified
+  the override remained unchanged.
+- Verified the existing topology view still shows 13 nodes, 16 links, zero unmatched.
+- Adjusted sidebar scrolling so saved labs and discovery controls remain accessible.
+- Captured the final standalone workspace screenshot in the release artifacts.
 
-## Limits and deployment
+## Deployment limits
 
-No Docker engine or WSL is available here. No image build, actual SuperPuTTY import,
-real NOS backup, GitHub push, or deployment was performed. The supplied worker YAML
-has no /data mount; follow [fresh-image instructions](../FRESH-IMAGE.md) to preserve
-its data and encryption key before replacing the container.
+No Docker engine or Linux/WSL execution environment is available here. The image
+was not built, host networking was not exercised on Linux, and privileged VM setup,
+sudoers installation and migration scripts were not executed. Script contents and
+Compose structure were reviewed; Linux provisioning is the remaining deployment
+validation. No real NOS backup, SuperPuTTY import, or live host discovery was run.
 
-On a Linux development host, from clab-backup-ui:
+Follow STANDALONE-SETUP.md for a deployment test: preserve existing data, start one
+standalone manager, configure the restricted account, import an edited lab YAML,
+verify discovery through lab stop/redeploy, and test a real node SSH/backup. Verify
+history and keys before removing the old worker. Discovery reports container state;
+it does not prove that a virtual NOS has finished booting.
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt httpx
-PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -v
-node --test tests/test_download_ui.js tests/test_topology_ui.js
-.venv/bin/ansible-galaxy collection install -r collections.yml
-RUN_SSH_FIXTURES=1 PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -p test_eos_ssh.py -v
-```
-
-The upgrade patch applies to v2 commit `06b8624`. Packaging applies it to a clean
-copy of that baseline and compares the resulting source files. The ZIP excludes
-virtual environments, raw uploads, preview state, tokens, keys, and configurations.
-Only sanitized map regression fixtures are included in source.
+The source archive excludes raw uploads, preview state, tokens, private keys,
+configuration captures, virtual environments and .build/. Only sanitized geometry
+regression fixtures are included. Original uploaded YAML is encrypted at runtime
+and omitted from public API responses.

@@ -1,3 +1,5 @@
+> Historical 1.6.1 worker upgrade. For the standalone 1.7.0 manager, use [STANDALONE-SETUP.md](STANDALONE-SETUP.md).
+
 # Fresh image and worker upgrade — 1.6.1
 
 Use the corrected **CLAB-BACKUP-WORKER-v2 1.6.1 source ZIP** or a checkout containing

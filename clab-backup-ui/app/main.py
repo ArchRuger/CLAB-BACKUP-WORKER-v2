@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 import paramiko
 from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.background import BackgroundTask
@@ -20,6 +21,7 @@ from .store import Store
 from .runner import Runner, readiness, now, effective_credentials
 from .node_services import NodeServices
 from . import topology
+from .discovery import Discovery, lab_status, node_available
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
 from . import __version__
 
@@ -30,15 +32,22 @@ def create_app(data_dir=None):
     migrate_download_metadata(store)
     runner=Runner(store)
     services=NodeServices(store)
+    discovery=Discovery(store)
     @asynccontextmanager
     async def lifespan(app):
         print(f'NOS Backup UI access token: {store.token}',flush=True)
         runner.start()
+        discovery.start()
         yield
+        discovery.close()
         services.close()
         runner.close()
     app=FastAPI(title='Containerlab Node Manager',version=__version__,lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(request, exc):
+        return JSONResponse({"detail":"Check the request fields and upload sizes."},status_code=422)
     app.state.store=store; app.state.runner=runner
+    app.state.discovery=discovery
     app.state.node_services=services
     services.install(app)
     topology.install(app,store)
@@ -65,7 +74,7 @@ def create_app(data_dir=None):
                     matched=next((j for j in store.state['jobs'] if j['id']==job_id),None)
                     if matched: lab_id=matched['lab_id']
             route=request.scope.get('route')
-            store.event('api.request',f'{request.method} {getattr(route, "path", "/api/unknown")} → {response.status_code} ({time.monotonic()-started:.3f}s)',
+            store.event('api.request',f'{request.method} {getattr(route, "path", "/api/unknown")} â†’ {response.status_code} ({time.monotonic()-started:.3f}s)',
                         level='error' if response.status_code>=400 else 'info',lab_id=lab_id,job_id=job_id)
         response.headers['X-Content-Type-Options']='nosniff'
         response.headers['Referrer-Policy']='no-referrer'
@@ -81,22 +90,25 @@ def create_app(data_dir=None):
         if not lab: raise HTTPException(404,'Lab not found')
         return lab
     def public_lab(lab):
-        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing')}
+        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml')}
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
         result['nodes']=[]
         for n in lab['nodes']:
             row={k:copy.deepcopy(v) for k,v in n.items() if k not in ('username','password','enable_password','container_name')}
-            row['readiness']=readiness(lab,n)
+            row['available']=node_available(store.state,lab,n)
+            row['readiness']=readiness(lab,n) if row['available'] else 'Lab unavailable'
             row['inventory_credentials']=bool(n.get('username') and n.get('password'))
-            row['ssh_ready']=bool(effective_credentials(lab,n).get('username'))
+            row['ssh_ready']=row['available'] and bool(effective_credentials(lab,n).get('username'))
             result['nodes'].append(row)
+        result['deployment']=lab_status(store.state,lab)
         return result
+    discovery.install(app,public_lab)
     @app.get('/api/state')
     def state():
         with store.lock:
             return {'labs':[public_lab(l) for l in store.state['labs']],
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
-                    'platforms':PLATFORMS, 'version':__version__}
+                    'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public()}
     @app.get('/api/logs')
     def logs(lab_id: str='', job_id: str='', level: str='', node: str='', limit: int=Query(500,ge=1,le=2000)):
         return {'events':store.events(lab_id,job_id,level,node,limit)}
@@ -109,6 +121,7 @@ def create_app(data_dir=None):
             raw=await inventory.read(1024*1024+1)
             extra=await topology.read(1024*1024+1) if topology and topology.filename else None
             nodes=parse_inventory(raw,extra)
+            for node in nodes: node['endpoint_mode']='manual'
         except (ValueError,TypeError,RecursionError) as exc:
             raise HTTPException(400,str(exc))
         finally:
@@ -145,6 +158,7 @@ def create_app(data_dir=None):
         profile_id: str=''
         enabled: bool=True
         short_name: str|None=None
+        endpoint_mode: str|None=None
     @app.put('/api/labs/{lab_id}/node')
     def edit_node(lab_id: str, edit: NodeEdit):
         with store.lock:
@@ -160,8 +174,17 @@ def create_app(data_dir=None):
             if edit.short_name is not None:
                 try: node['short_name']=literal(edit.short_name.strip(),'Download device name',200)
                 except ValueError as exc: raise HTTPException(400,str(exc))
+            if edit.endpoint_mode not in (None,'manual','auto'): raise HTTPException(400,'Choose automatic or manual addressing')
+            if edit.endpoint_mode=='auto' and not lab.get('deployment_name'): raise HTTPException(400,'Link a deployed lab before using automatic addresses')
+            if edit.endpoint_mode is not None:
+                node['endpoint_mode']=edit.endpoint_mode
+            elif (endpoint,ssh_port)!=(node['address'],node['port']):
+                node['endpoint_mode']='manual'
             node.update(address=endpoint,port=ssh_port,platform=edit.platform,
                         profile_id=edit.profile_id,enabled=edit.enabled and bool(edit.platform))
+            if edit.endpoint_mode=='auto':
+                from .discovery import reconcile
+                reconcile(store.state)
             store.save()
             return public_lab(lab)
     @app.post('/api/labs/{lab_id}/profiles')

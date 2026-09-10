@@ -22,19 +22,20 @@ function badge(status){const type=['Ready','succeeded','reachable'].includes(sta
 function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platform||'ssh'];return lab.profiles.find(p=>p.id===id)?.label||(node.inventory_credentials?'From inventory':'Not configured');}
 function render(){
  const lab=current();
- $('labs').innerHTML=state.labs.length?state.labs.map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${esc(l.name)}<small>${l.nodes.length} nodes</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
- $('app-version').textContent='v'+(state.version||'1.6.1');
+ $('labs').innerHTML=state.labs.length?state.labs.map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${esc(l.name)}<small>${l.nodes.length} nodes · ${esc(l.deployment?.status||'Unlinked')}</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
+ $('app-version').textContent='v'+(state.version||'1.7.0');
  $('worker-state').textContent=busy()?'SSH job in progress':'Worker idle';
  $('empty').hidden=!!lab;$('lab-content').hidden=!lab;
  $('title').textContent=lab?.name||'Your next lab starts here.';$('breadcrumb').textContent=lab?.name||'Overview';
  $('subtitle').textContent=lab?'Your nodes, connections, and configuration history.':'Import your nodes. Connect, experiment, and keep your configurations close.';
  $('import-top').textContent=lab?'↑ Replace inventory':'↑ Import inventory';
  $('updated').textContent=lab?'Inventory updated '+new Date(lab.updated).toLocaleString():'No inventory loaded';
+ if(typeof renderManagement==='function')renderManagement();
  if(!lab)return;
  $('node-count').textContent=lab.nodes.length;
  const enabled=lab.nodes.filter(n=>n.enabled), ready=enabled.filter(n=>n.readiness==='Ready');
  $('enabled-count').textContent=enabled.length;$('ready-count').textContent=ready.length;
- $('schedule-summary').textContent=lab.interval?lab.interval+' min':'Manual';
+ $('schedule-summary').textContent=lab.interval?(lab.deployment&& !['Running','Unlinked'].includes(lab.deployment.status)?'Paused · ':'')+lab.interval+' min':'Manual';
  $('test').disabled=$('backup').disabled=busy()||!enabled.length||ready.length!==enabled.length;
  $('test').title=$('backup').title=ready.length!==enabled.length?'Complete credentials for enabled nodes':'';
  $('inventory-caption').textContent=lab.source+' · '+enabled.length+' selected';
@@ -71,7 +72,7 @@ function platformOptions(includeUnknown=false){return (includeUnknown?'<option v
 function openProfile(){if(!current())return;$('profile-form').reset();$('profile-form').querySelector('.form-error').textContent='';$('profile-platform').innerHTML=platformOptions()+'<option value="ssh">Generic SSH / Linux (terminal only)</option>';toggleAuth();$('profile-dialog').showModal();}
 function toggleEnable(){$('enable-fields').hidden=$('profile-platform').value!=='arista_ceos';}
 function toggleAuth(){toggleEnable();const isKey=$('auth-type').value==='key';$('password-fields').hidden=isKey;$('key-fields').hidden=!isKey;$('private-key').required=isKey;}
-function openNode(name){const lab=current(),n=lab.nodes.find(n=>n.name===name);if(!n)return;$('node-form').querySelector('.form-error').textContent='';$('node-title').textContent=n.name;$('node-name').value=n.name;$('node-short-name').value=n.short_name||'';$('node-address').value=n.address;$('node-port').value=n.port;$('node-platform').innerHTML=platformOptions(true);$('node-platform').value=n.platform;$('node-enabled').checked=n.enabled;$('node-profile').innerHTML='<option value="">NOS default / inventory credentials</option>'+lab.profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.label)} · ${esc(p.username)}</option>`).join('');$('node-profile').value=n.profile_id;$('node-dialog').showModal();}
+function openNode(name){const lab=current(),n=lab.nodes.find(n=>n.name===name);if(!n)return;$('node-form').querySelector('.form-error').textContent='';$('node-title').textContent=n.name;$('node-name').value=n.name;$('node-short-name').value=n.short_name||'';$('node-address').value=n.address;$('node-port').value=n.port;$('node-endpoint-mode').value=n.endpoint_mode||'manual';$('node-endpoint-mode').disabled=!lab.deployment_name;$('node-platform').innerHTML=platformOptions(true);$('node-platform').value=n.platform;$('node-enabled').checked=n.enabled;$('node-profile').innerHTML='<option value="">NOS default / inventory credentials</option>'+lab.profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.label)} · ${esc(p.username)}</option>`).join('');$('node-profile').value=n.profile_id;$('node-dialog').showModal();}
 async function withForm(form,fn){const button=form.querySelector('button[type=submit]');button.disabled=true;const error=form.querySelector('.form-error');if(error)error.textContent='';try{await fn();}catch(e){if(error)error.textContent=e.message;else notify(e.message);}finally{button.disabled=false;}}
 $('login-dialog').addEventListener('cancel',e=>e.preventDefault());
 $('login-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{sessionStorage.setItem('uiToken',$('token').value.trim());await refresh();$('login-dialog').close();$('token').value='';});});
@@ -94,7 +95,7 @@ $('nodes').addEventListener('change',async e=>{const name=e.target.dataset.enabl
 $('import-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{const data=new FormData(e.currentTarget);const result=await(await api('/inventory',{method:'POST',body:data})).json();activeId=result.id;sessionStorage.setItem('activeLab',activeId);$('import-dialog').close();$('import-form').reset();tab='inventory';await refresh();notify('Inventory imported. Review the nodes and credentials.');});});
 $('add-profile').onclick=openProfile;$('auth-type').onchange=toggleAuth;$('profile-platform').onchange=toggleEnable;
 $('profile-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{const data=new FormData(e.currentTarget);data.set('make_default',$('make-default').checked?'true':'false');await api('/labs/'+activeId+'/profiles',{method:'POST',body:data});$('profile-dialog').close();$('profile-form').reset();await refresh();notify('NOS credentials saved.');});});
-$('node-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/node','PUT',{name:$('node-name').value,short_name:$('node-short-name').value,address:$('node-address').value,port:Number($('node-port').value),platform:$('node-platform').value,profile_id:$('node-profile').value,enabled:$('node-enabled').checked});$('node-dialog').close();await refresh();notify('Connection updated.');});});
+$('node-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/node','PUT',{name:$('node-name').value,short_name:$('node-short-name').value,address:$('node-address').value,port:Number($('node-port').value),endpoint_mode:$('node-endpoint-mode').value,platform:$('node-platform').value,profile_id:$('node-profile').value,enabled:$('node-enabled').checked});$('node-dialog').close();await refresh();notify('Connection updated.');});});
 $('schedule-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/schedule','PUT',{interval:Number($('interval').value)});await refresh();notify('Backup schedule saved.');});});
 async function startJob(operation,node_names){try{await json('/labs/'+activeId+'/jobs','POST',{operation,...(node_names?{node_names}:{})});tab='backups';await refresh();notify(operation==='test'?'Testing NOS login with show version.':'Backup started.');}catch(e){notify(e.message);}}
 $('test').onclick=()=>startJob('test');$('backup').onclick=()=>startJob('backup');

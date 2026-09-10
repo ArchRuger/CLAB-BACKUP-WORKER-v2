@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import hashlib
 import yaml
 from .inventory import PLATFORMS
+from .discovery import automatic_ready, node_available
 from .downloads import short_name
 
 APP = Path(__file__).parent
@@ -102,6 +103,8 @@ class Runner:
             lab=self.store.lab(lab_id)
             if not lab:
                 raise ValueError('Lab not found')
+            if source=='scheduled' and not automatic_ready(self.store.state,lab):
+                raise ValueError('Scheduled backup paused: lab discovery is unavailable or the lab is not fully running')
             if node_names is not None:
                 known={n['name'] for n in lab['nodes']}
                 if not node_names or len(set(node_names))!=len(node_names) or not set(node_names)<=known:
@@ -110,6 +113,8 @@ class Runner:
                    if (n['name'] in node_names if node_names is not None else n['enabled'])]
             if not nodes:
                 raise ValueError('Enable at least one supported node')
+            if any(not node_available(self.store.state,lab,n) for n in nodes):
+                raise ValueError('Selected nodes are not currently available. Refresh VM discovery before connecting.')
             missing=[n['name'] for n in nodes if readiness(lab,n)!='Ready']
             if missing:
                 raise ValueError('Complete NOS and credentials for: '+', '.join(missing[:8]))

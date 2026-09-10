@@ -1,5 +1,35 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.7.0 addendum — standalone persistent manager
+
+The user explicitly authorized host SSH discovery, overriding earlier statements
+that the worker must not connect to its host. Scope is fixed read-only inspection;
+do not add host metrics, Docker socket mounts or lab lifecycle commands.
+
+Default compose.yml now runs independently of containerlab, with Linux host
+networking, UI port 8081, fixed project name and a /srv/containerlab-node-manager/data
+bind mount. Image UID/GID are both 10001. Read STANDALONE-SETUP.md for setup,
+restricted SSH helper/account, migration, key handling and old-worker removal.
+
+app/discovery.py owns YAML registration, optional layout import, VM configuration,
+30-second SSH polling, 90-second freshness, host-key pinning, exact container
+matching, and automatic-address updates. Original YAML and host credentials live
+only in encrypted state; main.py excludes them from public responses. First-use
+VM host-key trust is explicit in the UI. Errors/logs never include raw SSH output.
+Host configuration revisions prevent stale in-flight results from being applied.
+
+Saved labs use deployment_name/container_prefix; names are unique per configured
+VM. One host connection per manager is intentional. Manual node endpoints are
+preserved. New YAML nodes are automatic; legacy inventory endpoints remain manual.
+Stable node names retain history even when a deployment name changes. Discovery
+does not delete saved workspaces or deploy/restore device configurations.
+Linked schedules require a fresh Running lab; manual actions require a fresh,
+matched running node. Unlinked legacy labs retain their prior connection/schedule
+behavior. Use Update lab YAML to link/migrate an existing workspace deliberately.
+
+Keep setup/migration shell scripts LF-terminated for Linux. Source delivery remains
+ZIP plus verified patches; do not claim Docker/Linux deployment or GitHub push.
+
 ## Release 1.6.1 addendum — v2 repository
 
 Current repository: https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.
