@@ -23,7 +23,7 @@ function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platf
 function render(){
  const lab=current();
  $('labs').innerHTML=state.labs.length?state.labs.map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${esc(l.name)}<small>${l.nodes.length} nodes</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
- $('app-version').textContent='v'+(state.version||'1.6.0');
+ $('app-version').textContent='v'+(state.version||'1.6.1');
  $('worker-state').textContent=busy()?'SSH job in progress':'Worker idle';
  $('empty').hidden=!!lab;$('lab-content').hidden=!lab;
  $('title').textContent=lab?.name||'Your next lab starts here.';$('breadcrumb').textContent=lab?.name||'Overview';

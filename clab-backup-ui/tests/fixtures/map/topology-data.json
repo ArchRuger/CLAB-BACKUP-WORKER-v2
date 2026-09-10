@@ -1,0 +1,264 @@
+{
+  "name": "BGP_TheoryToPractice",
+  "nodes": {
+    "Backup-Worker": {
+      "shortname": "Backup-Worker",
+      "longname": "clab-BGP_TheoryToPractice-Backup-Worker",
+      "kind": "linux"
+    },
+    "GTW-1": {
+      "shortname": "GTW-1",
+      "longname": "clab-BGP_TheoryToPractice-GTW-1",
+      "kind": "cisco_xrv9k"
+    },
+    "GTW-2": {
+      "shortname": "GTW-2",
+      "longname": "clab-BGP_TheoryToPractice-GTW-2",
+      "kind": "juniper_cjunosevolved"
+    },
+    "IXP-L2-Switch": {
+      "shortname": "IXP-L2-Switch",
+      "longname": "clab-BGP_TheoryToPractice-IXP-L2-Switch",
+      "kind": "arista_ceos"
+    },
+    "Internet": {
+      "shortname": "Internet",
+      "longname": "clab-BGP_TheoryToPractice-Internet",
+      "kind": "arista_ceos"
+    },
+    "PE1": {
+      "shortname": "PE1",
+      "longname": "clab-BGP_TheoryToPractice-PE1",
+      "kind": "cisco_xrv9k"
+    },
+    "PE2": {
+      "shortname": "PE2",
+      "longname": "clab-BGP_TheoryToPractice-PE2",
+      "kind": "juniper_cjunosevolved"
+    },
+    "RTR5": {
+      "shortname": "RTR5",
+      "longname": "clab-BGP_TheoryToPractice-RTR5",
+      "kind": "arista_ceos"
+    },
+    "RTR6": {
+      "shortname": "RTR6",
+      "longname": "clab-BGP_TheoryToPractice-RTR6",
+      "kind": "arista_ceos"
+    },
+    "RTR7": {
+      "shortname": "RTR7",
+      "longname": "clab-BGP_TheoryToPractice-RTR7",
+      "kind": "arista_ceos"
+    },
+    "RTR8": {
+      "shortname": "RTR8",
+      "longname": "clab-BGP_TheoryToPractice-RTR8",
+      "kind": "arista_ceos"
+    },
+    "UP-1": {
+      "shortname": "UP-1",
+      "longname": "clab-BGP_TheoryToPractice-UP-1",
+      "kind": "cisco_xrv9k"
+    },
+    "UP-2": {
+      "shortname": "UP-2",
+      "longname": "clab-BGP_TheoryToPractice-UP-2",
+      "kind": "juniper_cjunosevolved"
+    }
+  },
+  "links": [
+    {
+      "endpoints": {
+        "a": {
+          "node": "RTR6",
+          "interface": "eth1"
+        },
+        "z": {
+          "node": "PE1",
+          "interface": "eth2"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "RTR6",
+          "interface": "eth2"
+        },
+        "z": {
+          "node": "PE2",
+          "interface": "eth4"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "RTR5",
+          "interface": "eth1"
+        },
+        "z": {
+          "node": "PE1",
+          "interface": "eth3"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "RTR5",
+          "interface": "eth2"
+        },
+        "z": {
+          "node": "PE2",
+          "interface": "eth5"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "PE1",
+          "interface": "eth4"
+        },
+        "z": {
+          "node": "GTW-1",
+          "interface": "eth2"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "GTW-1",
+          "interface": "eth3"
+        },
+        "z": {
+          "node": "GTW-2",
+          "interface": "eth4"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "GTW-2",
+          "interface": "eth5"
+        },
+        "z": {
+          "node": "PE2",
+          "interface": "eth6"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "PE2",
+          "interface": "eth7"
+        },
+        "z": {
+          "node": "PE1",
+          "interface": "eth5"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "PE2",
+          "interface": "eth8"
+        },
+        "z": {
+          "node": "GTW-1",
+          "interface": "eth4"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "GTW-2",
+          "interface": "eth6"
+        },
+        "z": {
+          "node": "PE1",
+          "interface": "eth6"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "GTW-1",
+          "interface": "eth5"
+        },
+        "z": {
+          "node": "IXP-L2-Switch",
+          "interface": "eth1"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "GTW-2",
+          "interface": "eth7"
+        },
+        "z": {
+          "node": "IXP-L2-Switch",
+          "interface": "eth2"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "UP-1",
+          "interface": "eth2"
+        },
+        "z": {
+          "node": "IXP-L2-Switch",
+          "interface": "eth3"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "UP-2",
+          "interface": "eth4"
+        },
+        "z": {
+          "node": "IXP-L2-Switch",
+          "interface": "eth4"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "Internet",
+          "interface": "eth1"
+        },
+        "z": {
+          "node": "UP-1",
+          "interface": "eth3"
+        }
+      }
+    },
+    {
+      "endpoints": {
+        "a": {
+          "node": "Internet",
+          "interface": "eth2"
+        },
+        "z": {
+          "node": "UP-2",
+          "interface": "eth5"
+        }
+      }
+    }
+  ]
+}

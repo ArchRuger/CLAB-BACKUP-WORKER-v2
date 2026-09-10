@@ -1,5 +1,26 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.6.1 addendum — v2 repository
+
+Current repository: https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.
+Baseline is `06b8624` (1.6.0 upload); changes prepared on `codex/map-import-fixes`.
+This addendum supersedes the older repository/baseline and demo-only validation below.
+The user supplied the actual BGP annotation, YAML, export, and inventory files.
+
+Drawing schema 3 fixes top-left node coordinates, legacy unsized note margins,
+explicit shape opacity, endpoint offsets, and XRv9k exported interface aliases.
+Regression fixtures in tests/fixtures/map preserve geometry with credentials and
+connection details removed. Do not add raw uploaded files or preview state to source.
+Both YAML and topology-data imports produce the same 13 nodes and 16 links.
+Right-click SSH was connected to a local fixture; right-click backup selected only
+PE1 through the real API with background execution stubbed. No live NOS was touched.
+Versioned static URLs prevent older browser assets from hiding the menu after upgrade.
+
+See FRESH-IMAGE.md before replacing the worker: the supplied YAML has no /data mount.
+Preserve its data and encryption key before recreation. The screenshot was v1.5.0;
+verify the actual running container and footer are 1.6.1, then reimport the drawing.
+Keep source ZIP/patch delivery; no GitHub push, Docker build, or deployment is implied.
+
 ## Release 1.6.0 addendum
 
 The user approved the demonstrated map design. The application name is now

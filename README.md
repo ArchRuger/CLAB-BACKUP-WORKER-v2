@@ -1,6 +1,6 @@
-# Containerlab Node Manager — 1.6.0
+# Containerlab Node Manager — 1.6.1
 
-Version 1.6.0 renames the application to Containerlab Node Manager, improves imported topology styling, adds right-click node actions, and names SuperPuTTY exports after the lab. See [node features and setup](clab-backup-ui/NODE-FEATURES.md) for usage and upgrades.
+Version 1.6.1 fixes topology imports using the supplied 13-node/16-link lab: node coordinates, legacy note spacing, shape opacity, and IOS-XR interface labels. The right-click SSH/backup menu is verified with the actual drawing and local test endpoints. See [fresh image and worker upgrade](FRESH-IMAGE.md) before replacing an existing worker; the supplied lab YAML has no persistent `/data` mount.
 
 A self-contained Docker application for backing up Junos, IOS-XR, and Arista EOS
 configuration over SSH. The image starts empty. Upload containerlab's generated
@@ -268,7 +268,7 @@ and is removed afterward.
    For a worker managed by containerlab, rebuild its existing image tag:
 
    ```bash
-   docker build -t clab-backup:1.6.0 -t clab-backup:webui ./clab-backup-ui
+   docker build -t clab-backup:1.6.1 -t clab-backup:webui ./clab-backup-ui
    ```
 
    Then recreate the worker container through your existing deployment procedure,
@@ -287,7 +287,7 @@ Official references:
 - https://containerlab.dev/manual/kinds/cjunosevolved/
 - https://github.com/ansible-collections/arista.eos/blob/main/plugins/terminal/eos.py
 
-## 1.2.0 — Individual downloads and readable names (retained in 1.6.0)
+## 1.2.0 — Individual downloads and readable names (retained in 1.6.1)
 
 In **Backup history**, expand a completed job and click **Download config** beside
 any successful device, or **Download all (ZIP)** for all successful configurations
@@ -338,14 +338,14 @@ configuration detection. Later inventory edits do not change saved snapshot name
 From the repository root:
 
 ```bash
-docker build -t clab-backup:1.6.0 -t clab-backup:webui ./clab-backup-ui
+docker build -t clab-backup:1.6.1 -t clab-backup:webui ./clab-backup-ui
 ```
 
-For containerlab, set the worker image to `clab-backup:1.6.0`, then recreate the
+For containerlab, set the worker image to `clab-backup:1.6.1`, then recreate the
 worker using your deployment procedure while preserving its existing `/data` mount.
 For Compose, run `docker compose up -d --build` from `clab-backup-ui`; Compose now
-uses `clab-backup:1.6.0`. Refresh the browser after recreating the worker. The footer
-and `/api/state` report `1.6.0`, and the image carries the OCI version label.
+uses `clab-backup:1.6.1`. Refresh the browser after recreating the worker. The footer
+and `/api/state` report `1.6.1`, and the image carries the OCI version label.
 
 Extra validation commands, from `clab-backup-ui`:
 
@@ -354,4 +354,4 @@ python -m unittest discover -s tests -v
 node --test tests/test_download_ui.js
 ```
 
-Topology maps and SuperPuTTY session export are available in 1.6.0. See NODE-FEATURES.md in the application directory for inputs, mapping, export credentials, and compatibility limits.
+Topology maps and SuperPuTTY session export are available in 1.6.1. See NODE-FEATURES.md in the application directory for inputs, mapping, export credentials, and compatibility limits.

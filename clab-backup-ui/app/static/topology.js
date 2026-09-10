@@ -39,7 +39,7 @@ async function refreshMap(force=false){
  map.innerHTML=topologyMarkup(drawing);
  map.classList.toggle('labels-on-select',drawing.settings?.labelMode==='on-select');
  mapBounds=measureTopology(map);mapBox=[...mapBounds];setMapBox();
- if(drawing.schema!==2)$('map-status').textContent+=' Reimport the original annotations to recover styling discarded by the earlier importer.';
+ if(drawing.schema!==3)$('map-status').textContent+=' Reimport the original annotations and lab YAML to restore complete styling and NOS interface labels.';
 
  }catch(e){if(request===mapRequest)$('map-status').textContent='Could not load map: '+e.message;}
 }

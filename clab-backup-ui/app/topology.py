@@ -44,12 +44,32 @@ def bounded(value, default, minimum, maximum):
     return min(maximum,max(minimum,number(value,default)))
 
 
+def exported_interface(interface, kind):
+    """Reverse containerlab's XRv9k data-port mapping, not allocation patterns.
+
+    XRv9k reserves eth1 for management; eth2 is Gi0/0/0/1. Native YAML
+    interface names and other kinds must remain unchanged (e.g. Junos eth4).
+    """
+    match=re.fullmatch(r'eth(\d+)',interface)
+    if kind in ('cisco_xrv9k','vr-xrv9k') and match and int(match[1])>=2:
+        return 'Gi0/0/0/'+str(int(match[1])-1)
+    return interface
+
+
+def opaque_color(value):
+    """Explicit fillOpacity replaces RGBA alpha in the upstream renderer."""
+    match=re.fullmatch(r'rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*[\d.]+\s*\)',value)
+    if match: return 'rgb('+','.join(match.groups())+')'
+    if value.startswith('#') and len(value) in (5,9): return value[:-1] if len(value)==5 else value[:-2]
+    return value
+
+
 def parse_drawing(raw, topology=None):
     if len(raw)>1024*1024: raise ValueError('Annotations must be smaller than 1 MiB')
     data=json.loads(raw)
     if not isinstance(data,dict) or not any(k in data for k in ('nodeAnnotations','networkNodeAnnotations','freeTextAnnotations','groupStyleAnnotations','freeShapeAnnotations')):
         raise ValueError('Upload a containerlab .annotations.json file')
-    nodes={}; links=[]; decorations=[]; skipped_links=0
+    nodes={}; links=[]; decorations=[]; skipped_links=0; kinds={}; aliases={}
     for index,n in enumerate(rows(data,'nodeAnnotations')+rows(data,'networkNodeAnnotations')):
         ident=text(n.get('id'))
         if not ident or ident in nodes: raise ValueError('Drawing node IDs must be unique and nonempty')
@@ -60,6 +80,7 @@ def parse_drawing(raw, topology=None):
                       'labelPosition':text(n.get('labelPosition') or 'bottom'),
                       'labelBackgroundColor':color(n.get('labelBackgroundColor'),'#454545'),
                       'iconCornerRadius':bounded(n.get('iconCornerRadius'),4,0,32),
+                      'interfacePattern':text(n.get('interfacePattern') or ''),
                       'direction':text(n.get('direction') or 'up')}
     if topology:
         topo=read_data(topology)
@@ -69,9 +90,12 @@ def parse_drawing(raw, topology=None):
         for ident,n in body.get('nodes',{}).items():
             if not isinstance(n,dict): n={}
             ident=text(ident); short=text(n.get('shortname') or ident)
+            kinds[short]=n.get('kind','')
+            for alias in (ident,short,n.get('longname')):
+                if isinstance(alias,str): aliases[alias]=short
             # Export keys may be container names; annotations use short names.
             if short in nodes: continue
-            if ident not in nodes: nodes[ident]={'id':ident,'alias':short,'label':short,'x':len(nodes)%8*160,'y':len(nodes)//8*120}
+            if short not in nodes: nodes[short]={'id':short,'alias':short,'label':short,'x':len(nodes)%8*160,'y':len(nodes)//8*120}
         for link in rows(body,'links'):
             endpoints=link.get('endpoints')
             if isinstance(endpoints,dict): endpoints=[endpoints[k] for k in ('a','z') if k in endpoints]
@@ -84,9 +108,20 @@ def parse_drawing(raw, topology=None):
                 elif isinstance(ep,dict): node=ep.get('node',ep.get('node-short-name','')); interface=ep.get('interface',ep.get('interface-name',''))
                 else: raise ValueError('Invalid link endpoint')
                 node=text(node); interface=text(interface)
+                node=aliases.get(node,node)
+                if 'topology' not in topo: interface=exported_interface(interface,kinds.get(node,''))
                 if node not in nodes: nodes[node]={'id':node,'alias':node,'label':node,'x':len(nodes)%8*160,'y':len(nodes)//8*120}
                 pair.append({'node':node,'interface':interface})
             links.append(pair)
+    for edge in rows(data,'edgeAnnotations'):
+        if edge.get('endpointLabelOffsetEnabled') is not True: continue
+        offset=bounded(edge.get('endpointLabelOffset'),20,0,200)
+        source=(edge.get('source'),edge.get('sourceEndpoint'))
+        target=(edge.get('target'),edge.get('targetEndpoint'))
+        for pair in links:
+            ends=[(ep['node'],ep['interface']) for ep in pair]
+            if ends==[source,target] or ends==[target,source]:
+                for ep in pair: ep['label_offset']=offset
     for key in ('groupStyleAnnotations','freeShapeAnnotations','freeTextAnnotations'):
         for item in rows(data,key):
             pos=item.get('position') or {}
@@ -112,9 +147,15 @@ def parse_drawing(raw, topology=None):
                      textDecoration='underline' if item.get('textDecoration')=='underline' else 'none',
                      backgroundColor=color(item.get('backgroundColor'),'transparent'),
                      rotation=number(item.get('rotation'),0),zIndex=number(item.get('zIndex'),-1 if key!='freeTextAnnotations' else 1))
+            if ('backgroundOpacity' if is_group else 'fillOpacity') in item:
+                d['fillColor']=opaque_color(d['fillColor'])
             if key=='freeTextAnnotations':
+                # Legacy auto-sized markdown notes have a 1em paragraph margin.
+                # Their saved position is the outer box, not the first glyph.
+                d['paragraphMargin']=d['fontSize'] if item.get('height') is None else 0
+                d['fontFamily']=item.get('fontFamily') if item.get('fontFamily') in ('Arial','Verdana','Georgia','monospace','sans-serif','serif') else 'Arial'
                 d['width']=bounded(item.get('width'),max(50,max((len(line) for line in d['text'].splitlines()),default=0)*d['fontSize']*.6+8),1,100000)
-                d['height']=bounded(item.get('height'),max(1,len(d['text'].splitlines()))*d['fontSize']*1.5+8,1,100000)
+                d['height']=bounded(item.get('height'),max(1,len(d['text'].splitlines()))*d['fontSize']*1.5+8+2*d['paragraphMargin'],1,100000)
             end=item.get('endPosition') or {}
             d.update(x2=number(end.get('x'),d['x']+d['width']),y2=number(end.get('y'),d['y']+d['height']))
             decorations.append(d)
@@ -122,11 +163,11 @@ def parse_drawing(raw, topology=None):
     if len(nodes)>2000: raise ValueError('Too many drawing nodes')
     settings=data.get('viewerSettings') or {}
     if not isinstance(settings,dict): raise ValueError('Invalid viewer settings')
-    return {'schema':2,'nodes':list(nodes.values()),'links':links,'decorations':decorations,'has_links_source':bool(topology),'skipped_links':skipped_links,
-            'settings':{'background':color(settings.get('gridBgColor'),'#fbf8ee'),
+    return {'schema':3,'nodes':list(nodes.values()),'links':links,'decorations':decorations,'has_links_source':bool(topology),'skipped_links':skipped_links,
+            'settings':{'background':color(settings.get('gridBgColor'),'#fdf6e3'),
                         'gridColor':color(settings.get('gridColor'),'#d2cbb5'),
                         'labelMode':settings.get('linkLabelMode') if settings.get('linkLabelMode') in ('show-all','on-select','hide') else 'show-all',
-                        'endpointOffset':bounded(settings.get('endpointLabelOffset'),40,12,200)}}
+                        'endpointOffset':bounded(settings.get('endpointLabelOffset'),20,0,200)}}
 
 
 def bind_drawing(lab):

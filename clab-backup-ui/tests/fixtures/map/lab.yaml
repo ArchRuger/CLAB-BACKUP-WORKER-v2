@@ -1,0 +1,78 @@
+name: BGP_TheoryToPractice
+topology:
+  nodes:
+    Backup-Worker:
+      kind: linux
+    IXP-L2-Switch:
+      kind: arista_ceos
+    PE1:
+      kind: cisco_xrv9k
+    GTW-1:
+      kind: cisco_xrv9k
+    UP-1:
+      kind: cisco_xrv9k
+    UP-2:
+      kind: juniper_cjunosevolved
+    GTW-2:
+      kind: juniper_cjunosevolved
+    PE2:
+      kind: juniper_cjunosevolved
+    RTR5:
+      kind: arista_ceos
+    RTR6:
+      kind: arista_ceos
+    Internet:
+      kind: arista_ceos
+    RTR7:
+      kind: arista_ceos
+    RTR8:
+      kind: arista_ceos
+  links:
+  - endpoints:
+    - RTR6:eth1
+    - PE1:Gi0/0/0/1
+  - endpoints:
+    - RTR6:eth2
+    - PE2:eth4
+  - endpoints:
+    - RTR5:eth1
+    - PE1:Gi0/0/0/2
+  - endpoints:
+    - RTR5:eth2
+    - PE2:eth5
+  - endpoints:
+    - PE1:Gi0/0/0/3
+    - GTW-1:Gi0/0/0/1
+  - endpoints:
+    - GTW-1:Gi0/0/0/2
+    - GTW-2:eth4
+  - endpoints:
+    - GTW-2:eth5
+    - PE2:eth6
+  - endpoints:
+    - PE2:eth7
+    - PE1:Gi0/0/0/4
+  - endpoints:
+    - PE2:eth8
+    - GTW-1:Gi0/0/0/3
+  - endpoints:
+    - GTW-2:eth6
+    - PE1:Gi0/0/0/5
+  - endpoints:
+    - GTW-1:Gi0/0/0/4
+    - IXP-L2-Switch:eth1
+  - endpoints:
+    - GTW-2:eth7
+    - IXP-L2-Switch:eth2
+  - endpoints:
+    - UP-1:Gi0/0/0/1
+    - IXP-L2-Switch:eth3
+  - endpoints:
+    - UP-2:eth4
+    - IXP-L2-Switch:eth4
+  - endpoints:
+    - Internet:eth1
+    - UP-1:Gi0/0/0/2
+  - endpoints:
+    - Internet:eth2
+    - UP-2:eth5

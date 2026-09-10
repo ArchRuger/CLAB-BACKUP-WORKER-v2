@@ -1,6 +1,7 @@
 import copy
 import json
 import tempfile
+from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
 from fastapi.testclient import TestClient
@@ -62,7 +63,7 @@ class TopologyTests(unittest.TestCase):
         a['groupStyleAnnotations']=[{'name':'Routing','position':{'x':100,'y':200},'width':400,'height':200,'backgroundColor':'#ffcaab','backgroundOpacity':.4,'borderWidth':2,'labelPosition':'bottom-center'}]
         a['freeTextAnnotations']=[{'text':'Title','fontSize':28,'fontColor':'#112233','fontWeight':'bold','position':{'x':10,'y':20}}]
         d=self.parse(a)
-        self.assertEqual(d['schema'],2)
+        self.assertEqual(d['schema'],3)
         self.assertEqual(d['nodes'][0]['labelPosition'],'top')
         self.assertEqual(d['decorations'][0]['fillColor'],'#ffcaab')
         self.assertEqual(d['decorations'][0]['fillOpacity'],.4)
@@ -89,3 +90,39 @@ class TopologyTests(unittest.TestCase):
             self.assertEqual(bad.status_code,400)
             self.assertEqual(client.get(path,headers=auth).json(),result.json())
             app.state.node_services.close();app.state.runner.close();client.close()
+
+
+class ActualMapRegressionTests(unittest.TestCase):
+    """Geometry from the reported lab; credentials, addresses and images removed."""
+    def setUp(self):
+        self.fixture=Path(__file__).parent/'fixtures'/'map'
+        self.annotations=(self.fixture/'annotations.json').read_bytes()
+
+    def test_yaml_and_exported_topology_have_identical_nos_endpoints(self):
+        yaml=parse_drawing(self.annotations,(self.fixture/'lab.yaml').read_bytes())
+        exported=parse_drawing(self.annotations,(self.fixture/'topology-data.json').read_bytes())
+        self.assertEqual(len(exported['nodes']),13)
+        self.assertEqual(len(exported['links']),16)
+        self.assertEqual(yaml['links'],exported['links'])
+        self.assertEqual(exported['links'][0][1]['interface'],'Gi0/0/0/1')
+        self.assertEqual(exported['links'][7][0]['interface'],'eth7')
+        self.assertEqual(exported['links'][10][0]['label_offset'],20)
+
+    def test_annotation_geometry_legacy_text_and_alpha_are_retained(self):
+        d=parse_drawing(self.annotations,(self.fixture/'lab.yaml').read_bytes())
+        pe=next(n for n in d['nodes'] if n['id']=='PE1')
+        self.assertEqual((pe['x'],pe['y']),(60,100))
+        self.assertEqual(pe['labelPosition'],'top')
+        note=next(a for a in d['decorations'] if a['text']=='AS 64101')
+        self.assertEqual(note['paragraphMargin'],18)
+        self.assertEqual(note['fontFamily'],'Arial')
+        circle=next(a for a in d['decorations'] if a['type']=='circle')
+        self.assertEqual(circle['fillColor'],'rgb(127,127,127)')
+        self.assertEqual(circle['fillOpacity'],.2)
+
+    def test_every_drawing_node_binds_to_its_own_inventory_identity(self):
+        d=parse_drawing(self.annotations,(self.fixture/'lab.yaml').read_bytes())
+        lab={'name':'BGP_TheoryToPractice','drawing':d,'nodes':[{'name':'clab-BGP_TheoryToPractice-'+n['id'],'short_name':n['id']} for n in d['nodes']]}
+        mapped=bind_drawing(lab)
+        for n in mapped['nodes']:
+            self.assertEqual(n['inventory_name'],'clab-BGP_TheoryToPractice-'+n['id'])

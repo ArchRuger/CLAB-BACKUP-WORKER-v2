@@ -22,3 +22,15 @@ test('coincident node coordinates do not produce invalid SVG geometry',()=>{
  const svg=context.topologyLink([{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}],nodes,0,{});
  assert.match(svg,/<path/);assert.doesNotMatch(svg,/NaN|Infinity/);
 });
+test('real lab icons use top-left annotations while links connect icon centers',()=>{
+ const svg=context.topologyNode({id:'PE1',label:'PE1',x:60,y:100,inventory_name:'clab-BGP_TheoryToPractice-PE1'});
+ assert.match(svg,/translate\(80 120\)/);
+ const nodes=new Map([['a',{label:'a',x:60,y:100}],['b',{label:'b',x:220,y:100}]]);
+ const edge=context.topologyLink([{node:'a',interface:'Gi0/0/0/3'},{node:'b',interface:'Gi0/0/0/1'}],nodes,0,{});
+ assert.match(edge,/M100 120L220 120/);
+});
+test('legacy un-sized notes retain paragraph spacing inside their imported group',()=>{
+ const svg=context.topologyDecoration({type:'text',x:18.9,y:-93.4,width:260,height:99,text:'Line one\nLine two\nLine three',fontSize:14,paragraphMargin:14,fontFamily:'Arial'});
+ assert.match(svg,/y="-61.400000000000006"|y="-61.4"/);
+ assert.match(svg,/font-family="Arial"/);
+});

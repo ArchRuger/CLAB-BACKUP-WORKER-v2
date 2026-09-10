@@ -1,7 +1,7 @@
 services:
   backup-ui:
     build: .
-    image: clab-backup:1.6.0
+    image: clab-backup:1.6.1
     restart: unless-stopped
     ports:
       - '${UI_BIND:-0.0.0.0}:${UI_PORT:-8080}:8080'

@@ -1,0 +1,381 @@
+{
+  "freeTextAnnotations": [
+    {
+      "id": "freeText_1788914135761",
+      "text": "AS 65101",
+      "position": {
+        "x": -161.24560450350145,
+        "y": -13.866141094450953
+      },
+      "fontSize": 18,
+      "fontColor": "#657b83",
+      "fontWeight": "bold",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    },
+    {
+      "id": "freeText_1788914135761-1",
+      "text": "AS 65101",
+      "position": {
+        "x": -164.12115903051557,
+        "y": 329.7011020054508
+      },
+      "fontSize": 18,
+      "fontColor": "#657b83",
+      "fontWeight": "bold",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    },
+    {
+      "id": "freeText_1788914135761-2",
+      "text": "AS 64101",
+      "position": {
+        "x": 115.08150159088791,
+        "y": 44.1247627345152
+      },
+      "fontSize": 18,
+      "fontColor": "#000000",
+      "fontWeight": "bold",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    },
+    {
+      "id": "freeText_1788914135761-2-1",
+      "text": "IXP",
+      "position": {
+        "x": 402.93674104845053,
+        "y": 186.0119081413374
+      },
+      "fontSize": 18,
+      "fontColor": "#000000",
+      "fontWeight": "bold",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    },
+    {
+      "id": "freeText_1788914135761-3",
+      "text": "AS 65541",
+      "position": {
+        "x": 533.5968835116223,
+        "y": -26.095332521332004
+      },
+      "fontSize": 18,
+      "fontColor": "#657b83",
+      "fontWeight": "bold",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    },
+    {
+      "id": "freeText_1788914135761-3-1",
+      "text": "AS 65542",
+      "position": {
+        "x": 538.3677538464235,
+        "y": 345.81300464201195
+      },
+      "fontSize": 18,
+      "fontColor": "#657b83",
+      "fontWeight": "bold",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial",
+      "groupId": "group-1-1"
+    },
+    {
+      "id": "freeText_1788984724924",
+      "text": "Cisco lab account\nJuniper lab account\nArista lab account",
+      "position": {
+        "x": 18.922653180168652,
+        "y": -93.40747215726896
+      },
+      "fontSize": 14,
+      "fontColor": "#657b83",
+      "fontWeight": "normal",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial",
+      "rotation": 360
+    }
+  ],
+  "freeShapeAnnotations": [
+    {
+      "id": "freeShape_1788913720631",
+      "shapeType": "circle",
+      "position": {
+        "x": 354.018020226331,
+        "y": 113.45538817564159
+      },
+      "width": 133,
+      "height": 133,
+      "fillColor": "rgba(127, 127, 127, 0.16)",
+      "fillOpacity": 0.2,
+      "borderColor": "#657b83",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "rotation": 0,
+      "zIndex": -1
+    },
+    {
+      "id": "freeShape_1788913720631-1",
+      "shapeType": "circle",
+      "position": {
+        "x": -172.61940623495286,
+        "y": 31.731493440806076
+      },
+      "width": 109,
+      "height": 109,
+      "fillColor": "#a599ff",
+      "fillOpacity": 0.2,
+      "borderColor": "#657b83",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "rotation": 0,
+      "zIndex": -1
+    },
+    {
+      "id": "freeShape_1788913720631-1-1",
+      "shapeType": "circle",
+      "position": {
+        "x": -175.8062388059231,
+        "y": 244.54162648117583
+      },
+      "width": 109,
+      "height": 109,
+      "fillColor": "#78ff66",
+      "fillOpacity": 0.2,
+      "borderColor": "#657b83",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "rotation": 0,
+      "zIndex": -1
+    }
+  ],
+  "trafficRateAnnotations": [],
+  "groupStyleAnnotations": [
+    {
+      "id": "group-1",
+      "name": "Upstream Transit #1",
+      "level": "1",
+      "position": {
+        "x": 504.5129755794382,
+        "y": 39.1725166949504
+      },
+      "width": 156,
+      "height": 91,
+      "backgroundColor": "rgba(100, 100, 255, 0.1)",
+      "borderColor": "#657b83",
+      "borderWidth": 2,
+      "borderStyle": "dashed",
+      "borderRadius": 8,
+      "zIndex": -1
+    },
+    {
+      "id": "group-1-1",
+      "name": "Upstream Transit #2",
+      "level": "1",
+      "position": {
+        "x": 500.27007551632255,
+        "y": 259.12977021751516
+      },
+      "width": 156,
+      "height": 91,
+      "backgroundColor": "#f4ddf2",
+      "borderColor": "#657b83",
+      "borderWidth": 2,
+      "borderStyle": "dashed",
+      "borderRadius": 8,
+      "labelPosition": "bottom-left",
+      "zIndex": -1
+    },
+    {
+      "id": "group-2",
+      "name": "ISP Tier-2",
+      "level": "1",
+      "position": {
+        "x": 10.303121959497275,
+        "y": 53.42511755070973
+      },
+      "width": 305,
+      "height": 283,
+      "backgroundColor": "#ffcead",
+      "borderColor": "#657b83",
+      "borderWidth": 2,
+      "borderStyle": "dashed",
+      "borderRadius": 8,
+      "zIndex": -1
+    },
+    {
+      "id": "group-3",
+      "name": "Logins",
+      "level": "1",
+      "position": {
+        "x": 8.974669647241114,
+        "y": -81.8137857857721
+      },
+      "width": 283,
+      "height": 80,
+      "backgroundColor": "rgba(100, 100, 255, 0.1)",
+      "borderColor": "#657b83",
+      "borderWidth": 2,
+      "borderStyle": "dashed",
+      "borderRadius": 8,
+      "zIndex": -1
+    }
+  ],
+  "networkNodeAnnotations": [],
+  "nodeAnnotations": [
+    {
+      "id": "RTR8",
+      "position": {
+        "x": 300,
+        "y": 160
+      },
+      "icon": "pe",
+      "interfacePattern": "eth{n:1}",
+      "groupId": "group-2"
+    },
+    {
+      "id": "PE1",
+      "position": {
+        "x": 60,
+        "y": 100
+      },
+      "icon": "pe",
+      "interfacePattern": "Gi0/0/0/{n}",
+      "labelPosition": "top"
+    },
+    {
+      "id": "GTW-1",
+      "position": {
+        "x": 220,
+        "y": 100
+      },
+      "icon": "pe",
+      "interfacePattern": "Gi0/0/0/{n}",
+      "labelPosition": "top"
+    },
+    {
+      "id": "UP-1",
+      "position": {
+        "x": 560,
+        "y": 58.83192736618658
+      },
+      "icon": "pe",
+      "interfacePattern": "Gi0/0/0/{n}"
+    },
+    {
+      "id": "IXP-L2-Switch",
+      "position": {
+        "x": 400,
+        "y": 160
+      },
+      "icon": "pe",
+      "interfacePattern": "eth{n:1}",
+      "labelPosition": "top"
+    },
+    {
+      "id": "PE2",
+      "position": {
+        "x": 60,
+        "y": 240
+      },
+      "icon": "pe",
+      "interfacePattern": "eth{n:4}"
+    },
+    {
+      "id": "GTW-2",
+      "position": {
+        "x": 220,
+        "y": 240
+      },
+      "icon": "pe",
+      "interfacePattern": "eth{n:4}"
+    },
+    {
+      "id": "UP-2",
+      "position": {
+        "x": 560,
+        "y": 280
+      },
+      "icon": "pe",
+      "interfacePattern": "eth{n:4}"
+    },
+    {
+      "id": "RTR5",
+      "position": {
+        "x": -140,
+        "y": 280
+      },
+      "icon": "pe",
+      "interfacePattern": "eth{n:1}"
+    },
+    {
+      "id": "RTR6",
+      "position": {
+        "x": -140,
+        "y": 60
+      },
+      "icon": "pe",
+      "interfacePattern": "eth{n:1}"
+    },
+    {
+      "id": "Internet",
+      "position": {
+        "x": 700,
+        "y": 160
+      },
+      "labelPosition": "top",
+      "icon": "pe",
+      "interfacePattern": "eth{n:1}"
+    },
+    {
+      "id": "Backup-Worker",
+      "position": {
+        "x": -60,
+        "y": -60
+      }
+    },
+    {
+      "id": "RTR7",
+      "position": {
+        "x": -40,
+        "y": 160
+      },
+      "icon": "pe",
+      "interfacePattern": "eth{n:1}"
+    }
+  ],
+  "edgeAnnotations": [
+    {
+      "id": "Clab-Link12",
+      "source": "UP-1",
+      "target": "IXP-L2-Switch",
+      "sourceEndpoint": "Gi0/0/0/1",
+      "targetEndpoint": "eth3",
+      "endpointLabelOffsetEnabled": true,
+      "endpointLabelOffset": 20
+    },
+    {
+      "id": "Clab-Link10",
+      "source": "GTW-1",
+      "target": "IXP-L2-Switch",
+      "sourceEndpoint": "Gi0/0/0/4",
+      "targetEndpoint": "eth1",
+      "endpointLabelOffsetEnabled": true,
+      "endpointLabelOffset": 20
+    }
+  ],
+  "aliasEndpointAnnotations": [],
+  "viewerSettings": {}
+}

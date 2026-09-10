@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.6.0
+# Containerlab Node Manager — 1.6.1
 
 Click a lab to open its node dashboard. Every imported node is shown, including
 Linux and unmapped kinds. Details contains the last SSH authentication check,
@@ -76,29 +76,33 @@ sudo systemctl disable --now clab-monitor
 ```
 
 If you ran it in a terminal, stop that process with Ctrl+C. You may remove the old
-MONITOR_TOKEN entry from your deployment environment. The 1.6.0 source archive
+MONITOR_TOKEN entry from your deployment environment. The 1.6.1 source archive
 does not contain `monitor/`; old copies left by an overlay extraction are not used
 by the worker. The archive's source folder is the complete current build context.
 
 ## Build and upgrade
 
+See [fresh image and worker upgrade](../FRESH-IMAGE.md) for worker-only recreation
+and data preservation. The supplied lab YAML has no `/data` mount; copy its data
+before replacing that container.
+
 From the repository root (the folder containing `clab-backup-ui/`):
 
 ```bash
-docker build -t clab-backup:1.6.0 -t clab-backup:webui ./clab-backup-ui
+docker build --pull --no-cache -t clab-backup:1.6.1 -t clab-backup:webui ./clab-backup-ui
 ```
 
 If already inside `clab-backup-ui` beside its Dockerfile:
 
 ```bash
-docker build -t clab-backup:1.6.0 -t clab-backup:webui .
+docker build --pull --no-cache -t clab-backup:1.6.1 -t clab-backup:webui .
 ```
 
 For Compose, run `docker compose up -d --build` from that application directory.
-For containerlab, update the worker image to `clab-backup:1.6.0` and recreate only
+For containerlab, update the worker image to `clab-backup:1.6.1` and recreate only
 that worker using your existing deployment procedure. Keep the existing `/data`
 mount and its key. Do not delete the volume or redeploy the router lab for this upgrade.
-Refresh the browser and confirm v1.6.0 in the footer. The upgrade preserves existing device snapshots and stored credentials.
+Refresh the browser and confirm v1.6.1 in the footer. The upgrade preserves existing device snapshots and stored credentials.
 
 ## Deployment checks
 
@@ -112,7 +116,7 @@ See `VALIDATION.md` for local test evidence and remaining live-lab checks.
 
 Implementation reference: [xterm.js API](https://xtermjs.org/docs/api/terminal/classes/terminal/).
 
-## Topology and session export (1.6.0)
+## Topology and session export (1.6.1)
 
 Choose **Topology > Import topology**. Upload `lab.clab.yaml.annotations.json`
 and optionally the corresponding `.clab.yaml` or generated `topology-data.json`.
@@ -124,14 +128,23 @@ colors are preserved where supported. Built-in router, switch and server symbols
 replace the corresponding icon categories. Pan by dragging the background; use zoom,
 Fit map, or Expand map. Fit uses the rendered bounds rather than guessed text extents.
 
+Version 1.6.1 interprets saved node coordinates as the top-left of the 40px icon,
+matching the source canvas. Legacy unsized text notes retain paragraph spacing;
+explicit fill opacity replaces an embedded RGBA alpha. Endpoint labels use the
+saved offset. For generated topology-data exports, Cisco XRv9k data ports map from
+`eth2` to `Gi0/0/0/1`, and so on; other kinds retain their exported names. Native
+YAML interface names are preserved. YAML is preferred when it contains custom NOS
+aliases that cannot be reconstructed from an export. These paths produce identical
+links for the supplied BGP lab. Schema 3 records the corrected drawing metadata.
+
 Right-click a matched node for **SSH**, **Back up configuration**, and **Node details**.
 SSH opens a new browser tab with the existing saved connection. Keyboard users can
 focus a node and press Shift+F10, navigate with arrow keys, and press Escape to close
 the menu. Actions have the same credential/readiness requirements as the node list.
 
-**Upgrading from 1.5.0:** reimport the original annotations plus topology file.
-The earlier importer discarded styling fields; existing stored maps cannot recover
-those fields without a fresh import. Old maps remain readable and display a reminder.
+**Upgrading from 1.5.0 or 1.6.0:** reimport the original annotations plus topology file.
+Earlier importers discarded styling or did not retain corrected label metadata;
+existing stored maps need a fresh import to apply all corrections. Old maps remain readable and display a reminder.
 Reimporting drawing data does not replace inventory, credentials, or backups.
 This is an operational map, not a complete VS Code topology editor: custom icons,
 HTML/Markdown text styling, geographic layouts, nested relative geometry, traffic
