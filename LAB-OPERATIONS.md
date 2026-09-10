@@ -1,18 +1,18 @@
-# Lab operations — Containerlab Node Manager 1.12.0
+# Lab operations — Containerlab Node Manager 1.12.1
 
 ## Upgrade
 
-Place the source directly in `~/projects/v1.12.0`, containing `deploy/` and
+Place the source directly in `~/projects/v1.12.1`, containing `deploy/` and
 `clab-backup-ui/`. Copy any customized `clab-backup-ui/.env` from the older folder.
 Keep the persistent directory and existing SSH key.
 
 ```bash
-cd "$HOME/projects/v1.12.0"
+cd "$HOME/projects/v1.12.1"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui
 ```
 
-The script refreshes and verifies both host helpers, builds `clab-backup:1.12.0`
+The script refreshes and verifies both host helpers, builds `clab-backup:1.12.1`
 without cache and recreates the manager. Open `http://VM_IP:8081`; no UI login is
 required. Linux host networking uses this port directly, without `-p` forwarding.
 Data stays in `/srv/containerlab-node-manager/data` (UID/GID 10001, mode 700).
@@ -37,7 +37,7 @@ Open **Lab actions** or right-click a saved lab (keyboard: Shift+F10).
 | Favorite | Sorts this saved lab above other labs. |
 | Interactive draw.io editor | Drag nodes or edit coordinates. Save layout updates the manager; Export full diagram downloads current positions without saving. |
 | Delete undeployed VM YAML | Separate source deletion; refused while its deployment exists. Keeps a VM recovery copy. |
-| VM projects | Global sidebar browser in a new tab; one expandable vertical folder tree. Existing files are read-only. |
+| Deploy New Lab → Lab Topologies | Same-tab landing page with an explicit browser button. Expand folders to select .clab.yaml/.clab.yml files; existing files are read-only. |
 | New topology | Creates a new VM YAML after structure preview and confirmation; never replaces an existing file. |
 | Add project / deploy project | Read an existing file, add a saved manager workspace, or separately review deployment. |
 | Clone repository / popular labs | Optional HTTPS project acquisition, followed by review of files and separate deployment. |
@@ -80,8 +80,7 @@ persist in operation history; interrupted jobs require inspection before retryin
 Lifecycle commands can interrupt node sessions. Manager backups/import changes
 are blocked during an active lab operation.
 
-Discovery matches imported lab names to the original VM topology path. Browse
-VM projects to add an undeployed project. Sync from VM refreshes imported data
+Discovery matches imported lab names to the original VM topology path. Open **Deploy New Lab → Lab Topologies** to add an undeployed project. Sync from VM refreshes imported data
 without overwriting saved connection settings. Saving a manager layout never
 rewrites the original annotations file; a later topology import can replace it.
 

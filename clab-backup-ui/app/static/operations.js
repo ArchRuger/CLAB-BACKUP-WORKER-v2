@@ -1,6 +1,6 @@
 'use strict';
 // Shared by the main workspace and independent VM-folder / SSH-launcher tabs.
-const opLabels={deploy:'Deploy',redeploy:'Redeploy',destroy:'Destroy deployment',apply:'Apply topology',start:'Start lab nodes',stop:'Stop lab nodes',restart:'Restart lab nodes',save:'Save configurations (clab)',inspect:'Inspect lab','inspect-all':'Inspect all labs',create:'Create VM topology',delete:'Delete undeployed VM YAML',clone:'Clone repository'};
+const opLabels={deploy:'Deploy lab',redeploy:'Redeploy',destroy:'Destroy deployment',apply:'Apply topology',start:'Start lab nodes',stop:'Stop lab nodes',restart:'Restart lab nodes',save:'Save configurations (clab)',inspect:'Inspect lab','inspect-all':'Inspect all labs',create:'Create VM topology',delete:'Delete undeployed VM YAML',clone:'Clone repository'};
 let opCaps=null, opMenuLab='', opOutputTimer=null, opEditorContext=null;
 function opDialog(id,title,body){
  let dialog=$(id);if(!dialog){dialog=document.createElement('dialog');dialog.id=id;dialog.className='operations-dialog';document.body.append(dialog);}
@@ -43,15 +43,15 @@ async function openLabOperations(id=activeId){
 async function opReview(request){
  const value=await json('/operations/preview','POST',request);
  const label=opLabels[value.action]||value.action;
- const dialog=opDialog('operation-review','Review: '+label,`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All deployed labs on the configured VM')}</p>
+ const dialog=opDialog('operation-review',label+'?',`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All deployed labs on the configured VM')}</p>
  ${value.warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
  ${['stop','restart','redeploy','destroy','apply'].includes(value.action)?'<p class="op-notice">This can interrupt lab connectivity and open SSH sessions.</p>':''}
  ${value.action==='delete'?'<p class="op-notice">Deletes the original YAML on the VM after preserving a recovery copy. The saved manager workspace remains.</p>':''}
- <p>${value.affected.length} deployed containers in this lab</p>${value.affected.length?`<details><summary>Affected containers</summary><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul></details>`:''}
- <pre class="op-output">${esc((value.steps?.length?value.steps:[value.argv]).filter(a=>a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n')||label)}</pre>
+ <p>${value.action==='deploy'?'Creates and starts the devices defined in this topology.':value.affected.length+' deployed containers affected'}</p>${value.affected.length?`<details><summary>Affected containers</summary><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul></details>`:''}
+ <details><summary>Containerlab command</summary><pre class="op-output">${esc((value.steps?.length?value.steps:[value.argv]).filter(a=>a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n')||label)}</pre></details>
  ${value.diff?`<details open><summary>YAML changes</summary><pre class="op-output">${esc(value.diff)}</pre></details>`:''}
- <p class="form-help">This review expires in five minutes. Changes to the topology or deployment require a new review.</p>
- <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button><button class="button primary" id="op-confirm">Confirm ${esc(label.toLowerCase())}</button></div>`);
+ <p class="form-help">Confirm to run this action on the VM. If the topology or deployment changes, open this confirmation again.</p>
+ <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button><button class="button primary" id="op-confirm">${esc(label)}</button></div>`);
  $('op-cancel').onclick=()=>dialog.close();$('op-confirm').onclick=()=>opTask(dialog,async()=>{
   const job=await json('/operations/confirm','POST',{token:value.token});dialog.close();
   if($('op-editor')?.open)$('op-editor').close();await refresh();await opShowJob(job.id);
@@ -92,7 +92,7 @@ async function opShowJob(id){
    const inspected=inspectAction&&job.status==='succeeded'&&rows.length;
    const emptyInspection=inspectAction&&job.status==='succeeded'&&/(^|\n)\s*(?:\[\s*\]|\{\s*\})\s*(?=\n|$)/.test(job.output||'');
    pre.hidden=!!inspected||emptyInspection;
-   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows):emptyInspection?'<p>No deployed nodes found.</p>':'')+(job.result?.recovery_path?`<p>Recovery copy: <code>${esc(job.result.recovery_path)}</code></p>`:'')+(job.result?.project_path?`<button class="button secondary" id="op-open-clone">Browse cloned project</button>`:'');
+   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows):emptyInspection?'<p>No deployed nodes found.</p>':'')+(job.result?.recovery_path?`<p>Recovery copy: <code>${esc(job.result.recovery_path)}</code></p>`:'')+(job.result?.project_path?`<button class="button secondary" id="op-open-clone">Browse cloned lab topologies</button>`:'');
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else await refresh();
   }catch(e){dialog.querySelector('.form-error').textContent=e.message;}
@@ -104,11 +104,13 @@ async function opHistory(labId=''){
  dialog.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>opShowJob(b.dataset.job));
 }
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open workspace',`<p>Your browser may have blocked the new tab.</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open workspace ↗</a>`);}
+function opTopologyEntries(entries){return entries.filter(entry=>entry.directory||/\.clab\.ya?ml$/i.test(entry.name));}
 async function opBrowse(path=''){
  const result=await json('/operations/browse','POST',{path}),caps=await opCapabilities();
- const dialog=opDialog('op-browser','VM projects',`<p class="op-path">${esc(result.path||'Trusted project roots')}</p><div class="actions"><button class="button secondary" id="op-roots">Project roots</button><button class="button secondary" id="op-up">Parent folder</button><button class="button secondary" id="op-create">New topology</button><button class="button secondary" id="op-clone">Clone repository</button><button class="button secondary" id="op-popular">Popular labs</button></div><div class="op-file-tree" id="op-file-tree" aria-label="VM project files"></div><p class="form-help">Expand folders to browse. Existing files open read-only. Each folder shows at most 500 entries. Review project files before deployment.</p>`);
+ const dialog=opDialog('op-browser','Lab Topologies',`<p class="op-path">${esc(result.path||'Lab topology folders')}</p><div class="actions"><button class="button secondary" id="op-roots">Lab folders</button><button class="button secondary" id="op-up">Parent folder</button><button class="button secondary" id="op-create">New topology</button><button class="button secondary" id="op-clone">Clone repository</button><button class="button secondary" id="op-popular">Popular labs</button></div><div class="op-file-tree" id="op-file-tree" aria-label="Lab topology files"></div><p class="form-help">Expand a folder and select a .clab.yaml or .clab.yml topology to view or deploy. Other files are hidden. Each folder shows at most 500 matching entries.</p>`);
  const addEntries=(container,entries)=>{
-  if(!entries.length){container.textContent='Empty folder';return;}
+  entries=opTopologyEntries(entries);
+  if(!entries.length){container.textContent='No lab topologies or subfolders here.';return;}
   for(const entry of entries){
    if(entry.directory){
     const folder=document.createElement('details'),summary=document.createElement('summary'),children=document.createElement('div');
@@ -129,18 +131,18 @@ async function opEdit(path,labId='',newPath=''){
  const value=path?await json('/operations/read','POST',{path}):{text:'name: new-lab\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:latest\n',path:newPath};
  const isYaml=/\.ya?ml$/i.test(value.path);
  opEditorContext={path:value.path,labId,isNew:!path};
- const dialog=opDialog('op-editor',path?'VM project file':'Create topology',`<label>Absolute VM path<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology YAML':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Existing VM files are read-only here. New topology creation is reviewed before saving to the VM; referenced files must already be in the project.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Validate / preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Review creation on VM</button>':''}${path&&isYaml?'<button class="button secondary" id="op-add-project">'+(labId?'Link this project':'Add project to manager')+'</button><button class="button secondary" id="op-deploy-project">Review deployment</button>':''}</div>`);
+ const dialog=opDialog('op-editor',path?'Lab topology':'Create lab topology',`<label>Absolute VM path<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology YAML':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">View the topology, then choose Deploy lab to create and start its devices on the VM. Saving to the manager alone does not deploy it. Existing files are read-only; edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Validate / preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Review creation on VM</button>':''}${path&&isYaml?'<button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Save to manager')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
  $('op-edit-path').value=value.path;$('op-edit-text').value=value.text;
  $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await json('/operations/parse-yaml','POST',{options:{text:$('op-edit-text').value}});opMapPreview(parsed.drawing,parsed.name);}));
  $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value}})));
  $('op-add-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
   // Always read the actual VM file; unsaved editor contents are not linked/imported.
   const source=await json('/operations/read','POST',{path}),parsed=await json('/operations/parse-yaml','POST',{options:{text:source.text}});
-  const confirm=opDialog('op-add-confirm',labId?'Link VM project?':'Add project to manager?',`<p>${esc(parsed.name)} · ${parsed.drawing.nodes.length} nodes</p><p class="op-path">${esc(path)}</p><p>This saves a manager workspace and links its original VM source. It does not deploy containers. Device credentials can be imported from discovered VM files after deployment.</p><button class="button primary" id="op-add-confirm-button">${labId?'Link project':'Add project'}</button>`);
+  const confirm=opDialog('op-add-confirm',labId?'Link lab topology?':'Save lab to manager?',`<p>${esc(parsed.name)} · ${parsed.drawing.nodes.length} nodes</p><p class="op-path">${esc(path)}</p><p>This saves a manager workspace and links its original VM source. It does not deploy containers. Device credentials can be imported from discovered VM files after deployment.</p><button class="button primary" id="op-add-confirm-button">${labId?'Link topology':'Save lab'}</button>`);
   $('op-add-confirm-button').onclick=()=>opTask(confirm,async()=>{
    let id=labId;
    if(!id){const form=new FormData();form.append('definition',new Blob([source.text],{type:'text/yaml'}),path.split('/').pop());const lab=await(await api('/lab-definitions',{method:'POST',body:form})).json();id=lab.id;}
-   await json('/labs/'+id+'/operations-settings','PUT',{path});activeId=id;sessionStorage.setItem('activeLab',id);confirm.close();dialog.close();await refresh();notify('VM project linked.');
+   await json('/labs/'+id+'/operations-settings','PUT',{path});activeId=id;sessionStorage.setItem('activeLab',id);confirm.close();dialog.close();await refresh();notify('Lab topology saved to the manager.');
   });
  }));
  $('op-deploy-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
@@ -155,7 +157,7 @@ function opClone(url='',project=''){
 }
 async function opPopular(){
  const data=await(await api('/operations/popular')).json();
- const dialog=opDialog('op-popular-dialog','Popular Containerlab projects','<p>SRL Labs repositories tagged clab-topo, ordered by GitHub stars. Cloning and deployment are separate reviewed steps.</p><div class="op-history">'+data.items.map((item,i)=>`<button class="button secondary" data-repo="${i}"><strong>${esc(item.name)}</strong><small>${esc(item.description)}</small></button>`).join('')+'</div>');
+ const dialog=opDialog('op-popular-dialog','Popular lab topologies','<p>SRL Labs repositories tagged clab-topo, ordered by GitHub stars. Cloning and deployment are separate reviewed steps.</p><div class="op-history">'+data.items.map((item,i)=>`<button class="button secondary" data-repo="${i}"><strong>${esc(item.name)}</strong><small>${esc(item.description)}</small></button>`).join('')+'</div>');
  dialog.querySelectorAll('[data-repo]').forEach(b=>b.onclick=()=>{const item=data.items[Number(b.dataset.repo)];opClone(item.url,item.name);});
 }
 function opMapPreview(drawing,name){
@@ -176,7 +178,20 @@ async function opLayout(id){
  $('op-layout-export').onclick=()=>opTask(dialog,async()=>{const response=await api('/labs/'+id+'/drawio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({positions:Object.fromEntries(drawing.nodes.map(n=>[n.id,[n.x,n.y]]))})});const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download=attachmentName(response,'topology.drawio');a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Full editable diagram exported.');});
  $('op-layout-save').onclick=()=>opTask(dialog,async()=>{await json('/labs/'+id+'/layout','PUT',{positions:Object.fromEntries(drawing.nodes.map(n=>[n.id,[n.x,n.y]]))});dialog.close();if(typeof refreshMap==='function'&&id===activeId)await refreshMap(true);notify('Layout saved.');});
 }
+function opQuickActions(lab,discovery,isBusy=false){
+ const status=lab?.deployment?.status, known=['Not deployed','Running','Stopped','Partially running'].includes(status);
+ const available=!!lab&&!!opPath(lab)&&!!discovery?.connected&&known&&!isBusy;
+ return {startAction:status==='Not deployed'?'deploy':'start',canStart:available&&status!=='Running',canDestroy:available&&status!=='Not deployed'};
+}
+async function opQuickRun(kind){
+ const lab=current(),actions=opQuickActions(lab,state.discovery,busy());
+ if(!lab||!(kind==='start'?actions.canStart:actions.canDestroy))return;
+ await opReview({lab_id:lab.id,action:kind==='start'?actions.startAction:'destroy'});
+}
 function renderLabOperations(){
+ const quick=opQuickActions(current(),state.discovery,busy());
+ if($('lab-start')){$('lab-start').disabled=!quick.canStart;$('lab-start').title=quick.startAction==='deploy'?'Deploy this topology and start its devices':'Start stopped devices in this lab';}
+ if($('lab-destroy'))$('lab-destroy').disabled=!quick.canDestroy;
  if($('lab-actions'))$('lab-actions').hidden=!current();
  if($('operation-summary')){const running=(state.operations||[]).filter(j=>['queued','running'].includes(j.status));$('operation-summary').textContent=running.length?'Lab command running · view operation history':'';}
  if(busy()){for(const id of ['remove-lab','sync-vm','update-definition','link-deployment'])if($(id))$(id).disabled=true;}
@@ -184,8 +199,8 @@ function renderLabOperations(){
 }
 if($('import-top')){
  $('import-top').insertAdjacentHTML('beforebegin','<button class="button secondary" id="lab-actions">Lab actions ▾</button>');
- $('vm-refresh').insertAdjacentHTML('afterend','<button class="side-button" id="vm-projects">VM projects ↗</button><button class="side-button" id="operations-history">Operation history</button><button class="side-button" id="inspect-all">Inspect all labs</button><p class="side-hint" id="operation-summary" role="status"></p>');
- $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>opNewTab({mode:'folder'});$('operations-history').onclick=()=>opHistory();$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
+ $('vm-refresh').insertAdjacentHTML('afterend','<button class="side-button side-primary" id="vm-projects">Deploy New Lab</button><button class="side-button" id="operations-history">Operation history</button><button class="side-button" id="inspect-all">Inspect all labs</button><p class="side-hint" id="operation-summary" role="status"></p>');
+ $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>location.assign('/static/workspace.html#mode=folder');$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opHistory();$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
  $('labs').addEventListener('contextmenu',e=>{const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}});
  $('labs').addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}}});
 }

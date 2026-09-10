@@ -1,9 +1,14 @@
-# Containerlab Node Manager — 1.12.0
+# Containerlab Node Manager — 1.12.1
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
 discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced.
+
+**Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
+Proxmox/Ubuntu setup, Docker Hub installation, VM access, lab workflows and recovery.
+Paste its contents into a Wiki.js page using the Markdown editor; its anchored
+sections, tabsets and callouts follow the existing internal wiki format.
 
 **Already pulled the Docker image?** Follow [Docker Hub setup](DOCKER-HUB-SETUP.md).
 It covers host prerequisites, matching helper installation, persistent storage,
@@ -13,6 +18,20 @@ Use [deploy/compose.image.yml](deploy/compose.image.yml) for this path; it has n
 **Building from source?** Follow the [Fresh VM installation guide](FRESH-VM-GUIDE.md).
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
+
+## Changes in 1.12.1
+
+- **Deploy New Lab** opens in the same tab. Choose the large **Lab Topologies**
+  button to browse; no dialog opens automatically. **Back to lab manager** returns
+  to the saved workspace.
+- Only `.clab.yaml` / `.clab.yml` files and navigation folders appear in the browser.
+- **Deploy lab** opens a concise confirmation, with the command in expandable details.
+- **Start lab** and **Destroy lab** appear beside deployment status. Start deploys
+  an absent lab or starts stopped containers. Destroy is separate from Remove lab.
+
+See [1.12.1 update and build instructions](UI-UPDATE-1.12.1.md). This is a source
+release; the previously supplied Hub image `archtop/clab-backup:1.12.0` does not
+include these changes. No new Hub image has been published by this workspace.
 
 ## Changes in 1.12.0
 

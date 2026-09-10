@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.12.0
+# Containerlab Node Manager — 1.12.1
 
 Lab-level lifecycle, project and drawing controls are documented in
 [LAB-OPERATIONS.md](../LAB-OPERATIONS.md). Enable the host operations helper for

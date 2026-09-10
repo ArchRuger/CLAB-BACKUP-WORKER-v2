@@ -1,3 +1,17 @@
+# UI refinement validation — 1.12.1
+
+- Python regression run: 145 tests; six platform/environment skips. The only
+  initial failure was the previous version assertion, updated to 1.12.1 and rerun.
+- New coverage: topology filtering before the 500-entry limit, quick-action state
+  guards and deploy/start selection, and no automatic topology dialog on entry.
+- Browser fixture: same-tab Deploy New Lab landing page, explicit Lab Topologies
+  opening, filtering old-helper mixed results, topology Deploy lab confirmation,
+  cancellation, return navigation, and status-panel Destroy confirmation. No
+  browser console errors were reported during the check.
+- Synthetic SSH/operation fixtures only; no live NOS commands or Docker build.
+- Git fetch was unavailable because the local Git remote-https helper is missing.
+  Existing local source was preserved; no push or registry publication occurred.
+
 # Validation — Containerlab Node Manager 1.12.0 (2026-09-10)
 
 ## Current release

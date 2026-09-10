@@ -1,4 +1,4 @@
-# VM connection — setup and recovery, 1.12.0
+# VM connection — setup and recovery, 1.12.1
 
 > Already pulled the release image from Docker Hub? Use [DOCKER-HUB-SETUP.md](DOCKER-HUB-SETUP.md)
 > for a launch that uses that image without rebuilding it, plus the required host-helper setup.
@@ -12,7 +12,7 @@ Node SSH uses the device credentials from inventory or credential profiles.
 For a completely empty Ubuntu VM, start with [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md)
 to install Docker, Compose, Containerlab and OpenSSH. Commands below run on that
 VM unless explicitly marked Workstation. Versioned source lives in
-`~/projects/v1.12.0`, with `deploy/` and `clab-backup-ui/` directly inside it.
+`~/projects/v1.12.1`, with `deploy/` and `clab-backup-ui/` directly inside it.
 Persistent data lives outside every version folder at
 `/srv/containerlab-node-manager/data`.
 
@@ -29,7 +29,7 @@ scp clab-manager-discovery.pub YOUR_VM_USER@VM_IP:clab-manager-discovery.pub
 2. On the VM, install the helper, build the image and launch the manager:
 
 ```bash
-cd "$HOME/projects/v1.12.0"
+cd "$HOME/projects/v1.12.1"
 sudo bash deploy/start-manager.sh "$HOME/clab-manager-discovery.pub" --enable-operations --lab-root /etc/containerlab
 ```
 
@@ -86,7 +86,7 @@ Do not use chmod 777. Keep the entire data directory when upgrading or backing u
 Extract the new source into the new version folder. Then:
 
 ```bash
-cd "$HOME/projects/v1.12.0"
+cd "$HOME/projects/v1.12.1"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml exec backup-ui python -c 'from app import __version__; print(__version__)'
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=50 backup-ui
@@ -96,16 +96,16 @@ The script refreshes both helpers, verifies versions, prepares storage, performs
 a fresh no-cache build and recreates the Compose service. It retains installed
 public keys and the manager's private key/settings. A Docker build alone cannot
 update a helper installed on the VM. No new key pair is needed for upgrades.
-Refresh your browser after upgrading. The expected version is **1.12.0**.
+Refresh your browser after upgrading. The expected version is **1.12.1**.
 
 To repair only the host helpers, without building an image:
 
 ```bash
-cd "$HOME/projects/v1.12.0"
+cd "$HOME/projects/v1.12.1"
 sudo bash deploy/setup-discovery.sh --update-helper
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
-sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.12.0
-printf '%s\n' '{"mode":"capabilities"}' | sudo /usr/local/sbin/clab-manager-operate | python3 deploy/verify-operations.py 1.12.0
+sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.12.1
+printf '%s\n' '{"mode":"capabilities"}' | sudo /usr/local/sbin/clab-manager-operate | python3 deploy/verify-operations.py 1.12.1
 ```
 
 The verifiers display only compatibility information. Raw discovery output can
@@ -117,7 +117,7 @@ Use your normal VM administrator login. Generate a new pair on the workstation
 and copy its `.pub` file as in first setup, using a new filename. On the VM:
 
 ```bash
-cd "$HOME/projects/v1.12.0"
+cd "$HOME/projects/v1.12.1"
 sudo bash deploy/setup-discovery.sh "$HOME/clab-manager-replacement.pub"
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
 ```

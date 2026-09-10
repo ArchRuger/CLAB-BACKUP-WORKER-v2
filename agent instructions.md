@@ -1,5 +1,18 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.12.1 addendum — deployment navigation
+
+Email UI changes approved. Deploy New Lab is same-tab navigation to an explicit
+landing page; no automatic topology dialog. Lab Topologies filters .clab.yaml and
+.clab.yml plus navigation folders in both UI and host helper before the 500-entry
+limit. Start/Destroy on deployment status use existing preview/confirmation APIs;
+Start selects deploy only for fresh Not deployed status, otherwise start. Unknown,
+disconnected, busy and missing-source states disable the quick actions. Remove lab
+remains manager-only. Source folder ~/projects/v1.12.1; update both helpers while
+retaining keys. Hub image 1.12.0 is the last user-supplied reference, not the new UI.
+Git fetch failed because this machine's git remote-https helper is unavailable;
+no remote synchronization or push was performed for this release.
+
 ## Release 1.12.0 addendum — approved simplification
 
 This supersedes the 1.11.0 feature inventory. Retain VM connection and document

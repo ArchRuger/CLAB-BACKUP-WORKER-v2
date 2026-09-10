@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.12.0'
+VERSION = '1.12.1'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 ENV = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root',
@@ -123,6 +123,7 @@ class HostOperations:
         entries = []
         for p in sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
             if p.name.startswith('.') or p.is_symlink(): continue
+            if not p.is_dir() and not (p.is_file() and p.name.lower().endswith(('.clab.yaml', '.clab.yml'))): continue
             entries.append({'name': p.name, 'path': str(p), 'directory': p.is_dir()})
             if len(entries) >= 500: break
         return {'path': str(path), 'parent': str(path.parent) if path not in self.roots else '', 'entries': entries}

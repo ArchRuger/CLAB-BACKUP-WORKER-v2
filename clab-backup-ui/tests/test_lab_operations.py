@@ -30,6 +30,18 @@ class HostOperationTests(unittest.TestCase):
         self.host = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', git='/usr/bin/git', roots=[str(self.root)], projects=str(self.root), network=True), run)
 
     def tearDown(self): self.tmp.cleanup()
+
+    def test_browser_filters_non_topologies_before_entry_limit(self):
+        for i in range(505):
+            (self.root / f'noise-{i:03}.json').write_text('{}')
+        (self.root/'other.clab.yml').write_bytes(YAML)
+        (self.root/'training.clab.yaml.annotations.json').write_text('{}')
+        (self.root/'ansible-inventory.yml').write_text('all: {}')
+        (self.root/'nested').mkdir()
+        entries=self.host.browse(str(self.root))['entries']
+        self.assertEqual({entry['name'] for entry in entries}, {'training.clab.yaml','other.clab.yml','nested'})
+        self.assertTrue(next(e for e in entries if e['name']=='nested')['directory'])
+
     def request(self, action, **options): return dict(action=action, name='training', path=str(self.path), options=options)
     def test_lifecycle_exact_scoped_argv_and_capabilities(self):
         for action in LIFECYCLE:

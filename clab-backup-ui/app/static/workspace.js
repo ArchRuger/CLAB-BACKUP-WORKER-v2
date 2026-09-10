@@ -18,7 +18,7 @@ async function launchWorkspace(){
    const link=n=>'/static/terminal.html#'+new URLSearchParams({lab:lab.id,node:n.name,label:lab.name});
    $('workspace-content').innerHTML='<button class="button primary" id="ssh-launch-all">Open all ready sessions ↗</button><div class="op-session-list">'+lab.nodes.map(n=>`<p><strong>${esc(n.short_name||n.name)}</strong> · ${esc(n.address)} ${n.ssh_ready?`<a class="button secondary" target="_blank" rel="opener" href="${esc(link(n))}">SSH ↗</a>`:'<span>Unavailable or missing credentials</span>'}</p>`).join('')+'</div>';
    $('ssh-launch-all').onclick=()=>{let blocked=0;for(const n of nodes.slice(0,32))if(!window.open(link(n),'_blank'))blocked++;notify(blocked?blocked+' popups were blocked. Use the individual SSH links.':nodes.length>32?'Opened the first 32. Close sessions before opening more.':'Sessions opened.');};
-  }else await opBrowse(params.get('path')||'',activeId);
+  }else{$('workspace-title').textContent='Deploy New Lab';$('workspace-message').textContent='Choose a topology from your VM to create and start a training lab. Open Lab Topologies when you are ready.';}
  }catch(e){$('workspace-message').textContent=e.message;}
 }
 document.addEventListener('DOMContentLoaded',()=>{launchWorkspace();$('workspace-open').onclick=()=>opTask(null,()=>opBrowse(params.get('path')||'',activeId));$('workspace-history').onclick=()=>opHistory()});
