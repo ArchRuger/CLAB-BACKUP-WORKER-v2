@@ -1,0 +1,22 @@
+# Runs an already downloaded release image. There is deliberately no build section.
+# Usage from the repository root:
+# docker compose --env-file deploy/image.env -f deploy/compose.image.yml up -d --no-build --pull never
+name: containerlab-node-manager
+services:
+  backup-ui:
+    image: ${MANAGER_IMAGE:?Set MANAGER_IMAGE in deploy/image.env to your downloaded release image}
+    pull_policy: never
+    restart: unless-stopped
+    network_mode: host
+    command: ["uvicorn", "app.main:create_app", "--factory", "--host", "${UI_BIND:-0.0.0.0}", "--port", "${UI_PORT:-8081}", "--workers", "1"]
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - type: bind
+        source: /srv/containerlab-node-manager/data
+        target: /data
+        bind:
+          create_host_path: false
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true

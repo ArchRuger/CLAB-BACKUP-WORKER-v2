@@ -5,8 +5,14 @@ per Linux VM as an independent Docker Compose service. Import lab definitions,
 discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced.
 
-**Start here:** [Fresh VM installation guide](../FRESH-VM-GUIDE.md) — Ubuntu, Docker, containerlab,
-persistent storage, SSH keys, first launch, automatic imports, upgrades and backups.
+**Already pulled the Docker image?** Follow [Docker Hub setup](../DOCKER-HUB-SETUP.md).
+It covers host prerequisites, matching helper installation, persistent storage,
+image-only Compose launch, VM connection, first import, everyday use and upgrades.
+Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it has no build step.
+
+**Building from source?** Follow the [Fresh VM installation guide](../FRESH-VM-GUIDE.md).
+For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
+and [migration instructions](../STANDALONE-SETUP.md).
 
 ## Changes in 1.12.0
 
@@ -31,7 +37,7 @@ helper repair and upgrades. [Lab commands](../LAB-OPERATIONS.md) documents retai
 
 ## Setup and import improvements retained from 1.10.0
 
-- **One launch command:** `sudo bash deploy/start-manager.sh` updates the installed
+- **Source-build launch command:** `sudo bash deploy/start-manager.sh` updates the installed
   VM helper, verifies its file-transfer protocol and version, prepares storage,
   builds the image and recreates the Compose service. Existing keys/data are retained.
   First setup accepts a discovery public key argument. An old helper cannot silently
@@ -74,7 +80,7 @@ The list and map both retain node details, per-node backups and browser SSH tabs
 SuperPuTTY XML exports use the lab name. Junos, IOS-XR and EOS backup adapters and
 historical downloads remain. Host CPU/memory monitoring is not part of this release.
 
-## Install or migrate
+## Build from source or migrate
 
 Read [Standalone setup and migration](../STANDALONE-SETUP.md) first. Existing workers
 may contain all their data inside the container; copy it before removing them.

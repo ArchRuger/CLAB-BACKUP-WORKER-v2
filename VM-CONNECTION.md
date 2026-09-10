@@ -1,5 +1,9 @@
 # VM connection — setup and recovery, 1.12.0
 
+> Already pulled the release image from Docker Hub? Use [DOCKER-HUB-SETUP.md](DOCKER-HUB-SETUP.md)
+> for a launch that uses that image without rebuilding it, plus the required host-helper setup.
+
+
 The manager runs independently of your labs. Its VM connection is an SSH connection
 to the Linux machine running Containerlab. It discovers deployed labs and reads
 their files. With operations enabled, the same connection runs reviewed lab commands.

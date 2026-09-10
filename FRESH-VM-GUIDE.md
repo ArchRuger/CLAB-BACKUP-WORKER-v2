@@ -1,5 +1,9 @@
 # Containerlab Node Manager 1.12.0 — a fresh VM to a working lab
 
+> Already pulled the release image from Docker Hub? Use [DOCKER-HUB-SETUP.md](DOCKER-HUB-SETUP.md)
+> for a launch that uses that image without rebuilding it, plus the required host-helper setup.
+
+
 This guide starts with a fresh **Ubuntu Server 24.04 LTS VM**, a normal user with
 `sudo` access, and an internet connection for installation. Run one manager per
 engineer's VM. Allow enough CPU, RAM, disk and virtualization support for your
