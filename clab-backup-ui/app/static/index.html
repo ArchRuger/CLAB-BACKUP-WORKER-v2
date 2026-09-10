@@ -1,0 +1,87 @@
+<!doctype html>
+
+<html lang="en">
+
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager · Network lab operations</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script><script src="/static/topology-render.js" defer></script><script src="/static/topology.js" defer></script></head>
+
+<body>
+
+<div class="workspace">
+
+<aside class="sidebar">
+
+  <div class="brand"><img class="brandmark" src="/static/fabric-mark.svg" alt=""><div>Containerlab Node Manager<small>NETWORK LAB OPERATIONS</small></div></div>
+
+  <div class="side-label">LAB WORKSPACES <button id="add-lab" class="icon-button" title="Add lab" aria-label="Add lab">+</button></div>
+
+  <nav id="labs" aria-label="Labs"><p class="side-hint">Your labs will appear here.</p></nav>
+
+  <button id="new-lab" class="side-button">+ Import a lab</button>
+
+  <div class="side-bottom"><span class="side-caption">BUILT FOR THE LAB</span><p>Junos / IOS-XR / EOS</p><small>Connections. Configurations. History.</small><button id="logout" class="text-button">Lock workspace</button></div>
+
+</aside>
+
+<main>
+
+<header class="topbar"><div class="crumb">Workspace <span>/</span> <strong id="breadcrumb">Overview</strong></div><span class="worker-state" id="worker-state">Worker idle</span></header>
+
+<div class="content">
+
+  <div class="page-heading"><div><p class="eyebrow">NETWORK ENGINEERING WORKSPACE</p><h1 id="title">Your next lab starts here.</h1><p class="subtitle" id="subtitle">Import your nodes. Connect, experiment, and keep your configurations close.</p></div><button class="button primary" id="import-top">↑ Import inventory</button></div>
+
+  <section id="empty" class="empty-panel"><div class="file-icon" aria-hidden="true">YML</div><h2>Start with your containerlab inventory</h2><p>Upload <code>ansible-inventory.yml</code>. Review the nodes, add NOS credentials, and take your first backup.</p><button class="button primary" id="import-empty">Choose inventory file</button><div class="platform-pills"><span>Junos</span><span>IOS-XR</span><span>Arista EOS</span></div><p class="empty-note">Inventories, credentials, and backups stay in this worker’s storage.</p></section>
+
+  <div id="lab-content" hidden>
+
+    <section class="metrics" aria-label="Lab summary"><div><span>Lab nodes</span><strong id="node-count">0</strong></div><div><span>Selected for backup</span><strong id="enabled-count">0</strong></div><div><span>Credentials ready</span><strong id="ready-count">0</strong></div><div><span>Backup schedule</span><strong id="schedule-summary">Manual</strong></div></section>
+
+    <div class="control-row"><nav class="tabs" aria-label="Workspace views"><button class="active" data-tab="inventory" aria-selected="true">Nodes</button><button data-tab="topology" aria-selected="false">Topology</button><button data-tab="credentials" aria-selected="false">Credentials</button><button data-tab="backups" aria-selected="false">Backup history</button><button data-tab="logs" aria-selected="false">Action logs</button></nav><div class="actions"><button class="button secondary" id="export-sessions">Export sessions</button><button class="button secondary" id="test">Test NOS login</button><button class="button primary" id="backup">Back up now <span aria-hidden="true">→</span></button></div></div>
+
+    <section id="topology-view" class="view" hidden><div class="section-heading"><div><h2>Lab topology</h2><p>Right-click a node for SSH and backup actions. Click for connection details.</p></div><button id="import-map" class="button primary">Import topology</button></div><div class="map-tools"><button id="map-expand">Expand map</button><button id="map-fit">Fit map</button><button id="map-in" aria-label="Zoom in">+</button><button id="map-out" aria-label="Zoom out">-</button><span>Drag to pan · Links show imported wiring, not live status</span></div><p id="map-status" role="status"></p><svg id="topology-map" viewBox="0 0 1000 600" aria-label="Lab topology" role="group"></svg></section><section id="logs-view" class="view" hidden>
+
+      <div class="section-heading"><div><h2>Action logs</h2><p>Live job steps and application actions. Refreshed every four seconds. Newest first.</p></div><button id="download-logs" class="button secondary">Download logs</button></div>
+
+      <div class="log-filters"><label>Scope <select id="log-scope"><option value="lab">Current lab</option><option value="all">All worker actions</option></select></label><label>Level <select id="log-level"><option value="">All levels</option><option>error</option><option>warning</option><option>info</option></select></label><label>Node <input id="log-node" placeholder="Filter node name"></label><label>Job ID <input id="log-job" placeholder="All jobs"></label><button id="refresh-logs" class="button secondary">Refresh</button></div>
+
+      <p id="log-status" role="status"></p><div class="table-wrap"><table><thead><tr><th>UTC time / level</th><th>Node / job</th><th>Action</th><th>Details</th></tr></thead><tbody id="log-rows"></tbody></table></div>
+
+    </section>
+
+    <section id="inventory-view" class="view">
+
+      <div class="section-heading"><div><h2>Nodes</h2><p id="inventory-caption">Select the nodes to include.</p></div><input id="search" type="search" placeholder="Filter nodes…" aria-label="Filter nodes"></div>
+
+      <div class="table-wrap"><table><thead><tr><th scope="col"><span class="sr-only">Include in scheduled backups</span></th><th scope="col">Node / SSH endpoint</th><th scope="col">Platform / credentials</th><th scope="col">Last SSH check</th><th scope="col">Last backup</th><th scope="col">Actions</th></tr></thead><tbody id="nodes"></tbody></table></div>
+
+      <div class="notice">Checkboxes select nodes for lab-wide and scheduled backups. SSH checks are on demand; their timestamps show when access was last verified.</div>
+
+    </section>
+
+    <section id="credentials-view" class="view" hidden><div class="section-heading"><div><h2>NOS credential profiles</h2><p>Use a default account per platform, or assign a profile to an individual node.</p></div><button class="button primary" id="add-profile">+ Add credentials</button></div><div id="profiles" class="profile-grid"></div><div class="notice">Credentials already present in the inventory are available automatically. An assigned profile takes precedence. Secrets are never displayed after saving.</div></section>
+
+    <section id="backups-view" class="view" hidden><div class="section-heading"><div><h2>Backup history</h2><p>Download individual device configurations or the complete ZIP. All backup timestamps use UTC.</p></div><form id="schedule-form" class="schedule-form"><label for="interval">Every</label><input type="number" id="interval" min="0" max="10080" value="0"><span>minutes</span><button class="button secondary" type="submit">Save</button><small>0 = manual</small></form></div><div id="jobs"></div></section>
+
+  </div>
+
+  <footer><span>Containerlab Node Manager / SSH &amp; configuration history · <span id="app-version">v1.6.0</span></span><span id="updated">No inventory loaded</span></footer>
+
+</div>
+
+</main>
+
+</div>
+
+<div id="toast" role="status" hidden></div>
+
+<dialog id="login-dialog"><form id="login-form"><div class="dialog-head"><span class="eyebrow">WORKER ACCESS</span><span class="tag">CONTAINERLAB NODE MANAGER</span></div><h2>Unlock your workspace</h2><p>Enter the access token printed in this worker’s startup log.</p><label for="token">UI access token</label><input id="token" type="password" required autocomplete="off"><p class="form-error" id="login-error" role="alert"></p><button class="button primary full" type="submit">Open workspace</button><p class="form-help">This token protects the UI. Your NOS credentials are configured separately.</p></form></dialog>
+
+<dialog id="import-dialog"><form id="import-form"><div class="dialog-head"><span class="eyebrow">INVENTORY UPLOAD</span><button type="button" class="icon-button close" aria-label="Close">×</button></div><h2 id="import-title">Import a lab</h2><p>Use containerlab’s generated Ansible inventory. No node addresses are built into this image.</p><input type="hidden" name="lab_id" id="import-lab-id"><label for="lab-name">Lab name</label><input id="lab-name" name="name" required maxlength="120" placeholder="A name for this lab"><label for="inventory-file">Ansible inventory <span class="required">required</span></label><div class="upload-field"><input id="inventory-file" name="inventory" type="file" accept=".yml,.yaml,.json" required><small>YAML or JSON · up to 1 MiB</small></div><details><summary>Optional: topology metadata</summary><p class="form-help">Upload <code>topology-data.json</code> if custom inventory groups do not identify the node kinds.</p><input name="topology" type="file" accept=".json"></details><p class="form-error" role="alert"></p><div class="dialog-actions"><button class="button secondary close" type="button">Cancel</button><button class="button primary" type="submit">Import and review</button></div></form></dialog>
+
+<dialog id="profile-dialog"><form id="profile-form"><div class="dialog-head"><span class="eyebrow">NOS AUTHENTICATION</span><button type="button" class="icon-button close" aria-label="Close">×</button></div><h2>Add credentials</h2><p>These credentials log in to the network operating system.</p><label for="profile-label">Profile name</label><input id="profile-label" name="label" required maxlength="120" placeholder="Lab administrators"><div class="form-grid"><div><label for="profile-platform">Network OS</label><select id="profile-platform" name="platform"></select></div><div><label for="profile-user">NOS username</label><input id="profile-user" name="username" required autocomplete="off"></div></div><div id="enable-fields"><label for="enable-password">EOS enable password <span class="muted">optional</span></label><input id="enable-password" name="enable_password" type="password" autocomplete="new-password"><p class="form-help">EOS sessions enter enable mode before retrieval. Leave blank when the account does not require an enable password.</p></div><label for="auth-type">Authentication</label><select name="auth" id="auth-type"><option value="password">Password</option><option value="key">SSH private key</option></select><div id="password-fields"><label for="profile-password">NOS password</label><input id="profile-password" name="password" type="password" autocomplete="new-password"></div><div id="key-fields" hidden><label for="private-key">SSH private key</label><input id="private-key" name="private_key" type="file"><label for="passphrase">Key passphrase <span class="muted">optional</span></label><input id="passphrase" name="passphrase" type="password" autocomplete="new-password"></div><label class="checkbox-label"><input type="checkbox" id="make-default" checked> Use as the default for this NOS in this lab</label><p class="form-error" role="alert"></p><div class="dialog-actions"><button class="button secondary close" type="button">Cancel</button><button class="button primary" type="submit">Save credentials</button></div></form></dialog>
+
+<dialog id="node-dialog"><form id="node-form"><div class="dialog-head"><span class="eyebrow">NODE CONNECTION</span><button type="button" class="icon-button close" aria-label="Close">×</button></div><h2 id="node-title">Edit node</h2><input id="node-name" type="hidden"><label for="node-short-name">Download device name <span class="muted">optional</span></label><input id="node-short-name" maxlength="200" placeholder="Detected automatically"><p class="form-help">Use a short name such as GTW-1 if the inventory name has an ambiguous lab prefix. New backups retain this name.</p><div class="form-grid wide"><div><label for="node-address">NOS management IP or DNS</label><input id="node-address" required></div><div><label for="node-port">SSH port</label><input id="node-port" type="number" min="1" max="65535" required></div></div><label for="node-platform">Network OS</label><select id="node-platform"></select><label for="node-profile">Credential profile</label><select id="node-profile"></select><label class="checkbox-label"><input type="checkbox" id="node-enabled"> Include in backups</label><p class="form-error" role="alert"></p><div class="dialog-actions"><button class="button secondary close" type="button">Cancel</button><button class="button primary" type="submit">Save connection</button></div></form></dialog>
+
+<dialog id="details-dialog" class="node-details" aria-labelledby="details-title"><div class="drawer-head"><div class="dialog-head"><span class="eyebrow">NODE WORKSPACE</span><button class="icon-button close" aria-label="Close node details">×</button></div><h2 id="details-title"></h2><p id="details-endpoint" class="endpoint"></p><div id="details-actions" class="node-actions drawer-actions"></div></div><div class="drawer-content"><div id="details-info"></div><section class="drawer-section"><h3>Configuration history</h3><p class="section-description">Saved snapshots, ready when you need them.</p><div id="node-history"></div></section></div></dialog>
+
+<dialog id="map-dialog"><form id="map-form"><h2>Import lab topology</h2><label>VS Code annotations JSON<input type="file" name="annotations" accept=".json" required></label><label>Lab topology YAML or topology-data.json<input type="file" name="topology" accept=".yaml,.yml,.json"></label><p class="form-help">Annotations supply positions, groups, and notes. Include the topology file to draw links. Imports replace the current map. Connections and credentials remain in your inventory.</p><p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-map">Cancel</button><button type="submit" class="button primary">Import map</button></div></form></dialog><dialog id="export-dialog"><form id="export-form"><h2>Export SuperPuTTY sessions</h2><p>One lab folder, with a session for every inventory node using its short name and saved SSH address and port.</p><p class="form-help">Saved credentials take priority. Otherwise, known NOS kinds supply the default username. Your workstation must be able to reach these addresses.</p><label class="checkbox-label"><input type="checkbox" id="export-passwords"> Include saved passwords as plain text</label><p class="form-help">Optional passwords use PuTTY's -pw argument. Private keys are not exported. Without a saved password, PuTTY prompts at login.</p><p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-export">Cancel</button><button type="submit" class="button primary">Download XML</button></div></form></dialog><div id="node-context-menu" class="node-context-menu" role="menu" aria-label="Node actions" hidden></div></body></html>

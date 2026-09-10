@@ -1,0 +1,6 @@
+---
+collections:
+  - name: ansible.netcommon
+  - name: junipernetworks.junos
+  - name: cisco.iosxr
+  - name: arista.eos

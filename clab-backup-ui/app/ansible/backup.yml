@@ -1,0 +1,9 @@
+---
+- name: Read network operating system configuration
+  hosts: targets
+  gather_facts: false
+  tasks:
+    - name: Fetch NOS configuration
+      ansible.netcommon.cli_command:
+        command: "{{ backup_command }}"
+      changed_when: false

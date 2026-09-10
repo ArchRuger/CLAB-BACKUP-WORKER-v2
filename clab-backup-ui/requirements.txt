@@ -1,0 +1,8 @@
+ansible-core>=2.19,<2.20
+paramiko>=3.5,<4
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+websockets>=13,<16
+python-multipart>=0.0.20,<1
+cryptography>=43
+PyYAML>=6,<7
