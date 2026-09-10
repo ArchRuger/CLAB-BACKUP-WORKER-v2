@@ -1,9 +1,13 @@
-# Containerlab Node Manager — 1.7.0
+# Containerlab Node Manager — 1.8.0
 
 The default deployment is now a standalone persistent manager. Follow
 [standalone setup and migration](../STANDALONE-SETUP.md); the older build/worker
 upgrade section below is historical. Linked lab discovery gates SSH and backups
 on fresh running nodes. Manual endpoints remain available as explicit overrides.
+
+The updated restricted helper imports new deployments from VM files. Existing labs
+show file changes and offer Sync from VM without resetting saved node connections
+or history. Follow [the fresh VM guide](../FRESH-VM-GUIDE.md) for setup and upgrades.
 
 Click a lab to open its node dashboard. Every imported node is shown, including
 Linux and unmapped kinds. Details contains the last SSH authentication check,

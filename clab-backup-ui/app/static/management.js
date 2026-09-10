@@ -1,4 +1,5 @@
 'use strict';
+let vmSyncBusy=false;
 // All host output is rendered as text or escaped; credentials never enter state responses.
 document.body.insertAdjacentHTML('beforeend', `
 <dialog id="setup-dialog"><form id="setup-form">
@@ -22,8 +23,8 @@ document.body.insertAdjacentHTML('beforeend', `
  <div id="vm-password-fields"><label>VM password<input id="vm-password" type="password" autocomplete="new-password"></label></div>
  <div id="vm-key-fields" hidden><label>SSH private key<input id="vm-key" type="file"></label><label>Key passphrase<input id="vm-passphrase" type="password" autocomplete="new-password"></label></div>
  <p class="form-help">Leave credentials blank to retain them for the same account. Secrets are encrypted in persistent storage and are never displayed after saving.</p>
- <label>Inspection method<select id="vm-command"><option value="helper">Installed discovery helper (recommended)</option><option value="direct">Direct containerlab inspect (account already has permission)</option></select></label>
- <p class="form-help">Install the supplied VM setup script for the helper. Only a fixed read-only inspect command is used.</p>
+ <label>Inspection method<select id="vm-command"><option value="helper">Installed discovery and file helper (recommended)</option><option value="direct">Direct containerlab inspect (account already has permission)</option></select></label>
+ <p class="form-help">Install the supplied VM setup script for the helper. The restricted helper reads deployment state and the original YAML, annotations, generated inventory and topology export. New labs import automatically. Direct inspection only discovers running nodes.</p>
  <label class="checkbox-label"><input id="vm-enabled" type="checkbox" checked> Enable automatic discovery</label>
  <p id="vm-fingerprint" class="form-help"></p><p class="form-help">The first successful connection trusts and saves the VM SSH fingerprint. Later key changes block discovery.</p>
  <label class="checkbox-label"><input id="vm-reset-key" type="checkbox"> Trust a replacement SSH host key on the next connection</label>
@@ -41,8 +42,12 @@ document.querySelectorAll('[data-dismiss]').forEach(button=>button.onclick=()=>b
 function renderManagement(){
  const discovery=state.discovery||{}, lab=current();
  $('vm-summary').textContent=!discovery.configured?'VM discovery is not configured.':!discovery.host.enabled?'VM discovery is paused.':discovery.connected?'VM connected · checks every 30s':(discovery.error||'VM status unknown; refresh discovery.');
- $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · setup required</small></button>`).join('');
+ $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · ${esc(discovery.file_errors?.[l.name]||'setup required')}</small></button>`).join('');
  if(!lab)return;
+ const source=lab.vm_source, sync=$('sync-vm');
+ sync.hidden=!lab.deployment_name;
+ sync.disabled=vmSyncBusy||!discovery.connected||!source?.can_sync;
+ $('vm-files-status').textContent=!lab.deployment_name?'':!discovery.connected?'VM file sync is unavailable until discovery reconnects.':!discovery.file_import_supported?'Automatic file import requires the updated VM helper. Manual uploads remain available.':source?('VM files: '+source.status+(source.synced_at?' · Last synced '+new Date(source.synced_at).toLocaleString():'')+(source.message?' · '+source.message:'')):(discovery.file_errors?.[lab.deployment_name]||'No deployed source files found. Saved workspace retained.');
  $('deployment-status').textContent=lab.deployment?.status||'Unlinked';
  $('deployment-message').textContent=lab.deployment?.message||'Link this workspace to a deployed lab.';
  $('deployment-checked').textContent=lab.deployment?.last_success?'Last successful inspection: '+new Date(lab.deployment.last_success).toLocaleString():'';
@@ -78,3 +83,12 @@ $('vm-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
 $('vm-refresh').onclick=async()=>{const b=$('vm-refresh');b.disabled=true;b.textContent='Checking VM…';try{const result=await json('/discovery/refresh','POST',{});await refresh();notify(result.error||(!result.configured?'Configure the VM connection first.':result.connected?'Discovery updated.':'Discovery is paused or still checking.'));}catch(e){notify(e.message);}finally{b.disabled=false;b.textContent='Refresh discovery';}};
 $('link-deployment').onclick=()=>{const lab=current();$('binding-form').querySelector('.form-error').textContent='';$('binding-name').value=lab.deployment_name||lab.name;$('binding-prefix').value=lab.container_prefix??'clab';$('deployment-names').innerHTML=(state.discovery?.discovered||[]).map(l=>`<option value="${esc(l.name)}"></option>`).join('');$('binding-dialog').showModal();};
 $('binding-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/deployment','PUT',{deployed_name:$('binding-name').value.trim(),prefix:$('binding-prefix').value.trim()});$('binding-dialog').close();await refresh();notify('Deployment link saved.');});};
+
+$('sync-vm').onclick=async()=>{
+ const lab=current();if(!lab||vmSyncBusy)return;
+ vmSyncBusy=true;
+ const button=$('sync-vm');button.disabled=true;button.textContent='Syncing…';
+ try{await json('/labs/'+lab.id+'/sync','POST',{});await refresh();notify('VM files synced. Saved connections, credentials and backup history retained.');}
+ catch(error){notify(error.message);}
+ finally{vmSyncBusy=false;button.textContent='Sync from VM';renderManagement();}
+};

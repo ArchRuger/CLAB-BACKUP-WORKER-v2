@@ -2,7 +2,7 @@
 
 <html lang="en">
 
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager · Network lab operations</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.7.0"><script src="/static/app.js?v=1.7.0" defer></script><script src="/static/topology-render.js?v=1.7.0" defer></script><script src="/static/topology.js?v=1.7.0" defer></script><script src="/static/management.js?v=1.7.0" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager · Network lab operations</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.8.0"><script src="/static/app.js?v=1.8.0" defer></script><script src="/static/topology-render.js?v=1.8.0" defer></script><script src="/static/topology.js?v=1.8.0" defer></script><script src="/static/management.js?v=1.8.0" defer></script></head>
 
 <body>
 
@@ -37,7 +37,7 @@
   <section id="empty" class="empty-panel"><div class="file-icon" aria-hidden="true">YML</div><h2>Keep your labs in one workspace</h2><p>Import your original <code>.clab.yaml</code>, then connect this manager to the VM for automatic lab discovery. Existing Ansible inventories are also supported.</p><button class="button primary" id="import-empty">Import a lab</button><div class="platform-pills"><span>Junos</span><span>IOS-XR</span><span>Arista EOS</span></div><p class="empty-note">Inventories, credentials, and backups stay in this worker’s storage.</p></section>
 
   <div id="lab-content" hidden>
-    <section class="deployment-bar"><div><strong id="deployment-status"></strong><p id="deployment-message"></p><small id="deployment-checked"></small></div><div class="actions"><button class="button secondary" id="update-definition">Update lab YAML</button><button class="button secondary" id="link-deployment">Link deployment</button></div></section>
+    <section class="deployment-bar"><div><strong id="deployment-status"></strong><p id="deployment-message"></p><small id="deployment-checked"></small><p id="vm-files-status" role="status"></p></div><div class="actions"><button class="button secondary" id="sync-vm" hidden>Sync from VM</button><button class="button secondary" id="update-definition">Update lab YAML</button><button class="button secondary" id="link-deployment">Link deployment</button></div></section>
 
     <section class="metrics" aria-label="Lab summary"><div><span>Lab nodes</span><strong id="node-count">0</strong></div><div><span>Selected for backup</span><strong id="enabled-count">0</strong></div><div><span>Credentials ready</span><strong id="ready-count">0</strong></div><div><span>Backup schedule</span><strong id="schedule-summary">Manual</strong></div></section>
 
@@ -69,7 +69,7 @@
 
   </div>
 
-  <footer><span>Containerlab Node Manager / SSH &amp; configuration history · <span id="app-version">v1.7.0</span></span><span id="updated">No inventory loaded</span></footer>
+  <footer><span>Containerlab Node Manager / SSH &amp; configuration history · <span id="app-version">v1.8.0</span></span><span id="updated">No inventory loaded</span></footer>
 
 </div>
 

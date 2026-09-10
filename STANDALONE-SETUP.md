@@ -1,9 +1,12 @@
-# Standalone persistent Node Manager — 1.7.0
+# Standalone persistent Node Manager — 1.8.0
 
 Run one manager per engineer's Linux VM. It is a separate Docker Compose service,
 outside every containerlab topology. Lab deployment/destruction does not manage
 its lifecycle. The manager uses host networking for reachability and SSH for a
-fixed read-only lab inspection command. It does not mount the Docker socket.
+fixed read-only inspection and bounded deployment file reads. It does not mount the Docker socket.
+
+For a VM with nothing installed, begin with [the complete fresh VM guide](FRESH-VM-GUIDE.md).
+This shorter guide covers an already prepared Linux host and old-worker migration.
 
 ## 1. Prepare permanent storage
 
@@ -72,7 +75,7 @@ docker compose -f clab-backup-ui/compose.yml exec backup-ui \
 docker compose -f clab-backup-ui/compose.yml logs backup-ui
 ```
 
-Expect version **1.7.0**. The logs print the UI access token. Migrated data retains
+Expect version **1.8.0**. The logs print the UI access token. Migrated data retains
 its existing token. Open `http://VM_ADDRESS:8081` and unlock the workspace.
 Docker must start at VM boot; `restart: unless-stopped` restarts the manager with
 Docker unless you explicitly stopped it.
@@ -80,7 +83,7 @@ Docker unless you explicitly stopped it.
 Equivalent image-only build, from the repository root:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.7.0 ./clab-backup-ui
+docker build --pull --no-cache -t clab-backup:1.8.0 ./clab-backup-ui
 ```
 
 The final path is the required build context. Builds require the base image and
@@ -111,19 +114,21 @@ sudo bash deploy/setup-discovery.sh /path/to/clab-manager-discovery.pub
 ```
 
 Prerequisites: containerlab installed as a root-owned binary under `/usr/bin` or
-`/usr/local/bin`, `sudo`, and a running OpenSSH server. The script creates the
+`/usr/local/bin`, `sudo`, Python 3, Docker CLI, and a running OpenSSH server. The script creates the
 dedicated `clab-discovery` account, installs a root-owned helper and validates its
 sudoers entry. The uploaded public key is restricted to that helper, without shell,
 PTY or forwarding access. The account is not added to the Docker group.
 Rerunning this script replaces that dedicated account's authorized key.
 
-The helper accepts no arguments and executes only:
+The helper accepts no caller arguments. It inspects deployments using:
 
 ```bash
 containerlab inspect --all --format json
 ```
 
-It uses a fixed binary, a clean environment, and `/` as its working directory.
+It also reads Docker container labels using fixed `docker inspect` arguments and reads
+only the original YAML, adjacent annotations, generated inventory and topology export.
+It uses fixed binaries, a clean environment, and `/` as its working directory.
 The application cannot submit arbitrary shell commands through discovery.
 
 In **VM connection**:
@@ -146,6 +151,23 @@ containers without an interactive sudo prompt. The dedicated helper is preferred
 Host credentials and NOS credentials are separate.
 
 ## 5. Register and use persistent labs
+
+The 1.8.0 helper automatically imports new deployed labs from their files. Existing
+workspaces show Updates available and offer **Sync from VM**, preserving matching
+node settings, credentials, profiles, schedules and history. Missing files never
+delete a saved workspace. Optional files must be valid and match the YAML; invalid
+files block sync without partial changes. A missing annotation retains an existing
+map. Original YAML is required. Direct/old helpers discover nodes only.
+
+To upgrade an existing helper while keeping its installed SSH key:
+
+```bash
+sudo bash deploy/setup-discovery.sh --update-helper
+```
+
+See [the complete guide](FRESH-VM-GUIDE.md) for file locations, limits, fresh setup,
+Docker-run-to-Compose upgrades and troubleshooting. Manual import remains available:
+
 
 Choose **Import a lab** and upload the original `.clab.yaml`. Optionally include
 its `.annotations.json`. The YAML supplies the lab name, node identities/kinds,

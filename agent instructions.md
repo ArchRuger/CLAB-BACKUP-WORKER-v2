@@ -1,5 +1,19 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.8.0 addendum — automatic VM file import
+
+The user authorized reading deployment files through the existing SSH connection.
+The restricted helper now reads the original YAML, adjacent annotations, generated
+inventory and topology export using verified deployment metadata. No arbitrary
+commands/paths, disk scanning, host metrics or lifecycle actions were added.
+`deploy/clab_manager_files.py` is installed root-owned and uses stdlib only.
+`app/vm_files.py` validates bundles and prepares atomic settings-preserving imports.
+New deployed labs import automatically; existing workspaces require Sync from VM.
+Only source hashes/paths/status are public. Raw file bundles stay in memory; accepted
+YAML, drawings and normalized credentials persist through the existing Store.
+Keep old-helper/direct inspection compatibility. Missing labs/files retain state.
+Read FRESH-VM-GUIDE.md for fresh Ubuntu setup and helper/key-preserving upgrades.
+
 ## Release 1.7.0 addendum — standalone persistent manager
 
 The user explicitly authorized host SSH discovery, overriding earlier statements

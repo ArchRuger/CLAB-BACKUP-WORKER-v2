@@ -21,7 +21,7 @@ COMMANDS = {'helper': 'sudo -n /usr/local/sbin/clab-manager-inspect',
             'direct': 'containerlab inspect --all --format json'}
 INTERVAL = 30
 MAX_AGE = 90
-MAX_OUTPUT = 4 * 1024 * 1024
+MAX_OUTPUT = 16 * 1024 * 1024
 
 
 def stamp():
@@ -73,7 +73,7 @@ def parse_definition(raw, deployed_name=''):
 
 
 def parse_inspect(raw):
-    if len(raw) > MAX_OUTPUT: raise ValueError('Inspection output exceeded 4 MiB')
+    if len(raw) > MAX_OUTPUT: raise ValueError('Inspection output exceeded 16 MiB')
     value = json.loads(raw)
     groups = {}
     if isinstance(value, list):
@@ -103,6 +103,26 @@ def parse_inspect(raw):
             total += 1
             if total > 10000: raise ValueError('Too many discovered nodes')
     return groups
+
+
+class Inspection(dict):
+    """Normal lab mapping with optional versioned helper file bundles."""
+    def __init__(self, labs, sources=None):
+        super().__init__(labs)
+        self.sources = sources
+
+
+def parse_snapshot(raw):
+    from .vm_files import PROTOCOL
+    if len(raw) > MAX_OUTPUT: raise ValueError('Inspection response exceeds limit')
+    value = json.loads(raw)
+    if isinstance(value, dict) and value.get('protocol') == PROTOCOL:
+        labs = parse_inspect(json.dumps(value.get('inspect')).encode())
+        sources = value.get('sources')
+        if not isinstance(sources, dict) or not set(sources).issubset(labs):
+            raise ValueError('Invalid file discovery response')
+        return Inspection(labs, sources)
+    return Inspection(parse_inspect(raw))
 
 
 def discovery_fresh(state):
@@ -189,19 +209,19 @@ def inspect_host(host, stopping=None):
         channel = transport.open_session(timeout=8)
         channel.settimeout(8)
         channel.exec_command(COMMANDS[host['command_mode']])
-        output = bytearray(); size = 0; deadline = time.monotonic() + 15
+        output = bytearray(); size = 0; deadline = time.monotonic() + 40
         while True:
             if time.monotonic() > deadline or (stopping and stopping.is_set()):
                 raise ValueError('VM inspection timed out or was interrupted')
             if channel.recv_ready():
                 chunk = channel.recv(65536); output.extend(chunk); size += len(chunk)
             if channel.recv_stderr_ready(): size += len(channel.recv_stderr(65536))
-            if size > MAX_OUTPUT: raise ValueError('VM inspection output exceeded 4 MiB')
+            if size > MAX_OUTPUT: raise ValueError('VM inspection output exceeded 16 MiB')
             if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready(): break
             time.sleep(.01)
         if channel.recv_exit_status() != 0:
             raise ValueError('Inspection command failed. Verify containerlab and the discovery account/helper permissions on the VM.')
-        return parse_inspect(bytes(output)), policy.fingerprint
+        return parse_snapshot(bytes(output)), policy.fingerprint
     finally:
         client.close()
 
@@ -213,6 +233,7 @@ class Discovery:
         self.stopping = threading.Event()
         self.wake = threading.Event()
         self.thread = None
+        self.sources = {}
         # A previous process's snapshot is not evidence of current deployment.
         with store.lock:
             if store.state.get('discovery'):
@@ -251,10 +272,21 @@ class Discovery:
                 previous = self.store.state.get('discovery', {})
                 info = {**previous, 'ok': not error, 'error': error, 'checked_at': stamp(), 'checked_epoch': time.time()}
                 if not error:
-                    info.update(labs=labs, last_success=info['checked_at'])
+                    info.update(labs=dict(labs), last_success=info['checked_at'])
                     self.store.state['host']['fingerprint'] = fingerprint
                 self.store.state['discovery'] = info
-                if not error: reconcile(self.store.state)
+                self.sources = {}
+                if not error:
+                    self.update_sources(getattr(labs, 'sources', None))
+                    reconcile(self.store.state)
+                    file_errors = info.get('file_errors', {})
+                    if previous.get('file_errors', {}) != file_errors:
+                        self.store.event('discovery.files',
+                            f'{len(file_errors)} deployed labs need file correction or manual import' if file_errors else 'VM file discovery recovered',
+                            level='warning' if file_errors else 'info')
+                else:
+                    for lab in self.store.state['labs']:
+                        if lab.get('vm_source'): lab['vm_source'].update(can_sync=False, status='VM unavailable')
                 if previous.get('ok') != info['ok'] or previous.get('error') != error:
                     self.store.event('discovery.status', error or 'VM inspection succeeded', level='warning' if error else 'info')
                 self.store.save()
@@ -263,6 +295,47 @@ class Discovery:
             return result
         finally:
             self.lock.release()
+
+    def update_sources(self, sources):
+        from .vm_files import decode_bundle, metadata, prepare_lab
+        state = self.store.state
+        state['discovery']['file_import_supported'] = sources is not None
+        state['discovery']['file_errors'] = {}
+        for lab in state['labs']:
+            if lab.get('vm_source'):
+                lab['vm_source'].update(can_sync=False, status='Files unavailable')
+        if sources is None: return
+        for name, source in sources.items():
+            lab = next((l for l in state['labs'] if l.get('deployment_name') == name), None)
+            # Reuse a unique legacy inventory workspace, but never overwrite it
+            # automatically. Its first file import remains an explicit sync.
+            if lab is None:
+                legacy = [l for l in state['labs'] if not l.get('deployment_name') and l['name'] == name]
+                if len(legacy) > 1:
+                    state['discovery']['file_errors'][name] = 'Several saved workspaces match. Link the intended workspace first.'
+                    continue
+                if legacy:
+                    state['discovery']['file_errors'][name] = 'A saved inventory workspace matches. Use Link deployment there, then Sync from VM.'
+                    continue
+            try:
+                bundle = decode_bundle(source)
+                # Validate before advertising an available sync. Preparation is
+                # side-effect-free; a bad optional file cannot half-update a lab.
+                candidate = prepare_lab(bundle, name, lab)
+            except (ValueError, TypeError, AttributeError, KeyError, RecursionError):
+                message = 'VM files are missing, invalid, or inconsistent. Check the four source files or import manually.'
+                state['discovery']['file_errors'][name] = message
+                if lab:
+                    lab.setdefault('vm_source', {}).update(status='Files unavailable', can_sync=False, message=message)
+                continue
+            self.sources[name] = bundle
+            if lab is None:
+                state['labs'].append(candidate)
+                self.store.event('lab.auto_import', 'Imported deployed lab files from VM', lab_id=candidate['id'])
+            else:
+                previous = lab.get('vm_source', {})
+                lab['vm_source'] = {**previous, **metadata(bundle), 'can_sync': True,
+                    'status': 'Up to date' if previous.get('synced_digest') == bundle['digest'] else 'Updates available'}
 
     def public(self):
         with self.store.lock:
@@ -273,6 +346,8 @@ class Discovery:
                         connected=discovery_fresh(state), checking=self.lock.locked(),
                         checked_at=info.get('checked_at'), last_success=info.get('last_success'),
                         error=info.get('error', ''), interval=INTERVAL,
+                        file_import_supported=bool(info.get('file_import_supported')),
+                        file_errors=info.get('file_errors', {}),
                         discovered=[dict(name=name, nodes=len(nodes), running=sum(n['state']=='running' for n in nodes),
                                          imported=name in linked) for name,nodes in info.get('labs', {}).items()])
 
@@ -310,6 +385,7 @@ class Discovery:
                     if data.auth == 'key': read_key(host['private_key'],host['passphrase'])
                     elif not host['password']: raise ValueError('Enter the VM password')
                     host['fingerprint'] = old.get('fingerprint','') if (old.get('address'),old.get('port')) == (endpoint,data.port) and not data.reset_fingerprint else ''
+                    self.sources = {}
                     self.store.state['host'] = host
                     self.store.state['discovery'] = dict(ok=False,error='Waiting for a fresh VM inspection.')
                     self.store.save(); self.store.event('discovery.configure','VM connection settings saved; automatic discovery '+('enabled' if data.enabled else 'paused'))
@@ -319,6 +395,26 @@ class Discovery:
 
         @app.post('/api/discovery/refresh')
         def refresh(): return self.refresh(wait=True)
+
+        @app.post('/api/labs/{lab_id}/sync')
+        def sync(lab_id: str):
+            from .vm_files import prepare_lab
+            # Fetch once more so an explicit sync never applies an older cached
+            # source after the VM or its files have changed.
+            self.refresh(wait=True)
+            with self.store.lock:
+                lab = self.store.lab(lab_id)
+                if not lab: raise HTTPException(404, 'Lab not found')
+                bundle = self.sources.get(lab.get('deployment_name'))
+                if not discovery_fresh(self.store.state) or not bundle:
+                    raise HTTPException(409, 'Fresh VM files are unavailable. Refresh discovery, upgrade the helper, or import manually.')
+                try: candidate = prepare_lab(bundle, lab['deployment_name'], lab)
+                except (ValueError, TypeError, AttributeError, KeyError, RecursionError):
+                    raise HTTPException(400, 'VM files are invalid or inconsistent; the saved workspace was retained.')
+                lab.clear(); lab.update(candidate)
+                reconcile(self.store.state); self.store.save()
+                self.store.event('lab.sync', 'Synced VM files; saved node settings and backup history retained', lab_id=lab_id)
+                return public_lab(lab)
 
         class Binding(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -336,6 +432,7 @@ class Discovery:
                 if not lab: raise HTTPException(404,'Lab not found')
                 if name and any(l['id']!=lab_id and l.get('deployment_name')==name for l in self.store.state['labs']):
                     raise HTTPException(409,'That deployment is already linked to another workspace')
+                lab.pop('vm_source', None)
                 lab.update(deployment_name=name,container_prefix=prefix)
                 # Legacy inventory endpoints stay manual until explicitly switched.
                 for node in lab['nodes']: node.setdefault('endpoint_mode','manual')

@@ -1,12 +1,18 @@
-# Containerlab Node Manager — 1.7.0
+# Containerlab Node Manager — 1.8.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
 discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced.
 
+**Start here:** [Fresh VM installation guide](../FRESH-VM-GUIDE.md) — Ubuntu, Docker, containerlab,
+persistent storage, SSH keys, first launch, automatic imports, upgrades and backups.
+
 ## What changed
 
+- Automatic imports of deployed lab YAML, annotations, generated inventory and topology data through the restricted VM helper.
+- File change detection and **Sync from VM**, preserving saved node settings, profiles and backup history.
+- Helper upgrade with `deploy/setup-discovery.sh --update-helper` retains the existing SSH key.
 - Standalone Compose deployment with Linux host networking and automatic restart.
 - Host directory `/srv/containerlab-node-manager/data` mounted at `/data`, using
   explicit UID/GID 10001 and a one-time setup script.
@@ -33,18 +39,18 @@ For a fresh installation, from this repository root on the Linux VM:
 
 ```bash
 sudo bash deploy/setup-vm.sh
-docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
-docker compose -f clab-backup-ui/compose.yml up -d
-docker compose -f clab-backup-ui/compose.yml logs backup-ui
+sudo docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
+sudo docker compose -f clab-backup-ui/compose.yml up -d
+sudo docker compose -f clab-backup-ui/compose.yml logs backup-ui
 ```
 
 Open `http://VM_ADDRESS:8081`, enter the token printed in the logs, and configure
 **VM connection**. The guide includes the restricted discovery account setup and
-existing-data migration. Then import a lab YAML, optional annotations, and NOS
-credentials. Running container status does not prove NOS login/boot readiness.
+existing-data migration. New deployed labs import automatically. Existing workspaces offer Sync from VM;
+manual YAML/annotation/inventory uploads remain available. Running container status does not prove NOS login/boot readiness.
 
 The manager requires no Docker socket. Host networking provides reachability;
-host SSH provides only the configured inspection command. Uploaded lab YAML is
+host SSH provides fixed inspection and bounded reads of deployment files. Uploaded lab YAML is
 stored as encrypted data and never executed or deployed by this application.
 Exactly one manager process/container may use a given data directory.
 

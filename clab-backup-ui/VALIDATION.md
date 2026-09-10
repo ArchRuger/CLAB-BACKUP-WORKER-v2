@@ -1,4 +1,39 @@
-# Validation — Containerlab Node Manager 1.7.0 (2026-09-10)
+# Validation — Containerlab Node Manager 1.8.0 (2026-09-10)
+
+## 1.8.0 evidence
+
+- Full Python suite: 86 tests, 81 passed, 5 skipped. Added 18 VM-file tests:
+  automatic import; encrypted persistence and public/log secret exclusion;
+  explicit sync preserving manual endpoints, credentials, profiles, identity,
+  schedules and history; pending annotation changes; bad/mismatched/missing files;
+  removed deployments; old helper compatibility; authentication/offline rejection;
+  custom inventory ports; saved display-name map binding; real loopback SSH file
+  transport; helper paths, custom generated directories, digests and size budgets.
+- The additional skip is the helper's Linux openat/O_NOFOLLOW symlink test. The
+  original four platform/integration skips remain as documented below.
+- JavaScript regressions: 14 passed. Application JavaScript syntax checked.
+- Browser: the production app received all four files over a local Paramiko SSH
+  fixture, automatically created the 13-node BGP workspace, imported credentials
+  and rendered 16 links with zero unmatched nodes. A changed annotation produced
+  Updates available while retaining the map. Clicking Sync from VM changed the
+  saved/rendered coordinate from x=320 to x=360 and returned Up to date. Restored
+  original fixture geometry afterward. Right-click node actions remain available.
+- Updated the restricted helper installation and added a key-preserving upgrade.
+  Added FRESH-VM-GUIDE.md covering clean Ubuntu installation through deployment,
+  connectivity, keys, persistence, first lab, backups and upgrades.
+- Verified complete source archive and patches against Git baseline 06b8624 and
+  the previously delivered 1.7.0 source archive, and GitHub commit 4742a90. The
+  fetched GitHub 1.7.0 source matches that delivery except for three absent ignore/
+  attributes files, restored here. No live state/keys included.
+
+No Docker engine, Linux VM or WSL distribution is available in this workspace.
+Docker image build, privileged installation, sudoers/SSH restrictions, Linux
+openat protections and real vendor-node operations remain VM deployment checks.
+The helper's portable file-collection branch was tested with temporary directories;
+that is not evidence that Linux provisioning has run successfully.
+No code was pushed to GitHub or deployed to the user's VM.
+
+## Earlier 1.7.0 evidence (retained for context)
 
 Repository: ArchRuger/CLAB-BACKUP-WORKER-v2. Git baseline: 06b8624 (1.6.0 upload).
 This release includes the previously delivered 1.6.1 map corrections. No changes

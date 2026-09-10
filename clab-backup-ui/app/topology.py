@@ -176,7 +176,7 @@ def bind_drawing(lab):
     aliases={}
     for n in lab['nodes']:
         prefix='clab-'+lab['name']+'-'
-        for alias in {n['name'],n.get('short_name'),n['name'].removeprefix(prefix)}-{None,''}:
+        for alias in {n['name'],n.get('short_name'),n.get('definition_node'),n['name'].removeprefix(prefix)}-{None,''}:
             aliases.setdefault(alias,set()).add(n['name'])
     result={**drawing,'nodes':[]}
     for n in drawing['nodes']:
