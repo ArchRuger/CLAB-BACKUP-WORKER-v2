@@ -2,6 +2,16 @@
 let vmSyncBusy=false;
 // All host output is rendered as text or escaped; credentials never enter state responses.
 document.body.insertAdjacentHTML('beforeend', `
+<dialog id="remove-lab-dialog"><form id="remove-lab-form">
+ <div class="dialog-head"><span class="eyebrow">REMOVE SAVED WORKSPACE</span><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
+ <h2>Remove lab from this manager?</h2><p id="remove-lab-name"></p>
+ <input type="hidden" id="remove-lab-id"><input type="hidden" id="remove-lab-confirm-name">
+ <p>This removes the imported nodes, map, saved credentials, schedule and backup history entries. Saved backup files and audit logs remain on disk.</p>
+ <p>Your running containers and lab files on the VM are unaffected. The VM connection and other saved labs remain available.</p>
+ <label class="checkbox-label"><input id="remove-lab-exclude" type="checkbox" checked> Keep this lab excluded from automatic import</label>
+ <p class="form-help">Uncheck to test discovery: the deployed lab can return on the next discovery check. Otherwise, use Import again in the sidebar when ready.</p>
+ <p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Cancel</button><button type="submit" class="button primary">Remove saved lab</button></div>
+</form></dialog>
 <dialog id="setup-dialog"><form id="setup-form">
  <div class="dialog-head"><span class="eyebrow">PERSISTENT LAB WORKSPACE</span><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
  <h2 id="setup-title">Import a lab</h2><p>Start with the original containerlab YAML. The workspace remains saved when the lab is stopped or removed.</p>
@@ -42,8 +52,10 @@ document.querySelectorAll('[data-dismiss]').forEach(button=>button.onclick=()=>b
 function renderManagement(){
  const discovery=state.discovery||{}, lab=current();
  $('vm-summary').textContent=!discovery.configured?'VM discovery is not configured.':!discovery.host.enabled?'VM discovery is paused.':discovery.connected?'VM connected · checks every 30s':(discovery.error||'VM status unknown; refresh discovery.');
- $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · ${esc(discovery.file_errors?.[l.name]||'setup required')}</small></button>`).join('');
+ $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · ${esc(discovery.file_errors?.[l.name]||'setup required')}</small></button>`).join('');
+ $('excluded-labs').innerHTML=(discovery.ignored_labs||[]).length?'<p class="side-hint">Excluded from automatic import</p>'+(discovery.ignored_labs||[]).map(name=>`<button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again</small></button>`).join(''):'';
  if(!lab)return;
+ $('remove-lab').disabled=state.jobs.some(j=>j.lab_id===lab.id&&['queued','running'].includes(j.status));
  const source=lab.vm_source, sync=$('sync-vm');
  sync.hidden=!lab.deployment_name;
  sync.disabled=vmSyncBusy||!discovery.connected||!source?.can_sync;
@@ -91,4 +103,25 @@ $('sync-vm').onclick=async()=>{
  try{await json('/labs/'+lab.id+'/sync','POST',{});await refresh();notify('VM files synced. Saved connections, credentials and backup history retained.');}
  catch(error){notify(error.message);}
  finally{vmSyncBusy=false;button.textContent='Sync from VM';renderManagement();}
+};
+
+$('remove-lab').onclick=()=>{
+ const lab=current();if(!lab)return;
+ $('remove-lab-form').reset();$('remove-lab-form').querySelector('.form-error').textContent='';
+ $('remove-lab-id').value=lab.id;$('remove-lab-confirm-name').value=lab.name;
+ $('remove-lab-name').textContent=lab.name;$('remove-lab-dialog').showModal();
+};
+$('remove-lab-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
+ const id=$('remove-lab-id').value, exclude=$('remove-lab-exclude').checked;
+ await json('/labs/'+encodeURIComponent(id),'DELETE',{name:$('remove-lab-confirm-name').value,prevent_reimport:exclude});
+ $('remove-lab-dialog').close();
+ if(activeId===id){activeId='';sessionStorage.removeItem('activeLab');tab='inventory';if($('details-dialog').open)$('details-dialog').close();}
+ await refresh();
+ notify(exclude?'Saved lab removed. Use Import again to rediscover it.':'Saved lab removed. Discovery can import the deployed lab again on its next check.');
+});};
+$('excluded-labs').onclick=async e=>{
+ const button=e.target.closest('[data-allow-import]');if(!button||button.disabled)return;
+ button.disabled=true;
+ try{const result=await json('/discovery/allow-import','POST',{name:button.dataset.allowImport});await refresh();notify(result.error||'Automatic import enabled. Available VM files are imported during discovery.');}
+ catch(error){notify(error.message);button.disabled=false;}
 };

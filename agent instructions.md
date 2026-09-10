@@ -1,5 +1,16 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.9.0 addendum — remove saved lab
+
+Remove lab deletes only saved workspace/job metadata. Retain backup files and
+shared audit logs; never issue Containerlab lifecycle commands or delete host files.
+The UI confirmation describes the exact scope. Block removal during this lab's
+queued/running jobs. Default persistent ignored_labs entries prevent background
+reimport (including in-flight polls). Import again clears an exclusion; the dialog
+also permits immediate rediscovery for testing. Manual YAML import/linking clears
+its matching exclusion. Preserve other labs and host credentials. No helper or
+SSH key upgrade is required from 1.8.0.
+
 ## Release 1.8.0 addendum — automatic VM file import
 
 The user authorized reading deployment files through the existing SSH connection.

@@ -1,4 +1,4 @@
-# Containerlab Node Manager 1.8.0 — a fresh VM to a working lab
+# Containerlab Node Manager 1.9.0 — a fresh VM to a working lab
 
 This guide starts with a fresh **Ubuntu Server 24.04 LTS VM**, a normal user with
 `sudo` access, and an internet connection for installation. Run one manager per
@@ -28,11 +28,11 @@ cd CLAB-BACKUP-WORKER-v2
 cat clab-backup-ui/VERSION
 ```
 
-This guide requires **1.8.0** source, including `deploy/clab_manager_files.py`.
-If the clone reports an older version, obtain the 1.8.0 source package or the
+This guide requires **1.9.0** source, including `deploy/clab_manager_files.py`.
+If the clone reports an older version, obtain the 1.9.0 source package or the
 matching release commit before proceeding. Local source delivery does not mean
 the GitHub repository has already been updated. For a delivered ZIP, extract it
-and use its `CLAB-BACKUP-WORKER-v2-1.8.0` directory as the repository root instead.
+and use its `CLAB-BACKUP-WORKER-v2-1.9.0` directory as the repository root instead.
 All later relative paths start at the directory containing `deploy/` and
 `clab-backup-ui/`.
 
@@ -173,7 +173,7 @@ sudo docker compose -f clab-backup-ui/compose.yml exec backup-ui \
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui
 ```
 
-Expect **1.8.0**. The startup log prints the UI access token. To retrieve the
+Expect **1.9.0**. The startup log prints the UI access token. To retrieve the
 persisted token directly:
 
 ```bash
@@ -211,7 +211,7 @@ and use it in the browser. Default access is HTTP for the isolated lab network.
 An equivalent **image-only build** from the repository root is:
 
 ```bash
-sudo docker build --pull --no-cache -t clab-backup:1.8.0 ./clab-backup-ui
+sudo docker build --pull --no-cache -t clab-backup:1.9.0 ./clab-backup-ui
 ```
 
 If already inside `clab-backup-ui`, use `.` as the last argument instead. That
@@ -307,6 +307,16 @@ requirements are separate from the manager installation.
 - **Invalid/inconsistent files:** the workspace stays intact and sync is blocked.
   The UI identifies the lab needing manual import/file correction. Original YAML
   is required; optional inventory and topology export must match its nodes.
+- **Remove lab in the manager:** open the lab and select **Remove lab**. Confirm
+  the named workspace. Imported nodes, map, credentials, schedule and history
+  entries are removed from manager state. Backup files under `/data/backups/<old-id>`
+  and audit logs remain on disk. Other labs, VM credentials and running containers
+  are unaffected. Wait for any queued/running lab job to finish first.
+- **Test automatic import again:** uncheck **Keep this lab excluded from automatic
+  import** in that dialog, remove it, and click Refresh discovery. Or leave the
+  default exclusion enabled and later click **Import again** under its name in
+  the sidebar. A valid deployed lab imports into a new workspace with a new ID;
+  old custom settings and history are not restored. Exclusions survive restarts.
 - **Deleted/stopped lab:** its workspace, credentials and history remain. Discovery
   only finds deployed containers; it does not scan for never-deployed YAML files.
   Import those manually if you want to prepare a workspace before deployment.
@@ -353,9 +363,11 @@ any current data as a separate recovery copy, extract the archive under
 the data. Reconfigure the discovery key/account for the new VM; a different VM
 SSH host key needs verification before trusting it in the UI.
 
-### Upgrade an existing 1.7.0 installation to 1.8.0
+### Upgrade an existing 1.7.0 installation to 1.9.0
 
-Obtain the new source, keep the original data directory, and back it up first.
+For an existing 1.8.0 installation, the VM helper and SSH key need no changes;
+only rebuild/recreate the manager using the new source. For 1.7.0, also update
+the helper as below. Keep the original data directory and back it up first.
 From the updated repository root:
 
 ```bash
@@ -408,7 +420,7 @@ host directory. Do not run two manager processes against the same data directory
 | Saved map did not change | Save the correct `.annotations.json` beside the original YAML, refresh, then Sync from VM |
 | Running but SSH/backup fails | NOS still booting, credentials/driver, network routing, or wrong SSH port; edit the node connection |
 | YAML uses anchors/variables | Provide a resolved, literal definition manually; manager imports data without executing templates |
-| A removed workspace reappears | It is still deployed on the VM, so automatic import recreates it |
+| A removed workspace reappears | Keep the exclusion checkbox enabled when removing it; unchecked allows automatic reimport for testing |
 
 Do not paste raw helper JSON into support logs: it carries base64-encoded file
 contents, which can include inventory credentials. The UI reports controlled
@@ -421,13 +433,13 @@ same architecture. Transfer the source and required Ubuntu/Docker/containerlab
 packages or use your internal package mirrors. Build the manager there and export:
 
 ```bash
-sudo docker save clab-backup:1.8.0 -o clab-backup-1.8.0.tar
+sudo docker save clab-backup:1.9.0 -o clab-backup-1.9.0.tar
 ```
 
 On the prepared offline VM:
 
 ```bash
-sudo docker load -i clab-backup-1.8.0.tar
+sudo docker load -i clab-backup-1.9.0.tar
 sudo docker compose -f clab-backup-ui/compose.yml up -d --no-build
 ```
 

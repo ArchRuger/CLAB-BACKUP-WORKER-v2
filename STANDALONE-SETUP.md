@@ -1,4 +1,4 @@
-# Standalone persistent Node Manager — 1.8.0
+# Standalone persistent Node Manager — 1.9.0
 
 Run one manager per engineer's Linux VM. It is a separate Docker Compose service,
 outside every containerlab topology. Lab deployment/destruction does not manage
@@ -75,7 +75,7 @@ docker compose -f clab-backup-ui/compose.yml exec backup-ui \
 docker compose -f clab-backup-ui/compose.yml logs backup-ui
 ```
 
-Expect version **1.8.0**. The logs print the UI access token. Migrated data retains
+Expect version **1.9.0**. The logs print the UI access token. Migrated data retains
 its existing token. Open `http://VM_ADDRESS:8081` and unlock the workspace.
 Docker must start at VM boot; `restart: unless-stopped` restarts the manager with
 Docker unless you explicitly stopped it.
@@ -83,7 +83,7 @@ Docker unless you explicitly stopped it.
 Equivalent image-only build, from the repository root:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.8.0 ./clab-backup-ui
+docker build --pull --no-cache -t clab-backup:1.9.0 ./clab-backup-ui
 ```
 
 The final path is the required build context. Builds require the base image and
@@ -152,7 +152,14 @@ Host credentials and NOS credentials are separate.
 
 ## 5. Register and use persistent labs
 
-The 1.8.0 helper automatically imports new deployed labs from their files. Existing
+Use **Remove lab** to remove only a saved manager workspace, credentials, schedule
+and history entries. Backup files and audit logs stay on disk. No running container
+or VM lab file is modified. The default exclusion prevents automatic reimport;
+use **Import again** in the sidebar later, or uncheck the exclusion when removing
+if you want to test immediate rediscovery. Other labs and the VM connection remain.
+
+
+The 1.9.0 helper automatically imports new deployed labs from their files. Existing
 workspaces show Updates available and offer **Sync from VM**, preserving matching
 node settings, credentials, profiles, schedules and history. Missing files never
 delete a saved workspace. Optional files must be valid and match the YAML; invalid

@@ -58,7 +58,7 @@ def create_app(data_dir=None):
             expected=store.token
             if not expected or not hmac.compare_digest(supplied.encode('utf8'),expected.encode('utf8')):
                 return JSONResponse({'detail':'Enter the UI access token from the worker startup log.'},status_code=401)
-            if request.method in ('POST','PUT','PATCH'):
+            if request.method in ('POST','PUT','PATCH','DELETE'):
                 try: size=int(request.headers.get('content-length','0'))
                 except ValueError: return JSONResponse({'detail':'Invalid request length'},status_code=400)
                 if size>2_500_000 or size<=0:
@@ -109,6 +109,41 @@ def create_app(data_dir=None):
             return {'labs':[public_lab(l) for l in store.state['labs']],
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
                     'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public()}
+    class RemoveLab(BaseModel):
+        model_config = ConfigDict(extra='forbid')
+        name: str = Field(min_length=1, max_length=120)
+        prevent_reimport: bool = True
+
+    @app.delete('/api/labs/{lab_id}')
+    def remove_lab(lab_id: str, data: RemoveLab):
+        with store.lock:
+            lab = get_lab(lab_id)
+            if data.name != lab['name']:
+                raise HTTPException(409, 'The lab name changed. Reopen Remove lab and try again.')
+            if any(j['lab_id'] == lab_id and j['status'] in ('queued', 'running') for j in store.state['jobs']):
+                raise HTTPException(409, 'Wait for this lab backup or login job to finish before removing it.')
+            name = lab.get('deployment_name') or lab['name']
+            previous = store.state
+            updated = copy.deepcopy(previous)
+            updated['labs'] = [l for l in updated['labs'] if l['id'] != lab_id]
+            updated['jobs'] = [j for j in updated['jobs'] if j['lab_id'] != lab_id]
+            ignored = set(updated.get('ignored_labs', []))
+            if data.prevent_reimport: ignored.add(name)
+            else: ignored.discard(name)
+            updated['ignored_labs'] = sorted(ignored)
+            updated.get('discovery', {}).get('file_errors', {}).pop(name, None)
+            store.state = updated
+            try: store.save()
+            except OSError:
+                store.state = previous
+                raise HTTPException(500, 'Could not save the removal. The workspace was retained.')
+            discovery.sources.pop(name, None)
+            with services.lock:
+                services.checks = {k:v for k,v in services.checks.items() if k[0] != lab_id}
+                services.tickets = {k:v for k,v in services.tickets.items() if v[1] != lab_id}
+            store.event('lab.remove', 'Removed saved workspace and history entries; backup files and audit logs retained; automatic import '+('excluded' if data.prevent_reimport else 'allowed'), lab_id=lab_id)
+            return {'removed': lab_id, 'name': lab['name'], 'prevent_reimport': data.prevent_reimport}
+
     @app.get('/api/logs')
     def logs(lab_id: str='', job_id: str='', level: str='', node: str='', limit: int=Query(500,ge=1,le=2000)):
         return {'events':store.events(lab_id,job_id,level,node,limit)}

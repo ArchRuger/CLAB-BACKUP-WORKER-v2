@@ -1,4 +1,29 @@
-# Validation — Containerlab Node Manager 1.8.0 (2026-09-10)
+# Validation — Containerlab Node Manager 1.9.0 (2026-09-10)
+
+## 1.9.0 evidence
+
+- Full Python suite: 94 tests, 89 passed, 5 existing platform/integration skips.
+  Eight new removal tests verify scoped state/history removal, retained backup
+  files and other labs/host credentials, absence of remote command calls,
+  persistent exclusions across restarts, explicit reimport, immediate rediscovery,
+  removal during an in-flight poll, active-job and stale-name guards, failed-save
+  rollback, authentication, and manual import clearing a matching exclusion.
+- JavaScript regressions: 14 passed. All application JavaScript syntax checked.
+- Browser with synthetic local data: Cancel retains the workspace; default removal
+  leaves an excluded sidebar entry, and refreshing discovery does not recreate it.
+  Import again creates a new 13-node Running workspace. Removing with exclusion
+  unchecked and refreshing discovery also imports a fresh workspace successfully.
+  No browser console errors were observed. Screenshot: remove-lab-1.9.0.png.
+- Removal has no remote side effects and performs no filesystem deletion. Saved
+  backup files and shared audit logs remain on disk; prior history entries and
+  credential profiles are not restored when a new workspace is imported.
+- Latest fetched GitHub commit 63ca6d6 contains the 1.8.0 delivery except for the
+  three ignore/attributes files restored here. Source ZIP and patches verified
+  against that commit, prior 1.8.0 delivery, and original 06b8624 baseline.
+- No helper/key change is required from 1.8.0. Docker/Linux deployment remains
+  untested here; no changes were pushed to GitHub or deployed to the user's VM.
+
+## Earlier 1.8.0 validation (retained for context)
 
 ## 1.8.0 evidence
 

@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.8.0
+# Containerlab Node Manager — 1.9.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -9,6 +9,13 @@ backups as training labs are replaced.
 persistent storage, SSH keys, first launch, automatic imports, upgrades and backups.
 
 ## What changed
+
+- **Remove lab** clears only that saved manager workspace and its history entries.
+  It never stops containers or changes VM lab files. Backup files and audit logs
+  remain on disk; other labs and the VM connection are retained.
+- Removed labs are excluded from automatic import by default. Use **Import again**
+  in the sidebar, or uncheck the exclusion in the removal dialog to test automatic
+  discovery on its next check. Queued/running jobs must finish before removal.
 
 - Automatic imports of deployed lab YAML, annotations, generated inventory and topology data through the restricted VM helper.
 - File change detection and **Sync from VM**, preserving saved node settings, profiles and backup history.

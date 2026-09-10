@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.8.0
+# Containerlab Node Manager — 1.9.0
 
 The default deployment is now a standalone persistent manager. Follow
 [standalone setup and migration](../STANDALONE-SETUP.md); the older build/worker

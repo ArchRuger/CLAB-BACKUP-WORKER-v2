@@ -306,6 +306,7 @@ class Discovery:
                 lab['vm_source'].update(can_sync=False, status='Files unavailable')
         if sources is None: return
         for name, source in sources.items():
+            if name in state.get('ignored_labs', []): continue
             lab = next((l for l in state['labs'] if l.get('deployment_name') == name), None)
             # Reuse a unique legacy inventory workspace, but never overwrite it
             # automatically. Its first file import remains an explicit sync.
@@ -348,8 +349,9 @@ class Discovery:
                         error=info.get('error', ''), interval=INTERVAL,
                         file_import_supported=bool(info.get('file_import_supported')),
                         file_errors=info.get('file_errors', {}),
+                        ignored_labs=state.get('ignored_labs', []),
                         discovered=[dict(name=name, nodes=len(nodes), running=sum(n['state']=='running' for n in nodes),
-                                         imported=name in linked) for name,nodes in info.get('labs', {}).items()])
+                                         imported=name in linked, excluded=name in state.get('ignored_labs', [])) for name,nodes in info.get('labs', {}).items()])
 
     def install(self, app, public_lab):
         class HostSettings(BaseModel):
@@ -396,6 +398,23 @@ class Discovery:
         @app.post('/api/discovery/refresh')
         def refresh(): return self.refresh(wait=True)
 
+        class AllowImport(BaseModel):
+            model_config = ConfigDict(extra='forbid')
+            name: str = Field(min_length=1, max_length=120)
+
+        @app.post('/api/discovery/allow-import')
+        def allow_import(data: AllowImport):
+            with self.store.lock:
+                ignored = self.store.state.get('ignored_labs', [])
+                if data.name not in ignored: raise HTTPException(404, 'Lab is not excluded from automatic import')
+                self.store.state['ignored_labs'] = [n for n in ignored if n != data.name]
+                try: self.store.save()
+                except OSError:
+                    self.store.state['ignored_labs'] = ignored
+                    raise HTTPException(500, 'Could not save the import setting. Try again.')
+                self.store.event('lab.allow_import', 'Automatic import enabled for a removed workspace')
+            return self.refresh(wait=True)
+
         @app.post('/api/labs/{lab_id}/sync')
         def sync(lab_id: str):
             from .vm_files import prepare_lab
@@ -432,6 +451,7 @@ class Discovery:
                 if not lab: raise HTTPException(404,'Lab not found')
                 if name and any(l['id']!=lab_id and l.get('deployment_name')==name for l in self.store.state['labs']):
                     raise HTTPException(409,'That deployment is already linked to another workspace')
+                self.store.state['ignored_labs'] = [n for n in self.store.state.get('ignored_labs', []) if n != name]
                 lab.pop('vm_source', None)
                 lab.update(deployment_name=name,container_prefix=prefix)
                 # Legacy inventory endpoints stay manual until explicitly switched.
@@ -475,6 +495,7 @@ class Discovery:
                         n['endpoint_mode']=previous.get('endpoint_mode','manual')
                 lab.update(nodes=parsed['nodes'],deployment_name=parsed['deployed_name'],container_prefix=parsed['prefix'],
                            definition_yaml=raw.decode('utf-8-sig'),updated=stamp(),source=definition.filename or 'lab.clab.yaml')
+                self.store.state['ignored_labs'] = [n for n in self.store.state.get('ignored_labs', []) if n != parsed['deployed_name']]
                 if ann or not lab.get('drawing'): lab['drawing']=drawing
                 reconcile(self.store.state); self.store.save()
                 self.store.event('lab.register',f'Registered lab definition with {len(lab["nodes"])} nodes',lab_id=lab['id'])
