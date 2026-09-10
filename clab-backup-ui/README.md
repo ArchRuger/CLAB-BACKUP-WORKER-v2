@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.10.0
+# Containerlab Node Manager — 1.11.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -8,7 +8,19 @@ backups as training labs are replaced.
 **Start here:** [Fresh VM installation guide](../FRESH-VM-GUIDE.md) — Ubuntu, Docker, containerlab,
 persistent storage, SSH keys, first launch, automatic imports, upgrades and backups.
 
-## What changed in 1.10.0
+## Lab commands in 1.11.0
+
+Lab actions now covers deployment/cleanup, apply, whole-lab start/stop/restart,
+inspect/save, SSH all, VM project editing and browsing, favorites, topology layout
+editing and draw.io export. Optional repository/popular-lab acquisition, SSHX/GoTTY
+sharing and SR Linux fcli tools are included. Commands are reviewed, run through a
+restricted host helper, and recorded in persistent operation history.
+
+[Lab command setup, coverage and prerequisites](../LAB-OPERATIONS.md) explains the upgrade.
+Enable once with `sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab`.
+The existing SSH key and data are retained. Future launches update enabled helpers.
+
+## Setup and import improvements retained from 1.10.0
 
 - **One launch command:** `sudo bash deploy/start-manager.sh` updates the installed
   VM helper, verifies its file-transfer protocol and version, prepares storage,
@@ -63,14 +75,14 @@ After installing Docker, containerlab and SSH as described in the guide, run fro
 the repository root on the Linux VM. For first setup, supply your public key:
 
 ```bash
-sudo bash deploy/start-manager.sh /absolute/path/to/clab-manager-discovery.pub
+sudo bash deploy/start-manager.sh /absolute/path/to/clab-manager-discovery.pub --enable-operations --lab-root /etc/containerlab
 ```
 
 For upgrades with the existing discovery account/key:
 
 ```bash
-cd ~/projects/v1.10.0
-sudo bash deploy/start-manager.sh
+cd ~/projects/v1.11.0
+sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 
 The script installs/updates and verifies the helper before starting the manager.
@@ -85,8 +97,9 @@ existing-data migration. New deployed labs appear as Ready to import; review and
 manual YAML/annotation/inventory uploads remain available. Running container status does not prove NOS login/boot readiness.
 
 The manager requires no Docker socket. Host networking provides reachability;
-host SSH provides fixed inspection and bounded reads of deployment files. Uploaded lab YAML is
-stored as encrypted data and never executed or deployed by this application.
+host SSH provides fixed discovery and explicitly enabled lab operations. Imported YAML
+is stored as encrypted data. Deployment uses the reviewed original VM project
+through the privileged host helper; treat project files and manager users as trusted.
 Exactly one manager process/container may use a given data directory.
 
 ## Development

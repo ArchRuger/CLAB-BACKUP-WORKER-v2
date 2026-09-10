@@ -1,3 +1,42 @@
+# Validation — Containerlab Node Manager 1.11.0 (2026-09-10)
+
+## 1.11.0 evidence
+
+- Full Python suite: 136 tests, 130 passed, 6 skipped for unavailable platform
+  capabilities. Existing map, persistence, import confirmation, discovery, backup,
+  SSH and removal checks remain included.
+- All 14 JavaScript regression tests pass; new operations/workspace scripts pass
+  Node syntax checks. Browser checks cover the new interactive flows.
+- Host operation tests exercise exact scoped argv, feature detection, redeploy
+  fallback order, unsupported flags/actions, path traversal, changed source/state/
+  options, file creation, write/delete recovery, active-lab deletion refusal,
+  optional cloning/sharing/fcli constraints, output bounds and secret redaction.
+- Real subprocess tests verify stderr cannot corrupt inspection JSON and a
+  disconnected streaming consumer terminates the child process.
+- Real loopback Paramiko tests verify structured stdin, literal forced command,
+  fragmented NDJSON output, failed exit/error handling and fingerprint mismatch.
+- Authenticated API tests cover cancel, single-use/expired/revision-bound reviews,
+  backup/operation conflicts, disk-save failure, output persistence and restart
+  interruption, YAML diffs/name overrides, favorites/layouts and XML parsing.
+  GoTTY JSON-port and HOST_IP output formats are covered; fcli reads the current
+  VM management network and rejects incompatible saved labs.
+- Browser fixture uses the supplied BGP topology with sanitized annotations and
+  twelve nodes. Verified lab header and sidebar right-click menus, cleanup review
+  cancellation, inspect confirmation/live output/success, YAML diff/cancel,
+  drag-and-save layout, project browser, popular catalog selection, clone details,
+  GoTTY port entry, and the new-tab SSH launcher with correct node-specific links.
+  No browser console errors observed. No real VM/device commands were run.
+  Screenshot: dist/lab-actions-1.11.0.png.
+- Latest fetched origin/main b20468e matches delivered 1.10.0 source except the
+  three ignore files. Source ZIP and patches target that commit, previous 1.10.0
+  delivery and original baseline 06b8624; packaging checks reconstruct the source.
+- Windows has no Docker/Containerlab/Linux host service here. Actual root helper
+  installation, flock/process-group behavior, Docker image build, lifecycle
+  operations and external SSHX/GoTTY/fcli services require a disposable Linux lab.
+  These are not claimed as live deployment validation.
+
+## Earlier release evidence
+
 # Validation — Containerlab Node Manager 1.10.0 (2026-09-10)
 
 ## 1.10.0 evidence

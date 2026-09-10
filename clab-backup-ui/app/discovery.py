@@ -377,6 +377,10 @@ class Discovery:
                                          imported=name in linked, excluded=name in state.get('ignored_labs', [])) for name,nodes in info.get('labs', {}).items()])
 
     def install(self, app, public_lab):
+        def idle(lab_id=None):
+            from .lab_operations import operation_busy
+            if operation_busy(self.store.state,lab_id): raise HTTPException(409, 'Wait for the lab operation to finish.')
+
         class HostSettings(BaseModel):
             model_config = ConfigDict(extra='forbid')
             address: str = Field(max_length=253)
@@ -400,6 +404,7 @@ class Discovery:
                 endpoint = address(data.address.strip()); username = literal(data.username.strip(), 'VM username',128)
                 if not username: raise ValueError('Enter a VM username')
                 with self.store.lock:
+                    idle()
                     old = self.store.state.get('host', {})
                     same = (old.get('address'),old.get('port'),old.get('username'),old.get('auth')) == (endpoint,data.port,username,data.auth)
                     host = dict(address=endpoint,port=data.port,username=username,auth=data.auth,
@@ -472,6 +477,7 @@ class Discovery:
         def import_discovered(data: ConfirmImport):
             self.refresh(wait=True)
             with self.store.lock:
+                idle()
                 state = self.store.state
                 preview = self.import_previews.get(data.token)
                 if not preview or preview['name'] != data.name or preview['expires'] < time.monotonic():
@@ -505,6 +511,7 @@ class Discovery:
             # source after the VM or its files have changed.
             self.refresh(wait=True)
             with self.store.lock:
+                idle(lab_id)
                 lab = self.store.lab(lab_id)
                 if not lab: raise HTTPException(404, 'Lab not found')
                 bundle = self.sources.get(lab.get('deployment_name'))
@@ -530,6 +537,7 @@ class Discovery:
                 prefix = identifier(data.prefix,'Container prefix') if data.prefix else ''
             except ValueError as exc: raise HTTPException(400,str(exc))
             with self.store.lock:
+                idle(lab_id)
                 lab = self.store.lab(lab_id)
                 if not lab: raise HTTPException(404,'Lab not found')
                 if name and any(l['id']!=lab_id and l.get('deployment_name')==name for l in self.store.state['labs']):
@@ -558,6 +566,7 @@ class Discovery:
                 await definition.close()
                 if annotations: await annotations.close()
             with self.store.lock:
+                idle(lab_id)
                 lab = self.store.lab(lab_id) if lab_id else next((l for l in self.store.state['labs'] if l.get('deployment_name')==parsed['deployed_name']),None)
                 if lab_id and not lab: raise HTTPException(404,'Lab not found')
                 if not lab_id and lab is None:

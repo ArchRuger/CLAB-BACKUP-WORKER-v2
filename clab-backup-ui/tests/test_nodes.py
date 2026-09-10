@@ -137,7 +137,7 @@ class NodeTests(unittest.TestCase):
         self.assertNotIn(key, logs)
 
     def test_session_limit(self):
-        clients = [self.services.reserve() for _ in range(8)]
+        clients = [self.services.reserve() for _ in range(32)]
         self.assertEqual(self.post('/api/labs/lab/ssh-check', {'name': 'r1'}).status_code, 429)
         for client in clients:
             self.services.release(client)

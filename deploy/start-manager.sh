@@ -1,19 +1,29 @@
 #!/usr/bin/env bash
 # One host-side entry point for fresh setup and upgrades. Existing keys are retained.
 set -euo pipefail
-[[ $EUID -eq 0 && $# -le 1 ]] || { echo 'Usage: sudo bash deploy/start-manager.sh [discovery-public-key.pub]' >&2; exit 1; }
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+public_key_path=''; operations=false; operation_args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --enable-operations) operations=true; shift;;
+    --lab-root) [[ $# -ge 2 ]] || exit 64; operation_args+=("$1" "$2"); operations=true; shift 2;;
+    --allow-downloads|--allow-sharing) operation_args+=("$1"); operations=true; shift;;
+    --*) echo 'Unknown option. Use --enable-operations, --lab-root PATH, --allow-downloads or --allow-sharing.' >&2; exit 64;;
+    *) [[ -z "$public_key_path" ]] || exit 64; public_key_path=$1; shift;;
+  esac
+done
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(dirname -- "$script_dir")
 command -v docker >/dev/null || { echo 'Install Docker first; see FRESH-VM-GUIDE.md.' >&2; exit 1; }
 docker compose version >/dev/null
 docker info >/dev/null
-if [[ $# -eq 1 ]]; then
+if [[ -n "$public_key_path" ]]; then
   # Installing with a key is for a fresh account only; rotation remains explicit.
   if id clab-discovery >/dev/null 2>&1; then
     echo 'Discovery account already exists. Rerun without the public-key argument to retain its key.' >&2
     exit 1
   fi
-  bash "$script_dir/setup-discovery.sh" "$1"
+  bash "$script_dir/setup-discovery.sh" "$public_key_path"
 else
   if ! id clab-discovery >/dev/null 2>&1; then
     echo 'First launch requires your discovery public key: sudo bash deploy/start-manager.sh /absolute/path/to/key.pub' >&2
@@ -25,6 +35,10 @@ fi
 # Only the version is printed: its response may contain inventory credentials.
 expected=$(tr -d '\r\n' < "$repo_dir/clab-backup-ui/VERSION")
 /usr/local/sbin/clab-manager-inspect | /usr/bin/python3 "$script_dir/verify-helper.py" "$expected"
+if $operations || [[ -f /etc/clab-manager/operations.json ]]; then
+  bash "$script_dir/setup-operations.sh" "${operation_args[@]}"
+  printf '%s\n' '{"mode":"capabilities"}' | /usr/local/sbin/clab-manager-operate | /usr/bin/python3 "$script_dir/verify-operations.py" "$expected"
+fi
 bash "$script_dir/setup-vm.sh"
 cd -- "$repo_dir"
 docker compose -f clab-backup-ui/compose.yml build --pull --no-cache

@@ -23,6 +23,7 @@ from .node_services import NodeServices
 from . import topology
 from .discovery import Discovery, lab_status, node_available
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
+from .lab_operations import LabOperations, operation_busy
 from . import __version__
 
 APP=Path(__file__).parent
@@ -33,12 +34,14 @@ def create_app(data_dir=None):
     runner=Runner(store)
     services=NodeServices(store)
     discovery=Discovery(store)
+    operations=LabOperations(store,discovery)
     @asynccontextmanager
     async def lifespan(app):
         print(f'NOS Backup UI access token: {store.token}',flush=True)
         runner.start()
         discovery.start()
         yield
+        operations.close()
         discovery.close()
         services.close()
         runner.close()
@@ -48,6 +51,8 @@ def create_app(data_dir=None):
         return JSONResponse({"detail":"Check the request fields and upload sizes."},status_code=422)
     app.state.store=store; app.state.runner=runner
     app.state.discovery=discovery
+    app.state.operations=operations
+    operations.install(app)
     app.state.node_services=services
     services.install(app)
     topology.install(app,store)
@@ -86,6 +91,7 @@ def create_app(data_dir=None):
         response.headers['Content-Security-Policy']=f"default-src 'self'; script-src 'self'; style-src {styles}; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         return response
     def get_lab(lab_id):
+        if operation_busy(store.state,lab_id): raise HTTPException(409,'Wait for the lab operation to finish.')
         lab=store.lab(lab_id)
         if not lab: raise HTTPException(404,'Lab not found')
         return lab
@@ -108,7 +114,8 @@ def create_app(data_dir=None):
         with store.lock:
             return {'labs':[public_lab(l) for l in store.state['labs']],
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
-                    'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public()}
+                    'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
+                    'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])[-200:]]}
     class RemoveLab(BaseModel):
         model_config = ConfigDict(extra='forbid')
         name: str = Field(min_length=1, max_length=120)

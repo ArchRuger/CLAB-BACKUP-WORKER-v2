@@ -1,9 +1,11 @@
-# Standalone persistent Node Manager — 1.10.0
+# Standalone persistent Node Manager — 1.11.0
 
 Run one manager per engineer's Linux VM. It is a separate Docker Compose service,
 outside every containerlab topology. Lab deployment/destruction does not manage
 its lifecycle. The manager uses host networking for reachability and SSH for a
-fixed read-only inspection and bounded deployment file reads. It does not mount the Docker socket.
+fixed discovery and explicitly enabled privileged lab commands. It does not mount
+the Docker socket. See [LAB-OPERATIONS.md](LAB-OPERATIONS.md) to enable commands
+and configure trusted project roots while retaining the current key.
 
 For a VM with nothing installed, begin with [the complete fresh VM guide](FRESH-VM-GUIDE.md).
 This shorter guide covers an already prepared Linux host and old-worker migration.
@@ -25,7 +27,8 @@ or user-namespace remapping needs the equivalent mapped host ownership.
 The directory contains encrypted state (`state.enc`), its encryption key
 (`state.key`), the UI access token (`ui.token`), action logs and `backups/`.
 Imported lab YAML and host/device credentials are kept in encrypted state. API
-responses never return raw YAML, passwords, private keys or passphrases.
+state responses exclude raw YAML and credentials. The authenticated VM file editor
+can explicitly read original source files within trusted project roots.
 The key lives beside the encrypted state, so access to this directory permits
 recovery of secrets. Keep the directory private and back it up as a unit.
 
@@ -75,7 +78,7 @@ docker compose -f clab-backup-ui/compose.yml exec backup-ui \
 docker compose -f clab-backup-ui/compose.yml logs backup-ui
 ```
 
-Expect version **1.10.0**. The logs print the UI access token. Migrated data retains
+Expect version **1.11.0**. The logs print the UI access token. Migrated data retains
 its existing token. Open `http://VM_ADDRESS:8081` and unlock the workspace.
 Docker must start at VM boot; `restart: unless-stopped` restarts the manager with
 Docker unless you explicitly stopped it.
@@ -83,7 +86,7 @@ Docker unless you explicitly stopped it.
 Equivalent image-only build, from the repository root:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.10.0 ./clab-backup-ui
+docker build --pull --no-cache -t clab-backup:1.11.0 ./clab-backup-ui
 ```
 
 The final path is the required build context. Builds require the base image and
@@ -161,7 +164,7 @@ if you want to test immediate rediscovery. Both paths require confirmation befor
 a new workspace is saved; cancelling Import again retains its exclusion. Other labs and the VM connection remain.
 
 
-The 1.10.0 helper reads deployed lab files automatically. New labs wait for
+The 1.11.0 helper reads deployed lab files automatically. New labs wait for
 confirmation: click Ready to import, review files, and choose Import lab or Cancel. Existing
 workspaces show Updates available and offer **Sync from VM**, preserving matching
 node settings, credentials, profiles, schedules and history. Missing files never
@@ -169,7 +172,7 @@ delete a saved workspace. Optional files must be valid and match the YAML; inval
 files block sync without partial changes. A missing annotation retains an existing
 map. Original YAML is required. New labs can import the YAML while reporting an
 invalid optional file; credentials from a mismatched inventory are skipped.
-Old inspection-only helpers discover nodes only. Update the helper for 1.10.0.
+Old inspection-only helpers discover nodes only. Update the helper for 1.11.0.
 The standard generated folder beside the YAML is tried even without Docker labels.
 **Discovery file details** shows paths and results; clicking a detected lab retries
 automatic import before offering manual upload.

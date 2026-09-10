@@ -75,7 +75,7 @@ class NodeServices:
 
     def reserve(self):
         with self.lock:
-            if self.closed or len(self.clients) >= 8:
+            if self.closed or len(self.clients) >= 32:
                 raise HTTPException(429, 'SSH session limit reached; close a session and retry.')
             client = paramiko.SSHClient()
             self.clients.add(client)

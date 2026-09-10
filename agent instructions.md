@@ -1,5 +1,19 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.11.0 addendum — approved lab-level operations
+
+User approved all lab-level commands in LAB-COMMANDS-PLAN.md. This supersedes
+older read-only-only scope statements for explicitly enabled host operations.
+No individual node lifecycle/interface tools were requested. Read LAB-OPERATIONS.md.
+Host helper uses a forced SSH gateway, structured stdin, fixed argv, trusted roots,
+review digests and one host flock. Keep Remove lab manager-only; VM source deletion
+is separate and preserves recovery copies. Existing keys/data survive setup.
+Operations, output and favorites persist; pending operations become Interrupted
+on restart. Guard backups/sync/import/removal against concurrent operations.
+Never operate real training deployments as a test without specific authorization.
+VM source folder is ~/projects/v1.11.0. Latest origin/main b20468e matches the
+1.10.0 delivery except three ignore files. Keep release ZIP/patches in ignored dist/.
+
 ## Release 1.10.0 addendum — setup preflight and import confirmation
 
 User requested normal setup to avoid stale helpers and confirmation for VM imports.

@@ -97,7 +97,9 @@ class Runner:
         self.stopping.set()
         self.pool.shutdown(wait=False,cancel_futures=True)
     def submit(self, lab_id, operation='backup', source='manual', node_names=None):
+        from .lab_operations import operation_busy
         with self.store.lock:
+            if operation_busy(self.store.state,lab_id): raise ValueError('Wait for the lab operation to finish.')
             if any(j['status'] in ('queued','running') for j in self.store.state['jobs']):
                 raise ValueError('A job is already running. Wait for it to finish.')
             lab=self.store.lab(lab_id)

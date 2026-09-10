@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state={labs:[],jobs:[],platforms:{}}, activeId=sessionStorage.getItem('activeLab')||'', tab='inventory', toastTimer;
 const current=()=>state.labs.find(l=>l.id===activeId);
-const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status));
+const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status))||(state.operations||[]).some(j=>['queued','running'].includes(j.status));
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 async function api(path,options={}){
  const headers={Authorization:'Bearer '+(sessionStorage.getItem('uiToken')||''),...(options.headers||{})};
@@ -22,8 +22,8 @@ function badge(status){const type=['Ready','succeeded','reachable'].includes(sta
 function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platform||'ssh'];return lab.profiles.find(p=>p.id===id)?.label||(node.inventory_credentials?'From inventory':'Not configured');}
 function render(){
  const lab=current();
- $('labs').innerHTML=state.labs.length?state.labs.map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${esc(l.name)}<small>${l.nodes.length} nodes · ${esc(l.deployment?.status||'Unlinked')}</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
- $('app-version').textContent='v'+(state.version||'1.10.0');
+ $('labs').innerHTML=state.labs.length?[...state.labs].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)).map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${l.favorite?'★ ':''}${esc(l.name)}<small>${l.nodes.length} nodes · ${esc(l.deployment?.status||'Unlinked')}</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
+ $('app-version').textContent='v'+(state.version||'1.11.0');
  $('worker-state').textContent=busy()?'SSH job in progress':'Worker idle';
  $('empty').hidden=!!lab;$('lab-content').hidden=!lab;
  $('title').textContent=lab?.name||'Your next lab starts here.';$('breadcrumb').textContent=lab?.name||'Overview';
@@ -31,6 +31,7 @@ function render(){
  $('import-top').textContent=lab?'↑ Replace inventory':'↑ Import inventory';
  $('updated').textContent=lab?'Inventory updated '+new Date(lab.updated).toLocaleString():'No inventory loaded';
  if(typeof renderManagement==='function')renderManagement();
+ if(typeof renderLabOperations==='function')renderLabOperations();
  if(!lab)return;
  $('node-count').textContent=lab.nodes.length;
  const enabled=lab.nodes.filter(n=>n.enabled), ready=enabled.filter(n=>n.readiness==='Ready');

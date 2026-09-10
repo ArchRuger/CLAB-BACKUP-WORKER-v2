@@ -115,7 +115,7 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(short_name({'name':'long','short_name':'PE-1'}),'PE-1')
     def test_state_exposes_release_names_and_utc(self):
         state=self.get('/api/state').json()
-        self.assertEqual(state['version'],'1.10.0')
+        self.assertEqual(state['version'],'1.11.0')
         self.assertEqual(state['jobs'][0]['download_timezone'],'UTC')
         self.assertIn('archive_name',state['jobs'][0])
         self.assertTrue(all(n.get('download_name') for n in state['jobs'][0]['nodes']))

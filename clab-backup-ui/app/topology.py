@@ -227,6 +227,8 @@ def install(app,store):
             await annotations.close()
             if topology: await topology.close()
         with store.lock:
+            from .lab_operations import operation_busy
+            if operation_busy(store.state,lab_id): raise HTTPException(409,'Wait for the lab operation to finish.')
             lab=lab_for(lab_id); lab['drawing']=result; store.save()
             store.event('topology.import',f'Imported {len(result["nodes"])} drawing nodes and {len(result["links"])} links',lab_id=lab_id)
             return bind_drawing(lab)
