@@ -214,5 +214,6 @@ PY
   apt_install "$temporary/clab.deb"
   chmod 0755 /usr/bin/containerlab
   containerlab version
+  echo 'Containerlab uses sudo on this VM. Manager operations use the restricted gateway; clab_admins membership is not required.'
 fi
 echo 'Selected prerequisites are ready. Existing labs and manager data were retained.'

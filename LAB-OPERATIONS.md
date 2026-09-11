@@ -1,18 +1,18 @@
-# Lab operations — Containerlab Node Manager 1.15.1
+# Lab operations — Containerlab Node Manager 1.18.1
 
 ## Upgrade
 
-Place the source directly in `~/projects/v1.15.1`, containing `deploy/` and
+Place the source directly in `~/projects/v1.18.1`, containing `deploy/` and
 `clab-backup-ui/`. Copy any customized `clab-backup-ui/.env` from the older folder.
 Keep the persistent directory and existing VM password.
 
 ```bash
-cd "$HOME/projects/v1.15.1"
+cd "$HOME/projects/v1.18.1"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui
 ```
 
-The script first checks source release consistency, refreshes and verifies host helpers, builds `clab-backup:1.15.1`
+The script first checks source release consistency, refreshes and verifies host helpers, builds `clab-backup:1.18.1`
 without cache and recreates the manager. Open `http://VM_IP:8081`; no UI login is
 required. Linux host networking uses this port directly, without `-p` forwarding.
 Data stays in `/srv/containerlab-node-manager/data` (UID/GID 10001, mode 700).
@@ -123,6 +123,9 @@ manager-only scope; neither deletes original VM sources or deployment containers
 If discovery works but commands fail, repair the operations gateway and permissions
 using [VM-CONNECTION.md](VM-CONNECTION.md). A stale image-only upgrade does not
 refresh host scripts. Updating both through start-manager is the normal workflow.
+The launcher checks the restricted gateway before building. For the older checker's
+false sudo failures and the operations SSH response fix, follow
+[the health report recovery procedure](HEALTH-CHECK.md#recover-the-operations-helper-error).
 
 ## Save lab progress to Git
 

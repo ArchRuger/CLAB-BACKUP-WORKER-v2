@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.18.0
+# Containerlab Node Manager — 1.18.1
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.18.0 deployment:** Build the new source and create the VM password using
+**1.18.1 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -31,6 +31,19 @@ and [migration instructions](STANDALONE-SETUP.md).
 ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
+
+## Changes in 1.18.1
+
+Fixes operations SSH reads that could stop at the exit-status packet before the
+helper's final response arrived. The manager now waits for stream EOF, retains
+bounded diagnostics, and distinguishes missing gateway and sudo-permission errors.
+The launcher also checks helpers through `clab-discovery` before building the image.
+
+The health checker retains its terminal session for sudo authentication. Earlier
+1.17.0/1.18.0 checkers could report administrator access PASS followed by false
+failures for every privileged check. On those releases, rerun the same report
+with `sudo bash deploy/check-install.sh --owner archtop` (use your ordinary account).
+See [the health report guide](HEALTH-CHECK.md) for the complete recovery procedure.
 
 ## Changes in 1.18.0
 
@@ -58,8 +71,9 @@ because of its nested architecture; adding this manager adapter does not change
 that deployment requirement. See the [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/)
 and [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) kind guides.
 
-Prepared locally from published main `712662f` (1.17.0). Publication, a complete
-fresh-VM run and live SSH/backup validation of these two NOS images remain pending.
+The Junos support was merged in main `7331e9a` (1.18.0). Live SSH/backup
+validation of these two NOS images remains pending. The 1.18.1 fixes are prepared
+from that baseline; publication and a complete fresh-VM validation remain pending.
 
 ## Changes in 1.17.0
 
@@ -263,7 +277,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.18.0
+cd ~/projects/v1.18.1
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

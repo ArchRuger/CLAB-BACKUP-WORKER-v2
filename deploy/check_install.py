@@ -123,9 +123,13 @@ class Context:
             stop()
 
         try:
+            # Keep the caller's session and controlling terminal: sudo's normal
+            # timestamp is bound to that session. setsid/start_new_session would
+            # make sudo -n reject an otherwise valid sudo -v authentication.
+            # A separate process group still lets the watchdog stop descendants.
             process = subprocess.Popen(args, stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
                                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                       env=env, start_new_session=True)
+                                       env=env, process_group=0)
             timer = threading.Timer(duration + (2 if privileged and os.geteuid() != 0 else 0), expire)
             timer.start()
             try:
@@ -631,9 +635,15 @@ def main(argv=None):
         except (OSError, subprocess.TimeoutExpired):
             pass
     ctx = Context(args, owner, privileged)
+    # Exercise the same subprocess path used by the checks before claiming that
+    # administrator inspection is available. A successful interactive sudo probe
+    # alone says nothing about authentication in a detached child session.
+    privileged = privileged and ctx.run(['/usr/bin/true'], privileged=True, timeout=5).ok
+    ctx.privileged = privileged
     ctx.add('privileges', 'PASS' if privileged else 'FAIL', 'Administrator inspection access',
-            'Read/query commands can use sudo.' if privileged else 'Privileged checks cannot run.',
-            'Run from your normal sudo-capable VM account; approve sudo when prompted.')
+            'The health-check command runner can execute administrator queries.' if privileged else
+            'Administrator queries could not run through the health-check command runner; service health has not been established.',
+            'Rerun sudo bash deploy/check-install.sh --owner YOUR_VM_USER with the same check options, or approve sudo when prompted.')
     if not owner:
         ctx.add('owner', 'WARN', 'Normal VM account', 'Account-specific SSH/SFTP checks need a normal account.',
                 'Run without sudo as your ordinary account, or supply --owner YOUR_VM_USER.')
@@ -647,6 +657,11 @@ def main(argv=None):
             ctx.add('deadline', 'SKIP', 'Remaining checks', 'Overall report time budget expired.',
                     'Resolve slow/unreachable services or rerun with a larger --deadline.')
             break
+        if not ctx.privileged and title not in ('Source release', 'Ubuntu, clock and SSH/SFTP'):
+            ctx.add('privilege-skip-' + str(len(ctx.checks)), 'SKIP', title,
+                    'Administrator inspection access is unavailable; this is not evidence of a broken or missing service.',
+                    'Resolve the Administrator inspection access failure and rerun the report.')
+            continue
         ctx.progress('Checking ' + title + '...')
         try:
             fn(ctx)

@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.18.0
+# Containerlab Node Manager — 1.18.1
 
 Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
 ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
@@ -16,6 +16,19 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 **Building from source?** Follow the [Fresh VM installation guide](../FRESH-VM-GUIDE.md).
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
+
+## Changes in 1.18.1
+
+Fixes operations SSH reads that could stop at the exit-status packet before the
+helper's final response arrived. The manager now waits for stream EOF, retains
+bounded diagnostics, and distinguishes missing gateway and sudo-permission errors.
+The launcher also checks helpers through `clab-discovery` before building the image.
+
+The health checker retains its terminal session for sudo authentication. Earlier
+1.17.0/1.18.0 checkers could report administrator access PASS followed by false
+failures for every privileged check. On those releases, rerun the same report
+with `sudo bash deploy/check-install.sh --owner archtop` (use your ordinary account).
+See [the health report guide](../HEALTH-CHECK.md) for the complete recovery procedure.
 
 ## Changes in 1.18.0
 
@@ -132,7 +145,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.18.0
+cd ~/projects/v1.18.1
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

@@ -1,3 +1,35 @@
+# Operations helper and installation diagnostics — 1.18.1
+
+- Prepared from merged main `7331e9a` (1.18.0) on `codex/operations-helper-fix`.
+  Commit, push, publication and VM deployment remain pending.
+- Reproduced the exact generic operations-helper error in two real localhost SSH
+  tests before changing the client: exit status arriving before the final JSON
+  result, including a fragmented 160 KiB response. Both pass with EOF-based reads.
+  This establishes a transport defect; it does not prove the cause on the user's VM.
+- All 14 real SSH regressions pass, including streamed output, fingerprint pinning,
+  late output, nonzero/missing exit status, incomplete JSON, bounded stderr and
+  controlled diagnostic messages without leaked stderr secrets.
+- The 133-test application/health/installer regression run passed with two skips:
+  131 passed; the Linux controlling-terminal regression and symlink creation test
+  could not run on this Windows host. Host services and permission probes are
+  mocked; the localhost SSH tests use Paramiko, not Ubuntu OpenSSH.
+- The checker now retains its terminal/session for sudo's authentication timestamp,
+  and tests the actual query runner before reporting administrator access PASS.
+  This corrects the false-failure pattern in the user's 1.18.0 report. The root-run
+  workaround is documented; the corrected live VM report is still outstanding.
+- The delegated gateway suite adds 12 passing tests and two Linux-only process
+  regressions skipped here: 147 tests selected overall, 143 passed and four skipped.
+  It covers sudo denial, missing capabilities, invalid versions, timeout/overflow
+  cleanup, failed pipe reads and unfinished readers without exposing helper output.
+- The launcher additionally checks the restricted gateway and core capabilities
+  before rebuilding. These are read-only preflight queries, not a lab deployment.
+- Source metadata verifies as 1.18.1. ShellCheck, Python syntax, workflow YAML,
+  documentation links/fences and Git whitespace checks passed. CI includes the
+  SSH, operations and delegated gateway suites; this branch's CI has not run yet.
+- No Docker image build, real fresh Ubuntu install, live gateway/sudo check or lab
+  deployment was performed. The saved VM account and live deployment outcome still
+  need verification on the user's VM. No existing labs or credentials were changed.
+
 # Juniper vQFX and vJunos-switch — 1.18.0
 
 - Prepared from merged main `712662f` (1.17.0) on `codex/junos-switch-kinds`.

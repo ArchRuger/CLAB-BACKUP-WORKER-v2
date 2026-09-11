@@ -1,11 +1,11 @@
-# Check an installed VM — 1.18.0
+# Check an installed VM — 1.18.1
 
 Run the second script after installation and browser setup to get a clear
 **PASS / FAIL / WARN / SKIP / INFO** report with the next action for each problem.
 It checks the current installation and does not repair it automatically.
 
-This guide targets **1.18.0**, based on published main `712662f` (**1.17.0**),
-which introduced the checker. Obtain the complete matching source after publication;
+This guide targets **1.18.1**, prepared from published main `7331e9a` (**1.18.0**).
+It fixes the checker's sudo session handling. Obtain complete matching source after publication;
 copying only the launcher omits the Python check modules it needs. An earlier
 installed manager will be reported as a version mismatch until upgraded.
 
@@ -18,7 +18,8 @@ bash deploy/check-install.sh
 ```
 
 Approve the sudo prompt for host inspection. Run without a leading `sudo` so
-the checker detects the ordinary account used for WinSCP. You can also select
+the checker detects the ordinary account used for WinSCP. A leading `sudo` is
+also supported: the checker uses `SUDO_USER`, or an explicit `--owner archtop`. You can also select
 **3. Check running installation** in `bash deploy/install.sh`.
 
 Before this final check, complete **VM connection → Save and test connection**,
@@ -72,7 +73,7 @@ FAILURES FOUND
   The backup-ui container is running.
 [FAIL] Operations helper through restricted account
   Helper responds as root but not correctly through clab-discovery; check gateway/sudoers.
-  Next: sudo bash /home/archtop/projects/v1.18.0/deploy/setup-operations.sh
+  Next: sudo bash /home/archtop/projects/v1.18.1/deploy/setup-operations.sh
 [FAIL] Topology browser over saved SSH connection
   The uncached browser request failed: HTTP 409
 [INFO] Git repository 1: push permission
@@ -138,11 +139,42 @@ specific folder and a larger budget. A timed-out check is never counted as passe
 
 ## Recover the operations-helper error
 
-The launcher's earlier root capability check did not exercise the restricted
-account's sudo permission, the manager's saved SSH connection, or each actual
-folder. A running manager and a successful root check can therefore coexist with
-**“Operations helper is unavailable”** in the topology browser. That message
-alone does not identify the failed layer; use the new report to separate them.
+**If 1.17.0/1.18.0 reports administrator access PASS but Docker, SSH and every
+helper fail together**, first rerun the report as root. Those checker versions
+start commands in detached sessions which cannot reuse Ubuntu's terminal-scoped
+sudo authentication. Do not treat that pattern alone as a broken VM:
+
+```bash
+sudo bash deploy/check-install.sh --owner archtop --lab-path /etc/containerlab/vJunOS-SW
+```
+
+Substitute your ordinary account and actual folder. This workaround works on the
+existing source. Version 1.18.1 preserves the session while keeping command
+process groups and timeouts, and verifies privilege using the same command runner.
+
+The 1.18.1 launcher checks the restricted account's gateway and sudo permissions
+before building. The browser's saved SSH connection and actual folders still
+need the report after browser setup. Use **clab-discovery** as the saved VM
+username with **installed helper** mode; `archtop` is the ordinary Git/SFTP owner.
+An ordinary SSH shell does not implement the `clab-manager-operations` command.
+
+The manager's SSH reader also used to stop at exit status before the stream
+ended. A delayed final result reproduced the exact generic helper error in a
+local SSH test. Upgrading both image and helpers to 1.18.1 fixes that reader;
+a helper-only refresh cannot update code inside the running image:
+
+```bash
+sudo bash deploy/start-manager.sh --enable-operations
+```
+
+Run this from complete 1.18.1 source after publication, retaining any customized
+`.env` settings when moving to a new source folder. No automatic lab deployment
+or retry is performed. If a lifecycle command was interrupted, inspect current
+lab state before approving another operation.
+
+`clab_admins` is not required for manager operations. The installer deliberately
+keeps new Containerlab installations without SUID/group elevation; the fixed
+helper runs Containerlab through its restricted sudo rule.
 
 For an existing VM whose discovery account is already set up, refresh only the
 operations installation from its **matching source checkout**:
@@ -159,7 +191,7 @@ installer first. Use the existing installed release's source for a helper-only
 repair; a release upgrade should update the manager and helpers together.
 
 If local helper execution passes but browser SSH fails, review **VM connection**
-address, password and fingerprint. If only one folder fails, verify its existence
+address, username, installed-helper mode, password and fingerprint. If only one folder fails, verify its existence
 and that its path is within a trusted root without symlink components. The checker
 does not create folders, change their ownership, or broaden trusted roots.
 
