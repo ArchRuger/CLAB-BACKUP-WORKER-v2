@@ -1,3 +1,16 @@
+# Repository consistency repair — 1.15.1
+
+- Audited current GitHub main b0389ba and reproduced its source/helper version
+  mismatch. Corrected VERSION to match the existing 1.15.1 runtime components.
+- Seven release-consistency tests and four helper-preflight tests passed. Cases
+  include the stale VERSION file, each runtime metadata location, empty lab
+  inventory, malformed responses, and version errors without credential leakage.
+- Source consistency check, launcher ShellCheck and Git whitespace checks passed.
+- New GitHub Actions workflow is prepared but has not run on GitHub. Docker build
+  and fresh-VM launch have not been executed here. No remote push was performed.
+- Existing runtime code is retained; the historical full-suite results below
+  describe their original runs, not a new full-suite run for this cleanup.
+
 # Git progress validation — 1.15.0
 
 - Baseline: GitHub main 160fe5e. This cumulative source release includes the prior
