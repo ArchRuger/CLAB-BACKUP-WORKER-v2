@@ -25,6 +25,7 @@ from .downloads import migrate_download_metadata, decorate_job, config_names, ar
 from .lab_operations import LabOperations, operation_busy
 from .git_progress import GitProgress, public_job as public_git_job
 from . import __version__
+from .diagnostics import Diagnostics
 
 APP=Path(__file__).parent
 
@@ -95,6 +96,9 @@ def create_app(data_dir=None):
         styles="'self' 'unsafe-inline'" if request.url.path=='/static/terminal.html' else "'self'"
         response.headers['Content-Security-Policy']=f"default-src 'self'; script-src 'self'; style-src {styles}; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         return response
+    diagnostics = Diagnostics(store, discovery, operations)
+    app.state.diagnostics = diagnostics
+    diagnostics.install(app)
     def get_lab(lab_id):
         if operation_busy(store.state,lab_id): raise HTTPException(409,'Wait for the lab operation to finish.')
         lab=store.lab(lab_id)

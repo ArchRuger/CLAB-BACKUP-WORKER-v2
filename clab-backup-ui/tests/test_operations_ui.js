@@ -47,3 +47,30 @@ test('deployment landing page opens topology browser only on an explicit click',
  await page.launchWorkspace();
  assert.equal(browses,0);assert.equal(element('workspace-title').textContent,'Deploy New Lab');
 });
+
+test('browse renders before capabilities settle, survives failure and retries folders',async()=>{
+ const elements=new Map();
+ const element=()=>({children:[],isConnected:true,textContent:'',append(...items){this.children.push(...items);},replaceChildren(...items){this.children=items;}});
+ const get=id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id);};
+ let rejectCaps,folderCalls=0;
+ const page=vm.createContext({$:id=>id==='import-top'?null:get(id),esc:String,document:{createElement:element},
+  json:async(url,method,data)=>{
+   if(data.path==='/root/nested'){
+    if(++folderCalls===1)throw new Error('Temporary folder failure');
+    return {entries:[{name:'lab.clab.yaml',path:'/root/nested/lab.clab.yaml',directory:false}]};
+   }
+   return {path:'/root',entries:[{name:'nested',path:'/root/nested',directory:true}]};
+  },api:()=>new Promise((resolve,reject)=>{rejectCaps=reject;})});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),page);
+ page.opDialog=()=>({querySelector:()=>get('help')});
+ await page.opBrowse('/root');
+ assert.equal(get('op-file-tree').children.length,1);
+ assert.equal(get('op-clone').disabled,true);
+ rejectCaps(new Error('Capability failure'));
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.match(get('help').textContent,/Files are available/);
+ const folder=get('op-file-tree').children[0];folder.open=true;await folder.ontoggle();
+ assert.match(folder.children[1].textContent,/Close and reopen/);
+ folder.open=false;await folder.ontoggle();folder.open=true;await folder.ontoggle();
+ assert.equal(folderCalls,2);assert.equal(folder.children[1].children[0].textContent,'◇ lab.clab.yaml');
+});

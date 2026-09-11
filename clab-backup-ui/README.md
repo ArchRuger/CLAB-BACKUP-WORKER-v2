@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.18.1
+# Containerlab Node Manager — 1.19.0
 
 Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
 ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
@@ -16,6 +16,22 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 **Building from source?** Follow the [Fresh VM installation guide](../FRESH-VM-GUIDE.md).
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
+
+## Changes in 1.19.0
+
+Adds a [development debug panel](../DEBUG-PANEL.md) available before any lab is imported.
+Inspect runtime versions, VM readiness, recent API failures and independent
+read-only folder/helper checks, then download a metadata-only JSON report.
+Credentials, paths, request payloads and raw logs are excluded.
+
+Fixes a remaining file-browser failure: a successful folder listing no longer
+waits for command-capability checks. Files render immediately; failed command
+checks disable only optional online controls and show a diagnostic hint.
+The existing 1.18.1 SSH stream and gateway fixes are retained.
+
+Run `bash deploy/install.sh` from the complete source root on the VM to update,
+then verify Release 1.19.0 in Debug panel. Source delivery only; no image
+publication or VM deployment is implied.
 
 ## Changes in 1.18.1
 
