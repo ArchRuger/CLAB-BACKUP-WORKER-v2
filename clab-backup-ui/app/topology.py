@@ -186,7 +186,8 @@ def bind_drawing(lab):
     return result
 
 
-DEFAULT_USERS={'juniper_cjunosevolved':'admin','cisco_xrv9k':'clab','arista_ceos':'admin'}
+DEFAULT_USERS={'juniper_cjunosevolved':'admin','juniper_vqfx':'admin','juniper_vjunosswitch':'admin',
+               'cisco_xrv9k':'clab','arista_ceos':'admin'}
 
 
 def session_xml(lab, include_passwords=False):

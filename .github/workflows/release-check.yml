@@ -29,3 +29,10 @@ jobs:
           for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh; do
             bash -n "$script"
           done
+      - name: Install application test dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/clab-test-venv"
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m pip install -r clab-backup-ui/requirements.txt 'httpx>=0.27,<1'
+      - name: Check Junos kind support
+        working-directory: clab-backup-ui
+        run: '"$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_junos_kinds.py -v'

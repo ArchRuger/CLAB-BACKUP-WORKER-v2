@@ -1,3 +1,26 @@
+# Juniper vQFX and vJunos-switch — 1.18.0
+
+- Prepared from merged main `712662f` (1.17.0) on `codex/junos-switch-kinds`.
+  Commit, push, publication and VM deployment remain pending.
+- 118 focused tests selected: 114 passed and four Linux-only checks skipped on
+  this Windows host. Coverage includes 14 new Junos-kind tests plus application,
+  discovery, VM import, downloads, Git progress, topology, release consistency
+  and helper-preflight regressions.
+- The new tests exercise canonical/legacy kind imports, generic Junos driver
+  precedence and conflicting groups, saved-node sync with retained selection,
+  credentials and manual endpoints, distinct credential defaults, generated
+  Junos commands, `.set` captures, immutable download naming, Git manifest/byte
+  preservation and SuperPuTTY usernames. Device and Git processes are mocked;
+  temporary captured fixtures do not demonstrate a live NOS backup or push.
+- Source release verification reports 1.18.0. Python syntax, workflow YAML,
+  documentation links/fences and Git whitespace checks passed. CI now includes
+  the Junos-kind suite with application test dependencies; that workflow has
+  not yet run on GitHub for this branch.
+- No Docker image build, live SSH/backup against either new NOS, or VM deployment
+  was performed. Existing cJunos behavior and historical capture metadata are
+  retained. Manager support does not remove Containerlab's documented restriction
+  on deploying vJunos-switch inside another VM; this is covered in the VM guides.
+
 # Installation health report — 1.17.0
 
 - Prepared from merged main `7c25648` (1.16.1), retaining the pending WinSCP

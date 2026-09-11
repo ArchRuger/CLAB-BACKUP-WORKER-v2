@@ -1,11 +1,11 @@
-# Check an installed VM — 1.17.0
+# Check an installed VM — 1.18.0
 
 Run the second script after installation and browser setup to get a clear
 **PASS / FAIL / WARN / SKIP / INFO** report with the next action for each problem.
 It checks the current installation and does not repair it automatically.
 
-This feature is prepared locally for **1.17.0**, based on published main
-`7c25648` (**1.16.1**). Obtain the complete matching source after publication;
+This guide targets **1.18.0**, based on published main `712662f` (**1.17.0**),
+which introduced the checker. Obtain the complete matching source after publication;
 copying only the launcher omits the Python check modules it needs. An earlier
 installed manager will be reported as a version mismatch until upgraded.
 
@@ -72,7 +72,7 @@ FAILURES FOUND
   The backup-ui container is running.
 [FAIL] Operations helper through restricted account
   Helper responds as root but not correctly through clab-discovery; check gateway/sudoers.
-  Next: sudo bash /home/archtop/projects/v1.17.0/deploy/setup-operations.sh
+  Next: sudo bash /home/archtop/projects/v1.18.0/deploy/setup-operations.sh
 [FAIL] Topology browser over saved SSH connection
   The uncached browser request failed: HTTP 409
 [INFO] Git repository 1: push permission
