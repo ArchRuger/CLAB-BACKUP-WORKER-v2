@@ -42,6 +42,7 @@ class DiscoveryTests(unittest.TestCase):
         self.service=self.app.state.discovery
 
     def tearDown(self):
+        self.app.state.git_progress.close()
         self.service.close();self.app.state.runner.close();self.app.state.node_services.close()
         self.client.close();self.tmp.cleanup()
 

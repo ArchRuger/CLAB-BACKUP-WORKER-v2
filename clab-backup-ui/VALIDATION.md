@@ -1,3 +1,38 @@
+# Git progress validation — 1.15.0
+
+- Baseline: GitHub main 160fe5e. This cumulative source release includes the prior
+  VM password and UI/diagram changes documented below.
+- Full Python suite: 204 tests run, 198 passed, 6 platform/opt-in skips.
+  Includes 20 host Git tests (real disposable repositories/bare remotes and mocked
+  production dispatch), 19 coordinator tests, four bounded SSH transport tests,
+  and five worker logging/persistence recovery tests. Existing backup, password,
+  topology, file-transfer and lab-operation regressions also passed.
+- Real Git cases cover exact artifact bytes, unrelated/staged work, foreign
+  outgoing commits, no-op saves, baseline-only changes, checkpoint uniqueness,
+  changed remotes, fast-forward updates/divergence, failed pushes, ancestor-save
+  reconciliation, interrupted writes/commits and retries after owner repairs.
+  A no-change save compares as empty; long and reserved device names export safely.
+- Coordinator tests cover exact selected scope, incomplete captures, provenance,
+  idempotency, review preferences, retry-without-push, lost replies, capture-ID
+  persistence failure, restart recovery, pending-save guards and version ZIPs.
+- JavaScript: 38 tests passed, including 14 Git workflow tests for payloads,
+  escaped output, destination acknowledgement, historical target selection,
+  request-ID reuse, double-click prevention and modal/polling behavior.
+- Browser QA used an isolated local manager, synthetic device captures and real
+  local Git checkouts/remotes. Checked repository selection, one-click save,
+  diff/version viewing, ZIP download, checkpoint capture, failed push and retry,
+  and baseline from an older capture. Verified retry created no new capture and
+  baseline left latest untouched. No real VM/device/remote account was accessed.
+- ShellCheck passed for setup-git.sh, start-manager.sh and clab-manager-gateway.
+  Deploy shell files remain LF; Python source/embedded setup code compile.
+- The source ZIP and cumulative patch are verified against clean 160fe5e. The
+  package excludes preview state, environments, real captures and credentials.
+- Linux sudo/UID transitions, the owner's noninteractive HTTPS credential helper,
+  Docker image build and real NOS captures still require deployment validation.
+  Mocked privilege-order checks do not establish live Linux permission behavior.
+  No GitHub push, registry publication or deployment was performed. Load version
+  retrieves files; applying configurations to live devices remains unavailable.
+
 # UI and diagram validation — 1.14.0
 
 - Baseline: GitHub main 160fe5e; includes the 1.13.0 VM password changes below.

@@ -23,6 +23,7 @@ from . import topology
 from .discovery import Discovery, lab_status, node_available
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
 from .lab_operations import LabOperations, operation_busy
+from .git_progress import GitProgress, public_job as public_git_job
 from . import __version__
 
 APP=Path(__file__).parent
@@ -34,12 +35,14 @@ def create_app(data_dir=None):
     services=NodeServices(store)
     discovery=Discovery(store)
     operations=LabOperations(store,discovery)
+    git_progress=GitProgress(store,runner)
     @asynccontextmanager
     async def lifespan(app):
         print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
         runner.start()
         discovery.start()
         yield
+        git_progress.close()
         operations.close()
         discovery.close()
         services.close()
@@ -52,6 +55,8 @@ def create_app(data_dir=None):
     app.state.discovery=discovery
     app.state.operations=operations
     operations.install(app)
+    app.state.git_progress=git_progress
+    git_progress.install(app)
     app.state.node_services=services
     services.install(app)
     topology.install(app,store)
@@ -121,6 +126,7 @@ def create_app(data_dir=None):
         try:
             with store.lock, services.lock:
                 operations.guard()
+                git_progress.guard_pending()
                 if services.clients or services.checking:
                     raise HTTPException(409, 'Close SSH sessions and wait for connection checks before resetting.')
                 try: store.reset()
@@ -137,6 +143,7 @@ def create_app(data_dir=None):
             return {'labs':[public_lab(l) for l in store.state['labs']],
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
                     'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
+                    'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])[-200:]],
                     'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])[-200:]]}
     class RemoveLab(BaseModel):
         model_config = ConfigDict(extra='forbid')
@@ -147,6 +154,7 @@ def create_app(data_dir=None):
     def remove_lab(lab_id: str, data: RemoveLab):
         with store.lock:
             lab = get_lab(lab_id)
+            git_progress.guard_pending(lab_id)
             if data.name != lab['name']:
                 raise HTTPException(409, 'The lab name changed. Reopen Remove lab and try again.')
             if any(j['lab_id'] == lab_id and j['status'] in ('queued', 'running') for j in store.state['jobs']):
@@ -156,6 +164,7 @@ def create_app(data_dir=None):
             updated = copy.deepcopy(previous)
             updated['labs'] = [l for l in updated['labs'] if l['id'] != lab_id]
             updated['jobs'] = [j for j in updated['jobs'] if j['lab_id'] != lab_id]
+            updated['git_jobs'] = [j for j in updated.get('git_jobs', []) if j['lab_id'] != lab_id]
             ignored = set(updated.get('ignored_labs', []))
             if data.prevent_reimport: ignored.add(name)
             else: ignored.discard(name)

@@ -411,6 +411,9 @@ class Discovery:
                     host['password'] = data.password or (old.get('password','') if same else '')
                     if not host['password']: raise ValueError('Enter the VM password')
                     host['fingerprint'] = old.get('fingerprint','') if (old.get('address'),old.get('port')) == (endpoint,data.port) and not data.reset_fingerprint else ''
+                    from .git_progress import pending_progress, host_identity
+                    if pending_progress(self.store.state) and host_identity(old) != host_identity(host):
+                        raise HTTPException(409, 'Finish pending Git saves or choose Keep snapshot only before changing the VM identity.')
                     self.sources = {}
                     self.store.state['host'] = host
                     self.store.state['discovery'] = dict(ok=False,error='Waiting for a fresh VM inspection.')

@@ -91,7 +91,7 @@ class Store:
                 self.checked_tree(self.root/name)
             host = copy.deepcopy(self.state.get('host', {}))
             if host: host['revision'] = uuid.uuid4().hex
-            fresh = {'labs': [], 'jobs': [], 'operations': [], 'ignored_labs': [],
+            fresh = {'labs': [], 'jobs': [], 'operations': [], 'git_jobs': [], 'ignored_labs': [],
                      'host': host, 'reset_id': uuid.uuid4().hex}
             stage = self.root/'.reset-pending'
             stage.mkdir(mode=0o700)

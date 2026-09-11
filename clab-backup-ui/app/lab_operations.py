@@ -19,11 +19,15 @@ from .drawio_export import drawio
 from .layout import decorations, annotations, revision
 
 BUSY = ('queued', 'running')
+GIT_BUSY = ('queued', 'capturing', 'exporting', 'pushing')
 
 
-def operation_busy(state, lab_id=None):
-    return any(j['status'] in BUSY and (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
-               for j in state.get('operations', []))
+def operation_busy(state, lab_id=None, progress_id=None):
+    return (any(j['status'] in BUSY and (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
+                for j in state.get('operations', [])) or
+            any(j['status'] in GIT_BUSY and j.get('id') != progress_id and
+                (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
+                for j in state.get('git_jobs', [])))
 
 
 def remote(host, request, output=None, stopping=None):

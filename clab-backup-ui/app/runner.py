@@ -96,10 +96,10 @@ class Runner:
     def close(self):
         self.stopping.set()
         self.pool.shutdown(wait=False,cancel_futures=True)
-    def submit(self, lab_id, operation='backup', source='manual', node_names=None):
+    def submit(self, lab_id, operation='backup', source='manual', node_names=None, progress_id=None, progress_context=None):
         from .lab_operations import operation_busy
         with self.store.lock:
-            if operation_busy(self.store.state,lab_id): raise ValueError('Wait for the lab operation to finish.')
+            if operation_busy(self.store.state,lab_id,progress_id=progress_id): raise ValueError('Wait for the lab operation to finish.')
             if self.store.reset_pending: raise ValueError('Finish the manager reset before starting a job.')
             if any(j['status'] in ('queued','running') for j in self.store.state['jobs']):
                 raise ValueError('A job is already running. Wait for it to finish.')
@@ -124,13 +124,24 @@ class Runner:
             job={'id':uuid.uuid4().hex,'lab_id':lab_id,'lab_name':lab['name'],
                  'operation':operation,'created':now(),'status':'queued','message':'Waiting for SSH worker',
                  'nodes':[{'name':n['name'],'status':'queued'} for n in nodes]}
+            if progress_id:
+                job.update(progress_id=progress_id, progress_context=copy.deepcopy(progress_context or {}))
             self.store.state['jobs'].insert(0,job)
             # History records are retained alongside snapshots; no automatic deletion.
+            old_next_run = lab.get('next_run')
             if node_names is None:
                 lab['next_run']=time.time()+lab['interval']*60 if lab['interval'] else None
-            self.store.save()
-            self.store.event('job.queued',f'{source} {operation}: {len(nodes)} nodes queued',lab_id=lab_id,job_id=job['id'])
-            self.pool.submit(self.execute,job['id'],copy.deepcopy(lab),nodes,operation)
+            try: self.store.save()
+            except OSError:
+                self.store.state['jobs'].remove(job)
+                if node_names is None: lab['next_run'] = old_next_run
+                raise
+            try: self.store.event('job.queued',f'{source} {operation}: {len(nodes)} nodes queued',lab_id=lab_id,job_id=job['id'])
+            except OSError: pass  # A log failure must not orphan a durable capture request.
+            try: self.pool.submit(self.execute,job['id'],copy.deepcopy(lab),nodes,operation)
+            except RuntimeError:
+                job.update(status='interrupted', message='Worker stopped before the capture started.')
+                self.store.save()
             return copy.deepcopy(job)
     def update(self, job_id, **fields):
         with self.store.lock:
@@ -138,6 +149,26 @@ class Runner:
             job.update(fields)
             self.store.save()
     def execute(self, job_id, lab, nodes, operation):
+        try:
+            self._execute(job_id, lab, nodes, operation)
+        except Exception:
+            # Initial/terminal state writes can fail outside the capture's normal
+            # error handling. Never leave a dead worker marked queued/running:
+            # Git progress waits for this job's terminal state. If storage stays
+            # unavailable, retain the interruption in memory; Store recovers the
+            # older durable queued/running record on the next restart.
+            message = 'Job interrupted before its result could be finalized. Existing backup files were retained; check storage and retry.'
+            with self.store.lock:
+                job = next((j for j in self.store.state['jobs'] if j['id'] == job_id), None)
+                if job is None: return
+                job.update(status='interrupted', finished=now(), message=message)
+                for node in job.get('nodes', []):
+                    if node.get('status') in ('queued', 'running'):
+                        node.update(status='interrupted', message=message)
+                try: self.store.save()
+                except OSError: pass
+
+    def _execute(self, job_id, lab, nodes, operation):
         self.update(job_id,status='running',message='Opening NOS CLI sessions over SSH',started=now(),
                     nodes=[{'name':n['name'],'status':'queued'} for n in nodes])
         outcomes=[]
@@ -155,7 +186,8 @@ class Runner:
             message=re.sub(r'(?im)^.*(?:password|secret|community|private.key|passphrase).*$', '[sensitive diagnostic omitted]', message)
             return message[:1500]
         def log(action,message,level='info',node=''):
-            self.store.event(action,safe_error(message),level=level,lab_id=lab['id'],job_id=job_id,node=node)
+            try: self.store.event(action,safe_error(message),level=level,lab_id=lab['id'],job_id=job_id,node=node)
+            except OSError: pass  # Capture/state persistence must not depend on audit-log availability.
         log('job.start',f'{operation} started for {len(nodes)} nodes')
         try:
             with tempfile.TemporaryDirectory(prefix='ssh-job-') as tmp:

@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state={labs:[],jobs:[],platforms:{}}, activeId=sessionStorage.getItem('activeLab')||'', tab='topology', toastTimer;
 const current=()=>state.labs.find(l=>l.id===activeId);
-const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status))||(state.operations||[]).some(j=>['queued','running'].includes(j.status));
+const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status))||(state.operations||[]).some(j=>['queued','running'].includes(j.status))||(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status));
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
 async function api(path,options={}){
  const headers={...(options.headers||{})};
@@ -21,9 +21,9 @@ function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platf
 function render(){
  const lab=current();
  $('labs').innerHTML=state.labs.length?[...state.labs].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)).map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${l.favorite?'★ ':''}${esc(l.name)}<small>${l.nodes.length} nodes · ${esc(l.deployment?.status||'Unlinked')}</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
- const version=state.version||'1.14.0';$('app-version').textContent='v'+version;
+ const version=state.version||'1.15.0';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Supported device types as of release '+version;
- $('worker-state').textContent=busy()?'SSH job in progress':'Worker idle';
+ $('worker-state').textContent=(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status))?'Saving lab progress':busy()?'SSH job in progress':'Worker idle';
  $('empty').hidden=!!lab;$('lab-content').hidden=!lab;
  $('title').textContent=lab?.name||'Your next lab starts here.';$('breadcrumb').textContent=lab?.name||'Overview';
  $('subtitle').textContent=lab?'Your nodes, connections, and configuration history.':'Import your nodes. Connect, experiment, and keep your configurations close.';
@@ -31,6 +31,7 @@ function render(){
  $('updated').textContent=lab?'Inventory updated '+new Date(lab.updated).toLocaleString():'No inventory loaded';
  if(typeof renderManagement==='function')renderManagement();
  if(typeof renderLabOperations==='function')renderLabOperations();
+ if(typeof renderGitProgress==='function')renderGitProgress();
  if(!lab)return;
  $('node-count').textContent=lab.nodes.length;
  $('map-ssh-all').disabled=!lab.nodes.some(n=>n.ssh_ready);
@@ -68,7 +69,7 @@ function renderJobs(){
  }).join(''):'<div class="blank-state"><h2>No jobs yet</h2><p>Test the NOS login, then run a backup. Individual configurations and full archives appear here.</p></div>';
 }
 function utcDisplay(value){const date=new Date(value);return Number.isNaN(date.getTime())?'Time unavailable':date.toISOString().replace('T',' ').slice(0,19)+' UTC';}
-function showTab(value){tab=value;if($('extra-views-label')){$('extra-views-label').textContent=tab==='credentials'?'Credentials':tab==='logs'?'Action logs':'More';$('extra-views-label').classList.toggle('active',['credentials','logs'].includes(tab));}document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===tab);b.setAttribute('aria-selected',b.dataset.tab===tab);});for(const name of ['inventory','topology','credentials','backups','logs'])$(name+'-view').hidden=name!==tab;if(tab==='topology'&&typeof refreshMap==='function')refreshMap();}
+function showTab(value){tab=value;if($('extra-views-label')){$('extra-views-label').textContent=tab==='credentials'?'Credentials':tab==='logs'?'Action logs':tab==='git'?'Git repository':'More';$('extra-views-label').classList.toggle('active',['credentials','logs','git'].includes(tab));}document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===tab);b.setAttribute('aria-selected',b.dataset.tab===tab);});for(const name of ['inventory','topology','credentials','backups','logs','git'])if($(name+'-view'))$(name+'-view').hidden=name!==tab;if(tab==='topology'&&typeof refreshMap==='function')refreshMap();if(tab==='git'&&typeof gitShowRepository==='function')gitShowRepository();}
 function openImport(replace=false){$('import-form').reset();$('import-form').querySelector('.form-error').textContent='';const lab=replace?current():null;$('import-lab-id').value=lab?.id||'';$('lab-name').value=lab?.name||'';$('import-title').textContent=lab?'Replace lab inventory':'Import a lab';$('import-dialog').showModal();}
 function platformOptions(includeUnknown=false){return (includeUnknown?'<option value="">Choose network OS</option>':'')+Object.entries(state.platforms).map(([id,p])=>`<option value="${esc(id)}">${esc(p.label)}</option>`).join('');}
 function openProfile(){if(!current())return;$('profile-form').reset();$('profile-form').querySelector('.form-error').textContent='';$('profile-platform').innerHTML=platformOptions()+'<option value="ssh">Generic SSH / Linux (terminal only)</option>';toggleAuth();$('profile-dialog').showModal();}
