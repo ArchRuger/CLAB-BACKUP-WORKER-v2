@@ -58,4 +58,5 @@ done
 docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
 docker compose -f clab-backup-ui/compose.yml ps
 echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery password are retained.'
+echo 'Optional Git setup: as your ordinary VM account, run bash deploy/setup-git.sh (without sudo). See GIT-SETUP.md.'
 echo 'The UI opens directly without a login. VM and device SSH credentials remain in persistent storage.'

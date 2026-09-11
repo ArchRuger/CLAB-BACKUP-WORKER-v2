@@ -1,5 +1,20 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.15.1 — guided Git setup
+
+Read GIT-SETUP.md first. `bash deploy/setup-git.sh` as the ordinary VM account
+launches the wizard; explicit sudo registration and --refresh remain supported.
+Standalone uses the existing Linux account, not a new engineer account. Keep all
+Git, clone, config and GitHub login commands under that owner's account and HOME.
+The wizard does not collect tokens, create remote repositories or publish commits.
+It checks identity, GitHub write permission and registration readiness; a push dry
+run cannot guarantee later commits pass branch rules. Never overwrite a nonempty
+non-checkout, chown existing projects recursively, reset work or disable hooks.
+Catch missing identity before export/staging. Retry the original preserved save.
+Identical registration settings retain revision/anchor; --refresh retains bindings.
+The user's setup log confirms their 1.15.0 manual HTTPS push succeeded. New 1.15.1
+Linux interactive onboarding still needs VM validation; local tests are not that.
+
 ## Release 1.15.0 — Save lab progress to Git
 
 The approved Git architecture is implemented as owner-scoped VM repository export,

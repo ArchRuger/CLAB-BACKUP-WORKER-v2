@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.15.0'
+VERSION = '1.15.1'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -149,7 +149,8 @@ class GitRepository:
                     'GIT_LITERAL_PATHSPECS': '1'}
         if env is not None: self.env.update(env)
         self.prefix = relpath(binding.get('prefix', ''), empty=True)
-        self.control = no_links(self.root / '.git')
+        self.control = no_links(self.root / '.git', False)
+        if not self.control.exists(): raise ValueError('This directory is not a Git checkout: .git is missing. Run guided Git setup to clone a repository; mkdir alone is insufficient.')
         if not self.control.is_dir(): raise ValueError('Linked worktrees and bare repositories are not supported.')
         self.state = self.control / 'clab-manager'; no_links(self.state, False)
         self.state.mkdir(mode=0o700, exist_ok=True)
@@ -163,6 +164,28 @@ class GitRepository:
         return (code, raw) if not check else raw.decode('utf8').strip()
 
     def scope(self, name): return '/'.join(p for p in (self.prefix, name) if p)
+
+    def registration(self, previous=None):
+        binding = dict(self.binding)
+        unchanged = previous and all(previous.get(k) == v for k, v in binding.items() if k not in ('revision', 'anchor'))
+        if unchanged:
+            binding['anchor'] = previous['anchor']
+            binding['revision'] = previous['revision']
+        else:
+            binding['revision'] = digest({k: v for k, v in binding.items() if k != 'revision'})
+        return binding
+
+    def commit_identity(self):
+        for role in ('GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT'):
+            code, _ = self.run('var', role, check=False)
+            if code:
+                raise ValueError('Git commit identity is missing or invalid. As the registered Linux owner, run guided Git setup or set user.name and user.email inside this checkout, then retry the original save.')
+
+    def check_push_access(self):
+        code, _ = self.run('push', '--dry-run', '--porcelain', '--no-follow-tags', self.binding['remote'],
+                           'HEAD:refs/heads/' + self.binding['branch'], check=False, timeout=90)
+        if code:
+            raise ValueError('Git push preflight failed. Authenticate as the registered Linux owner and check remote write access. For GitHub use gh auth login and gh auth setup-git; your GitHub website password cannot authenticate a Git push. No commits were pushed.')
 
     def descriptor(self):
         return {k: self.binding[k] for k in ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')}
@@ -211,7 +234,7 @@ class GitRepository:
     def clean(self, entire=False):
         if any((self.control / marker).exists() for marker in ('MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-apply', 'rebase-merge', 'BISECT_START', 'index.lock')):
             raise ValueError('Finish the existing Git operation before saving lab progress.')
-        if self.run('diff', '--cached', '--name-only', '-z'): raise ValueError('The repository already has staged changes. Commit or unstage them first.')
+        if self.run('diff', '--cached', '--name-only', '-z'): raise ValueError('The repository already has staged changes. If an earlier manager save failed, fix its reported issue and retry that original save: Retry commits automatically. For unrelated staged work, resolve it as the repository owner first.')
         args = [] if entire else ['--', self.scope('latest'), self.scope('baseline'), self.scope('checkpoints')]
         if self.run('status', '--porcelain=v1', '--untracked-files=all', *args):
             raise ValueError('The repository has unsaved edits in the selected scope. Resolve them before continuing.')
@@ -349,6 +372,7 @@ class GitRepository:
             journal.update(status='needs_attention', pushed=False, message=str(error)); self.save_journal(journal); return self.result(journal)
 
     def finish_export(self, journal, req):
+        self.commit_identity()
         """Resume only files still matching their journaled before or after bytes."""
         expected = {p: None if b is None else base64.b64decode(b) for p, b in journal['expected'].items()}
         before = journal['before']; changed = journal['changed_files']; head = journal['parent']
@@ -444,7 +468,7 @@ class GitRepository:
                    'snapshot_path': '', 'recovery_path': str(archive), 'message': 'Snapshot preserved; export has not completed.'}
         self.save_journal(journal)
         try:
-            head = self.validate(); self.clean()
+            head = self.validate(); self.clean(); self.commit_identity()
             if not retry_before_write and req.get('expected_head') != head: raise ValueError('The repository changed since it was selected. Refresh status and retry the preserved snapshot.')
             target = req.get('target')
             if target not in ('latest', 'baseline', 'checkpoint'): raise ValueError('Choose latest, baseline or checkpoint.')

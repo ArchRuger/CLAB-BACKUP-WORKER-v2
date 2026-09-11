@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.15.0
+# Containerlab Node Manager — 1.15.1
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.15.0 deployment:** Build the new source and create the VM password using
+**1.15.1 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -23,7 +23,15 @@ Use [deploy/compose.image.yml](deploy/compose.image.yml) for this path; it has n
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
 
-## Changes in 1.15.0
+## Changes in 1.15.1
+
+Guided Git onboarding now uses the existing VM account, prepares HTTPS login and
+commit identity, and checks repository readiness before registration. Run
+`bash deploy/setup-git.sh` without sudo. Start with [GIT-SETUP.md](GIT-SETUP.md).
+Missing identity is caught before an export writes or stages files. Helper-only
+upgrades retain existing registrations; unchanged re-registration retains revisions.
+
+## Git progress introduced in 1.15.0
 
 - **Save progress** captures the chosen devices, exports a complete snapshot to
   the registered VM repository, commits exact changed files and pushes. Capture,
@@ -162,7 +170,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.15.0
+cd ~/projects/v1.15.1
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

@@ -1,4 +1,8 @@
-# Standalone persistent Node Manager — 1.15.0
+# Standalone persistent Node Manager — 1.15.1
+
+For Git publishing, use the VM account you already have. Once the manager and a
+device backup work, run `bash deploy/setup-git.sh` without sudo from this source
+directory. Follow [GIT-SETUP.md](GIT-SETUP.md); no additional Linux user is needed.
 
 > Already pulled the release image from Docker Hub? Use [DOCKER-HUB-SETUP.md](DOCKER-HUB-SETUP.md)
 > for a launch that uses that image without rebuilding it, plus the required host-helper setup.
@@ -82,7 +86,7 @@ docker compose -f clab-backup-ui/compose.yml exec backup-ui \
 docker compose -f clab-backup-ui/compose.yml logs backup-ui
 ```
 
-Expect version **1.15.0**. Open `http://VM_ADDRESS:8081`; no UI login is required.
+Expect version **1.15.1**. Open `http://VM_ADDRESS:8081`; no UI login is required.
 See [VM connection setup and troubleshooting](VM-CONNECTION.md).
 Docker must start at VM boot; `restart: unless-stopped` restarts the manager with
 Docker unless you explicitly stopped it.
@@ -90,7 +94,7 @@ Docker unless you explicitly stopped it.
 Equivalent image-only build, from the repository root:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.15.0 ./clab-backup-ui
+docker build --pull --no-cache -t clab-backup:1.15.1 ./clab-backup-ui
 ```
 
 The final path is the required build context. Builds require the base image and
@@ -158,7 +162,7 @@ if you want to test immediate rediscovery. Both paths require confirmation befor
 a new workspace is saved; cancelling Import again retains its exclusion. Other labs and the VM connection remain.
 
 
-The 1.15.0 helper reads deployed lab files automatically. New labs wait for
+The 1.15.1 helper reads deployed lab files automatically. New labs wait for
 confirmation: click Ready to import, review files, and choose Import lab or Cancel. Existing
 workspaces show Updates available and offer **Sync from VM**, preserving matching
 node settings, credentials, profiles, schedules and history. Missing files never
@@ -166,7 +170,7 @@ delete a saved workspace. Optional files must be valid and match the YAML; inval
 files block sync without partial changes. A missing annotation retains an existing
 map. Original YAML is required. New labs can import the YAML while reporting an
 invalid optional file; credentials from a mismatched inventory are skipped.
-Old inspection-only helpers discover nodes only. Update the helper for 1.15.0.
+Old inspection-only helpers discover nodes only. Update the helper for 1.15.1.
 The standard generated folder beside the YAML is tried even without Docker labels.
 **Discovery file details** shows paths and results; clicking a detected lab retries
 automatic import before offering manual upload.

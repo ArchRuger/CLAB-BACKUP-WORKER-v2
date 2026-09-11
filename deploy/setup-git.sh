@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
-# Register Ben's existing HTTPS checkout, or refresh installed code without relinking.
+# Guided onboarding, existing-checkout registration, or helper-only refresh.
 set -euo pipefail
-[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [[ $# -eq 0 || ( $# -eq 1 && $1 == --guided ) ]]; then
+  [[ $EUID -ne 0 ]] || { echo 'For guided setup, run: bash deploy/setup-git.sh (without sudo, as the repository owner).' >&2; exit 1; }
+  exec /usr/bin/python3 "$script_dir/git-onboard.py"
+fi
+if [[ $# -eq 1 && ( $1 == --help || $1 == -h ) ]]; then
+  echo 'Guided setup: bash deploy/setup-git.sh (ordinary VM account; no additional user needed).'
+  echo 'Existing checkout: sudo bash deploy/setup-git.sh --repo /absolute/checkout [--owner LINUX_USER] [--remote origin] [--prefix labs/bgp] [--label NAME]'
+  echo 'Owner defaults to the invoking sudo user. GitHub login must belong to that Linux user.'
+  echo 'Helper upgrade only: sudo bash deploy/setup-git.sh --refresh'
+  exit 0
+fi
+[[ $EUID -eq 0 ]] || { echo 'Use sudo for registration/refresh, or run without arguments for guided setup.' >&2; exit 1; }
 owner=''; repo=''; remote=origin; prefix=''; label=''; refresh=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -17,7 +28,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 if ! $refresh; then
-  [[ -n "$owner" && -n "$repo" ]] || { echo 'Supply --owner and --repo, or use --refresh to retain all bindings.' >&2; exit 64; }
+  owner=${owner:-${SUDO_USER:-}}
+  [[ -n "$owner" && -n "$repo" ]] || { echo 'Supply --repo (and --owner when not invoked with sudo), or run without arguments as the VM user for guided setup.' >&2; exit 64; }
+  id "$owner" >/dev/null 2>&1 || { echo "Linux account '$owner' does not exist. --owner is the existing VM account, not your GitHub username. No additional account is required." >&2; exit 1; }
+  [[ $(id -u "$owner") -ne 0 && "$owner" != clab-discovery ]] || { echo 'Choose the ordinary VM account that owns the Git checkout.' >&2; exit 1; }
+  [[ "$repo" == /* && -d "$repo/.git" ]] || { echo 'Supply the absolute root of a cloned Git checkout containing a .git directory. mkdir alone does not create a repository. Run guided setup to clone it.' >&2; exit 1; }
 elif [[ -n "$owner" || -n "$repo" || -n "$prefix" || -n "$label" || "$remote" != origin ]]; then
   echo '--refresh cannot change repository settings.' >&2; exit 64
 fi
@@ -84,9 +99,12 @@ try:
             urls=worker.run('remote','get-url','--push','--all',remote).splitlines()
             if len(urls)!=1: raise ValueError('Configure exactly one HTTPS push URL.')
             binding['push_url']=h.checked_url(urls[0])
-            binding['anchor']=worker.validate();worker.clean()
+            binding['anchor']=worker.validate();worker.clean();worker.commit_identity()
             if worker.remote_head()!=binding['anchor']: raise ValueError('Before linking, synchronize the current branch with its existing remote branch using your ordinary Git login.')
-            binding['revision']=h.digest({k:v for k,v in binding.items() if k!='revision'})
+            worker.check_push_access()
+            # A repeated setup for unchanged settings must not invalidate pending
+            # jobs just because HEAD advanced through ordinary manager saves.
+            binding=worker.registration(old)
             result={'binding':binding}
         except ValueError as error: result={'error':str(error)}
         except Exception: result={'error':'Could not register the repository. Check checkout permissions and the owner\'s HTTPS Git authentication.'}

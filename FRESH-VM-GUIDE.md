@@ -1,6 +1,6 @@
-# Containerlab Node Manager 1.15.0 — a fresh VM to a working lab
+# Containerlab Node Manager 1.15.1 — a fresh VM to a working lab
 
-> This 1.15.0 source release requires building the new image. Previously published
+> This 1.15.1 source release requires building the new image. Previously published
 > images do not contain this release's Git progress workflow.
 
 
@@ -27,16 +27,16 @@ sudo apt install -y ca-certificates curl git openssh-server python3 sudo
 sudo systemctl enable --now ssh
 mkdir -p "$HOME/projects"
 cd "$HOME/projects"
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.15.0
-cd v1.15.0
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.15.1
+cd v1.15.1
 cat clab-backup-ui/VERSION
 ```
 
-This guide requires **1.15.0** source, including `clab-backup-ui/app/host_files.py`.
-If the clone reports an older version, obtain the 1.15.0 source package or the
+This guide requires **1.15.1** source, including `clab-backup-ui/app/host_files.py`.
+If the clone reports an older version, obtain the 1.15.1 source package or the
 matching release commit before proceeding. Local source delivery does not mean
 the GitHub repository has already been updated. For a delivered ZIP, extract it
-and place its contents in `~/projects/v1.15.0` so that `clab-backup-ui/` and
+and place its contents in `~/projects/v1.15.1` so that `clab-backup-ui/` and
 `deploy/` are directly inside that folder. This is the version-folder convention
 used throughout this guide.
 All later relative paths start at the directory containing `deploy/` and
@@ -166,7 +166,7 @@ for command coverage, optional downloads and recovery. Without this flag,
 a fresh setup provides discovery/import only. Already enabled helpers are upgraded
 automatically on subsequent launches.
 
-Expect **1.15.0**. Open **`http://VM_IP:8081`** on your workstation. There is no
+Expect **1.15.1**. Open **`http://VM_IP:8081`** on your workstation. There is no
 UI access-token login. VM connection and device SSH authentication are separate.
 See [VM connection setup and recovery](VM-CONNECTION.md) for detailed help.
 
@@ -200,7 +200,7 @@ and use it in the browser. Default access is HTTP for the isolated lab network.
 An equivalent **image-only build** from the repository root is:
 
 ```bash
-sudo docker build --pull --no-cache -t clab-backup:1.15.0 ./clab-backup-ui
+sudo docker build --pull --no-cache -t clab-backup:1.15.1 ./clab-backup-ui
 ```
 
 If already inside `clab-backup-ui`, use `.` as the last argument instead. That
@@ -360,17 +360,19 @@ configurations. Back up NOS configurations separately using the manager.
 
 ## 9a. Connect a repository for Save progress
 
-Complete a manual device backup before setting up Git publishing. As the normal
-VM owner (for example Ben), prepare a clean existing checkout with a first commit,
-a current branch, an HTTPS remote, author identity and a working Git login.
-Publish its initial commit outside the manager so local HEAD matches the existing
-remote branch when registering it. Authentication is performed outside this manager.
-
-From the 1.15.0 source directory, register that exact owner and checkout:
+Complete a manual device backup before setting up Git publishing. Use your existing
+ordinary VM account; no extra Linux user is needed on a standalone installation.
+Create the destination repository on GitHub with a README, then from this source
+directory run **without sudo**:
 
 ```bash
-sudo bash deploy/setup-git.sh --owner ben --repo /home/ben/labs/BENS-BGP-LAB
+bash deploy/setup-git.sh
 ```
+
+The wizard handles clone/reuse, GitHub login, commit identity and registration
+checks. On a headless VM, authorize its device code in your workstation browser
+and leave the terminal waiting. A missing VM browser is normal.
+Follow [GIT-SETUP.md](GIT-SETUP.md) for the short walkthrough and error recovery.
 
 In the lab, choose **Git repository settings**, select the registered checkout,
 review the included devices and save the binding. **Save progress** now captures,
@@ -379,12 +381,12 @@ VM; **Push saved progress** retries it later. Checkpoints and baseline preserve
 milestones, and **Load version** downloads saved configurations without applying
 commands to devices.
 
-Git runs as Ben with his existing authentication. The `clab-discovery` VM password
+Git runs as the registered VM owner with that account’s authentication. The `clab-discovery` VM password
 remains separate. The UI has no user login: everyone given access shares the
 registered repositories' authority. Read [GIT-PROGRESS.md](GIT-PROGRESS.md) for
 service-context credentials, review, conflicts, recovery and persistence.
 
-Back up Ben's working checkout and the helper's registration/journal as well as
+Back up the owner's working checkout and the helper's registration/journal as well as
 the manager data. A manager-only archive does not include his repository or Git
 login. Resolve pending saves or explicitly **Keep snapshot only** before removing
 that workspace or resetting the manager.
@@ -415,26 +417,26 @@ any current data as a separate recovery copy, extract the archive under
 the data. Reconfigure the discovery password/account for the new VM; a different VM
 SSH host key needs verification before trusting it in the UI.
 
-### Upgrade an existing installation to 1.15.0
+### Upgrade an existing installation to 1.15.1
 
 Keep the original data directory and back it up first. Put the new source in
-`~/projects/v1.15.0` with `clab-backup-ui/` and `deploy/` directly inside it.
+`~/projects/v1.15.1` with `clab-backup-ui/` and `deploy/` directly inside it.
 Carry forward your previous `.env` or custom UI bind/port settings. For an existing
 Compose installation, use the same entry point as a fresh launch:
 
 ```bash
-cd "$HOME/projects/v1.15.0"
+cd "$HOME/projects/v1.15.1"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 
 This updates and verifies the VM helper, retains the existing password/account,
-prepares the persistent data directory, builds `clab-backup:1.15.0`, and recreates
+prepares the persistent data directory, builds `clab-backup:1.15.1`, and recreates
 the Compose service. It verifies the helper version/protocol even when no labs
 are deployed. It prints no file contents or credentials during that check.
 If Git progress was enabled, refresh its helper with `sudo bash deploy/setup-git.sh --refresh` from
 this same source; keep the existing registrations and repository checkouts.
 
-The browser must show v1.15.0. Refresh discovery; existing labs stay saved and new
+The browser must show v1.15.1. Refresh discovery; existing labs stay saved and new
 labs wait for import confirmation. Existing workspaces still use Sync from VM.
 
 If you only run `docker build`, host files cannot be updated from that image build.
@@ -490,14 +492,14 @@ same architecture. Transfer the source and required Ubuntu/Docker/containerlab
 packages or use your internal package mirrors. Build the manager there and export:
 
 ```bash
-sudo docker save clab-backup:1.15.0 -o clab-backup-1.15.0.tar
+sudo docker save clab-backup:1.15.1 -o clab-backup-1.15.1.tar
 ```
 
 On the prepared offline VM, after completing storage and discovery-password setup
 above, update both host helpers from the transferred source before starting:
 
 ```bash
-sudo docker load -i clab-backup-1.15.0.tar
+sudo docker load -i clab-backup-1.15.1.tar
 sudo bash deploy/setup-discovery.sh --update-helper
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml up -d --no-build

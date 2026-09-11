@@ -1,11 +1,11 @@
-# Save lab progress to Git — 1.15.0
+# Save lab progress to Git — 1.15.1
 
 Connect a lab to an existing repository on its VM once, then use **Save progress**
 to capture its selected devices, save the complete capture in that repository,
 commit changed configurations and push. Ben keeps his existing Git login and
 commit identity. The manager never asks for his Git token.
 
-This is a local source release. Build the 1.15.0 image and install its matching VM
+This is a local source release. Build the 1.15.1 image and install its matching VM
 helpers; a previously published image does not acquire these features automatically.
 See [Fresh VM setup](FRESH-VM-GUIDE.md) and [VM connection](VM-CONNECTION.md).
 
@@ -43,47 +43,87 @@ A progress save supports up to 500 devices, with nonempty UTF-8 configurations
 up to 2 MiB each and 16 MiB in total. Oversized or incomplete captures do not
 replace the repository snapshot.
 
-## One-time setup on Ben's VM
+## One-time setup
 
-1. Obtain the 1.15.0 source and finish the existing password-based VM connection.
-2. As **Ben**, clone or prepare a normal repository with an existing commit, a
-   current branch, an HTTPS remote and the intended author name/email. Complete
-   Git authentication outside this application, then publish the initial commit
-   so local HEAD matches the existing remote branch at registration.
-3. Keep the checkout clean. Commit or move unrelated work before connecting it.
-   Use a separate checkout if Ben regularly edits another copy of the same project.
-4. As the VM administrator, register the exact owner and checkout from the source
-   directory:
+Start with [GIT-SETUP.md](GIT-SETUP.md). From the release source on the Ubuntu VM,
+run this as the existing ordinary account, without sudo:
 
 ```bash
-sudo bash deploy/setup-git.sh --owner ben --repo /home/ben/labs/BENS-BGP-LAB
+bash deploy/setup-git.sh
 ```
 
-The helper records the current branch and uses `origin` unless `--remote NAME`
-selects another existing remote. Optional `--label "Ben BGP lab"` sets its display
-name; the registration ID is generated automatically. Optional `--prefix labs/bgp`
-places `latest`, `baseline` and `checkpoints` below `labs/bgp/`. Each registered
-prefix must be separate from the others. Bare repositories, linked worktrees,
-submodules and symlinked destinations are not supported.
+The guided flow prepares the checkout, owner-scoped HTTPS login and commit
+identity, then registers the current branch after noninteractive validation.
+No additional Linux account is needed on a standalone VM. Linux and GitHub
+usernames do not need to match. Existing working installations should upgrade
+with `start-manager.sh` or `setup-git.sh --refresh` and retain their current owner.
 
-5. Open the lab in the manager. Choose **Git repository settings**, select the
-   registered checkout and choose the devices to include. The initial list selects
-   supported devices independently of the normal backup schedule checkboxes.
-6. Review the repository/branch and acknowledge that captured device configurations
-   will be committed there. Choose whether saves should pause for review before
-   pushing. Save the connection settings, then perform the first **Save progress**.
+In the lab, choose **More → Git repository**, select the registered checkout and
+devices, review the destination and save the connection. **Save progress** then
+captures, commits and pushes automatically. A separate Commit button is not needed.
 
-Authentication must work without an interactive prompt in Ben's service context.
-A login that depends on an unlocked desktop, a temporary terminal environment or
-an expired credential cache can fail during unattended saves. Configure and test
-the chosen credential helper as Ben. GitHub CLI users can configure an existing
-login with `gh auth setup-git`; the manager does not run a login or create tokens.
-See [Git credential helpers](https://git-scm.com/docs/gitcredentials) and
-[GitHub CLI Git setup](https://cli.github.com/manual/gh_auth_setup-git).
+The following sections are manual authentication and recovery reference. The
+quickstart guide covers advanced registration, other HTTPS providers and separate
+owners. Git authentication remains separate from the `clab-discovery` VM password.
 
-Git connections in this release use HTTPS. The password for `clab-discovery`
-remains the manager-to-VM credential; it is separate from Ben's Git authentication.
-Do not put tokens in repository URLs, installation commands or the manager UI.
+## GitHub HTTPS login on the VM
+
+GitHub does not accept the account's website password for HTTPS Git operations.
+Use GitHub CLI to configure the repository owner's Git authentication.
+The GitHub account must have write access to the intended repository.
+See [GitHub authentication](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github).
+
+On Ubuntu 24.04, the VM administrator can install the
+[GitHub CLI package](https://packages.ubuntu.com/noble/gh):
+
+```bash
+sudo apt update
+sudo apt install gh
+```
+
+Then run the following **as the registered repository owner**, without sudo.
+For the standalone installation, this can be the existing VM account; creating a
+separate engineer account is optional.
+
+```bash
+gh auth login --hostname github.com --git-protocol https --web
+gh auth setup-git --hostname github.com
+gh auth status --hostname github.com
+```
+
+Complete the browser authorization using the URL and one-time code shown by the
+command. On a VM without a desktop, use your workstation browser. The login and
+Git credential helper must belong to the same Linux account selected by
+`--owner`. See [CLI login](https://cli.github.com/manual/gh_auth_login) and
+[Git credential setup](https://cli.github.com/manual/gh_auth_setup-git).
+
+Git commit identity is configured separately. Inside the checkout, verify it:
+
+```bash
+git var GIT_AUTHOR_IDENT
+git var GIT_COMMITTER_IDENT
+```
+
+If identity is missing, set repository-local `user.name` and `user.email` to your
+intended author name and email before the first manager save. Authentication
+alone does not supply these settings.
+
+### Recovery after manually committing a failed manager export
+
+If you already committed the exported files from the CLI, finish publishing that
+manual commit as the repository owner. For a checkout on `main` with `origin`:
+
+```bash
+git push origin main
+git status -sb
+```
+
+After the push succeeds, use **Keep snapshot only** on the superseded failed
+manager saves, then start a new **Save progress**. Dismissal preserves backup
+files and Git commits. A CLI commit changes the original export's expected
+history; the old operation cannot always resume it, and the manager will not
+automatically push unrelated unpublished commits. Normal manager saves commit
+automatically; after an ordinary failure, retry the original job first.
 
 ## Repository layout
 
@@ -197,7 +237,7 @@ flowchart TD
 | Commit exists; push failed or review is required | Review the recorded commit and use **Push saved progress**. No new capture is needed. |
 | Remote advanced / push rejected | Inspect the repository as Ben. Resolve divergence outside the app; never force push merely to clear the status. |
 | Unexpected branch, URL, owner or repository identity | Restore the registered destination or deliberately register/reconnect the intended checkout after resolving pending work. |
-| Helper unavailable or older than the manager | Run `sudo bash deploy/setup-git.sh --refresh` from the 1.15.0 source and refresh repository status. |
+| Helper unavailable or older than the manager | Run `sudo bash deploy/setup-git.sh --refresh` from the 1.15.1 source and refresh repository status. |
 | Manager restarted during a save | Open the recorded job and retry. The coordinator reconciles the recorded operation with the VM journal rather than silently recapturing. |
 | Git authentication expired | Repair Ben's Git login on the VM, then retry the existing push. Changing the VM SSH password does not repair Git credentials. |
 
@@ -229,15 +269,16 @@ the current topology as the topology used for that historical capture.
 
 ## Upgrade and validation
 
-Upgrade the manager from the 1.15.0 source, retaining its persistent data.
+Upgrade the manager from the 1.15.1 source, retaining its persistent data.
 `deploy/start-manager.sh` refreshes the Git helper when a registry already exists.
 To refresh only that helper, use `sudo bash deploy/setup-git.sh --refresh` from
 the same source. This preserves registration IDs and revisions. Existing VM
 passwords, labs, device profiles and backup files are retained. No remote repository is created,
 and no user repository is pushed merely by installing the helper.
 
-Registering the same checkout/prefix again preserves its ID but can change its
-registration revision. Use `--refresh` for routine code upgrades. Before changing
+Registering unchanged settings preserves the ID, revision and original anchor
+even when ordinary saves advanced HEAD. Changed settings create a new revision.
+Use `--refresh` for routine code upgrades. Before changing
 a registration, resolve pending saves and reconnect the lab afterward so it uses
 the new revision. A registration binds the selected branch and push destination;
 changing either outside the app requires deliberate registration and reconnection.

@@ -1,5 +1,8 @@
 # Containerlab Node Manager — 1.12.0
 
+Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
+ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
+
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
 discover deployed labs over SSH, open node terminals, and retain configuration
@@ -105,7 +108,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.15.0
+cd ~/projects/v1.15.1
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

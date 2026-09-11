@@ -100,6 +100,46 @@ class HostGitTests(unittest.TestCase):
         self.assertEqual(result['status'], 'committed', result)
         self.assertFalse(self.raw('ls-tree', 'HEAD', 'notes.txt'))
 
+    def test_missing_identity_fails_before_export_and_original_save_retries(self):
+        self.raw('config', '--unset', 'user.name')
+        self.raw('config', '--unset', 'user.email')
+        self.raw('config', 'user.useConfigOnly', 'true')
+        req, result = self.publish()
+        self.assertEqual(result['status'], 'needs_attention')
+        self.assertIn('commit identity', result['message'])
+        self.assertFalse((self.repo / 'latest').exists())
+        self.assertEqual(self.raw('diff', '--cached', '--name-only'), '')
+        self.raw('config', 'user.name', 'Fixed Author')
+        self.raw('config', 'user.email', 'fixed@example.invalid')
+        retry = self.worker.dispatch(req)
+        self.assertEqual(retry['status'], 'committed', retry)
+        self.assertEqual(self.raw('rev-list', '--count', 'HEAD'), '2')
+
+    def test_push_preflight_does_not_publish_local_commit(self):
+        self.publish()
+        before = self.raw('ls-remote', 'origin', 'refs/heads/main')
+        self.worker.check_push_access()
+        self.assertEqual(before, self.raw('ls-remote', 'origin', 'refs/heads/main'))
+        self.assertNotIn(self.raw('rev-parse', 'HEAD'), before)
+
+    def test_registration_keeps_pending_revision_when_only_head_changed(self):
+        self.binding['anchor'] = self.raw('rev-parse', 'HEAD')
+        old = self.worker.registration()
+        self.publish()
+        self.binding['anchor'] = self.raw('rev-parse', 'HEAD')
+        same = self.worker.registration(old)
+        self.assertEqual(same['revision'], old['revision'])
+        self.assertEqual(same['anchor'], old['anchor'])
+        self.binding['branch'] = 'another-branch'
+        changed = self.worker.registration(old)
+        self.assertNotEqual(changed['revision'], old['revision'])
+
+    def test_push_preflight_failure_has_actionable_message_without_git_stderr(self):
+        with patch.object(self.worker, 'run', return_value=(128, b'sensitive credentials')):
+            with self.assertRaisesRegex(ValueError, 'registered Linux owner') as error:
+                self.worker.check_push_access()
+        self.assertNotIn('sensitive', str(error.exception))
+
     def test_prewrite_retry_adopts_owner_committed_and_published_repair(self):
         (self.repo / 'notes.txt').write_text('Owner notes\n'); self.raw('add', 'notes.txt')
         req, result = self.publish()
