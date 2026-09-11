@@ -1,7 +1,7 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let state={labs:[],jobs:[],platforms:{}}, activeId=sessionStorage.getItem('activeLab')||'', tab='inventory', toastTimer;
+let state={labs:[],jobs:[],platforms:{}}, activeId=sessionStorage.getItem('activeLab')||'', tab='topology', toastTimer;
 const current=()=>state.labs.find(l=>l.id===activeId);
 const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status))||(state.operations||[]).some(j=>['queued','running'].includes(j.status));
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
@@ -14,14 +14,15 @@ async function api(path,options={}){
 }
 async function json(path,method,data){return (await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
 async function refresh(){const response=await api('/state');state=await response.json();if(!current())activeId=state.labs[0]?.id||'';render();if(tab==='logs')await refreshLogs();}
-function selectLab(id){if($('details-dialog').open)$('details-dialog').close();activeId=id;tab='inventory';sessionStorage.setItem('activeLab',id);$('search').value='';$('log-job').value='';render();}
+function selectLab(id){if($('details-dialog').open)$('details-dialog').close();activeId=id;tab='topology';sessionStorage.setItem('activeLab',id);$('search').value='';$('log-job').value='';render();}
 function platformLabel(kind){return state.platforms[kind]?.label||(kind==='ssh'?'Generic SSH / Linux':'Unmapped');}
 function badge(status){const type=['Ready','succeeded','reachable'].includes(status)?'good':['failed','unreachable','interrupted'].includes(status)?'bad':['queued','running'].includes(status)?'running':'warn';return `<span class="badge ${type}">${esc(status)}</span>`;}
 function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platform||'ssh'];return lab.profiles.find(p=>p.id===id)?.label||(node.inventory_credentials?'From inventory':'Not configured');}
 function render(){
  const lab=current();
  $('labs').innerHTML=state.labs.length?[...state.labs].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)).map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${l.favorite?'★ ':''}${esc(l.name)}<small>${l.nodes.length} nodes · ${esc(l.deployment?.status||'Unlinked')}</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
- $('app-version').textContent='v'+(state.version||'1.12.0');
+ const version=state.version||'1.14.0';$('app-version').textContent='v'+version;
+ if($('supported-release'))$('supported-release').textContent='Supported device types as of release '+version;
  $('worker-state').textContent=busy()?'SSH job in progress':'Worker idle';
  $('empty').hidden=!!lab;$('lab-content').hidden=!lab;
  $('title').textContent=lab?.name||'Your next lab starts here.';$('breadcrumb').textContent=lab?.name||'Overview';
@@ -67,7 +68,7 @@ function renderJobs(){
  }).join(''):'<div class="blank-state"><h2>No jobs yet</h2><p>Test the NOS login, then run a backup. Individual configurations and full archives appear here.</p></div>';
 }
 function utcDisplay(value){const date=new Date(value);return Number.isNaN(date.getTime())?'Time unavailable':date.toISOString().replace('T',' ').slice(0,19)+' UTC';}
-function showTab(value){tab=value;document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===tab);b.setAttribute('aria-selected',b.dataset.tab===tab);});for(const name of ['inventory','topology','credentials','backups','logs'])$(name+'-view').hidden=name!==tab;if(tab==='topology'&&typeof refreshMap==='function')refreshMap();}
+function showTab(value){tab=value;if($('extra-views-label')){$('extra-views-label').textContent=tab==='credentials'?'Credentials':tab==='logs'?'Action logs':'More';$('extra-views-label').classList.toggle('active',['credentials','logs'].includes(tab));}document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===tab);b.setAttribute('aria-selected',b.dataset.tab===tab);});for(const name of ['inventory','topology','credentials','backups','logs'])$(name+'-view').hidden=name!==tab;if(tab==='topology'&&typeof refreshMap==='function')refreshMap();}
 function openImport(replace=false){$('import-form').reset();$('import-form').querySelector('.form-error').textContent='';const lab=replace?current():null;$('import-lab-id').value=lab?.id||'';$('lab-name').value=lab?.name||'';$('import-title').textContent=lab?'Replace lab inventory':'Import a lab';$('import-dialog').showModal();}
 function platformOptions(includeUnknown=false){return (includeUnknown?'<option value="">Choose network OS</option>':'')+Object.entries(state.platforms).map(([id,p])=>`<option value="${esc(id)}">${esc(p.label)}</option>`).join('');}
 function openProfile(){if(!current())return;$('profile-form').reset();$('profile-form').querySelector('.form-error').textContent='';$('profile-platform').innerHTML=platformOptions()+'<option value="ssh">Generic SSH / Linux (terminal only)</option>';toggleAuth();$('profile-dialog').showModal();}
@@ -75,9 +76,9 @@ function toggleEnable(){$('enable-fields').hidden=$('profile-platform').value!==
 function toggleAuth(){toggleEnable();const isKey=$('auth-type').value==='key';$('password-fields').hidden=isKey;$('key-fields').hidden=!isKey;$('private-key').required=isKey;}
 function openNode(name){const lab=current(),n=lab.nodes.find(n=>n.name===name);if(!n)return;$('node-form').querySelector('.form-error').textContent='';$('node-title').textContent=n.name;$('node-name').value=n.name;$('node-short-name').value=n.short_name||'';$('node-address').value=n.address;$('node-port').value=n.port;$('node-endpoint-mode').value=n.endpoint_mode||'manual';$('node-endpoint-mode').disabled=!lab.deployment_name;$('node-platform').innerHTML=platformOptions(true);$('node-platform').value=n.platform;$('node-enabled').checked=n.enabled;$('node-profile').innerHTML='<option value="">NOS default / inventory credentials</option>'+lab.profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.label)} · ${esc(p.username)}</option>`).join('');$('node-profile').value=n.profile_id;$('node-dialog').showModal();}
 async function withForm(form,fn){const button=form.querySelector('button[type=submit]');button.disabled=true;const error=form.querySelector('.form-error');if(error)error.textContent='';try{await fn();}catch(e){if(error)error.textContent=e.message;else notify(e.message);}finally{button.disabled=false;}}
-$('new-lab').onclick=$('add-lab').onclick=$('import-empty').onclick=()=>openImport();$('import-top').onclick=()=>openImport(!!current());
+$('new-lab').onclick=$('import-empty').onclick=()=>openImport();$('import-top').onclick=()=>openImport(!!current());
 document.querySelectorAll('.close').forEach(b=>b.onclick=()=>b.closest('dialog').close());
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{showTab(b.dataset.tab);if(tab==='logs')refreshLogs().catch(e=>notify(e.message));});
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{showTab(b.dataset.tab);if($('extra-views'))$('extra-views').open=false;if(tab==='logs')refreshLogs().catch(e=>notify(e.message));});
 $('labs').addEventListener('click',e=>{const b=e.target.closest('[data-lab]');if(b)selectLab(b.dataset.lab);});
 $('search').oninput=renderNodes;
 async function handleNodeAction(e){const b=e.target.closest('button');if(!b||b.disabled)return;

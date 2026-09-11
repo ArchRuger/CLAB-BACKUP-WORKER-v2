@@ -1,5 +1,17 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.14.0 — UI Changes 2 and master wiki
+
+The user authorized the UI changes from UI Changes 2.eml and a password-aware update
+of their supplied master wiki. Sidebar actions are static and ordered; Topology is
+the default tab, with Credentials/Action logs under More. The basic diagram editor
+persists visual annotations only, with revision conflict checks and JSON/draw.io
+exports. VM YAML and wiring are not edited. Preserve imported annotation styles.
+WIKI-MASTER-GUIDE.md supersedes its old key instructions and uses source builds by
+default. The supplied Proxmox/Ubuntu sections are retained. Version 1.14.0 is a local
+source delivery, not a published Hub image. Continue preserving password restrictions,
+persistent data, device credentials and explicit host-operation review.
+
 ## Release 1.13.0 — VM account password
 
 User requested password-only VM connections, superseding all key-retention instructions

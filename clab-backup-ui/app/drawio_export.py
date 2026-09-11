@@ -55,7 +55,7 @@ def drawio(lab, layout='interactive'):
             ET.SubElement(g, 'mxPoint', x=str(d.get('x2', d['x']+d['width'])), y=str(d.get('y2', d['y']+d['height'])), **{'as': 'targetPoint'})
             continue
         if kind == 'text':
-            style += f"text;strokeColor=none;fillColor={safe(d.get('backgroundColor') or 'none')};align={safe(d.get('textAlign', 'left'))};verticalAlign=top;spacing=4;"
+            style += f"text;strokeColor=none;fillOpacity={d.get('fillOpacity', 1)*100};fillColor={safe(d.get('backgroundColor') or 'none')};align={safe(d.get('textAlign', 'left'))};verticalAlign=top;spacing=4;"
         else:
             label = d.get('labelPosition', 'top-left')
             style += f"shape={'ellipse' if kind == 'circle' else 'rectangle'};container=1;collapsible=0;recursiveResize=0;fillColor={safe(d.get('fillColor') or 'none')};fillOpacity={d.get('fillOpacity', 1)*100};strokeColor={safe(d.get('borderColor') or '#607d8b')};strokeWidth={d.get('borderWidth', 1)};dashed={int(d.get('borderStyle') == 'dashed')};rounded={int(bool(d.get('cornerRadius', 0)))};absoluteArcSize=1;arcSize={d.get('cornerRadius', 0)*2};verticalLabelPosition={'bottom' if 'bottom' in label else 'top'};verticalAlign={'top' if 'bottom' in label else 'bottom'};align={'right' if 'right' in label else 'center' if 'center' in label else 'left'};"

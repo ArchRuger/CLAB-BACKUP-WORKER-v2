@@ -1,3 +1,27 @@
+# UI and diagram validation — 1.14.0
+
+- Baseline: GitHub main 160fe5e; includes the 1.13.0 VM password changes below.
+- Full Python suite: 156 tests run, 150 passed, six platform/opt-in skips.
+  New tests cover saved annotation persistence/restart, unchanged wiring/no VM writes,
+  unsaved export, XML escaping, JSON style round-trip, invalid input, stale-map
+  conflicts and rollback after failed saves.
+- JavaScript: 24 tests passed. New geometry/payload tests cover line movement,
+  coordinate limits, node identity and revision retention.
+- Browser checks used an isolated local 1.14.0 fixture without a VM connection:
+  sidebar labels/order, release caption, default Topology view, Credentials dropdown,
+  equal 12px tab text, Deploy New Lab wording, text/box editing, saved/reopened edits,
+  Undo and discard confirmation. Input events update the canvas before Save.
+- Inspection dialog checked at a 1280px viewport: width about 1242px; full long
+  topology path wraps and no table cell truncates its text.
+- Master wiki updated from the user-supplied document. Proxmox/Ubuntu sections
+  retained; old VM client-key procedures replaced with setup, encrypted persistence,
+  one-time migration and password recovery. Source builds are the default.
+- Source ZIP and cumulative patch checked against clean 160fe5e; Linux scripts
+  remain LF. Generated artifacts exclude preview data and email attachments.
+- No Linux VM installation, Docker build, live-device test, registry publication,
+  GitHub push or deployment was performed. Those deployment checks remain as
+  described in the password validation below.
+
 # VM password validation — 1.13.0
 
 - Baseline: fresh clone of GitHub origin/main at 160fe5e (V1.12.1 bug fixs).

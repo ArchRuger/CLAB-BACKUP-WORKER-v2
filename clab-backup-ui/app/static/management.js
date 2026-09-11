@@ -82,7 +82,7 @@ function openSetup(replace=false, deployedName=''){
  $('setup-auto-import').hidden=replace||!deployedName||!state.discovery?.configured;
  $('setup-title').textContent=lab?'Update lab definition':'Import a lab';$('setup-dialog').showModal();
 }
-$('new-lab').onclick=$('add-lab').onclick=$('import-empty').onclick=()=>openSetup();
+$('new-lab').onclick=$('import-empty').onclick=()=>openSetup();
 $('import-top').onclick=()=>current()?openImport(true):openSetup();
 $('update-definition').onclick=()=>openSetup(true);
 $('legacy-import').onclick=()=>{$('setup-dialog').close();openImport(!!$('setup-lab-id').value);};

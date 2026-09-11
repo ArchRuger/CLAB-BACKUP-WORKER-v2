@@ -152,7 +152,7 @@ def parse_drawing(raw, topology=None):
             if key=='freeTextAnnotations':
                 # Legacy auto-sized markdown notes have a 1em paragraph margin.
                 # Their saved position is the outer box, not the first glyph.
-                d['paragraphMargin']=d['fontSize'] if item.get('height') is None else 0
+                d['paragraphMargin']=bounded(item.get('paragraphMargin'),d['fontSize'] if item.get('height') is None else 0,0,160)
                 d['fontFamily']=item.get('fontFamily') if item.get('fontFamily') in ('Arial','Verdana','Georgia','monospace','sans-serif','serif') else 'Arial'
                 d['width']=bounded(item.get('width'),max(50,max((len(line) for line in d['text'].splitlines()),default=0)*d['fontSize']*.6+8),1,100000)
                 d['height']=bounded(item.get('height'),max(1,len(d['text'].splitlines()))*d['fontSize']*1.5+8+2*d['paragraphMargin'],1,100000)
@@ -178,7 +178,8 @@ def bind_drawing(lab):
         prefix='clab-'+lab['name']+'-'
         for alias in {n['name'],n.get('short_name'),n.get('definition_node'),n['name'].removeprefix(prefix)}-{None,''}:
             aliases.setdefault(alias,set()).add(n['name'])
-    result={**drawing,'nodes':[]}
+    from .layout import revision
+    result={**drawing,'nodes':[],'revision':revision(drawing)}
     for n in drawing['nodes']:
         matches=aliases.get(n['alias'],set())
         result['nodes'].append({**n,'inventory_name':next(iter(matches)) if len(matches)==1 else None})

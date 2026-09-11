@@ -1,6 +1,6 @@
 'use strict';
 // Shared by the main workspace and independent VM-folder / SSH-launcher tabs.
-const opLabels={deploy:'Deploy lab',redeploy:'Redeploy',destroy:'Destroy deployment',apply:'Apply topology',start:'Start lab nodes',stop:'Stop lab nodes',restart:'Restart lab nodes',save:'Save configurations (clab)',inspect:'Inspect lab','inspect-all':'Inspect all labs',create:'Create VM topology',delete:'Delete undeployed VM YAML',clone:'Clone repository'};
+const opLabels={deploy:'Deploy lab',redeploy:'Redeploy',destroy:'Destroy deployment',apply:'Apply topology',start:'Start lab nodes',stop:'Stop lab nodes',restart:'Restart lab nodes',save:'Save configurations (clab)',inspect:'Inspect lab','inspect-all':'View running lab details',create:'Create VM topology',delete:'Delete undeployed VM YAML',clone:'Clone repository'};
 let opCaps=null, opMenuLab='', opOutputTimer=null, opEditorContext=null;
 function opDialog(id,title,body){
  let dialog=$(id);if(!dialog){dialog=document.createElement('dialog');dialog.id=id;dialog.className='operations-dialog';document.body.append(dialog);}
@@ -27,7 +27,7 @@ async function openLabOperations(id=activeId){
  const cleanup=['deploy','redeploy','destroy'].filter(a=>opCaps?.actions[a]?.cleanup).map(a=>opCommand(a,opLabels[a]+' + cleanup',{cleanup:true})).join('');
  opDialog(dialog.id,lab.name,`<p class="op-path">${esc(opPath(lab)||'Import the original VM lab files before using host commands.')}</p>${problem?`<p class="op-notice">${esc(problem)}</p>`:''}
  <div class="op-sections"><section><h3>Deployment & configuration</h3><div class="op-grid">${['deploy','redeploy','apply','start','stop','restart','inspect','save','destroy'].map(a=>opCommand(a)).join('')}${cleanup}</div><p class="form-help">Destroy removes containers. Cleanup also removes generated lab artifacts. Containerlab save supports selected device kinds; manager backups remain in Backup history.</p></section>
- <section><h3>Workspace & access</h3><div class="op-grid"><button class="button secondary" data-local="ssh">SSH all nodes ↗</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove favorite':'Favorite lab'}</button><button class="button secondary" data-local="interactive">Interactive draw.io editor</button><button class="button secondary" data-local="history">Operation history</button>${opCommand('delete')}</div></section></div>`);
+ <section><h3>Workspace & access</h3><div class="op-grid"><button class="button secondary" data-local="ssh">SSH all nodes ↗</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove favorite':'Favorite lab'}</button><button class="button secondary" data-local="interactive">Edit topology diagram</button><button class="button secondary" data-local="history">Operation history</button>${opCommand('delete')}</div></section></div>`);
  dialog.querySelectorAll('[data-op-action]').forEach(b=>b.onclick=()=>{
   const action=b.dataset.opAction,options=JSON.parse(b.dataset.opOptions);
   opTask(dialog,()=>opReview({lab_id:id,action,options}));
@@ -89,6 +89,7 @@ async function opShowJob(id){
    const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for command output…';if(follow)pre.scrollTop=pre.scrollHeight;
    const rows=opInspectionRows(job.output||'');
    const inspectAction=['inspect','inspect-all'].includes(job.action);
+   dialog.classList.toggle('inspection-dialog',inspectAction);
    const inspected=inspectAction&&job.status==='succeeded'&&rows.length;
    const emptyInspection=inspectAction&&job.status==='succeeded'&&/(^|\n)\s*(?:\[\s*\]|\{\s*\})\s*(?=\n|$)/.test(job.output||'');
    pre.hidden=!!inspected||emptyInspection;
@@ -164,20 +165,7 @@ function opMapPreview(drawing,name){
  const dialog=opDialog('op-map-preview','Topology preview · '+name,'<svg id="op-preview-map" class="topology-map op-layout-map" role="img" aria-label="Proposed topology"></svg><p>This previews YAML structure. Imported annotations remain in the saved map until explicitly replaced.</p>');
  const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing);svg.setAttribute('viewBox',measureTopology(svg).join(' '));return dialog;
 }
-async function opLayout(id){
- const drawing=await(await api('/labs/'+id+'/topology')).json();if(!drawing)throw new Error('Import a topology map first.');
- const dialog=opDialog('op-layout-editor','Interactive draw.io editor',`<p>Drag nodes on the map or enter coordinates. Links follow the nodes. Export full diagram downloads an editable .drawio file with nodes, links, interface labels, groups and notes at the displayed positions. Save layout updates only the manager. For adding nodes or links, edit your original topology on the VM.</p><svg id="op-layout-map" class="topology-map op-layout-map" aria-label="Editable lab topology"></svg><details><summary>Node coordinates</summary><div class="op-coordinates">${drawing.nodes.map((n,i)=>`<label>${esc(n.alias)}<input type="number" data-x="${i}" aria-label="${esc(n.alias)} X" value="${n.x}"><input type="number" data-y="${i}" aria-label="${esc(n.alias)} Y" value="${n.y}"></label>`).join('')}</div></details><div class="dialog-actions"><button class="button primary" id="op-layout-save">Save layout</button><button class="button secondary" id="op-layout-export">Export full diagram</button></div>`);
- const svg=$('op-layout-map');let bounds=null,drag=null;
- const render=()=>{svg.innerHTML=topologyMarkup(drawing);svg.querySelectorAll('[data-map-id]').forEach(el=>{el.removeAttribute('aria-haspopup');el.setAttribute('aria-label','Move '+el.dataset.mapId);el.querySelector('title').textContent='Drag to reposition, or use the coordinate fields below.';});const measured=measureTopology(svg);if(!bounds)bounds=measured;svg.setAttribute('viewBox',bounds.join(' '));};render();
- const point=e=>{const p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse());};
- svg.onpointerdown=e=>{if(e.button!==0)return;const el=e.target.closest('[data-map-id]');if(!el)return;const node=drawing.nodes.find(n=>n.id===el.dataset.mapId);if(!node)return;e.preventDefault();drag={node,p:point(e),x:node.x,y:node.y};svg.setPointerCapture(e.pointerId);};
- svg.onpointermove=e=>{if(!drag)return;const p=point(e);drag.node.x=Math.round(drag.x+p.x-drag.p.x);drag.node.y=Math.round(drag.y+p.y-drag.p.y);render();};
- const release=()=>{if(!drag)return;const i=drawing.nodes.indexOf(drag.node);dialog.querySelector(`[data-x="${i}"]`).value=drag.node.x;dialog.querySelector(`[data-y="${i}"]`).value=drag.node.y;drag=null;};
- svg.onpointerup=release;svg.onpointercancel=release;svg.onlostpointercapture=release;
- dialog.querySelectorAll('[data-x],[data-y]').forEach(input=>input.onchange=()=>{const axis=input.hasAttribute('data-x')?'x':'y',i=Number(input.dataset[axis]),value=Number(input.value);if(Number.isFinite(value)&&Math.abs(value)<=100000){drawing.nodes[i][axis]=value;render();}});
- $('op-layout-export').onclick=()=>opTask(dialog,async()=>{const response=await api('/labs/'+id+'/drawio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({positions:Object.fromEntries(drawing.nodes.map(n=>[n.id,[n.x,n.y]]))})});const url=URL.createObjectURL(await response.blob()),a=document.createElement('a');a.href=url;a.download=attachmentName(response,'topology.drawio');a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Full editable diagram exported.');});
- $('op-layout-save').onclick=()=>opTask(dialog,async()=>{await json('/labs/'+id+'/layout','PUT',{positions:Object.fromEntries(drawing.nodes.map(n=>[n.id,[n.x,n.y]]))});dialog.close();if(typeof refreshMap==='function'&&id===activeId)await refreshMap(true);notify('Layout saved.');});
-}
+async function opLayout(id){return editDiagram(id);}
 function opQuickActions(lab,discovery,isBusy=false){
  const status=lab?.deployment?.status, known=['Not deployed','Running','Stopped','Partially running'].includes(status);
  const available=!!lab&&!!opPath(lab)&&!!discovery?.connected&&known&&!isBusy;
@@ -199,7 +187,8 @@ function renderLabOperations(){
 }
 if($('import-top')){
  $('import-top').insertAdjacentHTML('beforebegin','<button class="button secondary" id="lab-actions">Lab actions ▾</button>');
- $('vm-refresh').insertAdjacentHTML('afterend','<button class="side-button side-primary" id="vm-projects">Deploy New Lab</button><button class="side-button" id="operations-history">Operation history</button><button class="side-button" id="inspect-all">Inspect all labs</button><p class="side-hint" id="operation-summary" role="status"></p>');
+
+ $('map-edit').onclick=()=>opTask(null,()=>opLayout(activeId));
  $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>location.assign('/static/workspace.html#mode=folder');$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opHistory();$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
  $('labs').addEventListener('contextmenu',e=>{const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}});
  $('labs').addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}}});

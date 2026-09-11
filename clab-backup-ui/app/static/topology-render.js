@@ -1,6 +1,6 @@
 'use strict';
 // Pure SVG rendering: retain annotation geometry and styles in model coordinates.
-function topologyDecoration(d){
+function topologyDecoration(d,index){
  const x=d.x,y=d.y,w=d.width,h=d.height,cx=x+w/2,cy=y+h/2;
  const dash=d.borderStyle==='dashed'?'6 4':d.borderStyle==='dotted'?'2 3':'';
  const attrs=`fill="${esc(d.fillColor||'transparent')}" fill-opacity="${d.fillOpacity??.22}" stroke="${esc(d.borderColor||'#78909c')}" stroke-width="${d.borderWidth??1}" stroke-dasharray="${dash}"`;
@@ -8,14 +8,14 @@ function topologyDecoration(d){
  if(d.type==='text'){
   const fs=d.fontSize||14,anchor=d.textAlign==='center'?'middle':d.textAlign==='right'?'end':'start',tx=d.textAlign==='center'?cx:d.textAlign==='right'?x+w-4:x+4;
   // Text stays text: no imported HTML, CSS, or executable image content.
-  content=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${esc(d.backgroundColor||'transparent')}"/><text x="${tx}" y="${y+fs+4+(d.paragraphMargin??0)}" text-anchor="${anchor}" font-size="${fs}" font-family="${esc(d.fontFamily||'Arial')}" fill="${esc(d.fontColor||d.color||'#333')}" font-weight="${d.fontWeight||'normal'}" font-style="${d.fontStyle||'normal'}" text-decoration="${d.textDecoration||'none'}">${d.text.split('\n').map((line,i)=>`<tspan x="${tx}" dy="${i?fs*1.5:0}">${esc(line)}</tspan>`).join('')}</text>`;
+  content=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${esc(d.backgroundColor||'transparent')}" fill-opacity="${d.fillOpacity??1}"/><text x="${tx}" y="${y+fs+4+(d.paragraphMargin??0)}" text-anchor="${anchor}" font-size="${fs}" font-family="${esc(d.fontFamily||'Arial')}" fill="${esc(d.fontColor||d.color||'#333')}" font-weight="${d.fontWeight||'normal'}" font-style="${d.fontStyle||'normal'}" text-decoration="${d.textDecoration||'none'}">${d.text.split('\n').map((line,i)=>`<tspan x="${tx}" dy="${i?fs*1.5:0}">${esc(line)}</tspan>`).join('')}</text>`;
  }else{
   if(d.type==='circle')content=`<ellipse cx="${cx}" cy="${cy}" rx="${w/2}" ry="${h/2}" ${attrs}/>`;
   else if(d.type==='line')content=`<line x1="${x}" y1="${y}" x2="${d.x2}" y2="${d.y2}" ${attrs}/>`;
   else content=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${d.cornerRadius??8}" ${attrs}/>`;
-  if(d.text){const pos=d.labelPosition||'top-left',anchor=pos.includes('center')?'middle':pos.includes('right')?'end':'start';const tx=anchor==='middle'?cx:anchor==='end'?x+w-10:x+10;const ty=pos.startsWith('bottom')?y+h+18:y-7;content+=`<text x="${tx}" y="${ty}" text-anchor="${anchor}" fill="${esc(d.color||'#607d8b')}" font-size="12">${esc(d.text)}</text>`;}
+  if(d.text){const pos=d.labelPosition||'top-left',anchor=pos.includes('center')?'middle':pos.includes('right')?'end':'start';const tx=anchor==='middle'?cx:anchor==='end'?x+w-10:x+10;const ty=pos.startsWith('bottom')?y+h+18:y-7;content+=`<text x="${tx}" y="${ty}" text-anchor="${anchor}" fill="${esc(d.color||'#607d8b')}" font-size="${d.fontSize||12}" font-weight="${d.fontWeight||'normal'}">${esc(d.text)}</text>`;}
  }
- return `<g transform="rotate(${d.rotation||0} ${cx} ${cy})" class="topology-annotation">${content}</g>`;
+ return `<g transform="rotate(${d.rotation||0} ${cx} ${cy})" class="topology-annotation" data-decoration-index="${index}">${content}</g>`;
 }
 function topologyNode(n){
  const size=40,r=size/2,color=n.iconColor||'#0066ff';
@@ -36,8 +36,8 @@ function topologyLink(pair,nodes,index,settings){
  return `<g class="topology-wire" data-source="${esc(a.id)}" data-target="${esc(b.id)}"><title>${esc(a.label+':'+pair[0].interface+' — '+b.label+':'+pair[1].interface)}</title><path d="M${a.x+ux*radius} ${a.y+uy*radius}L${b.x-ux*radius} ${b.y-uy*radius}"/>${settings.labelMode==='hide'?'':label(pair[0],a.x+ux*offset,a.y+uy*offset+3)+label(pair[1],b.x-ux*offset,b.y-uy*offset+3)}</g>`;
 }
 function topologyMarkup(drawing){
- const nodes=new Map(drawing.nodes.map(n=>[n.id,n])),settings=drawing.settings||{},decos=[...drawing.decorations].sort((a,b)=>(a.zIndex||0)-(b.zIndex||0));
- return `<defs><pattern id="topology-grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".6" fill="${esc(settings.gridColor||'#d2cbb5')}"/></pattern></defs><rect x="-200000" y="-200000" width="400000" height="400000" fill="${esc(settings.background||'#fdf6e3')}"/><rect x="-200000" y="-200000" width="400000" height="400000" fill="url(#topology-grid)"/><g id="topology-scene">${decos.map(topologyDecoration).join('')}${drawing.links.map((p,i)=>topologyLink(p,nodes,i,settings)).join('')}${drawing.nodes.map(topologyNode).join('')}</g>`;
+ const nodes=new Map(drawing.nodes.map(n=>[n.id,n])),settings=drawing.settings||{},decos=drawing.decorations.map((d,i)=>({d,i})).sort((a,b)=>(a.d.zIndex||0)-(b.d.zIndex||0));
+ return `<defs><pattern id="topology-grid" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".6" fill="${esc(settings.gridColor||'#d2cbb5')}"/></pattern></defs><rect x="-200000" y="-200000" width="400000" height="400000" fill="${esc(settings.background||'#fdf6e3')}"/><rect x="-200000" y="-200000" width="400000" height="400000" fill="url(#topology-grid)"/><g id="topology-scene">${decos.map(({d,i})=>topologyDecoration(d,i)).join('')}${drawing.links.map((p,i)=>topologyLink(p,nodes,i,settings)).join('')}${drawing.nodes.map(topologyNode).join('')}</g>`;
 }
 function measureTopology(svg){
  for(const group of svg.querySelectorAll('.device-label,.interface-label')){

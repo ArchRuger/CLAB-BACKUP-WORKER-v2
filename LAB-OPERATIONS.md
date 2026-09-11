@@ -31,11 +31,11 @@ Open **Lab actions** or right-click a saved lab (keyboard: Shift+F10).
 | Deploy / redeploy / destroy | Operates on the original VM topology; compatible cleanup variants are offered separately. Redeploy falls back to destroy then deploy when necessary. |
 | Apply | Applies the original VM YAML when supported by installed Containerlab. |
 | Start / stop / restart | Applies to every node in the selected lab. Stop retains containers; destroy removes them. |
-| Inspect lab / inspect all | Readable table of topology, lab, node, kind/image, state/health and IPv4/IPv6. Failed or incomplete output remains visible for diagnosis. |
+| Inspect lab / View running lab details | Readable table of topology, lab, node, kind/image, state/health and IPv4/IPv6. Failed or incomplete output remains visible for diagnosis. |
 | Save configurations | Containerlab's kind-dependent save command. Manager backups are separate. |
 | SSH all nodes | Opens a launcher tab with individual links and Open all ready sessions. Allow browser popups; at most 32 concurrent terminals/checks. |
 | Favorite | Sorts this saved lab above other labs. |
-| Interactive draw.io editor | Drag nodes or edit coordinates. Save layout updates the manager; Export full diagram downloads current positions without saving. |
+| Edit topology diagram | Move nodes and annotations, add text/boxes/circles/lines, style, undo, save and export JSON/draw.io. |
 | Delete undeployed VM YAML | Separate source deletion; refused while its deployment exists. Keeps a VM recovery copy. |
 | Deploy New Lab → Lab Topologies | Same-tab landing page with an explicit browser button. Expand folders to select .clab.yaml/.clab.yml files; existing files are read-only. |
 | New topology | Creates a new VM YAML after structure preview and confirmation; never replaces an existing file. |
@@ -51,7 +51,9 @@ automatically stopped or deleted by an upgrade; manage those on the VM if presen
 
 ## Interactive diagram and topology actions
 
-There is one interactive diagram editor. It changes node positions; connections
+Choose **Edit diagram** in the topology toolbar to move nodes, add text, boxes, circles and lines, or edit appearance. Undo reverses edits; closing offers to discard unsaved changes. Save persists the manager map. Download annotations JSON or Export draw.io includes unsaved edits without writing VM files. Concurrent edits are rejected if the saved map changed; reopen it before editing again.
+
+The editor changes node positions; connections
 follow the nodes. Full export contains editable nodes, connections, interface
 labels, groups/shapes, notes, colors and positions. Contained nodes are grouped
 with their surrounding annotation so they move together in draw.io. Router,

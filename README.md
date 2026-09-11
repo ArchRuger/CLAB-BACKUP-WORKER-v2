@@ -1,15 +1,15 @@
-# Containerlab Node Manager — 1.13.0
+# Containerlab Node Manager — 1.14.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
 discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced.
 
-**1.13.0 deployment:** Build the new source and create the VM password using
+**1.14.0 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
-**Historical master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
-Proxmox/Ubuntu setup, Docker Hub installation, VM access, lab workflows and recovery.
+**Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
+Proxmox/Ubuntu setup, source/image installation, VM passwords, lab workflows and recovery.
 Paste its contents into a Wiki.js page using the Markdown editor; its anchored
 sections, tabsets and callouts follow the existing internal wiki format.
 
@@ -21,6 +21,19 @@ Use [deploy/compose.image.yml](deploy/compose.image.yml) for this path; it has n
 **Building from source?** Follow the [Fresh VM installation guide](FRESH-VM-GUIDE.md).
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
+
+## Changes in 1.14.0
+
+- Sidebar order and labels follow the revised workflow; supported device types show
+  the active release. View running lab details opens a wider inspection table.
+- Topology opens first, followed by Nodes and Backup history; Credentials and
+  Action logs are available from the More dropdown.
+- Edit diagram adds movable text, boxes, circles and lines with appearance controls,
+  Undo and unsaved-change protection. Save persists annotations in manager storage.
+  Export current edits as annotations JSON or editable draw.io without changing VM files.
+- Concurrent map edits fail with a clear conflict instead of overwriting a newer map.
+- The master wiki now documents password setup, persistence, migration and recovery,
+  and the updated UI. The VM password behavior from 1.13.0 is included.
 
 ## Changes in 1.13.0
 

@@ -1,6 +1,6 @@
-> Historical guide for earlier releases. For 1.13.0, use [VM-CONNECTION.md](VM-CONNECTION.md)
+> Historical guide for earlier releases. For 1.14.0, use [VM-CONNECTION.md](VM-CONNECTION.md)
 > and [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md). Their password setup replaces the SSH client key steps below.
-> Build 1.13.0 from source; no new registry image is claimed by this delivery.
+> Build 1.14.0 from source; no new registry image is claimed by this delivery.
 
 # Pulled the Docker image? Start here
 

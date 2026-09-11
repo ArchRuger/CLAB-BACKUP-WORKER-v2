@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .discovery import PinnedHostKey, vm_password, parse_definition, stamp
 from .topology import parse_drawing
 from .drawio_export import drawio
+from .layout import decorations, annotations, revision
 
 BUSY = ('queued', 'running')
 
@@ -251,11 +252,19 @@ class LabOperations:
             return Response(content, media_type='application/xml', headers={'Content-Disposition': "attachment; filename=topology.drawio; filename*=UTF-8''" + quote(filename, safe='')})
 
         class Layout(BaseModel):
-            positions: dict
+            model_config = ConfigDict(extra="forbid")
+            positions: dict = Field(default_factory=dict, max_length=2000)
+            decorations: list[dict] | None = Field(default=None, max_length=2000)
+            revision: str | None = Field(default=None, max_length=64)
 
-        def positioned(lab, positions):
+        def positioned(lab, data):
             if not lab or not lab.get('drawing'): raise HTTPException(404, 'Import a topology map first.')
+            if data.revision and data.revision != revision(lab['drawing']): raise HTTPException(409, 'The map changed. Reopen the editor before saving or exporting.')
             drawing = copy.deepcopy(lab['drawing'])
+            positions = data.positions
+            if data.decorations is not None:
+                try: drawing['decorations'] = decorations(data.decorations)
+                except ValueError as exc: raise HTTPException(400, str(exc))
             aliases = {n['id']: n for n in drawing['nodes']}
             if set(positions) - set(aliases): raise HTTPException(400, 'Unknown map nodes.')
             for alias, point in positions.items():
@@ -267,19 +276,29 @@ class LabOperations:
         def layout(lab_id: str, data: Layout):
             with self.store.lock:
                 self.guard(lab_id); lab = self.store.lab(lab_id)
-                drawing = positioned(lab, data.positions)
+                drawing = positioned(lab, data)
                 previous = lab['drawing']; lab['drawing'] = drawing
                 try: self.store.save()
                 except OSError:
                     lab['drawing'] = previous
                     raise HTTPException(500, 'Could not save the layout. Try again.')
+            self.store.event('topology.layout', 'Diagram layout and annotations saved', lab_id=lab_id)
             return {'saved': True}
+
+        @app.post('/api/labs/{lab_id}/annotations')
+        def export_annotations(lab_id: str, data: Layout):
+            with self.store.lock:
+                lab = self.store.lab(lab_id)
+                drawing = positioned(lab, data)
+                content = json.dumps(annotations(drawing), ensure_ascii=False, indent=2).encode()
+                filename = lab['name'] + '.clab.yaml.annotations.json'
+            return Response(content, media_type='application/json', headers={'Content-Disposition': "attachment; filename=topology.annotations.json; filename*=UTF-8''" + quote(filename, safe='')})
 
         @app.post('/api/labs/{lab_id}/drawio')
         def export_current(lab_id: str, data: Layout):
             with self.store.lock:
                 lab = copy.deepcopy(self.store.lab(lab_id))
-                drawing = positioned(lab, data.positions)
+                drawing = positioned(lab, data)
                 lab['drawing'] = drawing
                 content = drawio(lab)
             return Response(content, media_type='application/xml', headers={'Content-Disposition': "attachment; filename=topology.drawio; filename*=UTF-8''" + quote(lab['name']+'.drawio', safe='')})

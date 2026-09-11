@@ -2,7 +2,7 @@
 
 <html lang="en">
 
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager · Network lab operations</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.13.0"><script src="/static/app.js?v=1.13.0" defer></script><script src="/static/topology-render.js?v=1.13.0" defer></script><script src="/static/topology.js?v=1.13.0" defer></script><script src="/static/management.js?v=1.13.0" defer></script><script src="/static/operations.js?v=1.13.0" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager · Network lab operations</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.14.0"><script src="/static/app.js?v=1.14.0" defer></script><script src="/static/topology-render.js?v=1.14.0" defer></script><script src="/static/topology.js?v=1.14.0" defer></script><script src="/static/management.js?v=1.14.0" defer></script><script src="/static/operations.js?v=1.14.0" defer></script><script src="/static/diagram-editor.js?v=1.14.0" defer></script></head>
 
 <body>
 
@@ -12,17 +12,21 @@
 
   <div class="brand"><img class="brandmark" src="/static/fabric-mark.svg" alt=""><div>Containerlab Node Manager<small>NETWORK LAB OPERATIONS</small></div></div>
 
-  <div class="side-label">LAB WORKSPACES <button id="add-lab" class="icon-button" title="Add lab" aria-label="Add lab">+</button></div>
+  <div class="side-label">LAB WORKSPACES </div>
 
   <nav id="labs" aria-label="Labs"><p class="side-hint">Your labs will appear here.</p></nav>
 
-  <button id="new-lab" class="side-button">+ Import a lab</button>
+  <button id="vm-projects" class="side-button side-primary">Deploy New Lab</button>
+  <button id="inspect-all" class="side-button">View running lab details</button>
   <button id="vm-settings" class="side-button">VM connection</button>
   <button id="vm-refresh" class="side-button">Refresh discovery</button>
+  <button id="operations-history" class="side-button">Operation history</button>
+  <button id="new-lab" class="side-button">Manual discovery</button>
+  <p class="side-hint" id="operation-summary" role="status"></p>
   <p id="vm-summary" class="side-hint" role="status"></p>
   <div id="discovered-labs"></div><div id="excluded-labs"></div><details id="discovery-files"><summary>Discovery file details</summary><div id="discovery-file-list"></div></details>
 
-  <div class="side-bottom"><span class="side-caption">BUILT FOR THE LAB</span><p>Junos / IOS-XR / EOS</p><small>Connections. Configurations. History.</small><button id="manager-settings" class="text-button">Manager settings</button></div>
+  <div class="side-bottom"><span class="side-caption" id="supported-release">Supported device types as of release 1.14.0</span><p>Junos / IOS-XR / EOS</p><button id="manager-settings" class="text-button">Manager settings</button></div>
 
 </aside>
 
@@ -41,9 +45,9 @@
 
     <section class="metrics" aria-label="Lab summary"><div><span>Lab nodes</span><strong id="node-count">0</strong></div><div><span>Selected for backup</span><strong id="enabled-count">0</strong></div><div><span>Credentials ready</span><strong id="ready-count">0</strong></div><div><span>Backup schedule</span><strong id="schedule-summary">Manual</strong></div></section>
 
-    <div class="control-row"><nav class="tabs" aria-label="Workspace views"><button class="active" data-tab="inventory" aria-selected="true">Nodes</button><button data-tab="topology" aria-selected="false">Topology</button><button data-tab="credentials" aria-selected="false">Credentials</button><button data-tab="backups" aria-selected="false">Backup history</button><button data-tab="logs" aria-selected="false">Action logs</button></nav><div class="actions"><button class="button secondary" id="export-sessions">Export sessions</button><button class="button secondary" id="test">Test NOS login</button><button class="button primary" id="backup">Back up now <span aria-hidden="true">→</span></button></div></div>
+    <div class="control-row"><nav class="tabs" aria-label="Workspace views"><button class="active" data-tab="topology" aria-selected="true">Topology</button><button data-tab="inventory" aria-selected="false">Nodes</button><button data-tab="backups" aria-selected="false">Backup history</button><details id="extra-views" class="extra-views"><summary id="extra-views-label">More</summary><div class="extra-views-menu"><button data-tab="credentials" aria-selected="false">Credentials</button><button data-tab="logs" aria-selected="false">Action logs</button></div></details></nav><div class="actions"><button class="button secondary" id="export-sessions">Export sessions</button><button class="button secondary" id="test">Test NOS login</button><button class="button primary" id="backup">Back up now <span aria-hidden="true">→</span></button></div></div>
 
-    <section id="topology-view" class="view" hidden><div class="section-heading"><div><h2>Lab topology</h2><p>Right-click a node for SSH and backup actions. Click for connection details.</p></div><div class="actions"><button id="map-ssh-all" class="button secondary">SSH all nodes ↗</button><button id="map-backup-all" class="button secondary">Back up all configs</button><button id="import-map" class="button primary">Import topology</button></div></div><div class="map-tools"><button id="map-expand">Expand map</button><button id="map-fit">Fit map</button><button id="map-in" aria-label="Zoom in">+</button><button id="map-out" aria-label="Zoom out">-</button><span>Drag to pan · Links show imported wiring, not live status</span></div><p id="map-status" role="status"></p><svg id="topology-map" viewBox="0 0 1000 600" aria-label="Lab topology" role="group"></svg></section><section id="logs-view" class="view" hidden>
+    <section id="topology-view" class="view" hidden><div class="section-heading"><div><h2>Lab topology</h2><p>Right-click a node for SSH and backup actions. Click for connection details.</p></div><div class="actions"><button id="map-ssh-all" class="button secondary">SSH all nodes ↗</button><button id="map-backup-all" class="button secondary">Back up all configs</button><button id="import-map" class="button primary">Import topology</button></div></div><div class="map-tools"><button id="map-expand">Expand map</button><button id="map-fit">Fit map</button><button id="map-in" aria-label="Zoom in">+</button><button id="map-out" aria-label="Zoom out">-</button><span>Drag to pan · Links show imported wiring, not live status</span><button id="map-edit" class="button secondary">Edit diagram</button></div><p id="map-status" role="status"></p><svg id="topology-map" viewBox="0 0 1000 600" aria-label="Lab topology" role="group"></svg></section><section id="logs-view" class="view" hidden>
 
       <div class="section-heading"><div><h2>Action logs</h2><p>Live job steps and application actions. Refreshed every four seconds. Newest first.</p></div><button id="download-logs" class="button secondary">Download logs</button></div>
 
@@ -69,7 +73,7 @@
 
   </div>
 
-  <footer><span>Containerlab Node Manager / SSH &amp; configuration history · <span id="app-version">v1.13.0</span></span><span id="updated">No inventory loaded</span></footer>
+  <footer><span>Containerlab Node Manager / SSH &amp; configuration history · <span id="app-version">v1.14.0</span></span><span id="updated">No inventory loaded</span></footer>
 
 </div>
 

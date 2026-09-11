@@ -1,4 +1,4 @@
-# VM connection — password setup and recovery, 1.13.0
+# VM connection — password setup and recovery, 1.14.0
 
 Create the `clab-discovery` password **on the VM during host setup, before launching
 the manager**. The image build contains no user password. Each VM has its own
@@ -15,7 +15,7 @@ Docker, Compose, Containerlab, Python 3, sudo and a running OpenSSH service are 
 see [Fresh VM guide](FRESH-VM-GUIDE.md) for installation.
 
 ```bash
-cd "$HOME/projects/v1.13.0"
+cd "$HOME/projects/v1.14.0"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

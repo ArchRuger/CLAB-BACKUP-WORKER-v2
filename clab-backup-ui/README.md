@@ -14,7 +14,7 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
 
-## Changes in 1.13.0
+## Changes in 1.14.0
 
 VM connections now use a user-created password. First host setup prompts securely
 for the clab-discovery account password before launching the manager. Enter that
@@ -105,7 +105,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.13.0
+cd ~/projects/v1.14.0
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 
