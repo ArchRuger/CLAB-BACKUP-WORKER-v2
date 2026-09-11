@@ -11,7 +11,7 @@ import threading
 
 import paramiko
 
-from .inventory import literal, parse_inventory, read_data
+from .inventory import JUNOS_SWITCHES, literal, parse_inventory, read_data
 from .topology import parse_drawing
 
 PROTOCOL = 'clab-manager-files-v1'
@@ -75,7 +75,8 @@ def prepare_lab(bundle, deployed_name, previous=None):
             optional_error('topology', 'topology-data.json is invalid or does not match the original YAML.')
     if files.get('inventory'):
         try:
-            entries = parse_inventory(files['inventory'], files.get('topology'))
+            entries = parse_inventory(files['inventory'], files.get('topology'),
+                                      kind_hints={alias: expected[short]['platform'] for alias, short in aliases.items()})
             seen = set()
             for entry in entries:
                 short = aliases.get(entry['name'])
@@ -109,8 +110,13 @@ def prepare_lab(bundle, deployed_name, previous=None):
             # Preserve saved identities, credentials (including deliberately blank
             # ones), profile assignments, selection, driver and manual endpoints.
             current_kind = node['kind']
+            inferred_platform = node['platform']
             node.update(copy.deepcopy(saved))
             node['kind'] = current_kind
+            # Explicit sync may recognize a previously unsupported kind, but
+            # must not enable it or replace a user's existing driver selection.
+            if not saved.get('platform') and inferred_platform in JUNOS_SWITCHES:
+                node['platform'] = inferred_platform
             node['endpoint_mode'] = saved.get('endpoint_mode', 'manual')
     if files.get('annotations') or not lab.get('drawing'):
         lab['drawing'] = drawing

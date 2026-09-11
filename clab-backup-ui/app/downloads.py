@@ -5,6 +5,8 @@ import re
 
 FORMATS = {
     'juniper_cjunosevolved': ('cjunosevo', 'cfg'),
+    'juniper_vqfx': ('vQFX', 'cfg'),
+    'juniper_vjunosswitch': ('vJunos-switch', 'cfg'),
     'cisco_xrv9k': ('IOS-XR', 'txt'),
     'arista_ceos': ('CEOS', 'conf'),
 }

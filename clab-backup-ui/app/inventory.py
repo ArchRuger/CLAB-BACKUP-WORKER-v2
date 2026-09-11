@@ -3,12 +3,20 @@ import json
 import re
 import yaml
 
+JUNOS_DRIVER = {'os': 'junipernetworks.junos.junos', 'command': 'show configuration | display set | no-more', 'suffix': 'set'}
+JUNOS_SWITCHES = ('juniper_vqfx', 'juniper_vjunosswitch')
+JUNOS_PLATFORMS = ('juniper_cjunosevolved', *JUNOS_SWITCHES)
+GENERIC_JUNOS = ('junos', 'junipernetworks.junos.junos')
 PLATFORMS = {
-    'juniper_cjunosevolved': {'label': 'Junos', 'os': 'junipernetworks.junos.junos', 'command': 'show configuration | display set | no-more', 'suffix': 'set'},
+    'juniper_cjunosevolved': {'label': 'Junos', **JUNOS_DRIVER},
+    'juniper_vqfx': {'label': 'Junos (vQFX)', **JUNOS_DRIVER},
+    'juniper_vjunosswitch': {'label': 'Junos (vJunos-switch)', **JUNOS_DRIVER},
     'cisco_xrv9k': {'label': 'IOS-XR', 'os': 'cisco.iosxr.iosxr', 'command': 'show running-config', 'suffix': 'cfg'},
     'arista_ceos': {'label': 'EOS', 'os': 'arista.eos.eos', 'command': 'show running-config', 'suffix': 'cfg'},
 }
 ALIASES = {'junos': 'juniper_cjunosevolved', 'junipernetworks.junos.junos': 'juniper_cjunosevolved',
+           'vr-vqfx': 'juniper_vqfx', 'vqfx': 'juniper_vqfx',
+           'vr-vjunosswitch': 'juniper_vjunosswitch', 'vjunosswitch': 'juniper_vjunosswitch',
            'iosxr': 'cisco_xrv9k', 'cisco.iosxr.iosxr': 'cisco_xrv9k',
            'ceos': 'arista_ceos', 'vr-xrv9k': 'cisco_xrv9k', 'cjunosevolved': 'juniper_cjunosevolved', 'eos': 'arista_ceos', 'arista.eos.eos': 'arista_ceos', **{k:k for k in PLATFORMS}}
 SAFE_FIELDS = {'ansible_host','ansible_port','ansible_user','ansible_password','ansible_ssh_pass','ansible_network_os','clab_kind','ansible_become_password'}
@@ -48,7 +56,7 @@ def read_data(raw):
         raise ValueError('Inventory must be a YAML/JSON mapping')
     return data
 
-def parse_inventory(raw, topology=None):
+def parse_inventory(raw, topology=None, *, kind_hints=None):
     data = read_data(raw)
     records = {}
     topo_types = {}
@@ -64,6 +72,10 @@ def parse_inventory(raw, topology=None):
                             topo_types[str(alias)] = ALIASES.get(node.get('kind'), '')
                             if node.get('shortname'):
                                 topo_names[str(alias)]=literal(node['shortname'],'Device short name',200)
+    # VM imports also have the original lab YAML. Its concrete kinds keep a
+    # generic Junos Ansible driver from relabeling every Juniper as cJunos.
+    if kind_hints:
+        topo_types.update({name: kind for name, kind in kind_hints.items() if kind in PLATFORMS})
     def fields(values):
         if values is None:
             return {}
@@ -120,6 +132,15 @@ def parse_inventory(raw, topology=None):
         v = record['vars']
         kinds = {ALIASES[g] for g in record['groups'] if g in ALIASES}
         explicit = ALIASES.get(v.get('clab_kind')) or ALIASES.get(v.get('ansible_network_os')) or topo_types.get(name)
+        if not ALIASES.get(v.get('clab_kind')) and v.get('ansible_network_os') in GENERIC_JUNOS:
+            concrete = {ALIASES[g] for g in record['groups'] if g in ALIASES
+                        and g not in GENERIC_JUNOS and ALIASES[g] in JUNOS_PLATFORMS}
+            inferred = topo_types.get(name)
+            if inferred not in JUNOS_PLATFORMS:
+                if len(concrete) > 1:
+                    raise ValueError(f'{name}: conflicting Junos kinds across groups; set an explicit clab_kind')
+                inferred = next(iter(concrete)) if len(concrete) == 1 else ''
+            explicit = inferred or explicit
         kind = explicit or (next(iter(kinds)) if len(kinds) == 1 else '')
         result.append({'name': name, 'short_name':topo_names.get(name,''), 'address': address(v.get('ansible_host', name)),
                        'port': port(v.get('ansible_port',22)), 'platform': kind,

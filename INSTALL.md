@@ -1,12 +1,12 @@
-# Guided VM installation — 1.17.0
+# Guided VM installation — 1.18.0
 
 Starting before Ubuntu is installed? Use the
 [Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) for Proxmox settings, first
 login, this installer, WinSCP/SFTP checks and your first successful Git save.
 This page is the short installation reference.
 
-The new health checker is prepared for **1.17.0**, based on published main
-`7c25648` (**1.16.1**); obtain the matching source after these changes are merged.
+This guide targets **1.18.0**, adding vQFX and vJunos-switch support to published
+main `712662f` (**1.17.0**). Obtain matching source after these changes are merged.
 
 After cloning or extracting the source on your Ubuntu 24.04 VM, run one command
 as your existing ordinary VM account, **without sudo**:
@@ -27,8 +27,8 @@ Compare UTC with a trusted current clock. For a wrong clock or APT's
 Then clone into a new source folder:
 
 ```bash
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.17.0"
-bash "$HOME/projects/v1.17.0/deploy/install.sh"
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.18.0"
+bash "$HOME/projects/v1.18.0/deploy/install.sh"
 ```
 
 Git is needed for the clone. If Git is not yet installed, extract a source ZIP
@@ -39,10 +39,10 @@ requirements. Internet access is needed for packages, image builds and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.17.0 — guided setup
+Containerlab Node Manager 1.18.0 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
-Source: /home/your-account/projects/v1.17.0
+Source: /home/your-account/projects/v1.18.0
 
 Setup menu
   1. Install or update manager, then set up Git
@@ -113,7 +113,7 @@ Use menu **2** whenever Git needs attention. It does not rebuild the manager.
 You can open it directly from any directory:
 
 ```bash
-bash "$HOME/projects/v1.17.0/deploy/install.sh" --git
+bash "$HOME/projects/v1.18.0/deploy/install.sh" --git
 ```
 
 The wizard separates Linux owner, GitHub login, commit name/email and checkout

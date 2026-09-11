@@ -32,13 +32,13 @@ advanced administrator/owner workflow below.
    directory and run this command **without sudo**:
 
    ```bash
-   cd "$HOME/projects/v1.17.0"
+   cd "$HOME/projects/v1.18.0"
    bash deploy/setup-git.sh
    ```
 
 Use your actual source folder if it has a different name. This is the folder
 containing `deploy/` and `clab-backup-ui/`, not the lab-config checkout under
-`~/labs/`. You can also run `bash "$HOME/projects/v1.17.0/deploy/setup-git.sh"`
+`~/labs/`. You can also run `bash "$HOME/projects/v1.18.0/deploy/setup-git.sh"`
 from any directory. The launcher prints your actual absolute setup command.
 
 Finish the wizard until it reports **Registered** and **Ready** before connecting
@@ -184,7 +184,7 @@ In 1.15.3 and later
 you can supply the existing checkout directly:
 
 ```bash
-bash "$HOME/projects/v1.17.0/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
+bash "$HOME/projects/v1.18.0/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
 ```
 
 Replace `my-lab` with the actual folder. This command works even when your current
@@ -208,7 +208,7 @@ git var GIT_COMMITTER_IDENT
 Both checks must succeed. Then, from the manager source folder, register:
 
 ```bash
-cd "$HOME/projects/v1.17.0"
+cd "$HOME/projects/v1.18.0"
 sudo bash deploy/setup-git.sh --repo "$HOME/labs/my-lab"
 ```
 

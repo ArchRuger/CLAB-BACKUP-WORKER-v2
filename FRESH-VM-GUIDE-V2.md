@@ -1,7 +1,7 @@
 # Fresh VM guide, version 2 — Proxmox to your first Git save
 
 This is the **installer-based walkthrough** for Containerlab Node Manager
-**1.17.0** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
+**1.18.0** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
 the application version. It supplements the [short install guide](INSTALL.md)
 and keeps the [original manual guide](FRESH-VM-GUIDE.md) available.
 
@@ -10,11 +10,11 @@ obtain the project source, run **one installer**, then verify file transfer,
 load your lab, and save its progress to Git. You do not need WinSCP to bootstrap
 the installer.
 
-The published baseline is GitHub main `7c25648` (**1.16.1**); this guide includes
-the **1.17.0** installation checker prepared locally for publication. Obtain the
-matching 1.17.0 source after these changes are merged. Instructions were checked
+The published baseline is GitHub main `712662f` (**1.17.0**); this guide includes
+**1.18.0** vQFX/vJunos-switch support prepared locally for publication. Obtain the
+matching 1.18.0 source after these changes are merged. Instructions were checked
 against source and the linked provider documentation. The administrative WinSCP
-procedure below was confirmed by the user; a complete fresh-VM run of 1.17.0 has
+procedure below was confirmed by the user; a complete fresh-VM run of 1.18.0 has
 not been verified by its author.
 
 ## Before you start
@@ -31,7 +31,7 @@ This guide uses these examples; substitute your actual values:
 | Ubuntu VM name | `clab-3` |
 | Normal Ubuntu administrator | `archtop` |
 | VM LAN address | `10.150.2.213` |
-| Manager source folder | `/home/archtop/projects/v1.17.0` |
+| Manager source folder | `/home/archtop/projects/v1.18.0` |
 | Uploaded files | `/home/archtop/uploads` |
 | Lab topology/project | `/etc/containerlab/practice-lab` |
 | Lab-config Git checkout | `/home/archtop/labs/my-lab` |
@@ -100,6 +100,13 @@ nodes. [Proxmox VM documentation](https://github.com/proxmox/pve-docs/blob/maste
 For VM-backed images such as cJunosEvolved or XRv9k, check the physical host's
 nested KVM setting. Ordinary Linux containers and the manager itself do not need
 nested virtualization.
+
+**vJunos-switch requires a different deployment plan:** Containerlab documents
+that it cannot run inside a VM because its architecture already uses nested
+virtualization. A Proxmox Ubuntu guest with `/dev/kvm` does not remove that
+limitation. Use a host supported by the image's requirements; the manager's new
+Junos adapter only adds node login/backup handling.
+[Containerlab vJunos-switch requirements](https://containerlab.dev/manual/kinds/vr-vjunosswitch/)
 
 **Proxmox host shell:** run the command matching its CPU vendor:
 
@@ -199,8 +206,8 @@ subshell stops at a failed command without closing your login session.
     sudo apt-get install -y git
   fi
   mkdir -p "$HOME/projects"
-  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.17.0"
-  bash "$HOME/projects/v1.17.0/deploy/install.sh"
+  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.18.0"
+  bash "$HOME/projects/v1.18.0/deploy/install.sh"
 )
 ```
 
@@ -211,10 +218,10 @@ normal account. The source must be present before its installer can run.
 If that source folder already exists, reuse it instead of cloning over it:
 
 ```bash
-bash "$HOME/projects/v1.17.0/deploy/install.sh"
+bash "$HOME/projects/v1.18.0/deploy/install.sh"
 ```
 
-The installer banner must identify **1.17.0** for this guide. A directory name
+The installer banner must identify **1.18.0** for this guide. A directory name
 does not pin a Git version; if main has advanced, use that release's matching
 guide. Its source consistency check must pass.
 
@@ -274,7 +281,7 @@ with its initial README is ready. Otherwise choose **Finish; set up Git later**.
 You can reopen the Git wizard without rebuilding:
 
 ```bash
-bash "$HOME/projects/v1.17.0/deploy/install.sh" --git
+bash "$HOME/projects/v1.18.0/deploy/install.sh" --git
 ```
 
 The six phases guide you through:
@@ -542,6 +549,27 @@ not prove that its NOS SSH service is ready. In the manager:
 5. Test a device login, then take one backup and inspect/download the result.
 6. Once that succeeds, capture the full intended node set.
 
+For the Juniper kinds added in 1.18.0, use these names in your topology and
+select the matching NOS when adding a credential profile:
+
+| Device | Canonical Containerlab kind | Manager import aliases |
+|---|---|---|
+| Juniper vQFX | `juniper_vqfx` | `vr-vqfx`, `vqfx` |
+| Juniper vJunos-switch | `juniper_vjunosswitch` | `vr-vjunosswitch`, `vjunosswitch` |
+
+Enter the actual device username/password; the manager does not fill in default
+passwords. If upgrading a saved lab, **Sync from VM** can map unknown nodes to
+these kinds, or choose the NOS under **Node details → Edit connection**. Review
+**Include in backups** because existing selections are preserved. The same
+Junos SSH driver used for cJunosEvolved captures
+`show configuration | display set | no-more`; saved files use `.set`, Git
+manifests report `junos-display-set`, and individual downloads use
+`vQFX_*.cfg` or `vJunos-switch_*.cfg`. Live configuration restore is unavailable.
+See the [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
+[vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) requirements,
+including the vJunos-switch VM limitation in step 1. Live login and backup of
+these images must still be verified on your deployment.
+
 No initial inventory upload is normally needed for a deployed lab whose files
 the helper can read. Keep YAML, annotations and startup files in their lasting
 project folder. Discovery is read-only until you explicitly request a supported
@@ -559,13 +587,13 @@ After the Git wizard reported **Registered** and **Ready**:
 Now return to the **Ubuntu terminal** for the separate installation report:
 
 ```bash
-bash "$HOME/projects/v1.17.0/deploy/check-install.sh" --require-git
+bash "$HOME/projects/v1.18.0/deploy/check-install.sh" --require-git
 ```
 
 If you completed the administrative WinSCP sudoers setup in step 7, use:
 
 ```bash
-bash "$HOME/projects/v1.17.0/deploy/check-install.sh" --require-git --require-admin-sftp
+bash "$HOME/projects/v1.18.0/deploy/check-install.sh" --require-git --require-admin-sftp
 ```
 
 Approve sudo for inspection. The report checks services, SSH/SFTP policy,
@@ -585,7 +613,7 @@ refresh the operations helper from this matching source checkout and retest the
 actual failed folder:
 
 ```bash
-cd "$HOME/projects/v1.17.0"
+cd "$HOME/projects/v1.18.0"
 sudo bash deploy/setup-operations.sh
 bash deploy/check-install.sh --require-git --lab-path /etc/containerlab/practice-lab
 ```
@@ -633,7 +661,7 @@ The master wiki covers [manager data backup and recovery in Part 17](WIKI-MASTER
 
 At a suitable time, save lab work and perform a normal Ubuntu reboot. Afterwards
 verify WinSCP, the manager page, saved lab/history and VM connection. Reopen
-`bash "$HOME/projects/v1.17.0/deploy/install.sh"` and select **Check running
+`bash "$HOME/projects/v1.18.0/deploy/install.sh"` and select **Check running
 installation** if needed. Training device restart behavior is separate; inspect
 your lab rather than assuming every NOS resumed. Do not delete persistent data
 or clone everything again to recover a failed check.

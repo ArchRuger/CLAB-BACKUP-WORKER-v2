@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.17.0
+# Containerlab Node Manager — 1.18.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.17.0 deployment:** Build the new source and create the VM password using
+**1.18.0 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -31,6 +31,35 @@ and [migration instructions](STANDALONE-SETUP.md).
 ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
+
+## Changes in 1.18.0
+
+Adds Juniper vQFX and vJunos-switch to node import, NOS credential profiles,
+SSH checks, configuration backups and Git progress saves. They use the existing
+Junos SSH driver to capture `show configuration | display set | no-more`.
+
+| Device | Containerlab kind | Also recognized by the manager |
+|---|---|---|
+| Juniper vQFX | `juniper_vqfx` | `vr-vqfx`, `vqfx` |
+| Juniper vJunos-switch | `juniper_vjunosswitch` | `vr-vjunosswitch`, `vjunosswitch` |
+
+Use the canonical kind in new Containerlab YAML. Select the matching NOS in
+**Credentials** and enter that device's actual login. Passwords are not filled in
+automatically. Previously saved unknown nodes can use **Sync from VM**, or choose
+the NOS in **Node details → Edit connection**. Check **Include in backups** for
+each intended node; sync preserves existing selection and credential choices.
+Captured files use `.set` internally and `junos-display-set` in Git manifests;
+individual downloads are named `vQFX_*.cfg` or `vJunos-switch_*.cfg`.
+
+Build the matching manager and update its host helpers using the source launcher
+before testing a device login and backup. Live configuration restore remains
+unavailable. Containerlab documents vJunos-switch as unsupported inside a VM
+because of its nested architecture; adding this manager adapter does not change
+that deployment requirement. See the [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/)
+and [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) kind guides.
+
+Prepared locally from published main `712662f` (1.17.0). Publication, a complete
+fresh-VM run and live SSH/backup validation of these two NOS images remain pending.
 
 ## Changes in 1.17.0
 
@@ -234,7 +263,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.17.0
+cd ~/projects/v1.18.0
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

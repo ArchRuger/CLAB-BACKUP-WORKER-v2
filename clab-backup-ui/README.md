@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.17.0
+# Containerlab Node Manager — 1.18.0
 
 Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
 ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
@@ -16,6 +16,30 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 **Building from source?** Follow the [Fresh VM installation guide](../FRESH-VM-GUIDE.md).
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
+
+## Changes in 1.18.0
+
+Juniper vQFX (`juniper_vqfx`; aliases `vr-vqfx`, `vqfx`) and vJunos-switch
+(`juniper_vjunosswitch`; aliases `vr-vjunosswitch`, `vjunosswitch`) now use
+the existing Junos SSH driver for login checks and display-set backups. Use
+the canonical kinds in new Containerlab YAML. Each has a distinct NOS choice
+for node settings and credential profiles; enter the actual device credentials.
+No default password is supplied.
+
+For a saved node that still says **Choose NOS**, use **Sync from VM** or select
+its NOS in **Node details → Edit connection**. Existing enabled/disabled choices
+are retained, so review **Include in backups** before a lab-wide capture. Backups
+are stored as `.set`, exported to Git with format `junos-display-set`, and offered
+as `vQFX_*.cfg` or `vJunos-switch_*.cfg` downloads. Live configuration restore
+remains unavailable.
+
+Update both the manager image and matching host helpers with the launcher below.
+Then test device login and backup after the NOS has booted. These adapters have
+not been tested against live vQFX/vJunos-switch images here. Containerlab's
+[vJunos-switch guide](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) says
+that kind cannot be run inside a VM because of its nested architecture; manager
+support does not change that limitation. See also the
+[vQFX guide](https://containerlab.dev/manual/kinds/vr-vqfx/).
 
 ## Changes in 1.14.0
 
@@ -108,7 +132,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.17.0
+cd ~/projects/v1.18.0
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 
