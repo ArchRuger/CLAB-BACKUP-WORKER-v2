@@ -107,7 +107,7 @@ async function opHistory(labId=''){
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open workspace',`<p>Your browser may have blocked the new tab.</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open workspace ↗</a>`);}
 function opTopologyEntries(entries){return entries.filter(entry=>entry.directory||/\.clab\.ya?ml$/i.test(entry.name));}
 async function opBrowse(path=''){
- const result=await json('/operations/browse','POST',{path}),caps=await opCapabilities();
+ const result=await json('/operations/browse','POST',{path});
  const dialog=opDialog('op-browser','Lab Topologies',`<p class="op-path">${esc(result.path||'Lab topology folders')}</p><div class="actions"><button class="button secondary" id="op-roots">Lab folders</button><button class="button secondary" id="op-up">Parent folder</button><button class="button secondary" id="op-create">New topology</button><button class="button secondary" id="op-clone">Clone repository</button><button class="button secondary" id="op-popular">Popular labs</button></div><div class="op-file-tree" id="op-file-tree" aria-label="Lab topology files"></div><p class="form-help">Expand a folder and select a .clab.yaml or .clab.yml topology to view or deploy. Other files are hidden. Each folder shows at most 500 matching entries.</p>`);
  const addEntries=(container,entries)=>{
   entries=opTopologyEntries(entries);
@@ -124,8 +124,18 @@ async function opBrowse(path=''){
  addEntries($('op-file-tree'),result.entries);
  $('op-roots').onclick=()=>opTask(dialog,()=>opBrowse());$('op-up').onclick=()=>opTask(dialog,()=>opBrowse(result.parent||''));
  $('op-create').onclick=()=>opEdit('','',(result.path||'/srv/containerlab-node-manager/projects')+'/new-lab.clab.yaml');$('op-clone').onclick=()=>opClone();$('op-popular').onclick=()=>opTask(dialog,()=>opPopular());
- $('op-clone').disabled=!caps.network||caps.actions.clone?.available===false;$('op-popular').disabled=!caps.network;
- if(!caps.network)dialog.querySelector('.form-help').textContent+=' Online downloads are disabled. Enable --allow-downloads in VM setup for cloning and the catalog.';
+ // Listing files does not depend on Containerlab's command help probes. Render
+ // immediately; only the optional network controls need capabilities.
+ const clone=$('op-clone'),popular=$('op-popular'),help=dialog.querySelector('.form-help');
+ clone.disabled=true;popular.disabled=true;
+ opCapabilities().then(caps=>{
+  if(!clone.isConnected)return;
+  clone.disabled=!caps.network||caps.actions?.clone?.available===false;popular.disabled=!caps.network;
+  if(!caps.network)help.textContent+=' Online downloads are disabled. Enable --allow-downloads in VM setup for cloning and the catalog.';
+ }).catch(()=>{
+  if(!clone.isConnected)return;
+  help.textContent+=' Files are available, but command checks failed. Open the Debug panel to check VM helpers. Online actions remain disabled.';
+ });
 }
 async function opEdit(path,labId='',newPath=''){
  if(!path)labId='';

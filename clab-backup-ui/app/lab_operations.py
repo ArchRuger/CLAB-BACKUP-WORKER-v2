@@ -47,7 +47,7 @@ def operation_connection_error(status, stderr):
             'Run sudo bash deploy/check-install.sh on the VM and review the operations checks.')
 
 
-def remote(host, request, output=None, stopping=None):
+def remote(host, request, output=None, stopping=None, timeout=None):
     if not host or not host.get('enabled'): raise ValueError('Configure and enable the VM connection first.')
     if not host.get('fingerprint'): raise ValueError('Refresh discovery to establish the VM fingerprint first.')
     password = vm_password(host)
@@ -62,7 +62,7 @@ def remote(host, request, output=None, stopping=None):
         channel.exec_command('clab-manager-operations')
         channel.sendall((json.dumps(request) + '\n').encode()); channel.shutdown_write()
         channel.settimeout(.2)
-        until = time.monotonic() + (1250 if request.get('mode') == 'run' else 180)
+        until = time.monotonic() + (timeout if timeout is not None else 1250 if request.get('mode') == 'run' else 180)
         pending = b''; result = None; total = 0; stderr = b''; eof = False
         while True:
             if time.monotonic() > until or (stopping and stopping.is_set()):

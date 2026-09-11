@@ -12,7 +12,7 @@ FIELDS = {
     'clab-backup-ui/Dockerfile': r'org\.opencontainers\.image\.version="([^"]+)"',
     'clab-backup-ui/compose.yml': r'^\s+image:\s+clab-backup:([^\s]+)',
 }
-for name in ('index.html', 'terminal.html', 'workspace.html', 'vm-connection.html'):
+for name in ('index.html', 'terminal.html', 'workspace.html', 'vm-connection.html', 'debug.html'):
     FIELDS['clab-backup-ui/app/static/' + name] = r'/static/[^"\s?]+\?v=([^"\s]+)'
 
 

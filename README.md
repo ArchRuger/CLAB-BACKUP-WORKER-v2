@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.18.1
+# Containerlab Node Manager — 1.19.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.18.1 deployment:** Build the new source and create the VM password using
+**1.19.0 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -31,6 +31,22 @@ and [migration instructions](STANDALONE-SETUP.md).
 ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
+
+## Changes in 1.19.0
+
+Adds a [development debug panel](DEBUG-PANEL.md) available before any lab is imported.
+Inspect runtime versions, VM readiness, recent API failures and independent
+read-only folder/helper checks, then download a metadata-only JSON report.
+Credentials, paths, request payloads and raw logs are excluded.
+
+Fixes a remaining file-browser failure: a successful folder listing no longer
+waits for command-capability checks. Files render immediately; failed command
+checks disable only optional online controls and show a diagnostic hint.
+The existing 1.18.1 SSH stream and gateway fixes are retained.
+
+Run `bash deploy/install.sh` from the complete source root on the VM to update,
+then verify Release 1.19.0 in Debug panel. Source delivery only; no image
+publication or VM deployment is implied.
 
 ## Changes in 1.18.1
 

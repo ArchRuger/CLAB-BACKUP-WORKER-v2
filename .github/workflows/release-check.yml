@@ -42,3 +42,7 @@ jobs:
         run: |
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_operations_ssh.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_lab_operations.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_diagnostics.py -v
+      - name: Check browser regressions
+        working-directory: clab-backup-ui
+        run: node --test tests/test_operations_ui.js tests/test_debug_ui.js

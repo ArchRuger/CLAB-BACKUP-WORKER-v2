@@ -1,3 +1,31 @@
+# Development debug panel and folder browsing — 1.19.0
+
+- Prepared from merged main `a7a016b` (1.18.1) on
+  `codex/development-debug-panel`. No commit, push, image publication or VM
+  deployment was performed.
+- Full Python suite: 416 tests ran, 407 passed and nine skipped. Skips cover
+  Linux Ansible control-node behavior, controlling-terminal/process groups,
+  symlink/openat checks and the opt-in EOS SSH fixture. The seven focused debug
+  tests also pass, including a server-error test added after the full run.
+- All 42 JavaScript tests pass (39 existing/operations tests plus three debug
+  UI tests). Browser regression proves a listing renders while capabilities
+  are still pending, survives their failure and retries folder expansion.
+- Debug tests cover availability before setup, metadata bounds, secret/path
+  exclusion, safe exception classification, same-origin rejection, simultaneous
+  probe rejection, settings changes during checks, version mismatch, failed
+  checks, safe text rendering, retry and JSON report generation.
+- An isolated localhost browser fixture verified the debug page, readable
+  narrow layout, separate browse PASS / capabilities FAIL results, and topology
+  folder expansion while capability checks fail. No real VM was contacted.
+  Report Blob contents and download naming passed the UI harness; the in-app
+  browser did not emit a download event, so a saved workstation file was not
+  independently confirmed.
+- Release metadata, workflow YAML and Git whitespace checks pass. CI now runs
+  debug API and browser regressions; this branch's remote CI has not run yet.
+- Existing 1.18.1 SSH EOF handling is retained and its real localhost Paramiko
+  tests pass. The identified browser dependency is a separate failure path;
+  confirmation of the user's actual VM error still requires a live debug report.
+
 # Operations helper and installation diagnostics — 1.18.1
 
 - Prepared from merged main `7331e9a` (1.18.0) on `codex/operations-helper-fix`.
