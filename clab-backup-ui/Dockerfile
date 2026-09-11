@@ -15,6 +15,8 @@ RUN groupadd --gid 10001 worker \
  && chmod 700 /data
 WORKDIR /opt/nos-backup
 COPY app/ ./app/
+COPY VERSION ./VERSION
+RUN python -c 'from pathlib import Path; from app import __version__; expected = Path("VERSION").read_text().strip(); assert __version__ == expected, "VERSION and app.__version__ do not match"'
 ENV DATA_DIR=/data PYTHONUNBUFFERED=1 ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
 USER worker
 EXPOSE 8081

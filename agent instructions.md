@@ -1,5 +1,16 @@
 # CLAB Backup Worker — Agent Instructions
 
+## 1.15.1 repository consistency repair
+
+GitHub main b0389ba had VERSION 1.15.0 with 1.15.1 app/helpers. Read
+REPOSITORY-MAINTENANCE.md and run deploy/verify-release.py before delivery.
+The launcher checks consistency before host changes. Old root patch artifacts
+and the unused deploy/clab_manager_files.py development shim were removed;
+historical references below do not require restoring them. The production
+installer still installs app/host_files.py under the original helper path.
+Retain dotfiles in source packages and Git commits. Keep generated archives,
+runtime data and credentials out of the repository and Docker context.
+
 ## Release 1.15.1 — guided Git setup
 
 Read GIT-SETUP.md first. `bash deploy/setup-git.sh` as the ordinary VM account

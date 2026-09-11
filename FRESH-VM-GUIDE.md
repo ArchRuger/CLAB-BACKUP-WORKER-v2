@@ -148,6 +148,11 @@ Some nonstandard or unresolved template-based definitions need manual import.
 
 ## 6. Build a fresh image and launch the manager
 
+First run `python3 deploy/verify-release.py` from the repository root. The launcher
+also checks that VERSION, app, helpers and image metadata match before changing
+the host. If the source reports 1.15.0 but helpers report 1.15.1, follow the
+[repair for the affected GitHub checkout](REPOSITORY-MAINTENANCE.md#repair-the-affected-fresh-vm).
+
 **VM, repository root:**
 
 ```bash

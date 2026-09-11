@@ -24,3 +24,15 @@ class HelperPreflightTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn(b'secret-password', result.stdout + result.stderr)
             self.assertIn(b'has not been recreated', result.stderr)
+
+    def test_version_mismatch_shows_expected_and_installed_versions(self):
+        result = self.verify(dict(protocol='clab-manager-files-v1', helper_version='0.0.0', inspect={}, sources={}))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(('source VERSION expects ' + __version__).encode(), result.stderr)
+        self.assertIn(b'installed helper reports 0.0.0', result.stderr)
+
+    def test_invalid_version_and_inventory_content_are_never_printed(self):
+        result = self.verify(dict(protocol='clab-manager-files-v1', helper_version='secret-token',
+                                  inspect={'password': 'secret-password'}, sources={}))
+        self.assertNotIn(b'secret-token', result.stderr)
+        self.assertNotIn(b'secret-password', result.stderr)

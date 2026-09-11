@@ -25,6 +25,12 @@ and [migration instructions](STANDALONE-SETUP.md).
 
 ## Changes in 1.15.1
 
+Repository repair: VERSION now matches the 1.15.1 app/helpers. Run
+`python3 deploy/verify-release.py` to check the complete source before publishing
+or installing. The launcher runs this check automatically. See
+[repository audit and maintenance](REPOSITORY-MAINTENANCE.md) for the cleanup and
+repair of affected fresh installations.
+
 Guided Git onboarding now uses the existing VM account, prepares HTTPS login and
 commit identity, and checks repository readiness before registration. Run
 `bash deploy/setup-git.sh` without sudo. Start with [GIT-SETUP.md](GIT-SETUP.md).

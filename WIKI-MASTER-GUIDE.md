@@ -583,6 +583,12 @@ socket mount and no mount of host lab directories; helpers access them over SSH.
 
 # Part 10 — Launch Containerlab Node Manager {#part-10}
 
+Check source consistency before launch with `python3 deploy/verify-release.py`.
+The launcher also runs this check before updating the host. A checkout named
+`v1.15.1` can still contain stale files: VERSION, app and helpers must all agree.
+If the affected GitHub checkout reports source 1.15.0 and helper 1.15.1, see
+[the repository repair](REPOSITORY-MAINTENANCE.md#repair-the-affected-fresh-vm).
+
 From the matching source directory on the **Ubuntu VM**:
 
 ```bash
@@ -1188,7 +1194,8 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 |---|---|
 | Cannot find the Proxmox VM ID | Run `qm list` in the Proxmox host shell; match the VM name. |
 | First launch requires a public key | This is an old setup script. Obtain the matching 1.15.1 source and follow Part 8; current setup prompts for a password. |
-| Compose says service is not running during `exec` | The earlier launch failed. Read that failure, fix it, run `up`, then verify `ps` before `exec`. |
+| Compose says service is not running during `exec` | The earlier launch failed or was skipped. Read the launcher error first; version verification happens before the image is built. Fix it, rerun the launcher, then verify `ps` before `exec`. |
+| Source VERSION expects 1.15.0, installed helper reports 1.15.1 | The affected GitHub 1.15.1 checkout retained an old VERSION file. See the repository repair above. For other mismatches, obtain a complete matching source release. |
 | `docker build` requires an argument | Include the build context: `./clab-backup-ui` from the repo root or `.` from its Dockerfile folder. |
 | `[1]+ Stopped less ...` | Ctrl+Z suspended the viewer. Run `fg`, then press `q`. |
 | Lab discovered but upload is still manual | Verify both installed helpers match the image; image replacement alone does not update host file-transfer support. |

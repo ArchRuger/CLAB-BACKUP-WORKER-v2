@@ -14,6 +14,7 @@ while [[ $# -gt 0 ]]; do
 done
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(dirname -- "$script_dir")
+/usr/bin/python3 "$script_dir/verify-release.py" "$repo_dir"
 command -v docker >/dev/null || { echo 'Install Docker first; see FRESH-VM-GUIDE.md.' >&2; exit 1; }
 docker compose version >/dev/null
 docker info >/dev/null

@@ -1,4 +1,4 @@
-> Historical 1.6.1 worker upgrade. For the standalone 1.7.0 manager, use [STANDALONE-SETUP.md](STANDALONE-SETUP.md).
+> Historical 1.6.1 worker upgrade. For a current fresh VM, use [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md); for an existing standalone manager, use [STANDALONE-SETUP.md](STANDALONE-SETUP.md).
 
 # Fresh image and worker upgrade — 1.6.1
 
