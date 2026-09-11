@@ -1,3 +1,15 @@
+# Guided Git setup recovery — 1.15.2
+
+- Based on GitHub main 698fabb, preserving the latest user wiki edits.
+- Reject GitHub branch/file page URLs before choosing a directory or authenticating;
+  retain HTTPS repository URLs and nested namespaces on other Git hosts.
+- Package-update failures stop before installation, with source-repair instructions;
+  package-install errors report their own recovery step. System sources are not edited.
+- Focused validation passed: 15 onboarding tests, seven release-consistency tests
+  and four helper-preflight tests (26 total). Source verification reports 1.15.2;
+  the Git whitespace check passed. These are local tests with mocked package commands.
+- No live Ubuntu package installation, Docker build, VM upgrade or push was performed.
+
 # Repository consistency repair — 1.15.1
 
 - Audited current GitHub main b0389ba and reproduced its source/helper version

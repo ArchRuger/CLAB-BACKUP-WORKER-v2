@@ -12,6 +12,45 @@ spec.loader.exec_module(onboard)
 
 
 class GitOnboardTests(unittest.TestCase):
+    def test_github_web_pages_are_rejected_before_clone(self):
+        for suffix in ('/tree/main', '/blob/main/README.md', '/issues', '', '/../lab'):
+            url = 'https://github.com/owner' + (suffix if not suffix else '/repo' + suffix)
+            with self.subTest(url=url), self.assertRaisesRegex(ValueError, 'Code > HTTPS'):
+                onboard.https_url(url)
+        for url in ('https://github.com/owner/repo', 'https://github.com/owner/repo.git',
+                    'https://github.com/owner/repo/', 'https://git.example.org/group/subgroup/repo.git'):
+            self.assertEqual(onboard.https_url(url), url)
+
+    def test_bad_clone_url_reprompts_without_running_commands(self):
+        good = 'https://github.com/N24L/patricks-bgp-lab_2.git'
+        with patch.object(onboard, 'ask', side_effect=[good[:-4] + '/tree/main', good]), \
+                patch.object(onboard, 'run') as run, patch('builtins.print') as output:
+            self.assertEqual(onboard.ask_clone_url(), good)
+        run.assert_not_called()
+        self.assertIn('Code > HTTPS', output.call_args.args[0])
+
+    def test_failed_apt_update_stops_before_install_or_login(self):
+        with patch.object(onboard, 'run', return_value=subprocess.CompletedProcess([], 100)) as run:
+            with self.assertRaisesRegex(ValueError, 'file:/cdrom') as error:
+                onboard.install_package('gh', {})
+        self.assertIn('GIT-SETUP.md', str(error.exception))
+        self.assertEqual([call.args[0] for call in run.call_args_list], [['sudo', 'apt-get', 'update']])
+
+    def test_package_install_failure_has_distinct_recovery(self):
+        results = [subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 100)]
+        with patch.object(onboard, 'run', side_effect=results), self.assertRaisesRegex(ValueError, 'could not install gh'):
+            onboard.install_package('gh', {})
+
+    def test_successful_package_install_keeps_interactive_sudo(self):
+        for package in ('git', 'gh'):
+            env = onboard.service_env('owner', '/home/owner')
+            with patch.object(onboard, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+                onboard.install_package(package, env)
+            self.assertEqual([call.args[0] for call in run.call_args_list],
+                             [['sudo', 'apt-get', 'update'], ['sudo', 'apt-get', 'install', '-y', package]])
+            self.assertTrue(all(call.kwargs['interactive'] for call in run.call_args_list))
+            self.assertTrue(all(call.args[1] == env for call in run.call_args_list))
+
     def test_rejects_credentials_and_non_https_urls(self):
         for url in ('https://token@github.com/a/b.git', 'https://github.com/a/b?token=x',
                     'git@github.com:a/b', 'http://github.com/a/b', 'https://github.com/a/b#secret',
