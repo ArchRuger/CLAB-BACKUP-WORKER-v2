@@ -6,7 +6,7 @@ This guide covers the end to end process of preparing a fresh Ubuntu VM to be us
 
 This page combines the Ubuntu/Proxmox build notes, the installation walkthrough and the current manager documentation. Follow it from the beginning for a fresh VM. If Docker and Containerlab already work, start at **Part 6**.
 
-> **Release baseline:** 1.15.1 source delivery, built locally as `clab-backup:1.15.1`. This update does not publish a Docker Hub image.
+> **Release baseline:** GitHub `main` at `77d3c76`, checked on 11 September 2026. Source VERSION, application, helpers and image metadata agree on **1.15.1**. Build locally as `clab-backup:1.15.1`; a Docker Hub publication has not been verified.
 {.is-info}
 
 ## Reference environment
@@ -418,12 +418,8 @@ Use the same account context for login and image pulls: `sudo docker login` stor
 
 ## Step 6.1 — Obtain version 1.15.1
 
-Use the delivered `containerlab-node-manager-1.15.1-source.zip`, extracted under
-`~/projects/` so that `deploy/` and `clab-backup-ui/` are directly inside
-`~/projects/v1.15.1/`. This guide builds the image from that source. A versioned
-directory name alone does not select a release.
-
-If the update has been published to GitHub, you can instead clone the project:
+The corrected 1.15.1 source is on GitHub. On a fresh VM, clone into a new source
+folder as your ordinary VM account, then check the complete release:
 
 ```bash
 mkdir -p "$HOME/projects"
@@ -431,11 +427,17 @@ cd "$HOME/projects"
 git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.15.1
 cd v1.15.1
 cat clab-backup-ui/VERSION
+python3 deploy/verify-release.py
 ```
 
-Expect **1.15.1**. If GitHub still contains an earlier version, use the delivered
-source ZIP. Do not mix old setup scripts with the new application. No Docker Hub
-tag is assumed to exist for this delivery.
+Expect **1.15.1** and **Source release verified: 1.15.1**. A directory name does
+not select a release. Future `main` changes may be newer; use a complete matching
+release and its guide. Stop if the consistency check fails.
+
+If this directory already exists, do not clone over it. Inspect `git status`
+before updating, preserving local changes and `clab-backup-ui/.env`. Alternatively,
+extract the cleaned source ZIP into a separate folder with `deploy/` and
+`clab-backup-ui/` directly inside it. No Docker Hub tag is assumed to exist.
 
 ## Step 6.2 — Check the host setup files
 
@@ -583,18 +585,16 @@ socket mount and no mount of host lab directories; helpers access them over SSH.
 
 # Part 10 — Launch Containerlab Node Manager {#part-10}
 
-Check source consistency before launch with `python3 deploy/verify-release.py`.
-The launcher also runs this check before updating the host. A checkout named
-`v1.15.1` can still contain stale files: VERSION, app and helpers must all agree.
-If the affected GitHub checkout reports source 1.15.0 and helper 1.15.1, see
-[the repository repair](REPOSITORY-MAINTENANCE.md#repair-the-affected-fresh-vm).
+The launcher checks source consistency before updating the host, verifies the
+installed helpers, then builds the image and creates the manager container.
+A failure before the build leaves no manager image or container on a fresh VM.
 
 From the matching source directory on the **Ubuntu VM**:
 
 ```bash
 cd "$HOME/projects/v1.15.1"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
-sudo docker compose -f clab-backup-ui/compose.yml ps
+sudo docker compose -f clab-backup-ui/compose.yml ps -a
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=50 backup-ui
 ```
 
@@ -608,7 +608,28 @@ one worker and restarts after a VM reboot or unexpected exit. Run only one manag
 against this directory. Stop and migrate an old standalone `docker run` worker
 before launching the replacement; the launcher rejects a conflicting container.
 
-Check the running release and HTTP endpoint:
+Continue to the checks below only after the launcher succeeds and `ps -a` shows
+`backup-ui` running. If it fails, read the first launcher error. Empty Compose
+logs mean the container may not have been created; logs cannot explain an earlier
+host-helper failure. `service "backup-ui" is not running` and `HTTP 000` are
+consequences of the incomplete launch.
+
+An older upload (`b0389ba`) had source VERSION **1.15.0** with helper **1.15.1**.
+This is fixed in the current source. Prefer obtaining the corrected source; for
+that exact mismatch only, the repair was:
+
+```bash
+printf '1.15.1\n' > clab-backup-ui/VERSION
+sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
+```
+
+For other mismatches, obtain matching source rather than changing version numbers.
+Do not bypass helper verification. An empty lab inventory (`{}` or `[]`) is valid
+and does not prevent launch.
+
+Check the running release and HTTP endpoint using the code block exactly as shown.
+The Python name has **double underscores** (`__version__`); do not replace them
+with Markdown asterisks, and do not paste Markdown link syntax into the curl URL:
 
 ```bash
 sudo docker compose -f clab-backup-ui/compose.yml \
@@ -958,8 +979,8 @@ undo an intentional stop on reboot. [Docker restart policies](https://docs.docke
 # Part 16 — Upgrade without losing data {#part-16}
 
 1. Back up the persistent manager directory using [Part 17](#part-17).
-2. Extract the matching new source package in its own version folder. Verify
-   `clab-backup-ui/VERSION`; for this delivery it must read **1.15.1**.
+2. Extract or clone the matching source into its own folder. Run
+   `python3 deploy/verify-release.py`; for this delivery it must report **1.15.1**.
 3. Retain any customized `clab-backup-ui/.env` from the previous installation.
 4. From the new release's root, run:
 
@@ -1303,15 +1324,44 @@ the VM password in the manager. Do not run the source-build launcher offline.
 
 ## Documentation baseline
 
-Updated for the local 1.15.1 source delivery using this supplied master guide
-as the base. The Proxmox, storage, administrator-access and VS Code build notes
+Updated against published GitHub source `77d3c76` on 11 September 2026, using
+the supplied master guide as the base. The Proxmox, storage, administrator-access and VS Code build notes
 are retained. Manager procedures reflect password-only VM authentication,
 persistent storage, the revised sidebar/tabs, diagram editing and registered Git
 repository saves. Version retrieval downloads files; it does not restore live NOS
 configurations. Git-owner execution is not browser-user authentication.
-Application behavior is covered by local automated tests and browser checks;
-a complete fresh Linux VM installation, image build, registry publication and
-live network-device validation were not performed in the Windows workspace.
+The published source passes all seven release-consistency and four helper-preflight
+tests locally. Earlier application tests and browser checks remain documented in
+the validation record. The user's log confirms a successful 1.15.0 HTTPS Git push;
+the new clab-3 full launch and a Docker Hub publication have not been confirmed.
+
+### Repository upload completion
+
+At this audit, the corrected VERSION and both obsolete-patch deletions are on
+GitHub. These four files were still missing from the web upload:
+
+```text
+.gitignore
+.gitattributes
+.github/workflows/release-check.yml
+clab-backup-ui/.dockerignore
+```
+
+Upload them with their exact paths, or use GitHub **Add file → Create new file**
+and paste each file's contents. Verify them individually after committing. The
+Actions check cannot run until its workflow file is present; once added, verify
+the **Release consistency** run. Requiring it for merges is a separate branch
+protection setting.
+
+The unused `deploy/clab_manager_files.py` development launcher was also still
+present and can be deleted. Keep the production `clab-backup-ui/app/host_files.py`;
+setup installs it under the VM's existing helper path. Restore `LAB-OPERATIONS.md`,
+which current setup and feature guides still reference. The deleted historical
+`LAB-COMMANDS-PLAN.md` is not required for running the current manager.
+
+The completion bundle accompanying this wiki includes the missing files and the
+updated operational guide. These documentation/upload corrections are local until
+uploaded. They do not imply a Docker deployment or an Actions run has occurred.
 
 ---
 
