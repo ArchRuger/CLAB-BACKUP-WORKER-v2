@@ -26,6 +26,16 @@ if $operations || [[ -f /etc/clab-manager/operations.json ]]; then
   bash "$script_dir/setup-operations.sh" "${operation_args[@]}"
   printf '%s\n' '{"mode":"capabilities"}' | /usr/local/sbin/clab-manager-operate | /usr/bin/python3 "$script_dir/verify-operations.py" "$expected"
 fi
+if [[ -f /etc/clab-manager/git.json ]]; then
+  bash "$script_dir/setup-git.sh" --refresh
+  printf '%s\n' '{"mode":"list"}' | /usr/local/sbin/clab-manager-git | /usr/bin/python3 -c '
+import json, sys
+value=json.load(sys.stdin).get("result",{})
+if value.get("protocol")!="clab-manager-git-v1" or value.get("version")!=sys.argv[1]:
+    sys.exit("Installed Git helper version/protocol does not match this source release.")
+print("Git helper version verified; repository bindings retained.")
+' "$expected"
+fi
 bash "$script_dir/setup-vm.sh"
 cd -- "$repo_dir"
 docker compose -f clab-backup-ui/compose.yml build --pull --no-cache

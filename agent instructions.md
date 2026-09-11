@@ -1,5 +1,28 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.15.0 — Save lab progress to Git
+
+The approved Git architecture is implemented as owner-scoped VM repository export,
+commit and push. Read GIT-PROGRESS.md. Save progress captures an explicit node scope
+and frozen topology provenance, then exports only a complete immutable job snapshot.
+Do not use the rolling latest directory or claim current topology for a legacy job.
+Keep capture success independent of manager-internal Git failure and remote push.
+
+The restricted host helper validates registered repositories and drops privileges
+before Git, using the registered owner's external HTTPS credential helper. The
+manager must not collect tokens, accept arbitrary Git command text, push unrelated
+history, stage unrelated files, force push, stash or destructively reset a checkout.
+Persist job IDs and host journals; retries reuse the same snapshot/commit. Guard
+active operations and pending saves against reset/removal/rebinding/host identity
+changes. Explicit Keep snapshot only dismissal retains backup files and commits.
+
+The UI has no login: repository owner is an execution account, not web identity.
+Version retrieval is download-only; live NOS restore adapters remain unavailable
+until tested on each supported NOS. Existing backup schedules do not imply Git
+publication. Version 1.15.0 is local source delivery, not a Hub publication, deployed
+VM upgrade or live network-device validation. Preserve VM password restrictions,
+persistent data, device credentials, diagram behavior and operation confirmations.
+
 ## Release 1.14.0 — UI Changes 2 and master wiki
 
 The user authorized the UI changes from UI Changes 2.eml and a password-aware update

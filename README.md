@@ -1,11 +1,12 @@
-# Containerlab Node Manager — 1.14.0
+# Containerlab Node Manager — 1.15.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
 discover deployed labs over SSH, open node terminals, and retain configuration
-backups as training labs are replaced.
+backups as training labs are replaced. Save lab progress directly to a registered
+VM Git checkout using its owner's existing Git login.
 
-**1.14.0 deployment:** Build the new source and create the VM password using
+**1.15.0 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -21,6 +22,27 @@ Use [deploy/compose.image.yml](deploy/compose.image.yml) for this path; it has n
 **Building from source?** Follow the [Fresh VM installation guide](FRESH-VM-GUIDE.md).
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
+
+## Changes in 1.15.0
+
+- **Save progress** captures the chosen devices, exports a complete snapshot to
+  the registered VM repository, commits exact changed files and pushes. Capture,
+  commit and push outcomes remain separate, with retry from the saved artifacts.
+- **Save locally**, named checkpoints and an explicitly selected baseline support
+  offline work and milestones. History, comparison and version ZIP downloads
+  let the engineer retrieve an earlier configuration set.
+- A restricted host Git helper runs Git as the registered Linux owner using the
+  owner's external HTTPS authentication. It does not copy tokens into the manager.
+- Repository changes, unexpected staged work and remote conflicts require
+  attention; no force push, automatic stash or destructive reset is offered.
+- Pending saves retain their context across restarts and block destructive manager
+  cleanup until resolved or explicitly dismissed while keeping the snapshot.
+- Version retrieval downloads files. Applying configurations to running devices
+  is unavailable until the NOS restore adapters are validated.
+
+Read [Save lab progress to Git](GIT-PROGRESS.md) for setup, buttons, architecture,
+recovery and account boundaries. This remains a trusted-operator UI without
+browser sign-in; a registered owner is a Linux execution identity.
 
 ## Changes in 1.14.0
 
@@ -140,7 +162,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.13.0
+cd ~/projects/v1.15.0
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

@@ -6,7 +6,7 @@ This guide covers the end to end process of preparing a fresh Ubuntu VM to be us
 
 This page combines the Ubuntu/Proxmox build notes, the installation walkthrough and the current manager documentation. Follow it from the beginning for a fresh VM. If Docker and Containerlab already work, start at **Part 6**.
 
-> **Release baseline:** 1.14.0 source delivery, built locally as `clab-backup:1.14.0`. This update does not publish a Docker Hub image.
+> **Release baseline:** 1.15.0 source delivery, built locally as `clab-backup:1.15.0`. This update does not publish a Docker Hub image.
 {.is-info}
 
 ## Reference environment
@@ -23,10 +23,11 @@ This page combines the Ubuntu/Proxmox build notes, the installation walkthrough 
 | Proxmox VM ID | Look up with `qm list`; do not infer it from the hostname |
 | Earlier reference hosts | `clab-1`: `10.150.2.211`; `clab-2`: `10.150.2.212` |
 | Manager UI | `http://10.150.2.213:8081` |
-| Release files | `/home/archtop/projects/v1.14.0/` |
+| Release files | `/home/archtop/projects/v1.15.0/` |
 | Persistent manager data | `/srv/containerlab-node-manager/data/` |
 | Lab projects | `/etc/containerlab/<project>/` |
 | VM helper account | `clab-discovery` |
+| Git execution owner / checkout | Engineer account, for example `ben` / `/home/ben/labs/BENS-BGP-LAB` |
 
 Replace these example addresses and usernames for each engineer. The old build's VM ID `101` belongs to that example; it is not a universal value. This guide assumes a normal rootful Docker Engine installation without user-namespace remapping.
 
@@ -51,6 +52,7 @@ Engineer workstation
                                         |
                                         +-- SSH --> VM helper (clab-discovery)
                                         |          discovery, files, lab commands
+                                        |          Git helper -> engineer-owned checkout -> HTTPS Git remote
                                         |
                                         +-- SSH --> network nodes
 
@@ -60,7 +62,7 @@ Proxmox --> Ubuntu VM --> Docker / Containerlab --> training devices
 
 The manager keeps running when a lab is stopped or destroyed. Deployed labs remain on the VM; importing a lab creates a saved manager workspace. The two have different lifecycles.
 
-> **Access model:** 1.14.0 opens directly without a UI login. Give access to TCP 8081 only to the intended engineers. VM discovery authentication and device SSH credentials are still required and are stored in the persistent manager data.
+> **Access model:** 1.15.0 opens directly without a UI login. Give access to TCP 8081 only to the intended engineers. VM discovery authentication and device SSH credentials are still required and are stored in the persistent manager data.
 {.is-warning}
 
 ## Page contents
@@ -87,6 +89,7 @@ The manager keeps running when a lab is stopped or destroyed. Deployed labs rema
 | [18](#part-18) | VM connection repair and password recovery |
 | [19](#part-19) | Troubleshooting and lessons from the first install |
 | [20](#part-20) | Airgapped installation and handoff checklist |
+| [21](#part-21) | Save lab progress to the engineer's Git repository |
 
 ---
 
@@ -413,11 +416,11 @@ Use the same account context for login and image pulls: `sudo docker login` stor
 
 # Part 6 — Get the release source and matching host files {#part-6}
 
-## Step 6.1 — Obtain version 1.14.0
+## Step 6.1 — Obtain version 1.15.0
 
-Use the delivered `containerlab-node-manager-1.14.0-source.zip`, extracted under
+Use the delivered `containerlab-node-manager-1.15.0-source.zip`, extracted under
 `~/projects/` so that `deploy/` and `clab-backup-ui/` are directly inside
-`~/projects/v1.14.0/`. This guide builds the image from that source. A versioned
+`~/projects/v1.15.0/`. This guide builds the image from that source. A versioned
 directory name alone does not select a release.
 
 If the update has been published to GitHub, you can instead clone the project:
@@ -425,19 +428,19 @@ If the update has been published to GitHub, you can instead clone the project:
 ```bash
 mkdir -p "$HOME/projects"
 cd "$HOME/projects"
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.14.0
-cd v1.14.0
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.15.0
+cd v1.15.0
 cat clab-backup-ui/VERSION
 ```
 
-Expect **1.14.0**. If GitHub still contains an earlier version, use the delivered
+Expect **1.15.0**. If GitHub still contains an earlier version, use the delivered
 source ZIP. Do not mix old setup scripts with the new application. No Docker Hub
 tag is assumed to exist for this delivery.
 
 ## Step 6.2 — Check the host setup files
 
 ```bash
-cd "$HOME/projects/v1.14.0"
+cd "$HOME/projects/v1.15.0"
 ls deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-password.sh \
   deploy/clab-manager-gateway deploy/clab-manager-password.conf \
   deploy/setup-operations.sh deploy/verify-helper.py deploy/verify-operations.py \
@@ -448,7 +451,7 @@ ls deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-password.sh \
 Keep this directory for upgrades and maintenance. The resulting layout is:
 
 ```text
-/home/archtop/projects/v1.14.0/          source and host setup scripts
+/home/archtop/projects/v1.15.0/          source and host setup scripts
 /etc/containerlab/<project>/           lab sources and deployment artifacts
 /srv/containerlab-node-manager/data/   persistent manager state and backups
 ```
@@ -461,7 +464,7 @@ offline VM, prepare the image on a connected machine using [Part 20](#part-20).
 
 # Part 7 — Prepare persistent storage {#part-7}
 
-From `~/projects/v1.14.0`:
+From `~/projects/v1.15.0`:
 
 ```bash
 sudo bash deploy/setup-vm.sh
@@ -503,7 +506,7 @@ password; the application does not ship a default password.
 From a normal administrator's terminal on the **Ubuntu VM**:
 
 ```bash
-cd "$HOME/projects/v1.14.0"
+cd "$HOME/projects/v1.15.0"
 sudo bash deploy/setup-discovery.sh
 ```
 
@@ -559,14 +562,14 @@ Part 8 installs discovery and file-transfer support. Enable lab operations on
 the **Ubuntu VM** using the matching source:
 
 ```bash
-cd "$HOME/projects/v1.14.0"
+cd "$HOME/projects/v1.15.0"
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
-sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.14.0
+sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.15.0
 printf '%s\n' '{"mode":"capabilities"}' | sudo /usr/local/sbin/clab-manager-operate \
-  | python3 deploy/verify-operations.py 1.14.0
+  | python3 deploy/verify-operations.py 1.15.0
 ```
 
-Both verifiers must successfully report **1.14.0**. They avoid printing imported
+Both verifiers must successfully report **1.15.0**. They avoid printing imported
 file contents, which may contain device passwords. If a check fails, repair the
 helper before continuing; see [Part 18](#part-18).
 
@@ -582,14 +585,14 @@ socket mount and no mount of host lab directories; helpers access them over SSH.
 From the matching source directory on the **Ubuntu VM**:
 
 ```bash
-cd "$HOME/projects/v1.14.0"
+cd "$HOME/projects/v1.15.0"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml ps
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=50 backup-ui
 ```
 
 The launcher refreshes and verifies the host helpers, prepares persistent
-storage, builds `clab-backup:1.14.0` and recreates the manager. It retains an
+storage, builds `clab-backup:1.15.0` and recreates the manager. It retains an
 existing `clab-discovery` password. If Parts 7–9 were skipped, the first launch
 prompts for the password before building or starting the container.
 
@@ -606,14 +609,14 @@ sudo docker compose -f clab-backup-ui/compose.yml \
 curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:8081/
 ```
 
-Expect **1.14.0** and **HTTP 200**. Optional `UI_BIND` and `UI_PORT` settings belong
+Expect **1.15.0** and **HTTP 200**. Optional `UI_BIND` and `UI_PORT` settings belong
 in `clab-backup-ui/.env`; retain that file across source-folder upgrades and use
 your chosen port in browser and health checks.
 
 An image-only build needs the final build context argument:
 
 ```bash
-sudo docker build --pull --no-cache -t clab-backup:1.14.0 ./clab-backup-ui
+sudo docker build --pull --no-cache -t clab-backup:1.15.0 ./clab-backup-ui
 ```
 
 Building an image alone neither configures the Linux account nor starts the
@@ -788,6 +791,13 @@ Browser SSH runs from the manager to the device. Test the saved management addre
 
 Review readiness, choose a backup, then inspect its outcome in **Backup history** and download a configuration. Configure a schedule only after a manual backup works. Linked discovery pauses automatic work when its lab is unavailable; a running container alone is not proof of SSH readiness.
 
+## Save progress to Git
+
+**Save progress** captures the selected devices, exports the completed snapshot
+into the engineer's registered VM repository, commits changed configuration files
+and pushes. Set this up once using [Part 21](#part-21). An ordinary backup or
+schedule does not publish to that repository automatically.
+
 ## SuperPuTTY session export
 
 Choose **Export sessions** in the lab toolbar. The file is named `<lab-name>.xml` and organizes sessions as **Lab name → node short name**. Import it through SuperPuTTY's session import feature.
@@ -919,7 +929,7 @@ Run these from your installation directory. Restarting/stopping the manager does
 not stop the training lab containers. It does disconnect active browser SSH sessions.
 
 ```bash
-cd "$HOME/projects/v1.14.0"
+cd "$HOME/projects/v1.15.0"
 
 # View status and recent logs
 sudo docker compose -f clab-backup-ui/compose.yml ps
@@ -942,7 +952,7 @@ undo an intentional stop on reboot. [Docker restart policies](https://docs.docke
 
 1. Back up the persistent manager directory using [Part 17](#part-17).
 2. Extract the matching new source package in its own version folder. Verify
-   `clab-backup-ui/VERSION`; for this delivery it must read **1.14.0**.
+   `clab-backup-ui/VERSION`; for this delivery it must read **1.15.0**.
 3. Retain any customized `clab-backup-ui/.env` from the previous installation.
 4. From the new release's root, run:
 
@@ -1019,7 +1029,12 @@ settings. Neither is required for an image upgrade. Neither destroys live labs.
 
 After **Remove lab**, the default exclusion prevents immediate reappearance. Right-click the excluded lab and choose **Clear exclusion** to test discovery again. The next import still needs confirmation.
 
-Close active terminals and wait for jobs before **Start fresh**. It is not part of a normal upgrade. If interrupted by disk/permission problems, fix the cause and retry or restart; the reset journal resumes the operation.
+Close active terminals and wait for jobs before **Start fresh**. Resolve pending
+Git saves, or explicitly choose **Keep snapshot only** to dismiss their export
+while retaining the local snapshot and any Git commit. Start fresh still removes
+manager backups; it does not delete the engineer's Git checkout or remote.
+Back up that checkout independently.
+ It is not part of a normal upgrade. If interrupted by disk/permission problems, fix the cause and retry or restart; the reset journal resumes the operation.
 
 ## Rebuilding an entire VM
 
@@ -1034,12 +1049,12 @@ A manager data archive is only one part of recovery. Retain the complete VM proj
 Use the source that matches the running application:
 
 ```bash
-cd "$HOME/projects/v1.14.0"
+cd "$HOME/projects/v1.15.0"
 sudo bash deploy/setup-discovery.sh
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
-sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.14.0
+sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.15.0
 printf '%s\n' '{"mode":"capabilities"}' | sudo /usr/local/sbin/clab-manager-operate \
-  | python3 deploy/verify-operations.py 1.14.0
+  | python3 deploy/verify-operations.py 1.15.0
 ```
 
 An existing usable password is preserved. Setup verifies the effective SSH
@@ -1054,7 +1069,7 @@ Use the VM console or your normal administrator login; `clab-discovery` is not
 an administrative shell account:
 
 ```bash
-cd "$HOME/projects/v1.14.0"
+cd "$HOME/projects/v1.15.0"
 sudo bash deploy/setup-discovery.sh --reset-password
 ```
 
@@ -1158,7 +1173,7 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 | Message / symptom | Cause and correction |
 |---|---|
 | Cannot find the Proxmox VM ID | Run `qm list` in the Proxmox host shell; match the VM name. |
-| First launch requires a public key | This is an old setup script. Obtain the matching 1.14.0 source and follow Part 8; current setup prompts for a password. |
+| First launch requires a public key | This is an old setup script. Obtain the matching 1.15.0 source and follow Part 8; current setup prompts for a password. |
 | Compose says service is not running during `exec` | The earlier launch failed. Read that failure, fix it, run `up`, then verify `ps` before `exec`. |
 | `docker build` requires an argument | Include the build context: `./clab-backup-ui` from the repo root or `.` from its Dockerfile folder. |
 | `[1]+ Stopped less ...` | Ctrl+Z suspended the viewer. Run `fg`, then press `q`. |
@@ -1186,29 +1201,29 @@ downloads remain disabled by default.
 
 ## Build and transfer the manager image
 
-On a **connected Linux staging machine**, from the 1.14.0 source root, build for
+On a **connected Linux staging machine**, from the 1.15.0 source root, build for
 the target VM's architecture:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.14.0 ./clab-backup-ui
-docker image save -o clab-backup-1.14.0.tar clab-backup:1.14.0
+docker build --pull --no-cache -t clab-backup:1.15.0 ./clab-backup-ui
+docker image save -o clab-backup-1.15.0.tar clab-backup:1.15.0
 ```
 
 Transfer the image archive, source ZIP and other offline prerequisites. On the
 **Ubuntu VM**, load the archive and verify its version:
 
 ```bash
-sudo docker image load -i clab-backup-1.14.0.tar
-sudo docker run --rm --entrypoint python clab-backup:1.14.0 \
+sudo docker image load -i clab-backup-1.15.0.tar
+sudo docker run --rm --entrypoint python clab-backup:1.15.0 \
   -c 'from app import __version__; print(__version__)'
 ```
 
-Expect **1.14.0**. Complete Parts 7–9 from the transferred source, including the
-interactive password prompt. Then from `~/projects/v1.14.0`:
+Expect **1.15.0**. Complete Parts 7–9 from the transferred source, including the
+interactive password prompt. Then from `~/projects/v1.15.0`:
 
 ```bash
 cat > deploy/image.env <<'EOF'
-MANAGER_IMAGE=clab-backup:1.14.0
+MANAGER_IMAGE=clab-backup:1.15.0
 UI_BIND=0.0.0.0
 UI_PORT=8081
 EOF
@@ -1238,6 +1253,9 @@ the VM password in the manager. Do not run the source-build launcher offline.
 | Verified VM SSH host fingerprint | |
 | Password recovery owner / private storage location — never paste the password | |
 | Data archive location / last successful restore check | |
+| Git owner / registration ID / checkout / selected branch | |
+| Git credential recovery owner — never paste a token | |
+| Unpublished Git snapshots/commits resolved or preserved | |
 
 ## Completion checklist
 
@@ -1246,7 +1264,7 @@ the VM password in the manager. Do not run the source-build launcher offline.
 - [ ] Root filesystem has the intended capacity.
 - [ ] Docker, Compose and Containerlab work on the VM.
 - [ ] Required network device images are available locally.
-- [ ] Source package, image and both installed helpers match.
+- [ ] Source package, image and enabled discovery/operations/Git helpers match.
 - [ ] Manager data is outside version/lab folders, owned by `10001:10001`, mode `700`.
 - [ ] User-created clab-discovery password is set; VM connection reports connected.
 - [ ] Password-only migration and unchanged administrator access have been checked where upgrading.
@@ -1258,16 +1276,186 @@ the VM password in the manager. Do not run the source-build launcher offline.
 - [ ] SuperPuTTY session export has been checked where used.
 - [ ] Manager restart retains the workspace and credentials.
 - [ ] A complete manager data archive has been copied off the VM.
+- [ ] If Git publishing is enabled, the chosen owner can authenticate without an interactive prompt.
+- [ ] Save progress, a pending push retry and a version ZIP download have been checked on a test repository.
+- [ ] The Git checkout and helper registration/journal have an independent backup.
 
 ## Documentation baseline
 
-Updated for the local 1.14.0 source delivery using this supplied master guide
+Updated for the local 1.15.0 source delivery using this supplied master guide
 as the base. The Proxmox, storage, administrator-access and VS Code build notes
 are retained. Manager procedures reflect password-only VM authentication,
-persistent storage, the revised sidebar/tabs and basic diagram editing.
+persistent storage, the revised sidebar/tabs, diagram editing and registered Git
+repository saves. Version retrieval downloads files; it does not restore live NOS
+configurations. Git-owner execution is not browser-user authentication.
 Application behavior is covered by local automated tests and browser checks;
 a complete fresh Linux VM installation, image build, registry publication and
 live network-device validation were not performed in the Windows workspace.
+
+---
+
+# Part 21 — Save lab progress to the engineer's Git repository {#part-21}
+
+Once configured, **Save progress** captures the lab's chosen devices, commits a
+complete configuration set in the engineer's repository and pushes it. The goal
+is one daily action after a lab experiment. Setup happens once for each checkout.
+
+## Step 21.1 — Prepare the repository and Git login
+
+As the engineer on the **Ubuntu VM**, prepare a clean existing checkout with an
+initial commit, the intended current branch, an HTTPS remote and an author
+name/email. Publish the initial commit outside the manager so that local HEAD
+matches the existing remote branch during registration. For example, Ben's checkout may be:
+
+```text
+/home/ben/labs/BENS-BGP-LAB/
+  .git/
+  BENS-BGP-LAB.clab.yaml
+```
+
+Use Ben's account for his Git login. Authentication is completed outside the
+manager. Configure the chosen credential helper so it works without a prompt
+under Ben's HOME; a temporary terminal login or desktop-only credential unlock
+may not work after reboot. The manager does not ask for a Git token. GitHub CLI
+users can configure an existing login with `gh auth setup-git`.
+
+Git export currently uses HTTPS. The `clab-discovery` password from Part 8 is
+separate: it connects the manager to the restricted VM gateway. Do not put Git
+tokens in repository URLs or setup commands.
+
+## Step 21.2 — Register the owner and checkout
+
+From the matching release directory as the **Ubuntu VM administrator**:
+
+```bash
+cd "$HOME/projects/v1.15.0"
+sudo bash deploy/setup-git.sh --owner ben --repo /home/ben/labs/BENS-BGP-LAB
+```
+
+Use the actual engineer account and absolute repository path. The registration ID
+is generated automatically. Optional `--label "Ben BGP lab"` chooses a display
+name; `--remote NAME` selects an existing remote other than the default `origin`.
+Optional `--prefix labs/bgp` puts the managed folders below `labs/bgp/`, useful
+when a repository contains several projects. The helper validates a normal
+checkout and records its current branch/destination. Bare repositories, linked
+worktrees, submodules and symlinked destinations are not supported. Installation
+does not push user configurations or create a remote repository.
+
+Routine `start-manager.sh` upgrades refresh an already enabled Git helper. Use
+`sudo bash deploy/setup-git.sh --refresh` to refresh only the installed helper and
+preserve registrations. Registering the same checkout/prefix again retains its
+ID but changes the revision; resolve pending saves first and reconnect the lab
+afterward. Do not re-register merely to refresh helper code.
+
+The restricted helper drops privileges before Git and runs it as the registered
+owner with that owner's Git configuration. It does not run Git as root or mount
+Ben's HOME in the manager container. The existing password-only gateway and
+administrator's own VM access remain separate.
+
+## Step 21.3 — Connect the lab and save
+
+In the **Manager UI**, open the lab and choose **Git repository settings**. Select
+the registered checkout, review the included devices, review the branch/destination
+and acknowledge that device configurations will be committed there. The device
+selection is independent of regular backup schedule checkboxes. An optional review
+preference pauses before pushing. Save the settings, then choose **Save progress**.
+
+```mermaid
+flowchart TD
+    A[Save progress] --> B[Capture selected devices]
+    B --> C{Complete capture?}
+    C -- No --> D[Keep local results; latest unchanged]
+    C -- Yes --> E[Retain immutable backup snapshot]
+    E --> F[Export exact configs and manifest]
+    F --> G[Commit changed files]
+    G --> H[Push selected branch]
+    H -- Verified --> I[Saved to Git]
+    H -- Offline or rejected --> J[Saved locally; Push saved progress]
+```
+
+Only the recorded configurations and manifest enter the commit. Existing YAML,
+annotations and unrelated project files are outside the export. The manifest
+records node mapping, format, checksums and capture/topology provenance. Export
+uses one complete backup job, not a mixture of files from the rolling latest
+backup directory. Timestamps alone do not produce an extra commit for unchanged
+configuration content.
+
+## Folders and buttons
+
+```text
+BENS-BGP-LAB/
+  BENS-BGP-LAB.clab.yaml       existing project file
+  latest/                    newest complete saved capture
+    PE1.cfg
+    manifest.json
+  baseline/                  changes only through Set baseline
+    PE1.cfg
+    manifest.json
+  checkpoints/
+    bgp-peering-working/      named milestone
+      PE1.cfg
+      manifest.json
+```
+
+The filenames are illustrative; names are generated consistently from the node
+identity and actual configuration format. Git history retains earlier ordinary
+saves, so a separate timestamp folder is unnecessary for each Save progress.
+
+| Action | Meaning |
+|---|---|
+| Save progress | Capture, export latest, commit changes and push; honor the review preference. |
+| Save locally | Capture and commit without pushing. |
+| Save checkpoint | Preserve a capture under a new descriptive checkpoint name. |
+| Set baseline | Select a complete capture; review explicit replacement if a baseline already exists. |
+| View changes / History | Browse versions and configuration differences. |
+| Push saved progress | Retry the recorded local commit without recapturing routers. |
+| Update from remote | Fast-forward an eligible clean checkout; resolve diverged history outside the app. |
+| Load version | View or download a saved version as a configuration ZIP. |
+
+**Load version downloads files.** It does not apply commands to running devices,
+change the repository branch, rewrite the original topology or redeploy the lab.
+Live restore remains unavailable until NOS-specific adapters are validated. Older
+captures can have unknown topology provenance; match the intended devices and
+configuration format before using downloaded files outside the tool.
+
+## Recovery, ownership and backups
+
+Capture, commit and push have separate results. A successful snapshot remains
+available even if the repository is busy or remote authentication fails. **Retry
+export** reuses its captured files. **Push saved progress** reuses its recorded
+commit. A restart reconciles the job with the VM journal instead of issuing a new
+capture silently. Inspect the job's status before assuming it reached the remote.
+
+Keep the checkout clean. Unexpected staged work, changed branch/remote, unsafe
+paths and conflicting history require attention. The manager does not force push,
+automatically stash, merge/rebase conflicts or destructively reset a checkout.
+Resolve these issues in Ben's VM session, then retry the saved job.
+
+Pending saves block forgetting or redirecting their context, including removing
+the workspace, Start fresh, replacing its repository or changing VM identity.
+Password repair for the same VM/account remains possible. **Keep snapshot only**
+explicitly dismisses a pending export and retains its backup and any existing Git
+commit. It does not undo a remote push. A later Start fresh still deletes the
+manager backup files; the engineer's checkout and remote are not manager storage.
+
+Keep all of the following when backing up or rebuilding the VM:
+
+- The entire manager data directory, including `state.key`, `state.enc` and
+  immutable configuration history.
+- Ben's working checkout, including `.git`, especially unpublished commits.
+- The root-owned `/etc/clab-manager/git.json` registration and the
+  `<checkout>/.git/clab-manager/` recovery journal/transfer snapshots.
+- Ben's external Git credential setup or the means to reauthenticate it.
+
+The manager has no browser login. Registering `ben` selects the Linux execution
+owner; it does not sign Ben into the browser or isolate his repository from other
+people with UI access. Use a trusted operator per VM or deliberately shared
+operator authority. A complete multi-user permission system is separate work.
+
+The release source contains `GIT-PROGRESS.md` with the detailed workflow and
+recovery guide. Check `clab-backup-ui/VALIDATION.md` for the evidence actually
+obtained. Test owner switching and Git authentication on the Linux VM using a
+disposable repository before connecting a live lab's intended remote.
 
 ## Related references
 
