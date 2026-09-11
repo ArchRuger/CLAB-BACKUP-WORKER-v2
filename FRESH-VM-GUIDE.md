@@ -1,5 +1,10 @@
 # Containerlab Node Manager 1.16.0 — a fresh VM to a working lab
 
+For the complete installer-based route starting with Proxmox, use the
+[Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md). It includes normal-user
+WinSCP/SFTP verification and the first Git push. This original guide retains
+the manual installation alternative.
+
 ## Recommended: use the terminal installer
 
 Once the source is cloned or extracted on the Ubuntu VM, run **without sudo**:

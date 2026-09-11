@@ -19,7 +19,11 @@ It covers host prerequisites, matching helper installation, persistent storage,
 image-only Compose launch, VM connection, first import, everyday use and upgrades.
 Use [deploy/compose.image.yml](deploy/compose.image.yml) for this path; it has no build step.
 
-**Building from source?** Follow the [Fresh VM installation guide](FRESH-VM-GUIDE.md).
+**Starting with a fresh Proxmox VM?** Follow the
+[Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md): Proxmox settings, Ubuntu,
+the terminal installer, Git setup, a WinSCP transfer check and your first lab save.
+The [short install guide](INSTALL.md) and
+[original manual installation guide](FRESH-VM-GUIDE.md) are also available.
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
 

@@ -6,7 +6,13 @@ This guide covers the end to end process of preparing a fresh Ubuntu VM to be us
 
 This page combines the Ubuntu/Proxmox build notes, the installation walkthrough and the current manager documentation. Follow it from the beginning for a fresh VM. If Docker and Containerlab already work, start at **Part 6**.
 
-> **Release baseline:** 1.16.0 prepared locally from local 1.15.3 commit `e64790a` (GitHub main last checked at `0658562`) on 11 September 2026; commit/push is pending. Source VERSION, application, helpers and image metadata agree on **1.16.0**. Build locally as `clab-backup:1.16.0`; a Docker Hub publication has not been verified.
+For a fresh installation using the terminal installer, follow the separate
+[Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) from Proxmox settings through
+Ubuntu, installation, WinSCP/SFTP verification, lab import and the first Git push.
+Use this master wiki for detailed operations and recovery; its manual package
+and launch steps do not need repeating after the installer succeeds.
+
+> **Release baseline:** GitHub main `2248942` verified on 11 September 2026. Source VERSION, application, helpers and image metadata agree on **1.16.0**. Build locally as `clab-backup:1.16.0`; a Docker Hub publication has not been verified. Version 2 refers to the new guide edition, not an application release.
 {.is-info}
 
 ## Reference environment
@@ -1346,21 +1352,23 @@ the VM password in the manager. Do not run the source-build launcher offline.
 
 ## Documentation baseline
 
-Updated against published GitHub source `77d3c76` on 11 September 2026, using
-the supplied master guide as the base. The Proxmox, storage, administrator-access and VS Code build notes
+Updated against published GitHub source `2248942` (1.16.0) on 11 September 2026,
+using the supplied master guide as the base. The Proxmox, storage, administrator-access and VS Code build notes
 are retained. Manager procedures reflect password-only VM authentication,
 persistent storage, the revised sidebar/tabs, diagram editing and registered Git
 repository saves. Version retrieval downloads files; it does not restore live NOS
 configurations. Git-owner execution is not browser-user authentication.
-The published source passes all seven release-consistency and four helper-preflight
-tests locally. Earlier application tests and browser checks remain documented in
-the validation record. The user's log confirms a successful 1.15.0 HTTPS Git push;
-the new clab-3 full launch and a Docker Hub publication have not been confirmed.
+The source includes automated checks for release consistency, helper preflight,
+the installer, Git onboarding/registrations and APT source handling. Earlier
+application tests and browser checks remain documented in the validation record.
+The user's log confirms a successful 1.15.0 HTTPS Git push. The new installer-based
+guide has been checked against source and provider documentation; a complete
+fresh-VM run of that guide and a Docker Hub publication have not been verified.
 
 ### Repository upload completion
 
-At this audit, the corrected VERSION and both obsolete-patch deletions are on
-GitHub. These four files were still missing from the web upload:
+The earlier web-upload omissions are resolved in the verified main baseline.
+These files are present:
 
 ```text
 .gitignore
@@ -1369,21 +1377,12 @@ GitHub. These four files were still missing from the web upload:
 clab-backup-ui/.dockerignore
 ```
 
-Upload them with their exact paths, or use GitHub **Add file → Create new file**
-and paste each file's contents. Verify them individually after committing. The
-Actions check cannot run until its workflow file is present; once added, verify
-the **Release consistency** run. Requiring it for merges is a separate branch
-protection setting.
-
-The unused `deploy/clab_manager_files.py` development launcher was also still
-present and can be deleted. Keep the production `clab-backup-ui/app/host_files.py`;
-setup installs it under the VM's existing helper path. Restore `LAB-OPERATIONS.md`,
-which current setup and feature guides still reference. The deleted historical
-`LAB-COMMANDS-PLAN.md` is not required for running the current manager.
-
-The completion bundle accompanying this wiki includes the missing files and the
-updated operational guide. These documentation/upload corrections are local until
-uploaded. They do not imply a Docker deployment or an Actions run has occurred.
+`LAB-OPERATIONS.md` is also present, and the unused
+`deploy/clab_manager_files.py` development launcher is absent. No manual upload
+or deletion from that earlier checklist remains necessary. Keep the production
+`clab-backup-ui/app/host_files.py`; setup installs it under the VM's helper path.
+The Actions workflow runs release and installer checks on pushes and pull
+requests. Requiring it for merges is a separate branch-protection setting.
 
 ---
 

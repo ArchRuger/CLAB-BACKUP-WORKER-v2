@@ -1,5 +1,10 @@
 # Guided VM installation — 1.16.0
 
+Starting before Ubuntu is installed? Use the
+[Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) for Proxmox settings, first
+login, this installer, WinSCP/SFTP checks and your first successful Git save.
+This page is the short installation reference.
+
 After cloning or extracting the source on your Ubuntu 24.04 VM, run one command
 as your existing ordinary VM account, **without sudo**:
 
@@ -7,7 +12,7 @@ as your existing ordinary VM account, **without sudo**:
 bash deploy/install.sh
 ```
 
-For a clone into a new source folder (once this release is on GitHub main):
+For a clone into a new source folder:
 
 ```bash
 git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.16.0"
