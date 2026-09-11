@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.15.1
+# Containerlab Node Manager — 1.15.2
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.15.1 deployment:** Build the new source and create the VM password using
+**1.15.2 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -22,6 +22,13 @@ Use [deploy/compose.image.yml](deploy/compose.image.yml) for this path; it has n
 **Building from source?** Follow the [Fresh VM installation guide](FRESH-VM-GUIDE.md).
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
+
+## Changes in 1.15.2
+
+Guided Git setup rejects GitHub page URLs before cloning, explains the local
+checkout directory and reports package failures with recovery instructions.
+See [package installation recovery](GIT-SETUP.md#package-installation-recovery)
+for the Ubuntu `file:/cdrom` error. This source is prepared locally for publication.
 
 ## Changes in 1.15.1
 

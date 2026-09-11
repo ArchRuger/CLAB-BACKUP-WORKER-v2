@@ -9,7 +9,9 @@ additional Linux user. The VM username and GitHub username can be different.
    its VM password, and confirm that a manual device backup works.
 2. On GitHub, create the repository that will hold your configurations. Choose
    the intended visibility and **Add a README** so it has an initial commit.
-   Copy its HTTPS clone URL. Your GitHub account needs write access.
+   Copy **Code → HTTPS**, for example `https://github.com/OWNER/REPOSITORY.git`.
+   A browser address ending in `/tree/main` is not a clone URL.
+   Your GitHub account needs write access.
 3. In the VM terminal, as your ordinary account, enter the release source
    directory and run this command **without sudo**:
 
@@ -31,6 +33,11 @@ The wizard shows the Linux account it will use, then:
 and open the displayed URL in your workstation browser. A message about a missing
 browser on the VM is expected. Keep the terminal open until authorization completes;
 do not press Ctrl+C. This is [GitHub CLI's login flow](https://cli.github.com/manual/gh_auth_login).
+
+**Checkout directory** means the local repository on the VM, for example
+`/home/archtop/labs/my-bgp-lab`. The wizard clones into that directory; subsequent
+saves write `latest/`, `baseline/` or checkpoints inside it. It is separate from
+the manager's application source directory under `~/projects/`.
 
 Finally, open your lab in the manager → **More → Git repository**, select the
 checkout and devices, review the destination, and save the connection settings.
@@ -69,10 +76,46 @@ sudo bash deploy/setup-git.sh --refresh
 ```
 
 Do not clone again or create another Linux account just to upgrade. Guided setup
-can be rerun after interruption: select **existing** and the same checkout. It
+can be rerun after interruption: if cloning completed, select **existing** and the
+same checkout. If it stopped during package installation/login before cloning,
+select **clone** again. It
 keeps existing author settings and files. Re-registering unchanged settings keeps
 the registration ID/revision; changed owner, branch, destination or prefix needs
 pending saves resolved and the lab reconnected.
+
+## Package installation recovery
+
+If `sudo apt-get update` fails with `file:/cdrom ... Release` or `cdrom:`, Ubuntu
+still has an installation-media source enabled. Locate the entry:
+
+```bash
+sudo grep -nHE 'file:/+cdrom|cdrom:' /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources
+```
+
+A missing-file message for an unused format is harmless. Open the matching file
+with `sudo nano /actual/path/from/output`, and disable only its installation-media
+entry. For `sources.list` or a `.list` file, put `#` before the matching `deb` line.
+For a `.sources` file, add `Enabled: no` to the media-only stanza (or change its
+existing `Enabled` value). If that stanza lists both media and network URIs,
+remove only the media URI instead. Keep Ubuntu network mirrors, security updates
+and Docker entries enabled. These are the supported
+[APT source formats](https://manpages.ubuntu.com/manpages/noble/man5/sources.list.5.html).
+Save in nano with **Ctrl+O**, **Enter**, then **Ctrl+X**.
+
+Run these in order; continue only after each command succeeds:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git gh
+bash deploy/setup-git.sh
+```
+
+Run the wizard as your ordinary VM account, without sudo. If it stopped before
+cloning, choose **clone**, enter the repository HTTPS URL without `/tree/main`,
+and accept its repository-named checkout directory. No manager rebuild is needed
+for this VM package-source repair. Other APT errors (network, sudo, unavailable
+package or signature failures) require resolving the specific message; do not
+bypass repository signature checks. Setup does not edit system package sources.
 
 ## Which account/password goes where?
 

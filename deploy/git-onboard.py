@@ -45,7 +45,36 @@ def https_url(value):
             or url.query or url.fragment or any(ord(c) <= 32 for c in value)
             or '%' in value or '\\' in value or not url.path.strip('/')):
         raise ValueError('Use an HTTPS clone URL without a username, token, query or fragment.')
+    if url.hostname == 'github.com':
+        parts = url.path.strip('/').split('/')
+        if (len(parts) != 2 or not all(re.fullmatch(r'[A-Za-z0-9_.-]+', part) for part in parts)
+                or any(part in ('.', '..') for part in parts)
+                or not parts[1].removesuffix('.git')):
+            raise ValueError('Use the GitHub repository clone URL: https://github.com/OWNER/REPOSITORY.git. '
+                             'Copy Code > HTTPS; do not include /tree/main, /blob/ or other page paths.')
     return value
+
+
+def ask_clone_url():
+    while True:
+        try:
+            return https_url(ask('HTTPS clone URL (Code > HTTPS on GitHub)'))
+        except ValueError as error:
+            print(str(error))
+
+
+def install_package(package, env):
+    if run(['sudo', 'apt-get', 'update'], env, interactive=True, check=False).returncode:
+        raise ValueError('APT package-list update failed; the package was not installed. '
+                         'If the output mentions file:/cdrom or cdrom: and a missing Release file, '
+                         'disable only the obsolete installation-media entry in /etc/apt/sources.list '
+                         'or /etc/apt/sources.list.d/ (see GIT-SETUP.md, Package installation recovery). '
+                         'Keep Ubuntu/Docker network sources and signature checks enabled. '
+                         'Otherwise resolve the APT or sudo error shown above. '
+                         'Run sudo apt-get update successfully, then rerun bash deploy/setup-git.sh.')
+    if run(['sudo', 'apt-get', 'install', '-y', package], env, interactive=True, check=False).returncode:
+        raise ValueError(f'APT could not install {package}. Resolve the package or sudo error above, '
+                         f'then run sudo apt-get install -y {package} and rerun bash deploy/setup-git.sh.')
 
 
 def checkout_path(value):
@@ -91,8 +120,7 @@ def github_login(env):
     if not Path('/usr/bin/gh').exists():
         if not confirm('Install GitHub CLI with sudo apt-get?'):
             raise ValueError('Install gh as a VM administrator, then rerun setup as the repository owner.')
-        run(['sudo', 'apt-get', 'update'], env, interactive=True)
-        run(['sudo', 'apt-get', 'install', '-y', 'gh'], env, interactive=True)
+        install_package('gh', env)
     if run(['gh', 'auth', 'status', '--hostname', 'github.com'], env, check=False).returncode:
         print('\nGitHub login belongs to this Linux account. Use your GitHub account with write access.')
         print('Copy the device code below, press Enter, then open the displayed URL in your workstation browser.')
@@ -122,16 +150,16 @@ def main():
     if not shutil.which('git', path=env['PATH']):
         if not confirm('Install Git with sudo apt-get?'):
             raise ValueError('Install git as a VM administrator, then rerun.')
-        run(['sudo', 'apt-get', 'update'], env, interactive=True)
-        run(['sudo', 'apt-get', 'install', '-y', 'git'], env, interactive=True)
+        install_package('git', env)
     mode = ask('Clone a repository or use an existing checkout? Enter clone/existing', 'clone').lower()
     if mode not in ('clone', 'existing'):
         raise ValueError('Choose clone or existing.')
     url = ''
     if mode == 'clone':
         print('First create your repository on GitHub with a README (an initial commit). A private repository is suitable for lab configs.')
-        url = https_url(ask('HTTPS clone URL'))
+        url = ask_clone_url()
         name = urlsplit(url).path.rstrip('/').split('/')[-1].removesuffix('.git')
+        print('Checkout directory is the local repository on this VM, where lab configurations will be saved.')
         path = checkout_path(ask('Checkout directory', str(Path(account.pw_dir) / 'labs' / name)))
     else:
         path = checkout_path(ask('Existing checkout directory'))

@@ -1,3 +1,11 @@
+# Guided Git setup recovery — 1.15.2
+
+Reject GitHub browser page URLs before login/clone and reprompt for Code > HTTPS.
+Keep the checkout in the ordinary owner's persistent home. Package failures must
+identify APT recovery, without changing sources or bypassing signature checks.
+GIT-SETUP.md and the master wiki describe obsolete file:/cdrom source repair.
+Prepared on main 698fabb; older release and audit notes below are historical.
+
 # CLAB Backup Worker — Agent Instructions
 
 ## 1.15.1 repository consistency repair
