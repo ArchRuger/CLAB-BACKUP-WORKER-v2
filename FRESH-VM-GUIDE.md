@@ -1,4 +1,4 @@
-# Containerlab Node Manager 1.16.0 — a fresh VM to a working lab
+# Containerlab Node Manager 1.16.1 — a fresh VM to a working lab
 
 For the complete installer-based route starting with Proxmox, use the
 [Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md). It includes normal-user
@@ -20,7 +20,7 @@ Git repair without rebuilding; menu **3** checks an existing installation. See
 The numbered sections below are the **manual alternative**, not extra steps to
 repeat after the installer succeeds. Continue with browser VM/lab configuration.
 
-> This 1.16.0 source release requires building the new image. Previously published
+> This 1.16.1 source release requires building the new image. Previously published
 > images do not contain this release's Git progress workflow.
 
 If package setup fails with `file:/cdrom ... Release`, follow
@@ -51,16 +51,16 @@ sudo apt install -y ca-certificates curl git openssh-server python3 sudo
 sudo systemctl enable --now ssh
 mkdir -p "$HOME/projects"
 cd "$HOME/projects"
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.16.0
-cd v1.16.0
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.16.1
+cd v1.16.1
 cat clab-backup-ui/VERSION
 ```
 
-This guide requires **1.16.0** source, including `clab-backup-ui/app/host_files.py`.
-If the clone reports an older version, obtain the 1.16.0 source package or the
+This guide requires **1.16.1** source, including `clab-backup-ui/app/host_files.py`.
+If the clone reports an older version, obtain the 1.16.1 source package or the
 matching release commit before proceeding. Local source delivery does not mean
 the GitHub repository has already been updated. For a delivered ZIP, extract it
-and place its contents in `~/projects/v1.16.0` so that `clab-backup-ui/` and
+and place its contents in `~/projects/v1.16.1` so that `clab-backup-ui/` and
 `deploy/` are directly inside that folder. This is the version-folder convention
 used throughout this guide.
 All later relative paths start at the directory containing `deploy/` and
@@ -195,7 +195,7 @@ for command coverage, optional downloads and recovery. Without this flag,
 a fresh setup provides discovery/import only. Already enabled helpers are upgraded
 automatically on subsequent launches.
 
-Expect **1.16.0**. Open **`http://VM_IP:8081`** on your workstation. There is no
+Expect **1.16.1**. Open **`http://VM_IP:8081`** on your workstation. There is no
 UI access-token login. VM connection and device SSH authentication are separate.
 See [VM connection setup and recovery](VM-CONNECTION.md) for detailed help.
 
@@ -229,7 +229,7 @@ and use it in the browser. Default access is HTTP for the isolated lab network.
 An equivalent **image-only build** from the repository root is:
 
 ```bash
-sudo docker build --pull --no-cache -t clab-backup:1.16.0 ./clab-backup-ui
+sudo docker build --pull --no-cache -t clab-backup:1.16.1 ./clab-backup-ui
 ```
 
 If already inside `clab-backup-ui`, use `.` as the last argument instead. That
@@ -446,26 +446,26 @@ any current data as a separate recovery copy, extract the archive under
 the data. Reconfigure the discovery password/account for the new VM; a different VM
 SSH host key needs verification before trusting it in the UI.
 
-### Upgrade an existing installation to 1.16.0
+### Upgrade an existing installation to 1.16.1
 
 Keep the original data directory and back it up first. Put the new source in
-`~/projects/v1.16.0` with `clab-backup-ui/` and `deploy/` directly inside it.
+`~/projects/v1.16.1` with `clab-backup-ui/` and `deploy/` directly inside it.
 Carry forward your previous `.env` or custom UI bind/port settings. For an existing
 Compose installation, use the same entry point as a fresh launch:
 
 ```bash
-cd "$HOME/projects/v1.16.0"
+cd "$HOME/projects/v1.16.1"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 
 This updates and verifies the VM helper, retains the existing password/account,
-prepares the persistent data directory, builds `clab-backup:1.16.0`, and recreates
+prepares the persistent data directory, builds `clab-backup:1.16.1`, and recreates
 the Compose service. It verifies the helper version/protocol even when no labs
 are deployed. It prints no file contents or credentials during that check.
 If Git progress was enabled, refresh its helper with `sudo bash deploy/setup-git.sh --refresh` from
 this same source; keep the existing registrations and repository checkouts.
 
-The browser must show v1.16.0. Refresh discovery; existing labs stay saved and new
+The browser must show v1.16.1. Refresh discovery; existing labs stay saved and new
 labs wait for import confirmation. Existing workspaces still use Sync from VM.
 
 If you only run `docker build`, host files cannot be updated from that image build.
@@ -521,14 +521,14 @@ same architecture. Transfer the source and required Ubuntu/Docker/containerlab
 packages or use your internal package mirrors. Build the manager there and export:
 
 ```bash
-sudo docker save clab-backup:1.16.0 -o clab-backup-1.16.0.tar
+sudo docker save clab-backup:1.16.1 -o clab-backup-1.16.1.tar
 ```
 
 On the prepared offline VM, after completing storage and discovery-password setup
 above, update both host helpers from the transferred source before starting:
 
 ```bash
-sudo docker load -i clab-backup-1.16.0.tar
+sudo docker load -i clab-backup-1.16.1.tar
 sudo bash deploy/setup-discovery.sh --update-helper
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml up -d --no-build

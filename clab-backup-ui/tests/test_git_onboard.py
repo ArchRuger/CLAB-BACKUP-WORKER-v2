@@ -337,7 +337,9 @@ class GitOnboardTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'file:/cdrom') as error:
                 onboard.install_package('gh', {})
         self.assertIn('GIT-SETUP.md', str(error.exception))
-        self.assertEqual([call.args[0] for call in run.call_args_list], [['sudo', 'apt-get', 'update']])
+        self.assertIn('clock', str(error.exception))
+        self.assertEqual([call.args[0] for call in run.call_args_list],
+                         [['sudo', '/usr/bin/python3', str(onboard.SOURCE / 'deploy/apt_update.py')]])
 
     def test_package_install_failure_has_distinct_recovery(self):
         results = [subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 100)]
@@ -350,7 +352,8 @@ class GitOnboardTests(unittest.TestCase):
             with patch.object(onboard, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
                 onboard.install_package(package, env)
             self.assertEqual([call.args[0] for call in run.call_args_list],
-                             [['sudo', 'apt-get', 'update'], ['sudo', 'apt-get', 'install', '-y', package]])
+                             [['sudo', '/usr/bin/python3', str(onboard.SOURCE / 'deploy/apt_update.py')],
+                              ['sudo', 'apt-get', 'install', '-y', package]])
             self.assertTrue(all(call.kwargs['interactive'] for call in run.call_args_list))
             self.assertTrue(all(call.args[1] == env for call in run.call_args_list))
 

@@ -1,7 +1,7 @@
 # Fresh VM guide, version 2 — Proxmox to your first Git save
 
 This is the **installer-based walkthrough** for Containerlab Node Manager
-**1.16.0** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
+**1.16.1** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
 the application version. It supplements the [short install guide](INSTALL.md)
 and keeps the [original manual guide](FRESH-VM-GUIDE.md) available.
 
@@ -10,10 +10,11 @@ obtain the project source, run **one installer**, then verify file transfer,
 load your lab, and save its progress to Git. You do not need WinSCP to bootstrap
 the installer.
 
-The runtime baseline is GitHub main `2248942` (1.16.0). Instructions were checked
-against that source and the linked provider documentation. The installer has
-local automated test coverage; a complete fresh-VM run has not been verified
-by the author of this guide.
+The published baseline is GitHub main `58a17bd` (1.16.0). This guide includes
+the locally prepared **1.16.1** clock-recovery changes; obtain that complete source
+after publication, or use its supplied source package. Instructions were checked
+against source and the linked provider documentation. A complete fresh-VM run of
+1.16.1 has not been verified by the author of this guide.
 
 ## Before you start
 
@@ -29,7 +30,7 @@ This guide uses these examples; substitute your actual values:
 | Ubuntu VM name | `clab-3` |
 | Normal Ubuntu administrator | `archtop` |
 | VM LAN address | `10.150.2.213` |
-| Manager source folder | `/home/archtop/projects/v1.16.0` |
+| Manager source folder | `/home/archtop/projects/v1.16.1` |
 | Uploaded files | `/home/archtop/uploads` |
 | Lab topology/project | `/etc/containerlab/practice-lab` |
 | Lab-config Git checkout | `/home/archtop/labs/my-lab` |
@@ -54,6 +55,21 @@ flowchart TD
 ```
 
 ## 1. Set up the VM in Proxmox
+
+### Check the Proxmox node clock
+
+In the **Proxmox host shell**, check:
+
+```bash
+date -u
+timedatectl status
+```
+
+Compare UTC with a trusted current clock. If it is wrong, have the Proxmox
+administrator repair the node's existing time synchronization before building
+the guest. Do not copy a timestamp from this guide or change the host timezone
+to compensate. Check the Ubuntu guest separately in step 3; a correct host
+clock alone does not prove the guest clock is correct.
 
 ### Create VM
 
@@ -137,12 +153,21 @@ ip -br address
 ip route
 getent hosts github.com
 df -h /
+date -u
+timedatectl status
 ```
 
 Confirm the username, assigned address, default route, DNS lookup and usable
 root filesystem capacity. If the root volume is unexpectedly small, use the
 master wiki's [Part 3 disk inspection procedure](WIKI-MASTER-GUIDE.md) before
 loading large images; the installer does not expand disks or filesystems.
+
+Compare the displayed UTC date and time with a trusted current clock **before
+installing Git or cloning**. A different local timezone is fine; UTC must be
+correct. If the time is wrong, or a newly started time service has not caught up,
+complete [clock recovery](#recovery-c) first. `NTP service: active` means the
+service is running, not that it has synchronized. A deliberately manual or
+host-managed clock can be correct even when synchronization is reported as no.
 
 For VM-backed NOS images, also check:
 
@@ -154,7 +179,7 @@ If it is missing, resolve the Proxmox nesting/CPU settings before expecting thos
 devices to boot. You can still install the manager while resolving that issue.
 
 **Checkpoint:** you are in the Ubuntu VM as the ordinary administrator, sudo
-works, and GitHub resolves. Do not run the following Linux commands in Windows
+works, GitHub resolves, and the UTC clock is correct. Do not run the following Linux commands in Windows
 PowerShell or the Proxmox host shell.
 
 ## 4. Obtain the source and launch the installer
@@ -167,12 +192,12 @@ subshell stops at a failed command without closing your login session.
 (
   set -e
   if ! command -v git >/dev/null 2>&1; then
-    sudo apt-get update
+    sudo apt-get update --error-on=any
     sudo apt-get install -y git
   fi
   mkdir -p "$HOME/projects"
-  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.16.0"
-  bash "$HOME/projects/v1.16.0/deploy/install.sh"
+  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.16.1"
+  bash "$HOME/projects/v1.16.1/deploy/install.sh"
 )
 ```
 
@@ -183,10 +208,10 @@ normal account. The source must be present before its installer can run.
 If that source folder already exists, reuse it instead of cloning over it:
 
 ```bash
-bash "$HOME/projects/v1.16.0/deploy/install.sh"
+bash "$HOME/projects/v1.16.1/deploy/install.sh"
 ```
 
-The installer banner must identify **1.16.0** for this guide. A directory name
+The installer banner must identify **1.16.1** for this guide. A directory name
 does not pin a Git version; if main has advanced, use that release's matching
 guide. Its source consistency check must pass.
 
@@ -194,6 +219,9 @@ guide. Its source consistency check must pass.
 `file:/cdrom ... Release`, go to [recovery A](#recovery-a) below. If the error
 happens inside the installer, return to its menu and select installation-media
 repair when reviewing the install plan. Neither case requires a new VM.
+For `Release file ... is not valid yet` or `expired`, use
+[clock recovery](#recovery-c) instead. Media-source repair and clock correction
+address different errors.
 
 ## 5. Complete the full installation menu
 
@@ -213,6 +241,14 @@ The installer handles missing Git, SSH, Docker/Compose and Containerlab;
 prepares persistent manager storage; installs and verifies helpers; builds and
 starts the manager; then checks its running version and HTTP response. Image
 builds can take time. Keep the terminal open and wait for the result.
+
+Before APT updates, setup displays UTC and NTP status. If a time service is
+already active but not yet synchronized, it waits up to 30 seconds before
+continuing. This is a read-only preflight: it does not change time services,
+servers, timezone or the clock, and it does not require NTP for an otherwise
+correct clock. APT output and failure status are retained, with specific guidance
+for future-dated or expired repository metadata. Git/GitHub CLI package setup
+uses the same checks. If APT reports a clock error, follow [recovery C](#recovery-c).
 
 Existing `.env` settings, passwords, manager data and compatible installations
 are retained. This is a fresh-build guide; upgrades with customized settings
@@ -234,7 +270,7 @@ with its initial README is ready. Otherwise choose **Finish; set up Git later**.
 You can reopen the Git wizard without rebuilding:
 
 ```bash
-bash "$HOME/projects/v1.16.0/deploy/install.sh" --git
+bash "$HOME/projects/v1.16.1/deploy/install.sh" --git
 ```
 
 The six phases guide you through:
@@ -499,7 +535,7 @@ The master wiki covers [manager data backup and recovery in Part 17](WIKI-MASTER
 
 At a suitable time, save lab work and perform a normal Ubuntu reboot. Afterwards
 verify WinSCP, the manager page, saved lab/history and VM connection. Reopen
-`bash "$HOME/projects/v1.16.0/deploy/install.sh"` and select **Check running
+`bash "$HOME/projects/v1.16.1/deploy/install.sh"` and select **Check running
 installation** if needed. Training device restart behavior is separate; inspect
 your lab rather than assuming every NOS resumed. Do not delete persistent data
 or clone everything again to recover a failed check.
@@ -623,11 +659,107 @@ user and workstation IP. Use the configured login method or have your VM
 administrator correct the intended account policy. Do not enable passwords for
 every user or remove the manager's Match block as a blanket fix.
 
+<a id="recovery-c"></a>
+
+## Recovery C — APT says “not valid yet” or “expired”
+
+`Release file ... is not valid yet (invalid for another ... )` means repository
+metadata is dated ahead of the VM clock. On a fresh VM, an incorrect or
+unsynchronized guest clock is a common cause. The duration in that error is the
+gap to the metadata date, not a measurement of the exact guest clock error.
+An `expired` message can mean a guest clock that is ahead **or** a stale mirror.
+APT checks these dates as part of repository validation.
+[Ubuntu APT date checks](https://manpages.ubuntu.com/manpages/noble/man5/apt.conf.5.html)
+
+If the installer already reported that it changed/backed up a CD-ROM source,
+that repair succeeded. A later clock error needs a separate correction; do not
+restore the obsolete CD-ROM source or clone the project again.
+
+### Continue the paused installation
+
+1. Leave the installer at its **Recovery** menu. Open a **second terminal into
+   the same Ubuntu VM**, using another SSH session or the Proxmox console.
+   Do not paste shell commands into the installer's numbered-choice prompt.
+2. Inspect the clock and configured time service:
+
+   ```bash
+   date -u
+   timedatectl status
+   ```
+
+   Compare UTC against a trusted current clock. Changing the displayed timezone
+   does not correct UTC. If this VM should use network time, enable its installed
+   time provider:
+
+   ```bash
+   sudo timedatectl set-ntp true
+   timedatectl status
+   date -u
+   ```
+
+   Allow the provider time to synchronize, then repeat the last two checks.
+   `set-ntp true` starts an available installed provider; it does not install one
+   or replace its server configuration. If your environment deliberately manages
+   time another way, repair that method instead. Do not install a second time
+   provider just to make a status flag say yes.
+   [Ubuntu timedatectl reference](https://manpages.ubuntu.com/manpages/noble/man1/timedatectl.1.html)
+3. Once UTC is correct, verify the actual APT operation:
+
+   ```bash
+   sudo apt-get update --error-on=any
+   ```
+
+4. After that succeeds, return to the original installer and choose **1. Retry
+   this step after fixing the error**. Completed setup and data are retained.
+   If the failure was in the Git wizard, use that phase's **Retry** action. If
+   you already exited, run `bash /actual/source/folder/deploy/install.sh` as your
+   ordinary user again; use `--git` for Git-only recovery. Before source bootstrap,
+   return to step 4 of this guide after the APT check succeeds.
+
+### Time service is active but the clock is still wrong
+
+Use the commands for the VM's **existing provider**, not both sets as repair
+instructions. Standard Ubuntu 24.04 commonly uses systemd-timesyncd; a managed
+image may use chrony or another provider.
+
+For **systemd-timesyncd**:
+
+```bash
+systemctl status systemd-timesyncd.service --no-pager
+timedatectl timesync-status
+sudo journalctl -u systemd-timesyncd.service -n 30 --no-pager
+```
+
+For **chrony**:
+
+```bash
+systemctl status chrony.service --no-pager
+chronyc tracking
+chronyc sources -v
+sudo journalctl -u chrony.service -n 30 --no-pager
+```
+
+`timesync-status` applies to timesyncd; its failure does not establish that
+chrony is broken. Inspect the selected provider's reachability and synchronization
+status. Check DNS and access to your configured time servers, including NTP
+traffic on UDP 123. Have the VM administrator correct an unavailable provider or
+network policy using the site's approved time source. If a large chrony correction
+is pending, the administrator should choose when to apply that clock adjustment.
+If wrong time returns after a VM restart, also recheck the Proxmox node clock.
+[Ubuntu time synchronization](https://ubuntu.com/server/docs/how-to/networking/timedatectl-and-timesyncd/),
+[chrony tracking and correction](https://chrony-project.org/doc/4.5/chronyc.html)
+
+If UTC is correct and APT still rejects the dates, investigate that repository's
+mirror, cached metadata or proxy with its administrator. Keep APT date and
+signature checks enabled; do not use a guessed `date -s` timestamp or disable
+validation to continue. Retry the same installation step only after APT succeeds.
+
 ## What the installer covers, and what this guide adds
 
 | Work | Where it happens |
 |---|---|
 | Proxmox VM, nested KVM, Ubuntu install, disk allocation | Steps 1–3; administrator choices |
+| Correct UTC on host/guest and functioning time provider | Steps 1 and 3; recovery C if needed. Installer checks status and waits briefly but does not set time |
 | Obtain source | Step 4; VM console/SSH bootstrap |
 | Docker, SSH, Containerlab, manager storage/password/helpers/build/start | Installer in step 5 |
 | Git login, identity, checkout and registration | Git terminal wizard in step 6 |

@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.16.0
+# Containerlab Node Manager — 1.16.1
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.16.0 deployment:** Build the new source and create the VM password using
+**1.16.1 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -26,6 +26,16 @@ The [short install guide](INSTALL.md) and
 [original manual installation guide](FRESH-VM-GUIDE.md) are also available.
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
+
+## Changes in 1.16.1
+
+Package setup now shows VM UTC time and NTP status before APT updates, with a
+bounded wait for an already-active time service. It identifies future-dated or
+expired repository metadata and gives clock/mirror recovery steps while keeping
+APT validation enabled. The same checks cover Git/GitHub CLI package setup.
+See [clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c) to resume a paused install.
+These changes are prepared locally on published main `58a17bd`; publication and
+a complete fresh-VM run of 1.16.1 have not been verified.
 
 ## Changes in 1.16.0
 
@@ -205,7 +215,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.15.1
+cd ~/projects/v1.16.1
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

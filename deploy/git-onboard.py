@@ -145,14 +145,15 @@ def github_clone_suggestion(value):
 
 
 def install_package(package, env):
-    if run(['sudo', 'apt-get', 'update'], env, interactive=True, check=False).returncode:
+    if run(['sudo', '/usr/bin/python3', str(SOURCE / 'deploy/apt_update.py')], env, interactive=True, check=False).returncode:
         raise PackageSourceError('APT package-list update failed; the package was not installed. '
                          'If the output mentions file:/cdrom or cdrom: and a missing Release file, '
                          'disable only the obsolete installation-media entry in /etc/apt/sources.list '
                          'or /etc/apt/sources.list.d/ (see GIT-SETUP.md, Package installation recovery). '
                          'Keep Ubuntu/Docker network sources and signature checks enabled. '
-                         'Otherwise resolve the APT or sudo error shown above. '
-                         'Run sudo apt-get update successfully, then rerun bash deploy/setup-git.sh.')
+                         'For Release file is not valid yet or expired, follow the VM clock/mirror recovery above; '
+                         'CD-ROM repair does not fix clock errors. Otherwise resolve the APT or sudo error shown above. '
+                         'Run sudo apt-get update --error-on=any successfully, then choose Retry this step.')
     if run(['sudo', 'apt-get', 'install', '-y', package], env, interactive=True, check=False).returncode:
         raise ValueError(f'APT could not install {package}. Resolve the package or sudo error above, '
                          f'then run sudo apt-get install -y {package} and rerun bash deploy/setup-git.sh.')

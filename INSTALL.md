@@ -1,4 +1,4 @@
-# Guided VM installation — 1.16.0
+# Guided VM installation — 1.16.1
 
 Starting before Ubuntu is installed? Use the
 [Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) for Proxmox settings, first
@@ -12,11 +12,20 @@ as your existing ordinary VM account, **without sudo**:
 bash deploy/install.sh
 ```
 
-For a clone into a new source folder:
+Before cloning or installing packages, check the VM clock:
 
 ```bash
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.16.0"
-bash "$HOME/projects/v1.16.0/deploy/install.sh"
+date -u
+timedatectl status
+```
+
+Compare UTC with a trusted current clock. For a wrong clock or APT's
+`not valid yet` / `expired` error, follow [clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c).
+Then clone into a new source folder:
+
+```bash
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.16.1"
+bash "$HOME/projects/v1.16.1/deploy/install.sh"
 ```
 
 Git is needed for the clone. If Git is not yet installed, extract a source ZIP
@@ -27,10 +36,10 @@ requirements. Internet access is needed for packages, image builds and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.16.0 — guided setup
+Containerlab Node Manager 1.16.1 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
-Source: /home/your-account/projects/v1.16.0
+Source: /home/your-account/projects/v1.16.1
 
 Setup menu
   1. Install or update manager, then set up Git
@@ -66,6 +75,12 @@ Review the displayed plan, then approve it once. The installer:
 6. Offers Git setup under the **original ordinary Linux account**. Git setup has
    its own retry/cancel flow; a Git error does not undo a working manager.
 
+Before APT updates, both installation paths display UTC/NTP status and wait up
+to 30 seconds only for already-active NTP. The check is read-only and does not
+require NTP when the clock is maintained another way. APT output and failure
+status are retained; clock-related failures get specific recovery instructions.
+The installer does not set the clock or change time services, servers or timezone.
+
 ```mermaid
 flowchart TD
     A[Run install.sh as ordinary VM user] --> B[Verify source and review plan]
@@ -95,7 +110,7 @@ Use menu **2** whenever Git needs attention. It does not rebuild the manager.
 You can open it directly from any directory:
 
 ```bash
-bash "$HOME/projects/v1.16.0/deploy/install.sh" --git
+bash "$HOME/projects/v1.16.1/deploy/install.sh" --git
 ```
 
 The wizard separates Linux owner, GitHub login, commit name/email and checkout
@@ -131,6 +146,11 @@ the actual package/launcher error before retrying. A successful launch with an
 HTTP problem can be checked again using menu **3**, without rebuilding. If Git
 was canceled or failed, use menu **2**. Exiting retains completed work; on a
 later run, the scripts inspect the current VM and preserve existing setup.
+
+For `Release file ... is not valid yet`, keep the installer open, fix/check the
+VM clock in another terminal, then choose **1. Retry this step after fixing the
+error**. See [detailed clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c). A successful
+CD-ROM source repair does not fix clock errors; no fresh VM or new clone is needed.
 
 If you accidentally run `sudo bash deploy/install.sh`, it prints the equivalent
 ordinary-user command and stops before running Git as root. The installer uses

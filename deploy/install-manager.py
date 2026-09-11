@@ -212,6 +212,7 @@ def install(env, version):
     print('\nInstallation plan')
     print('  Source: ' + str(SOURCE) + ' (' + version + ')')
     print('  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.')
+    print('  Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.')
     print('  Retain compatible installed tools; start Docker and SSH services.')
     print('  Prepare persistent storage and restricted clab-discovery password/helpers.')
     print('  Existing password/data retained; first setup asks you to create the password.')
