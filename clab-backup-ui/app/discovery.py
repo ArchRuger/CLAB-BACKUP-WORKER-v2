@@ -2,7 +2,6 @@
 import base64
 import copy
 import hashlib
-import io
 import ipaddress
 import json
 import re
@@ -182,11 +181,10 @@ def reconcile(state):
                 node.update(address=found['address'], port=22)
 
 
-def read_key(value, passphrase):
-    for kind in (paramiko.RSAKey, paramiko.ECDSAKey, paramiko.Ed25519Key):
-        try: return kind.from_private_key(io.StringIO(value), password=passphrase or None)
-        except (paramiko.SSHException, ValueError, TypeError): pass
-    raise ValueError('Cannot read SSH private key; check its format and passphrase')
+def vm_password(host):
+    if host.get('auth') != 'password' or not host.get('password'):
+        raise ValueError('VM password setup required. Run sudo bash deploy/setup-discovery.sh on the VM, then save its password in VM connection.')
+    return host['password']
 
 
 class PinnedHostKey(paramiko.MissingHostKeyPolicy):
@@ -202,13 +200,13 @@ class PinnedHostKey(paramiko.MissingHostKeyPolicy):
 
 
 def inspect_host(host, stopping=None):
+    password = vm_password(host)
     client = paramiko.SSHClient()
     policy = PinnedHostKey(host.get('fingerprint', ''))
     client.set_missing_host_key_policy(policy)
     opts = dict(hostname=host['address'], port=host['port'], username=host['username'],
                 timeout=8, auth_timeout=8, banner_timeout=8, allow_agent=False, look_for_keys=False)
-    if host['auth'] == 'key': opts['pkey'] = read_key(host['private_key'], host.get('passphrase', ''))
-    else: opts['password'] = host.get('password', '')
+    opts['password'] = password
     try:
         client.connect(**opts)
         transport = client.get_transport()
@@ -390,8 +388,6 @@ class Discovery:
             username: str = Field(min_length=1,max_length=128)
             auth: str = 'password'
             password: str = Field(default='',max_length=4096)
-            private_key: str = Field(default='',max_length=65536)
-            passphrase: str = Field(default='',max_length=4096)
             command_mode: str = 'helper'
             enabled: bool = True
             reset_fingerprint: bool = False
@@ -402,7 +398,8 @@ class Discovery:
         @app.put('/api/host')
         def save_host(data: HostSettings):
             try:
-                if data.auth not in ('password','key') or data.command_mode not in COMMANDS: raise ValueError('Choose valid authentication and inspection modes')
+                if data.auth != 'password': raise ValueError('VM connections require password authentication')
+                if data.command_mode not in COMMANDS: raise ValueError('Choose a valid inspection mode')
                 endpoint = address(data.address.strip()); username = literal(data.username.strip(), 'VM username',128)
                 if not username: raise ValueError('Enter a VM username')
                 with self.store.lock:
@@ -411,11 +408,8 @@ class Discovery:
                     same = (old.get('address'),old.get('port'),old.get('username'),old.get('auth')) == (endpoint,data.port,username,data.auth)
                     host = dict(address=endpoint,port=data.port,username=username,auth=data.auth,
                                 enabled=data.enabled,command_mode=data.command_mode,revision=uuid.uuid4().hex)
-                    for key in ('password','private_key','passphrase'):
-                        host[key] = getattr(data,key) or (old.get(key,'') if same else '')
-                    if data.private_key: host['passphrase'] = data.passphrase
-                    if data.auth == 'key': read_key(host['private_key'],host['passphrase'])
-                    elif not host['password']: raise ValueError('Enter the VM password')
+                    host['password'] = data.password or (old.get('password','') if same else '')
+                    if not host['password']: raise ValueError('Enter the VM password')
                     host['fingerprint'] = old.get('fingerprint','') if (old.get('address'),old.get('port')) == (endpoint,data.port) and not data.reset_fingerprint else ''
                     self.sources = {}
                     self.store.state['host'] = host

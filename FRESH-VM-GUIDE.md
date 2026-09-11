@@ -1,7 +1,7 @@
-# Containerlab Node Manager 1.12.1 — a fresh VM to a working lab
+# Containerlab Node Manager 1.13.0 — a fresh VM to a working lab
 
-> Already pulled the release image from Docker Hub? Use [DOCKER-HUB-SETUP.md](DOCKER-HUB-SETUP.md)
-> for a launch that uses that image without rebuilding it, plus the required host-helper setup.
+> This 1.13.0 source release requires building the new image. Previously published
+> images do not contain this password-only VM connection UI.
 
 
 This guide starts with a fresh **Ubuntu Server 24.04 LTS VM**, a normal user with
@@ -27,16 +27,16 @@ sudo apt install -y ca-certificates curl git openssh-server python3 sudo
 sudo systemctl enable --now ssh
 mkdir -p "$HOME/projects"
 cd "$HOME/projects"
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.12.1
-cd v1.12.1
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.13.0
+cd v1.13.0
 cat clab-backup-ui/VERSION
 ```
 
-This guide requires **1.12.1** source, including `clab-backup-ui/app/host_files.py`.
-If the clone reports an older version, obtain the 1.12.1 source package or the
+This guide requires **1.13.0** source, including `clab-backup-ui/app/host_files.py`.
+If the clone reports an older version, obtain the 1.13.0 source package or the
 matching release commit before proceeding. Local source delivery does not mean
 the GitHub repository has already been updated. For a delivered ZIP, extract it
-and place its contents in `~/projects/v1.12.1` so that `clab-backup-ui/` and
+and place its contents in `~/projects/v1.13.0` so that `clab-backup-ui/` and
 `deploy/` are directly inside that folder. This is the version-folder convention
 used throughout this guide.
 All later relative paths start at the directory containing `deploy/` and
@@ -113,36 +113,21 @@ If this is actually an upgrade from a worker that kept data inside its container
 stop here and follow [the migration procedure](STANDALONE-SETUP.md#2-migrate-an-existing-worker-if-present)
 before starting the new manager. A genuinely fresh VM has nothing to migrate.
 
-## 5. Set up the restricted VM discovery key
+## 5. Create the restricted VM account password
 
-**Workstation:** generate a dedicated key pair. These commands work in a terminal
-with OpenSSH, including Windows PowerShell. Run in a folder where you can find
-the resulting files; choose a passphrase when prompted, or press Enter for none.
-
-```text
-ssh-keygen -t ed25519 -f clab-manager-discovery
-scp clab-manager-discovery.pub YOUR_VM_USER@VM_IP:clab-manager-discovery.pub
-```
-
-Two files are created:
-
-| File | Use |
-|---|---|
-| `clab-manager-discovery.pub` | Public key: copied to the VM for the setup script |
-| `clab-manager-discovery` | Private key: retain on your workstation; select this file in the manager UI |
-
-**VM, repository root:**
+**VM, repository root, interactive terminal:**
 
 ```bash
-sudo bash deploy/setup-discovery.sh "$HOME/clab-manager-discovery.pub"
+sudo bash deploy/setup-discovery.sh
 sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
 ```
 
-The script creates the `clab-discovery` account, a root-owned helper and a validated
-sudoers rule. At this discovery-only setup step, its SSH key invokes the fixed helper; it cannot open a shell,
-PTY or tunnel. The account is not added to the Docker group. The helper uses the
-host's Docker CLI to read deployment labels; the manager container receives no
-Docker socket and needs no mount of your lab directories.
+Setup creates clab-discovery and prompts twice for your chosen password with hidden
+input. It installs the restricted SSH gateway and stores the account's password hash
+in /etc/shadow. Enter this same password in VM connection after launch. No client
+key generation, transfer or upload is needed. The SSH host fingerprint still identifies
+the VM. The account is not added to the Docker group; it has no interactive SSH shell,
+PTY or forwarding access. The manager container needs no Docker socket.
 
 It reads deployment state and **only** these files from verified metadata:
 
@@ -161,11 +146,6 @@ per inspection and examines at most 100 labs. This discovery helper never execut
 inventory scripts, deploy/destroy commands, or device configuration commands.
 Some nonstandard or unresolved template-based definitions need manual import.
 
-If your existing key is already installed, **do not generate another key**: use
-the upgrade section below. If you generated it on the VM instead, copy the
-private file to your workstation using your normal file transfer and keep its
-permissions private; the setup script still takes the `.pub` file.
-
 ## 6. Build a fresh image and launch the manager
 
 **VM, repository root:**
@@ -177,18 +157,16 @@ sudo docker compose -f clab-backup-ui/compose.yml exec backup-ui \
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui
 ```
 
-The launch script refreshes the already configured helper, verifies its protocol
-and version, prepares storage, builds and starts the manager. A helper failure
-stops the launch before recreation. For first setup where step 5 was not run, pass
-your public key: `sudo bash deploy/start-manager.sh "$HOME/clab-manager-discovery.pub" --enable-operations --lab-root /etc/containerlab`.
-An existing account uses no public-key argument; it retains its authorized key.
-`--enable-operations` adds lab commands to that restricted key. Only trusted VM
+The launch script refreshes the helper and validates its version before building
+and recreating the manager. If step 5 was skipped, it prompts for the password here.
+An existing password is retained. --enable-operations adds reviewed lab commands.
+Only trusted VM
 projects under approved roots can be managed. Read [LAB-OPERATIONS.md](LAB-OPERATIONS.md)
 for command coverage, optional downloads and recovery. Without this flag,
 a fresh setup provides discovery/import only. Already enabled helpers are upgraded
 automatically on subsequent launches.
 
-Expect **1.12.1**. Open **`http://VM_IP:8081`** on your workstation. There is no
+Expect **1.13.0**. Open **`http://VM_IP:8081`** on your workstation. There is no
 UI access-token login. VM connection and device SSH authentication are separate.
 See [VM connection setup and recovery](VM-CONNECTION.md) for detailed help.
 
@@ -222,7 +200,7 @@ and use it in the browser. Default access is HTTP for the isolated lab network.
 An equivalent **image-only build** from the repository root is:
 
 ```bash
-sudo docker build --pull --no-cache -t clab-backup:1.12.1 ./clab-backup-ui
+sudo docker build --pull --no-cache -t clab-backup:1.13.0 ./clab-backup-ui
 ```
 
 If already inside `clab-backup-ui`, use `.` as the last argument instead. That
@@ -238,9 +216,7 @@ In the UI, open **VM connection** and enter:
 | VM address | `127.0.0.1` because the container shares this VM's network |
 | SSH port | `22`, or the actual port configured for the VM SSH service |
 | VM username | `clab-discovery` |
-| Authentication | SSH private key |
-| Private key | Select `clab-manager-discovery`, without `.pub` |
-| Passphrase | The key passphrase, if you chose one |
+| VM password | The password you created for clab-discovery |
 | Inspection method | Installed discovery and file helper |
 | Automatic discovery | Enabled |
 
@@ -252,7 +228,7 @@ unexpected fingerprint changes block discovery until you verify/reset it.
 
 These credentials access the VM helper. Device SSH/backup credentials are separate;
 they come from generated inventory when available or from your saved profiles.
-Leaving credential fields blank when saving the same VM account retains its key.
+Leaving credential fields blank when saving the same VM account retains its password.
 
 ## 8. Deploy a lab and let it appear automatically
 
@@ -404,33 +380,33 @@ Keep another copy outside the VM. To restore on a new VM, stop its manager, reta
 any current data as a separate recovery copy, extract the archive under
 `/srv/containerlab-node-manager`, ensure the restored directory/files belong to
 `10001:10001`, and start the manager. Restore `state.key` along with
-the data. Reconfigure the discovery key/account for the new VM; a different VM
+the data. Reconfigure the discovery password/account for the new VM; a different VM
 SSH host key needs verification before trusting it in the UI.
 
-### Upgrade an existing installation to 1.12.1
+### Upgrade an existing installation to 1.13.0
 
 Keep the original data directory and back it up first. Put the new source in
-`~/projects/v1.12.1` with `clab-backup-ui/` and `deploy/` directly inside it.
+`~/projects/v1.13.0` with `clab-backup-ui/` and `deploy/` directly inside it.
 Carry forward your previous `.env` or custom UI bind/port settings. For an existing
 Compose installation, use the same entry point as a fresh launch:
 
 ```bash
-cd "$HOME/projects/v1.12.1"
+cd "$HOME/projects/v1.13.0"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 
-This updates and verifies the VM helper, retains the existing SSH key/account,
-prepares the persistent data directory, builds `clab-backup:1.12.1`, and recreates
+This updates and verifies the VM helper, retains the existing password/account,
+prepares the persistent data directory, builds `clab-backup:1.13.0`, and recreates
 the Compose service. It verifies the helper version/protocol even when no labs
 are deployed. It prints no file contents or credentials during that check.
-The browser must show v1.12.1. Refresh discovery; existing labs stay saved and new
+The browser must show v1.13.0. Refresh discovery; existing labs stay saved and new
 labs wait for import confirmation. Existing workspaces still use Sync from VM.
 
 If you only run `docker build`, host files cannot be updated from that image build.
 Use the launch script for helper-based setup/upgrades. Advanced direct-SFTP users
 can continue building and running Compose manually; their existing VM account
 must have inspection and SFTP file-read permission. The restricted clab-discovery
-key must use helper mode.
+account must use helper mode.
 
 If a running docker-run manager uses the same data, the launch script stops after
 building and asks you to complete the following migration. It does not remove it.
@@ -459,7 +435,7 @@ host directory. Do not run two manager processes against the same data directory
 | UI unreachable | VM IP, TCP 8081, hypervisor NAT/bridge, firewall, Compose `ps` and `logs` |
 | Address already in use | Old manager is still running or another service occupies 8081; inspect `sudo ss -ltnp` |
 | Permission denied for `/data` | `stat` should show `10001:10001 700`; use the provided setup script for a fresh directory |
-| VM authentication fails | Username `clab-discovery`, private key without `.pub`, correct passphrase, SSH service and setup script |
+| VM authentication fails | Username `clab-discovery`, its password, SSH service and setup script; see VM-CONNECTION.md for reset |
 | Helper upgrade required | Run `sudo bash deploy/start-manager.sh` from current source on the VM; select helper mode and refresh |
 | Connected but file import fails | Expand Discovery file details for each attempted path and result; update the helper, verify original YAML still exists, avoid symlinks, each file <=1 MiB |
 | File locations unclear | `sudo containerlab inspect --all --format json` shows original `absLabPath`; generated files normally live in the adjacent `clab-<lab-name>` folder; verified labels can identify a custom folder |
@@ -479,14 +455,14 @@ same architecture. Transfer the source and required Ubuntu/Docker/containerlab
 packages or use your internal package mirrors. Build the manager there and export:
 
 ```bash
-sudo docker save clab-backup:1.12.1 -o clab-backup-1.12.1.tar
+sudo docker save clab-backup:1.13.0 -o clab-backup-1.13.0.tar
 ```
 
-On the prepared offline VM, after completing storage and discovery-key setup
+On the prepared offline VM, after completing storage and discovery-password setup
 above, update both host helpers from the transferred source before starting:
 
 ```bash
-sudo docker load -i clab-backup-1.12.1.tar
+sudo docker load -i clab-backup-1.13.0.tar
 sudo bash deploy/setup-discovery.sh --update-helper
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml up -d --no-build

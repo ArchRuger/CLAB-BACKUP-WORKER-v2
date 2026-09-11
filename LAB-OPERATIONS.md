@@ -4,7 +4,7 @@
 
 Place the source directly in `~/projects/v1.12.1`, containing `deploy/` and
 `clab-backup-ui/`. Copy any customized `clab-backup-ui/.env` from the older folder.
-Keep the persistent directory and existing SSH key.
+Keep the persistent directory and existing VM password.
 
 ```bash
 cd "$HOME/projects/v1.12.1"
@@ -19,7 +19,7 @@ Data stays in `/srv/containerlab-node-manager/data` (UID/GID 10001, mode 700).
 
 See [VM connection setup and recovery](VM-CONNECTION.md) and the
 [fresh VM installation guide](FRESH-VM-GUIDE.md). Lab commands require the dedicated
-clab-discovery account, its private key and the installed helper mode. Direct
+clab-discovery account, its password and the installed helper mode. Direct
 inspection accounts do not automatically gain the operations protocol.
 
 ## Retained commands

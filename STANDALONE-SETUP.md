@@ -1,4 +1,4 @@
-# Standalone persistent Node Manager — 1.12.1
+# Standalone persistent Node Manager — 1.13.0
 
 > Already pulled the release image from Docker Hub? Use [DOCKER-HUB-SETUP.md](DOCKER-HUB-SETUP.md)
 > for a launch that uses that image without rebuilding it, plus the required host-helper setup.
@@ -9,7 +9,7 @@ outside every containerlab topology. Lab deployment/destruction does not manage
 its lifecycle. The manager uses host networking for reachability and SSH for a
 fixed discovery and explicitly enabled privileged lab commands. It does not mount
 the Docker socket. See [LAB-OPERATIONS.md](LAB-OPERATIONS.md) to enable commands
-and configure trusted project roots while retaining the current key.
+and configure trusted project roots while retaining the current password.
 
 For a VM with nothing installed, begin with [the complete fresh VM guide](FRESH-VM-GUIDE.md).
 This shorter guide covers an already prepared Linux host and old-worker migration.
@@ -82,7 +82,7 @@ docker compose -f clab-backup-ui/compose.yml exec backup-ui \
 docker compose -f clab-backup-ui/compose.yml logs backup-ui
 ```
 
-Expect version **1.12.1**. Open `http://VM_ADDRESS:8081`; no UI login is required.
+Expect version **1.13.0**. Open `http://VM_ADDRESS:8081`; no UI login is required.
 See [VM connection setup and troubleshooting](VM-CONNECTION.md).
 Docker must start at VM boot; `restart: unless-stopped` restarts the manager with
 Docker unless you explicitly stopped it.
@@ -90,7 +90,7 @@ Docker unless you explicitly stopped it.
 Equivalent image-only build, from the repository root:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.12.1 ./clab-backup-ui
+docker build --pull --no-cache -t clab-backup:1.13.0 ./clab-backup-ui
 ```
 
 The final path is the required build context. Builds require the base image and
@@ -107,25 +107,16 @@ SSH readiness still apply; deployment status is not proof of a successful NOS lo
 
 ## 4. Install the restricted discovery account
 
-On your workstation, generate a dedicated key pair (the command works with OpenSSH):
+On the VM, in an interactive administrator terminal, create the account password:
 
 ```bash
-ssh-keygen -t ed25519 -f clab-manager-discovery
+sudo bash deploy/setup-discovery.sh
 ```
 
-Copy only `clab-manager-discovery.pub` to the VM using your usual file transfer.
-Keep the private file on your workstation for upload to the manager. On the VM:
-
-```bash
-sudo bash deploy/setup-discovery.sh /path/to/clab-manager-discovery.pub
-```
-
-Prerequisites: containerlab installed as a root-owned binary under `/usr/bin` or
-`/usr/local/bin`, `sudo`, Python 3, Docker CLI, and a running OpenSSH server. The script creates the
-dedicated `clab-discovery` account, installs a root-owned helper and validates its
-sudoers entry. The uploaded public key is restricted to that helper, without shell,
-PTY or forwarding access. The account is not added to the Docker group.
-Rerunning this script replaces that dedicated account's authorized key.
+Setup prompts twice without echo. The Linux account hash persists in /etc/shadow;
+the manager saves an encrypted copy of the entered password in its persistent data.
+The gateway restricts SSH to discovery and approved operations. See
+[VM connection setup and recovery](VM-CONNECTION.md) for migration and password reset.
 
 The helper accepts no caller arguments. It inspects deployments using:
 
@@ -143,8 +134,7 @@ In **VM connection**:
 - VM address: `127.0.0.1` (the manager shares this VM's networking).
 - SSH port: the VM's SSH port, normally 22.
 - Username: `clab-discovery`.
-- Authentication: SSH private key; upload `clab-manager-discovery` and its
-  passphrase if one was set.
+- VM password: the password created during host setup.
 - Inspection method: **Installed discovery helper**.
 - Save and test connection.
 
@@ -152,7 +142,7 @@ The first successful SSH connection trusts and stores the VM fingerprint. Later
 changes block discovery. Verify an unexpected change before using the explicit
 replacement-key checkbox. Reopen VM connection to see the saved fingerprint.
 
-Alternatively, an existing VM account can use password/key authentication with
+Alternatively, an existing VM account can use password authentication with
 **Direct inspection + SFTP (existing VM account)** if it already has permission
 to inspect Docker without an interactive sudo prompt and read the deployment
 files through SFTP. Direct mode does not elevate file-read permissions. The dedicated helper is preferred.
@@ -168,7 +158,7 @@ if you want to test immediate rediscovery. Both paths require confirmation befor
 a new workspace is saved; cancelling Import again retains its exclusion. Other labs and the VM connection remain.
 
 
-The 1.12.1 helper reads deployed lab files automatically. New labs wait for
+The 1.13.0 helper reads deployed lab files automatically. New labs wait for
 confirmation: click Ready to import, review files, and choose Import lab or Cancel. Existing
 workspaces show Updates available and offer **Sync from VM**, preserving matching
 node settings, credentials, profiles, schedules and history. Missing files never
@@ -176,15 +166,15 @@ delete a saved workspace. Optional files must be valid and match the YAML; inval
 files block sync without partial changes. A missing annotation retains an existing
 map. Original YAML is required. New labs can import the YAML while reporting an
 invalid optional file; credentials from a mismatched inventory are skipped.
-Old inspection-only helpers discover nodes only. Update the helper for 1.12.1.
+Old inspection-only helpers discover nodes only. Update the helper for 1.13.0.
 The standard generated folder beside the YAML is tried even without Docker labels.
 **Discovery file details** shows paths and results; clicking a detected lab retries
 automatic import before offering manual upload.
 
 Normal setup/upgrades use `sudo bash deploy/start-manager.sh`, which updates and
 verifies the helper before building/recreating the manager. It preserves existing
-keys/data. First launch can take a public key argument when the account is absent.
-For an advanced helper-only repair while keeping its installed SSH key:
+passwords/data. First launch prompts for a password when needed.
+For a helper-only repair (including password migration when needed):
 
 ```bash
 sudo bash deploy/setup-discovery.sh --update-helper
@@ -261,7 +251,7 @@ first to avoid duplicate schedules or a port conflict. Imported workspaces and
 backups remain. No router configuration is automatically restored by this feature.
 
 For golden VM templates, provision the empty directory and software, then initialize
-each engineer's manager and SSH key separately. Cloning initialized data also clones
+each engineer's manager and VM password separately. Cloning initialized data also clones
 its credentials and encryption key.
 
 References: [Docker host networking](https://docs.docker.com/engine/network/drivers/host/),

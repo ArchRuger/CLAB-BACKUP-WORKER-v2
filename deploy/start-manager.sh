@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# One host-side entry point for fresh setup and upgrades. Existing keys are retained.
+# One host-side entry point for fresh setup and upgrades. Existing passwords are retained.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
-public_key_path=''; operations=false; operation_args=()
+password_args=(); operations=false; operation_args=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --reset-password) password_args+=(--reset-password); shift;;
     --enable-operations) operations=true; shift;;
     --lab-root) [[ $# -ge 2 ]] || exit 64; operation_args+=("$1" "$2"); operations=true; shift 2;;
     --allow-downloads) operation_args+=("$1"); operations=true; shift;;
-    --*) echo 'Unknown option. Use --enable-operations, --lab-root PATH or --allow-downloads.' >&2; exit 64;;
-    *) [[ -z "$public_key_path" ]] || exit 64; public_key_path=$1; shift;;
+    *) echo 'Options: --reset-password, --enable-operations, --lab-root PATH, --allow-downloads. Public keys are no longer used.' >&2; exit 64;;
   esac
 done
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -17,20 +17,7 @@ repo_dir=$(dirname -- "$script_dir")
 command -v docker >/dev/null || { echo 'Install Docker first; see FRESH-VM-GUIDE.md.' >&2; exit 1; }
 docker compose version >/dev/null
 docker info >/dev/null
-if [[ -n "$public_key_path" ]]; then
-  # Installing with a key is for a fresh account only; rotation remains explicit.
-  if id clab-discovery >/dev/null 2>&1; then
-    echo 'Discovery account already exists. Rerun without the public-key argument to retain its key.' >&2
-    exit 1
-  fi
-  bash "$script_dir/setup-discovery.sh" "$public_key_path"
-else
-  if ! id clab-discovery >/dev/null 2>&1; then
-    echo 'First launch requires your discovery public key: sudo bash deploy/start-manager.sh /absolute/path/to/key.pub' >&2
-    exit 1
-  fi
-  bash "$script_dir/setup-discovery.sh" --update-helper
-fi
+bash "$script_dir/setup-discovery.sh" "${password_args[@]}"
 # Fail before recreation if the installed helper cannot return file-transfer data.
 # Only the version is printed: its response may contain inventory credentials.
 expected=$(tr -d '\r\n' < "$repo_dir/clab-backup-ui/VERSION")
@@ -60,5 +47,5 @@ print("yes" if any(m.get("Source", "").rstrip("/") == "/srv/containerlab-node-ma
 done
 docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
 docker compose -f clab-backup-ui/compose.yml ps
-echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery key are retained.'
+echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery password are retained.'
 echo 'The UI opens directly without a login. VM and device SSH credentials remain in persistent storage.'

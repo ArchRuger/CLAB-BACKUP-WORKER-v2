@@ -14,6 +14,15 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
 
+## Changes in 1.13.0
+
+VM connections now use a user-created password. First host setup prompts securely
+for the clab-discovery account password before launching the manager. Enter that
+same password in VM connection; it is encrypted in persistent storage. Routine
+upgrades retain it, and --reset-password supports recovery. SSH restrictions now
+apply to the account independently of client keys. Existing key connections require
+one-time migration; device credential options remain unchanged.
+
 ## Changes in 1.12.0
 
 The workspace opens directly without an access-token login. VM and device SSH
@@ -32,15 +41,15 @@ for discovery, automatic file import and reviewed lab commands.
 - Manager settings → Start fresh clears manager data and backup files after
   confirmation, retaining the VM connection and leaving VM labs/files untouched.
 
-[VM connection setup and troubleshooting](../VM-CONNECTION.md) covers keys, permissions,
+[VM connection setup and troubleshooting](../VM-CONNECTION.md) covers passwords, permissions,
 helper repair and upgrades. [Lab commands](../LAB-OPERATIONS.md) documents retained actions.
 
 ## Setup and import improvements retained from 1.10.0
 
 - **Source-build launch command:** `sudo bash deploy/start-manager.sh` updates the installed
   VM helper, verifies its file-transfer protocol and version, prepares storage,
-  builds the image and recreates the Compose service. Existing keys/data are retained.
-  First setup accepts a discovery public key argument. An old helper cannot silently
+  builds the image and recreates the Compose service. Existing passwords/data are retained.
+  First setup prompts for the discovery account password. An old helper cannot silently
   survive a normal upgrade; verification failures stop before container recreation.
 - **Import confirmation:** discovery reads files automatically and shows new labs as
   Ready to import. Clicking a lab previews its name, node/link counts, source files
@@ -63,13 +72,13 @@ helper repair and upgrades. [Lab commands](../LAB-OPERATIONS.md) documents retai
 
 - Automatic retrieval of deployed lab YAML, annotations, generated inventory and topology data, followed by import confirmation.
 - File change detection and **Sync from VM**, preserving saved node settings, profiles and backup history.
-- Helper upgrade with `deploy/setup-discovery.sh --update-helper` retains the existing SSH key.
+- Helper upgrade with `deploy/setup-discovery.sh --update-helper` retains the password after first migration.
 - Standalone Compose deployment with Linux host networking and automatic restart.
 - Host directory `/srv/containerlab-node-manager/data` mounted at `/data`, using
   explicit UID/GID 10001 and a one-time setup script.
 - Original `.clab.yaml` registration, optional annotation maps, and updates that
   preserve matching node identities, credentials, schedules and configuration history.
-- Encrypted VM password/key settings, fixed read-only SSH discovery every 30 seconds,
+- Encrypted VM password settings, fixed read-only SSH discovery every 30 seconds,
   manual refresh, stored SSH fingerprint and changed-key rejection.
 - Running, Partially running, Stopped, Not deployed, Unknown and Unlinked lab states.
 - Automatic node management addresses with explicit manual endpoint overrides.
@@ -87,16 +96,16 @@ may contain all their data inside the container; copy it before removing them.
 Remove the old Backup-Worker entry from training lab YAML once migration is verified.
 
 After installing Docker, containerlab and SSH as described in the guide, run from
-the repository root on the Linux VM. For first setup, supply your public key:
+the repository root on the Linux VM. For first setup, create your password when prompted:
 
 ```bash
-sudo bash deploy/start-manager.sh /absolute/path/to/clab-manager-discovery.pub --enable-operations --lab-root /etc/containerlab
+sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 
-For upgrades with the existing discovery account/key:
+For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.12.0
+cd ~/projects/v1.13.0
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

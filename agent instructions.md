@@ -1,5 +1,21 @@
 # CLAB Backup Worker — Agent Instructions
 
+## Release 1.13.0 — VM account password
+
+User requested password-only VM connections, superseding all key-retention instructions
+below for the dedicated host account. Latest source cloned from origin/main 160fe5e.
+Use deploy/start-manager.sh for setup/build/launch; first setup or key migration prompts
+through passwd in an interactive VM terminal. --reset-password rotates explicitly.
+Host password hash persists in /etc/shadow; manager credential persists encrypted under
+/srv/containerlab-node-manager/data. API/UI no longer accept VM private keys. Legacy
+key state cannot connect; saving the password removes its client key/passphrase and
+preserves the VM fingerprint. Device credential key support remains intact.
+The shared gateway is forced by a Match User clab-discovery policy in sshd_config;
+setup verifies effective restrictions before reload and revokes old authorized_keys.
+Preserve helpers/operations permissions, all labs/history and state.key on upgrades.
+Read VM-CONNECTION.md. This is local source delivery; no push or live deployment.
+
+
 ## Release 1.12.1 addendum — deployment navigation
 
 Email UI changes approved. Deploy New Lab is same-tab navigation to an explicit

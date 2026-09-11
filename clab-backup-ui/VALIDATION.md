@@ -1,3 +1,26 @@
+# VM password validation — 1.13.0
+
+- Baseline: fresh clone of GitHub origin/main at 160fe5e (V1.12.1 bug fixs).
+  Work is isolated in branch codex/vm-password; previous local checkouts preserved.
+- Full Python suite: 151 tests run, 145 passed, six platform/opt-in skips. Includes
+  synthetic local SSH transport for discovery, SFTP and structured operations.
+- New tests cover key-to-password migration, fingerprint retention, encrypted
+  persistence/restart, password rotation and blank preservation, rejection of key
+  fields, no credential leakage, and effective SSH policy conflict detection.
+- JavaScript: 22 tests passed, including new password form and migration behavior.
+  Node syntax check passed for management.js.
+- ShellCheck 0.11.0: no findings for setup-discovery.sh, setup-password.sh,
+  setup-operations.sh, start-manager.sh and the shared gateway.
+- Browser: inspected the real local 1.13.0 app with isolated data, confirmed the
+  masked/required password field, default account, absence of client-key controls,
+  dialog layout and rendered password setup/recovery guide.
+- Whitespace check passed with cr-at-eol for the repository's tracked CRLF files;
+  Linux scripts remain LF and are protected by .gitattributes.
+- No Linux VM/systemd/passwd/sshd installation, Docker image build, live NOS test,
+  registry publication or GitHub push was performed. Deployment validation should
+  cover a fresh account, existing key migration, cancelled password prompt, restart,
+  password reset, rejected client keys/shell/forwarding and unchanged admin login.
+
 # UI refinement validation — 1.12.1
 
 - Python regression run: 145 tests; six platform/environment skips. The only

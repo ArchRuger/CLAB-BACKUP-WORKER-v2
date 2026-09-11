@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+[ "$#" -eq 0 ] || exit 64
+case "${SSH_ORIGINAL_COMMAND:-}" in
+  clab-manager-operations) exec sudo -n /usr/local/sbin/clab-manager-operate ;;
+  'sudo -n /usr/local/sbin/clab-manager-inspect'|'containerlab inspect --all --format json') exec sudo -n /usr/local/sbin/clab-manager-inspect ;;
+  *) echo 'Only manager discovery and structured lab operations are supported.' >&2; exit 64 ;;
+esac

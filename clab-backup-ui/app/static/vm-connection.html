@@ -1,12 +1,196 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VM connection guide</title><link rel="stylesheet" href="/static/style.css?v=1.12.1"></head><body><main class="vm-guide"><a href="/">← Containerlab Node Manager</a><h1>VM connection — setup and recovery, 1.12.1</h1><p>The manager runs independently of your labs. Its VM connection is an SSH connection to the Linux machine running Containerlab. It discovers deployed labs and reads their files. With operations enabled, the same connection runs reviewed lab commands. Node SSH uses the device credentials from inventory or credential profiles.</p><p>For a completely empty Ubuntu VM, start with <a href="https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2/blob/main/FRESH-VM-GUIDE.md">FRESH-VM-GUIDE.md</a> to install Docker, Compose, Containerlab and OpenSSH. Commands below run on that VM unless explicitly marked Workstation. Versioned source lives in <code>~/projects/v1.12.1</code>, with <code>deploy/</code> and <code>clab-backup-ui/</code> directly inside it. Persistent data lives outside every version folder at <code>/srv/containerlab-node-manager/data</code>.</p><h2>First connection</h2><p>1. On your workstation, generate a dedicated key pair with OpenSSH. Choose a    passphrase if desired. Copy only the public key to your VM using its normal login:</p><pre><code>ssh-keygen -t ed25519 -f clab-manager-discovery
-scp clab-manager-discovery.pub YOUR_VM_USER@VM_IP:clab-manager-discovery.pub</code></pre><p>2. On the VM, install the helper, build the image and launch the manager:</p><pre><code>cd &quot;$HOME/projects/v1.12.1&quot;
-sudo bash deploy/start-manager.sh &quot;$HOME/clab-manager-discovery.pub&quot; --enable-operations --lab-root /etc/containerlab</code></pre><p>This first-launch command refuses to replace an existing account&#x27;s key. For an already configured VM, use the upgrade command below without a public key. The <code>.pub</code> file is public. The file without <code>.pub</code> is private; keep it on your workstation and select it in the manager. If you generated the pair on the VM, transfer the private file to your workstation using your normal file transfer.</p><p>3. Open <code>http://VM_IP:8081</code>. No workspace login is required. Open <strong>VM connection</strong>:</p><div class="guide-row"><span>Setting</span><span>Recommended value</span></div><div class="guide-row"><span>VM address</span><span><code>127.0.0.1</code> when using supplied Linux host-network Compose on the same VM</span></div><div class="guide-row"><span>SSH port</span><span><code>22</code>, or the VM SSH server&#x27;s configured port</span></div><div class="guide-row"><span>VM username</span><span><code>clab-discovery</code></span></div><div class="guide-row"><span>Authentication</span><span>SSH private key</span></div><div class="guide-row"><span>SSH private key</span><span>Select <code>clab-manager-discovery</code>, without <code>.pub</code></span></div><div class="guide-row"><span>Key passphrase</span><span>The passphrase chosen during generation, if any</span></div><div class="guide-row"><span>Inspection method</span><span>Installed discovery and file helper</span></div><div class="guide-row"><span>Enable automatic discovery</span><span>Checked</span></div><p>Choose <strong>Save and test connection</strong>. The first connection saves the VM SSH host fingerprint. On the VM, compare it with <code>sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</code> (the negotiated host key may instead be RSA/ECDSA). Subsequent fingerprint changes block connection until explicitly accepted in the UI.</p><p>The manager checks every 30 seconds. A detected lab appears as Ready to import. Click it, review the files and counts, then choose <strong>Import lab</strong>. Cancelling does not save a workspace. Use manual file upload if source files are unavailable.</p><h2>What is stored where</h2><div class="guide-row"><span>Location</span><span>Contents</span></div><div class="guide-row"><span>Workstation private key file</span><span>Original private key you generated</span></div><div class="guide-row"><span><code>/home/clab-discovery/.ssh/authorized_keys</code></span><span>Restricted public key entries accepted by the VM</span></div><div class="guide-row"><span><code>/usr/local/sbin/clab-manager-gateway</code></span><span>Routes SSH requests to discovery or structured operations</span></div><div class="guide-row"><span><code>/usr/local/sbin/clab-manager-inspect</code></span><span>Discovery and file-reading helper</span></div><div class="guide-row"><span><code>/usr/local/lib/clab-manager/</code></span><span>Installed Python helpers</span></div><div class="guide-row"><span><code>/etc/sudoers.d/clab-manager-discovery</code></span><span>Exact helper commands allowed through sudo</span></div><div class="guide-row"><span><code>/etc/clab-manager/operations.json</code></span><span>Trusted project roots and optional download permission</span></div><div class="guide-row"><span><code>/srv/containerlab-node-manager/data/state.enc</code></span><span>Encrypted lab and VM settings, including uploaded private key</span></div><div class="guide-row"><span><code>/srv/containerlab-node-manager/data/state.key</code></span><span>Encryption key; retain alongside state.enc</span></div><div class="guide-row"><span><code>/srv/containerlab-node-manager/data/backups/</code></span><span>Saved configuration files and history</span></div><p>The container uses UID/GID <code>10001:10001</code>; its data directory should have mode <code>700</code>. Run <code>sudo bash deploy/setup-vm.sh</code> to create/repair this directory, then check <code>sudo stat -c &#x27;%u:%g %a %n&#x27; /srv/containerlab-node-manager/data</code>. Do not use chmod 777. Keep the entire data directory when upgrading or backing up.</p><h2>Upgrading without changing keys</h2><p>Extract the new source into the new version folder. Then:</p><pre><code>cd &quot;$HOME/projects/v1.12.1&quot;
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VM connection guide</title><link rel="stylesheet" href="/static/style.css?v=1.13.0"></head><body><main class="vm-guide"><a href="/">← Containerlab Node Manager</a><h1>VM connection — password setup and recovery, 1.13.0</h1>
+<p>Create the <code>clab-discovery</code> password <strong>on the VM during host setup, before launching
+the manager</strong>. The image build contains no user password. Each VM has its own
+user-created password, retained across reboots and manager upgrades.</p>
+<p>The manager connects to the Containerlab VM over SSH using this password. Device
+SSH and backup credentials are configured separately and retain their existing options.</p>
+<h2>First launch or migration from an SSH key</h2>
+<p>Run these commands in an interactive terminal using your normal VM administrator
+account. Start in the extracted source folder containing <code>deploy/</code> and <code>clab-backup-ui/</code>.
+Docker, Compose, Containerlab, Python 3, sudo and a running OpenSSH service are required;
+see <a href="https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2/blob/main/FRESH-VM-GUIDE.md">Fresh VM guide</a> for installation.</p>
+<pre><code class="language-bash">cd &quot;$HOME/projects/v1.13.0&quot;
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
-sudo docker compose -f clab-backup-ui/compose.yml exec backup-ui python -c &#x27;from app import __version__; print(__version__)&#x27;
-sudo docker compose -f clab-backup-ui/compose.yml logs --tail=50 backup-ui</code></pre><p>The script refreshes both helpers, verifies versions, prepares storage, performs a fresh no-cache build and recreates the Compose service. It retains installed public keys and the manager&#x27;s private key/settings. A Docker build alone cannot update a helper installed on the VM. No new key pair is needed for upgrades. Refresh your browser after upgrading. The expected version is <strong>1.12.1</strong>.</p><p>To repair only the host helpers, without building an image:</p><pre><code>cd &quot;$HOME/projects/v1.12.1&quot;
-sudo bash deploy/setup-discovery.sh --update-helper
+</code></pre>
+<p>Setup prompts twice for the new <code>clab-discovery</code> password without displaying it.
+This is separate from sudo's prompt for your administrator password. Use a unique
+password. There is no default or generated password, command-line password argument,
+environment variable, or password file. Setup then verifies helpers, builds the image,
+and recreates the manager with its existing persistent data. Omit <code>--enable-operations</code>
+for discovery/import only on a new VM.</p>
+<p>For an existing key-based installation, this converts the dedicated account to
+password authentication and clears its old <code>authorized_keys</code> entries. The new manager
+does not use saved client keys; saving the password removes the old private key and
+passphrase from its encrypted host settings. Existing SSH sessions are not terminated
+by the SSH reload. Other VM accounts and their SSH authentication settings are preserved.</p>
+<p>Open <code>http://VM_IP:8081</code>, then <strong>VM connection</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VM address</td>
+<td><code>127.0.0.1</code> for the supplied Linux host-network deployment</td>
+</tr>
+<tr>
+<td>SSH port</td>
+<td><code>22</code>, or your configured SSH port</td>
+</tr>
+<tr>
+<td>VM username</td>
+<td><code>clab-discovery</code></td>
+</tr>
+<tr>
+<td>VM password</td>
+<td>The password you just created in the VM terminal</td>
+</tr>
+<tr>
+<td>Inspection method</td>
+<td>Installed discovery and file helper</td>
+</tr>
+<tr>
+<td>Automatic discovery</td>
+<td>Enabled</td>
+</tr>
+</tbody>
+</table>
+<p>Choose <strong>Save and test connection</strong>. The manager saves the password encrypted and
+never returns it to the browser. Reopening the dialog shows an empty password field;
+leave it blank to retain the saved password for the same address, port and account.
+Changing any of those requires entering the password again. Saving here updates the
+manager's credential; it does not change the Linux account password.</p>
+<p>On first connection, compare the saved host fingerprint against the VM's host key:</p>
+<pre><code class="language-bash">sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+</code></pre>
+<p>The negotiated key may instead be RSA/ECDSA. SSH server identity keys remain required;
+this change removes client authentication keys. Migrating the password on the same
+VM preserves its trusted fingerprint. Later fingerprint changes block connection
+until independently verified and explicitly accepted in the UI.</p>
+<h2>Persistent storage</h2>
+<table>
+<thead>
+<tr>
+<th>Location on VM</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/etc/shadow</code></td>
+<td>Linux account password hash, managed by <code>passwd</code></td>
+</tr>
+<tr>
+<td><code>/srv/containerlab-node-manager/data/state.enc</code></td>
+<td>Encrypted manager settings, including the saved VM password</td>
+</tr>
+<tr>
+<td><code>/srv/containerlab-node-manager/data/state.key</code></td>
+<td>Key needed to decrypt settings; retain alongside state.enc</td>
+</tr>
+<tr>
+<td><code>/srv/containerlab-node-manager/data/backups/</code></td>
+<td>Saved device configurations</td>
+</tr>
+<tr>
+<td><code>/etc/ssh/clab-manager-password.conf</code></td>
+<td>Password-only, restricted SSH policy for clab-discovery</td>
+</tr>
+<tr>
+<td><code>/etc/ssh/sshd_config</code></td>
+<td>Includes the account policy at its end</td>
+</tr>
+<tr>
+<td><code>/usr/local/sbin/clab-manager-gateway</code></td>
+<td>Allows only fixed discovery and structured operation requests</td>
+</tr>
+<tr>
+<td><code>/etc/sudoers.d/clab-manager-discovery</code></td>
+<td>Exact allowed helper commands</td>
+</tr>
+<tr>
+<td><code>/etc/clab-manager/operations.json</code></td>
+<td>Trusted lab roots and optional download permission</td>
+</tr>
+</tbody>
+</table>
+<p>Compose mounts the manager data directory at <code>/data</code>. Keep this entire directory,
+including its encryption key, when recreating or upgrading the container. Expected
+ownership/mode is <code>10001:10001 700</code>; <code>sudo bash deploy/setup-vm.sh</code> prepares it.
+No password is baked into a Docker image. A rebuilt VM requires account setup again;
+copying manager data alone does not recreate a Linux account.</p>
+<p>The SSH policy forces the gateway and disables public-key authentication, interactive
+SSH shells, PTYs, forwarding and user RC scripts for this account. The installer
+validates syntax and effective policy before reload and restores the previous SSH
+configuration on failure or a cancelled password prompt. Earlier conflicting Match
+rules cause setup to fail with a review message. Its directives follow
+<a href="https://man.openbsd.org/sshd_config">OpenSSH's SSH server configuration reference</a>.</p>
+<h2>Upgrades and password changes</h2>
+<p>Routine upgrades use the same <code>start-manager.sh</code> command. Once an account password
+exists, setup retains it without prompting. It also preserves manager data and
+previously enabled operations. A Docker build alone cannot install host helpers.</p>
+<p>To create/migrate the account or repair helpers without building:</p>
+<pre><code class="language-bash">sudo bash deploy/setup-discovery.sh
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
-sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.12.1
-printf &#x27;%s\n&#x27; &#x27;{&quot;mode&quot;:&quot;capabilities&quot;}&#x27; | sudo /usr/local/sbin/clab-manager-operate | python3 deploy/verify-operations.py 1.12.1</code></pre><p>The verifiers display only compatibility information. Raw discovery output can contain inventory passwords; do not paste it into public logs or support messages.</p><h2>Replacing a lost private key and revoking old keys</h2><p>Use your normal VM administrator login. Generate a new pair on the workstation and copy its <code>.pub</code> file as in first setup, using a new filename. On the VM:</p><pre><code>cd &quot;$HOME/projects/v1.12.1&quot;
-sudo bash deploy/setup-discovery.sh &quot;$HOME/clab-manager-replacement.pub&quot;
-sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab</code></pre><p>Passing a public key to setup-discovery <strong>replaces all existing key entries for the dedicated clab-discovery account</strong>. It does not alter your normal VM user&#x27;s keys. The second command restores the operations gateway and sudo permissions. In <strong>VM connection</strong>, select the new matching private key and passphrase, then save and test. This changes client authentication; it does not require trusting a new VM host fingerprint. Existing authenticated SSH connections must be closed if you need revocation to take effect immediately.</p><h2>Multiple keys</h2><p>One manager has one configured VM connection and one active credential. Multiple public keys on the VM allow different clients to authenticate to the same helper account; they do not make the manager rotate between keys.</p><p>For this multi-engineer design, each isolated VM should have its own pair. If you need two keys on one VM, install operations first and use:</p><pre><code>sudoedit /home/clab-discovery/.ssh/authorized_keys</code></pre><p>Retain the existing entry and append one line for each additional public key, using exactly this prefix followed by the entire <code>.pub</code> file content:</p><pre><code>restrict,command=&quot;/usr/local/sbin/clab-manager-gateway&quot; ssh-ed25519 AAAA... engineer-name</code></pre><p>Replace <code>AAAA...</code> with the actual public key, not a private key. Each entry must be one line. Keep the file root-owned with mode 644 and <code>.ssh</code> mode 755, as set by the installer. Future normal upgrades retain these entries. To revoke one key, remove its line; to revoke all old keys, use the replacement procedure above.</p><h2>Troubleshooting</h2><div class="guide-row"><span>Symptom</span><span>Check / fix</span></div><div class="guide-row"><span>Cannot reach the UI</span><span>Check Compose status and logs. Browse VM_IP:8081, and check VM firewall/NAT forwarding for TCP 8081.</span></div><div class="guide-row"><span>VM connection refused or timed out</span><span>Verify the address and SSH port; run <code>sudo systemctl status ssh</code> and <code>sudo ss -lntp</code>. Supplied host-network Compose can use 127.0.0.1; bridge containers cannot use that address to reach the VM.</span></div><div class="guide-row"><span>Authentication failed</span><span>Use username clab-discovery, the private file without .pub and its correct passphrase. Compare its public fingerprint with installed authorized_keys using ssh-keygen -lf. Replace lost keys using the procedure above.</span></div><div class="guide-row"><span>An interactive SSH test refuses a shell</span><span>Expected for the helper account. It only accepts fixed discovery/operation requests; use Save and test connection.</span></div><div class="guide-row"><span>Fingerprint mismatch</span><span>Verify the VM&#x27;s host key independently. If the VM was rebuilt and the new key is expected, check Trust a replacement SSH host key in VM connection, then save and test. Do not rotate the client key to solve this.</span></div><div class="guide-row"><span>Lab discovered but automatic import asks for helper update</span><span>Run the normal start-manager command from the current source folder, or repair both helpers above. Refresh discovery and retry the lab.</span></div><div class="guide-row"><span>Read/import permission error</span><span>Use Installed discovery and file helper; it can read root-owned lab artifacts. Direct mode uses the selected account&#x27;s ordinary SFTP permissions and cannot read files that account cannot access.</span></div><div class="guide-row"><span>Commands unavailable or operations helper error</span><span>Enable/repair setup-operations and include the lab&#x27;s trusted root. The helper tests the installed Containerlab command support. Older Containerlab versions may lack some commands.</span></div><div class="guide-row"><span>Path outside trusted roots</span><span>Run setup-operations with <code>--lab-root /actual/project/root</code>. Use the parent directory containing your lab projects, not filesystem root.</span></div><div class="guide-row"><span>Cannot browse a symlink path</span><span>Use a real directory path. Helpers deliberately refuse symlink components.</span></div><div class="guide-row"><span>Save fails / Start fresh cannot finish</span><span>Check free disk space and data ownership. Repair permissions, then retry Start fresh or restart; its journal resumes the reset.</span></div><div class="guide-row"><span>Deployed lab missing</span><span>Run <code>sudo containerlab inspect --all --format json</code> on the same VM and check VM connection is enabled. Refresh discovery; clear any matching exclusion.</span></div><p>File discovery starts from the topology path reported by inspect. For example, <code>/etc/containerlab/BGP_TheoryToPractice/BGP_TheoryToPractice.clab.yaml</code> leads to the adjacent <code>.annotations.json</code> and generated <code>clab-BGP_TheoryToPractice/ansible-inventory.yml</code> and <code>topology-data.json</code>. These files must exist on the VM; manual uploads remain available if they do not.</p><p>For a credential-preserving edit to the same VM account, leave credential fields blank. Switching accounts or replacing a passphrase requires supplying the matching credential again. The UI never displays saved private keys or passwords.</p><h2>Start fresh versus Remove lab</h2><p><strong>Remove lab</strong> removes one saved workspace and its history entries. Its saved backup files and audit logs remain on disk. A default exclusion prevents immediate rediscovery; right-click that excluded lab and choose <strong>Clear exclusion</strong> to forget it.</p><p><strong>Manager settings → Start fresh</strong> requires typing RESET. It clears all imported labs, device credentials, schedules, backup files, job/operation history, logs and exclusions. It retains the VM connection, its authentication and trusted fingerprint, and state.key. It never destroys a deployment, deletes a VM project, or removes the helper account. Close terminals and wait for jobs first. Deployed labs will be offered for import again and still require confirmation. New audit entries can appear immediately after the reset as the manager resumes work.</p></main></body></html>
+</code></pre>
+<p><code>--update-helper</code> remains an alias for setup, including password migration if needed.
+To change or recover a forgotten password, use your normal VM administrator account:</p>
+<pre><code class="language-bash">sudo bash deploy/setup-discovery.sh --reset-password
+</code></pre>
+<p>Then enter the new password in <strong>VM connection</strong> and save/test. The previous manager
+credential cannot reconnect until updated. <code>start-manager.sh --reset-password</code> also
+resets the password before building and launching. No SSH key generation or upload
+is required.</p>
+<h2>Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Check / fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Password setup required</td>
+<td>Run setup-discovery.sh in the VM terminal, then save the password in VM connection.</td>
+</tr>
+<tr>
+<td>Authentication failed</td>
+<td>Use the same password set for clab-discovery; reset it through the administrator command above if forgotten.</td>
+</tr>
+<tr>
+<td>Setup needs an interactive terminal</td>
+<td>Run directly from a VM console or interactive administrator SSH session. Passwords are not accepted from piped input.</td>
+</tr>
+<tr>
+<td>Conflicting SSH account policy</td>
+<td>Review earlier Match rules and global PermitUserEnvironment with your VM administrator. The installer requires user environment processing disabled.</td>
+</tr>
+<tr>
+<td>Connection refused / timed out</td>
+<td>Check address/port, <code>sudo systemctl status ssh</code>, firewall and VM networking.</td>
+</tr>
+<tr>
+<td>Interactive SSH / SFTP denied</td>
+<td>Expected for clab-discovery. Select the installed helper and use Save and test connection. Direct SFTP mode requires another existing account with ordinary file access.</td>
+</tr>
+<tr>
+<td>Fingerprint changed</td>
+<td>Verify the VM's host key independently before trusting a replacement in the UI. Password resets do not fix host identity changes.</td>
+</tr>
+<tr>
+<td>Helper outdated / commands unavailable</td>
+<td>Run start-manager.sh from the current release source with the required lab roots and operations enabled.</td>
+</tr>
+<tr>
+<td>Save failed</td>
+<td>Check free disk space and data ownership; retain state.key and state.enc.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Manager settings → Start fresh</strong> retains the VM connection, password, fingerprint
+and state.key. <strong>Remove lab</strong> affects only the selected saved workspace. Neither
+operation changes the VM account password. New labs still require import confirmation.</p></main></body></html>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Enable approved lab-level host operations while retaining the discovery key.
+# Enable approved lab-level host operations while retaining the discovery password.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -11,7 +11,7 @@ while [[ $# -gt 0 ]]; do
     *) echo 'Options: --lab-root /trusted/directory --allow-downloads' >&2; exit 64;;
   esac
 done
-[[ -f /home/clab-discovery/.ssh/authorized_keys && -f /etc/sudoers.d/clab-manager-discovery ]] || { echo 'Set up the discovery account first.' >&2; exit 1; }
+[[ -f /etc/ssh/clab-manager-password.conf && -f /etc/sudoers.d/clab-manager-discovery ]] || { echo 'Set up the discovery account first.' >&2; exit 1; }
 clab_bin=$(readlink -f "$(command -v containerlab)")
 docker_bin=$(readlink -f "$(command -v docker)")
 git_bin=$(command -v git || true)
@@ -49,32 +49,9 @@ set -eu
 cd /
 exec /usr/bin/env -i PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/root /usr/bin/python3 -I /usr/local/lib/clab-manager/host_operations.py
 SH
-cat > "$temp_dir/gateway" <<'SH'
-#!/bin/sh
-set -eu
-[ "$#" -eq 0 ] || exit 64
-case "${SSH_ORIGINAL_COMMAND:-}" in
-  clab-manager-operations) exec sudo -n /usr/local/sbin/clab-manager-operate ;;
-  'sudo -n /usr/local/sbin/clab-manager-inspect'|'containerlab inspect --all --format json'|'') exec sudo -n /usr/local/sbin/clab-manager-inspect ;;
-  *) echo 'Only manager discovery and structured lab operations are supported.' >&2; exit 64 ;;
-esac
-SH
 printf '%s\n' 'clab-discovery ALL=(root) NOPASSWD: /usr/local/sbin/clab-manager-inspect "", /usr/local/sbin/clab-manager-operate ""' > "$temp_dir/sudoers"
 visudo -cf "$temp_dir/sudoers"
 install -o root -g root -m 0755 "$temp_dir/operate" /usr/local/sbin/clab-manager-operate
-install -o root -g root -m 0755 "$temp_dir/gateway" /usr/local/sbin/clab-manager-gateway
+install -o root -g root -m 0755 "$script_dir/clab-manager-gateway" /usr/local/sbin/clab-manager-gateway
 install -o root -g root -m 0440 "$temp_dir/sudoers" /etc/sudoers.d/clab-manager-discovery
-/usr/bin/python3 - <<'PY'
-from pathlib import Path
-import os
-path=Path('/home/clab-discovery/.ssh/authorized_keys')
-if path.is_symlink(): raise SystemExit('Refusing symlink at authorized_keys.')
-raw=path.read_text()
-old='restrict,command="sudo -n /usr/local/sbin/clab-manager-inspect" '
-new='restrict,command="/usr/local/sbin/clab-manager-gateway" '
-lines=raw.splitlines()
-if not lines or any(not line.startswith((old,new)) for line in lines): raise SystemExit('Unknown authorized_keys options; retain existing file and review account setup.')
-updated='\n'.join(new+line.split('" ',1)[1] for line in lines)+'\n'
-tmp=path.with_suffix('.tmp');tmp.write_text(updated);os.chmod(tmp,0o644);os.replace(tmp,path)
-PY
-echo 'Lab operations enabled. Existing SSH public keys retained. Trusted project roots and optional permissions are in /etc/clab-manager/operations.json.'
+echo 'Lab operations enabled. Existing VM password retained. Trusted project roots and optional permissions are in /etc/clab-manager/operations.json.'

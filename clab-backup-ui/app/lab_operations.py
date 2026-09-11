@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from .discovery import PinnedHostKey, read_key, parse_definition, stamp
+from .discovery import PinnedHostKey, vm_password, parse_definition, stamp
 from .topology import parse_drawing
 from .drawio_export import drawio
 
@@ -28,11 +28,11 @@ def operation_busy(state, lab_id=None):
 def remote(host, request, output=None, stopping=None):
     if not host or not host.get('enabled'): raise ValueError('Configure and enable the VM connection first.')
     if not host.get('fingerprint'): raise ValueError('Refresh discovery to establish the VM fingerprint first.')
+    password = vm_password(host)
     client = paramiko.SSHClient(); client.set_missing_host_key_policy(PinnedHostKey(host['fingerprint']))
     opts = dict(hostname=host['address'], port=host['port'], username=host['username'], timeout=8,
                 auth_timeout=8, banner_timeout=8, allow_agent=False, look_for_keys=False)
-    if host['auth'] == 'key': opts['pkey'] = read_key(host['private_key'], host.get('passphrase', ''))
-    else: opts['password'] = host.get('password', '')
+    opts['password'] = password
     try:
         client.connect(**opts)
         client.get_transport().set_keepalive(15)

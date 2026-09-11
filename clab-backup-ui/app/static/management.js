@@ -39,10 +39,9 @@ document.body.insertAdjacentHTML('beforeend', `
  <h2>VM connection</h2><p><a href="/vm-connection-guide" target="_blank" rel="noopener">VM setup and troubleshooting guide ↗</a></p><p>This standalone manager inspects deployed labs over SSH every 30 seconds. Device SSH credentials are configured separately.</p>
  <div class="form-grid wide"><label>VM address<input id="vm-address" required placeholder="127.0.0.1"></label><label>SSH port<input id="vm-port" type="number" min="1" max="65535" value="22" required></label></div>
  <label>VM username<input id="vm-user" required maxlength="128" autocomplete="off"></label>
- <label>Authentication<select id="vm-auth"><option value="password">Password</option><option value="key">SSH private key</option></select></label>
- <div id="vm-password-fields"><label>VM password<input id="vm-password" type="password" autocomplete="new-password"></label></div>
- <div id="vm-key-fields" hidden><label>SSH private key<input id="vm-key" type="file"></label><label>Key passphrase<input id="vm-passphrase" type="password" autocomplete="new-password"></label></div>
- <p class="form-help">Leave credentials blank to retain them for the same account. Secrets are encrypted in persistent storage and are never displayed after saving.</p>
+ <label>VM password<input id="vm-password" type="password" autocomplete="current-password" maxlength="4096"></label>
+ <p class="form-help">Create the clab-discovery password in the VM terminal during setup, then enter it here. Leave blank to retain a saved password for the same account. It is encrypted in the VM's persistent manager storage.</p>
+ <p id="vm-password-migration" class="form-help" hidden>This connection previously used an SSH key. Run sudo bash deploy/setup-discovery.sh on the VM to create its password, then enter that password here.</p>
  <label>Inspection method<select id="vm-command"><option value="helper">Installed discovery and file helper (recommended)</option><option value="direct">Direct inspection + SFTP (existing VM account)</option></select></label>
  <p class="form-help">Install the supplied VM setup script for the helper. The restricted helper reads deployment state and the original YAML, annotations, generated inventory and topology export. New labs appear for import confirmation. Direct mode reads these files through SFTP with the same VM account. The installed helper supports root-owned lab files.</p>
  <label class="checkbox-label"><input id="vm-enabled" type="checkbox" checked> Enable automatic discovery</label>
@@ -92,17 +91,15 @@ $('setup-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()
  const result=await(await api('/lab-definitions',{method:'POST',body:new FormData(e.target)})).json();
  activeId=result.id;sessionStorage.setItem('activeLab',activeId);tab='inventory';$('setup-dialog').close();$('setup-form').reset();await refresh();notify('Lab saved. Discovery updates automatic addresses when the lab is running.');
 });};
-function vmAuthFields(){$('vm-key-fields').hidden=$('vm-auth').value!=='key';$('vm-password-fields').hidden=$('vm-auth').value!=='password';}
-$('vm-auth').onchange=vmAuthFields;
 $('vm-settings').onclick=()=>{
  const h=state.discovery?.host||{};$('vm-form').reset();$('vm-form').querySelector('.form-error').textContent='';
- $('vm-address').value=h.address||'127.0.0.1';$('vm-port').value=h.port||22;$('vm-user').value=h.username||'clab-discovery';$('vm-auth').value=h.auth||'key';$('vm-command').value=h.command_mode||'helper';$('vm-enabled').checked=h.enabled!==false;
- $('vm-fingerprint').textContent=h.fingerprint?'Saved fingerprint: '+h.fingerprint:'No VM fingerprint saved yet.';vmAuthFields();$('vm-dialog').showModal();
+ $('vm-address').value=h.address||'127.0.0.1';$('vm-port').value=h.port||22;$('vm-user').value=h.username||'clab-discovery';$('vm-command').value=h.command_mode||'helper';$('vm-enabled').checked=h.enabled!==false;
+ $('vm-fingerprint').textContent=h.fingerprint?'Saved fingerprint: '+h.fingerprint:'No VM fingerprint saved yet.';$('vm-password-migration').hidden=h.auth!=='key';$('vm-password').required=!h.auth||h.auth!=='password';$('vm-dialog').showModal();
 };
 $('vm-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
- const file=$('vm-key').files[0];if(file&&file.size>65536)throw new Error('SSH key must be smaller than 64 KiB');
- await json('/host','PUT',{address:$('vm-address').value,port:Number($('vm-port').value),username:$('vm-user').value,auth:$('vm-auth').value,password:$('vm-password').value,private_key:file?await file.text():'',passphrase:$('vm-passphrase').value,command_mode:$('vm-command').value,enabled:$('vm-enabled').checked,reset_fingerprint:$('vm-reset-key').checked});
- const result=await json('/discovery/refresh','POST',{});await refresh();$('vm-password').value='';$('vm-key').value='';$('vm-passphrase').value='';
+ await json('/host','PUT',{address:$('vm-address').value,port:Number($('vm-port').value),username:$('vm-user').value,auth:'password',password:$('vm-password').value,command_mode:$('vm-command').value,enabled:$('vm-enabled').checked,reset_fingerprint:$('vm-reset-key').checked});
+ $('vm-password').value='';$('vm-password').required=false;
+ const result=await json('/discovery/refresh','POST',{});await refresh();
  if((result.error||result.helper_update_required)&&!result.checking){$('vm-form').querySelector('.form-error').textContent=result.error||'Connected, but the installed VM helper is outdated. On the VM, run sudo bash deploy/start-manager.sh from the current source, then retry.';return;}
  $('vm-dialog').close();notify(result.connected?'VM connected. Lab discovery is active.':'VM settings saved. Check the discovery status for the connection result.');
 });};
