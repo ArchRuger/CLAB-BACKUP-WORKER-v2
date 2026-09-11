@@ -113,6 +113,12 @@ class InstallManagerTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][0], 'bash')
         self.assertEqual(run.call_args.args[1]['HOME'], '/home/owner')
 
+    def test_full_health_report_keeps_owner_and_preserves_attention_exit(self):
+        env = install.environment(SimpleNamespace(pw_name='owner', pw_dir='/home/owner'))
+        with patch.object(install, 'run', return_value=subprocess.CompletedProcess([], 2)) as run:
+            self.assertEqual(install.health_report(env), 2)
+        self.assertEqual(run.call_args.args, (['bash', str(install.SOURCE / 'deploy/check-install.sh')], env))
+
     def test_declined_plan_runs_no_commands_and_copies_no_settings(self):
         with patch.object(install, 'choose_env_copy', return_value=None), \
                 patch.object(install, 'menu', return_value='1'), \

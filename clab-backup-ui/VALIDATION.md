@@ -1,3 +1,27 @@
+# Installation health report — 1.17.0
+
+- Prepared from merged main `7c25648` (1.16.1), retaining the pending WinSCP
+  instruction updates. Commit, push and VM deployment remain pending.
+- 163 focused tests passed: health report 32, host checks 12, Git checks 13,
+  installer 15, APT clock/update 17, Git wizard 40, registrations 9, APT sources
+  14, release consistency 7 and helper preflight 4. Host/service commands and
+  HTTP were mocked; this is not evidence that the user's VM is healthy.
+- Covered root-only helper success with failed restricted access, unavailable
+  operations, real-folder request failures, empty inventories/folders, bounded
+  traversal, stale or unsafe helpers, missing persistent storage/key, invalid
+  state, version drift, Git owner/identity/staging/remote-read failures, omitted
+  secrets and independent continued reporting. Watchdog regressions cover
+  descendants holding stdout, privileged timeout wrapping and one HTTP deadline
+  across connection and body reads.
+- ShellCheck passed for check-install.sh, install.sh, install-prerequisites.sh,
+  setup-git.sh and start-manager.sh. Source consistency reports 1.17.0; Python
+  syntax, Markdown links/fences and Git whitespace checks passed. CI includes
+  the new tests and shell launcher, but has not run on GitHub for this change.
+- No packages, clocks, services, Git checkouts or lab configurations were changed
+  on a VM. No Docker build, live SSH/SFTP login, device backup or real GitHub
+  authorization/push was performed. The report distinguishes these remaining
+  manual workflow tests from automated checks.
+
 # Installer clock recovery — 1.16.1
 
 - Prepared from merged GitHub main `58a17bd` (1.16.0); commit/push is pending.

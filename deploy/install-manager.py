@@ -202,6 +202,13 @@ def verify_manager(env, version):
     check_manager(env, version)
 
 
+def health_report(env):
+    result = run(['bash', str(SOURCE / 'deploy/check-install.sh')], env)
+    if result.returncode:
+        print('Review the health report above, complete the indicated steps, then run the check again.')
+    return result.returncode
+
+
 def install(env, version):
     env_source = choose_env_copy()
     operations = menu('Lab operation access', [('1', 'Enable reviewed lab operations (standard standalone setup)'),
@@ -239,6 +246,8 @@ def install(env, version):
     if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
         git_setup(env)
     print('In VM connection use clab-discovery and the password you created. Verify the host fingerprint.')
+    print('After browser setup, run the full installation health report (without sudo):\n  '
+          + shlex.join(['bash', str(SOURCE / 'deploy/check-install.sh')]))
 
 
 def main(argv=None):
@@ -271,7 +280,7 @@ def main(argv=None):
             elif choice == '2':
                 git_setup(env)
             else:
-                phase('Check manager', lambda: verify_manager(env, version))
+                health_report(env)
         except Cancelled:
             print('Returned to menu. Existing data and completed steps are retained.')
 

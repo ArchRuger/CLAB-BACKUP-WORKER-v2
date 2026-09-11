@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.16.1
+# Containerlab Node Manager — 1.17.0
 
 Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
 ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
@@ -108,7 +108,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.16.1
+cd ~/projects/v1.17.0
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

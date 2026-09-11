@@ -1,9 +1,12 @@
-# Guided VM installation — 1.16.1
+# Guided VM installation — 1.17.0
 
 Starting before Ubuntu is installed? Use the
 [Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) for Proxmox settings, first
 login, this installer, WinSCP/SFTP checks and your first successful Git save.
 This page is the short installation reference.
+
+The new health checker is prepared for **1.17.0**, based on published main
+`7c25648` (**1.16.1**); obtain the matching source after these changes are merged.
 
 After cloning or extracting the source on your Ubuntu 24.04 VM, run one command
 as your existing ordinary VM account, **without sudo**:
@@ -24,8 +27,8 @@ Compare UTC with a trusted current clock. For a wrong clock or APT's
 Then clone into a new source folder:
 
 ```bash
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.16.1"
-bash "$HOME/projects/v1.16.1/deploy/install.sh"
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.17.0"
+bash "$HOME/projects/v1.17.0/deploy/install.sh"
 ```
 
 Git is needed for the clone. If Git is not yet installed, extract a source ZIP
@@ -36,10 +39,10 @@ requirements. Internet access is needed for packages, image builds and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.16.1 — guided setup
+Containerlab Node Manager 1.17.0 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
-Source: /home/your-account/projects/v1.16.1
+Source: /home/your-account/projects/v1.17.0
 
 Setup menu
   1. Install or update manager, then set up Git
@@ -110,7 +113,7 @@ Use menu **2** whenever Git needs attention. It does not rebuild the manager.
 You can open it directly from any directory:
 
 ```bash
-bash "$HOME/projects/v1.16.1/deploy/install.sh" --git
+bash "$HOME/projects/v1.17.0/deploy/install.sh" --git
 ```
 
 The wizard separates Linux owner, GitHub login, commit name/email and checkout
@@ -125,19 +128,83 @@ registration and the detailed recovery table. You still create the destination
 GitHub repository with an initial README. The wizard does not create a remote
 repository, invent commit identity, or publish commits during setup.
 
+## WinSCP file transfers
+
+Use SFTP on port 22 with your normal Ubuntu account, such as `archtop`. For
+uploads to your own directories, leave WinSCP's SFTP server setting at default.
+
+For **administrative access to root-owned files**, the installer does not add
+the required sudoers rule. On the VM, run:
+
+```bash
+sudo EDITOR=nano visudo -f /etc/sudoers.d/archtop-sftp
+```
+
+Add this line for your actual VM account:
+
+```text
+archtop ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server
+```
+
+Save with **Ctrl+O**, **Enter**, **Ctrl+X**, then run `sudo visudo -c` and check
+for `parsed OK`. In WinSCP's **Advanced → Environment → SFTP → SFTP server**, use:
+
+```text
+sudo -n /usr/lib/openssh/sftp-server
+```
+
+Save and reconnect as **archtop** with its Ubuntu password. This session has
+root-level file access. See the [full procedure and troubleshooting](FRESH-VM-GUIDE-V2.md#winscp-admin-sftp)
+for checking the server binary and account. Use `clab-discovery` only for the
+manager connection.
+
 ## Finish in the browser
 
 The final terminal checks verify the local manager. On your workstation:
 
 1. Open `http://VM_ADDRESS:8081` (or the configured port).
 2. In **VM connection**, use `clab-discovery` and the password created during
-   setup. Verify the VM host fingerprint before accepting it.
+   setup. After the first successful connection saves its fingerprint, reopen
+   **VM connection** and compare it with the VM console host key.
 3. Import the intended lab, configure device credentials and verify a backup.
 4. In **More → Git repository**, select the registered checkout and devices.
-5. Choose **Save progress** and check that it reports **Pushed**.
+5. Back in the VM terminal, run the [full installation report](HEALTH-CHECK.md):
+
+   ```bash
+   bash deploy/check-install.sh --require-git
+   ```
+
+   If you configured root file access in WinSCP, include that requirement:
+
+   ```bash
+   bash deploy/check-install.sh --require-git --require-admin-sftp
+   ```
+
+6. Resolve any **FAIL**, **WARN** or **SKIP** items using their displayed next
+   steps. Then choose **Save progress** and check that it reports **Pushed** and
+   that the intended files appear on GitHub.
 
 Host trust, lab selection and device credentials still require your choices in
 the browser. The installer does not deploy router labs or publish lab configs.
+
+Menu **3. Check running installation** opens the same full report. The installer
+still performs a shorter container/version/HTTP check during initial setup;
+the saved VM connection is configured afterwards in the browser. The second
+script checks services, permissions, helpers through `clab-discovery`, actual
+folder browsing through saved SSH, storage and registered Git checkouts. It
+reports problems without automatically fixing them. Automated success does not
+replace the real WinSCP transfer, device backup or deliberate Git push above.
+
+For **Operations helper is unavailable**, run from the matching source checkout:
+
+```bash
+sudo bash deploy/setup-operations.sh
+bash deploy/check-install.sh --lab-path /etc/containerlab/vJunOS-SW
+```
+
+Use your actual failed folder. The first command refreshes the operations helper
+and permissions while retaining custom roots/download settings. Close and reopen
+the UI folder. The second command only checks; see [report meanings and recovery](HEALTH-CHECK.md).
 
 ## Retry without starting over
 
