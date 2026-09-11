@@ -2,6 +2,7 @@
 import copy
 import json
 import re
+import socket
 import threading
 import time
 import uuid
@@ -30,6 +31,22 @@ def operation_busy(state, lab_id=None, progress_id=None):
                 for j in state.get('git_jobs', [])))
 
 
+def operation_connection_error(status, stderr):
+    """Explain known gateway failures without exposing remote stderr or secrets."""
+    diagnostic = stderr.decode('utf-8', errors='replace').lower()
+    if 'sudo:' in diagnostic and any(value in diagnostic for value in (
+            'a password is required', 'not allowed', 'not in the sudoers', 'no tty present')):
+        return ('Operations gateway could not obtain its restricted sudo permission. '
+                'Run sudo bash deploy/start-manager.sh --enable-operations on the VM.')
+    if 'clab-manager-operations' in diagnostic and any(value in diagnostic for value in (
+            'not found', 'no such file', 'unknown command')):
+        return ('VM connection is not using the operations gateway. Select clab-discovery '
+                'as the VM connection username, save its password, and refresh discovery.')
+    detail = 'no SSH exit status' if status == -1 else 'SSH exit ' + str(status)
+    return ('Operations helper did not return a complete successful response (' + detail + '). '
+            'Run sudo bash deploy/check-install.sh on the VM and review the operations checks.')
+
+
 def remote(host, request, output=None, stopping=None):
     if not host or not host.get('enabled'): raise ValueError('Configure and enable the VM connection first.')
     if not host.get('fingerprint'): raise ValueError('Refresh discovery to establish the VM fingerprint first.')
@@ -44,13 +61,22 @@ def remote(host, request, output=None, stopping=None):
         channel = client.get_transport().open_session(timeout=8); channel.settimeout(15)
         channel.exec_command('clab-manager-operations')
         channel.sendall((json.dumps(request) + '\n').encode()); channel.shutdown_write()
+        channel.settimeout(.2)
         until = time.monotonic() + (1250 if request.get('mode') == 'run' else 180)
-        pending = b''; result = None; total = 0
+        pending = b''; result = None; total = 0; stderr = b''; eof = False
         while True:
             if time.monotonic() > until or (stopping and stopping.is_set()):
                 raise ValueError('Operation connection interrupted. Inspect the lab before retrying.')
-            if channel.recv_ready():
-                chunk = channel.recv(65536); pending += chunk; total += len(chunk)
+            if channel.recv_stderr_ready():
+                chunk = channel.recv_stderr(65536)
+                stderr = (stderr + chunk)[:8192]
+                total += len(chunk)
+                if total > 5 * 1024 * 1024: raise ValueError('Host operation response exceeded its limit.')
+            if not eof:
+                try: chunk = channel.recv(65536)
+                except socket.timeout: continue
+                eof = not chunk
+                pending += chunk; total += len(chunk)
                 if len(pending) > 3 * 1024 * 1024 or total > 5 * 1024 * 1024: raise ValueError('Host operation response exceeded its limit.')
                 while b'\n' in pending:
                     line, pending = pending.split(b'\n', 1)
@@ -60,11 +86,13 @@ def remote(host, request, output=None, stopping=None):
                     if 'error' in item: raise ValueError(str(item['error'])[:1000])
                     if output and 'output' in item: output(str(item['output']))
                     if 'result' in item: result = item['result']
-            if channel.recv_stderr_ready(): channel.recv_stderr(65536)
-            if channel.exit_status_ready() and not channel.recv_ready(): break
-            time.sleep(.03)
-        if channel.recv_exit_status() != 0 or not isinstance(result, dict):
-            raise ValueError('Operations helper is unavailable. Run sudo bash deploy/start-manager.sh --enable-operations on the VM.')
+            # Exit status is metadata, not EOF. Some servers deliver it before
+            # the last stdout packets; recv_ready() only describes the current buffer.
+            if eof and not channel.recv_stderr_ready() and channel.exit_status_ready(): break
+            if eof: time.sleep(.03)
+        status = channel.recv_exit_status()
+        if status != 0 or pending or not isinstance(result, dict):
+            raise ValueError(operation_connection_error(status, stderr))
         return result
     finally: client.close()
 

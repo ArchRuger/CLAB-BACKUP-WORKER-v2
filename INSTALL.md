@@ -1,12 +1,13 @@
-# Guided VM installation — 1.18.0
+# Guided VM installation — 1.18.1
 
 Starting before Ubuntu is installed? Use the
 [Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) for Proxmox settings, first
 login, this installer, WinSCP/SFTP checks and your first successful Git save.
 This page is the short installation reference.
 
-This guide targets **1.18.0**, adding vQFX and vJunos-switch support to published
-main `712662f` (**1.17.0**). Obtain matching source after these changes are merged.
+This guide targets **1.18.1**, fixing operations SSH reads, delegated helper
+verification and sudo authentication in the health checker. It is prepared from
+published main `7331e9a` (**1.18.0**). Obtain matching source after these fixes merge.
 
 After cloning or extracting the source on your Ubuntu 24.04 VM, run one command
 as your existing ordinary VM account, **without sudo**:
@@ -27,8 +28,8 @@ Compare UTC with a trusted current clock. For a wrong clock or APT's
 Then clone into a new source folder:
 
 ```bash
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.18.0"
-bash "$HOME/projects/v1.18.0/deploy/install.sh"
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.18.1"
+bash "$HOME/projects/v1.18.1/deploy/install.sh"
 ```
 
 Git is needed for the clone. If Git is not yet installed, extract a source ZIP
@@ -39,10 +40,10 @@ requirements. Internet access is needed for packages, image builds and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.18.0 — guided setup
+Containerlab Node Manager 1.18.1 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
-Source: /home/your-account/projects/v1.18.0
+Source: /home/your-account/projects/v1.18.1
 
 Setup menu
   1. Install or update manager, then set up Git
@@ -72,7 +73,9 @@ Review the displayed plan, then approve it once. The installer:
 4. Runs the existing manager launcher to prepare persistent storage, create or
    retain the restricted `clab-discovery` password, install/verify helpers, and
    build/recreate the manager. You choose whether to enable reviewed lab operations;
-   existing operations permissions remain on upgrades.
+   existing operations permissions remain on upgrades. Before building, it tests
+   discovery and enabled operations/Git through the restricted account and gateway;
+   a failed permission or capability check stops the launch.
 5. Checks the running Compose container, application version and HTTP response
    using the actual container bind address and port.
 6. Offers Git setup under the **original ordinary Linux account**. Git setup has
@@ -113,7 +116,7 @@ Use menu **2** whenever Git needs attention. It does not rebuild the manager.
 You can open it directly from any directory:
 
 ```bash
-bash "$HOME/projects/v1.18.0/deploy/install.sh" --git
+bash "$HOME/projects/v1.18.1/deploy/install.sh" --git
 ```
 
 The wizard separates Linux owner, GitHub login, commit name/email and checkout
@@ -198,13 +201,14 @@ replace the real WinSCP transfer, device backup or deliberate Git push above.
 For **Operations helper is unavailable**, run from the matching source checkout:
 
 ```bash
-sudo bash deploy/setup-operations.sh
+sudo bash deploy/start-manager.sh --enable-operations
 bash deploy/check-install.sh --lab-path /etc/containerlab/vJunOS-SW
 ```
 
-Use your actual failed folder. The first command refreshes the operations helper
-and permissions while retaining custom roots/download settings. Close and reopen
-the UI folder. The second command only checks; see [report meanings and recovery](HEALTH-CHECK.md).
+Use your actual failed folder and complete matching source. The first command
+updates both helpers and the manager image, retaining custom roots and data. Close
+and reopen the UI folder. The second command only checks. For older checkers with
+false sudo failures, use the [root-run workaround and recovery guide](HEALTH-CHECK.md#recover-the-operations-helper-error).
 
 ## Retry without starting over
 

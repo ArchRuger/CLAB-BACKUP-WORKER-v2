@@ -23,9 +23,11 @@ bash "$script_dir/setup-discovery.sh" "${password_args[@]}"
 # Only the version is printed: its response may contain inventory credentials.
 expected=$(tr -d '\r\n' < "$repo_dir/clab-backup-ui/VERSION")
 /usr/local/sbin/clab-manager-inspect | /usr/bin/python3 "$script_dir/verify-helper.py" "$expected"
+gateway_args=()
 if $operations || [[ -f /etc/clab-manager/operations.json ]]; then
   bash "$script_dir/setup-operations.sh" "${operation_args[@]}"
   printf '%s\n' '{"mode":"capabilities"}' | /usr/local/sbin/clab-manager-operate | /usr/bin/python3 "$script_dir/verify-operations.py" "$expected"
+  gateway_args+=(--operations)
 fi
 if [[ -f /etc/clab-manager/git.json ]]; then
   bash "$script_dir/setup-git.sh" --refresh
@@ -36,7 +38,11 @@ if value.get("protocol")!="clab-manager-git-v1" or value.get("version")!=sys.arg
     sys.exit("Installed Git helper version/protocol does not match this source release.")
 print("Git helper version verified; repository bindings retained.")
 ' "$expected"
+  gateway_args+=(--git)
 fi
+# Root-only helper checks cannot prove the account's forced gateway can invoke
+# them. Exercise the same read-only requests under clab-discovery before build.
+/usr/bin/python3 "$script_dir/verify-gateway.py" "$expected" "${gateway_args[@]}"
 bash "$script_dir/setup-vm.sh"
 cd -- "$repo_dir"
 docker compose -f clab-backup-ui/compose.yml build --pull --no-cache

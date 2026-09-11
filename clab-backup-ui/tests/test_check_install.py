@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -413,6 +414,7 @@ class InstallationCheckTests(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             stack.enter_context(patch.object(check.sys, 'platform', 'linux'))
             stack.enter_context(patch.object(check.os, 'geteuid', create=True, return_value=0))
+            stack.enter_context(patch.object(check.Context, 'run', return_value=check.Result(0)))
             stack.enter_context(patch.dict(sys.modules, {'pwd': fake_pwd}))
             stack.enter_context(patch.object(check, 'module', return_value=modules))
             for name in functions:
@@ -444,7 +446,7 @@ class InstallationCheckTests(unittest.TestCase):
             self.assertEqual(process.poll(), 0)
             callbacks[0]()
             kill.assert_called_with(process.pid, 9)
-            return b''
+            return b'partial output\n'
 
         process.stdout.read.side_effect = held_stdout
         with patch.object(check.os, 'geteuid', create=True, return_value=0), \
@@ -455,6 +457,7 @@ class InstallationCheckTests(unittest.TestCase):
             result = ctx.run(['/usr/sbin/sshd', '-t'], privileged=True)
         self.assertFalse(result.ok)
         self.assertEqual(result.reason, 'command timed out')
+        self.assertEqual(result.stdout, 'partial output\n')
         self.assertGreaterEqual(kill.call_count, 2)
         timer.cancel.assert_called_once()
 
@@ -474,7 +477,8 @@ class InstallationCheckTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(popen.call_args.args[0], ['sudo', '-n', '--', '/usr/bin/timeout',
                                                  '--kill-after=2s', '5s', '/usr/sbin/sshd', '-t'])
-        self.assertTrue(popen.call_args.kwargs['start_new_session'])
+        self.assertFalse(popen.call_args.kwargs.get('start_new_session', False))
+        self.assertEqual(popen.call_args.kwargs['process_group'], 0)
         self.assertEqual(timer.call_args.args[0], 7)
         self.assertIs(popen.call_args.kwargs['stderr'], check.subprocess.DEVNULL)
 
@@ -508,7 +512,77 @@ class InstallationCheckTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(next(row for row in report['checks'] if row['id'] == 'privileges')['status'], 'FAIL')
         self.assertEqual(sudo.call_args.kwargs['timeout'], 15)
-        modules.check_git.assert_called_once()
+        modules.check_git.assert_not_called()
+        self.assertTrue(any(row['status'] == 'SKIP' and row['title'] == 'Registered Git checkouts'
+                            for row in report['checks']))
+
+    def test_initial_sudo_success_cannot_mask_failed_query_runner(self):
+        output = io.StringIO()
+        account = SimpleNamespace(pw_uid=1000, pw_name='archtop')
+        modules = SimpleNamespace(check_host=Mock(), check_git=Mock())
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(check.sys, 'platform', 'linux'))
+            stack.enter_context(patch.object(check.os, 'geteuid', create=True, return_value=1000))
+            stack.enter_context(patch.dict(sys.modules, {'pwd': SimpleNamespace(getpwnam=lambda _: account)}))
+            stack.enter_context(patch.object(check.subprocess, 'run', return_value=SimpleNamespace(returncode=0)))
+            runner = stack.enter_context(patch.object(check.Context, 'run', return_value=check.Result(1, PRIVATE)))
+            stack.enter_context(patch.object(check, 'module', return_value=modules))
+            docker = stack.enter_context(patch.object(check, 'check_docker'))
+            stack.enter_context(patch.object(check, 'check_source'))
+            stack.enter_context(contextlib.redirect_stdout(output))
+            stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+            code = check.main(['--json', '--owner', 'archtop'])
+        report = json.loads(output.getvalue())
+        self.assertEqual(code, 1)
+        self.assertEqual(report['counts']['FAIL'], 1)
+        self.assertEqual(next(row for row in report['checks'] if row['id'] == 'privileges')['status'], 'FAIL')
+        self.assertTrue(any(row['status'] == 'SKIP' and row['title'] == 'Docker, manager and persistent storage'
+                            for row in report['checks']))
+        runner.assert_called_once_with(['/usr/bin/true'], privileged=True, timeout=5)
+        docker.assert_not_called()
+        modules.check_git.assert_not_called()
+        self.assertNotIn(PRIVATE, output.getvalue())
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Requires a real Linux controlling terminal and process groups')
+    def test_query_keeps_terminal_session_with_separate_watchdog_process_group(self):
+        # sudo caches authentication by terminal AND session ID. Exercise an
+        # actual PTY so a change back to setsid fails even without sudo installed.
+        # No credentials, sudo policy, accounts or host services are changed.
+        import pty
+        import signal
+
+        child, terminal = pty.fork()
+        if child == 0:
+            try:
+                signal.alarm(10)
+                session = os.getsid(0)
+                group = os.getpgrp()
+                ctx = check.Context(check.arguments([]), owner='test', privileged=False)
+                script = ('import json,os; fd=os.open("/dev/tty",os.O_RDONLY); '
+                          'print(json.dumps(dict(session=os.getsid(0),group=os.getpgrp(),pid=os.getpid()))); '
+                          'os.close(fd)')
+                result = ctx.run([sys.executable, '-c', script], timeout=3)
+                value = json.loads(result.stdout) if result.ok else {}
+                good = (result.ok and value.get('session') == session and value.get('group') != group
+                        and value.get('group') == value.get('pid'))
+                print(json.dumps({'ok': good, 'code': result.code, 'reason': result.reason}), flush=True)
+                os._exit(0 if good else 1)
+            except BaseException:
+                os._exit(2)
+        output = bytearray()
+        try:
+            while True:
+                try:
+                    part = os.read(terminal, 1024)
+                except OSError:
+                    break
+                if not part:
+                    break
+                output.extend(part)
+        finally:
+            os.close(terminal)
+            _, status = os.waitpid(child, 0)
+        self.assertEqual(os.waitstatus_to_exitcode(status), 0, output.decode(errors='replace'))
 
     def test_http_open_and_body_share_one_absolute_deadline(self):
         ctx = context()

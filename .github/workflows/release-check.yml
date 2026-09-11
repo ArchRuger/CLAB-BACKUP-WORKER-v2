@@ -16,6 +16,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_release_consistency.py -v
           python3 -m unittest discover -s tests -p test_helper_preflight.py -v
+          python3 -m unittest discover -s tests -p test_gateway_preflight.py -v
           python3 -m unittest discover -s tests -p test_install_manager.py -v
           python3 -m unittest discover -s tests -p test_git_onboard.py -v
           python3 -m unittest discover -s tests -p test_git_registrations.py -v
@@ -36,3 +37,8 @@ jobs:
       - name: Check Junos kind support
         working-directory: clab-backup-ui
         run: '"$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_junos_kinds.py -v'
+      - name: Check operations SSH and lab actions
+        working-directory: clab-backup-ui
+        run: |
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_operations_ssh.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_lab_operations.py -v
