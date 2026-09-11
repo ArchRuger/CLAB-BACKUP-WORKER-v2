@@ -16,3 +16,12 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -p test_release_consistency.py -v
           python3 -m unittest discover -s tests -p test_helper_preflight.py -v
+          python3 -m unittest discover -s tests -p test_install_manager.py -v
+          python3 -m unittest discover -s tests -p test_git_onboard.py -v
+          python3 -m unittest discover -s tests -p test_git_registrations.py -v
+          python3 -m unittest discover -s tests -p test_apt_sources.py -v
+      - name: Check installer shell syntax
+        run: |
+          for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh; do
+            bash -n "$script"
+          done

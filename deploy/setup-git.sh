@@ -2,15 +2,28 @@
 # Guided onboarding, existing-checkout registration, or helper-only refresh.
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-if [[ $# -eq 0 || ( $# -eq 1 && $1 == --guided ) ]]; then
-  [[ $EUID -ne 0 ]] || { echo 'For guided setup, run: bash deploy/setup-git.sh (without sudo, as the repository owner).' >&2; exit 1; }
-  exec /usr/bin/python3 "$script_dir/git-onboard.py"
+if [[ $# -eq 1 && $1 == --list ]]; then
+  [[ $EUID -eq 0 ]] || { echo 'Use sudo to read registered Git checkout settings.' >&2; exit 1; }
+  exec /usr/bin/python3 -I "$script_dir/git-registrations.py"
+fi
+if [[ $# -eq 0 || ${1:-} == --guided ]]; then
+  [[ $# -eq 0 ]] || shift
+  if [[ $EUID -eq 0 ]]; then
+    printf 'Run guided setup as the repository owner, without sudo:\n  bash %q --guided' "$script_dir/setup-git.sh" >&2
+    if [[ $# -gt 0 ]]; then printf ' %q' "$@" >&2; fi
+    printf '\n' >&2
+    exit 1
+  fi
+  exec /usr/bin/python3 "$script_dir/git-onboard.py" "$@"
 fi
 if [[ $# -eq 1 && ( $1 == --help || $1 == -h ) ]]; then
   echo 'Guided setup: bash deploy/setup-git.sh (ordinary VM account; no additional user needed).'
   echo 'Existing checkout: sudo bash deploy/setup-git.sh --repo /absolute/checkout [--owner LINUX_USER] [--remote origin] [--prefix labs/bgp] [--label NAME]'
   echo 'Owner defaults to the invoking sudo user. GitHub login must belong to that Linux user.'
+  printf 'Resume an existing checkout with identity/login prompts (without sudo):\n  bash %q --guided --repo /absolute/checkout\n' "$script_dir/setup-git.sh"
+  echo 'Explicit sudo registration is noninteractive: it validates existing identity/login, but does not configure them.'
   echo 'Helper upgrade only: sudo bash deploy/setup-git.sh --refresh'
+  echo 'Read-only registered checkout settings: sudo bash deploy/setup-git.sh --list'
   exit 0
 fi
 [[ $EUID -eq 0 ]] || { echo 'Use sudo for registration/refresh, or run without arguments for guided setup.' >&2; exit 1; }
@@ -30,7 +43,11 @@ done
 if ! $refresh; then
   owner=${owner:-${SUDO_USER:-}}
   [[ -n "$owner" && -n "$repo" ]] || { echo 'Supply --repo (and --owner when not invoked with sudo), or run without arguments as the VM user for guided setup.' >&2; exit 64; }
-  id "$owner" >/dev/null 2>&1 || { echo "Linux account '$owner' does not exist. --owner is the existing VM account, not your GitHub username. No additional account is required." >&2; exit 1; }
+  id "$owner" >/dev/null 2>&1 || {
+    echo "Linux account '$owner' does not exist. --owner is the existing VM account, not your GitHub username. No additional account is required." >&2
+    echo 'Run whoami in your ordinary terminal. Omit --owner when that account owns the checkout; sudo supplies it automatically.' >&2
+    exit 1
+  }
   [[ $(id -u "$owner") -ne 0 && "$owner" != clab-discovery ]] || { echo 'Choose the ordinary VM account that owns the Git checkout.' >&2; exit 1; }
   [[ "$repo" == /* && -d "$repo/.git" ]] || { echo 'Supply the absolute root of a cloned Git checkout containing a .git directory. mkdir alone does not create a repository. Run guided setup to clone it.' >&2; exit 1; }
 elif [[ -n "$owner" || -n "$repo" || -n "$prefix" || -n "$label" || "$remote" != origin ]]; then
@@ -58,7 +75,7 @@ printf '%s\n' 'clab-discovery ALL=(root) NOPASSWD: /usr/local/sbin/clab-manager-
 visudo -cf "$temp_dir/sudoers"
 install -o root -g root -m 0755 "$temp_dir/helper" /usr/local/sbin/clab-manager-git
 install -o root -g root -m 0440 "$temp_dir/sudoers" /etc/sudoers.d/clab-manager-git
-/usr/bin/python3 -I - "$refresh" "$owner" "$repo" "$remote" "$prefix" "$label" <<'PY'
+if ! /usr/bin/python3 -I - "$refresh" "$owner" "$repo" "$remote" "$prefix" "$label" <<'PY'
 import importlib.util, json, os, pathlib, pwd, re, sys, uuid
 spec=importlib.util.spec_from_file_location('host_git','/usr/local/lib/clab-manager/host_git.py')
 h=importlib.util.module_from_spec(spec);spec.loader.exec_module(h)
@@ -123,4 +140,17 @@ try:
 except (ValueError, KeyError) as error:
     sys.exit(str(error))
 PY
+then
+  if ! $refresh; then
+    printf '\nRegistration failed. The checkout was not registered by this attempt.\n' >&2
+    if [[ "$remote" == origin && -z "$prefix" && -z "$label" ]]; then
+      printf 'As Linux account %q, run this from any directory (without sudo):\n' "$owner" >&2
+      printf '  bash %q --guided --repo %q\n' "$script_dir/setup-git.sh" "$repo" >&2
+      echo 'This reuses the checkout, prompts for missing/invalid commit identity, and checks login before registration.' >&2
+    else
+      echo 'Repair identity/login as the owner using GIT-SETUP.md, then retry the original registration command with the same --remote, --prefix and --label options.' >&2
+    fi
+  fi
+  exit 1
+fi
 echo 'Git login remains with the repository owner. Select the repository under More > Git repository in the manager.'

@@ -1,0 +1,149 @@
+# Guided VM installation — 1.16.0
+
+After cloning or extracting the source on your Ubuntu 24.04 VM, run one command
+as your existing ordinary VM account, **without sudo**:
+
+```bash
+bash deploy/install.sh
+```
+
+For a clone into a new source folder (once this release is on GitHub main):
+
+```bash
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.16.0"
+bash "$HOME/projects/v1.16.0/deploy/install.sh"
+```
+
+Git is needed for the clone. If Git is not yet installed, extract a source ZIP
+instead or install Git using the VM administrator. The installer requires the
+Python 3 and sudo normally present on Ubuntu Server; it explains missing
+requirements. Internet access is needed for packages, image builds and GitHub.
+
+## Terminal menu
+
+```text
+Containerlab Node Manager 1.16.0 — guided setup
+Linux account: your existing VM account
+Persistent home: /home/your-account
+Source: /home/your-account/projects/v1.16.0
+
+Setup menu
+  1. Install or update manager, then set up Git
+  2. Git setup / repair only (no rebuild)
+  3. Check running installation
+  4. Exit
+```
+
+Enter a number and press Enter. The menus work over SSH and VM consoles without
+curses, a desktop browser or extra terminal UI packages. Commands that need
+passwords or GitHub device authorization keep the terminal attached.
+
+## What the full installation does
+
+Review the displayed plan, then approve it once. The installer:
+
+1. Retains an existing `.env`, or offers to copy one from an older source folder
+   without showing its contents. Defaults are all VM interfaces and port 8081.
+2. Installs missing prerequisites and enables Docker/SSH. Compatible tools stay
+   installed. Conflicting Docker packages stop with instructions instead of being
+   removed automatically. See the provider notes below.
+   A previously disabled Docker source gets a specific recovery message; setup
+   preserves that choice rather than silently enabling it or adding a duplicate.
+3. Optionally backs up and disables obsolete installation-media APT entries.
+   Only media entries/URIs are removed from use; network mirrors remain. Package
+   signature verification stays enabled.
+4. Runs the existing manager launcher to prepare persistent storage, create or
+   retain the restricted `clab-discovery` password, install/verify helpers, and
+   build/recreate the manager. You choose whether to enable reviewed lab operations;
+   existing operations permissions remain on upgrades.
+5. Checks the running Compose container, application version and HTTP response
+   using the actual container bind address and port.
+6. Offers Git setup under the **original ordinary Linux account**. Git setup has
+   its own retry/cancel flow; a Git error does not undo a working manager.
+
+```mermaid
+flowchart TD
+    A[Run install.sh as ordinary VM user] --> B[Verify source and review plan]
+    B --> C[Prerequisites and optional APT media repair]
+    C --> D[Password, helpers, persistent storage]
+    D --> E[Build and start manager]
+    E --> F[Container version and HTTP checks]
+    F --> G{Set up Git now?}
+    G -- Yes --> H[Git terminal wizard under original account]
+    G -- Later --> I[Manager ready; Git menu remains available]
+    H --> J[Register checkout, then connect lab in browser]
+    C -. Failure .-> K[Retry failed step or return to menu]
+    D -. Failure .-> K
+    E -. Failure .-> K
+    F -. Failure .-> K
+```
+
+Existing manager data, passwords, registered Git repositories and lab containers
+are retained. Source installation does not migrate data out of an old container
+that lacks persistent storage; use [the migration guide](STANDALONE-SETUP.md)
+first in that case. A new source folder does not automatically inherit another
+folder's `.env`; select the copy option if you customized the old one.
+
+## Git setup and recovery
+
+Use menu **2** whenever Git needs attention. It does not rebuild the manager.
+You can open it directly from any directory:
+
+```bash
+bash "$HOME/projects/v1.16.0/deploy/install.sh" --git
+```
+
+The wizard separates Linux owner, GitHub login, commit name/email and checkout
+directory. It checks the repository and identity before registration and supports
+existing checkout recovery. Already registered checkouts appear in a menu, so you
+can select the saved path without typing it again. Your account name is detected;
+there is no need to
+copy an example `--owner patrick` command or create another Linux account.
+
+Read [GIT-SETUP.md](GIT-SETUP.md) for repository preparation, device-code login,
+registration and the detailed recovery table. You still create the destination
+GitHub repository with an initial README. The wizard does not create a remote
+repository, invent commit identity, or publish commits during setup.
+
+## Finish in the browser
+
+The final terminal checks verify the local manager. On your workstation:
+
+1. Open `http://VM_ADDRESS:8081` (or the configured port).
+2. In **VM connection**, use `clab-discovery` and the password created during
+   setup. Verify the VM host fingerprint before accepting it.
+3. Import the intended lab, configure device credentials and verify a backup.
+4. In **More → Git repository**, select the registered checkout and devices.
+5. Choose **Save progress** and check that it reports **Pushed**.
+
+Host trust, lab selection and device credentials still require your choices in
+the browser. The installer does not deploy router labs or publish lab configs.
+
+## Retry without starting over
+
+Each failed install phase offers **Retry this step** or **Return to menu**. Read
+the actual package/launcher error before retrying. A successful launch with an
+HTTP problem can be checked again using menu **3**, without rebuilding. If Git
+was canceled or failed, use menu **2**. Exiting retains completed work; on a
+later run, the scripts inspect the current VM and preserve existing setup.
+
+If you accidentally run `sudo bash deploy/install.sh`, it prints the equivalent
+ordinary-user command and stops before running Git as root. The installer uses
+sudo only where the VM needs administrator access. A separate repository owner
+without sudo access can use the advanced administrator/owner workflow in the Git
+guide instead.
+
+## Provider installation notes
+
+Docker uses its [official Ubuntu signed APT repository](https://docs.docker.com/engine/install/ubuntu/).
+Containerlab uses the [official release packages](https://containerlab.dev/install/)
+with published checksum verification. New installations keep containerlab at
+normal executable permissions and use sudo for host operations. Existing
+containerlab installations are preserved. No Docker group change or re-login is
+needed. The helper does not deploy a lab, prune images or replace unrelated APT
+sources. The automated prerequisite path targets Ubuntu 24.04; use the manual
+guide for other distributions or offline staging.
+
+The detailed manual steps remain in [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md). They
+are useful for diagnostics and managed environments; you do not need to repeat
+their install commands after this menu has completed successfully.
