@@ -1,0 +1,4 @@
+deploy/*.sh text eol=lf
+deploy/clab-manager-gateway text eol=lf
+deploy/*.conf text eol=lf
+clab-backup-ui/VERSION text eol=lf

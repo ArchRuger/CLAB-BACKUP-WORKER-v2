@@ -1,0 +1,16 @@
+**/__pycache__
+**/*.py[cod]
+.venv
+venv
+.env
+.env.*
+data
+tests
+*.md
+.pytest_cache
+.coverage
+htmlcov
+*.zip
+*.patch
+*.tar
+*.tgz
