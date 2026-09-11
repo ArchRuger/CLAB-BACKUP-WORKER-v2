@@ -406,7 +406,7 @@ If an old VS Code server process retains the previous groups, close the connecti
 Node Manager's image does not contain the router/switch images. Read the topology's `image:` entries and pull or load each required image. Log in to Docker Hub only when needed for private access or authenticated pulls:
 
 ```bash
-sudo docker login -u archtop
+sudo docker login
 sudo docker image ls
 ```
 
