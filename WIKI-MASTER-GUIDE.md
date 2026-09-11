@@ -6,7 +6,7 @@ This guide covers the end to end process of preparing a fresh Ubuntu VM to be us
 
 This page combines the Ubuntu/Proxmox build notes, the installation walkthrough and the current manager documentation. Follow it from the beginning for a fresh VM. If Docker and Containerlab already work, start at **Part 6**.
 
-> **Release baseline:** 1.15.2 prepared locally from GitHub `main` at `698fabb` on 11 September 2026; commit/push is pending. Source VERSION, application, helpers and image metadata agree on **1.15.2**. Build locally as `clab-backup:1.15.2`; a Docker Hub publication has not been verified.
+> **Release baseline:** 1.15.3 prepared locally from GitHub `main` at `0658562` on 11 September 2026; commit/push is pending. Source VERSION, application, helpers and image metadata agree on **1.15.3**. Build locally as `clab-backup:1.15.3`; a Docker Hub publication has not been verified.
 {.is-info}
 
 ## Reference environment
@@ -23,7 +23,7 @@ This page combines the Ubuntu/Proxmox build notes, the installation walkthrough 
 | Proxmox VM ID | Look up with `qm list`; do not infer it from the hostname |
 | Earlier reference hosts | `clab-1`: `10.150.2.211`; `clab-2`: `10.150.2.212` |
 | Manager UI | `http://10.150.2.213:8081` |
-| Release files | `/home/archtop/projects/v1.15.2/` |
+| Release files | `/home/archtop/projects/v1.15.3/` |
 | Persistent manager data | `/srv/containerlab-node-manager/data/` |
 | Lab projects | `/etc/containerlab/<project>/` |
 | VM helper account | `clab-discovery` |
@@ -62,7 +62,7 @@ Proxmox --> Ubuntu VM --> Docker / Containerlab --> training devices
 
 The manager keeps running when a lab is stopped or destroyed. Deployed labs remain on the VM; importing a lab creates a saved manager workspace. The two have different lifecycles.
 
-> **Access model:** 1.15.2 opens directly without a UI login. Give access to TCP 8081 only to the intended engineers. VM discovery authentication and device SSH credentials are still required and are stored in the persistent manager data.
+> **Access model:** 1.15.3 opens directly without a UI login. Give access to TCP 8081 only to the intended engineers. VM discovery authentication and device SSH credentials are still required and are stored in the persistent manager data.
 {.is-warning}
 
 ## Page contents
@@ -416,21 +416,21 @@ Use the same account context for login and image pulls: `sudo docker login` stor
 
 # Part 6 — Get the release source and matching host files {#part-6}
 
-## Step 6.1 — Obtain version 1.15.2
+## Step 6.1 — Obtain version 1.15.3
 
-After the prepared 1.15.2 changes have been merged into GitHub main, obtain that source. On a fresh VM, clone into a new source
+After the prepared 1.15.3 changes have been merged into GitHub main, obtain that source. On a fresh VM, clone into a new source
 folder as your ordinary VM account, then check the complete release:
 
 ```bash
 mkdir -p "$HOME/projects"
 cd "$HOME/projects"
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.15.2
-cd v1.15.2
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.15.3
+cd v1.15.3
 cat clab-backup-ui/VERSION
 python3 deploy/verify-release.py
 ```
 
-Expect **1.15.2** and **Source release verified: 1.15.2**. A directory name does
+Expect **1.15.3** and **Source release verified: 1.15.3**. A directory name does
 not select a release. Future `main` changes may be newer; use a complete matching
 release and its guide. Stop if the consistency check fails.
 
@@ -442,7 +442,7 @@ extract the cleaned source ZIP into a separate folder with `deploy/` and
 ## Step 6.2 — Check the host setup files
 
 ```bash
-cd "$HOME/projects/v1.15.2"
+cd "$HOME/projects/v1.15.3"
 ls deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-password.sh \
   deploy/clab-manager-gateway deploy/clab-manager-password.conf \
   deploy/setup-operations.sh deploy/verify-helper.py deploy/verify-operations.py \
@@ -454,7 +454,7 @@ ls deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-password.sh \
 Keep this directory for upgrades and maintenance. The resulting layout is:
 
 ```text
-/home/archtop/projects/v1.15.2/          source and host setup scripts
+/home/archtop/projects/v1.15.3/          source and host setup scripts
 /etc/containerlab/<project>/           lab sources and deployment artifacts
 /srv/containerlab-node-manager/data/   persistent manager state and backups
 ```
@@ -467,7 +467,7 @@ offline VM, prepare the image on a connected machine using [Part 20](#part-20).
 
 # Part 7 — Prepare persistent storage {#part-7}
 
-From `~/projects/v1.15.2`:
+From `~/projects/v1.15.3`:
 
 ```bash
 sudo bash deploy/setup-vm.sh
@@ -509,7 +509,7 @@ password; the application does not ship a default password.
 From a normal administrator's terminal on the **Ubuntu VM**:
 
 ```bash
-cd "$HOME/projects/v1.15.2"
+cd "$HOME/projects/v1.15.3"
 sudo bash deploy/setup-discovery.sh
 ```
 
@@ -565,14 +565,14 @@ Part 8 installs discovery and file-transfer support. Enable lab operations on
 the **Ubuntu VM** using the matching source:
 
 ```bash
-cd "$HOME/projects/v1.15.2"
+cd "$HOME/projects/v1.15.3"
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
-sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.15.2
+sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.15.3
 printf '%s\n' '{"mode":"capabilities"}' | sudo /usr/local/sbin/clab-manager-operate \
-  | python3 deploy/verify-operations.py 1.15.2
+  | python3 deploy/verify-operations.py 1.15.3
 ```
 
-Both verifiers must successfully report **1.15.2**. They avoid printing imported
+Both verifiers must successfully report **1.15.3**. They avoid printing imported
 file contents, which may contain device passwords. If a check fails, repair the
 helper before continuing; see [Part 18](#part-18).
 
@@ -592,14 +592,14 @@ A failure before the build leaves no manager image or container on a fresh VM.
 From the matching source directory on the **Ubuntu VM**:
 
 ```bash
-cd "$HOME/projects/v1.15.2"
+cd "$HOME/projects/v1.15.3"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml ps -a
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=50 backup-ui
 ```
 
 The launcher refreshes and verifies the host helpers, prepares persistent
-storage, builds `clab-backup:1.15.2` and recreates the manager. It retains an
+storage, builds `clab-backup:1.15.3` and recreates the manager. It retains an
 existing `clab-discovery` password. If Parts 7–9 were skipped, the first launch
 prompts for the password before building or starting the container.
 
@@ -637,14 +637,14 @@ sudo docker compose -f clab-backup-ui/compose.yml \
 curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:8081/
 ```
 
-Expect **1.15.2** and **HTTP 200**. Optional `UI_BIND` and `UI_PORT` settings belong
+Expect **1.15.3** and **HTTP 200**. Optional `UI_BIND` and `UI_PORT` settings belong
 in `clab-backup-ui/.env`; retain that file across source-folder upgrades and use
 your chosen port in browser and health checks.
 
 An image-only build needs the final build context argument:
 
 ```bash
-sudo docker build --pull --no-cache -t clab-backup:1.15.2 ./clab-backup-ui
+sudo docker build --pull --no-cache -t clab-backup:1.15.3 ./clab-backup-ui
 ```
 
 Building an image alone neither configures the Linux account nor starts the
@@ -957,7 +957,7 @@ Run these from your installation directory. Restarting/stopping the manager does
 not stop the training lab containers. It does disconnect active browser SSH sessions.
 
 ```bash
-cd "$HOME/projects/v1.15.2"
+cd "$HOME/projects/v1.15.3"
 
 # View status and recent logs
 sudo docker compose -f clab-backup-ui/compose.yml ps
@@ -980,7 +980,7 @@ undo an intentional stop on reboot. [Docker restart policies](https://docs.docke
 
 1. Back up the persistent manager directory using [Part 17](#part-17).
 2. Extract or clone the matching source into its own folder. Run
-   `python3 deploy/verify-release.py`; for this delivery it must report **1.15.2**.
+   `python3 deploy/verify-release.py`; for this delivery it must report **1.15.3**.
 3. Retain any customized `clab-backup-ui/.env` from the previous installation.
 4. From the new release's root, run:
 
@@ -1090,12 +1090,12 @@ A manager data archive is only one part of recovery. Retain the complete VM proj
 Use the source that matches the running application:
 
 ```bash
-cd "$HOME/projects/v1.15.2"
+cd "$HOME/projects/v1.15.3"
 sudo bash deploy/setup-discovery.sh
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
-sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.15.2
+sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.15.3
 printf '%s\n' '{"mode":"capabilities"}' | sudo /usr/local/sbin/clab-manager-operate \
-  | python3 deploy/verify-operations.py 1.15.2
+  | python3 deploy/verify-operations.py 1.15.3
 ```
 
 An existing usable password is preserved. Setup verifies the effective SSH
@@ -1110,7 +1110,7 @@ Use the VM console or your normal administrator login; `clab-discovery` is not
 an administrative shell account:
 
 ```bash
-cd "$HOME/projects/v1.15.2"
+cd "$HOME/projects/v1.15.3"
 sudo bash deploy/setup-discovery.sh --reset-password
 ```
 
@@ -1214,7 +1214,7 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 | Message / symptom | Cause and correction |
 |---|---|
 | Cannot find the Proxmox VM ID | Run `qm list` in the Proxmox host shell; match the VM name. |
-| First launch requires a public key | This is an old setup script. Obtain the matching 1.15.2 source and follow Part 8; current setup prompts for a password. |
+| First launch requires a public key | This is an old setup script. Obtain the matching 1.15.3 source and follow Part 8; current setup prompts for a password. |
 | Compose says service is not running during `exec` | The earlier launch failed or was skipped. Read the launcher error first; version verification happens before the image is built. Fix it, rerun the launcher, then verify `ps` before `exec`. |
 | Source VERSION expects 1.15.0, installed helper reports 1.15.1 | The affected GitHub 1.15.1 checkout retained an old VERSION file. See the repository repair above. For other mismatches, obtain a complete matching source release. |
 | `docker build` requires an argument | Include the build context: `./clab-backup-ui` from the repo root or `.` from its Dockerfile folder. |
@@ -1243,29 +1243,29 @@ downloads remain disabled by default.
 
 ## Build and transfer the manager image
 
-On a **connected Linux staging machine**, from the 1.15.2 source root, build for
+On a **connected Linux staging machine**, from the 1.15.3 source root, build for
 the target VM's architecture:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.15.2 ./clab-backup-ui
-docker image save -o clab-backup-1.15.2.tar clab-backup:1.15.2
+docker build --pull --no-cache -t clab-backup:1.15.3 ./clab-backup-ui
+docker image save -o clab-backup-1.15.3.tar clab-backup:1.15.3
 ```
 
 Transfer the image archive, source ZIP and other offline prerequisites. On the
 **Ubuntu VM**, load the archive and verify its version:
 
 ```bash
-sudo docker image load -i clab-backup-1.15.2.tar
-sudo docker run --rm --entrypoint python clab-backup:1.15.2 \
+sudo docker image load -i clab-backup-1.15.3.tar
+sudo docker run --rm --entrypoint python clab-backup:1.15.3 \
   -c 'from app import __version__; print(__version__)'
 ```
 
-Expect **1.15.2**. Complete Parts 7–9 from the transferred source, including the
-interactive password prompt. Then from `~/projects/v1.15.2`:
+Expect **1.15.3**. Complete Parts 7–9 from the transferred source, including the
+interactive password prompt. Then from `~/projects/v1.15.3`:
 
 ```bash
 cat > deploy/image.env <<'EOF'
-MANAGER_IMAGE=clab-backup:1.15.2
+MANAGER_IMAGE=clab-backup:1.15.3
 UI_BIND=0.0.0.0
 UI_PORT=8081
 EOF
@@ -1382,7 +1382,7 @@ initial commit. Copy its HTTPS clone URL. From the new source directory on the
 **Ubuntu VM**, run **without sudo**:
 
 ```bash
-cd "$HOME/projects/v1.15.2"
+cd "$HOME/projects/v1.15.3"
 bash deploy/setup-git.sh
 ```
 
@@ -1396,6 +1396,34 @@ separate from the manager source in `~/projects/`. Copy the URL using GitHub's
 **Code → HTTPS**, for example `https://github.com/OWNER/REPOSITORY.git`.
 Do not paste a branch page URL ending in `/tree/main`.
 
+**Use the right folder and account.** The setup script is in the manager source
+under `~/projects/v1.15.3/deploy/`, not the lab-config checkout. Running it from
+`~/labs/...` by its relative path produces `No such file or directory` before
+the script starts. The launcher prints an absolute setup command that works from
+any directory. Guided setup selects your current Linux owner automatically.
+For explicit sudo registration, omit `--owner` to use the account invoking sudo;
+do not copy `--owner patrick` if your actual VM account is `archtop`.
+
+**Complete registration before using Connect Git repository.** A clean checkout
+and successful GitHub login do not supply Git commit author name/email. Guided
+setup prompts for them, stores new values in this checkout only, and checks both
+author and committer identities. Wait for **Registered** and **Ready** before
+selecting the checkout in the UI.
+
+If a checkout already exists but registration failed, resume as its owner
+without sudo (replace `my-lab` with the actual folder):
+
+```bash
+bash "$HOME/projects/v1.15.3/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
+```
+
+This reuses the existing checkout and prompts to repair missing/invalid identity.
+On 1.15.2, run the wizard without arguments and choose **existing** instead.
+Direct sudo registration checks existing identity/login but does not configure
+them. See [existing-checkout recovery](GIT-SETUP.md#recover-an-existing-checkout-that-will-not-register)
+for manual identity commands and custom remote/prefix registration. Fixing
+identity or registration does not require rebuilding the manager.
+
 If package installation stops with `file:/cdrom ... Release`, disable the obsolete
 installation-media APT entry before rerunning. Locate it with:
 
@@ -1407,6 +1435,9 @@ Open the matching file with `sudo nano /actual/path/from/output`. In a `.list`
 file, comment out only the media `deb` line with `#`. In a `.sources` file, set
 `Enabled: no` in the media-only stanza; if it also includes network URIs, remove
 only the media URI. Keep Ubuntu, security and Docker network sources enabled.
+These `.list` and `.sources` instructions are alternatives, not two required
+edits or shell commands. If the media entry was in `.list`, commenting it out is
+enough. Use `sudo nano` to edit these root-owned files.
 Save with **Ctrl+O**, **Enter**, **Ctrl+X**. Run each command successfully before
 continuing to the next:
 

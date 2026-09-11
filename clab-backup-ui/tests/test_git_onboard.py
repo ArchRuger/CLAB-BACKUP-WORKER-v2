@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -12,6 +13,56 @@ spec.loader.exec_module(onboard)
 
 
 class GitOnboardTests(unittest.TestCase):
+    def test_resume_arguments_preserve_checkout_path(self):
+        self.assertEqual(onboard.parse_args(['--repo', '/home/owner/labs/lab with spaces']).repo,
+                         '/home/owner/labs/lab with spaces')
+        self.assertIsNone(onboard.parse_args([]).repo)
+
+    def test_guided_resume_skips_clone_prompt_and_checks_identity_before_registration(self):
+        with tempfile.TemporaryDirectory() as folder:
+            account = SimpleNamespace(pw_name='owner', pw_dir=folder)
+            url = 'https://github.com/owner/lab.git'
+            def run(args, *unused, **kwargs):
+                output = url if args[1] == 'remote' else 'true'
+                return subprocess.CompletedProcess(args, 0, output)
+            with patch.dict('sys.modules', {'pwd': SimpleNamespace(getpwuid=lambda uid: account)}), \
+                    patch.object(onboard.os, 'geteuid', return_value=1000, create=True), \
+                    patch.object(onboard.sys.stdin, 'isatty', return_value=True), \
+                    patch.object(onboard.Path, 'is_file', return_value=True), \
+                    patch.object(onboard.shutil, 'which', return_value='/usr/bin/git'), \
+                    patch.object(onboard, 'prepare_checkout') as prepare, \
+                    patch.object(onboard, 'github_login'), patch.object(onboard, 'identity') as identity, \
+                    patch.object(onboard, 'run', side_effect=run) as commands, \
+                    patch.object(onboard, 'ask') as ask, patch.object(onboard, 'confirm', return_value=False):
+                onboard.main(['--repo', folder])
+            ask.assert_not_called()
+            identity.assert_called_once()
+            self.assertEqual(identity.call_args.args[0], Path(folder))
+            self.assertEqual(prepare.call_args_list[0].args[1], '')
+            self.assertFalse(any(call.args[0][0] == 'sudo' or 'clone' in call.args[0]
+                                 for call in commands.call_args_list))
+
+    def test_empty_identity_reprompts(self):
+        with patch.object(onboard, 'ask', side_effect=['', 'bad\x7fvalue', 'Lab Author']):
+            self.assertEqual(onboard.ask_identity('Name'), 'Lab Author')
+
+    def test_invalid_existing_identity_is_repaired_locally(self):
+        config = {'user.name': '<>', 'user.email': 'bad'}
+        commands = []
+        def run(args, env, cwd, **kwargs):
+            commands.append(args)
+            if args[1:3] == ['config', '--get']:
+                return subprocess.CompletedProcess(args, 0, config[args[3]])
+            if args[1:3] == ['config', '--local']:
+                config[args[3]] = args[4]
+                return subprocess.CompletedProcess(args, 0, '')
+            return subprocess.CompletedProcess(args, 0 if config['user.name'] == 'Lab Author' else 128, '')
+        with patch.object(onboard, 'run', side_effect=run), patch.object(onboard, 'ask', side_effect=['Lab Author', 'lab@example.invalid']):
+            onboard.identity(Path('/lab'), {})
+        self.assertEqual(config, {'user.name': 'Lab Author', 'user.email': 'lab@example.invalid'})
+        self.assertIn(['git', 'var', 'GIT_COMMITTER_IDENT'], commands)
+        self.assertFalse(any('--global' in args for args in commands))
+
     def test_github_web_pages_are_rejected_before_clone(self):
         for suffix in ('/tree/main', '/blob/main/README.md', '/issues', '', '/../lab'):
             url = 'https://github.com/owner' + (suffix if not suffix else '/repo' + suffix)

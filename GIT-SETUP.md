@@ -16,8 +16,18 @@ additional Linux user. The VM username and GitHub username can be different.
    directory and run this command **without sudo**:
 
    ```bash
+   cd "$HOME/projects/v1.15.3"
    bash deploy/setup-git.sh
    ```
+
+Use your actual source folder if it has a different name. This is the folder
+containing `deploy/` and `clab-backup-ui/`, not the lab-config checkout under
+`~/labs/`. You can also run `bash "$HOME/projects/v1.15.3/deploy/setup-git.sh"`
+from any directory. The launcher prints your actual absolute setup command.
+
+Finish the wizard until it reports **Registered** and **Ready** before connecting
+the repository in the UI. A running manager, successful GitHub login, and a clean
+`git status` do not establish that registration or commit identity is ready.
 
 The wizard shows the Linux account it will use, then:
 
@@ -102,6 +112,10 @@ and Docker entries enabled. These are the supported
 [APT source formats](https://manpages.ubuntu.com/manpages/noble/man5/sources.list.5.html).
 Save in nano with **Ctrl+O**, **Enter**, then **Ctrl+X**.
 
+The `.list` and `.sources` instructions are alternatives, not commands or two
+required edits. If the entry is in `.list`, commenting it out completes the edit;
+you do not need a `.sources` file. Use `sudo nano` because these files belong to root.
+
 Run these in order; continue only after each command succeeds:
 
 ```bash
@@ -134,6 +148,50 @@ owner's configuration file. Keep that home directory private and on persistent
 storage. Shell-only tokens or credentials under another user's home will not be
 available to unattended manager saves.
 
+## Recover an existing checkout that will not register
+
+For the usual `origin` remote and repository-root destination, run guided setup
+as the Linux account that owns the checkout, **without sudo**. In 1.15.3 and later
+you can supply the existing checkout directly:
+
+```bash
+bash "$HOME/projects/v1.15.3/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
+```
+
+Replace `my-lab` with the actual folder. This command works even when your current
+directory is the lab-config repository. It reuses that checkout and login, prompts
+for missing or invalid commit name/email, then offers registration. It does not
+clone again. For 1.15.2, run the wizard without arguments and choose **existing**.
+The commit name/email identify the author; they are neither the Linux username
+nor a GitHub login. Valid existing settings are kept; new values are local to
+this checkout. Your Linux owner is automatically selected by the wizard.
+
+For manual repair, as the checkout owner without sudo, set your chosen identity:
+
+```bash
+cd "$HOME/labs/my-lab"
+git config --local user.name "Your Name"
+git config --local user.email "your-email@example.com"
+git var GIT_AUTHOR_IDENT
+git var GIT_COMMITTER_IDENT
+```
+
+Both checks must succeed. Then, from the manager source folder, register:
+
+```bash
+cd "$HOME/projects/v1.15.3"
+sudo bash deploy/setup-git.sh --repo "$HOME/labs/my-lab"
+```
+
+Omitting `--owner` uses the ordinary account invoking sudo. For example, `archtop`
+owns `/home/archtop/labs/...`; do not copy `--owner patrick` from a separate-account
+example. Run `whoami` in your ordinary terminal to check your Linux account.
+Explicit sudo registration validates identity/login but does not configure them.
+It never runs Git as root. Retain custom `--remote`, `--prefix` and `--label`
+options when retrying a custom registration; the wizard uses `origin` and the
+repository root. Once registration succeeds, reopen **More → Git repository**
+and select the checkout. These identity/registration repairs need no container rebuild.
+
 ## Fix a failed save
 
 Open the **original failed save** from progress history. Its snapshot is already
@@ -142,12 +200,13 @@ preserved. Repair the stated problem, then use its **Retry export and push** or
 
 | Symptom | Action |
 |---|---|
+| `bash: deploy/setup-git.sh: No such file or directory` | You are probably in the lab-config checkout. Run the absolute source-script path above or change to the source folder containing `deploy/`. The script cannot report this itself because Bash has not started it. |
 | Linux owner does not exist | Use your actual VM account. `--owner` is not a GitHub username. |
 | Missing checkout / `.git` | Use the wizard's Clone option. `mkdir` creates a folder, not a repository. |
 | Permission denied | Check who owns the checkout. Clone as its intended owner; do not use `sudo git clone` or recursively change ownership of an existing project. |
 | `gh` missing / owner not in sudoers | Your VM administrator installs `gh`. Authenticate as the repository owner. The owner does not need sudo membership to use Git or the manager. |
 | Invalid username/token or interactive password prompt | Run the commands below **as the registered Linux owner**, then retry the original save. |
-| Missing commit identity | Inside the checkout, set `git config --local user.name "Your Name"` and `git config --local user.email "your-email"`. Retry the original save. |
+| Missing/invalid commit identity, despite a clean `git status` | Use guided existing-checkout recovery above, or set local name/email and verify both Git identities. Retry registration if it failed; retry the original save if already registered. |
 | Already staged changes after a failed manager export | Retry the original failed save after fixing its error. Do not start another save or manually commit its staged files. Resolve unrelated staged work separately. |
 | You already committed the manager files manually | As the owner, publish that manual commit with normal Git. Check it reached the remote. In the manager dismiss the old export using **Keep snapshot only**, then start a new save. The manager does not automatically push unrelated/manual history. |
 | Local and remote branch differ | Inspect `git status -sb` and resolve synchronization as the owner. Setup does not reset, merge, stash or force-push your work. |

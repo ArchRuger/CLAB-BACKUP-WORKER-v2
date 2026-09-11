@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Interactive Git onboarding. All Git and authentication run as the VM user."""
+import argparse
 import os
 from pathlib import Path
 import re
@@ -104,16 +105,26 @@ def prepare_checkout(path, url, env):
 
 
 def identity(path, env):
+    print('Commit name/email label your commits; GitHub login does not set them. Settings apply only to this checkout.')
     for key, prompt in (('user.name', 'Commit author name'), ('user.email', 'Commit author email (GitHub noreply email is also valid)')):
         current = run(['git', 'config', '--get', key], env, path, check=False).stdout.strip()
         if not current:
-            value = ask(prompt)
-            if not value or any(ord(c) < 32 for c in value):
-                raise ValueError('Enter a nonempty commit identity. Rerun setup to continue.')
+            value = ask_identity(prompt)
             run(['git', 'config', '--local', key, value], env, path)
-    for role in ('GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT'):
-        if run(['git', 'var', role], env, path, check=False).returncode:
-            raise ValueError('Git author/committer identity is invalid. Set repository-local user.name and user.email, then rerun.')
+    while any(run(['git', 'var', role], env, path, check=False).returncode
+              for role in ('GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT')):
+        print('Git rejected the commit identity. Enter a replacement name and email for this checkout.')
+        for key, prompt in (('user.name', 'Commit author name'), ('user.email', 'Commit author email')):
+            run(['git', 'config', '--local', key, ask_identity(prompt)], env, path)
+    print('Commit identity verified for this checkout.')
+
+
+def ask_identity(prompt):
+    while True:
+        value = ask(prompt)
+        if value and not any(ord(c) < 32 or ord(c) == 127 for c in value):
+            return value
+        print('Enter a nonempty value without control characters, or press Ctrl+C to cancel.')
 
 
 def github_login(env):
@@ -132,7 +143,14 @@ def github_login(env):
     print('GitHub account: ' + login)
 
 
-def main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description='Guided Git setup as the existing VM account.')
+    parser.add_argument('--repo', help='Resume guided setup for an existing checkout; no cloning.')
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    options = parse_args(argv)
     import pwd
     if os.geteuid() == 0:
         raise ValueError('Run bash deploy/setup-git.sh as the ordinary VM account, without sudo.')
@@ -147,11 +165,13 @@ def main():
     print(f'\nGit setup for Linux account: {account.pw_name}\nPersistent home: {account.pw_dir}')
     print('This is the repository owner. It does not need to match your GitHub username.')
     print('No additional Linux user is required. Sudo is used only for packages and helper registration.\n')
+    print('Manager source: ' + str(SOURCE))
+    print('The lab-config checkout is a separate folder. A clean git status does not verify commit identity or push access.')
     if not shutil.which('git', path=env['PATH']):
         if not confirm('Install Git with sudo apt-get?'):
             raise ValueError('Install git as a VM administrator, then rerun.')
         install_package('git', env)
-    mode = ask('Clone a repository or use an existing checkout? Enter clone/existing', 'clone').lower()
+    mode = 'existing' if options.repo else ask('Clone a repository or use an existing checkout? Enter clone/existing', 'clone').lower()
     if mode not in ('clone', 'existing'):
         raise ValueError('Choose clone or existing.')
     url = ''
@@ -162,7 +182,7 @@ def main():
         print('Checkout directory is the local repository on this VM, where lab configurations will be saved.')
         path = checkout_path(ask('Checkout directory', str(Path(account.pw_dir) / 'labs' / name)))
     else:
-        path = checkout_path(ask('Existing checkout directory'))
+        path = checkout_path(options.repo or ask('Existing checkout directory'))
         prepare_checkout(path, '', env)
         url = https_url(run(['git', 'remote', 'get-url', '--push', 'origin'], env, path).stdout.strip())
     if urlsplit(url).hostname == 'github.com':
@@ -198,6 +218,8 @@ def main():
                     '--repo', str(path)]
     result = run(registration, env, interactive=True, check=False)
     if result.returncode:
+        print('Registration failed; the checkout is not ready to select in the manager. Resume as this Linux account with:\n'
+              + shlex.join(['bash', str(SOURCE / 'deploy/setup-git.sh'), '--guided', '--repo', str(path)]))
         print('If this owner is not an administrator, have the VM administrator run:\n' + shlex.join(registration))
         raise ValueError('Registration did not complete. Resolve the error above; checkout and login are retained.')
     print('\nReady. In the manager: open your lab > More > Git repository.')

@@ -1,3 +1,17 @@
+# Git owner and identity guidance — 1.15.3
+
+- Based on merged main 0658562. Guided setup accepts an existing checkout directly,
+  repairs invalid identity, and retains valid settings and the owner's environment.
+- 19 onboarding tests passed, including existing-checkout resume without cloning,
+  blank input retry, invalid identity repair and preservation of valid identity.
+  Seven release-consistency and four helper-preflight tests passed (30 total).
+- ShellCheck passed for setup-git.sh and start-manager.sh. Source verification
+  reports 1.15.3; Git whitespace checks passed.
+- Shell registration still runs Git only after dropping to the owner. Failure
+  guidance retains custom registration settings and provides absolute paths.
+- No live Ubuntu registration, package installation, Docker build or deployment
+  was performed. Changes are prepared locally for user commit and push.
+
 # Guided Git setup recovery — 1.15.2
 
 - Based on GitHub main 698fabb, preserving the latest user wiki edits.
