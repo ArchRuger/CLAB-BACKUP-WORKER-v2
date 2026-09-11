@@ -2,6 +2,10 @@
 # Guided onboarding, existing-checkout registration, or helper-only refresh.
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [[ $# -eq 1 && $1 == --list ]]; then
+  [[ $EUID -eq 0 ]] || { echo 'Use sudo to read registered Git checkout settings.' >&2; exit 1; }
+  exec /usr/bin/python3 -I "$script_dir/git-registrations.py"
+fi
 if [[ $# -eq 0 || ${1:-} == --guided ]]; then
   [[ $# -eq 0 ]] || shift
   if [[ $EUID -eq 0 ]]; then
@@ -19,6 +23,7 @@ if [[ $# -eq 1 && ( $1 == --help || $1 == -h ) ]]; then
   printf 'Resume an existing checkout with identity/login prompts (without sudo):\n  bash %q --guided --repo /absolute/checkout\n' "$script_dir/setup-git.sh"
   echo 'Explicit sudo registration is noninteractive: it validates existing identity/login, but does not configure them.'
   echo 'Helper upgrade only: sudo bash deploy/setup-git.sh --refresh'
+  echo 'Read-only registered checkout settings: sudo bash deploy/setup-git.sh --list'
   exit 0
 fi
 [[ $EUID -eq 0 ]] || { echo 'Use sudo for registration/refresh, or run without arguments for guided setup.' >&2; exit 1; }

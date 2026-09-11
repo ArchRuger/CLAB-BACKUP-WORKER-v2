@@ -1,3 +1,13 @@
+# Consolidated terminal installation — 1.16.0
+
+Read INSTALL.md. Ordinary users run deploy/install.sh, which delegates privileged
+prerequisites/launcher tasks to sudo and keeps Git auth/config in the original
+owner HOME. Retain step retry/cancel, existing data/password/.env and custom Git
+registrations. APT media repair requires runtime confirmation and backups; other
+sources/signature checks stay intact. Source --list reads only bounded public
+registry descriptors before helper installation. No router labs are deployed.
+Prepared on e64790a plus latest fetched main 0658562; no VM deployment is implied.
+
 # Git owner and identity recovery — 1.15.3
 
 Guided setup supports --guided --repo PATH for an existing checkout. Identity

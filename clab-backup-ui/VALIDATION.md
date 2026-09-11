@@ -1,3 +1,21 @@
+# Consolidated terminal installer — 1.16.0
+
+- Prepared from local 1.15.3 commit e64790a; latest fetched main was 0658562.
+- 88 focused tests passed: installer 14, Git wizard 40, read-only registrations 9,
+  APT source handling 14, release consistency 7 and helper preflight 4.
+- Covered step retry/cancel, real-owner environment, retained .env bytes, custom
+  ports/IPv6 and version failures, registered checkout selection, custom binding
+  preservation/rechecks, URL correction, login recovery, identity repair and
+  exact APT backups that preserve network sources, disabled Docker repositories,
+  and explicit local Docker targeting. Package/sudo commands were mocked.
+- ShellCheck passed for install.sh, install-prerequisites.sh, setup-git.sh and
+  start-manager.sh. Source verification reports 1.16.0. Git whitespace checks passed.
+- CI now includes these stdlib regression tests and installer shell syntax checks;
+  the updated workflow has not yet run on GitHub.
+- No fresh Ubuntu install, live GitHub authorization, package installation,
+  Docker build or VM deployment was performed here. Validate the complete path
+  on a disposable Ubuntu 24.04 VM before treating it as a verified VM install.
+
 # Git owner and identity guidance — 1.15.3
 
 - Based on merged main 0658562. Guided setup accepts an existing checkout directly,

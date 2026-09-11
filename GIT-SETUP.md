@@ -3,6 +3,22 @@
 Use your **existing Ubuntu VM account**. On a standalone VM, you do not need an
 additional Linux user. The VM username and GitHub username can be different.
 
+**Recommended:** `bash deploy/install.sh` handles the full VM setup and then
+opens the Git terminal wizard. For a working manager, choose **Git setup / repair
+only**, or run `bash deploy/install.sh --git`. See [INSTALL.md](INSTALL.md).
+
+The Git wizard has numbered phases with **Retry**, **Sign in again** where
+applicable, and **Cancel and keep completed work**. It reads existing registered
+settings before proceeding, so a custom remote, label, prefix or branch is not
+silently replaced. Select the exact registration when a checkout has several
+managed prefixes. Unexpected owner, branch or push-URL changes require repair
+before continuing.
+
+Guided setup needs sudo for reading protected registration settings and final
+registration, as well as any requested package install. Git commands and login
+still run as your ordinary account. For a separate owner without sudo, use the
+advanced administrator/owner workflow below.
+
 ## First setup
 
 1. Install/start the manager using [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md), configure
@@ -16,13 +32,13 @@ additional Linux user. The VM username and GitHub username can be different.
    directory and run this command **without sudo**:
 
    ```bash
-   cd "$HOME/projects/v1.15.3"
+   cd "$HOME/projects/v1.16.0"
    bash deploy/setup-git.sh
    ```
 
 Use your actual source folder if it has a different name. This is the folder
 containing `deploy/` and `clab-backup-ui/`, not the lab-config checkout under
-`~/labs/`. You can also run `bash "$HOME/projects/v1.15.3/deploy/setup-git.sh"`
+`~/labs/`. You can also run `bash "$HOME/projects/v1.16.0/deploy/setup-git.sh"`
 from any directory. The launcher prints your actual absolute setup command.
 
 Finish the wizard until it reports **Registered** and **Ready** before connecting
@@ -150,12 +166,13 @@ available to unattended manager saves.
 
 ## Recover an existing checkout that will not register
 
-For the usual `origin` remote and repository-root destination, run guided setup
-as the Linux account that owns the checkout, **without sudo**. In 1.15.3 and later
+Run guided setup as the Linux account that owns the checkout, **without sudo**.
+Version 1.16.0 preserves a selected existing registration's custom settings.
+In 1.15.3 and later
 you can supply the existing checkout directly:
 
 ```bash
-bash "$HOME/projects/v1.15.3/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
+bash "$HOME/projects/v1.16.0/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
 ```
 
 Replace `my-lab` with the actual folder. This command works even when your current
@@ -179,7 +196,7 @@ git var GIT_COMMITTER_IDENT
 Both checks must succeed. Then, from the manager source folder, register:
 
 ```bash
-cd "$HOME/projects/v1.15.3"
+cd "$HOME/projects/v1.16.0"
 sudo bash deploy/setup-git.sh --repo "$HOME/labs/my-lab"
 ```
 
@@ -188,8 +205,9 @@ owns `/home/archtop/labs/...`; do not copy `--owner patrick` from a separate-acc
 example. Run `whoami` in your ordinary terminal to check your Linux account.
 Explicit sudo registration validates identity/login but does not configure them.
 It never runs Git as root. Retain custom `--remote`, `--prefix` and `--label`
-options when retrying a custom registration; the wizard uses `origin` and the
-repository root. Once registration succeeds, reopen **More → Git repository**
+options when retrying a custom registration. For new registrations the wizard
+uses `origin` and the repository root; for existing ones it retains the selected
+settings. Once registration succeeds, reopen **More → Git repository**
 and select the checkout. These identity/registration repairs need no container rebuild.
 
 ## Fix a failed save
@@ -225,7 +243,8 @@ Do not paste credentials into the remote URL or manager UI.
 
 ## Advanced: separate owner, other HTTPS host, or managed prefix
 
-The wizard supports GitHub with `origin`. For another HTTPS provider, complete
+New wizard registrations use `origin`; existing registered remote names are
+retained. For another HTTPS provider, complete
 that provider's persistent credential-helper setup as the repository owner first;
 the wizard can clone/register after you confirm it is configured.
 

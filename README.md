@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.15.3
+# Containerlab Node Manager — 1.16.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.15.3 deployment:** Build the new source and create the VM password using
+**1.16.0 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -22,6 +22,17 @@ Use [deploy/compose.image.yml](deploy/compose.image.yml) for this path; it has n
 **Building from source?** Follow the [Fresh VM installation guide](FRESH-VM-GUIDE.md).
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
+
+## Changes in 1.16.0
+
+Run `bash deploy/install.sh` as your ordinary VM account for a consolidated
+terminal installer: prerequisites, optional APT media repair, password/helpers,
+image build/start, HTTP/version checks, then Git setup. Separate menu entries
+reopen Git setup or check a running manager without rebuilding it.
+
+The Git terminal wizard has numbered steps, retry/cancel recovery, owner and
+identity checks, and preserves existing registration settings. Start with the
+[guided installation guide](INSTALL.md); detailed manual instructions remain available.
 
 ## Changes in 1.15.3
 
