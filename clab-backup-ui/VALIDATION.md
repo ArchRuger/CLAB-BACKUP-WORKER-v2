@@ -1,3 +1,19 @@
+# Installer clock recovery — 1.16.1
+
+- Prepared from merged GitHub main `58a17bd` (1.16.0); commit/push is pending.
+- 105 focused tests passed: APT clock/update handling 17, installer 14, Git
+  wizard 40, registrations 9, APT sources 14, release consistency 7 and helper
+  preflight 4. System/package commands were mocked; no clock was changed.
+- Covered the reported future Release date error, expired/stale metadata,
+  synchronized/manual/unavailable clocks, bounded active-NTP waits using
+  monotonic time, strict APT checks, streamed output and original failure codes.
+  Git package setup stops before installation after a failed update.
+- ShellCheck passed for install.sh, install-prerequisites.sh, setup-git.sh and
+  start-manager.sh. Source consistency reports 1.16.1. Documentation adds
+  pre-bootstrap clock checks and recovery within the original paused run.
+- No live Ubuntu package installation, NTP recovery, Docker build or VM
+  deployment was performed. The new CI test entry is prepared locally.
+
 # Consolidated terminal installer — 1.16.0
 
 - Prepared from local 1.15.3 commit e64790a; latest fetched main was 0658562.

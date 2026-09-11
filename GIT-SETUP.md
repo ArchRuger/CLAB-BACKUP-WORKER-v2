@@ -32,13 +32,13 @@ advanced administrator/owner workflow below.
    directory and run this command **without sudo**:
 
    ```bash
-   cd "$HOME/projects/v1.16.0"
+   cd "$HOME/projects/v1.16.1"
    bash deploy/setup-git.sh
    ```
 
 Use your actual source folder if it has a different name. This is the folder
 containing `deploy/` and `clab-backup-ui/`, not the lab-config checkout under
-`~/labs/`. You can also run `bash "$HOME/projects/v1.16.0/deploy/setup-git.sh"`
+`~/labs/`. You can also run `bash "$HOME/projects/v1.16.1/deploy/setup-git.sh"`
 from any directory. The launcher prints your actual absolute setup command.
 
 Finish the wizard until it reports **Registered** and **Ready** before connecting
@@ -111,6 +111,17 @@ pending saves resolved and the lab reconnected.
 
 ## Package installation recovery
 
+Git/GitHub CLI package installation shares the main installer's APT preflight.
+It displays UTC/NTP status and waits up to 30 seconds for an already-active NTP
+service to synchronize. It does not require NTP when the clock is maintained
+another way, change time settings, or hide APT output/failure status.
+
+For `Release file ... is not valid yet` or `expired`, use
+[clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c). Keep the wizard open, correct/check
+time in another VM terminal and use its **Retry** action after APT succeeds.
+This is separate from the CD-ROM source error below. Setup never disables APT
+date or signature validation to get past either error.
+
 If `sudo apt-get update` fails with `file:/cdrom ... Release` or `cdrom:`, Ubuntu
 still has an installation-media source enabled. Locate the entry:
 
@@ -144,8 +155,9 @@ Run the wizard as your ordinary VM account, without sudo. If it stopped before
 cloning, choose **clone**, enter the repository HTTPS URL without `/tree/main`,
 and accept its repository-named checkout directory. No manager rebuild is needed
 for this VM package-source repair. Other APT errors (network, sudo, unavailable
-package or signature failures) require resolving the specific message; do not
-bypass repository signature checks. Setup does not edit system package sources.
+package or signature failures) require resolving the specific message. The wizard
+can offer installation-media repair with your confirmation and a backup; it keeps
+other package sources and validation settings intact.
 
 ## Which account/password goes where?
 
@@ -167,12 +179,12 @@ available to unattended manager saves.
 ## Recover an existing checkout that will not register
 
 Run guided setup as the Linux account that owns the checkout, **without sudo**.
-Version 1.16.0 preserves a selected existing registration's custom settings.
+Version 1.16.0 and later preserve a selected existing registration's custom settings.
 In 1.15.3 and later
 you can supply the existing checkout directly:
 
 ```bash
-bash "$HOME/projects/v1.16.0/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
+bash "$HOME/projects/v1.16.1/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
 ```
 
 Replace `my-lab` with the actual folder. This command works even when your current
@@ -196,7 +208,7 @@ git var GIT_COMMITTER_IDENT
 Both checks must succeed. Then, from the manager source folder, register:
 
 ```bash
-cd "$HOME/projects/v1.16.0"
+cd "$HOME/projects/v1.16.1"
 sudo bash deploy/setup-git.sh --repo "$HOME/labs/my-lab"
 ```
 

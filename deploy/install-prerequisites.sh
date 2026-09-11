@@ -98,7 +98,7 @@ fi
 apt_updated=false
 apt_update() {
   if ! $apt_updated; then
-    apt-get update --error-on=any || fail 'APT update failed. Review the error above. For file:/cdrom, rerun the installer and accept installation-media repair; other sources, DNS, signatures and package locks require the stated correction. No authentication checks were disabled.'
+    /usr/bin/python3 "$script_dir/apt_update.py" || fail 'APT update did not pass. Follow the specific recovery above, then retry this step.'
     apt_updated=true
   fi
 }
