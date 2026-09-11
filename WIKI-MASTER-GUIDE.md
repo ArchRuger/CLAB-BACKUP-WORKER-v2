@@ -12,7 +12,7 @@ Ubuntu, installation, WinSCP/SFTP verification, lab import and the first Git pus
 Use this master wiki for detailed operations and recovery; its manual package
 and launch steps do not need repeating after the installer succeeds.
 
-> **Release baseline:** Published GitHub main `58a17bd` is the 1.16.0 baseline verified on 11 September 2026. This guide includes locally prepared **1.16.1** clock-recovery changes; obtain the complete matching source after publication or from its supplied source package. Build locally as `clab-backup:1.16.1`; publication and a complete fresh-VM run of 1.16.1 have not been verified. Version 2 refers to the new guide edition, not an application release.
+> **Release baseline:** Published GitHub main `7c25648` contains **1.16.1**, verified on 11 September 2026. This wiki includes **1.17.0** installation health checks prepared locally for publication. After obtaining matching source, build as `clab-backup:1.17.0`; publication, a complete fresh-VM run and a Docker Hub image for 1.17.0 remain unverified. Version 2 refers to the new guide edition, not an application release.
 {.is-info}
 
 ## Reference environment
@@ -29,7 +29,7 @@ and launch steps do not need repeating after the installer succeeds.
 | Proxmox VM ID | Look up with `qm list`; do not infer it from the hostname |
 | Earlier reference hosts | `clab-1`: `10.150.2.211`; `clab-2`: `10.150.2.212` |
 | Manager UI | `http://10.150.2.213:8081` |
-| Release files | `/home/archtop/projects/v1.16.1/` |
+| Release files | `/home/archtop/projects/v1.17.0/` |
 | Persistent manager data | `/srv/containerlab-node-manager/data/` |
 | Lab projects | `/etc/containerlab/<project>/` |
 | VM helper account | `clab-discovery` |
@@ -68,7 +68,7 @@ Proxmox --> Ubuntu VM --> Docker / Containerlab --> training devices
 
 The manager keeps running when a lab is stopped or destroyed. Deployed labs remain on the VM; importing a lab creates a saved manager workspace. The two have different lifecycles.
 
-> **Access model:** 1.16.1 opens directly without a UI login. Give access to TCP 8081 only to the intended engineers. VM discovery authentication and device SSH credentials are still required and are stored in the persistent manager data.
+> **Access model:** 1.17.0 opens directly without a UI login. Give access to TCP 8081 only to the intended engineers. VM discovery authentication and device SSH credentials are still required and are stored in the persistent manager data.
 {.is-warning}
 
 ## Page contents
@@ -392,26 +392,44 @@ Connect using SFTP, host `10.150.2.213`, port `22`, user `archtop`, and your nor
 
 ### Optional administrative SFTP
 
-Only if you need root-level file administration, first verify the server binary on Ubuntu:
+Use this when you need root-level file administration or an existing WinSCP site
+launches SFTP with `sudo`. The installer does not add this sudoers permission.
+First verify the server binary on Ubuntu:
 
 ```bash
 ls -l /usr/lib/openssh/sftp-server
-sudo visudo -f /etc/sudoers.d/archtop-sftp
 ```
 
-Add the following rule, adjusting the username if needed:
+If the binary is missing, follow [SFTP package recovery](FRESH-VM-GUIDE-V2.md#recovery-b).
+Otherwise open the account's sudoers file:
+
+```bash
+sudo EDITOR=nano visudo -f /etc/sudoers.d/archtop-sftp
+```
+
+Add the following rule once, adjusting the username if needed:
 
 ```text
 archtop ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server
 ```
 
-Validate with `sudo visudo -c`. In WinSCP, open **Advanced → Environment → SFTP** and set the server to:
+Save with **Ctrl+O**, **Enter**, then **Ctrl+X**. Validate with `sudo visudo -c`
+and check for `parsed OK`. Correct syntax errors before continuing. In WinSCP,
+open **Advanced → Environment → SFTP → SFTP server** and set it to:
 
 ```text
-sudo /usr/lib/openssh/sftp-server
+sudo -n /usr/lib/openssh/sftp-server
 ```
 
-This session can modify root-owned files. It is optional and not needed for the normal project upload workflow. Do not add the old example's blanket `NOPASSWD: ALL` rule just to transfer files. See [WinSCP's sudo/SFTP guidance](https://winscp.net/eng/docs/faq_su).
+Save, disconnect and reconnect as **archtop** with its Ubuntu password; no SSH
+restart is required. Test an upload in the intended directory. If WinSCP reports
+`sudo: a password is required`, check the sudoers account/path and validation.
+The `-n` option prevents an interactive sudo prompt.
+
+This session can modify root-owned files. It is optional for normal uploads and
+uses the normal administrator account, not `clab-discovery`. See the
+[full administrative SFTP procedure](FRESH-VM-GUIDE-V2.md#winscp-admin-sftp) and
+[WinSCP's sudo/SFTP guidance](https://winscp.net/eng/docs/faq_su).
 
 ## Step 5.3 — Connect VS Code to the VM
 
@@ -458,27 +476,30 @@ metadata. [Clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c) explains how to keep
 paused installer open and resume its failed step after correcting the clock.
 
 Menu **Git setup / repair only** reopens the Git wizard without rebuilding.
-**Check running installation** repeats readiness checks. The terminal interface
+**Check running installation** runs the separate full [health report](HEALTH-CHECK.md).
+The initial full installation keeps its shorter container/version/HTTP check;
+run the full report again after browser VM connection and Git setup in Part 21.
+The terminal interface
 uses numbered choices, works over SSH and needs no extra UI package. After a
 successful full run, the manual installation commands in Parts 7–10 do not need
 to be repeated. Continue with the browser VM connection and lab setup in Part 11.
 See [INSTALL.md](INSTALL.md) for the full shortcut, recovery and provider details.
 
-## Step 6.1 — Obtain version 1.16.1
+## Step 6.1 — Obtain version 1.17.0
 
-After the prepared 1.16.1 changes have been merged into GitHub main, obtain that source. On a fresh VM, clone into a new source
+After the prepared 1.17.0 changes have been merged into GitHub main, obtain that source. On a fresh VM, clone into a new source
 folder as your ordinary VM account, then check the complete release:
 
 ```bash
 mkdir -p "$HOME/projects"
 cd "$HOME/projects"
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.16.1
-cd v1.16.1
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git v1.17.0
+cd v1.17.0
 cat clab-backup-ui/VERSION
 python3 deploy/verify-release.py
 ```
 
-Expect **1.16.1** and **Source release verified: 1.16.1**. A directory name does
+Expect **1.17.0** and **Source release verified: 1.17.0**. A directory name does
 not select a release. Future `main` changes may be newer; use a complete matching
 release and its guide. Stop if the consistency check fails.
 
@@ -490,7 +511,7 @@ extract the cleaned source ZIP into a separate folder with `deploy/` and
 ## Step 6.2 — Check the host setup files
 
 ```bash
-cd "$HOME/projects/v1.16.1"
+cd "$HOME/projects/v1.17.0"
 ls deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-password.sh \
   deploy/clab-manager-gateway deploy/clab-manager-password.conf \
   deploy/setup-operations.sh deploy/verify-helper.py deploy/verify-operations.py \
@@ -502,7 +523,7 @@ ls deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-password.sh \
 Keep this directory for upgrades and maintenance. The resulting layout is:
 
 ```text
-/home/archtop/projects/v1.16.1/          source and host setup scripts
+/home/archtop/projects/v1.17.0/          source and host setup scripts
 /etc/containerlab/<project>/           lab sources and deployment artifacts
 /srv/containerlab-node-manager/data/   persistent manager state and backups
 ```
@@ -515,7 +536,7 @@ offline VM, prepare the image on a connected machine using [Part 20](#part-20).
 
 # Part 7 — Prepare persistent storage {#part-7}
 
-From `~/projects/v1.16.1`:
+From `~/projects/v1.17.0`:
 
 ```bash
 sudo bash deploy/setup-vm.sh
@@ -557,7 +578,7 @@ password; the application does not ship a default password.
 From a normal administrator's terminal on the **Ubuntu VM**:
 
 ```bash
-cd "$HOME/projects/v1.16.1"
+cd "$HOME/projects/v1.17.0"
 sudo bash deploy/setup-discovery.sh
 ```
 
@@ -613,16 +634,21 @@ Part 8 installs discovery and file-transfer support. Enable lab operations on
 the **Ubuntu VM** using the matching source:
 
 ```bash
-cd "$HOME/projects/v1.16.1"
+cd "$HOME/projects/v1.17.0"
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
-sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.16.1
+sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.17.0
 printf '%s\n' '{"mode":"capabilities"}' | sudo /usr/local/sbin/clab-manager-operate \
-  | python3 deploy/verify-operations.py 1.16.1
+  | python3 deploy/verify-operations.py 1.17.0
 ```
 
-Both verifiers must successfully report **1.16.1**. They avoid printing imported
+Both verifiers must successfully report **1.17.0**. They avoid printing imported
 file contents, which may contain device passwords. If a check fails, repair the
 helper before continuing; see [Part 18](#part-18).
+
+These root-level verifiers check compatibility before launch. They do not prove
+that `clab-discovery` can execute operations through sudo/SSH or that a specific
+topology folder can be browsed. After browser setup, run the separate
+[installation health report](HEALTH-CHECK.md) in Part 21.
 
 For projects elsewhere, add the actual parent directory using
 `sudo bash deploy/setup-operations.sh --lab-root /your/project/directory`.
@@ -640,14 +666,14 @@ A failure before the build leaves no manager image or container on a fresh VM.
 From the matching source directory on the **Ubuntu VM**:
 
 ```bash
-cd "$HOME/projects/v1.16.1"
+cd "$HOME/projects/v1.17.0"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml ps -a
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=50 backup-ui
 ```
 
 The launcher refreshes and verifies the host helpers, prepares persistent
-storage, builds `clab-backup:1.16.1` and recreates the manager. It retains an
+storage, builds `clab-backup:1.17.0` and recreates the manager. It retains an
 existing `clab-discovery` password. If Parts 7–9 were skipped, the first launch
 prompts for the password before building or starting the container.
 
@@ -685,14 +711,14 @@ sudo docker compose -f clab-backup-ui/compose.yml \
 curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:8081/
 ```
 
-Expect **1.16.1** and **HTTP 200**. Optional `UI_BIND` and `UI_PORT` settings belong
+Expect **1.17.0** and **HTTP 200**. Optional `UI_BIND` and `UI_PORT` settings belong
 in `clab-backup-ui/.env`; retain that file across source-folder upgrades and use
 your chosen port in browser and health checks.
 
 An image-only build needs the final build context argument:
 
 ```bash
-sudo docker build --pull --no-cache -t clab-backup:1.16.1 ./clab-backup-ui
+sudo docker build --pull --no-cache -t clab-backup:1.17.0 ./clab-backup-ui
 ```
 
 Building an image alone neither configures the Linux account nor starts the
@@ -1005,7 +1031,7 @@ Run these from your installation directory. Restarting/stopping the manager does
 not stop the training lab containers. It does disconnect active browser SSH sessions.
 
 ```bash
-cd "$HOME/projects/v1.16.1"
+cd "$HOME/projects/v1.17.0"
 
 # View status and recent logs
 sudo docker compose -f clab-backup-ui/compose.yml ps
@@ -1028,7 +1054,7 @@ undo an intentional stop on reboot. [Docker restart policies](https://docs.docke
 
 1. Back up the persistent manager directory using [Part 17](#part-17).
 2. Extract or clone the matching source into its own folder. Run
-   `python3 deploy/verify-release.py`; for this delivery it must report **1.16.1**.
+   `python3 deploy/verify-release.py`; for this delivery it must report **1.17.0**.
 3. Retain any customized `clab-backup-ui/.env` from the previous installation.
 4. From the new release's root, run:
 
@@ -1133,17 +1159,40 @@ A manager data archive is only one part of recovery. Retain the complete VM proj
 
 # Part 18 — VM connection repair and password recovery {#part-18}
 
+## Topology browser says operations helper is unavailable
+
+From the source checkout matching the running application, refresh just the
+operations helper and its permissions:
+
+```bash
+sudo bash deploy/setup-operations.sh
+```
+
+Existing custom roots, download permission and VM password are retained; the
+image is not rebuilt. Close and reopen the failed UI folder. On 1.17.0, run the
+second script against the actual failed folder to verify the full path:
+
+```bash
+bash deploy/check-install.sh --lab-path /etc/containerlab/vJunOS-SW
+```
+
+Replace the folder with your own. The report separates local restricted-account
+execution from the manager's actual saved SSH connection and folder requests.
+If only one folder fails, check its existence and trusted-root/symlink rules.
+See [HEALTH-CHECK.md](HEALTH-CHECK.md); do not remove the restricted gateway or
+give `clab-discovery` a general shell to solve this error.
+
 ## Repair helpers without rebuilding the image
 
 Use the source that matches the running application:
 
 ```bash
-cd "$HOME/projects/v1.16.1"
+cd "$HOME/projects/v1.17.0"
 sudo bash deploy/setup-discovery.sh
 sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
-sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.16.1
+sudo /usr/local/sbin/clab-manager-inspect | python3 deploy/verify-helper.py 1.17.0
 printf '%s\n' '{"mode":"capabilities"}' | sudo /usr/local/sbin/clab-manager-operate \
-  | python3 deploy/verify-operations.py 1.16.1
+  | python3 deploy/verify-operations.py 1.17.0
 ```
 
 An existing usable password is preserved. Setup verifies the effective SSH
@@ -1158,7 +1207,7 @@ Use the VM console or your normal administrator login; `clab-discovery` is not
 an administrative shell account:
 
 ```bash
-cd "$HOME/projects/v1.16.1"
+cd "$HOME/projects/v1.17.0"
 sudo bash deploy/setup-discovery.sh --reset-password
 ```
 
@@ -1264,8 +1313,9 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 | Cannot find the Proxmox VM ID | Run `qm list` in the Proxmox host shell; match the VM name. |
 | APT says `Release file ... is not valid yet` | Repository metadata is ahead of the VM clock. Check guest UTC and its existing time provider; see [clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c). After APT succeeds, choose **1. Retry this step after fixing the error** in the paused installer. Successful CD-ROM source repair is a separate completed action. |
 | APT says a Release file is `expired` | Check whether guest UTC is ahead; if UTC is correct, investigate the mirror/cache. Keep date/signature checks enabled and retry after the underlying issue is corrected. |
-| First launch requires a public key | This is an old setup script. Obtain the matching 1.16.1 source and follow Part 8; current setup prompts for a password. |
+| First launch requires a public key | This is an old setup script. Obtain the matching 1.17.0 source and follow Part 8; current setup prompts for a password. |
 | Compose says service is not running during `exec` | The earlier launch failed or was skipped. Read the launcher error first; version verification happens before the image is built. Fix it, rerun the launcher, then verify `ps` before `exec`. |
+| Topology folder reports **Operations helper is unavailable** | A successful root preflight is not a test of restricted sudo, saved SSH or that folder. From matching source, run `sudo bash deploy/setup-operations.sh`, close/reopen the folder, then `bash deploy/check-install.sh --lab-path /absolute/failed/folder`. See Part 18. |
 | Source VERSION expects 1.15.0, installed helper reports 1.15.1 | The affected GitHub 1.15.1 checkout retained an old VERSION file. See the repository repair above. For other mismatches, obtain a complete matching source release. |
 | `docker build` requires an argument | Include the build context: `./clab-backup-ui` from the repo root or `.` from its Dockerfile folder. |
 | `[1]+ Stopped less ...` | Ctrl+Z suspended the viewer. Run `fg`, then press `q`. |
@@ -1278,7 +1328,21 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 
 ## A useful support report
 
-Include the manager version, Containerlab version, Compose status, helper verification results, the specific UI error and whether ordinary node SSH works. Avoid sending private keys, raw inventories or full discovery JSON: they can contain credentials. Use the provided verifiers to report helper compatibility without dumping file contents.
+On 1.17.0, create the structured report from the ordinary Ubuntu account:
+
+```bash
+bash deploy/check-install.sh --json > "$HOME/clab-health.json"
+```
+
+The report contains status counts, checks, recovery guidance and manual limits.
+It can include local addresses, paths and filenames; review those before
+sharing. It omits secrets and raw inventory/Git/SSH output and uploads nothing.
+See [report options and exit codes](HEALTH-CHECK.md).
+
+Also include the specific UI error and whether ordinary node SSH works. Avoid
+sending private keys, raw inventories or full discovery JSON: they can contain
+credentials. Older installations can use the helper verifiers above for
+compatibility information without dumping file contents.
 
 Older installation logs may reference client keys. Those steps are superseded by the password setup in Part 8. A setup script that requests a public-key argument is from an older release; obtain the matching source instead of generating a key.
 
@@ -1293,29 +1357,29 @@ downloads remain disabled by default.
 
 ## Build and transfer the manager image
 
-On a **connected Linux staging machine**, from the 1.16.1 source root, build for
+On a **connected Linux staging machine**, from the 1.17.0 source root, build for
 the target VM's architecture:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.16.1 ./clab-backup-ui
-docker image save -o clab-backup-1.16.1.tar clab-backup:1.16.1
+docker build --pull --no-cache -t clab-backup:1.17.0 ./clab-backup-ui
+docker image save -o clab-backup-1.17.0.tar clab-backup:1.17.0
 ```
 
 Transfer the image archive, source ZIP and other offline prerequisites. On the
 **Ubuntu VM**, load the archive and verify its version:
 
 ```bash
-sudo docker image load -i clab-backup-1.16.1.tar
-sudo docker run --rm --entrypoint python clab-backup:1.16.1 \
+sudo docker image load -i clab-backup-1.17.0.tar
+sudo docker run --rm --entrypoint python clab-backup:1.17.0 \
   -c 'from app import __version__; print(__version__)'
 ```
 
-Expect **1.16.1**. Complete Parts 7–9 from the transferred source, including the
-interactive password prompt. Then from `~/projects/v1.16.1`:
+Expect **1.17.0**. Complete Parts 7–9 from the transferred source, including the
+interactive password prompt. Then from `~/projects/v1.17.0`:
 
 ```bash
 cat > deploy/image.env <<'EOF'
-MANAGER_IMAGE=clab-backup:1.16.1
+MANAGER_IMAGE=clab-backup:1.17.0
 UI_BIND=0.0.0.0
 UI_PORT=8081
 EOF
@@ -1369,22 +1433,26 @@ the VM password in the manager. Do not run the source-build launcher offline.
 - [ ] Manager restart retains the workspace and credentials.
 - [ ] A complete manager data archive has been copied off the VM.
 - [ ] If Git publishing is enabled, the chosen owner can authenticate without an interactive prompt.
+- [ ] The separate installation report has been run after browser VM/Git setup, with failed/warned/skipped results resolved or understood; manual workstation, device and push tests remain separate.
 - [ ] Save progress, a pending push retry and a version ZIP download have been checked on a test repository.
 - [ ] The Git checkout and helper registration/journal have an independent backup.
 
 ## Documentation baseline
 
-Updated against published GitHub source `58a17bd` (1.16.0) and locally prepared
-1.16.1 clock-recovery changes on 11 September 2026, using the supplied master
-guide as the base. The Proxmox, storage, administrator-access and VS Code build notes
+Updated from published GitHub source `7c25648` (1.16.1) on 11 September 2026,
+with local 1.17.0 health-checker changes pending publication, using the supplied
+master guide as the base. The Proxmox, storage,
+administrator-access and VS Code build notes
 are retained. Manager procedures reflect password-only VM authentication,
 persistent storage, the revised sidebar/tabs, diagram editing and registered Git
 repository saves. Version retrieval downloads files; it does not restore live NOS
 configurations. Git-owner execution is not browser-user authentication.
 The source includes automated checks for release consistency, helper preflight,
-the installer, Git onboarding/registrations and APT source handling. Earlier
+the installer, Git onboarding/registrations and APT source handling, plus the
+separate VM installation report described in [HEALTH-CHECK.md](HEALTH-CHECK.md). Earlier
 application tests and browser checks remain documented in the validation record.
-The user's log confirms a successful 1.15.0 HTTPS Git push. The new installer-based
+The user's log confirms a successful 1.15.0 HTTPS Git push; the user also confirmed
+the administrative WinSCP sudoers/server procedure above. The new installer-based
 guide has been checked against source and provider documentation; a complete
 fresh-VM run of that guide and a Docker Hub publication have not been verified.
 
@@ -1434,7 +1502,7 @@ initial commit. Copy its HTTPS clone URL. From the new source directory on the
 **Ubuntu VM**, run **without sudo**:
 
 ```bash
-cd "$HOME/projects/v1.16.1"
+cd "$HOME/projects/v1.17.0"
 bash deploy/setup-git.sh
 ```
 
@@ -1449,7 +1517,7 @@ separate from the manager source in `~/projects/`. Copy the URL using GitHub's
 Do not paste a branch page URL ending in `/tree/main`.
 
 **Use the right folder and account.** The setup script is in the manager source
-under `~/projects/v1.16.1/deploy/`, not the lab-config checkout. Running it from
+under `~/projects/v1.17.0/deploy/`, not the lab-config checkout. Running it from
 `~/labs/...` by its relative path produces `No such file or directory` before
 the script starts. The launcher prints an absolute setup command that works from
 any directory. Guided setup selects your current Linux owner automatically.
@@ -1466,7 +1534,7 @@ If a checkout already exists but registration failed, resume as its owner
 without sudo (replace `my-lab` with the actual folder):
 
 ```bash
-bash "$HOME/projects/v1.16.1/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
+bash "$HOME/projects/v1.17.0/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
 ```
 
 This reuses the existing checkout and prompts to repair missing/invalid identity.
@@ -1585,7 +1653,35 @@ available from the save action menu. Select
 the registered checkout, review the included devices, review the branch/destination
 and acknowledge that device configurations will be committed there. The device
 selection is independent of regular backup schedule checkboxes. An optional review
-preference pauses before pushing. Save the settings, then choose **Save progress**.
+preference pauses before pushing. Save the settings, then run the final installation
+report from the **ordinary Ubuntu account** before your first save:
+
+```bash
+bash "$HOME/projects/v1.17.0/deploy/check-install.sh" --require-git
+```
+
+If administrative WinSCP was configured in Part 5, include its permission check:
+
+```bash
+bash "$HOME/projects/v1.17.0/deploy/check-install.sh" --require-git --require-admin-sftp
+```
+
+Approve sudo for inspection. The report checks local services and storage,
+SSH/SFTP policy, helpers through the restricted account, actual topology
+folders over the manager's saved SSH connection and registered Git checkouts.
+It does not change configuration, restart services, operate labs or push Git.
+Normal service/request audit logs may still be written.
+
+Resolve **FAIL** items and review **WARN/SKIP** items using their displayed next
+steps. Exit `0` means automated checks passed; `1` means failures were found;
+`2` means warnings or skipped checks need attention. **INFO** records optional
+features and limits. The report always separates manual workstation WinSCP,
+real NOS backup and Git push verification. An optional `--git-remote` read
+does not prove write permission. See [all report options and recovery](HEALTH-CHECK.md).
+
+Then choose **Save progress** and confirm **Pushed** plus the expected files on
+the remote. Keep this deliberate workflow test even when the automated report
+passes.
 
 ```mermaid
 flowchart TD

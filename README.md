@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.16.1
+# Containerlab Node Manager — 1.17.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.16.1 deployment:** Build the new source and create the VM password using
+**1.17.0 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -27,6 +27,24 @@ The [short install guide](INSTALL.md) and
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
 
+**Check a running installation:** Run `bash deploy/check-install.sh` as your
+ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
+PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
+remaining workstation/device/push tests.
+
+## Changes in 1.17.0
+
+Adds a separate installation checker and connects installer menu **3** to the
+full report. It verifies services, persistent state, SSH/SFTP policy, helper
+execution through `clab-discovery`, actual topology folders over saved SSH,
+and owner-scoped Git checkout readiness. Optional checks cover administrative
+WinSCP, KVM and remote Git reads. It gives recovery commands and text/JSON
+results without automatically repairing setup or running lab/push operations.
+
+Prepared locally from published main `7c25648` (1.16.1); publication and a full
+fresh-VM validation of 1.17.0 remain pending. The initial installation's short
+HTTP/version check remains separate from this final report after browser setup.
+
 ## Changes in 1.16.1
 
 Package setup now shows VM UTC time and NTP status before APT updates, with a
@@ -34,8 +52,9 @@ bounded wait for an already-active time service. It identifies future-dated or
 expired repository metadata and gives clock/mirror recovery steps while keeping
 APT validation enabled. The same checks cover Git/GitHub CLI package setup.
 See [clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c) to resume a paused install.
-These changes are prepared locally on published main `58a17bd`; publication and
-a complete fresh-VM run of 1.16.1 have not been verified.
+These changes are on published main `7c25648`; a complete fresh-VM run of 1.16.1
+has not been verified. For WinSCP access to root-owned files, complete the
+[manual administrative SFTP setup](FRESH-VM-GUIDE-V2.md#winscp-admin-sftp).
 
 ## Changes in 1.16.0
 
@@ -215,7 +234,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.16.1
+cd ~/projects/v1.17.0
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

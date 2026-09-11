@@ -62,3 +62,4 @@ echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and 
 printf 'Optional Git setup: as your ordinary VM account, run (without sudo):\n  bash %q\n' "$script_dir/setup-git.sh"
 echo 'Use the guided prompts to configure commit name/email and GitHub login, then register. See GIT-SETUP.md.'
 echo 'The UI opens directly without a login. VM and device SSH credentials remain in persistent storage.'
+printf 'After configuring the VM connection, run the full health report as your ordinary account:\n  bash %q\n' "$script_dir/check-install.sh"

@@ -1,7 +1,7 @@
 # Fresh VM guide, version 2 — Proxmox to your first Git save
 
 This is the **installer-based walkthrough** for Containerlab Node Manager
-**1.16.1** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
+**1.17.0** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
 the application version. It supplements the [short install guide](INSTALL.md)
 and keeps the [original manual guide](FRESH-VM-GUIDE.md) available.
 
@@ -10,11 +10,12 @@ obtain the project source, run **one installer**, then verify file transfer,
 load your lab, and save its progress to Git. You do not need WinSCP to bootstrap
 the installer.
 
-The published baseline is GitHub main `58a17bd` (1.16.0). This guide includes
-the locally prepared **1.16.1** clock-recovery changes; obtain that complete source
-after publication, or use its supplied source package. Instructions were checked
-against source and the linked provider documentation. A complete fresh-VM run of
-1.16.1 has not been verified by the author of this guide.
+The published baseline is GitHub main `7c25648` (**1.16.1**); this guide includes
+the **1.17.0** installation checker prepared locally for publication. Obtain the
+matching 1.17.0 source after these changes are merged. Instructions were checked
+against source and the linked provider documentation. The administrative WinSCP
+procedure below was confirmed by the user; a complete fresh-VM run of 1.17.0 has
+not been verified by its author.
 
 ## Before you start
 
@@ -30,7 +31,7 @@ This guide uses these examples; substitute your actual values:
 | Ubuntu VM name | `clab-3` |
 | Normal Ubuntu administrator | `archtop` |
 | VM LAN address | `10.150.2.213` |
-| Manager source folder | `/home/archtop/projects/v1.16.1` |
+| Manager source folder | `/home/archtop/projects/v1.17.0` |
 | Uploaded files | `/home/archtop/uploads` |
 | Lab topology/project | `/etc/containerlab/practice-lab` |
 | Lab-config Git checkout | `/home/archtop/labs/my-lab` |
@@ -50,8 +51,10 @@ flowchart TD
     E --> F[Upload lab files and load device images]
     F --> G[Connect manager to VM and deploy lab]
     G --> H[Import lab and verify device backup]
-    H --> I[Connect Git repository and Save progress]
-    I --> J[Confirm Pushed and record recovery locations]
+    H --> I[Connect Git repository]
+    I --> J[Run check-install.sh and resolve report]
+    J --> K[Save progress and confirm Pushed]
+    K --> L[Record recovery locations]
 ```
 
 ## 1. Set up the VM in Proxmox
@@ -196,8 +199,8 @@ subshell stops at a failed command without closing your login session.
     sudo apt-get install -y git
   fi
   mkdir -p "$HOME/projects"
-  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.16.1"
-  bash "$HOME/projects/v1.16.1/deploy/install.sh"
+  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.17.0"
+  bash "$HOME/projects/v1.17.0/deploy/install.sh"
 )
 ```
 
@@ -208,10 +211,10 @@ normal account. The source must be present before its installer can run.
 If that source folder already exists, reuse it instead of cloning over it:
 
 ```bash
-bash "$HOME/projects/v1.16.1/deploy/install.sh"
+bash "$HOME/projects/v1.17.0/deploy/install.sh"
 ```
 
-The installer banner must identify **1.16.1** for this guide. A directory name
+The installer banner must identify **1.17.0** for this guide. A directory name
 does not pin a Git version; if main has advanced, use that release's matching
 guide. Its source consistency check must pass.
 
@@ -255,9 +258,10 @@ are retained. This is a fresh-build guide; upgrades with customized settings
 should use the `.env` copy option described in [INSTALL.md](INSTALL.md).
 
 If a step fails, read its output. Use **Retry this step** after fixing it, or
-**Return to menu**. Menu **3. Check running installation** repeats readiness
-checks without rebuilding. Do not continue as though an incomplete install
-passed.
+**Return to menu**. Menu **3. Check running installation** opens the full
+[installation report](HEALTH-CHECK.md) without rebuilding. Before browser VM/Git
+setup, some checks will need attention; repeat it at the step 12 checkpoint.
+Do not continue as though an incomplete install passed.
 
 **Checkpoint:** the terminal reports that the manager is running and its HTTP
 and version checks passed. That check does **not** prove workstation reachability,
@@ -270,7 +274,7 @@ with its initial README is ready. Otherwise choose **Finish; set up Git later**.
 You can reopen the Git wizard without rebuilding:
 
 ```bash
-bash "$HOME/projects/v1.16.1/deploy/install.sh" --git
+bash "$HOME/projects/v1.17.0/deploy/install.sh" --git
 ```
 
 The six phases guide you through:
@@ -348,7 +352,7 @@ Create a **new WinSCP site** with these values:
 | Port number | **22**, unless you configured a different SSH port |
 | User name | **archtop**, or your actual normal VM account |
 | Password | That account's Ubuntu password |
-| Advanced → Environment → SFTP server | Leave at its default; no `sudo` command |
+| Advanced → Environment → SFTP → SFTP server | Leave at its default for normal-user uploads; administrative access uses the optional setup below |
 | Remote directory | `/home/archtop/uploads`, adjusted for your account |
 
 Compare WinSCP's first host-key prompt with the VM console fingerprint before
@@ -363,6 +367,57 @@ be uploaded and downloaded. For a timeout or network failure, complete the
 network access checks in step 8, then return here. For other errors, follow
 [recovery B](#recovery-b) before transferring the lab. Reinstalling the manager
 does not repair a wrong WinSCP username, remote directory or network path.
+
+<a id="winscp-admin-sftp"></a>
+
+### Optional: WinSCP access to root-owned files
+
+Use this when you intentionally need administrative file access, including an
+existing WinSCP site configured to launch SFTP with `sudo`. The installer starts
+SSH but **does not add this sudoers permission**. This WinSCP session can modify
+root-owned files. Continue logging in as your normal administrator, such as
+`archtop`; keep `clab-discovery` reserved for the manager.
+
+On the **Ubuntu VM**, first verify the SFTP executable exists:
+
+```bash
+ls -l /usr/lib/openssh/sftp-server
+```
+
+If it is missing, follow the package instructions in [recovery B](#recovery-b).
+Otherwise open the account's sudoers file:
+
+```bash
+sudo EDITOR=nano visudo -f /etc/sudoers.d/archtop-sftp
+```
+
+Add this line once, replacing `archtop` with your actual VM account if different:
+
+```text
+archtop ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server
+```
+
+Save with **Ctrl+O**, **Enter**, then **Ctrl+X**. Validate before reconnecting:
+
+```bash
+sudo visudo -c
+```
+
+Expect `parsed OK`; correct any reported syntax error before continuing. In
+WinSCP, edit the site and open **Advanced → Environment → SFTP → SFTP server**.
+Set it to:
+
+```text
+sudo -n /usr/lib/openssh/sftp-server
+```
+
+Save the site, disconnect and reconnect using **archtop** and its Ubuntu
+password. Test a small upload in the intended directory. No SSH restart is
+needed for this sudoers change. A `sudo: a password is required` error means the
+rule did not grant this account/passwordless command combination; check the
+username, executable path and sudoers validation. The `-n` option prevents an
+interactive sudo prompt that WinSCP cannot answer.
+[WinSCP sudo/SFTP guidance](https://winscp.net/eng/docs/faq_su)
 
 ## 8. Finish optional VM integration and check network access
 
@@ -500,8 +555,51 @@ After the Git wizard reported **Registered** and **Ready**:
 1. Open the lab's **More → Git repository** settings.
 2. Select the registered checkout and the devices to include; review the
    destination and save the connection.
-3. Choose **Save progress** for the `latest` target with push enabled.
-4. Wait for **Pushed** and check GitHub for the files under `latest/` and its
+
+Now return to the **Ubuntu terminal** for the separate installation report:
+
+```bash
+bash "$HOME/projects/v1.17.0/deploy/check-install.sh" --require-git
+```
+
+If you completed the administrative WinSCP sudoers setup in step 7, use:
+
+```bash
+bash "$HOME/projects/v1.17.0/deploy/check-install.sh" --require-git --require-admin-sftp
+```
+
+Approve sudo for inspection. The report checks services, SSH/SFTP policy,
+helper execution as `clab-discovery`, persistent storage, actual folder browsing
+through the saved VM connection and each registered Git checkout. It provides
+**PASS / FAIL / WARN / SKIP / INFO** results and next steps; it changes no setup
+or lab configuration. Normal request audit logs can still be written.
+
+**Checkpoint:** resolve failed checks and review every warning/skipped check.
+`AUTOMATED CHECKS PASSED` means the automated checks passed; your real WinSCP
+transfer, device backup and Git push remain separate evidence. Installer menu
+**3. Check running installation** runs this same report. The initial installation
+only checked local container/version/HTTP readiness before browser setup.
+
+If **Deploy New Lab → Lab Topologies** reports **Operations helper is unavailable**,
+refresh the operations helper from this matching source checkout and retest the
+actual failed folder:
+
+```bash
+cd "$HOME/projects/v1.17.0"
+sudo bash deploy/setup-operations.sh
+bash deploy/check-install.sh --require-git --lab-path /etc/containerlab/practice-lab
+```
+
+Substitute your failed folder. The repair retains custom trusted roots and
+download permission and does not rebuild the image. Close and reopen the UI
+folder. A successful root helper check alone does not prove that its restricted
+sudo/SSH path or a particular folder works. See [the full report guide](HEALTH-CHECK.md)
+for diagnosis, larger folder trees, JSON output and all options.
+
+After those checks, finish the real Git workflow in the browser:
+
+1. Choose **Save progress** for the `latest` target with push enabled.
+2. Wait for **Pushed** and check GitHub for the files under `latest/` and its
    `manifest.json`.
 
 Save progress captures, exports, commits and pushes. There is no separate Commit
@@ -535,7 +633,7 @@ The master wiki covers [manager data backup and recovery in Part 17](WIKI-MASTER
 
 At a suitable time, save lab work and perform a normal Ubuntu reboot. Afterwards
 verify WinSCP, the manager page, saved lab/history and VM connection. Reopen
-`bash "$HOME/projects/v1.16.1/deploy/install.sh"` and select **Check running
+`bash "$HOME/projects/v1.17.0/deploy/install.sh"` and select **Check running
 installation** if needed. Training device restart behavior is separate; inspect
 your lab rather than assuming every NOS resumed. Do not delete persistent data
 or clone everything again to recover a failed check.
@@ -578,8 +676,9 @@ matching the actual error; “SFTP is not running” is not a diagnosis by itsel
 | Connection times out | Complete the Proxmox/Ubuntu firewall and workstation network checks in step 8, then retry step 7 |
 | Authentication failed | Use the ordinary VM account and its own credentials; inspect existing SSH policy if they are correct |
 | Login closes or reports manager-only commands | Stop using `clab-discovery`; open a new WinSCP site as your ordinary account |
-| Login succeeds but SFTP initialization fails | Leave WinSCP's SFTP server setting at default; verify the server subsystem below |
-| Listing works but upload says Permission denied | Test `/home/YOUR_USER/uploads`; a root-owned destination is a folder permission issue |
+| Login succeeds but SFTP initialization fails | For normal uploads, use WinSCP's default SFTP server and check the subsystem below. For a site using `sudo`, check the [administrative SFTP setup](#winscp-admin-sftp) |
+| `sudo: a password is required` when connecting | Check the matching account's sudoers rule and `sudo -n` server setting in [administrative SFTP setup](#winscp-admin-sftp) |
+| Listing works but upload says Permission denied | Test `/home/YOUR_USER/uploads`; use an engineer-owned project folder, or the [administrative setup](#winscp-admin-sftp) when root file access is intended |
 
 ### Packages/service missing
 
@@ -632,9 +731,10 @@ There must be **one** effective global SFTP subsystem declaration, usually
 or restore a missing one in the global section **before any Match block**.
 Check included files to avoid duplicates; do not blindly append it at the end.
 
-Retain the manager's `Match User clab-discovery` / forced-gateway policy. Do not
-remove its restrictions or add passwordless root SFTP just to upload files.
-Validate before applying:
+Retain the manager's `Match User clab-discovery` / forced-gateway policy. For
+intentional root file administration, use the normal administrator account and
+the [separate sudoers setup](#winscp-admin-sftp) above. Validate SSH configuration
+changes before applying:
 
 ```bash
 sudo /usr/sbin/sshd -t && sudo systemctl reload ssh
@@ -764,6 +864,8 @@ validation to continue. Retry the same installation step only after APT succeeds
 | Docker, SSH, Containerlab, manager storage/password/helpers/build/start | Installer in step 5 |
 | Git login, identity, checkout and registration | Git terminal wizard in step 6 |
 | Ordinary-user SFTP and actual workstation transfer | Explicit checkpoint in step 7 |
+| Optional administrative WinSCP access | Manual sudoers entry and matching WinSCP setting in step 7; not added by the installer |
+| Full installation report after browser VM/Git setup | Second script `deploy/check-install.sh` in step 12; explicit service/helper/folder/Git results and recovery, with manual transfer/backup/push still required |
 | QEMU guest agent and firewall/network access | Step 8; outside the manager installer |
 | Vendor images, topology upload and lab deployment | Steps 9 and 11; your chosen lab |
 | VM host trust, device credentials, lab/Git selection and first push | Browser workflow in steps 10–12 |
