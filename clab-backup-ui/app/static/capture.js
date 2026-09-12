@@ -2,6 +2,12 @@
 // Provider UI is intentionally separate from backups, SSH and the diagram editor.
 const captureDialog=$('capture-dialog');
 let captureRequest=0,captureTargets=[],captureLab='',captureNode='',captureHint='',captureTimer;
+// null until the provider status is known; node/menu Capture actions are disabled
+// only when the manager reports capture disabled, so the toolbar entry and the
+// dialog's setup link stay reachable.
+let captureEnabled=null;
+function captureActionAttrs(){return captureEnabled===false?'disabled title="Packet capture is not enabled. Open Capture packets for setup."':'';}
+(async()=>{try{captureEnabled=!!(await(await api('/capture/status')).json()).enabled;}catch{captureEnabled=null;}})();
 function clearCaptureLaunch(){
  clearTimeout(captureTimer);$('capture-launch').hidden=true;$('capture-launch').removeAttribute('href');
 }
@@ -9,18 +15,26 @@ function invalidateCapture(){captureRequest++;clearCaptureLaunch();}
 captureDialog.addEventListener('close',invalidateCapture);
 $('capture-close').onclick=()=>captureDialog.close();
 function captureSelected(){return captureTargets.find(t=>t.id===$('capture-target').value);}
+function captureChecked(){return [...$('capture-interfaces').querySelectorAll('input:checked')].map(el=>el.value);}
+// Prepare needs a target and at least one ticked interface; a matching imported
+// port counts because it is rendered ticked.
+function updateCapturePrepare(preselected=false){const target=captureSelected();$('capture-prepare').disabled=!(target&&(preselected||captureChecked().length));}
 function renderCaptureInterfaces(){
  invalidateCapture();const target=captureSelected();
- $('capture-interfaces').innerHTML=target?.interfaces.map(n=>`<label class="capture-interface"><input type="checkbox" value="${esc(n)}" ${captureHint===n?'checked':''}> <span>${esc(n)}</span></label>`).join('')||'<p>No capturable interfaces in this namespace.</p>';
- $('capture-prepare').disabled=!target?.interfaces.length;
+ $('capture-interfaces').innerHTML=!target?'<p>Choose a capture target above.</p>':target.interfaces.map(n=>`<label class="capture-interface"><input type="checkbox" value="${esc(n)}" ${captureHint===n?'checked':''}> <span>${esc(n)}</span></label>`).join('')||'<p>No capturable interfaces in this namespace.</p>';
+ updateCapturePrepare(!!(captureHint&&target?.interfaces.includes(captureHint)));
  if(captureHint)$('capture-status').textContent=target?.interfaces.includes(captureHint)?`Selected live interface ${captureHint}.`:`Imported port ${captureHint} is not a live Linux interface name here. Select its Linux interface explicitly; NOS aliases can differ.`;
 }
 $('capture-target').onchange=renderCaptureInterfaces;
-$('capture-interfaces').onchange=()=>{invalidateCapture();$('capture-prepare').disabled=!captureSelected()?.interfaces.length;$('capture-status').textContent='Selection changed. Prepare the capture again.';};
+$('capture-interfaces').onchange=()=>{invalidateCapture();updateCapturePrepare();$('capture-status').textContent='Selection changed. Prepare the capture again.';};
+function captureTargetLabel(t){
+ const shared=t.aliases?.length?' · shares namespace with '+esc(t.aliases.join(', ')):'',loopback=t.interfaces.length===1&&t.interfaces[0]==='lo'?' · loopback only':'';
+ return `${esc(t.name)}${t.prefix?' · '+esc(t.prefix):''} (${esc(t.kind)}) · ${t.interfaces.length} interfaces${shared}${loopback}`;
+}
 function filterCaptureTargets(){
  const previous=$('capture-target').value,query=$('capture-search').value.toLowerCase();
- const rows=captureTargets.filter(t=>[t.name,t.prefix,t.kind,...t.interfaces].join(' ').toLowerCase().includes(query));
- $('capture-target').innerHTML='<option value="">Choose a capture target</option>'+rows.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}${t.prefix?' · '+esc(t.prefix):''} (${esc(t.kind)}) · ${t.interfaces.length} interfaces</option>`).join('');
+ const rows=captureTargets.filter(t=>[t.name,t.prefix,t.kind,...(t.aliases||[]),...t.interfaces].join(' ').toLowerCase().includes(query));
+ $('capture-target').innerHTML='<option value="">Choose a capture target</option>'+rows.map(t=>`<option value="${esc(t.id)}">${captureTargetLabel(t)}</option>`).join('');
  if(rows.some(t=>t.id===previous))$('capture-target').value=previous;
  else if(rows.length===1)$('capture-target').value=rows[0].id;
  renderCaptureInterfaces();
@@ -32,6 +46,7 @@ async function refreshCaptureTargets(){
  $('capture-status').textContent='Discovering live capture targets…';
  try{
   const status=await(await api('/capture/status')).json();
+  captureEnabled=!!status.enabled;
   if(request!==captureRequest||!captureDialog.open)return;
   if(!status.enabled){$('capture-status').textContent=status.message;$('capture-search').disabled=false;return;}
   const params=new URLSearchParams();

@@ -48,14 +48,29 @@ class CaptureContractTests(unittest.TestCase):
         self.assertNotIn('future-extension',rows[0])
         self.assertEqual(rows[2]['pid'],0)
 
-    def test_malformed_payload_fails_closed(self):
-        for value in [[], {}, {'containers': {}}, {'containers': [None]}]:
-            with self.assertRaises(CaptureError): normalize_targets(value)
+    def test_malformed_shape_fails_closed_and_bad_rows_are_skipped_not_launchable(self):
+        # A wrong response shape, or a list with no usable row, still fails closed.
+        for value in [[], {}, {'containers': {}}, {'containers': [None]}, {'containers': [{'name': 'x'}]}]:
+            with self.subTest(value=value), self.assertRaises(CaptureError): normalize_targets(value)
+        # One malformed row must not hide every other namespace; it is dropped and counted.
         for key,value in [('netns',0),('pid',True),('starttime',-1),('name',''),
                           ('network-interfaces',['Gi0/0/0/1']),('network-interfaces',['a\nb']),
                           ('network-interfaces',['x'*16]),('network-interfaces',['\ud800']),('network-interfaces',None)]:
-            data=fixture();data['containers'][0][key]=value
-            with self.subTest(key=key,value=value), self.assertRaises(CaptureError): normalize_targets(data)
+            data=fixture();data['containers'][0][key]=value;skipped=[]
+            with self.subTest(key=key,value=value):
+                rows=normalize_targets(data,skipped)
+                self.assertEqual([r['name'] for r in rows],['init','/run/netns/test'])
+                self.assertEqual(len(skipped),1)
+
+    def test_shared_namespaces_merge_with_aliases_preferring_host_init(self):
+        from app.capture import merge_shared_namespaces
+        rows=normalize_targets(fixture())
+        manager=dict(rows[0],name='containerlab-node-manager-backup-ui-1',netns=rows[1]['netns'],pid=4242,starttime=99)
+        merged=merge_shared_namespaces(rows+[manager])
+        host=next(t for t in merged if t['netns']==rows[1]['netns'])
+        self.assertEqual((host['name'],host['type'],host['aliases']),('init','proc',['containerlab-node-manager-backup-ui-1']))
+        self.assertEqual(len(merged),3)
+        self.assertEqual([t['aliases'] for t in merged if t['netns']!=rows[1]['netns']],[[],[]])
 
     def test_url_matches_upstream_packetflix_contract_and_encodes_special_characters(self):
         target=normalize_targets(fixture())[0];target['name']='name&"<>=?';target['prefix']='engine/x'
@@ -194,6 +209,42 @@ class CaptureAPITests(unittest.TestCase):
         try:self.assertEqual(self.client.get('/api/capture/targets').status_code,429)
         finally:
             for _ in range(4): self.captures.slots.release()
+
+    def test_unrelated_interface_changes_keep_a_selection_valid(self):
+        # A new veth on the host (any container start) must not invalidate a selected
+        # host-namespace target whose chosen interface is unchanged; only the selected
+        # interfaces are checked against the fresh list.
+        data=self.selection();self.payload['containers'][0]['network-interfaces'].append('eth9')
+        self.assertEqual(self.client.post('/api/capture/launch',json=data).status_code,200)
+        host=next(t for t in self.client.get('/api/capture/targets').json()['targets'] if t['name']=='init')
+        self.payload['containers'][1]['network-interfaces'].append('veth9')
+        self.assertEqual(self.client.post('/api/capture/launch',json={'target_id':host['id'],'interfaces':['ens18']}).status_code,200)
+        self.payload['containers'][1]['network-interfaces'].remove('ens18')
+        self.assertEqual(self.client.post('/api/capture/launch',json={'target_id':host['id'],'interfaces':['ens18']}).status_code,409)
+
+    def test_host_view_lists_a_shared_namespace_once_and_launches_it(self):
+        manager=copy.deepcopy(self.payload['containers'][0])
+        manager.update(name='containerlab-node-manager-backup-ui-1',netns=self.payload['containers'][1]['netns'],pid=4242,starttime=99,
+                       **{'network-interfaces':self.payload['containers'][1]['network-interfaces']})
+        self.payload['containers'].append(manager)
+        rows=self.client.get('/api/capture/targets').json()['targets']
+        host=[t for t in rows if t['name'] in ('init','containerlab-node-manager-backup-ui-1')]
+        self.assertEqual([(t['name'],t['aliases']) for t in host],[('init',['containerlab-node-manager-backup-ui-1'])])
+        r=self.client.post('/api/capture/launch',json={'target_id':host[0]['id'],'interfaces':['ens18']})
+        self.assertEqual(r.status_code,200,r.text)
+        detail=json.loads(parse_qs(urlsplit(r.json()['uri'][len('packetflix:'):]).query)['container'][0])
+        self.assertNotIn('aliases',detail);self.assertEqual(detail['name'],'init')
+        # Lab and node views keep every container row so exact name matching still works.
+        self.lab['nodes'].append({'name':'mgr','definition_node':'x'});self.lab['deployment_name']=''
+        self.lab['nodes'][-1]['container_name']='containerlab-node-manager-backup-ui-1'
+        names=[t['name'] for t in self.client.get('/api/capture/targets?lab_id=lab').json()['targets']]
+        self.assertIn('containerlab-node-manager-backup-ui-1',names)
+
+    def test_unreadable_rows_are_reported_in_the_message(self):
+        self.payload['containers'][2]['name']=''
+        data=self.client.get('/api/capture/targets').json()
+        self.assertEqual(len(data['targets']),2)
+        self.assertIn('1 discovered namespace(s) were unreadable',data['message'])
 
     def test_same_container_name_in_multiple_engines_requires_explicit_choice(self):
         other=copy.deepcopy(self.payload['containers'][0]);other.update(prefix='nested',netns=1234)

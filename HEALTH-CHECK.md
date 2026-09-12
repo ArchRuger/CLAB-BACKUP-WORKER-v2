@@ -112,6 +112,7 @@ FAILURES FOUND (exit 1)
 | Lab folders | Real folder browsing through that connection, including subfolders within the configured coverage limit |
 | Git | Registry access through the manager, local registered owners/checkouts, initial commit, commit identity, registered branch/destination, and staged/managed-folder changes |
 | Optional Git remote read | With `--git-remote`, a bounded `ls-remote` as each registered owner; no fetch, commit or push |
+| Optional packet capture | Whether the manager reports its capture provider enabled and, if so, whether Edgeshark discovery through the manager lists targets; informational when disabled. The workstation plugin, tunnel and live packets stay manual checks |
 
 Disabled online lab downloads are informational and do not explain a failed
 folder browse. Existing empty folders are valid. A missing folder, symlinked

@@ -21,6 +21,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 MAX_RESPONSE = 4 * 1024 * 1024
 MAX_TARGETS = 10000
+# What identifies a capture location: the namespace, its root process (PID plus start
+# time), name and engine prefix. The interface list is deliberately not part of it;
+# see Captures.identity.
+IDENTITY_FIELDS = ('name', 'type', 'prefix', 'netns', 'pid', 'starttime')
 
 
 class CaptureError(ValueError):
@@ -76,51 +80,94 @@ def read_discovery(url):
         raise CaptureError('Cannot read Edgeshark discovery. Check the configured URL, TLS certificate, service and network access.') from None
 
 
-def normalize_targets(payload):
-    """Ghostwire /mobyshark v1 contract; unknown additional fields are harmless."""
+def normalize_target(row):
+    """One Ghostwire /mobyshark v1 row; unknown additional fields are harmless."""
+    if not isinstance(row, dict):
+        raise CaptureError('Unsupported Edgeshark capture target.')
+    target = {}
+    for key in ('name', 'type', 'prefix'):
+        value = row.get(key, '')
+        if not isinstance(value, str) or len(value) > 1024 or any(ord(c) < 32 for c in value):
+            raise CaptureError('Unsupported Edgeshark target identity.')
+        target[key] = value
+    for key in ('netns', 'pid', 'starttime'):
+        value = row.get(key, 0)
+        if type(value) is not int or not 0 <= value < 2**64:
+            raise CaptureError('Unsupported Edgeshark namespace identity.')
+        target[key] = value
+    if not target['netns'] or not target['name']:
+        raise CaptureError('Edgeshark returned an incomplete namespace identity.')
+    nifs = row.get('network-interfaces')
+    if not isinstance(nifs, list) or len(nifs) > 4096:
+        raise CaptureError('Unsupported Edgeshark interface list.')
+    if any(not isinstance(n, str) or not n or any(0xD800 <= ord(c) <= 0xDFFF for c in n)
+           or len(n.encode('utf-8')) > 15
+           or '/' in n or any(c.isspace() or ord(c) < 32 for c in n) for n in nifs):
+        raise CaptureError('Edgeshark returned an invalid Linux interface name.')
+    target['network-interfaces'] = sorted(set(nifs))
+    return target
+
+
+def normalize_targets(payload, skipped=None):
+    """Ghostwire /mobyshark v1 contract.
+
+    A malformed row is skipped (and counted in `skipped` when a list is given) rather
+    than hiding every other namespace behind one bad entry; a launch can never use a
+    row that did not validate. The response shape itself, or a list with no usable
+    row at all, still fails closed.
+    """
     rows = payload.get('containers') if isinstance(payload, dict) else None
     if not isinstance(rows, list) or len(rows) > MAX_TARGETS:
         raise CaptureError('Unsupported Edgeshark discovery response: expected a bounded containers list.')
     result = []
     for row in rows:
-        if not isinstance(row, dict):
-            raise CaptureError('Unsupported Edgeshark capture target.')
-        target = {}
-        for key in ('name', 'type', 'prefix'):
-            value = row.get(key, '')
-            if not isinstance(value, str) or len(value) > 1024 or any(ord(c) < 32 for c in value):
-                raise CaptureError('Unsupported Edgeshark target identity.')
-            target[key] = value
-        for key in ('netns', 'pid', 'starttime'):
-            value = row.get(key, 0)
-            if type(value) is not int or not 0 <= value < 2**64:
-                raise CaptureError('Unsupported Edgeshark namespace identity.')
-            target[key] = value
-        if not target['netns'] or not target['name']:
-            raise CaptureError('Edgeshark returned an incomplete namespace identity.')
-        nifs = row.get('network-interfaces')
-        if not isinstance(nifs, list) or len(nifs) > 4096:
-            raise CaptureError('Unsupported Edgeshark interface list.')
-        if any(not isinstance(n, str) or not n or any(0xD800 <= ord(c) <= 0xDFFF for c in n)
-               or len(n.encode('utf-8')) > 15
-               or '/' in n or any(c.isspace() or ord(c) < 32 for c in n) for n in nifs):
-            raise CaptureError('Edgeshark returned an invalid Linux interface name.')
-        target['network-interfaces'] = sorted(set(nifs))
-        result.append(target)
+        try:
+            result.append(normalize_target(row))
+        except CaptureError as error:
+            if skipped is not None:
+                skipped.append(str(error))
+    if rows and not result:
+        raise CaptureError('Edgeshark returned no usable capture target. Check its version and service logs.')
     return result
+
+
+def merge_shared_namespaces(rows):
+    """One network namespace is one capture location.
+
+    A host-networked container (the manager itself, for example) shares the host's
+    namespace, and Ghostwire reports both. Keep one row per namespace, preferring the
+    host's init process, then a container, and list the other names as aliases so
+    the operator can still recognise them. Only used for the unfiltered host view;
+    lab and node views keep every container row so exact name matching still works.
+    """
+    groups = {}
+    for target in rows:
+        groups.setdefault(target['netns'], []).append(target)
+    merged = []
+    for group in groups.values():
+        group.sort(key=lambda t: (0 if t['type'] == 'proc' and t['pid'] == 1 else 1 if t['type'] != 'proc' else 2, t['name']))
+        keep = dict(group[0])
+        keep['aliases'] = [t['name'] for t in group[1:]]
+        merged.append(keep)
+    return merged
 
 
 class EdgesharkProvider:
     def __init__(self, internal_url, public_url):
         self.internal_url = service_url(internal_url)
         self.public_url = service_url(public_url)
+        self.skipped = 0
 
     def discover(self):
-        return normalize_targets(read_discovery(self.internal_url + 'discover/mobyshark'))
+        skipped = []
+        rows = normalize_targets(read_discovery(self.internal_url + 'discover/mobyshark'), skipped)
+        self.skipped = len(skipped)
+        return rows
 
     def launch(self, target, interfaces):
         u = urlsplit(self.public_url)
-        detail = {**target, 'network-interfaces': interfaces}
+        # Only the identity fields travel; display-only keys such as aliases do not.
+        detail = {**{k: target[k] for k in IDENTITY_FIELDS}, 'network-interfaces': interfaces}
         query = urlencode({'container': json.dumps(detail, separators=(',', ':')), 'nif': '/'.join(interfaces)})
         return 'packetflix:' + urlunsplit(('wss' if u.scheme == 'https' else 'ws', u.netloc,
                                            u.path + 'capture', query, ''))
@@ -166,9 +213,13 @@ class Captures:
             self.error = str(error)
 
     def identity(self, target):
-        # A namespace restart, process restart, engine prefix or interface change
-        # invalidates a previously displayed selection. No PID is trusted alone.
-        raw = json.dumps(target, sort_keys=True, separators=(',', ':')).encode()
+        # A namespace restart, process restart or engine prefix change invalidates a
+        # previously displayed selection. No PID is trusted alone. The interface list
+        # is excluded on purpose: the selected interfaces are re-validated against
+        # fresh discovery at launch anyway, and hashing unrelated interfaces made any
+        # container start or stop on the host (a new veth) invalidate a selected
+        # host-namespace target whose chosen interface had not changed.
+        raw = json.dumps({k: target[k] for k in IDENTITY_FIELDS}, sort_keys=True, separators=(',', ':')).encode()
         return hmac.new(self.secret, raw, hashlib.sha256).hexdigest()
 
     def discover(self):
@@ -208,11 +259,17 @@ class Captures:
             rows = self.discover()
             # Never infer membership using a substring or an IP address.
             selected = [t for t in rows if names is None or t['name'] in names]
+            if names is None:
+                selected = merge_shared_namespaces(selected)
             unique = {self.identity(t): t for t in selected}
-            return {'targets': [{'id': key, 'name': t['name'], 'kind': t['type'],
-                                 'prefix': t['prefix'], 'interfaces': t['network-interfaces']}
+            skipped = getattr(self.provider, 'skipped', 0)
+            message = 'Live Linux interfaces. Edgeshark omits DOWN interfaces. Use All host targets for bridges, host NICs and other namespaces.'
+            if skipped:
+                message += f' {skipped} discovered namespace(s) were unreadable and are not listed.'
+            return {'targets': [{'id': key, 'name': t['name'], 'kind': t['type'], 'prefix': t['prefix'],
+                                 'interfaces': t['network-interfaces'], 'aliases': t.get('aliases', [])}
                                 for key, t in sorted(unique.items(), key=lambda item: (item[1]['name'], item[1]['prefix'], item[0]))],
-                    'message': 'Live Linux interfaces. Edgeshark omits DOWN interfaces. Use All host targets for bridges, host NICs and other namespaces.'}
+                    'message': message}
 
         @app.post('/api/capture/launch')
         def launch(data: LaunchRequest):
