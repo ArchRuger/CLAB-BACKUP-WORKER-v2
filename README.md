@@ -63,9 +63,11 @@ each pushed to its own subfolder, and an already-registered repository can gain 
 subfolder for another lab. Successful setup ends with a clear success banner. See
 [GIT-SETUP.md](GIT-SETUP.md) and [GIT-PROGRESS.md](GIT-PROGRESS.md).
 
-This is a source delivery; no Docker image is published. No fresh-VM install, live
-VM helper call, device action or Git push was performed by the author. See
-[VALIDATION.md](clab-backup-ui/VALIDATION.md) for the tests that were run.
+This is a source delivery; no Docker image is published. It was installed on a fresh
+Ubuntu 24.04 dev VM, where folder browsing, a lab deploy through the operations
+gateway, NOS login and backup on two cEOS nodes, a subfolder Git registration and a
+pushed Save progress all succeeded, and `check-install` reported no failures. See
+[VALIDATION.md](clab-backup-ui/VALIDATION.md) for the exact evidence and limits.
 
 ## Changes in 1.19.2
 
