@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 import time
@@ -112,6 +113,22 @@ class HostOperationTests(unittest.TestCase):
         for action in ('write','fcli','sshx-attach','sshx-detach','sshx-reattach','gotty-attach','gotty-detach','gotty-reattach'):
             with self.assertRaises(ValueError): self.host.plan(self.request(action))
             self.assertNotIn(action,self.host.capabilities()['actions'])
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX file modes')
+    def test_created_topology_is_readable_and_group_editable_in_engineer_folders(self):
+        import stat as st
+        plain = self.root / 'plain.clab.yaml'
+        req = {**self.request('create', text=YAML.decode()), 'path': str(plain)}; req['digest'] = self.host.plan(req)['digest']
+        self.host.execute(req, lambda _: None)
+        self.assertEqual(st.S_IMODE(plain.stat().st_mode), 0o644)
+        engineer = self.root / 'engineer'; engineer.mkdir()
+        os.chmod(engineer, 0o2775)
+        if not engineer.stat().st_mode & st.S_ISGID: self.skipTest('setgid not supported on this filesystem')
+        shared = engineer / 'shared.clab.yaml'
+        req = {**self.request('create', text=YAML.decode()), 'path': str(shared)}; req['digest'] = self.host.plan(req)['digest']
+        self.host.execute(req, lambda _: None)
+        self.assertEqual(st.S_IMODE(shared.stat().st_mode), 0o664)
+        self.assertEqual(shared.read_bytes(), YAML)
 
     def test_create_preserves_file_created_after_final_plan(self):
         target = self.root / 'racing.clab.yaml'

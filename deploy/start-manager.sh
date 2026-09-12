@@ -29,6 +29,11 @@ if $operations || [[ -f /etc/clab-manager/operations.json ]]; then
   printf '%s\n' '{"mode":"capabilities"}' | /usr/local/sbin/clab-manager-operate | /usr/bin/python3 "$script_dir/verify-operations.py" "$expected"
   gateway_args+=(--operations)
 fi
+if [[ -f /etc/clab-manager/engineer.json ]]; then
+  # setup-operations.sh and a containerlab upgrade reset the lab roots and SUID
+  # bit; reapply the recorded engineer (VS Code) access so it survives upgrades.
+  bash "$script_dir/setup-engineer-access.sh" --refresh
+fi
 if [[ -f /etc/clab-manager/git.json ]]; then
   bash "$script_dir/setup-git.sh" --refresh
   printf '%s\n' '{"mode":"list"}' | /usr/local/sbin/clab-manager-git | /usr/bin/python3 -c '

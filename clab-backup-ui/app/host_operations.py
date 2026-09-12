@@ -10,6 +10,7 @@ from pathlib import Path
 import queue
 import re
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -19,7 +20,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.19.3'
+VERSION = '1.19.4'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 ENV = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root',
@@ -267,6 +268,10 @@ class HostOperations:
                     try: os.link(temp, path)
                     except FileExistsError:
                         raise ValueError('The topology path now exists. Creation canceled; the existing file was retained.') from None
+                    # The 0600 temporary guarded the partial write. The published file is
+                    # shared with engineer tooling: group-editable inside a setgid
+                    # engineer lab folder, otherwise readable like hand-uploaded files.
+                    os.chmod(path, 0o664 if path.parent.stat().st_mode & stat.S_ISGID else 0o644)
                 finally:
                     if temp.exists(): temp.unlink()
             emit({'output': 'VM source ' + ('removed' if action == 'delete' else 'saved') + '.\n'})

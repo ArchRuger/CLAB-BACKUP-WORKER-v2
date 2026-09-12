@@ -119,6 +119,24 @@ class InstallManagerTests(unittest.TestCase):
             self.assertEqual(install.health_report(env), 2)
         self.assertEqual(run.call_args.args, (['bash', str(install.SOURCE / 'deploy/check-install.sh')], env))
 
+    def test_engineer_access_runs_after_manager_verification_only_when_chosen(self):
+        for chosen in ('1', '2'):
+            with self.subTest(engineer=chosen), patch.object(install, 'choose_env_copy', return_value=None), \
+                    patch.object(install, 'menu', side_effect=['1', chosen, '2']), \
+                    patch.object(install, 'confirm', side_effect=[False, True]), \
+                    patch.object(install, 'copy_env'), patch.object(install, 'verify_manager') as verify, \
+                    patch.object(install, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+                install.install({'USER': 'owner', 'HOME': '/home/owner'}, '1.19.4')
+            commands = [call.args[0] for call in run.call_args_list]
+            engineer = [c for c in commands if 'setup-engineer-access.sh' in ' '.join(c)]
+            if chosen == '1':
+                self.assertEqual(engineer, [['sudo', 'bash', str(install.SOURCE / 'deploy/setup-engineer-access.sh'), '--owner', 'owner']])
+                launch = next(i for i, c in enumerate(commands) if 'start-manager.sh' in ' '.join(c))
+                self.assertGreater(commands.index(engineer[0]), launch)
+                verify.assert_called_once()
+            else:
+                self.assertEqual(engineer, [])
+
     def test_declined_plan_runs_no_commands_and_copies_no_settings(self):
         with patch.object(install, 'choose_env_copy', return_value=None), \
                 patch.object(install, 'menu', return_value='1'), \

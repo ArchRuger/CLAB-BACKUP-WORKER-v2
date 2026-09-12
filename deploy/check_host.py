@@ -1,5 +1,6 @@
 """Read-only host checks for check-install.py; never requests an SSH password."""
 from datetime import datetime, timezone
+import json
 import os
 from pathlib import Path
 import platform
@@ -11,6 +12,9 @@ import stat
 
 GATEWAY = '/usr/local/sbin/clab-manager-gateway'
 SFTP_SERVER = '/usr/lib/openssh/sftp-server'
+ENGINEER_CONFIG = '/etc/clab-manager/engineer.json'
+OPERATIONS_CONFIG = '/etc/clab-manager/operations.json'
+ENGINEER_FIX = 'Run sudo bash deploy/setup-engineer-access.sh --refresh (or choose VS Code access in bash deploy/install.sh), then reconnect SSH and kill the VS Code server on the host.'
 POLICY = {
     'authenticationmethods': 'password', 'passwordauthentication': 'yes',
     'kbdinteractiveauthentication': 'no', 'pubkeyauthentication': 'no',
@@ -164,6 +168,70 @@ def _ssh(ctx):
     _admin_sftp(ctx)
 
 
+def _json_file(ctx, path):
+    # Root-only manager configuration; both files hold only account names and paths.
+    result = ctx.run(['cat', path], privileged=True, timeout=5)
+    if not result.ok:
+        return None
+    try:
+        value = json.loads(result.stdout)
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _engineer(ctx):
+    """VS Code Remote - SSH with the Containerlab extension needs what the manager does not.
+
+    The two errors this explains: "Extension activation failed. Insufficient permissions.
+    Ensure USER is in the clab_admins and docker group(s)" and "EACCES: permission denied,
+    mkdir '/etc/containerlab/...'" from the VS Code file explorer.
+    """
+    title = 'Engineer access for VS Code / Containerlab extension'
+    if not ctx.privileged:
+        ctx.add('host.engineer', 'INFO', title, 'Administrator access is needed to inspect groups, lab folders and the containerlab mode.')
+        return
+    config = _json_file(ctx, ENGINEER_CONFIG)
+    owner = config.get('owner') if config else None
+    if not isinstance(owner, str) or not owner:
+        ctx.add('host.engineer', 'INFO', title,
+                'Not configured. The manager does not need it; VS Code Remote - SSH with the Containerlab extension does '
+                '(docker and clab_admins groups, group-writable lab folders, containerlab SUID).',
+                'Run sudo bash deploy/setup-engineer-access.sh --owner YOUR_VM_USER, or choose VS Code access in bash deploy/install.sh.')
+        return
+    problems = []
+    groups = ctx.run(['id', '-nG', owner], timeout=5)
+    missing = sorted({'docker', 'clab_admins'} - set(groups.stdout.split())) if groups.ok else ['docker', 'clab_admins']
+    if missing:
+        problems.append(owner + ' lacks the ' + ' and '.join(missing) + ' group(s)')
+    operations = _json_file(ctx, OPERATIONS_CONFIG) or {}
+    roots = [r for r in operations.get('roots', []) if isinstance(r, str) and r.startswith('/')]
+    for root in roots:
+        result = ctx.run(['stat', '-c', '%G %a', root], privileged=True, timeout=5)
+        fields = result.stdout.split() if result.ok else []
+        try:
+            mode = int(fields[1], 8) if len(fields) == 2 else -1
+        except ValueError:
+            mode = -1
+        # setgid (02000) plus group write (00020): new files inherit clab_admins and
+        # the engineer's editor can create and change lab files.
+        if len(fields) != 2 or fields[0] != 'clab_admins' or mode < 0 or mode & 0o2020 != 0o2020:
+            problems.append(root + ' is not a group-writable clab_admins lab folder')
+    binary = next((path for path in ('/usr/bin/containerlab', '/usr/local/bin/containerlab') if _executable(path)), '')
+    result = ctx.run(['stat', '-c', '%u %a', binary], privileged=True, timeout=5) if binary else None
+    fields = result.stdout.split() if result and result.ok else []
+    try:
+        suid = len(fields) == 2 and fields[0] == '0' and int(fields[1], 8) & 0o4000 == 0o4000
+    except ValueError:
+        suid = False
+    if not suid:
+        problems.append('containerlab is not the root-owned SUID binary the extension runs without sudo')
+    ctx.add('host.engineer', 'FAIL' if problems else 'PASS', title,
+            ('Configured for ' + owner + ' but incomplete: ' + '; '.join(problems) + '. Existing SSH and VS Code server sessions keep their old groups until restarted.') if problems
+            else 'Configured for ' + owner + ': docker and clab_admins groups, group-writable clab_admins lab folders (' + ', '.join(roots) + ') and the SUID containerlab binary. Group changes need a fresh login.',
+            ENGINEER_FIX if problems else '')
+
+
 def check_host(ctx):
     release = _values(_read('/etc/os-release'), '=')
     supported = release.get('ID') == 'ubuntu' and release.get('VERSION_ID') == '24.04' and platform.machine() in ('x86_64', 'aarch64', 'arm64')
@@ -188,3 +256,4 @@ def check_host(ctx):
             '/dev/kvm is present. Image-specific permissions and successful guest boot remain to be tested.' if kvm else
             '/dev/kvm is absent. VM-based NOS images need nested virtualization; ordinary container images may not.',
             '' if kvm else 'If using VM-based images, check the Proxmox host nested-virtualization setting and VM CPU type in FRESH-VM-GUIDE-V2.md.')
+    _engineer(ctx)

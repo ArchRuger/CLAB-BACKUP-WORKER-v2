@@ -54,6 +54,52 @@ class Context:
 
 
 class HostChecksTests(unittest.TestCase):
+    def engineer_context(self, groups='clabllm docker clab_admins', root='clab_admins 2775', binary='0 4755'):
+        ctx = Context()
+        ctx.answers[('cat', host.ENGINEER_CONFIG)] = result('{"owner": "clabllm"}')
+        ctx.answers[('cat', host.OPERATIONS_CONFIG)] = result('{"roots": ["/etc/containerlab", "/srv/containerlab-node-manager/projects"]}')
+        ctx.answers[('id', '-nG', 'clabllm')] = result(groups + '\n')
+        for path in ('/etc/containerlab', '/srv/containerlab-node-manager/projects'):
+            ctx.answers[('stat', '-c', '%G %a', path)] = result(root + '\n')
+        ctx.answers[('stat', '-c', '%u %a', '/usr/bin/containerlab')] = result(binary + '\n')
+        return ctx
+
+    def test_engineer_access_not_configured_is_informational_and_read_only(self):
+        ctx = Context()
+        ctx.answers[('cat', host.ENGINEER_CONFIG)] = result(code=1)
+        host._engineer(ctx)
+        self.assertEqual(ctx.records['host.engineer'][0], 'INFO')
+        self.assertIn('setup-engineer-access.sh', ctx.records['host.engineer'][3])
+        self.assertFalse(any(args[0] in ('chmod', 'chgrp', 'usermod', 'groupadd') for args, _ in ctx.commands))
+
+    def test_engineer_access_passes_with_groups_setgid_roots_and_suid(self):
+        with patch.object(host, '_executable', side_effect=lambda path: path == '/usr/bin/containerlab'):
+            ctx = self.engineer_context()
+            host._engineer(ctx)
+        self.assertEqual(ctx.records['host.engineer'][0], 'PASS')
+        self.assertIn('/srv/containerlab-node-manager/projects', ctx.records['host.engineer'][2])
+
+    def test_engineer_access_names_each_missing_piece(self):
+        cases = (
+            dict(groups='clabllm docker'), dict(root='root 755'), dict(root='clab_admins 755'), dict(binary='0 755'))
+        for case in cases:
+            with self.subTest(case=case), patch.object(host, '_executable', side_effect=lambda path: path == '/usr/bin/containerlab'):
+                ctx = self.engineer_context(**case)
+                host._engineer(ctx)
+                self.assertEqual(ctx.records['host.engineer'][0], 'FAIL')
+                self.assertIn('--refresh', ctx.records['host.engineer'][3])
+        with patch.object(host, '_executable', side_effect=lambda path: path == '/usr/bin/containerlab'):
+            ctx = self.engineer_context(groups='clabllm')
+            host._engineer(ctx)
+        self.assertIn('clab_admins and docker group', ctx.records['host.engineer'][2])
+
+    def test_unprivileged_engineer_check_runs_no_commands(self):
+        ctx = Context()
+        ctx.privileged = False
+        host._engineer(ctx)
+        self.assertEqual(ctx.records['host.engineer'][0], 'INFO')
+        self.assertEqual(ctx.commands, [])
+
     def test_socket_activation_does_not_require_active_ssh_service(self):
         ctx = Context()
         with patch.object(host, '_executable', return_value=True), patch.object(host.socket, 'create_connection'):
