@@ -9,6 +9,9 @@ import sys
 
 
 FIELDS = ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')
+# This runs as root and imports from the ordinary owner's source checkout; never
+# leave root-owned bytecode there (it later blocks the owner from removing the tree).
+sys.dont_write_bytecode = True
 
 
 def host_helper():

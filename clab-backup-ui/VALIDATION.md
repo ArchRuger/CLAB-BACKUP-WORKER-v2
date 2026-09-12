@@ -38,6 +38,12 @@
   `systemd(1)` keeps Prepare disabled until `ens33` is ticked, and Prepare then yields
   the `packetflix:` link with no console errors. The alias-label truncation ("+N more")
   landed after that browser run and is covered by the JavaScript test only.
+- Found while redeploying: `setup-git.sh --list` (run as root by guided Git setup)
+  imported `host_git.py` from the owner's source checkout and left a root-owned
+  `__pycache__` there, so `rm -rf ~/projects/v1.20.1` failed as the owner.
+  `git-registrations.py` and `check_install.module()` now set
+  `sys.dont_write_bytecode`; the VM was cleaned with sudo once and the final commit
+  redeployed from a fresh extract.
 - Not exercised: the workstation cshargextcap plugin and SSH tunnel (Wireshark 4.6.8 is
   installed on the workstation but the plugin is not), VM-based NOS kinds, HTTPS/proxy
   Edgeshark deployments, and the `.env` copy path of `install.sh`.

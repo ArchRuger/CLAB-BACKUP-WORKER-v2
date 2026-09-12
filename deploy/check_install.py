@@ -34,6 +34,8 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def module(name):
+    # The report may run under sudo; never leave root-owned bytecode in the source tree.
+    sys.dont_write_bytecode = True
     spec = importlib.util.spec_from_file_location(name, SOURCE / 'deploy' / (name + '.py'))
     value = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(value)

@@ -57,7 +57,9 @@ disabled when the manager reports capture disabled. `check-install` gains an
 **Optional packet capture** check. [CAPTURE.md](CAPTURE.md) now states what was
 observed: Packetflix 0.9.7 does not reject a mismatched PID, start time or
 namespace, so the manager's re-discovery and link expiry are the real stale-target
-guards.
+guards. Root-run helpers (`setup-git.sh --list`, a privileged `check-install`) no
+longer leave root-owned Python bytecode in the ordinary owner's source folder, which
+blocked removing or re-staging that folder without sudo.
 
 ## Changes in 1.20.0
 
