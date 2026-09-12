@@ -65,6 +65,7 @@ function renderManagement(){
  const reports=discovery.file_reports||{};
  $('discovery-file-list').innerHTML=Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file results yet. Refresh discovery. If using an older helper, update it on the VM.</p>';
  $('excluded-labs').innerHTML=(discovery.ignored_labs||[]).length?'<p class="side-hint">Excluded from automatic import</p>'+(discovery.ignored_labs||[]).map(name=>`<button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again · Right-click to clear exclusion</small></button>`).join(''):'';
+ maybePromptVmConnection();
  if(!lab)return;
  $('remove-lab').disabled=state.jobs.some(j=>j.lab_id===lab.id&&['queued','running'].includes(j.status));
  const source=lab.vm_source, sync=$('sync-vm');
@@ -91,11 +92,23 @@ $('setup-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()
  const result=await(await api('/lab-definitions',{method:'POST',body:new FormData(e.target)})).json();
  activeId=result.id;sessionStorage.setItem('activeLab',activeId);tab='inventory';$('setup-dialog').close();$('setup-form').reset();await refresh();notify('Lab saved. Discovery updates automatic addresses when the lab is running.');
 });};
-$('vm-settings').onclick=()=>{
+function openVmDialog(){
  const h=state.discovery?.host||{};$('vm-form').reset();$('vm-form').querySelector('.form-error').textContent='';
  $('vm-address').value=h.address||'127.0.0.1';$('vm-port').value=h.port||22;$('vm-user').value=h.username||'clab-discovery';$('vm-command').value=h.command_mode||'helper';$('vm-enabled').checked=h.enabled!==false;
  $('vm-fingerprint').textContent=h.fingerprint?'Saved fingerprint: '+h.fingerprint:'No VM fingerprint saved yet.';$('vm-password-migration').hidden=h.auth!=='key';$('vm-password').required=!h.auth||h.auth!=='password';$('vm-dialog').showModal();
-};
+}
+$('vm-settings').onclick=openVmDialog;
+// The VM connection is what makes discovery, operations and Git work, so prompt for
+// it once on first load when nothing is configured yet. A configured connection, or a
+// connection the viewer dismissed this session, is never reopened automatically.
+let vmPromptShown=false;
+function maybePromptVmConnection(){
+ if(vmPromptShown)return;
+ const discovery=state.discovery;
+ if(!discovery||discovery.configured)return;
+ vmPromptShown=true;
+ if(!$('vm-dialog').open&&!(typeof document.querySelector==='function'&&document.querySelector('dialog[open]')))openVmDialog();
+}
 $('vm-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  await json('/host','PUT',{address:$('vm-address').value,port:Number($('vm-port').value),username:$('vm-user').value,auth:'password',password:$('vm-password').value,command_mode:$('vm-command').value,enabled:$('vm-enabled').checked,reset_fingerprint:$('vm-reset-key').checked});
  $('vm-password').value='';$('vm-password').required=false;

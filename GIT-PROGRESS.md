@@ -153,6 +153,13 @@ requires review. **Save checkpoint** creates a named milestone; choose a new nam
 for another milestone. The helpers reject unsafe paths, overlapping registered
 destinations and unsupported repository layouts rather than guessing a location.
 
+When one repository holds several labs, each lab registers a **subfolder** and the
+whole `latest/`, `baseline/` and `checkpoints/` layout nests under it, for example
+`bgp/latest/` and `eth/latest/`. Guided setup prompts for the subfolder; see
+[GIT-SETUP.md](GIT-SETUP.md#one-repository-one-subfolder-per-lab). Each lab in the
+manager connects to its own subfolder registration, so saving one lab never rewrites
+another lab's folder.
+
 ## Everyday buttons
 
 | Action | Result |

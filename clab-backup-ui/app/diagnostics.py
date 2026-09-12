@@ -31,19 +31,27 @@ def numeric_version(value):
 def failure_hint(exc):
     # Inspect diagnostics only to classify them; raw SSH errors can contain secrets.
     text = str(exc).lower()
+    # Order matters: match the specific gateway/helper phrases before the generic
+    # password rule. The operations "did not run the operations gateway" message
+    # contains the word "password" ("this does not indicate a wrong password"),
+    # so a bare 'password' rule placed first would misreport a reachable-account
+    # gateway problem as a rejected password and send the user to reset a password
+    # that discovery already proved is correct.
     for fragment, code, message in (
         ('fingerprint', 'host-trust', 'Refresh discovery and verify the VM host fingerprint.'),
         ('configure and enable', 'vm-disabled', 'Configure and enable the VM connection.'),
-        # Paramiko reports a rejected VM password as "Authentication failed."
-        ('authentication failed', 'authentication', 'Check the saved VM password and restricted account setup.'),
-        ('password', 'authentication', 'Check the saved VM password and restricted account setup.'),
         ('sudo permission', 'gateway-permission', 'Run sudo bash deploy/start-manager.sh --enable-operations from matching source on the VM.'),
-        ('not using the operations gateway', 'gateway-account', 'Use the clab-discovery account in VM connection settings.'),
+        ('did not run the operations gateway', 'gateway-account', 'Operations is not enabled for the clab-discovery SSH session. Run sudo bash deploy/start-manager.sh --enable-operations on the VM, then reconnect. Discovery works without it.'),
         ('outside the trusted', 'untrusted-folder', 'Add this project root using --lab-root during operations setup.'),
         ('no longer exists', 'missing-folder', 'Select an existing folder on the VM.'),
         ('project directory', 'not-directory', 'Select a directory rather than a topology file.'),
         ('symlink', 'symlink-folder', 'Select the real folder inside a trusted lab root.'),
         ('interrupted', 'timeout', 'The helper timed out. Run bash deploy/check-install.sh on the VM.'),
+        # Paramiko reports a rejected VM password as "Authentication failed."; the
+        # discovery/operations helpers raise "VM password setup required" when no
+        # password is saved. Both mean the SSH password itself needs attention.
+        ('authentication failed', 'authentication', 'Check the saved VM password and restricted account setup.'),
+        ('password setup required', 'authentication', 'Check the saved VM password and restricted account setup.'),
     ):
         if fragment in text:
             return {'code': code, 'message': message}

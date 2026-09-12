@@ -264,21 +264,53 @@ def read_registrations(env):
         raise ValueError('The registration list is invalid. Repair it with your VM administrator; setup will not replace existing settings.') from None
 
 
+def new_binding(path, prefix=''):
+    # The label distinguishes each subfolder of a shared repository in the manager's
+    # repository list, so several labs in one repository do not look identical.
+    label = path.name + (' / ' + prefix if prefix else '')
+    return {'remote': 'origin', 'prefix': prefix, 'label': label, 'branch': '', 'push_url': ''}
+
+
+def ask_subfolder():
+    """Choose the repository subfolder that holds this one lab's configurations.
+
+    One repository can hold many labs, each in its own subfolder, so a student keeps
+    a single course repository and pushes each lab (bgp, eth, ip, ...) to its folder.
+    The value maps to the registration prefix; the host helper validates it again.
+    """
+    print('One repository can hold many labs, each in its own subfolder.')
+    print('Enter this lab\'s subfolder, for example bgp, eth or ip. Leave blank to use the')
+    print('repository root when this repository holds only a single lab.')
+    while True:
+        value = ask('Repository subfolder for this lab', '').strip().strip('/')
+        if not value:
+            return ''
+        parts = value.split('/')
+        if (len(value) <= 200 and '\\' not in value
+                and all(re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', part) and part.lower() != '.git'
+                        for part in parts)):
+            return value
+        print('Use letters, numbers, dashes and underscores, with / to nest (for example courses/bgp). '
+              'No leading slash, no ".." and no .git parts.')
+
+
 def selected_registration(account, path, registrations):
     matches = [entry for entry in registrations if entry['path'] == str(path)]
     if any(entry['owner'] != account.pw_name for entry in matches):
         raise ValueError('This checkout is registered to another Linux owner. Continue as its registered owner; setup will not reassign it.')
     if not matches:
-        return {'remote': 'origin', 'prefix': '', 'label': path.name, 'branch': '', 'push_url': ''}
+        return new_binding(path, ask_subfolder())
     if not (path / '.git').is_dir():
         raise ValueError('This path has an existing registration but its checkout is missing. Restore the original checkout including .git, or select a new directory.')
-    if len(matches) > 1:
-        selected = menu('Select the existing registration to check:', [
-            (str(i), entry['label'] + ' — ' + (entry['prefix'] or 'repository root'))
-            for i, entry in enumerate(matches, 1)])
-        binding = matches[int(selected) - 1]
-    else:
-        binding = matches[0]
+    # An already-registered repository can gain another lab: reuse a saved destination
+    # to repair it, or register a new subfolder alongside the existing ones.
+    options = [(str(i), entry['label'] + ' — ' + (entry['prefix'] or 'repository root')) for i, entry in enumerate(matches, 1)]
+    options.append(('new', 'Register a new subfolder in this repository for another lab'))
+    prompt = 'This repository is already registered. Reuse a saved destination, or add a new subfolder:'
+    choice = menu(prompt, options, '1') if len(matches) == 1 else menu(prompt, options)
+    if choice == 'new':
+        return new_binding(path, ask_subfolder())
+    binding = matches[int(choice) - 1]
     print('Keeping existing registration: ' + binding['label'])
     print('Remote: ' + binding['remote'] + '; destination: ' + (binding['prefix'] or 'repository root') + '; branch: ' + binding['branch'])
     return binding
@@ -397,6 +429,18 @@ def resume_message(path=None):
     print('Resume as the same Linux account, without sudo:\n  ' + shlex.join(command))
 
 
+def success_banner(lines):
+    lines = [lines] if isinstance(lines, str) else list(lines)
+    width = max((len(line) for line in lines), default=0)
+    color = sys.stdout.isatty()
+    start, end = ('\033[1;32m', '\033[0m') if color else ('', '')
+    border = '+' + '-' * (width + 2) + '+'
+    print('\n' + start + border)
+    for line in lines:
+        print('| ' + line.ljust(width) + ' |')
+    print(border + end)
+
+
 def main(argv=None):
     options = parse_args(argv)
     import pwd
@@ -450,6 +494,8 @@ def main(argv=None):
         print('\nGit setup cancelled. Completed files and login are retained; readiness has not been confirmed.')
         resume_message(path)
         return 2
+    success_banner(['SUCCESS', 'Lab-config checkout registered with the manager.',
+                    'Destination: ' + (binding['prefix'] or 'repository root')])
     print('\nReady. In the manager: open your lab > More > Git repository.')
     print('Select this checkout and devices, review the destination, then Save progress.')
     print('Save progress commits and pushes automatically. No separate Commit button is needed.')

@@ -1,3 +1,35 @@
+# V1.19.2 bug-fix report follow-up — 1.19.3
+
+- Prepared from published main `0faae0b` (1.19.2) on branch
+  `claude/v1.19.2-bug-fix-report`. Source delivery only: no Docker build, fresh
+  Ubuntu install, live VM helper call, device action or Git push was performed.
+- Fixes: `diagnostics.failure_hint` now orders the gateway/account phrases before a
+  tightened password rule, so the Debug panel no longer reports a reachable-account
+  operations-gateway failure as an authentication/password problem;
+  `lab_operations.operation_connection_error` and `check_install`'s topology-browser
+  next step were reworded to match, and `check_install` gives a gateway-specific step
+  when discovery is connected. The manager prompts for the VM connection once on first
+  load when none is configured. Guided Git setup prompts for a per-lab repository
+  subfolder (one repository, many labs) and ends with a success banner.
+- Release metadata verifies as **1.19.3** (`python deploy/verify-release.py`), including
+  the `app.js` footer fallback and every `?v=` asset in the five static HTML pages.
+- Focused suites run on the Windows workstation with FastAPI/httpx/paramiko installed:
+  `test_diagnostics` (9), `test_operations_ssh` (14), `test_lab_operations` (21, 1 skip),
+  `test_check_install` (34, 1 skip), `test_check_host`, `test_git_onboard` (42),
+  `test_git_registrations`, `test_gateway_preflight`, `test_helper_preflight`,
+  `test_install_manager`, `test_check_git`, `test_apt_sources`, `test_apt_update`,
+  `test_junos_kinds` and `test_release_consistency` all pass. The new/changed test
+  methods were also run individually and pass.
+- JavaScript: **46 tests pass** (`node --test tests/*.js`), including three new
+  first-run VM-prompt tests; `node --check` passes for `app.js` and `management.js`.
+- The full Windows unittest run (445 tests) shows the known, nondeterministic
+  `PermissionError: [WinError 5]` on `os.replace(state.enc.tmp -> state.enc)` in
+  `Store.atomic` during `setUp`; each affected test passes when rerun in isolation.
+  This is a Windows open-handle rename limitation, not a product defect. Judge the
+  suite by isolated reruns or by Linux CI.
+- `bash -n` passes for all deploy scripts. No live SSH gateway, discovery, operations,
+  Git or device behavior on a real VM was exercised; those remain to verify on the VM.
+
 # Integrated audit recovery fixes — 1.19.2
 
 - Integrated the unmerged audit commit `8d87ea8` with current main `2c10037`

@@ -533,6 +533,22 @@ Remote - SSH itself cannot install its server and reports a permission error on
 `~/.vscode-server`, that folder is no longer owned by you, usually after a
 root-level upload into your home directory; fix it with
 `sudo chown -R "$(id -un):$(id -gn)" "$HOME/.vscode-server"` and reconnect.
+
+**Still `Extension activation failed. Insufficient permissions. Ensure ... clab_admins
+and docker`?** New group membership applies only to a fresh login, and the VS Code
+server already running on the VM keeps the old groups. You must run **Remote-SSH:
+Kill VS Code Server on Host...** and reconnect after the block, not just reload the
+window. Confirm in a new VS Code terminal that `id -nG` lists both `docker` and
+`clab_admins`; if it does not, the kill/reconnect did not take effect yet.
+
+**`Error: EACCES: permission denied, mkdir '/etc/containerlab/...'` from the VS Code
+file explorer** is a separate issue from the extension: `/etc/containerlab` is owned
+by root, so your engineer account cannot create files there over plain SSH. Create
+and edit your lab in an engineer-owned project folder (step 9), which you own and can
+write without sudo, and reserve `/etc/containerlab` for root-owned uploads. If you
+must write into a root-owned folder, use WinSCP with the
+[root SFTP paste-in fix](#winscp-admin-sftp); VS Code Remote - SSH has no equivalent
+per-transfer sudo.
 [Containerlab VS Code extension](https://containerlab.dev/manual/gui/vsc-extension/),
 [containerlab installation and sudo-less operation](https://containerlab.dev/install/)
 
