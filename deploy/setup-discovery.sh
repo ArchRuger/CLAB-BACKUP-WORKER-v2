@@ -12,12 +12,14 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 [[ -x /usr/bin/python3 ]] || { echo 'Install python3 first.' >&2; exit 1; }
 command -v visudo >/dev/null || { echo 'Install sudo first.' >&2; exit 1; }
 command -v sshd >/dev/null || [[ -x /usr/sbin/sshd ]] || { echo 'Install and enable the SSH server first.' >&2; exit 1; }
-clab_bin=$(readlink -f "$(command -v containerlab)")
+clab_path=$(command -v containerlab) || { echo 'containerlab is not installed or not on PATH. Run bash deploy/install.sh or install it in /usr/bin or /usr/local/bin first.' >&2; exit 1; }
+clab_bin=$(readlink -f "$clab_path")
 [[ "$clab_bin" =~ ^/usr/(local/)?bin/[A-Za-z0-9._-]+$ ]] || { echo 'Install containerlab in /usr/bin or /usr/local/bin.' >&2; exit 1; }
 [[ $(stat -c %u "$clab_bin") == 0 ]] || { echo 'The containerlab binary must be owned by root.' >&2; exit 1; }
 mode=$(stat -c %a "$clab_bin")
 (( (8#$mode & 8#022) == 0 )) || { echo 'The containerlab binary must not be writable by group/others.' >&2; exit 1; }
-docker_bin=$(readlink -f "$(command -v docker)")
+docker_path=$(command -v docker) || { echo 'Docker is not installed or not on PATH. Run bash deploy/install.sh first.' >&2; exit 1; }
+docker_bin=$(readlink -f "$docker_path")
 [[ "$docker_bin" =~ ^/usr/(local/)?bin/[A-Za-z0-9._-]+$ && $(stat -c %u "$docker_bin") == 0 ]] || { echo 'Install a root-owned Docker binary in /usr/bin or /usr/local/bin.' >&2; exit 1; }
 docker_mode=$(stat -c %a "$docker_bin")
 (( (8#$docker_mode & 8#022) == 0 )) || { echo 'Docker must not be writable by group/others.' >&2; exit 1; }

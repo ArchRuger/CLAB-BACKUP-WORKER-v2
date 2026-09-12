@@ -1,3 +1,38 @@
+# Transport EOF, helper timeouts and hygiene — 1.19.1
+
+- Prepared from published main `2d34415` (1.19.0) on
+  `claude/transport-eof-and-helper-timeouts`. No image build, fresh-VM run,
+  live VM helper call or device validation was performed on this Windows host.
+- Real localhost Paramiko regressions now cover discovery as they did
+  operations: exit status before a delayed tail, exit status before a 160 KiB
+  multipart tail, and nonzero status before a tail (six discovery SSH tests).
+  Git transport tests replace the old `recv_ready` mock with an EOF-terminated
+  stream, add a fragmented tail with early exit status, and assert a truncated
+  envelope is never parsed (six tests). Both loops copy `lab_operations.remote`.
+- Four helper timeout tests verify the 25 s inspect / 8 s label budget fits the
+  60 s manager deadline, that an expired watchdog raises `TimeoutError`, that a
+  completed inspect parses, and that the helper's stderr names the timeout.
+  Diagnostics tests cover the new `failure_hint` classification of Paramiko
+  "Authentication failed." and the 90 s probe budget.
+- Full Python suite on Windows with Git and Node on PATH: 427 tests ran,
+  424 passed, nine skipped (Linux Ansible control node, controlling terminal,
+  openat symlink, opt-in EOS fixture). Three errors were the known Windows
+  `os.replace` PermissionError on `state.enc` and each passes when rerun alone.
+  Twenty-two real-repository host Git tests ran that previous Windows runs
+  skipped for lack of git. JavaScript: 42 tests pass; `node --check` passes.
+- `deploy/verify-release.py` reports 1.19.1 including the new `app.js` footer
+  check; `bash -n` passes for every deploy script. ShellCheck was unavailable.
+- Vendor collection ranges were read from the Galaxy API on 2026-09-11
+  (netcommon 8.6.2, junos 11.1.1, iosxr 12.4.2, eos 12.2.0); an unconstrained
+  build that day would resolve the same majors. A Docker build with the pinned
+  ranges has not been run here.
+- Line-ending normalization was committed separately with
+  `git add --renormalize`; the change is content-neutral for every parser the
+  files feed and must be reviewed as such.
+- The OpenSSH ordering (exit-status request emitted before the remaining pipe
+  data is drained) is modelled by the fixtures; the effect on the user's VM
+  still needs a live discovery and Git save after upgrading image and helpers.
+
 # Development debug panel and folder browsing — 1.19.0
 
 - Prepared from merged main `a7a016b` (1.18.1) on

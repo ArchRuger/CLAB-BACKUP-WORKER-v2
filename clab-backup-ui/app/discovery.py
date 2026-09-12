@@ -5,6 +5,7 @@ import hashlib
 import ipaddress
 import json
 import re
+import socket
 import threading
 import time
 import uuid
@@ -21,6 +22,10 @@ COMMANDS = {'helper': 'sudo -n /usr/local/sbin/clab-manager-inspect',
 INTERVAL = 30
 MAX_AGE = 90
 MAX_OUTPUT = 16 * 1024 * 1024
+# The installed helper allows 25 s for containerlab inspect plus 18 s of file
+# reads; leave headroom for SSH connection setup and a loaded VM.
+INSPECT_DEADLINE = 60
+REFRESH_WAIT = INSPECT_DEADLINE + 15
 
 
 def stamp():
@@ -213,16 +218,24 @@ def inspect_host(host, stopping=None):
         channel = transport.open_session(timeout=8)
         channel.settimeout(8)
         channel.exec_command(COMMANDS[host['command_mode']])
-        output = bytearray(); size = 0; deadline = time.monotonic() + 40
+        channel.settimeout(.2)
+        output = bytearray(); size = 0; deadline = time.monotonic() + INSPECT_DEADLINE; eof = False
         while True:
             if time.monotonic() > deadline or (stopping and stopping.is_set()):
                 raise ValueError('VM inspection timed out or was interrupted')
-            if channel.recv_ready():
-                chunk = channel.recv(65536); output.extend(chunk); size += len(chunk)
             if channel.recv_stderr_ready(): size += len(channel.recv_stderr(65536))
+            if not eof:
+                try: chunk = channel.recv(65536)
+                except socket.timeout: continue
+                eof = not chunk
+                output.extend(chunk); size += len(chunk)
             if size > MAX_OUTPUT: raise ValueError('VM inspection output exceeded 16 MiB')
-            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready(): break
-            time.sleep(.01)
+            # Exit status is channel metadata, not end-of-output: OpenSSH can send
+            # it while the helper's final stdout bytes are still in its pipe. Wait
+            # for stream EOF before accepting the status, as the operations
+            # transport does.
+            if eof and not channel.recv_stderr_ready() and channel.exit_status_ready(): break
+            if eof: time.sleep(.03)
         if channel.recv_exit_status() != 0:
             raise ValueError('Inspection command failed. Verify containerlab and the discovery account/helper permissions on the VM.')
         snapshot = parse_snapshot(bytes(output))
@@ -264,7 +277,7 @@ class Discovery:
             self.wake.wait(INTERVAL); self.wake.clear()
 
     def refresh(self, wait=False):
-        if not self.lock.acquire(timeout=45 if wait else 0): return self.public()
+        if not self.lock.acquire(timeout=REFRESH_WAIT if wait else 0): return self.public()
         try:
             with self.store.lock:
                 if self.store.reset_pending: return self.public()

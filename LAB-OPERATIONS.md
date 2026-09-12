@@ -1,18 +1,18 @@
-# Lab operations — Containerlab Node Manager 1.18.1
+# Lab operations — Containerlab Node Manager 1.19.1
 
 ## Upgrade
 
-Place the source directly in `~/projects/v1.18.1`, containing `deploy/` and
+Place the source directly in `~/projects/v1.19.1`, containing `deploy/` and
 `clab-backup-ui/`. Copy any customized `clab-backup-ui/.env` from the older folder.
 Keep the persistent directory and existing VM password.
 
 ```bash
-cd "$HOME/projects/v1.18.1"
+cd "$HOME/projects/v1.19.1"
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui
 ```
 
-The script first checks source release consistency, refreshes and verifies host helpers, builds `clab-backup:1.18.1`
+The script first checks source release consistency, refreshes and verifies host helpers, builds `clab-backup:1.19.1`
 without cache and recreates the manager. Open `http://VM_IP:8081`; no UI login is
 required. Linux host networking uses this port directly, without `-p` forwarding.
 Data stays in `/srv/containerlab-node-manager/data` (UID/GID 10001, mode 700).

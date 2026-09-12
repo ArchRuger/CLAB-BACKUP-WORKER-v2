@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from app import __version__
+from app.diagnostics import PROBE_TIMEOUT, failure_hint
 import test_discovery
 
 
@@ -46,7 +47,8 @@ class DiagnosticsTests(unittest.TestCase):
         self.host()
         before = copy.deepcopy(self.store.state)
         def remote(host, req, **kwargs):
-            self.assertEqual(kwargs['timeout'], 30)
+            self.assertEqual(kwargs['timeout'], PROBE_TIMEOUT)
+            self.assertGreaterEqual(PROBE_TIMEOUT, 60)
             if req['mode'] == 'browse':
                 self.assertEqual(req['path'], '/etc/containerlab/private-path-secret')
                 return {'entries': [{'name': 'file-secret.clab.yaml'}]}
@@ -99,6 +101,22 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(report['requests'][0]['status'], 500)
         self.assertEqual(report['requests'][0]['route'], '/api/fixture-error')
         self.assertNotIn('exception-secret', json.dumps(report))
+
+    def test_failure_hints_classify_paramiko_and_helper_errors(self):
+        import paramiko
+        cases = {
+            paramiko.AuthenticationException('Authentication failed.'): 'authentication',
+            ValueError('VM password setup required. Run sudo bash deploy/setup-discovery.sh'): 'authentication',
+            ValueError('VM SSH host key changed. Verify the VM and reset the saved fingerprint'): 'host-trust',
+            ValueError('Operations gateway could not obtain its restricted sudo permission.'): 'gateway-permission',
+            ValueError('Operation connection interrupted. Inspect the lab before retrying.'): 'timeout',
+            OSError('connection refused by host-secret'): 'helper-unavailable',
+        }
+        for error, code in cases.items():
+            with self.subTest(error=str(error)):
+                hint = failure_hint(error)
+                self.assertEqual(hint['code'], code)
+                self.assertNotIn('host-secret', hint['message'])
 
 
 if __name__ == '__main__': unittest.main()

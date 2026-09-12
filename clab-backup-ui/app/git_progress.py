@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import re
+import socket
 import threading
 import time
 import uuid
@@ -80,16 +81,22 @@ def remote_git(host, request, stopping=None):
         channel.settimeout(30)
         channel.exec_command('clab-manager-git')
         channel.sendall(payload); channel.shutdown_write()
-        data = bytearray(); until = time.monotonic() + 600
+        channel.settimeout(.2)
+        data = bytearray(); until = time.monotonic() + 600; eof = False
         while True:
             if time.monotonic() > until or (stopping and stopping.is_set()):
                 raise ValueError('Git connection interrupted. Retry this saved operation to reconcile its result.')
-            if channel.recv_ready():
-                data.extend(channel.recv(65536))
-                if len(data) > MAX_WIRE: raise ValueError('Git helper response exceeded its limit.')
             if channel.recv_stderr_ready(): channel.recv_stderr(65536)
-            if channel.exit_status_ready() and not channel.recv_ready(): break
-            time.sleep(.02)
+            if not eof:
+                try: chunk = channel.recv(65536)
+                except socket.timeout: continue
+                eof = not chunk
+                data.extend(chunk)
+                if len(data) > MAX_WIRE: raise ValueError('Git helper response exceeded its limit.')
+            # Exit status can precede the last stdout packets; only stream EOF
+            # proves the multi-megabyte envelope is complete.
+            if eof and not channel.recv_stderr_ready() and channel.exit_status_ready(): break
+            if eof: time.sleep(.03)
         try: envelope = json.loads(data)
         except (ValueError, UnicodeError): raise ValueError('Install or refresh the matching Git helper on the VM.')
         if not isinstance(envelope, dict): raise ValueError('Invalid Git helper response.')
