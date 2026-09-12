@@ -30,7 +30,34 @@ test('handoff requires selection and prepares an explicit native link',async()=>
 });
 test('changing selection clears a prepared link and releases the prepare button',async()=>{
  const {c,$}=harness();await c.refreshCaptureTargets();$('capture-launch').href='packetflix:ws://old';$('capture-launch').hidden=false;$('capture-prepare').disabled=true;
+ $('capture-interfaces').checked=[{value:'eth2'}];
  $('capture-interfaces').onchange();assert.equal($('capture-launch').hidden,true);assert.equal($('capture-launch').href,undefined);assert.equal($('capture-prepare').disabled,false);
+});
+test('prepare stays disabled until an interface is ticked and a target-less dialog says so',async()=>{
+ const {c,$}=harness();await c.refreshCaptureTargets();
+ assert.equal($('capture-prepare').disabled,true);
+ $('capture-interfaces').checked=[];$('capture-interfaces').onchange();assert.equal($('capture-prepare').disabled,true);
+ $('capture-interfaces').checked=[{value:'eth2'}];$('capture-interfaces').onchange();assert.equal($('capture-prepare').disabled,false);
+ $('capture-target').value='';c.renderCaptureInterfaces();
+ assert.match($('capture-interfaces').innerHTML,/Choose a capture target above/);assert.equal($('capture-prepare').disabled,true);
+});
+test('shared namespaces and loopback-only targets are labelled and aliases are searchable',()=>{
+ const {c,$}=harness();
+ vm.runInContext(`captureTargets=[{id:'h',name:'systemd(1)',kind:'proc',prefix:'',interfaces:['ens33','lo'],aliases:['containerlab-node-manager-backup-ui-1']},{id:'s',name:'sandbox',kind:'proc',prefix:'',interfaces:['lo'],aliases:[]}];`,c);
+ c.filterCaptureTargets();
+ assert.match($('capture-target').innerHTML,/shares namespace with containerlab-node-manager-backup-ui-1/);assert.match($('capture-target').innerHTML,/sandbox \(proc\) · 1 interfaces · loopback only/);
+ $('capture-search').value='backup-ui';c.filterCaptureTargets();
+ assert.equal($('capture-target').value,'h');assert.doesNotMatch($('capture-target').innerHTML,/sandbox/);
+ vm.runInContext(`captureTargets=[{id:'n',name:'clab-demo-r1',kind:'docker',prefix:'',interfaces:['eth0'],aliases:['CliShell(1)','CliShell(2)','CliShell(3)','CliShell(4)']}];`,c);
+ $('capture-search').value='';c.filterCaptureTargets();
+ assert.match($('capture-target').innerHTML,/shares namespace with CliShell\(1\), CliShell\(2\) \+2 more/);
+ $('capture-search').value='clishell(4)';c.filterCaptureTargets();assert.equal($('capture-target').value,'n');
+});
+test('node and menu capture actions are disabled only once the manager reports capture disabled',async()=>{
+ const {c}=harness();await new Promise(r=>setImmediate(r));
+ assert.equal(c.captureActionAttrs(),'');
+ vm.runInContext('captureEnabled=false',c);assert.match(c.captureActionAttrs(),/^disabled title=/);
+ vm.runInContext('captureEnabled=null',c);assert.equal(c.captureActionAttrs(),'');
 });
 test('closing during an in-flight launch cannot restore a stale link',async()=>{
  const {c,$}=harness();await c.refreshCaptureTargets();$('capture-interfaces').checked=[{value:'eth2'}];let finish;

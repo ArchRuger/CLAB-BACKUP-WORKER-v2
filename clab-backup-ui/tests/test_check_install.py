@@ -179,6 +179,41 @@ class InstallationCheckTests(unittest.TestCase):
             ctx.http.assert_called_once_with('/api/git/repositories')
             self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
 
+    def test_capture_check_reports_disabled_enabled_and_failed_provider(self):
+        def router(enabled, discovery):
+            def request(path, payload=None, **kwargs):
+                if path == '/api/capture/status':
+                    return check.Result(0), {'enabled': enabled, 'provider': 'edgeshark' if enabled else 'disabled',
+                                             'message': PRIVATE if enabled else 'Packet capture is optional.'}
+                if path == '/api/capture/targets':
+                    return discovery
+                return check.Result(reason='unexpected route'), None
+            return request
+        ctx = context()
+        ctx.http = Mock(side_effect=router(False, (check.Result(0), {'targets': []})))
+        check.check_capture(ctx)
+        self.assertEqual(by_id(ctx, 'capture')['status'], 'INFO')
+        self.assertIn('CAPTURE_PROVIDER', by_id(ctx, 'capture')['fix'])
+        self.assertEqual([call.args[0] for call in ctx.http.call_args_list], ['/api/capture/status'])
+        ctx = context()
+        ctx.http = Mock(side_effect=router(True, (check.Result(0), {'targets': [{'id': 'a' * 64}, {'id': 'b' * 64}], 'message': PRIVATE})))
+        check.check_capture(ctx)
+        self.assertEqual(by_id(ctx, 'capture')['status'], 'PASS')
+        self.assertIn('2 capture target(s)', by_id(ctx, 'capture')['detail'])
+        self.assertTrue(any('cshargextcap' in item for item in ctx.manual))
+        self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
+        ctx = context()
+        ctx.http = Mock(side_effect=router(True, (check.Result(502, reason='HTTP 502'), None)))
+        check.check_capture(ctx)
+        self.assertEqual(by_id(ctx, 'capture')['status'], 'FAIL')
+        self.assertIn('compose.capture.yml', by_id(ctx, 'capture')['fix'])
+        ctx = context()
+        ctx.base_url = ''
+        ctx.http = Mock()
+        check.check_capture(ctx)
+        self.assertEqual(by_id(ctx, 'capture')['status'], 'SKIP')
+        ctx.http.assert_not_called()
+
     def test_untrusted_helper_cannot_be_executed_or_reached_over_http(self):
         ctx = context(require_git=True)
         ctx.trusted_helpers = {'inspect': False, 'operate': False, 'git': False}

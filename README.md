@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.20.0
+# Containerlab Node Manager — 1.20.1
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,10 +6,10 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.20.0 deployment:** Build the new source and create the VM password using
+**1.20.1 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 Install matching manager and helpers with `bash deploy/install.sh`, keeping existing
-persistent data, then confirm Release 1.20.0 in the Debug panel.
+persistent data, then confirm Release 1.20.1 in the Debug panel.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
 Proxmox/Ubuntu setup, source/image installation, VM passwords, lab workflows and recovery.
@@ -41,6 +41,25 @@ Containerlab extension. Each is a short block to paste as your normal account.
 ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
+
+## Changes in 1.20.1
+
+Fixes from vetting the 1.20.0 Wireshark capture on a live Ubuntu VM with Edgeshark.
+A selected host-namespace target no longer fails with "target changed" whenever any
+container starts or stops: the target identity now covers the namespace, root
+process, name and engine prefix, and only the interfaces you selected are checked
+against fresh discovery. **All host targets** lists a namespace shared by a
+host-networked container (the manager itself) once, naming the other as an alias,
+and marks loopback-only namespaces. A namespace Edgeshark reports in an unreadable
+form is skipped and counted instead of hiding every other target. Prepare capture
+stays disabled until an interface is ticked, and node/menu Capture actions are
+disabled when the manager reports capture disabled. `check-install` gains an
+**Optional packet capture** check. [CAPTURE.md](CAPTURE.md) now states what was
+observed: Packetflix 0.9.7 does not reject a mismatched PID, start time or
+namespace, so the manager's re-discovery and link expiry are the real stale-target
+guards. Root-run helpers (`setup-git.sh --list`, a privileged `check-install`) no
+longer leave root-owned Python bytecode in the ordinary owner's source folder, which
+blocked removing or re-staging that folder without sudo.
 
 ## Changes in 1.20.0
 

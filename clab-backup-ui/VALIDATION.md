@@ -1,3 +1,53 @@
+# Capture vetting fixes — 1.20.1
+
+- Prepared on branch `claude/capture-vetting-fixes` from main `71fb0e5` (1.20.0).
+  Source delivery; no Docker image is published. Lockstep metadata verifies as
+  **1.20.1** including `capture-setup.html`.
+- **Live vetting of 1.20.0 on the dev VM (Ubuntu 24.04.4, no KVM)** that produced the
+  findings: Edgeshark started from `deploy/compose.capture.yml` (packetflix 0.9.7,
+  `127.0.0.1:5001`; `/` serves the UI, `/version` answers); the real
+  `/discover/mobyshark` payload (15 rows over 5 namespaces) passes `normalize_targets`;
+  the manager-built `packetflix:ws://…/capture?container=…&nif=eth0%2Feth1` URI, read
+  with a stdlib WebSocket client on the VM while pinging between the cEOS nodes,
+  delivered valid pcapng (one SHB, two IDBs, dozens of EPBs), so multi-interface and
+  the percent-encoded `nif` work; 409 for unknown, duplicate and forged selections and
+  after a disposable container restart; 403 cross-origin; 502 with a safe message when
+  packetflix was stopped while the operations probe kept passing. Against packetflix
+  0.9.7 a wrong PID, wrong start time, another live namespace identifier and a
+  netns-only request **all captured**, which is why CAPTURE.md no longer describes the
+  `container=` identity as a stale-namespace check. A host-namespace launch returned
+  200, then **409 after an unrelated container started** (a new veth), then 200 after
+  it stopped: the identity hashed the whole interface list.
+- Windows unit tests with the CI-style discover invocation: `test_capture` (22; four
+  new: skipped rows, namespace merge preferring init, unrelated interface changes keep
+  a selection valid, shared namespace listed once and launchable without aliases in the
+  URL, unreadable rows counted), `test_check_install` (35; new capture check for
+  disabled/enabled/failed/no-manager), `test_release_consistency`; all 58 JavaScript
+  tests pass (three new capture-dialog tests plus the alias/loopback label test). The
+  known Windows `state.enc` rename flake appeared once in `setUp` and passes on rerun.
+- **Live verification of 1.20.1 on the same VM** after `start-manager.sh` rebuilt the
+  manager: version 1.20.1 with the provider enabled; the host view lists the host
+  namespace once as `systemd(1)` with `containerlab-node-manager-backup-ui-1` as its
+  alias and merges the cEOS `CliShell(pid)` process rows into their node rows (the raw
+  15 rows have exactly 5 distinct netns); a host launch returned **200, 200, 200**
+  across an unrelated container start and stop; lab/node views are unchanged; forged
+  and missing-interface selections still return 409; `check-install` reports
+  **PASS 59 / FAIL 0 / WARN 1** with `[PASS] Optional packet capture` and its manual
+  Wireshark item. In a real browser: the toolbar dialog shows "Choose a capture target
+  above." with Prepare disabled, the host scope shows the alias labels, selecting
+  `systemd(1)` keeps Prepare disabled until `ens33` is ticked, and Prepare then yields
+  the `packetflix:` link with no console errors. The alias-label truncation ("+N more")
+  landed after that browser run and is covered by the JavaScript test only.
+- Found while redeploying: `setup-git.sh --list` (run as root by guided Git setup)
+  imported `host_git.py` from the owner's source checkout and left a root-owned
+  `__pycache__` there, so `rm -rf ~/projects/v1.20.1` failed as the owner.
+  `git-registrations.py` and `check_install.module()` now set
+  `sys.dont_write_bytecode`; the VM was cleaned with sudo once and the final commit
+  redeployed from a fresh extract.
+- Not exercised: the workstation cshargextcap plugin and SSH tunnel (Wireshark 4.6.8 is
+  installed on the workstation but the plugin is not), VM-based NOS kinds, HTTPS/proxy
+  Edgeshark deployments, and the `.env` copy path of `install.sh`.
+
 # 1.20.0 — optional Wireshark capture (2026-09-12)
 
 Prepared in the active workspace on `codex/wireshark-capture`, based on fetched

@@ -100,6 +100,14 @@ Interactive SSO in a browser is not automatically available to a native plugin.
 | Processless network namespaces | All host targets; choose the bindmount target |
 | Several interfaces in one namespace | Select multiple checkboxes; PCAPNG preserves interfaces |
 
+One namespace is one capture location. A container that uses host networking, such
+as the manager itself, shares the host's namespace, so **All host targets** lists
+that namespace once (preferring the host's `init` entry) and names the sharing
+container as an alias; searching for either name finds it. Namespaces that expose
+only `lo` (sandboxed system services) are labelled *loopback only*. A namespace that
+Edgeshark reported in a form the manager could not validate is skipped and counted
+in the dialog message instead of hiding the whole list.
+
 The live Linux namespace/interface is the capture location, not the displayed NOS
 port alias. For example, the existing XRv9k diagram importer can display an
 `eth2` export as `Gi0/0/0/1`; select the live `eth2` interface. The UI preselects an
@@ -127,8 +135,9 @@ they are not backup jobs, Git snapshots, or automatic scheduled operations.
   two service logs, port conflicts, trusted TLS certificates and proxy path.
 - **No matching node:** use All host targets. Matching uses the exact container
   prefix, deployment name and definition node, never substring/IP matching.
-- **Target changed:** refresh and reselect. Restarts, changed interfaces or a
-  manager restart invalidate old selections.
+- **Target changed:** refresh and reselect. A restarted namespace or root process,
+  a selected interface that disappeared, or a manager restart invalidates an old
+  selection; unrelated interfaces changing does not.
 - **No Wireshark opens:** allow the browser's external-app prompt, verify the
   plugin/URL handler installation, and follow the local setup page.
 - **Wireshark opens but cannot connect:** verify the workstation public URL and
@@ -173,13 +182,20 @@ bounded reads/timeouts and strict payload limits prevent a broken provider from
 holding unlimited resources. URL redirects and ambient HTTP proxies are disabled.
 The UI cannot supply a server URL, process ID, namespace number or command.
 
-Each handoff performs fresh discovery and verifies the full selected identity
-with a server-generated HMAC. URLs include namespace, PID, process start time,
-name and engine prefix for Packetflix's own stale-namespace checks. Processless
-namespaces have no PID/start-time protection; their identifiers can be reused
-between verification and capture, an upstream limitation. The UI hides prepared
-URLs after 60 seconds, but URLs themselves are not bearer tickets with server-side
-expiry. They remain native Edgeshark URLs governed by provider access.
+Each handoff performs fresh discovery and verifies the selected identity (namespace,
+root PID and start time, name and engine prefix) with a server-generated HMAC, and
+checks the selected interfaces against that fresh list. The interface list itself is
+not part of the identity: an unrelated interface appearing or disappearing (any
+container start or stop adds or removes a host veth) does not invalidate a selection.
+URLs carry the same identity fields in Packetflix's `container=` form, but do not
+rely on Packetflix to reject a stale one: against Packetflix 0.9.7 a wrong PID, a
+wrong start time, a wrong name and even another live namespace identifier all
+captured anyway. The manager's re-discovery at Prepare and the 60-second link expiry
+in the UI are the real guards; treat a prepared URL as a live capture credential for
+that namespace for as long as Edgeshark is reachable. Processless namespaces have no
+PID or start time at all, and any namespace identifier can in principle be reused
+between verification and capture. URLs are not bearer tickets with server-side
+expiry; they remain native Edgeshark URLs governed by provider access.
 
 The image digests in `deploy/compose.capture.yml` were resolved from Siemens'
 public multi-architecture manifests on 2026-09-12. Update them deliberately and

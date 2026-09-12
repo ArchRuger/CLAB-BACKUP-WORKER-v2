@@ -34,6 +34,8 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def module(name):
+    # The report may run under sudo; never leave root-owned bytecode in the source tree.
+    sys.dont_write_bytecode = True
     spec = importlib.util.spec_from_file_location(name, SOURCE / 'deploy' / (name + '.py'))
     value = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(value)
@@ -570,6 +572,35 @@ def check_git_route(ctx):
                 'Run bash deploy/install.sh --git as the ordinary checkout owner.')
 
 
+def check_capture(ctx):
+    """Optional Wireshark handoff: provider configured in the manager and Edgeshark discoverable through it."""
+    title = 'Optional packet capture'
+    if not ctx.base_url:
+        ctx.add('capture', 'SKIP', title, 'Manager HTTP is unavailable; the capture provider could not be queried.')
+        return
+    result, status = ctx.http('/api/capture/status')
+    if not result.ok or not isinstance(status, dict):
+        ctx.add('capture', 'WARN', title, 'The manager did not report a capture provider status.',
+                'Update to a release with packet capture (1.20.0 or later) and rerun.')
+        return
+    if not status.get('enabled'):
+        ctx.add('capture', 'INFO', title, 'Disabled; the manager works without it. ' + safe_text(status.get('message') or '', 300),
+                'To enable Wireshark handoffs follow CAPTURE.md: start Edgeshark, set CAPTURE_PROVIDER, CAPTURE_EDGESHARK_URL and '
+                'CAPTURE_EDGESHARK_PUBLIC_URL in clab-backup-ui/.env, then recreate the manager.')
+        return
+    result, targets = ctx.http('/api/capture/targets', limit=4 * MIB)
+    if result.ok and isinstance(targets, dict) and isinstance(targets.get('targets'), list):
+        ctx.add('capture', 'PASS', title, f"Edgeshark discovery through the manager listed {len(targets['targets'])} capture target(s); "
+                'no capture was started. The workstation plugin, tunnel and live packets are separate checks.')
+        ctx.manual.append('Wireshark: install cshargextcap, open the SSH tunnel to the Edgeshark port, prepare a capture in the '
+                          'manager and confirm live packets arrive.')
+        return
+    ctx.add('capture', 'FAIL', title, 'The capture provider is enabled but discovery through the manager failed: '
+            + (result.reason or 'invalid response') + '.',
+            'On the VM run sudo docker compose -f deploy/compose.capture.yml ps and curl --fail http://127.0.0.1:5001/version; '
+            'verify CAPTURE_EDGESHARK_URL in clab-backup-ui/.env, then recreate the manager.')
+
+
 def valid_path(path):
     return isinstance(path, str) and len(path) <= 4096 and path.startswith('/') \
         and '..' not in Path(path).parts and not any(ord(c) < 32 or ord(c) == 127 for c in path)
@@ -660,7 +691,8 @@ def main(argv=None):
               ('Docker, manager and persistent storage', check_docker), ('Containerlab', check_containerlab),
               ('Installed helper files and sudoers', check_helper_files), ('Restricted helper execution', check_helpers),
               ('Manager SSH and topology folders', check_manager_routes), ('Git helper over saved SSH', check_git_route),
-              ('Registered Git checkouts', lambda c: module('check_git').check_git(c))]
+              ('Registered Git checkouts', lambda c: module('check_git').check_git(c)),
+              ('Optional packet capture', check_capture)]
     for title, fn in groups:
         if time.monotonic() >= ctx.deadline:
             ctx.add('deadline', 'SKIP', 'Remaining checks', 'Overall report time budget expired.',

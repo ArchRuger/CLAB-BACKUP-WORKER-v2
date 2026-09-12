@@ -1,3 +1,32 @@
+# Wireshark capture — 1.20.0 (Codex) and 1.20.1 fixes
+
+Read README.md "Changes in 1.20.0/1.20.1" and CAPTURE.md. The provider boundary is
+app/capture.py (Edgeshark only, explicit factory, no client-supplied URLs) and the
+dialog is static/capture.js; everything else only registers routes and entry points.
+Contract verified live on the dev VM against Edgeshark packetflix 0.9.7: the real
+/discover/mobyshark payload passes normalize_targets, and the manager-built
+`packetflix:ws://.../capture?container=<json>&nif=a%2Fb` URI streams valid pcapng with
+one IDB per interface (Packetflix decodes the percent-encoded slash). Keep
+IDENTITY_FIELDS (name, type, prefix, netns, pid, starttime) as the HMAC input and keep
+the interface list OUT of it: selected interfaces are re-validated at launch, and
+hashing the whole list made every container start/stop on the host (a new veth)
+invalidate a selected host-namespace target. Do not describe Packetflix's
+`container=` identity as a stale-namespace check: 0.9.7 captured with a wrong pid,
+starttime, name and even another live netns; only re-discovery at Prepare and the 60 s
+link expiry guard against reuse. merge_shared_namespaces applies only to the unfiltered
+host view (lab/node views must keep every container row for exact name matching);
+host-networked containers such as the manager share the host netns and are listed as
+aliases of the init entry. normalize_targets skips and counts malformed rows but still
+fails closed on a bad shape or when no row validates. capture.js: Prepare needs a target
+plus a ticked interface (an imported-port hint renders ticked); captureActionAttrs()
+disables node/menu Capture only when the manager reported capture disabled; the search
+box is disabled during discovery, so typing cannot race an in-flight refresh.
+check_install.check_capture is INFO when disabled, PASS/FAIL from a read-only
+/api/capture/targets through the manager. Enabling capture needs the three CAPTURE_*
+values in clab-backup-ui/.env of the source folder start-manager.sh runs from, then a
+recreate. The workstation needs cshargextcap and the SSH tunnel; the manager cannot
+observe whether Wireshark opened or packets arrived.
+
 # Engineer access for VS Code — 1.19.4
 
 Read README.md "Changes in 1.19.4" and FRESH-VM-GUIDE-V2.md "VS Code Remote -

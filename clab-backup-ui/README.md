@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.20.0
+# Containerlab Node Manager — 1.20.1
 
 Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
 ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
@@ -17,7 +17,7 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
 
-## Changes in 1.20.0
+## Changes in 1.20.1
 
 [Packet capture and Wireshark](../CAPTURE.md) adds optional Edgeshark integration:
 node capture, both endpoints of map links, live host/interface discovery and
