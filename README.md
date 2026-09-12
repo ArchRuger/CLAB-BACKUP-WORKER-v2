@@ -27,6 +27,9 @@ The [short install guide](INSTALL.md) and
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
 
+**Just want it done?** [Quick install](QUICK-INSTALL.md) is the same route as
+numbered steps with only what to paste, type or click.
+
 **After a snapshot rollback or the installer:** the fresh VM guide's
 [paste-in fixes](FRESH-VM-GUIDE-V2.md#paste-in-fixes) resynchronize the VM clock,
 let WinSCP write to root-owned lab folders and let VS Code Remote - SSH run the

@@ -3,7 +3,9 @@
 This is the **installer-based walkthrough** for Containerlab Node Manager
 **1.19.2** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
 the application version. It supplements the [short install guide](INSTALL.md)
-and keeps the [original manual guide](FRESH-VM-GUIDE.md) available.
+and keeps the [original manual guide](FRESH-VM-GUIDE.md) available. For the
+same route as bare numbered steps with only what to paste, use the
+[quick install](QUICK-INSTALL.md).
 
 The route is: create the VM in Proxmox, install Ubuntu, log into its console,
 obtain the project source, run **one installer**, then verify file transfer,
