@@ -1,35 +1,69 @@
-# Deployment and operation audit — 1.19.1
+# Integrated audit recovery fixes — 1.19.2
 
-- Prepared from merged main `2d34415` (1.19.0) on
-  `codex/deployment-operation-audit`. See the
-  [audit report](../DEPLOYMENT-AUDIT.md) for seven reproduced defects and fixes.
-  No commit, push, image publication, VM deployment or live-device action was performed.
-- Full Python suite: **433 tests ran, 423 passed and ten skipped** in 249 seconds.
-  Skips cover Linux Ansible control-node behavior, controlling-terminal/process
-  groups, symlink/openat checks and the opt-in EOS SSH fixture. The new real Linux
-  Git inherited-stdout timeout test is one of these skips; its simulated ordering
-  regression passes on Windows. This branch's remote CI has not run.
-- All **43 JavaScript tests pass**, including file browsing while capability
-  checks fail, development diagnostics and the new failed-audit-write display.
-- New tests failed before the corresponding fixes: delayed discovery/Git SSH
-  stdout, bounded Git stderr, topology-create race, background loop/operation
-  cleanup after storage failures, Git reservation recovery, audit API handling,
-  and Git timeout after the direct parent exits. They now pass locally.
-- Four new real localhost Paramiko tests cover both RPC clients, including a
-  fragmented 160 KiB response and missing/nonzero exit status. These complement
-  the existing real operations SSH suite; they do not exercise Ubuntu OpenSSH.
-- Fault-injection tests verify scheduler/discovery continuation, released lab/Git
-  guards, a retry using the original capture, and successful settings persistence
-  despite an unavailable audit log. Debug exposes the failure without secrets;
-  a subsequent successful log write clears the flag. Missed events are not replayed.
-- Release metadata verifies as 1.19.1. Workflow YAML, installer Bash syntax and
-  Git whitespace checks pass. CI includes the new regressions and relevant
-  discovery, Git transport/progress, worker recovery and logging coverage.
-- Installer, gateway, APT and health-check regression tests pass in the full
-  suite, with host services/package probes mocked. No additional fresh-install
-  defect was confirmed. Docker, WSL and a live Ubuntu target were unavailable;
-  package installation, image recreation, real sudo/SSHD policy, device login,
-  backups and remote Git credentials/push still require deployment-host checks.
+- Integrated the unmerged audit commit `8d87ea8` with current main `2c10037`
+  (1.19.1) on `codex/deployment-operation-audit`. The local merge is resolved
+  and staged for review; no new commit, push or GitHub merge was performed.
+- Full combined Python suite: **443 tests ran, 433 passed and 10 skipped**
+  in 244 seconds. All **43 JavaScript tests pass**. Skips cover Linux
+  Ansible control-node behavior, controlling-terminal/process groups,
+  symlink/openat checks and the opt-in EOS SSH fixture. No remote CI result is
+  available for the uncommitted integration.
+- Before integration, 16 focused audit tests against current main produced
+  three passes, five failures, seven errors and one Linux-only skip. The failure
+  paths cover topology overwrite, storage recovery, stuck lab/Git guards, audit
+  logging, bounded Git stderr and cleanup after the Git parent exits. The
+  previously failing regressions now pass as part of the combined suite.
+- Retained main's SSH EOF implementations and added audit bounds/recovery without
+  shortening its 60-second discovery deadline, helper inspect/label budgets,
+  refresh wait or 90-second debug probes. Its authentication hints, terminal Git
+  clone behavior, dependency bounds and LF normalization remain present.
+- Real localhost SSH regressions from both branches pass, including delayed and
+  fragmented output after exit status. Helper-timeout tests and diagnostics
+  tests confirm the newer budgets are retained. Host-service/package probes use
+  mocks; localhost Paramiko is not an Ubuntu OpenSSH installation test.
+- Release metadata, including the app.js footer fallback, verifies as 1.19.2.
+  Workflow YAML, Bash syntax for all ten deployment scripts, and Git whitespace
+  checks pass. CI includes both branches' relevant SSH, timeout, Git recovery,
+  operation, logging and browser regressions.
+- No Docker build, fresh Ubuntu install, live VM helper call, device action or
+  remote Git push was performed. The real Linux Git inherited-stdout timeout
+  regression is skipped locally and included in CI. Full deployment validation
+  remains outstanding; see the [audit report](../DEPLOYMENT-AUDIT.md).
+
+# Transport EOF, helper timeouts and hygiene — 1.19.1
+
+- Prepared from published main `2d34415` (1.19.0) on
+  `claude/transport-eof-and-helper-timeouts`. No image build, fresh-VM run,
+  live VM helper call or device validation was performed on this Windows host.
+- Real localhost Paramiko regressions now cover discovery as they did
+  operations: exit status before a delayed tail, exit status before a 160 KiB
+  multipart tail, and nonzero status before a tail (six discovery SSH tests).
+  Git transport tests replace the old `recv_ready` mock with an EOF-terminated
+  stream, add a fragmented tail with early exit status, and assert a truncated
+  envelope is never parsed (six tests). Both loops copy `lab_operations.remote`.
+- Four helper timeout tests verify the 25 s inspect / 8 s label budget fits the
+  60 s manager deadline, that an expired watchdog raises `TimeoutError`, that a
+  completed inspect parses, and that the helper's stderr names the timeout.
+  Diagnostics tests cover the new `failure_hint` classification of Paramiko
+  "Authentication failed." and the 90 s probe budget.
+- Full Python suite on Windows with Git and Node on PATH: 427 tests ran,
+  424 passed, nine skipped (Linux Ansible control node, controlling terminal,
+  openat symlink, opt-in EOS fixture). Three errors were the known Windows
+  `os.replace` PermissionError on `state.enc` and each passes when rerun alone.
+  Twenty-two real-repository host Git tests ran that previous Windows runs
+  skipped for lack of git. JavaScript: 42 tests pass; `node --check` passes.
+- `deploy/verify-release.py` reports 1.19.1 including the new `app.js` footer
+  check; `bash -n` passes for every deploy script. ShellCheck was unavailable.
+- Vendor collection ranges were read from the Galaxy API on 2026-09-11
+  (netcommon 8.6.2, junos 11.1.1, iosxr 12.4.2, eos 12.2.0); an unconstrained
+  build that day would resolve the same majors. A Docker build with the pinned
+  ranges has not been run here.
+- Line-ending normalization was committed separately with
+  `git add --renormalize`; the change is content-neutral for every parser the
+  files feed and must be reviewed as such.
+- The OpenSSH ordering (exit-status request emitted before the remaining pipe
+  data is drained) is modelled by the fixtures; the effect on the user's VM
+  still needs a live discovery and Git save after upgrading image and helpers.
 
 # Development debug panel and folder browsing — 1.19.0
 

@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.19.1
+# Containerlab Node Manager — 1.19.2
 
 Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
 ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
@@ -17,19 +17,33 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
 
+## Changes in 1.19.2
+
+Integrates the remaining [deployment audit fixes](../DEPLOYMENT-AUDIT.md)
+with 1.19.1. Topology creation now preserves files created concurrently.
+Discovery, scheduled backups and lab/Git operation guards recover from storage
+write failures. Failed audit writes no longer fail completed actions, and Debug
+panel reports the last audit-write result. Missed events are not replayed.
+Git response limits include stderr, and Linux Git timeouts stop descendants
+even after the parent exits.
+
+Retains 1.19.1's SSH EOF handling, longer helper/discovery/debug timeouts,
+dependency bounds and LF normalization. Install matching manager and helpers
+with `bash deploy/install.sh`, keeping existing persistent data, then confirm
+Release 1.19.2. See the audit for test evidence and live deployment limits.
+
 ## Changes in 1.19.1
 
-The [deployment and operation audit](../DEPLOYMENT-AUDIT.md) found and fixed
-seven reproducible defects: truncated discovery/Git SSH responses, topology
-creation overwriting a racing file, background loops stopping after storage
-failures, stuck lab/Git operation guards, audit writes failing completed actions,
-and a Git timeout that missed descendants after the parent exited.
-
-Debug panel now reports the last audit-write result. Failed audit events are not
-replayed; repair storage if that check fails. Install matching manager and helper
-source with `bash deploy/install.sh`, retaining existing persistent data.
-Confirm Release 1.19.1 after the update. See the audit for validation evidence
-and the remaining live Ubuntu/device checks.
+Discovery and Git SSH readers now wait for stream end-of-file before trusting
+the exit status, matching the 1.18.1 operations fix; truncated helper replies
+no longer surface as invalid-response or helper-mismatch errors. The discovery
+helper allows `containerlab inspect --all` 25 seconds (was 8) and reports a
+timeout distinctly; the manager and health checker wait 60 seconds. The Git
+wizard clone stays attached to the terminal, the Debug panel classifies a
+rejected VM password as authentication, `app.js`'s fallback footer version is
+release-checked, and vendor Ansible collections are pinned to their current
+major versions. Update image and host helpers together with
+`sudo bash deploy/start-manager.sh`.
 
 ## Changes in 1.19.0
 
@@ -44,7 +58,7 @@ checks disable only optional online controls and show a diagnostic hint.
 The existing 1.18.1 SSH stream and gateway fixes are retained.
 
 Run `bash deploy/install.sh` from the complete source root on the VM to update,
-then verify Release 1.19.0 in Debug panel. Source delivery only; no image
+then verify the release in Debug panel. Source delivery only; no image
 publication or VM deployment is implied.
 
 ## Changes in 1.18.1
@@ -175,7 +189,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.18.1
+cd ~/projects/v1.19.1
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

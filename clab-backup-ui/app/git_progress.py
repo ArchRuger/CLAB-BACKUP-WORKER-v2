@@ -94,9 +94,10 @@ def remote_git(host, request, stopping=None):
                 eof = not chunk
                 data.extend(chunk); total += len(chunk)
             if total > MAX_WIRE: raise ValueError('Git helper response exceeded its limit.')
-            # Status is not an end-of-output marker, including for large versions.
+            # Exit status can precede the last stdout packets; only stream EOF
+            # proves the multi-megabyte envelope is complete.
             if eof and not channel.recv_stderr_ready() and channel.exit_status_ready(): break
-            time.sleep(.02)
+            if eof: time.sleep(.03)
         try: envelope = json.loads(data)
         except (ValueError, UnicodeError): raise ValueError('Install or refresh the matching Git helper on the VM.')
         if not isinstance(envelope, dict): raise ValueError('Invalid Git helper response.')

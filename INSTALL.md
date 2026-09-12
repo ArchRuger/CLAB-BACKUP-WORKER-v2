@@ -1,13 +1,16 @@
-# Guided VM installation — 1.19.1
+# Guided VM installation — 1.19.2
+
+This release also includes the remaining [deployment audit fixes](DEPLOYMENT-AUDIT.md).
 
 Starting before Ubuntu is installed? Use the
 [Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) for Proxmox settings, first
 login, this installer, WinSCP/SFTP checks and your first successful Git save.
 This page is the short installation reference.
 
-This guide targets **1.19.1**, fixing the confirmed faults in the
-[deployment and operation audit](DEPLOYMENT-AUDIT.md). It is prepared from
-merged main `2d34415` (**1.19.0**). Obtain matching source after these changes merge.
+This guide targets **1.19.2**, integrating storage-failure recovery, topology
+file protection and bounded Git operations with 1.19.1's SSH and timeout fixes.
+It is prepared from merged main `2c10037` (**1.19.1**).
+Obtain matching source after these changes merge.
 After updating, open **Debug panel** in the manager sidebar to verify the release
 and check VM helpers. See [development diagnostics](DEBUG-PANEL.md).
 
@@ -30,8 +33,8 @@ Compare UTC with a trusted current clock. For a wrong clock or APT's
 Then clone into a new source folder:
 
 ```bash
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.19.1"
-bash "$HOME/projects/v1.19.1/deploy/install.sh"
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.19.2"
+bash "$HOME/projects/v1.19.2/deploy/install.sh"
 ```
 
 Git is needed for the clone. If Git is not yet installed, extract a source ZIP
@@ -42,10 +45,10 @@ requirements. Internet access is needed for packages, image builds and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.19.1 — guided setup
+Containerlab Node Manager 1.19.2 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
-Source: /home/your-account/projects/v1.19.1
+Source: /home/your-account/projects/v1.19.2
 
 Setup menu
   1. Install or update manager, then set up Git
@@ -118,7 +121,7 @@ Use menu **2** whenever Git needs attention. It does not rebuild the manager.
 You can open it directly from any directory:
 
 ```bash
-bash "$HOME/projects/v1.19.1/deploy/install.sh" --git
+bash "$HOME/projects/v1.19.2/deploy/install.sh" --git
 ```
 
 The wizard separates Linux owner, GitHub login, commit name/email and checkout

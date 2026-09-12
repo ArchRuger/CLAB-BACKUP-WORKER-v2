@@ -1,6 +1,8 @@
-# Check an installed VM — 1.19.1
+# Check an installed VM — 1.19.2
 
-For a running 1.19.1 manager, the [Debug panel](DEBUG-PANEL.md) also checks
+This release also includes the remaining [deployment audit fixes](DEPLOYMENT-AUDIT.md).
+
+For a running 1.19.0 or later manager, the [Debug panel](DEBUG-PANEL.md) also checks
 folder browsing and helper versions and exports API request metadata. Use this
 terminal report when the manager is unavailable or host setup needs checking.
 
@@ -8,9 +10,10 @@ Run the second script after installation and browser setup to get a clear
 **PASS / FAIL / WARN / SKIP / INFO** report with the next action for each problem.
 It checks the current installation and does not repair it automatically.
 
-This guide targets **1.19.1**, prepared from merged main `2d34415` (**1.19.0**).
-It includes the [deployment audit fixes](DEPLOYMENT-AUDIT.md) and retains the
-checker's sudo session fix. Obtain complete matching source after publication;
+This guide targets **1.19.2**, prepared from published main `2c10037` (**1.19.1**).
+The checker retains 1.19.1's 60-second discovery helper budget, matching the
+manager's own inspection budget, plus the sudo session fix and browser diagnostics.
+Obtain complete matching source after publication;
 copying only the launcher omits the Python check modules it needs. An earlier
 installed manager will be reported as a version mismatch until upgraded.
 
@@ -78,7 +81,7 @@ FAILURES FOUND
   The backup-ui container is running.
 [FAIL] Operations helper through restricted account
   Helper responds as root but not correctly through clab-discovery; check gateway/sudoers.
-  Next: sudo bash /home/archtop/projects/v1.18.1/deploy/setup-operations.sh
+  Next: sudo bash /home/archtop/projects/v1.19.2/deploy/setup-operations.sh
 [FAIL] Topology browser over saved SSH connection
   The uncached browser request failed: HTTP 409
 [INFO] Git repository 1: push permission

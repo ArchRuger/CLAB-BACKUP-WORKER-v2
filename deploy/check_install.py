@@ -344,7 +344,7 @@ def check_containerlab(ctx):
             'Review intended stopped labs or device boot failures; no lab was started by this check.' if stopped else '')
 
 
-def helper_request(ctx, helper, request=None, delegated=True, timeout=30, limit=16*MIB):
+def helper_request(ctx, helper, request=None, delegated=True, timeout=60, limit=16*MIB):
     if ctx.trusted_helpers.get(helper) is not True:
         return Result(reason='installed helper files are missing or unsafe')
     if delegated:

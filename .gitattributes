@@ -1,3 +1,7 @@
+# Normalize every text file to LF in the repository and on checkout. Linux
+# scripts, helpers and configuration must never receive CRLF from a Windows
+# workstation; binary detection stays automatic.
+* text=auto eol=lf
 deploy/*.sh text eol=lf
 deploy/clab-manager-gateway text eol=lf
 deploy/*.conf text eol=lf

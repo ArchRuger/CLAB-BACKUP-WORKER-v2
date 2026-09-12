@@ -11,6 +11,8 @@ FIELDS = {
     'clab-backup-ui/app/host_git.py': r'^VERSION\s*=\s*[\'"]([^\'"]+)[\'"]',
     'clab-backup-ui/Dockerfile': r'org\.opencontainers\.image\.version="([^"]+)"',
     'clab-backup-ui/compose.yml': r'^\s+image:\s+clab-backup:([^\s]+)',
+    # Footer fallback shown before the first /api/state response arrives.
+    'clab-backup-ui/app/static/app.js': r"state\.version\|\|'([^']+)'",
 }
 for name in ('index.html', 'terminal.html', 'workspace.html', 'vm-connection.html', 'debug.html'):
     FIELDS['clab-backup-ui/app/static/' + name] = r'/static/[^"\s?]+\?v=([^"\s]+)'

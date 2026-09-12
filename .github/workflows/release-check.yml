@@ -50,6 +50,7 @@ jobs:
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_git_transport.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_discovery_ssh.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_discovery_sftp.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_helper_timeout.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_runner_resilience.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_logging.py -v
       - name: Check browser regressions

@@ -14,6 +14,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from . import __version__
 from .lab_operations import remote
 
+# The capabilities probe runs up to nine containerlab --help commands of 15 s
+# each on the VM; the normal UI allows 180 s. Keep the panel responsive but
+# do not report a slow VM as a broken one.
+PROBE_TIMEOUT = 90
+
 
 def timestamp():
     return datetime.now(timezone.utc).isoformat()
@@ -29,6 +34,8 @@ def failure_hint(exc):
     for fragment, code, message in (
         ('fingerprint', 'host-trust', 'Refresh discovery and verify the VM host fingerprint.'),
         ('configure and enable', 'vm-disabled', 'Configure and enable the VM connection.'),
+        # Paramiko reports a rejected VM password as "Authentication failed."
+        ('authentication failed', 'authentication', 'Check the saved VM password and restricted account setup.'),
         ('password', 'authentication', 'Check the saved VM password and restricted account setup.'),
         ('sudo permission', 'gateway-permission', 'Run sudo bash deploy/start-manager.sh --enable-operations from matching source on the VM.'),
         ('not using the operations gateway', 'gateway-account', 'Use the clab-discovery account in VM connection settings.'),
@@ -119,7 +126,7 @@ class Diagnostics:
                     try:
                         req = {'mode': mode}
                         if mode == 'browse': req['path'] = data.path
-                        result = remote(host, req, timeout=30)
+                        result = remote(host, req, timeout=PROBE_TIMEOUT)
                         if mode == 'browse':
                             entries = result.get('entries')
                             if not isinstance(entries, list): raise ValueError('Invalid helper response')
