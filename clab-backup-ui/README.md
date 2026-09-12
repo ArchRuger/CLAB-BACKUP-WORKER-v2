@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.19.0
+# Containerlab Node Manager — 1.19.1
 
 Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
 ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
@@ -17,6 +17,19 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
 
+## Changes in 1.19.1
+
+Discovery and Git SSH readers now wait for stream end-of-file before trusting
+the exit status, matching the 1.18.1 operations fix; truncated helper replies
+no longer surface as invalid-response or helper-mismatch errors. The discovery
+helper allows `containerlab inspect --all` 25 seconds (was 8) and reports a
+timeout distinctly; the manager and health checker wait 60 seconds. The Git
+wizard clone stays attached to the terminal, the Debug panel classifies a
+rejected VM password as authentication, `app.js`'s fallback footer version is
+release-checked, and vendor Ansible collections are pinned to their current
+major versions. Update image and host helpers together with
+`sudo bash deploy/start-manager.sh`.
+
 ## Changes in 1.19.0
 
 Adds a [development debug panel](../DEBUG-PANEL.md) available before any lab is imported.
@@ -30,7 +43,7 @@ checks disable only optional online controls and show a diagnostic hint.
 The existing 1.18.1 SSH stream and gateway fixes are retained.
 
 Run `bash deploy/install.sh` from the complete source root on the VM to update,
-then verify Release 1.19.0 in Debug panel. Source delivery only; no image
+then verify the release in Debug panel. Source delivery only; no image
 publication or VM deployment is implied.
 
 ## Changes in 1.18.1
@@ -161,7 +174,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.18.1
+cd ~/projects/v1.19.1
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

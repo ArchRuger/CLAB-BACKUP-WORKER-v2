@@ -1,3 +1,21 @@
+# Transport EOF and helper timeouts — 1.19.1
+
+Read README.md "Changes in 1.19.1". The 1.18.1 operations reader fix (wait for
+stream EOF; exit status is metadata OpenSSH may send before draining the helper
+pipe) now also applies to discovery.py inspect_host and git_progress.remote_git.
+Keep all three loops identical in shape; new SSH readers must copy it and carry
+the status-before-tail regression tests. host_files.py allows 25 s for
+containerlab inspect and 8 s per label lookup; discovery waits 60 s
+(INSPECT_DEADLINE) and check_install helper_request 60 s. Keep helper budget +
+18 s file reads below the manager deadline. app.js's footer fallback is part of
+the lockstep version set checked by verify-release.py. collections.yml pins
+current major versions; raise deliberately after a Linux build test.
+.gitattributes normalizes all text to LF; commit with git, not web uploads.
+Prepared on published main 2d34415 (1.19.0) in branch
+claude/transport-eof-and-helper-timeouts; no image build, fresh-VM run or live
+device validation was performed. Windows full-suite runs can show WinError 5
+on state.enc rename; rerun failures alone or trust Linux CI.
+
 # Consolidated terminal installation — 1.16.0
 
 Read INSTALL.md. Ordinary users run deploy/install.sh, which delegates privileged

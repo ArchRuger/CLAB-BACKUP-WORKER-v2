@@ -1,4 +1,4 @@
-# Development debug panel — 1.19.0
+# Development debug panel — 1.19.1
 
 Open **Debug panel** at the bottom of the manager sidebar. It is also linked
 from **Deploy New Lab** and the VM connection guide. No imported lab is required.
@@ -21,7 +21,9 @@ The checks use the saved password and pinned SSH connection. They do not read
 topology contents, run lifecycle commands, change settings, or deploy labs.
 Capability checks bypass the normal cache to detect stale helpers after setup.
 Only one diagnostic probe runs at a time. Each of its two helper responses has
-a 30-second timeout, in addition to SSH connection setup time. Failed checks
+a 90-second timeout, in addition to SSH connection setup time; the capabilities
+check runs several containerlab help commands on the VM, so a slow VM is
+reported as slow rather than as missing. Failed checks
 include controlled recovery hints; a helper-version mismatch requests a matching
 source installation. Rerun after changing VM settings.
 
@@ -49,13 +51,13 @@ bash deploy/check-install.sh
 ```
 
 To install this source release or refresh mismatched helpers, use the existing
-installer from the complete 1.19.0 source checkout:
+installer from the complete 1.19.1 source checkout:
 
 ```bash
 bash deploy/install.sh
 ```
 
 Choose the install/update option and retain your existing settings. Then reopen
-the debug page and confirm **Release 1.19.0** and matching helper results. The
+the debug page and confirm **Release 1.19.1** and matching helper results. The
 installer retains persistent data and VM credentials. This source change is
 not a published image or a completed VM deployment.

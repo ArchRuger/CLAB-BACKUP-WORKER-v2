@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VM connection guide</title><link rel="stylesheet" href="/static/style.css?v=1.19.0"></head><body><main class="vm-guide"><a href="/">← Containerlab Node Manager</a><h1>VM connection — password setup and recovery, 1.19.0</h1>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VM connection guide</title><link rel="stylesheet" href="/static/style.css?v=1.19.1"></head><body><main class="vm-guide"><a href="/">← Containerlab Node Manager</a><h1>VM connection — password setup and recovery, 1.19.1</h1>
 <p>Create the <code>clab-discovery</code> password <strong>on the VM during host setup, before launching
 the manager</strong>. The image build contains no user password. Each VM has its own
 user-created password, retained across reboots and manager upgrades.</p>
@@ -9,7 +9,7 @@ SSH and backup credentials are configured separately and retain their existing o
 account. Start in the extracted source folder containing <code>deploy/</code> and <code>clab-backup-ui/</code>.
 Docker, Compose, Containerlab, Python 3, sudo and a running OpenSSH service are required;
 see <a href="https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2/blob/main/FRESH-VM-GUIDE.md">Fresh VM guide</a> for installation.</p>
-<pre><code class="language-bash">cd &quot;$HOME/projects/v1.19.0&quot;
+<pre><code class="language-bash">cd &quot;$HOME/projects/v1.19.1&quot;
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 </code></pre>
 <p>Setup prompts twice for the new <code>clab-discovery</code> password without displaying it.

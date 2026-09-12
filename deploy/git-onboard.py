@@ -189,7 +189,10 @@ def prepare_checkout(path, url, env):
         raise ValueError('This directory has no Git checkout. Choose Clone in the setup wizard.')
     https_url(url)
     path.parent.mkdir(parents=True, exist_ok=True)
-    result = run(['git', 'clone', '--', url, str(path)], env, check=False)
+    # Cloning keeps the terminal: a large lab-config repository or a slow link
+    # must not hit the 120 s non-interactive limit, and Git's own progress and
+    # error text stay visible. GIT_TERMINAL_PROMPT=0 still blocks credential prompts.
+    result = run(['git', 'clone', '--', url, str(path)], env, interactive=True, check=False)
     if result.returncode:
         raise ValueError('Clone failed. Check the HTTPS URL, repository access and directory ownership. Setup left existing files in place.')
     return True

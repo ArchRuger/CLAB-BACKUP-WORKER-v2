@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.19.0
+# Containerlab Node Manager — 1.19.1
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.19.0 deployment:** Build the new source and create the VM password using
+**1.19.1 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -32,6 +32,33 @@ ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
 
+## Changes in 1.19.1
+
+Applies the 1.18.1 operations-transport fix to the two remaining SSH readers.
+Discovery and Git transfers now wait for stream end-of-file before accepting
+the helper's exit status; OpenSSH can report that status while the helper's
+final stdout bytes are still queued, which truncated large inspection or Git
+envelopes and produced misleading "Invalid containerlab inspection response"
+or "Install or refresh the matching Git helper" errors.
+
+The installed discovery helper allows `containerlab inspect --all` 25 seconds
+instead of 8 (per-container label lookups stay at 8 seconds), the manager
+waits 60 seconds for the helper, the health checker matches that budget, and
+a timeout is reported as a timeout rather than a permissions failure. Update
+both the image and the host helpers with `sudo bash deploy/start-manager.sh`.
+
+Also: the Git wizard keeps `git clone` attached to the terminal with no
+120-second limit; the Debug panel classifies a rejected VM password as an
+authentication failure and gives the capabilities probe 90 seconds;
+`setup-discovery.sh` explains a missing containerlab or Docker binary instead
+of exiting silently; the browser footer fallback version is release-checked;
+vendor Ansible collections are pinned to their current major versions; and
+`.gitattributes` normalizes every text file to LF.
+
+Prepared from published main `2d34415` (1.19.0) on
+`claude/transport-eof-and-helper-timeouts`. Source delivery only; no image
+publication, fresh-VM run or live device validation is implied.
+
 ## Changes in 1.19.0
 
 Adds a [development debug panel](DEBUG-PANEL.md) available before any lab is imported.
@@ -45,7 +72,7 @@ checks disable only optional online controls and show a diagnostic hint.
 The existing 1.18.1 SSH stream and gateway fixes are retained.
 
 Run `bash deploy/install.sh` from the complete source root on the VM to update,
-then verify Release 1.19.0 in Debug panel. Source delivery only; no image
+then verify the release in Debug panel. Source delivery only; no image
 publication or VM deployment is implied.
 
 ## Changes in 1.18.1
@@ -293,7 +320,7 @@ sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerl
 For upgrades with the existing discovery account/password:
 
 ```bash
-cd ~/projects/v1.18.1
+cd ~/projects/v1.19.1
 sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
 ```
 

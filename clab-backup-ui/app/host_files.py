@@ -18,21 +18,34 @@ PROTOCOL = 'clab-manager-files-v1'
 FILE_LIMIT = 1024 * 1024
 TOTAL_LIMIT = 8 * FILE_LIMIT
 COMMAND_LIMIT = 4 * FILE_LIMIT
+# containerlab inspect --all runs a Docker inspection per container; several
+# labs or a busy daemon can take well over the old 8 s. Per-container label
+# lookups stay short. The manager waits 60 s in total for the helper.
+INSPECT_TIMEOUT = 25
+LABEL_TIMEOUT = 8
 
 
-def command_json(args):
+def command_json(args, timeout=LABEL_TIMEOUT):
     # A pipe avoids disk copies of credentials; a reader bounds memory while the
     # watchdog also terminates commands that stop producing output.
     import threading
+    expired = threading.Event()
+
+    def expire():
+        expired.set()
+        process.kill()
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                env={'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/root'}, cwd='/')
-    timer = threading.Timer(8, process.kill)
+    timer = threading.Timer(timeout, expire)
     timer.start()
     try:
         data = process.stdout.read(COMMAND_LIMIT + 1)
         if len(data) > COMMAND_LIMIT:
             raise ValueError('Command output limit exceeded')
-        if process.wait(timeout=1) != 0:
+        code = process.wait(timeout=1)
+        if expired.is_set():
+            raise TimeoutError(f'Read-only inspection exceeded {timeout} seconds')
+        if code != 0:
             raise ValueError('Read-only inspection failed')
         return json.loads(data)
     finally:
@@ -153,18 +166,22 @@ def collect(inspection, labels_for=None, reader=read_regular, path_type=Path, de
                     report['status'] = 'unreadable'
             if kind not in source['files']:
                 source['warnings'].append(kind + ': ' + report['status'])
-    return {'protocol': PROTOCOL, 'helper_version': '1.19.0', 'inspect': inspection, 'sources': sources}
+    return {'protocol': PROTOCOL, 'helper_version': '1.19.1', 'inspect': inspection, 'sources': sources}
 
 
 def main():
     if len(sys.argv) != 3: return 64
     clab, docker = sys.argv[1:]
     try:
-        inspection = command_json([clab, 'inspect', '--all', '--format', 'json'])
+        inspection = command_json([clab, 'inspect', '--all', '--format', 'json'], timeout=INSPECT_TIMEOUT)
         result = collect(inspection, lambda ident: command_json(
             [docker, 'inspect', '--type', 'container', '--format', '{{json .Config.Labels}}', ident]))
         sys.stdout.write(json.dumps(result, separators=(',', ':')))
         return 0
+    except TimeoutError:
+        sys.stderr.write(f'Containerlab inspection did not finish within {INSPECT_TIMEOUT} seconds. '
+                         'Check Docker daemon load and deployed container count; permissions are not indicated.\n')
+        return 1
     except Exception:
         sys.stderr.write('Containerlab discovery helper failed. Check installation and Docker service.\n')
         return 1
