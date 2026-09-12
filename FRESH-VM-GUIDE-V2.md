@@ -1,7 +1,7 @@
 # Fresh VM guide, version 2 — Proxmox to your first Git save
 
 This is the **installer-based walkthrough** for Containerlab Node Manager
-**1.19.1** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
+**1.19.2** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
 the application version. It supplements the [short install guide](INSTALL.md)
 and keeps the [original manual guide](FRESH-VM-GUIDE.md) available.
 
@@ -10,12 +10,28 @@ obtain the project source, run **one installer**, then verify file transfer,
 load your lab, and save its progress to Git. You do not need WinSCP to bootstrap
 the installer.
 
-The published baseline is GitHub main `2d34415` (**1.19.0**); this guide includes
-the **1.19.1** discovery/Git SSH stream fixes and helper timeout changes prepared
-for publication. Obtain matching source after these fixes merge. Instructions were checked
-against source and the linked provider documentation. The administrative WinSCP
-procedure below was confirmed by the user; a complete fresh-VM run of 1.19.1 has
-not been verified by its author.
+<a id="paste-in-fixes"></a>
+
+**Restoring a Proxmox snapshot taken right after the Ubuntu installation?** Start
+at [step 3](#step-3) and run its clock fix first; everything from step 4 on is
+unchanged. Three copy-and-paste blocks cover the problems seen most often after
+a rollback and after the installer:
+
+| When | Paste-in fix |
+|---|---|
+| Before cloning or installing anything | [Fix the clock](#fix-the-clock) |
+| Before uploading lab files with WinSCP | [WinSCP access to root-owned folders](#winscp-admin-sftp) |
+| Before using VS Code Remote - SSH on the VM | [VS Code and the Containerlab extension](#vscode-access) |
+
+Each block runs in the Ubuntu VM as your normal account, asks for your sudo
+password, and is safe to run again.
+
+The published baseline is GitHub main `f9dbf44` (**1.19.2**). Instructions were
+checked against source and the linked provider documentation. The administrative
+WinSCP procedure below was confirmed by the user. The clock and VS Code paste-in
+blocks were checked against the systemd, containerlab and VS Code extension
+documentation and source; a complete fresh-VM run of 1.19.2 with them has not
+been verified by its author.
 
 ## Before you start
 
@@ -31,7 +47,7 @@ This guide uses these examples; substitute your actual values:
 | Ubuntu VM name | `clab-3` |
 | Normal Ubuntu administrator | `archtop` |
 | VM LAN address | `10.150.2.213` |
-| Manager source folder | `/home/archtop/projects/v1.19.1` |
+| Manager source folder | `/home/archtop/projects/v1.19.2` |
 | Uploaded files | `/home/archtop/uploads` |
 | Lab topology/project | `/etc/containerlab/practice-lab` |
 | Lab-config Git checkout | `/home/archtop/labs/my-lab` |
@@ -47,7 +63,7 @@ flowchart TD
     A[Proxmox VM settings] --> B[Ubuntu install and console login]
     B --> C[Obtain source and run install.sh]
     C --> D[Manager checks and Git wizard]
-    D --> E[SSH and WinSCP transfer checkpoint]
+    D --> E[SSH, WinSCP and VS Code checkpoint]
     E --> F[Upload lab files and load device images]
     F --> G[Connect manager to VM and deploy lab]
     G --> H[Import lab and verify device backup]
@@ -151,6 +167,8 @@ from the later `clab-discovery` account.
 [Ubuntu installer screens](https://github.com/canonical/subiquity/blob/main/doc/tutorial/screen-by-screen.rst),
 [Ubuntu storage setup](https://github.com/canonical/subiquity/blob/main/doc/howto/configure-storage.rst)
 
+<a id="step-3"></a>
+
 ## 3. Log into the VM console and check the foundation
 
 Log into Ubuntu in the **Proxmox console** as your normal user. If SSH already
@@ -179,6 +197,47 @@ complete [clock recovery](#recovery-c) first. `NTP service: active` means the
 service is running, not that it has synchronized. A deliberately manual or
 host-managed clock can be correct even when synchronization is reported as no.
 
+<a id="fix-the-clock"></a>
+
+### Fix the clock (required after a Proxmox snapshot rollback)
+
+Rolling back to a snapshot that includes the VM's memory state resumes Ubuntu
+with the clock it had when the snapshot was taken. The time service corrects it
+only at its next scheduled poll, which can be more than half an hour away, and
+until then `apt-get` fails with `Release file ... is not valid yet`. Paste this
+block to force an immediate resynchronization:
+
+```bash
+sudo timedatectl set-ntp true
+sudo systemctl restart systemd-timesyncd
+sleep 10
+date -u
+timedatectl status
+```
+
+`date -u` must now show the current UTC date and time, and `timedatectl status`
+should report `System clock synchronized: yes`. If the date is still old, wait a
+few seconds and run the block again. If it stays wrong, the VM cannot reach a
+time server yet: set an approximate time by hand, then let the time service
+correct it precisely:
+
+```bash
+sudo timedatectl set-ntp false
+sudo timedatectl set-time "2026-09-12 15:20:00 UTC"
+sudo timedatectl set-ntp true
+sudo systemctl restart systemd-timesyncd
+date -u
+```
+
+Replace the quoted value with the current UTC date and time from a trusted
+clock before pasting; the `UTC` suffix keeps the VM's timezone out of it.
+Automatic synchronization is switched off first because `set-time` refuses to
+run while it is enabled, and it is switched back on immediately so the typed
+value is only a bootstrap. On a VM that uses chrony instead of
+systemd-timesyncd, run `sudo chronyc makestep` in place of the restart command.
+Keep APT's date and signature checks enabled; never disable them to work
+around a wrong clock.
+
 For VM-backed NOS images, also check:
 
 ```bash
@@ -206,8 +265,8 @@ subshell stops at a failed command without closing your login session.
     sudo apt-get install -y git
   fi
   mkdir -p "$HOME/projects"
-  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.19.1"
-  bash "$HOME/projects/v1.19.1/deploy/install.sh"
+  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.19.2"
+  bash "$HOME/projects/v1.19.2/deploy/install.sh"
 )
 ```
 
@@ -218,10 +277,10 @@ normal account. The source must be present before its installer can run.
 If that source folder already exists, reuse it instead of cloning over it:
 
 ```bash
-bash "$HOME/projects/v1.19.1/deploy/install.sh"
+bash "$HOME/projects/v1.19.2/deploy/install.sh"
 ```
 
-The installer banner must identify **1.19.1** for this guide. A directory name
+The installer banner must identify **1.19.2** for this guide. A directory name
 does not pin a Git version; if main has advanced, use that release's matching
 guide. Its source consistency check must pass.
 
@@ -281,7 +340,7 @@ with its initial README is ready. Otherwise choose **Finish; set up Git later**.
 You can reopen the Git wizard without rebuilding:
 
 ```bash
-bash "$HOME/projects/v1.19.1/deploy/install.sh" --git
+bash "$HOME/projects/v1.19.2/deploy/install.sh" --git
 ```
 
 The six phases guide you through:
@@ -311,13 +370,14 @@ within the wizard. Cancel keeps completed work.
 If Git setup is incomplete, the manager can still run. Finish Git setup before
 the final Git save in step 12. More recovery detail is in [GIT-SETUP.md](GIT-SETUP.md).
 
-## 7. Verify SSH and WinSCP before transferring lab files
+## 7. Verify SSH, WinSCP and VS Code before transferring lab files
 
 ### Which login goes where?
 
 | Connection | Username | Password/identity |
 |---|---|---|
 | Ubuntu console, SSH and **WinSCP** | Your normal VM account, e.g. **archtop** | That Ubuntu account's password or its configured SSH authentication |
+| **VS Code Remote - SSH** | Your normal VM account, e.g. **archtop** | The same Ubuntu login; the Containerlab extension also needs the [VS Code paste-in fix](#vscode-access) below |
 | Manager **VM connection** | **clab-discovery** | The password created during installation |
 | GitHub authorization | Your GitHub account | GitHub CLI browser/device login |
 | Git commits | Your author name/email | Identity settings; not a login password |
@@ -377,41 +437,33 @@ does not repair a wrong WinSCP username, remote directory or network path.
 
 <a id="winscp-admin-sftp"></a>
 
-### Optional: WinSCP access to root-owned files
+### WinSCP access to root-owned folders (paste-in fix)
 
-Use this when you intentionally need administrative file access, including an
-existing WinSCP site configured to launch SFTP with `sudo`. The installer starts
-SSH but **does not add this sudoers permission**. This WinSCP session can modify
-root-owned files. Continue logging in as your normal administrator, such as
-`archtop`; keep `clab-discovery` reserved for the manager.
-
-On the **Ubuntu VM**, first verify the SFTP executable exists:
-
-```bash
-ls -l /usr/lib/openssh/sftp-server
-```
-
-If it is missing, follow the package instructions in [recovery B](#recovery-b).
-Otherwise open the account's sudoers file:
+The lab folders under `/etc/containerlab`, like most places you will want to
+upload to, belong to root. A plain WinSCP session as `archtop` reports
+**Permission denied** there, and a WinSCP site that already launches SFTP with
+`sudo` fails with `sudo: a password is required` until the VM allows it. The
+installer starts SSH but **does not add this sudoers permission**. Paste this
+block in the Ubuntu VM as the account WinSCP logs in with; it writes the rule
+for that account, validates it and proves that it works without a password:
 
 ```bash
-sudo EDITOR=nano visudo -f /etc/sudoers.d/archtop-sftp
+sudo -v
+me="$(id -un)"
+printf '%s ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server\n' "$me" | sudo tee "/etc/sudoers.d/${me}-sftp" >/dev/null
+sudo chmod 0440 "/etc/sudoers.d/${me}-sftp"
+sudo visudo -cf "/etc/sudoers.d/${me}-sftp"
+sudo -k
+sudo -n /usr/lib/openssh/sftp-server </dev/null >/dev/null && echo "Root SFTP is ready for $me"
 ```
 
-Add this line once, replacing `archtop` with your actual VM account if different:
+Expect `parsed OK` followed by the `Root SFTP is ready` line. Rerunning the
+block rewrites the same one-line file, so it is safe to repeat. If the last
+line prints `sudo: a password is required`, the block ran as a different
+account than the one WinSCP uses. If `/usr/lib/openssh/sftp-server` is reported
+missing, follow the package instructions in [recovery B](#recovery-b) and rerun.
 
-```text
-archtop ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server
-```
-
-Save with **Ctrl+O**, **Enter**, then **Ctrl+X**. Validate before reconnecting:
-
-```bash
-sudo visudo -c
-```
-
-Expect `parsed OK`; correct any reported syntax error before continuing. In
-WinSCP, edit the site and open **Advanced → Environment → SFTP → SFTP server**.
+In WinSCP, edit the site and open **Advanced → Environment → SFTP → SFTP server**.
 Set it to:
 
 ```text
@@ -419,12 +471,68 @@ sudo -n /usr/lib/openssh/sftp-server
 ```
 
 Save the site, disconnect and reconnect using **archtop** and its Ubuntu
-password. Test a small upload in the intended directory. No SSH restart is
-needed for this sudoers change. A `sudo: a password is required` error means the
-rule did not grant this account/passwordless command combination; check the
-username, executable path and sudoers validation. The `-n` option prevents an
-interactive sudo prompt that WinSCP cannot answer.
+password, then upload a small file into a root-owned folder such as
+`/etc/containerlab`. No SSH restart is needed. The `-n` option prevents an
+interactive sudo prompt that WinSCP cannot answer. This session can modify any
+file on the VM; keep logging in as your normal administrator and keep
+`clab-discovery` reserved for the manager. Files uploaded this way belong to
+root, which is fine for containerlab and the manager. If you also want to edit
+them in VS Code without sudo, upload them into an engineer-owned project folder
+as described in step 9 instead. Later,
+`bash deploy/check-install.sh --require-admin-sftp` confirms that the rule is
+still effective.
 [WinSCP sudo/SFTP guidance](https://winscp.net/eng/docs/faq_su)
+
+<a id="vscode-access"></a>
+
+### VS Code Remote - SSH and the Containerlab extension (paste-in fix)
+
+Connecting VS Code to the VM with **Remote - SSH** as `archtop` works, but the
+**Containerlab** extension then stops with:
+
+```text
+Extension activation failed. Insufficient permissions. Ensure archtop is in the clab_admins and docker group(s).
+```
+
+The extension checks the groups of the account it runs under and needs both
+`docker` and `clab_admins`; containerlab itself must also be able to run as
+root without a password prompt. The installer deliberately leaves your account
+out of those groups and removes the containerlab SUID bit, because the manager
+only needs its restricted `clab-discovery` account. VS Code needs the standard
+containerlab setup for your own account instead. Paste this block in the Ubuntu
+VM as your normal account:
+
+```bash
+sudo groupadd -r -f clab_admins
+sudo usermod -aG docker,clab_admins "$(id -un)"
+sudo chmod u+s /usr/bin/containerlab
+ls -l /usr/bin/containerlab
+id "$(id -un)"
+```
+
+Expect `-rwsr-xr-x 1 root root` for the binary (the `s` is the restored SUID
+bit, the same mode the official containerlab package installs) and both groups
+in the `id` output. New groups apply only to new logins, and the VS Code server
+already running on the VM keeps the old ones, so:
+
+1. Close the remote window, open the Command Palette and run
+   **Remote-SSH: Kill VS Code Server on Host...**, choosing this VM.
+2. Reconnect. The Containerlab extension re-checks permissions when it activates.
+3. In the VS Code terminal, verify `id -nG`, `docker ps` and
+   `containerlab inspect --all`.
+
+Both groups grant root-equivalent control of the VM; add only your own engineer
+account, never `clab-discovery`. The manager keeps using sudo through its
+restricted gateway and does not need these changes, and later runs of
+`bash deploy/install.sh` leave them in place. A containerlab package upgrade
+installs a new binary without the SUID bit, so rerun the block if the extension
+activates but `containerlab deploy` reports a permission error afterwards. If
+Remote - SSH itself cannot install its server and reports a permission error on
+`~/.vscode-server`, that folder is no longer owned by you, usually after a
+root-level upload into your home directory; fix it with
+`sudo chown -R "$(id -un):$(id -gn)" "$HOME/.vscode-server"` and reconnect.
+[Containerlab VS Code extension](https://containerlab.dev/manual/gui/vsc-extension/),
+[containerlab installation and sudo-less operation](https://containerlab.dev/install/)
 
 ## 8. Finish optional VM integration and check network access
 
@@ -534,8 +642,9 @@ sudo containerlab inspect --all --format json
 
 These commands deploy the training lab; the installer does not. Fresh
 Containerlab installation through this project uses sudo, so the Docker and
-`clab_admins` groups are not prerequisites for this workflow. VS Code integration
-is optional and has separate access requirements.
+`clab_admins` groups are not prerequisites for this workflow. If you applied the
+[VS Code paste-in fix](#vscode-access) in step 7, `containerlab` also runs
+without sudo for your own account.
 
 Wait for the devices to finish booting. A Docker container marked Running does
 not prove that its NOS SSH service is ready. In the manager:
@@ -587,13 +696,13 @@ After the Git wizard reported **Registered** and **Ready**:
 Now return to the **Ubuntu terminal** for the separate installation report:
 
 ```bash
-bash "$HOME/projects/v1.19.1/deploy/check-install.sh" --require-git
+bash "$HOME/projects/v1.19.2/deploy/check-install.sh" --require-git
 ```
 
 If you completed the administrative WinSCP sudoers setup in step 7, use:
 
 ```bash
-bash "$HOME/projects/v1.19.1/deploy/check-install.sh" --require-git --require-admin-sftp
+bash "$HOME/projects/v1.19.2/deploy/check-install.sh" --require-git --require-admin-sftp
 ```
 
 Approve sudo for inspection. The report checks services, SSH/SFTP policy,
@@ -614,7 +723,7 @@ update both the image and helper from this matching source checkout and retest t
 actual failed folder:
 
 ```bash
-cd "$HOME/projects/v1.19.1"
+cd "$HOME/projects/v1.19.2"
 sudo bash deploy/start-manager.sh --enable-operations
 bash deploy/check-install.sh --require-git --lab-path /etc/containerlab/practice-lab
 ```
@@ -656,13 +765,14 @@ Git remote/checkout. Keep passwords in your password manager. Preserve:
 | `/home/archtop/labs/my-lab` | Full Git working tree including `.git` |
 | Normal user's home configuration | Persistent GitHub credential-helper settings |
 | Ubuntu account/SSH configuration | Account password hashes and VM host identity |
+| `/etc/sudoers.d/archtop-sftp`, `docker`/`clab_admins` membership and the containerlab SUID bit | The two step 7 paste-in access fixes; reapply them on a rebuilt VM |
 
 Use your normal VM backup process; GitHub lab-config history is not a VM backup.
 The master wiki covers [manager data backup and recovery in Part 17](WIKI-MASTER-GUIDE.md).
 
 At a suitable time, save lab work and perform a normal Ubuntu reboot. Afterwards
 verify WinSCP, the manager page, saved lab/history and VM connection. Reopen
-`bash "$HOME/projects/v1.19.1/deploy/install.sh"` and select **Check running
+`bash "$HOME/projects/v1.19.2/deploy/install.sh"` and select **Check running
 installation** if needed. Training device restart behavior is separate; inspect
 your lab rather than assuming every NOS resumed. Do not delete persistent data
 or clone everything again to recover a failed check.
@@ -706,8 +816,8 @@ matching the actual error; “SFTP is not running” is not a diagnosis by itsel
 | Authentication failed | Use the ordinary VM account and its own credentials; inspect existing SSH policy if they are correct |
 | Login closes or reports manager-only commands | Stop using `clab-discovery`; open a new WinSCP site as your ordinary account |
 | Login succeeds but SFTP initialization fails | For normal uploads, use WinSCP's default SFTP server and check the subsystem below. For a site using `sudo`, check the [administrative SFTP setup](#winscp-admin-sftp) |
-| `sudo: a password is required` when connecting | Check the matching account's sudoers rule and `sudo -n` server setting in [administrative SFTP setup](#winscp-admin-sftp) |
-| Listing works but upload says Permission denied | Test `/home/YOUR_USER/uploads`; use an engineer-owned project folder, or the [administrative setup](#winscp-admin-sftp) when root file access is intended |
+| `sudo: a password is required` when connecting | Run the [root SFTP paste-in fix](#winscp-admin-sftp) as the same account WinSCP logs in with; it writes, validates and tests the passwordless rule. Keep the `sudo -n` server setting |
+| Listing works but upload says Permission denied | The folder belongs to root. Test `/home/YOUR_USER/uploads`, then use an engineer-owned project folder, or apply the [root SFTP paste-in fix](#winscp-admin-sftp) when root file access is intended |
 
 ### Packages/service missing
 
@@ -817,20 +927,15 @@ restore the obsolete CD-ROM source or clone the project again.
    ```
 
    Compare UTC against a trusted current clock. Changing the displayed timezone
-   does not correct UTC. If this VM should use network time, enable its installed
-   time provider:
-
-   ```bash
-   sudo timedatectl set-ntp true
-   timedatectl status
-   date -u
-   ```
-
-   Allow the provider time to synchronize, then repeat the last two checks.
-   `set-ntp true` starts an available installed provider; it does not install one
-   or replace its server configuration. If your environment deliberately manages
-   time another way, repair that method instead. Do not install a second time
-   provider just to make a status flag say yes.
+   does not correct UTC. If this VM should use network time, run the
+   [clock paste-in fix](#fix-the-clock) from step 3: it enables the installed
+   provider and restarts it so the correction happens now rather than at the
+   next scheduled poll, and it includes a manual bootstrap for a VM that cannot
+   reach a time server. This is the usual repair after a Proxmox snapshot
+   rollback. `set-ntp true` starts an available installed provider; it does not
+   install one or replace its server configuration. If your environment
+   deliberately manages time another way, repair that method instead. Do not
+   install a second time provider just to make a status flag say yes.
    [Ubuntu timedatectl reference](https://manpages.ubuntu.com/manpages/noble/man1/timedatectl.1.html)
 3. Once UTC is correct, verify the actual APT operation:
 
@@ -880,20 +985,22 @@ If wrong time returns after a VM restart, also recheck the Proxmox node clock.
 
 If UTC is correct and APT still rejects the dates, investigate that repository's
 mirror, cached metadata or proxy with its administrator. Keep APT date and
-signature checks enabled; do not use a guessed `date -s` timestamp or disable
-validation to continue. Retry the same installation step only after APT succeeds.
+signature checks enabled; a manually entered time is only a bootstrap until
+synchronization takes over, and validation must never be disabled to continue.
+Retry the same installation step only after APT succeeds.
 
 ## What the installer covers, and what this guide adds
 
 | Work | Where it happens |
 |---|---|
 | Proxmox VM, nested KVM, Ubuntu install, disk allocation | Steps 1–3; administrator choices |
-| Correct UTC on host/guest and functioning time provider | Steps 1 and 3; recovery C if needed. Installer checks status and waits briefly but does not set time |
+| Correct UTC on host/guest and functioning time provider | Steps 1 and 3, with the step 3 clock paste-in after a snapshot rollback; recovery C if APT already failed. Installer checks status and waits briefly but does not set time |
 | Obtain source | Step 4; VM console/SSH bootstrap |
 | Docker, SSH, Containerlab, manager storage/password/helpers/build/start | Installer in step 5 |
 | Git login, identity, checkout and registration | Git terminal wizard in step 6 |
 | Ordinary-user SFTP and actual workstation transfer | Explicit checkpoint in step 7 |
-| Optional administrative WinSCP access | Manual sudoers entry and matching WinSCP setting in step 7; not added by the installer |
+| Optional administrative WinSCP access | Paste-in sudoers rule and matching WinSCP setting in step 7; not added by the installer |
+| VS Code Remote - SSH and the Containerlab extension | Paste-in group and SUID fix in step 7; not part of the installer |
 | Full installation report after browser VM/Git setup | Second script `deploy/check-install.sh` in step 12; explicit service/helper/folder/Git results and recovery, with manual transfer/backup/push still required |
 | QEMU guest agent and firewall/network access | Step 8; outside the manager installer |
 | Vendor images, topology upload and lab deployment | Steps 9 and 11; your chosen lab |
