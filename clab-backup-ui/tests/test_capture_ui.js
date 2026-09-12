@@ -48,6 +48,10 @@ test('shared namespaces and loopback-only targets are labelled and aliases are s
  assert.match($('capture-target').innerHTML,/shares namespace with containerlab-node-manager-backup-ui-1/);assert.match($('capture-target').innerHTML,/sandbox \(proc\) · 1 interfaces · loopback only/);
  $('capture-search').value='backup-ui';c.filterCaptureTargets();
  assert.equal($('capture-target').value,'h');assert.doesNotMatch($('capture-target').innerHTML,/sandbox/);
+ vm.runInContext(`captureTargets=[{id:'n',name:'clab-demo-r1',kind:'docker',prefix:'',interfaces:['eth0'],aliases:['CliShell(1)','CliShell(2)','CliShell(3)','CliShell(4)']}];`,c);
+ $('capture-search').value='';c.filterCaptureTargets();
+ assert.match($('capture-target').innerHTML,/shares namespace with CliShell\(1\), CliShell\(2\) \+2 more/);
+ $('capture-search').value='clishell(4)';c.filterCaptureTargets();assert.equal($('capture-target').value,'n');
 });
 test('node and menu capture actions are disabled only once the manager reports capture disabled',async()=>{
  const {c}=harness();await new Promise(r=>setImmediate(r));

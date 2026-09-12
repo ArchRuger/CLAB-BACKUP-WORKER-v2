@@ -28,7 +28,8 @@ function renderCaptureInterfaces(){
 $('capture-target').onchange=renderCaptureInterfaces;
 $('capture-interfaces').onchange=()=>{invalidateCapture();updateCapturePrepare();$('capture-status').textContent='Selection changed. Prepare the capture again.';};
 function captureTargetLabel(t){
- const shared=t.aliases?.length?' · shares namespace with '+esc(t.aliases.join(', ')):'',loopback=t.interfaces.length===1&&t.interfaces[0]==='lo'?' · loopback only':'';
+ const aliases=t.aliases||[],shown=aliases.slice(0,2).join(', ')+(aliases.length>2?` +${aliases.length-2} more`:'');
+ const shared=aliases.length?' · shares namespace with '+esc(shown):'',loopback=t.interfaces.length===1&&t.interfaces[0]==='lo'?' · loopback only':'';
  return `${esc(t.name)}${t.prefix?' · '+esc(t.prefix):''} (${esc(t.kind)}) · ${t.interfaces.length} interfaces${shared}${loopback}`;
 }
 function filterCaptureTargets(){
