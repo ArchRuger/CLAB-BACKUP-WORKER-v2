@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.19.1
+# Containerlab Node Manager — 1.19.2
 
 Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
 ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
@@ -16,6 +16,21 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 **Building from source?** Follow the [Fresh VM installation guide](../FRESH-VM-GUIDE.md).
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
+
+## Changes in 1.19.2
+
+Integrates the remaining [deployment audit fixes](../DEPLOYMENT-AUDIT.md)
+with 1.19.1. Topology creation now preserves files created concurrently.
+Discovery, scheduled backups and lab/Git operation guards recover from storage
+write failures. Failed audit writes no longer fail completed actions, and Debug
+panel reports the last audit-write result. Missed events are not replayed.
+Git response limits include stderr, and Linux Git timeouts stop descendants
+even after the parent exits.
+
+Retains 1.19.1's SSH EOF handling, longer helper/discovery/debug timeouts,
+dependency bounds and LF normalization. Install matching manager and helpers
+with `bash deploy/install.sh`, keeping existing persistent data, then confirm
+Release 1.19.2. See the audit for test evidence and live deployment limits.
 
 ## Changes in 1.19.1
 

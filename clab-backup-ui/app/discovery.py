@@ -4,6 +4,7 @@ import copy
 import hashlib
 import ipaddress
 import json
+import logging
 import re
 import socket
 import threading
@@ -224,6 +225,7 @@ def inspect_host(host, stopping=None):
             if time.monotonic() > deadline or (stopping and stopping.is_set()):
                 raise ValueError('VM inspection timed out or was interrupted')
             if channel.recv_stderr_ready(): size += len(channel.recv_stderr(65536))
+            if size > MAX_OUTPUT: raise ValueError('VM inspection output exceeded 16 MiB')
             if not eof:
                 try: chunk = channel.recv(65536)
                 except socket.timeout: continue
@@ -273,7 +275,10 @@ class Discovery:
 
     def loop(self):
         while not self.stopping.is_set():
-            self.refresh()
+            try: self.refresh()
+            except OSError:
+                # Temporary storage/log failures must not permanently stop polling.
+                logging.getLogger(__name__).warning('Discovery could not persist its result; check manager storage. Retrying on the next poll.')
             self.wake.wait(INTERVAL); self.wake.clear()
 
     def refresh(self, wait=False):

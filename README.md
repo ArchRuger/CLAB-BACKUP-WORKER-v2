@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.19.1
+# Containerlab Node Manager — 1.19.2
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,7 +6,7 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.19.1 deployment:** Build the new source and create the VM password using
+**1.19.2 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
@@ -31,6 +31,21 @@ and [migration instructions](STANDALONE-SETUP.md).
 ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
+
+## Changes in 1.19.2
+
+Integrates the remaining [deployment audit fixes](DEPLOYMENT-AUDIT.md)
+with 1.19.1. Topology creation now preserves files created concurrently.
+Discovery, scheduled backups and lab/Git operation guards recover from storage
+write failures. Failed audit writes no longer fail completed actions, and Debug
+panel reports the last audit-write result. Missed events are not replayed.
+Git response limits include stderr, and Linux Git timeouts stop descendants
+even after the parent exits.
+
+Retains 1.19.1's SSH EOF handling, longer helper/discovery/debug timeouts,
+dependency bounds and LF normalization. Install matching manager and helpers
+with `bash deploy/install.sh`, keeping existing persistent data, then confirm
+Release 1.19.2. See the audit for test evidence and live deployment limits.
 
 ## Changes in 1.19.1
 

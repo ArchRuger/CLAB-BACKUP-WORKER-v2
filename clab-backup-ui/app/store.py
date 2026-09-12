@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -13,6 +14,7 @@ class Store:
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.lock = threading.RLock()
+        self.event_error = False
         key = self.root/'state.key'
         if not key.exists():
             self.atomic(key, Fernet.generate_key())
@@ -106,15 +108,23 @@ class Store:
                      message=str(message)[:4000], level=level, lab_id=lab_id,
                      job_id=job_id, node=node)
         with self.lock:
-            path=self.root/'events.jsonl'
-            # Keep a bounded operational log: active file plus three 5 MiB rotations.
-            if path.exists() and path.stat().st_size >= 5*1024*1024:
-                for index in (3,2,1):
-                    source=path if index==1 else self.root/f'events.jsonl.{index-1}'
-                    if source.exists(): source.replace(self.root/f'events.jsonl.{index}')
-            fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_APPEND, 0o600)
-            with os.fdopen(fd,'a',encoding='utf8') as stream:
-                stream.write(json.dumps(entry)+'\n')
+            try:
+                path=self.root/'events.jsonl'
+                # Keep a bounded operational log: active file plus three 5 MiB rotations.
+                if path.exists() and path.stat().st_size >= 5*1024*1024:
+                    for index in (3,2,1):
+                        source=path if index==1 else self.root/f'events.jsonl.{index-1}'
+                        if source.exists(): source.replace(self.root/f'events.jsonl.{index}')
+                fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_APPEND, 0o600)
+                with os.fdopen(fd,'a',encoding='utf8') as stream:
+                    stream.write(json.dumps(entry)+'\n')
+                self.event_error = False
+            except OSError:
+                # An audit write cannot undo a successful host action or state save.
+                # Report the gap without echoing filesystem diagnostics or secrets.
+                if not self.event_error:
+                    logging.getLogger(__name__).warning('Action log write failed; check manager storage permissions and free space. Some audit events were not recorded.')
+                self.event_error = True
         return entry
 
     def events(self, lab_id='', job_id='', level='', node='', limit=500):

@@ -102,6 +102,18 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(report['requests'][0]['route'], '/api/fixture-error')
         self.assertNotIn('exception-secret', json.dumps(report))
 
+    def test_saved_settings_succeed_and_debug_reports_unavailable_audit_log(self):
+        with patch('app.store.os.open', side_effect=OSError('private path detail')):
+            response = self.client.put('/api/host', json=dict(address='127.0.0.1', port=22,
+                username='fixture', password='fixture-secret', enabled=False))
+            self.assertEqual(response.status_code, 200, response.text)
+            report = self.client.get('/api/debug')
+        self.assertFalse(report.json()['audit_log_available'])
+        self.assertNotIn('private path detail', report.text)
+        self.assertNotIn('fixture-secret', report.text)
+        saved = json.loads(self.store.cipher.decrypt(self.store.path.read_bytes()))
+        self.assertEqual(saved['host']['password'], 'fixture-secret')
+
     def test_failure_hints_classify_paramiko_and_helper_errors(self):
         import paramiko
         cases = {

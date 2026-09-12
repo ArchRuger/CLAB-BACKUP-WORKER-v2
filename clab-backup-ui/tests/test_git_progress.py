@@ -369,3 +369,29 @@ class GitProgressTests(unittest.TestCase):
             self.assertEqual(response.status_code, 500)
         self.assertEqual(len(self.store.state['git_jobs']), before)
         self.dispatch.assert_not_called()
+
+    def test_persistent_worker_write_failure_can_be_retried_after_storage_recovers(self):
+        backup = self.capture()
+        job, _ = self.save(backup_job_id=backup['id'])
+        with patch.object(self.store, 'save', side_effect=OSError('disk unavailable')):
+            self.progress.execute(job['id'])
+        current = self.progress.get_job(job['id'])
+        self.assertNotIn(current['status'], ('queued', 'capturing', 'exporting', 'pushing'))
+        self.assertEqual(current['backup_job_id'], backup['id'])
+        retry = self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True})
+        self.assertEqual(retry.status_code, 200, retry.text)
+        outcome, submit = self.run_save(job)
+        submit.assert_not_called()
+        self.assertEqual(outcome['status'], 'synced')
+
+    def test_update_storage_failure_does_not_leave_active_marker(self):
+        persist = self.store.save
+        def writes_fail_after_reservation():
+            if self.store.state['git_jobs'] and self.store.state['git_jobs'][-1]['status'] != 'exporting':
+                raise OSError('disk unavailable')
+            persist()
+        with patch.object(self.store, 'save', side_effect=writes_fail_after_reservation):
+            # HTTP failure is appropriate: the result was not durably recorded.
+            with self.assertRaises(OSError): self.client.post(self.url+'/update', json={})
+        self.assertEqual(self.store.state['git_jobs'][-1]['status'], 'dismissed')
+        self.progress.idle()

@@ -10,7 +10,6 @@ from pathlib import Path
 import queue
 import re
 import signal
-import stat
 import subprocess
 import sys
 import threading
@@ -20,7 +19,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.19.1'
+VERSION = '1.19.2'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 ENV = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root',
@@ -263,10 +262,11 @@ class HostOperations:
                 try:
                     with open(temp, 'xb') as stream_file:
                         os.chmod(temp, 0o600); stream_file.write(plan['options']['text'].encode())
-                    if path.exists():
-                        info = path.stat(); os.chmod(temp, stat.S_IMODE(info.st_mode))
-                        if os.name == 'posix': os.chown(temp, info.st_uid, info.st_gid)
-                    os.replace(temp, path)
+                    # Atomically publish only if the destination is still absent.
+                    # Editors outside our flock may create it after plan().
+                    try: os.link(temp, path)
+                    except FileExistsError:
+                        raise ValueError('The topology path now exists. Creation canceled; the existing file was retained.') from None
                 finally:
                     if temp.exists(): temp.unlink()
             emit({'output': 'VM source ' + ('removed' if action == 'delete' else 'saved') + '.\n'})

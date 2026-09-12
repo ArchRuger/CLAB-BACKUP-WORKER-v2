@@ -1,3 +1,35 @@
+# Integrated audit recovery fixes — 1.19.2
+
+- Integrated the unmerged audit commit `8d87ea8` with current main `2c10037`
+  (1.19.1) on `codex/deployment-operation-audit`. The local merge is resolved
+  and staged for review; no new commit, push or GitHub merge was performed.
+- Full combined Python suite: **443 tests ran, 433 passed and 10 skipped**
+  in 244 seconds. All **43 JavaScript tests pass**. Skips cover Linux
+  Ansible control-node behavior, controlling-terminal/process groups,
+  symlink/openat checks and the opt-in EOS SSH fixture. No remote CI result is
+  available for the uncommitted integration.
+- Before integration, 16 focused audit tests against current main produced
+  three passes, five failures, seven errors and one Linux-only skip. The failure
+  paths cover topology overwrite, storage recovery, stuck lab/Git guards, audit
+  logging, bounded Git stderr and cleanup after the Git parent exits. The
+  previously failing regressions now pass as part of the combined suite.
+- Retained main's SSH EOF implementations and added audit bounds/recovery without
+  shortening its 60-second discovery deadline, helper inspect/label budgets,
+  refresh wait or 90-second debug probes. Its authentication hints, terminal Git
+  clone behavior, dependency bounds and LF normalization remain present.
+- Real localhost SSH regressions from both branches pass, including delayed and
+  fragmented output after exit status. Helper-timeout tests and diagnostics
+  tests confirm the newer budgets are retained. Host-service/package probes use
+  mocks; localhost Paramiko is not an Ubuntu OpenSSH installation test.
+- Release metadata, including the app.js footer fallback, verifies as 1.19.2.
+  Workflow YAML, Bash syntax for all ten deployment scripts, and Git whitespace
+  checks pass. CI includes both branches' relevant SSH, timeout, Git recovery,
+  operation, logging and browser regressions.
+- No Docker build, fresh Ubuntu install, live VM helper call, device action or
+  remote Git push was performed. The real Linux Git inherited-stdout timeout
+  regression is skipped locally and included in CI. Full deployment validation
+  remains outstanding; see the [audit report](../DEPLOYMENT-AUDIT.md).
+
 # Transport EOF, helper timeouts and hygiene — 1.19.1
 
 - Prepared from published main `2d34415` (1.19.0) on

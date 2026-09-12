@@ -21,7 +21,7 @@ function debugRows(){
 }
 function debugRender(){
  const data=debugSnapshot,summary=debugElement('debug-summary');summary.replaceChildren();
- const cards=[['Running manager',{'Release':data.manager_version,'Python':data.python_version,'Uptime':data.uptime_seconds+' seconds',...data.packages}],
+ const cards=[['Running manager',{'Release':data.manager_version,'Python':data.python_version,'Uptime':data.uptime_seconds+' seconds','Last audit write':data.audit_log_available===false?'Failed — check storage':'Succeeded',...data.packages}],
   ['VM connection',data.vm],['Saved workspace',data.saved_counts]];
  for(const [title,values] of cards){const card=debugText('section','','debug-card');card.append(debugText('h2',title));const list=document.createElement('dl');
   for(const [key,value] of Object.entries(values)){list.append(debugText('dt',key.replaceAll('_',' ')),debugText('dd',typeof value==='boolean'?(value?'Yes':'No'):String(value)));}card.append(list);summary.append(card);}

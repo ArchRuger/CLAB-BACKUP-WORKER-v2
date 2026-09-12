@@ -43,6 +43,16 @@ jobs:
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_operations_ssh.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_lab_operations.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_diagnostics.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_rpc_completion.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_background_recovery.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_git_command_timeout.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_git_progress.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_git_transport.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_discovery_ssh.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_discovery_sftp.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_helper_timeout.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_runner_resilience.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_logging.py -v
       - name: Check browser regressions
         working-directory: clab-backup-ui
         run: node --test tests/test_operations_ui.js tests/test_debug_ui.js

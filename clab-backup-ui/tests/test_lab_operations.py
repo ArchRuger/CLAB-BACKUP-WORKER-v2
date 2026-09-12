@@ -113,6 +113,19 @@ class HostOperationTests(unittest.TestCase):
             with self.assertRaises(ValueError): self.host.plan(self.request(action))
             self.assertNotIn(action,self.host.capabilities()['actions'])
 
+    def test_create_preserves_file_created_after_final_plan(self):
+        target = self.root / 'racing.clab.yaml'
+        req = {**self.request('create', text=YAML.decode()), 'path': str(target)}
+        plan = self.host.plan(req); req['digest'] = plan['digest']
+        # A VM editor can create this path after the final plan's existence check.
+        def raced_plan(_):
+            target.write_bytes(b'operator-created topology')
+            return plan
+        with patch.object(self.host, 'plan', side_effect=raced_plan):
+            with self.assertRaises((ValueError, FileExistsError)):
+                self.host.execute(req, lambda _: None)
+        self.assertEqual(target.read_bytes(), b'operator-created topology')
+
     def test_inspection_stderr_does_not_corrupt_json(self):
         code, out=capture([sys.executable,'-c','import sys; print("[]"); print("INFO inspection",file=sys.stderr)'],cwd=str(self.root))
         self.assertEqual(code,0);self.assertEqual(json.loads(out),[])

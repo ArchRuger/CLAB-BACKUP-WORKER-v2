@@ -358,10 +358,18 @@ class LabOperations:
         except Exception as exc:
             message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
             with self.store.lock: clean = scrub(raw_output, self.store.state); message = scrub(message, self.store.state)
-            update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
-        finally:
-            self.store.event('lab.operation', 'Lab operation finished; review its operation record', lab_id=next(j['lab_id'] for j in self.store.state['operations'] if j['id'] == ident))
             try:
+                update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
+            except OSError:
+                pass  # update retained the terminal state in memory; restart reconciles disk.
+        finally:
+            try:
+                try:
+                    self.store.event('lab.operation', 'Lab operation finished; review its operation record', lab_id=next(j['lab_id'] for j in self.store.state['operations'] if j['id'] == ident))
+                except OSError:
+                    pass  # Logging cannot retain the active guard after execution ends.
                 if not self.stopping.is_set(): self.discovery.refresh()
+            except OSError:
+                pass  # The discovery loop retries storage failures independently.
             finally:
                 with self.store.lock: self.active.discard(ident)
