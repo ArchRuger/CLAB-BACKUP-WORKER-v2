@@ -18,8 +18,11 @@ upstream 4755 SUID mode on /usr/bin/containerlab; the user must then kill the
 VS Code server on the host and reconnect. The installer is unchanged: it still
 strips SUID on a fresh containerlab install and keeps the suid_setup_done marker,
 so the VS Code block must be rerun after a containerlab package upgrade. The
-manager never needs these groups. Documentation only; no version bump, no
-code change, no fresh-VM run of the blocks by the author.
+manager never needs these groups. QUICK-INSTALL.md is the paste-only ordered
+walkthrough of the same route; its prompt wording is copied from
+install-manager.py, setup-password.sh (passwd) and git-onboard.py, so update
+it when those prompts change. Documentation only; no version bump, no code
+change, no fresh-VM run of the blocks by the author.
 
 # Transport EOF and helper timeouts — 1.19.1
 

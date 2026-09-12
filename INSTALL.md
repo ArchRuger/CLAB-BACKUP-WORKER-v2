@@ -5,7 +5,8 @@ This release also includes the remaining [deployment audit fixes](DEPLOYMENT-AUD
 Starting before Ubuntu is installed? Use the
 [Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) for Proxmox settings, first
 login, this installer, WinSCP/SFTP checks and your first successful Git save.
-This page is the short installation reference.
+This page is the short installation reference; the [quick install](QUICK-INSTALL.md)
+is the paste-only version of the whole route.
 
 This guide targets **1.19.2**, integrating storage-failure recovery, topology
 file protection and bounded Git operations with 1.19.1's SSH and timeout fixes.
