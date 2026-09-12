@@ -27,13 +27,16 @@ function topologyNode(n){
 }
 function topologyLink(pair,nodes,index,settings){
  const rawA=nodes.get(pair[0].node),rawB=nodes.get(pair[1].node);if(!rawA||!rawB)return '';
+ const ends=pair.map((ep,i)=>({node:[rawA,rawB][i].inventory_name||'',label:[rawA,rawB][i].label,interface:ep.interface}));
+ const captureAttrs=`data-capture-endpoints="${esc(JSON.stringify(ends))}" tabindex="0" role="button" aria-label="Capture ${esc(ends.map(e=>e.label+':'+e.interface).join(' to '))}"`;
+ const wirePath=d=>`<path class="capture-hit" d="${d}"/><path d="${d}"/>`;
  const a={...rawA,x:rawA.x+20,y:rawA.y+20},b={...rawB,x:rawB.x+20,y:rawB.y+20};
- if(a.x===b.x&&a.y===b.y)return `<g class="topology-wire"><title>${esc(a.label+':'+pair[0].interface+' — '+b.label+':'+pair[1].interface)}</title><path d="M${a.x-12} ${a.y-20}C${a.x-60} ${a.y-75},${a.x+60} ${a.y-75},${a.x+12} ${a.y-20}"/></g>`;
+ if(a.x===b.x&&a.y===b.y)return `<g class="topology-wire" ${captureAttrs}><title>${esc(a.label+':'+pair[0].interface+' — '+b.label+':'+pair[1].interface)}</title>${wirePath(`M${a.x-12} ${a.y-20}C${a.x-60} ${a.y-75},${a.x+60} ${a.y-75},${a.x+12} ${a.y-20}`)}</g>`;
  const dx=b.x-a.x,dy=b.y-a.y,length=Math.hypot(dx,dy)||1,ux=dx/length,uy=dy/length;
  const radius=20/Math.max(Math.abs(ux),Math.abs(uy));
  const offset=Math.min(length*.45,radius+(pair[0].label_offset??settings.endpointOffset??20));
  const label=(ep,x,y)=>`<g class="interface-label"><rect rx="3"/><text x="${x}" y="${y}" text-anchor="middle">${esc(ep.interface)}</text></g>`;
- return `<g class="topology-wire" data-source="${esc(a.id)}" data-target="${esc(b.id)}"><title>${esc(a.label+':'+pair[0].interface+' — '+b.label+':'+pair[1].interface)}</title><path d="M${a.x+ux*radius} ${a.y+uy*radius}L${b.x-ux*radius} ${b.y-uy*radius}"/>${settings.labelMode==='hide'?'':label(pair[0],a.x+ux*offset,a.y+uy*offset+3)+label(pair[1],b.x-ux*offset,b.y-uy*offset+3)}</g>`;
+ return `<g class="topology-wire" ${captureAttrs} data-source="${esc(a.id)}" data-target="${esc(b.id)}"><title>${esc(a.label+':'+pair[0].interface+' — '+b.label+':'+pair[1].interface)}</title>${wirePath(`M${a.x+ux*radius} ${a.y+uy*radius}L${b.x-ux*radius} ${b.y-uy*radius}`)}${settings.labelMode==='hide'?'':label(pair[0],a.x+ux*offset,a.y+uy*offset+3)+label(pair[1],b.x-ux*offset,b.y-uy*offset+3)}</g>`;
 }
 function topologyMarkup(drawing){
  const nodes=new Map(drawing.nodes.map(n=>[n.id,n])),settings=drawing.settings||{},decos=drawing.decorations.map((d,i)=>({d,i})).sort((a,b)=>(a.d.zIndex||0)-(b.d.zIndex||0));

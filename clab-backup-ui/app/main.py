@@ -26,6 +26,7 @@ from .lab_operations import LabOperations, operation_busy
 from .git_progress import GitProgress, public_job as public_git_job
 from . import __version__
 from .diagnostics import Diagnostics
+from .capture import Captures
 
 APP=Path(__file__).parent
 
@@ -61,6 +62,8 @@ def create_app(data_dir=None):
     app.state.node_services=services
     services.install(app)
     topology.install(app,store)
+    app.state.captures = Captures(store)
+    app.state.captures.install(app)
     @app.middleware('http')
     async def guard(request, call_next):
         if request.url.path.startswith('/api/'):

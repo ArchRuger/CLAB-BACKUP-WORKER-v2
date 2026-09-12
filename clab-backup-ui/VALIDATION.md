@@ -1,3 +1,59 @@
+# 1.20.0 — optional Wireshark capture (2026-09-12)
+
+Prepared in the active workspace on `codex/wireshark-capture`, based on fetched
+`origin/main` at `822cb33`, then synchronized with main `2b36478` (1.19.4)
+after PRs #16 and #17 merged. Engineer access setup, topology file permissions,
+installer/health checks and upstream live-validation records are retained.
+The feature remains staged, with no source commit, push, image build or live
+Wireshark deployment performed here.
+
+## Verified locally
+
+- After synchronizing with main `2b36478` (PRs #16 and #17), the full Python
+  suite ran **469 tests, OK, 11 skipped**, in 239 seconds on Windows. No failures.
+  This includes all **18 capture tests**, the engineer-access health and installer
+  regressions, and the existing operations/backup/Git tests. The additional
+  POSIX topology-permission regression is among the Windows skips.
+- All upstream-only files were verified byte-for-byte against main. Host helpers
+  match main exactly apart from their 1.20.0 release metadata. Feature-only files
+  match the preserved pre-sync feature, and upstream validation history is retained.
+- All **55 JavaScript tests passed** again after main synchronization, including
+  nine capture UI regressions. Desktop/mobile browser checks below were also rerun.
+- All seven release-consistency tests passed with the new setup page included.
+  `deploy/verify-release.py` reports **1.20.0**.
+- JavaScript syntax and `git diff --check` passed.
+- Headless desktop Chrome used the real application UI and FastAPI server, with
+  isolated temporary lab data and a synthetic Edgeshark provider. Checked a node,
+  both link endpoint selection and interface preselection, two interfaces in one
+  namespace, host-interface capture preparation, native URI generation, and the
+  in-app setup page. No browser JavaScript errors.
+- Inspected desktop and 390px mobile screenshots; verified dialog and page have
+  no horizontal overflow, including the capture and topology action rows.
+- Checked Siemens' discovery schema, Packetflix API and native launch code.
+  Resolved and pinned public multi-architecture image manifest digests; both
+  contain Linux amd64 and arm64 images. Provider response time/size bounds,
+  redirect rejection, exact node matching, process restart/interface changes,
+  malformed payloads, cross-origin requests and concurrent discovery limits are
+  covered by the regression tests.
+
+## Deployment checks still required
+
+There is no Docker executable or installed WSL/Linux environment on this machine.
+No manager image or optional-service containers were built/run locally. YAML
+parsing is checked locally; actual `docker compose config` is added to Linux CI,
+with no claim that the new CI job has run. No desktop Wireshark plugin was installed
+or invoked, and no live packets, router NOS, host capture capabilities, SSH tunnel,
+TLS proxy or Linux namespace lifecycle were tested. Browser checks prove capture
+selection and handoff generation, not packet streaming.
+
+Follow [CAPTURE.md](../CAPTURE.md) for installation, research sources, known
+Linux/VM visibility limits, and the disposable-lab live acceptance procedure.
+Prepared URLs include Packetflix namespace/process identity checks; processless
+namespaces retain the upstream namespace-reuse limitation. The provider is
+optional, has no manager socket/capability changes, and is disabled by default.
+
+---
+
 # Engineer access for VS Code and the Containerlab extension — 1.19.4
 
 - Prepared on branch `claude/engineer-access` from the 1.19.3 branch tip `3d10cb4`
