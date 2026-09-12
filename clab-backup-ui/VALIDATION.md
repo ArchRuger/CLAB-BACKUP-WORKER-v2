@@ -1,3 +1,44 @@
+# Engineer access for VS Code and the Containerlab extension — 1.19.4
+
+- Prepared on branch `claude/engineer-access` from the 1.19.3 branch tip `3d10cb4`
+  (main `822cb33`). Source delivery; no Docker image is published.
+- Adds `deploy/setup-engineer-access.sh`, the `start-manager.sh --refresh` re-apply,
+  the installer question/phase 5/menu option 3, the `check_host._engineer` health
+  check, and the `host_operations.py` create mode (0664 in a setgid parent, else
+  0644). Lockstep metadata verifies as **1.19.4**; the new script is in the CI
+  `bash -n` list.
+- Windows unit tests with the CI-style discover invocation: `test_check_host` (16,
+  four new: unconfigured INFO, configured PASS, each missing piece FAIL, unprivileged
+  runs no commands), `test_install_manager` (16, one new: the engineer phase runs
+  after manager verification only when chosen, with `--owner USER`),
+  `test_lab_operations` (22; the POSIX file-mode test skips on Windows and runs in
+  Linux CI), `test_check_install` (34), `test_release_consistency`,
+  `test_helper_preflight`, `test_gateway_preflight` and `test_git_onboard` all pass.
+- **Live dev-VM validation (Ubuntu 24.04.4, no `/dev/kvm`), applied by the author with
+  the maintainer's passwordless sudo and read back afterwards:** before the change the
+  VM reproduced both reported errors (no `clab_admins` group, `clabllm` in neither
+  `docker` nor `clab_admins`, `/etc/containerlab` root:root 0755, containerlab 0755;
+  `mkdir /etc/containerlab/vscode-test` denied). After
+  `setup-engineer-access.sh --owner clabllm`, a fresh login showed both groups; the
+  roots became `clab_admins 2775` and the existing lab file 664; `mkdir` and a new
+  topology under `/etc/containerlab/vscode-test` succeeded as `clabllm`, inheriting
+  `clab_admins 664`; `containerlab inspect --all` and `docker ps` worked without
+  sudo (SUID `-rwsr-xr-x root root`). The still-running 1.19.3 manager browsed and
+  read that engineer-created folder through the gateway. `start-manager.sh
+  --enable-operations` then upgraded the VM to **1.19.4** (gateway verified for
+  discovery, operations and Git at 1.19.4; container `clab-backup:1.19.4`), and its
+  `--refresh` call restored `clab_admins 2775` on the projects root that
+  `setup-operations.sh` had reset plus the SUID bit. Afterwards: Debug probe
+  **browse PASS, capabilities PASS (1.19.4)**; `check-install` **PASS 58 / FAIL 0 /
+  WARN 1 / INFO 5** including `[PASS] Engineer access for VS Code / Containerlab
+  extension`; a topology **created by the manager** through the operations gateway
+  (`preview` + `confirm`, job succeeded) landed as `root:clab_admins 664` and the
+  engineer could edit it. Negative path: with the projects folder and SUID
+  deliberately reset, `check-install` reported `[FAIL] Engineer access` naming both
+  pieces with the `--refresh` fix, `--refresh` repaired them, and the report returned
+  to PASS 58 / FAIL 0. The VS Code extension's own activation after killing its
+  server was left to the maintainer and not observed by the author.
+
 # V1.19.2 bug-fix report follow-up — 1.19.3
 
 - Prepared from published main `0faae0b` (1.19.2) on branch
