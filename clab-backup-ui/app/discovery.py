@@ -4,7 +4,9 @@ import copy
 import hashlib
 import ipaddress
 import json
+import logging
 import re
+import socket
 import threading
 import time
 import uuid
@@ -213,15 +215,22 @@ def inspect_host(host, stopping=None):
         channel = transport.open_session(timeout=8)
         channel.settimeout(8)
         channel.exec_command(COMMANDS[host['command_mode']])
-        output = bytearray(); size = 0; deadline = time.monotonic() + 40
+        channel.settimeout(.2)
+        output = bytearray(); size = 0; deadline = time.monotonic() + 40; eof = False
         while True:
             if time.monotonic() > deadline or (stopping and stopping.is_set()):
                 raise ValueError('VM inspection timed out or was interrupted')
-            if channel.recv_ready():
-                chunk = channel.recv(65536); output.extend(chunk); size += len(chunk)
             if channel.recv_stderr_ready(): size += len(channel.recv_stderr(65536))
+            if not eof:
+                try: chunk = channel.recv(65536)
+                except socket.timeout:
+                    if size > MAX_OUTPUT: raise ValueError('VM inspection output exceeded 16 MiB')
+                    continue
+                eof = not chunk
+                output.extend(chunk); size += len(chunk)
             if size > MAX_OUTPUT: raise ValueError('VM inspection output exceeded 16 MiB')
-            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready(): break
+            # Exit status may precede the last stdout packets. Wait for EOF.
+            if eof and not channel.recv_stderr_ready() and channel.exit_status_ready(): break
             time.sleep(.01)
         if channel.recv_exit_status() != 0:
             raise ValueError('Inspection command failed. Verify containerlab and the discovery account/helper permissions on the VM.')
@@ -260,7 +269,10 @@ class Discovery:
 
     def loop(self):
         while not self.stopping.is_set():
-            self.refresh()
+            try: self.refresh()
+            except OSError:
+                # Temporary storage/log failures must not permanently stop polling.
+                logging.getLogger(__name__).warning('Discovery could not persist its result; check manager storage. Retrying on the next poll.')
             self.wake.wait(INTERVAL); self.wake.clear()
 
     def refresh(self, wait=False):

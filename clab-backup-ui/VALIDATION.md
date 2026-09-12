@@ -1,3 +1,36 @@
+# Deployment and operation audit — 1.19.1
+
+- Prepared from merged main `2d34415` (1.19.0) on
+  `codex/deployment-operation-audit`. See the
+  [audit report](../DEPLOYMENT-AUDIT.md) for seven reproduced defects and fixes.
+  No commit, push, image publication, VM deployment or live-device action was performed.
+- Full Python suite: **433 tests ran, 423 passed and ten skipped** in 249 seconds.
+  Skips cover Linux Ansible control-node behavior, controlling-terminal/process
+  groups, symlink/openat checks and the opt-in EOS SSH fixture. The new real Linux
+  Git inherited-stdout timeout test is one of these skips; its simulated ordering
+  regression passes on Windows. This branch's remote CI has not run.
+- All **43 JavaScript tests pass**, including file browsing while capability
+  checks fail, development diagnostics and the new failed-audit-write display.
+- New tests failed before the corresponding fixes: delayed discovery/Git SSH
+  stdout, bounded Git stderr, topology-create race, background loop/operation
+  cleanup after storage failures, Git reservation recovery, audit API handling,
+  and Git timeout after the direct parent exits. They now pass locally.
+- Four new real localhost Paramiko tests cover both RPC clients, including a
+  fragmented 160 KiB response and missing/nonzero exit status. These complement
+  the existing real operations SSH suite; they do not exercise Ubuntu OpenSSH.
+- Fault-injection tests verify scheduler/discovery continuation, released lab/Git
+  guards, a retry using the original capture, and successful settings persistence
+  despite an unavailable audit log. Debug exposes the failure without secrets;
+  a subsequent successful log write clears the flag. Missed events are not replayed.
+- Release metadata verifies as 1.19.1. Workflow YAML, installer Bash syntax and
+  Git whitespace checks pass. CI includes the new regressions and relevant
+  discovery, Git transport/progress, worker recovery and logging coverage.
+- Installer, gateway, APT and health-check regression tests pass in the full
+  suite, with host services/package probes mocked. No additional fresh-install
+  defect was confirmed. Docker, WSL and a live Ubuntu target were unavailable;
+  package installation, image recreation, real sudo/SSHD policy, device login,
+  backups and remote Git credentials/push still require deployment-host checks.
+
 # Development debug panel and folder browsing — 1.19.0
 
 - Prepared from merged main `a7a016b` (1.18.1) on

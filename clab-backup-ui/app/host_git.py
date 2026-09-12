@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.19.0'
+VERSION = '1.19.1'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -119,19 +119,26 @@ def command(argv, cwd, env, limit=MAX_JSON, timeout=45):
     process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                start_new_session=os.name == 'posix')
+    expired = threading.Event()
     def kill():
-        if process.poll() is None:
-            try:
-                if os.name == 'posix': os.killpg(process.pid, signal.SIGKILL)
-                else: process.kill()
-            except ProcessLookupError: pass
-    timer = threading.Timer(timeout, kill); timer.start()
+        try:
+            # Credential helpers/hooks may inherit stdout and outlive Git itself.
+            # The group's lifetime does not end when the direct child exits.
+            if os.name == 'posix': os.killpg(process.pid, getattr(signal, 'SIGKILL', 9))
+            elif process.poll() is None: process.kill()
+        except ProcessLookupError: pass
+    def expire():
+        expired.set(); kill()
+    timer = threading.Timer(timeout, expire); timer.start()
     try:
         output = process.stdout.read(limit + 1)
+        if expired.is_set(): raise ValueError('Git command timed out. Check the repository and credential helper before retrying.')
         if len(output) > limit: kill(); raise ValueError('Git output exceeded its bounded response limit.')
-        return process.wait(timeout=5), output
+        code = process.wait(timeout=5)
+        if expired.is_set(): raise ValueError('Git command timed out. Check the repository and credential helper before retrying.')
+        return code, output
     finally:
-        timer.cancel(); kill(); process.wait(); process.stdout.close()
+        timer.cancel(); timer.join(); kill(); process.wait(); process.stdout.close()
 
 
 class GitRepository:

@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -315,15 +316,19 @@ class Runner:
     def tick(self):
         while not self.stopping.wait(2):
             if self.store.reset_pending: continue
-            state=self.store.snapshot()
-            for lab in state['labs']:
-                if lab['interval'] and lab.get('next_run') and lab['next_run']<=time.time():
-                    try: self.submit(lab['id'],source='scheduled')
-                    except ValueError as exc:
-                        self.store.event('schedule.deferred',str(exc),level='warning',lab_id=lab['id'])
-                        with self.store.lock:
-                            current=self.store.lab(lab['id'])
-                            if current:
-                                current['next_run']=time.time()+60
-                                self.store.save()
-                    break
+            try:
+                state=self.store.snapshot()
+                for lab in state['labs']:
+                    if lab['interval'] and lab.get('next_run') and lab['next_run']<=time.time():
+                        try: self.submit(lab['id'],source='scheduled')
+                        except ValueError as exc:
+                            try: self.store.event('schedule.deferred',str(exc),level='warning',lab_id=lab['id'])
+                            except OSError: pass
+                            with self.store.lock:
+                                current=self.store.lab(lab['id'])
+                                if current:
+                                    current['next_run']=time.time()+60
+                                    self.store.save()
+                        break
+            except OSError:
+                logging.getLogger(__name__).warning('Scheduler could not persist its work; check manager storage. Retrying on the next tick.')

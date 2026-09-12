@@ -11,7 +11,7 @@ class GitTransportTests(unittest.TestCase):
         channel = Mock()
         raw = json.dumps(envelope).encode()
         channel.recv_ready.side_effect = [True, False]
-        channel.recv.return_value = raw
+        channel.recv.side_effect = [raw, b'']
         channel.recv_stderr_ready.return_value = False
         channel.exit_status_ready.return_value = True
         channel.recv_exit_status.return_value = code

@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import re
+import socket
 import threading
 import time
 import uuid
@@ -80,15 +81,21 @@ def remote_git(host, request, stopping=None):
         channel.settimeout(30)
         channel.exec_command('clab-manager-git')
         channel.sendall(payload); channel.shutdown_write()
-        data = bytearray(); until = time.monotonic() + 600
+        channel.settimeout(.2)
+        data = bytearray(); until = time.monotonic() + 600; total = 0; eof = False
         while True:
             if time.monotonic() > until or (stopping and stopping.is_set()):
                 raise ValueError('Git connection interrupted. Retry this saved operation to reconcile its result.')
-            if channel.recv_ready():
-                data.extend(channel.recv(65536))
-                if len(data) > MAX_WIRE: raise ValueError('Git helper response exceeded its limit.')
-            if channel.recv_stderr_ready(): channel.recv_stderr(65536)
-            if channel.exit_status_ready() and not channel.recv_ready(): break
+            if channel.recv_stderr_ready(): total += len(channel.recv_stderr(65536))
+            if total > MAX_WIRE: raise ValueError('Git helper response exceeded its limit.')
+            if not eof:
+                try: chunk = channel.recv(65536)
+                except socket.timeout: continue
+                eof = not chunk
+                data.extend(chunk); total += len(chunk)
+            if total > MAX_WIRE: raise ValueError('Git helper response exceeded its limit.')
+            # Status is not an end-of-output marker, including for large versions.
+            if eof and not channel.recv_stderr_ready() and channel.exit_status_ready(): break
             time.sleep(.02)
         try: envelope = json.loads(data)
         except (ValueError, UnicodeError): raise ValueError('Install or refresh the matching Git helper on the VM.')
@@ -317,9 +324,13 @@ class GitProgress:
                     existing['commit'] = result['commit']
                 message = scrub(str(exc), self.store.state) if isinstance(exc, (ValueError, HTTPException)) else 'Git save interrupted. The local capture is retained; retry to reconcile.'
             status = 'interrupted' if self.stopping.is_set() else 'push_pending' if existing.get('commit') else 'export_pending' if existing.get('backup_job_id') else 'failed'
-            try: self.update(job_id, status=status, message=message[:600], finished=now(),
-                             backup_job_id=existing.get('backup_job_id', ''), commit=existing.get('commit', ''))
-            except OSError: pass  # Persisted in-flight stage is reconciled after restart.
+            recovery = dict(status=status, message=message[:600], finished=now(),
+                            backup_job_id=existing.get('backup_job_id', ''), commit=existing.get('commit', ''))
+            try: self.update(job_id, **recovery)
+            except OSError:
+                # The worker has ended. Do not retain a busy reservation in memory
+                # until restart; retries after disk recovery reuse this capture.
+                with self.store.lock: self.get_job(job_id).update(recovery)
         finally:
             try: self.store.event('git.progress', 'Git save stage completed; see its saved operation status.', lab_id=job.get('lab_id', '') if 'job' in locals() else '', job_id=job_id)
             except OSError: pass
@@ -534,7 +545,11 @@ class GitProgress:
                 completed = True
                 return result
             finally:
-                self.update(ident, status='dismissed', finished=now(), message='Repository updated from remote.' if completed else 'Repository update needs attention. Check status before retrying.')
+                terminal = dict(status='dismissed', finished=now(), message='Repository updated from remote.' if completed else 'Repository update needs attention. Check status before retrying.')
+                try: self.update(ident, **terminal)
+                except OSError:
+                    with self.store.lock: self.get_job(ident).update(terminal)
+                    raise
 
         @app.get('/api/labs/{lab_id}/git/history')
         def history(lab_id: str):

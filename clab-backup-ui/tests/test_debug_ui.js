@@ -50,3 +50,8 @@ test('failed probe clears prior result and leaves retry available',async()=>{
  assert.equal(f.get('debug-probe').disabled,false);assert.match(f.get('debug-checks').children[0].textContent,/HTTP 409/);
  f.context.debugDownload();assert.equal(JSON.parse(await f.blob().text()).probe,null);
 });
+
+test('debug flags audit write failures without displaying exception details',async()=>{
+ const f=fixture(async()=>({ok:true,json:async()=>({...snapshot,audit_log_available:false})}));await tick();
+ assert.equal(f.get('debug-summary').children[0].children[1].children[7].textContent,'Failed — check storage');
+});

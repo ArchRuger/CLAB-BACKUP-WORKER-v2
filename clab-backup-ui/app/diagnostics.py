@@ -74,6 +74,7 @@ class Diagnostics:
         return {'schema': 1, 'generated_at': timestamp(), 'manager_version': __version__,
                 'python_version': platform.python_version(), 'packages': packages,
                 'uptime_seconds': int(time.monotonic() - self.started), 'vm': connection,
+                'audit_log_available': not self.store.event_error,
                 'saved_counts': counts, 'requests': requests,
                 'scope': 'Metadata only. Latest 200 API requests except successful state/debug polling; resets on restart. No credentials, paths, file contents or raw logs.'}
 
