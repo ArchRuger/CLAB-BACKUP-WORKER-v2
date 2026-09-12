@@ -1,8 +1,26 @@
 # V1.19.2 bug-fix report follow-up — 1.19.3
 
 - Prepared from published main `0faae0b` (1.19.2) on branch
-  `claude/v1.19.2-bug-fix-report`. Source delivery only: no Docker build, fresh
-  Ubuntu install, live VM helper call, device action or Git push was performed.
+  `claude/v1.19.2-bug-fix-report`. Source delivery; no Docker image is published.
+- **Live dev-VM validation (Ubuntu 24.04.4, x86_64, no `/dev/kvm`):** the branch was
+  staged with `git archive`, `deploy/install-prerequisites.sh --docker --containerlab`
+  installed Docker 29.8 / Compose v5.5.1 / containerlab 0.79.0, and the maintainer ran
+  the interactive steps (`start-manager.sh --enable-operations` with the clab-discovery
+  password, the browser VM connection, and `setup-git.sh` choosing a subfolder). The
+  resulting state, read back without changing it: manager container `clab-backup:1.19.3`
+  running; `/api/state` reports version 1.19.3, discovery configured and connected as
+  `clab-discovery`, helper 1.19.3; the Debug probe reports **browse PASS and
+  capabilities PASS** through the real SSH gateway (the path that returned 409 in the
+  1.19.2 report); a two-node `arista_ceos` lab (`n24l/ceos:4.35.0F`, container-only)
+  was **deployed through the operations gateway** (`deploy` succeeded, exit 0, then
+  `inspect-all`), imported as Running with both nodes Ready; a NOS login test and a
+  backup **succeeded on both nodes**; one Git registration carries the new
+  subfolder prompt (label `CLAB-MNGR-DEV-LLM / ARISTA-LAB-TEST`, prefix
+  `ARISTA-LAB-TEST`) and one Save progress is `synced` with a verified pushed commit;
+  `bash deploy/check-install.sh` reports **PASS 57 / FAIL 0 / WARN 1 / INFO 5** on
+  source 1.19.3, the WARN being the default 20-folder browse budget. The first-run VM
+  connection dialog and the green setup banner were exercised by the maintainer and
+  not directly observed by the author.
 - Fixes: `diagnostics.failure_hint` now orders the gateway/account phrases before a
   tightened password rule, so the Debug panel no longer reports a reachable-account
   operations-gateway failure as an authentication/password problem;
@@ -27,8 +45,9 @@
   `Store.atomic` during `setUp`; each affected test passes when rerun in isolation.
   This is a Windows open-handle rename limitation, not a product defect. Judge the
   suite by isolated reruns or by Linux CI.
-- `bash -n` passes for all deploy scripts. No live SSH gateway, discovery, operations,
-  Git or device behavior on a real VM was exercised; those remain to verify on the VM.
+- `bash -n` passes for all deploy scripts. VM-based NOS kinds (vJunos, XRv9k) were
+  not exercised because the dev VM lacks nested virtualization; only the container
+  cEOS kind was deployed and backed up.
 
 # Integrated audit recovery fixes — 1.19.2
 

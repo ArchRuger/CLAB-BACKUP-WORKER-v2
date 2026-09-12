@@ -1,3 +1,28 @@
+# Bug-fix report follow-up — 1.19.3
+
+Read README.md "Changes in 1.19.3", HEALTH-CHECK.md and GIT-SETUP.md "One
+repository, one subfolder per lab". diagnostics.failure_hint must keep the
+gateway/account/permission fragments ahead of the password rules ('authentication
+failed', 'password setup required'): a bare 'password' match misreported the
+reachable-account operations failure as a rejected password even though connected
+discovery proves the password. lab_operations.operation_connection_error's
+command-not-found text must contain "did not run the operations gateway" (the hint
+keys on it) and must not tell the user to save the password. check_install's
+http-browse next step branches on discovery connected. management.js: openVmDialog
+plus maybePromptVmConnection prompt once when state.discovery has loaded and is
+unconfigured, never for a configured or dismissed connection; test it by calling
+context.maybePromptVmConnection (renderManagement needs app.js globals).
+git-onboard.py: selected_registration calls ask_subfolder() for a fresh
+registration and offers "new" for an already-registered checkout; new_binding labels
+"repo / subfolder"; subfolder rules mirror host_git.relpath; the manager UI cannot
+register (root, CLI or guided setup only); a root ('') registration and subfolders in
+one repository overlap by design. success_banner colours only on a TTY. Validated on
+a fresh Ubuntu 24.04 dev VM without KVM: probe browse/capabilities, a cEOS deploy
+through the gateway, NOS login/backup and a subfolder Git save all passed;
+check-install 57 pass / 0 fail. On Windows run app tests with
+`python -m unittest discover -s tests -t tests -p test_X.py` from clab-backup-ui;
+the WinError 5 state.enc rename flake remains and passes on isolated rerun.
+
 # Post-install paste-in fixes — documentation on 1.19.2
 
 FRESH-VM-GUIDE-V2.md (step 3 and step 7), INSTALL.md and WIKI-MASTER-GUIDE.md
