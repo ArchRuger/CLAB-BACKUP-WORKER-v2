@@ -147,6 +147,25 @@ specific folder and a larger budget. A timed-out check is never counted as passe
 
 ## Recover the operations-helper error
 
+**If discovery is connected but "Topology browser over saved SSH connection" fails
+with HTTP 409 (and Git registry also fails)**, the saved VM password is not the
+cause: connected discovery uses the same `clab-discovery` account and password.
+The clab-discovery SSH session is reaching the account but not running the
+operations gateway, so its `clab-manager-operations` command is reported as not
+found. From matching source on the VM, re-run:
+
+```bash
+sudo bash deploy/start-manager.sh --enable-operations
+```
+
+This reinstalls the gateway, operations helper and sudoers, verifies them through
+the restricted account, and recreates the manager container so the running image
+matches. Then reconnect in **VM connection** and reopen the folder. From 1.19.3 the
+Debug panel labels this a gateway/enablement problem (`did not run the operations
+gateway`) rather than an authentication failure, and `check-install` gives the same
+gateway-specific next step. If the local "Operations helper through restricted
+account" check itself fails, run `sudo bash deploy/setup-operations.sh` first.
+
 **If 1.17.0/1.18.0 reports administrator access PASS but Docker, SSH and every
 helper fail together**, first rerun the report as root. Those checker versions
 start commands in detached sessions which cannot reuse Ubuntu's terminal-scoped

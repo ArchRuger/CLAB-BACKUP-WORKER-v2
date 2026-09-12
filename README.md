@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.19.2
+# Containerlab Node Manager — 1.19.3
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,8 +6,10 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.19.2 deployment:** Build the new source and create the VM password using
+**1.19.3 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
+Install matching manager and helpers with `bash deploy/install.sh`, keeping existing
+persistent data, then confirm Release 1.19.3 in the Debug panel.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
 Proxmox/Ubuntu setup, source/image installation, VM passwords, lab workflows and recovery.
@@ -39,6 +41,31 @@ Containerlab extension. Each is a short block to paste as your normal account.
 ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
+
+## Changes in 1.19.3
+
+Fixes for the 1.19.2 bug-fix report. The Debug panel and the operations error now
+name the real cause when the browser reaches a connected VM but folder browsing and
+Git return HTTP 409: previously both said "Check the saved VM password", even though
+connected discovery already proves the password. The operations "command not found"
+case is now reported as "the clab-discovery SSH session did not run the operations
+gateway" with the enable-operations remedy, and the Debug panel classifies it as a
+gateway problem instead of an authentication failure. `check-install` gives the same
+gateway-specific next step when discovery is connected.
+
+When the web page opens and no VM connection is configured yet, the manager now
+prompts for it once, since the VM connection is what makes discovery, operations and
+Git work. A configured connection, or one dismissed this session, is not re-prompted.
+
+Guided Git setup (`bash deploy/setup-git.sh`) now asks which repository subfolder
+holds each lab, so one repository can hold many labs (for example `bgp`, `eth`, `ip`),
+each pushed to its own subfolder, and an already-registered repository can gain a new
+subfolder for another lab. Successful setup ends with a clear success banner. See
+[GIT-SETUP.md](GIT-SETUP.md) and [GIT-PROGRESS.md](GIT-PROGRESS.md).
+
+This is a source delivery; no Docker image is published. No fresh-VM install, live
+VM helper call, device action or Git push was performed by the author. See
+[VALIDATION.md](clab-backup-ui/VALIDATION.md) for the tests that were run.
 
 ## Changes in 1.19.2
 

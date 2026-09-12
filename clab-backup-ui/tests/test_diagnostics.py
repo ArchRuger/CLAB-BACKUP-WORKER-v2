@@ -121,6 +121,12 @@ class DiagnosticsTests(unittest.TestCase):
             ValueError('VM password setup required. Run sudo bash deploy/setup-discovery.sh'): 'authentication',
             ValueError('VM SSH host key changed. Verify the VM and reset the saved fingerprint'): 'host-trust',
             ValueError('Operations gateway could not obtain its restricted sudo permission.'): 'gateway-permission',
+            # A reachable clab-discovery account whose operations command is not found is a
+            # gateway/enablement problem, not a rejected password: its message mentions the
+            # word "password" only to say the reverse, so it must not classify as authentication.
+            ValueError('The clab-discovery SSH session did not run the operations gateway '
+                       '(its operations command was not found). This does not indicate a wrong password; '
+                       'discovery uses the same clab-discovery account.'): 'gateway-account',
             ValueError('Operation connection interrupted. Inspect the lab before retrying.'): 'timeout',
             OSError('connection refused by host-secret'): 'helper-unavailable',
         }
@@ -129,6 +135,9 @@ class DiagnosticsTests(unittest.TestCase):
                 hint = failure_hint(error)
                 self.assertEqual(hint['code'], code)
                 self.assertNotIn('host-secret', hint['message'])
+        # Regression: the gateway-account message must never be read as an authentication
+        # failure, which previously sent the user to reset a correct VM password.
+        self.assertEqual(failure_hint(ValueError('did not run the operations gateway. wrong password?'))['code'], 'gateway-account')
 
 
 if __name__ == '__main__': unittest.main()

@@ -128,14 +128,18 @@ class OperationsSSHTests(unittest.TestCase):
         finally:
             thread.join(2)
 
-    def test_command_not_found_stderr_identifies_wrong_vm_account(self):
+    def test_command_not_found_stderr_identifies_operations_gateway_not_password(self):
         host,server,thread=self.serve([], code=127,
             stderr=b'sh: 1: clab-manager-operations: not found\nfixture-secret-password\n')
         try:
-            with self.assertRaisesRegex(ValueError, 'not using the operations gateway') as failure:
+            with self.assertRaisesRegex(ValueError, 'did not run the operations gateway') as failure:
                 remote(host, {'mode':'capabilities'})
-            self.assertIn('clab-discovery', str(failure.exception))
-            self.assertNotIn('fixture-secret-password', str(failure.exception))
+            message=str(failure.exception)
+            self.assertIn('clab-discovery', message)
+            self.assertIn('--enable-operations', message)
+            # Discovery uses the same account and password, so this must not blame the password.
+            self.assertNotIn('save its password', message)
+            self.assertNotIn('fixture-secret-password', message)
         finally:
             thread.join(2)
 

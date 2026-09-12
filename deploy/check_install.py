@@ -502,9 +502,18 @@ def check_manager_routes(ctx):
         return
     result, roots = ctx.http('/api/operations/browse', {'path': ''})
     if not result.ok or not isinstance(roots, dict) or not isinstance(roots.get('entries'), list):
+        connected = discovery.get('connected') is True
+        # Discovery uses the same account, password and gateway as operations. When
+        # discovery is connected but this browse fails, the password is not the cause:
+        # the clab-discovery SSH session is not reaching the operations helper.
+        gateway_hint = (' Discovery is connected, so the saved password is accepted; the clab-discovery '
+                        'SSH session is not reaching the operations helper. Re-run '
+                        + ctx.repair('start-manager.sh', '--enable-operations')
+                        + ' from matching source and recreate the manager.') if connected else \
+                       ' If local helper checks pass, verify the VM password and host fingerprint.'
         ctx.add('http-browse', 'INFO' if ctx.discovery_only else 'FAIL', 'Topology browser over saved SSH connection',
                 'The uncached browser request failed: ' + (result.reason or 'invalid response'),
-                ctx.repair('setup-operations.sh') + '; then close and reopen the failed folder. Verify VM password/fingerprint if local helper checks pass.')
+                ctx.repair('setup-operations.sh') + ', reconnect, then close and reopen the failed folder.' + gateway_hint)
         return
     ctx.add('http-browse', 'PASS', 'Topology browser over saved SSH connection',
             'An uncached request reached the operations helper using the manager saved SSH connection.')

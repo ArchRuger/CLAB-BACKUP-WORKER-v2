@@ -40,8 +40,11 @@ def operation_connection_error(status, stderr):
                 'Run sudo bash deploy/start-manager.sh --enable-operations on the VM.')
     if 'clab-manager-operations' in diagnostic and any(value in diagnostic for value in (
             'not found', 'no such file', 'unknown command')):
-        return ('VM connection is not using the operations gateway. Select clab-discovery '
-                'as the VM connection username, save its password, and refresh discovery.')
+        return ('The clab-discovery SSH session did not run the operations gateway '
+                '(its operations command was not found). On the VM, run '
+                'sudo bash deploy/start-manager.sh --enable-operations from the matching '
+                'source, then reconnect. This does not indicate a wrong password; discovery '
+                'uses the same clab-discovery account.')
     detail = 'no SSH exit status' if status == -1 else 'SSH exit ' + str(status)
     return ('Operations helper did not return a complete successful response (' + detail + '). '
             'Run sudo bash deploy/check-install.sh on the VM and review the operations checks.')

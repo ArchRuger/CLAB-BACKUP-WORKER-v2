@@ -35,9 +35,11 @@ class GitOnboardTests(unittest.TestCase):
                     patch.object(onboard, 'read_registrations', return_value=[]), \
                     patch.object(onboard, 'github_login'), patch.object(onboard, 'identity') as identity, \
                     patch.object(onboard, 'run', side_effect=run) as commands, \
-                    patch.object(onboard, 'ask') as ask, patch.object(onboard, 'confirm', return_value=False):
+                    patch.object(onboard, 'ask', return_value='') as ask, patch.object(onboard, 'confirm', return_value=False):
                 onboard.main(['--repo', folder])
-            ask.assert_not_called()
+            # Resume does not re-prompt for the checkout directory (supplied with --repo);
+            # a fresh registration may still ask which repository subfolder holds this lab.
+            self.assertTrue(all(call.args[0] != 'Checkout directory' for call in ask.call_args_list))
             identity.assert_called_once()
             self.assertEqual(identity.call_args.args[0], Path(folder))
             self.assertEqual(prepare.call_args_list[0].args[1], '')
@@ -152,7 +154,35 @@ class GitOnboardTests(unittest.TestCase):
             self.assertEqual(path, Path(folder) / 'labs' / 'b')
             self.assertEqual(chosen, url)
             self.assertEqual(binding['remote'], 'origin')
-            self.assertEqual(ask.call_args.args[1], str(path))
+            # A blank subfolder answer keeps the whole repository (single-lab repository).
+            self.assertEqual(binding['prefix'], '')
+            checkout_call = next(call for call in ask.call_args_list if call.args[0] == 'Checkout directory')
+            self.assertEqual(checkout_call.args[1], str(path))
+
+    def test_fresh_registration_prompts_for_a_repository_subfolder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            account = SimpleNamespace(pw_name='owner', pw_dir=folder)
+            path = Path(folder) / 'labs' / 'af-learning-labs'
+            with patch.object(onboard, 'ask', return_value='bgp'):
+                binding = onboard.selected_registration(account, path, [])
+            self.assertEqual(binding['prefix'], 'bgp')
+            self.assertIn('bgp', binding['label'])
+            self.assertEqual(binding['push_url'], '')
+
+    def test_registered_repository_can_add_a_new_subfolder_for_another_lab(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)
+            (path / '.git').mkdir()
+            existing = {'id': 'one', 'path': str(path), 'owner': 'owner', 'label': 'AF Labs / bgp',
+                        'remote': 'origin', 'branch': 'main', 'prefix': 'bgp',
+                        'push_url': 'https://github.com/owner/af.git', 'revision': 'r1'}
+            account = SimpleNamespace(pw_name='owner', pw_dir=folder)
+            with patch.object(onboard, 'menu', return_value='new'), \
+                    patch.object(onboard, 'ask', return_value='eth'):
+                binding = onboard.selected_registration(account, path, [existing])
+            self.assertEqual(binding['prefix'], 'eth')
+            self.assertNotIn('id', binding)
+            self.assertEqual(binding['push_url'], '')
 
     def test_resume_command_points_to_existing_checkout_after_cancellation(self):
         with tempfile.TemporaryDirectory(prefix='lab with spaces ') as folder:
@@ -189,7 +219,8 @@ class GitOnboardTests(unittest.TestCase):
             binding = {'id': 'one', 'path': str(path), 'owner': 'owner', 'remote': 'lab-origin',
                        'prefix': 'labs/bgp', 'label': 'My BGP lab', 'branch': 'lab-progress',
                        'push_url': url, 'revision': 'keep-this-revision'}
-            with patch.object(onboard, 'run', return_value=subprocess.CompletedProcess([], 0, url)) as run:
+            with patch.object(onboard, 'run', return_value=subprocess.CompletedProcess([], 0, url)) as run, \
+                    patch.object(onboard, 'menu', return_value='1'):
                 chosen, chosen_url, selected = onboard.choose_checkout(account, folder, {}, [binding])
             self.assertEqual((chosen, chosen_url, selected), (path, url, binding))
             run.assert_called_once_with(['git', 'remote', 'get-url', '--push', 'lab-origin'], {}, path)
@@ -253,13 +284,15 @@ class GitOnboardTests(unittest.TestCase):
             url = 'https://github.com/owner/lab.git'
             binding = {'path': str(path), 'owner': 'owner', 'label': 'My lab', 'remote': 'origin',
                        'branch': 'main', 'prefix': '', 'push_url': url}
-            with patch.object(onboard, 'menu', return_value='registered') as menu, \
+            # First menu picks the registered checkout; the second reuses its single
+            # saved destination ('1') rather than adding a new subfolder.
+            with patch.object(onboard, 'menu', side_effect=['registered', '1']) as menu, \
                     patch.object(onboard, 'ask') as ask, \
                     patch.object(onboard, 'run', return_value=subprocess.CompletedProcess([], 0, url)):
                 chosen, _, selected = onboard.choose_checkout(SimpleNamespace(pw_name='owner'), None, {}, [binding])
             self.assertEqual(chosen, path)
             self.assertEqual(selected, binding)
-            self.assertEqual(menu.call_args.args[2], 'registered')
+            self.assertEqual(menu.call_args_list[0].args[2], 'registered')
             ask.assert_not_called()
 
     def test_root_or_restricted_owner_never_runs_git_or_sudo(self):

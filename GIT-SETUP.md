@@ -32,13 +32,13 @@ advanced administrator/owner workflow below.
    directory and run this command **without sudo**:
 
    ```bash
-   cd "$HOME/projects/v1.19.1"
+   cd "$HOME/projects/v1.19.3"
    bash deploy/setup-git.sh
    ```
 
 Use your actual source folder if it has a different name. This is the folder
 containing `deploy/` and `clab-backup-ui/`, not the lab-config checkout under
-`~/labs/`. You can also run `bash "$HOME/projects/v1.19.1/deploy/setup-git.sh"`
+`~/labs/`. You can also run `bash "$HOME/projects/v1.19.3/deploy/setup-git.sh"`
 from any directory. The launcher prints your actual absolute setup command.
 
 Finish the wizard until it reports **Registered** and **Ready** before connecting
@@ -49,6 +49,8 @@ The wizard shows the Linux account it will use, then:
 
 - Installs missing Git/GitHub CLI packages through sudo, if you choose to do so.
 - Offers to clone a repository into `~/labs/REPOSITORY`, or reuse an existing checkout.
+- Asks which repository **subfolder** holds this lab, so one repository can hold many
+  labs (for example `bgp`, `eth`, `ip`). Leave it blank for a single-lab repository.
 - Reuses a GitHub login or opens GitHub's browser authorization flow for that account.
 - Configures the Git credential helper and asks for missing commit author name/email.
 - Checks GitHub repository write permission, then asks to register the displayed checkout.
@@ -84,6 +86,26 @@ flowchart TD
     I -- Yes --> J[Progress saved to Git]
     I -- No --> K[Keep snapshot and retry the same save]
 ```
+
+## One repository, one subfolder per lab
+
+To keep every lab of a course in a single repository, for example
+`Patricks-AF-Learning-Labs`, give each lab its own **subfolder**:
+
+1. Create the one course repository on GitHub with a README, and run guided setup.
+   Clone it once. When setup asks for the repository subfolder, enter this lab's
+   folder, for example `bgp`. It registers `bgp/` as this lab's destination.
+2. For the next lab, run guided setup again and choose the **same** checkout. Because
+   the repository is already registered, setup offers to reuse a saved destination or
+   **register a new subfolder**; choose the new subfolder and enter, for example, `eth`.
+3. In the manager, open each lab → **More → Git repository** and select its subfolder
+   registration (each is listed with its subfolder). **Save progress** pushes that lab
+   to its own subfolder, for example `bgp/latest/`, without touching the others.
+
+Subfolders in one repository must not overlap: use `bgp` and `eth`, not `bgp` and
+`bgp/edge`. A repository registered at its root (blank subfolder) cannot also register
+subfolders. An administrator can register subfolders non-interactively with
+`--prefix`, described under [Advanced](#advanced-separate-owner-other-https-host-or-managed-prefix) below.
 
 ## Already working? Upgrade without setting it up again
 
@@ -184,7 +206,7 @@ In 1.15.3 and later
 you can supply the existing checkout directly:
 
 ```bash
-bash "$HOME/projects/v1.19.1/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
+bash "$HOME/projects/v1.19.3/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
 ```
 
 Replace `my-lab` with the actual folder. This command works even when your current
@@ -208,7 +230,7 @@ git var GIT_COMMITTER_IDENT
 Both checks must succeed. Then, from the manager source folder, register:
 
 ```bash
-cd "$HOME/projects/v1.19.1"
+cd "$HOME/projects/v1.19.3"
 sudo bash deploy/setup-git.sh --repo "$HOME/labs/my-lab"
 ```
 
