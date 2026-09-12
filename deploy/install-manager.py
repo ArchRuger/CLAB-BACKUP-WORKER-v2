@@ -195,6 +195,14 @@ def git_setup(env):
     return result.returncode
 
 
+def engineer_access(env):
+    # Groups, group-writable trusted lab folders and containerlab SUID for the
+    # installing account. Privileged work stays in the dedicated helper script.
+    command_step(['sudo', 'bash', str(SOURCE / 'deploy/setup-engineer-access.sh'), '--owner', env['USER']], env)
+    print('New groups apply to new logins: reconnect SSH, and in VS Code run '
+          '"Remote-SSH: Kill VS Code Server on Host..." then reconnect before using the Containerlab extension.')
+
+
 def verify_manager(env, version):
     # A source build can outlast sudo's timestamp; renew on the real terminal
     # before checks that deliberately capture output and have no stdin.
@@ -215,6 +223,13 @@ def install(env, version):
                      ('2', 'Discovery/import only; retain any previously enabled operations'), ('3', 'Back')])
     if operations == '3':
         raise Cancelled()
+    engineer = '2'
+    if operations == '1':
+        # The manager works without this; VS Code Remote - SSH with the Containerlab
+        # extension does not (groups, writable lab folders, containerlab SUID).
+        engineer = menu('VS Code / Containerlab extension access for ' + env['USER'],
+                        [('1', 'Set up now: docker and clab_admins groups, group-writable lab folders, containerlab SUID (standard)'),
+                         ('2', 'Skip; the manager does not need it')])
     repair = confirm('Back up and disable obsolete installation-media APT entries if present?')
     print('\nInstallation plan')
     print('  Source: ' + str(SOURCE) + ' (' + version + ')')
@@ -225,23 +240,27 @@ def install(env, version):
     print('  Existing password/data retained; first setup asks you to create the password.')
     print('  Rebuild/recreate only the manager; existing lab containers remain in place.')
     print('  Lab operations: ' + ('enabled with default trusted roots' if operations == '1' else 'existing permissions retained'))
+    print('  Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'))
     print('  Settings: ' + ('copy ' + str(env_source) if env_source else 'retain current .env or use defaults'))
     print('  Installation-media APT repair: ' + ('enabled with backup' if repair else 'not selected'))
     print('  Check running version/HTTP, then offer Git setup under ' + env['USER'] + '.')
     if not confirm('Proceed with this plan?'):
         raise Cancelled()
-    phase('1/4 Administrator access and settings', lambda: command_step(['sudo', '-v'], env))
+    total = '5' if engineer == '1' else '4'
+    phase('1/' + total + ' Administrator access and settings', lambda: command_step(['sudo', '-v'], env))
     copy_env(env_source)
     prereqs = ['sudo', 'bash', str(SOURCE / 'deploy/install-prerequisites.sh'), '--docker', '--containerlab']
     if repair:
         prereqs.append('--repair-install-media')
-    phase('2/4 VM prerequisites', lambda: command_step(prereqs, env))
+    phase('2/' + total + ' VM prerequisites', lambda: command_step(prereqs, env))
     launch = ['sudo', 'env', 'DOCKER_HOST=unix:///var/run/docker.sock',
               'bash', str(SOURCE / 'deploy/start-manager.sh')]
     if operations == '1':
         launch.append('--enable-operations')
-    phase('3/4 Password, helpers, image and manager', lambda: command_step(launch, env))
-    phase('4/4 Running manager verification', lambda: verify_manager(env, version))
+    phase('3/' + total + ' Password, helpers, image and manager', lambda: command_step(launch, env))
+    phase('4/' + total + ' Running manager verification', lambda: verify_manager(env, version))
+    if engineer == '1':
+        phase('5/5 Engineer access for VS Code', lambda: engineer_access(env))
     print('\nManager installation is ready. Git is a separate setup step under your ordinary account.')
     if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
         git_setup(env)
@@ -270,15 +289,18 @@ def main(argv=None):
         return git_setup(env)
     while True:
         choice = menu('Setup menu', [('1', 'Install or update manager, then set up Git'),
-                      ('2', 'Git setup / repair only (no rebuild)'), ('3', 'Check running installation'),
-                      ('4', 'Exit')])
-        if choice == '4':
+                      ('2', 'Git setup / repair only (no rebuild)'),
+                      ('3', 'VS Code / Containerlab extension access for ' + account.pw_name + ' (no rebuild)'),
+                      ('4', 'Check running installation'), ('5', 'Exit')])
+        if choice == '5':
             return 0
         try:
             if choice == '1':
                 install(env, version)
             elif choice == '2':
                 git_setup(env)
+            elif choice == '3':
+                phase('Engineer access for VS Code', lambda: engineer_access(env))
             else:
                 health_report(env)
         except Cancelled:

@@ -103,6 +103,7 @@ FAILURES FOUND (exit 1)
 | Normal SFTP | Effective ordinary-account SFTP subsystem and password policy; no password is requested or tested by this check |
 | Administrative SFTP | Whether effective sudoers permission permits the ordinary account to launch the root SFTP server without a password |
 | Proxmox additions | Optional QEMU guest-agent state and `/dev/kvm` presence for VM-based NOS images |
+| Engineer access | When `setup-engineer-access.sh` recorded an account: its `docker` and `clab_admins` membership, group-writable `clab_admins` setgid trusted lab roots, and the root-owned SUID containerlab binary that VS Code's Containerlab extension needs; informational when never configured |
 | Docker and manager | Local rootful daemon, Compose, running manager container, restart policy, host networking, version and actual configured HTTP address/port |
 | Persistent storage | Persistent writable mount, container UID, saved key/state presence and successful decryption without printing contents |
 | Containerlab | CLI response and deployed-node inspection; no deployed labs is valid before the first deployment |

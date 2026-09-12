@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.19.3
+# Containerlab Node Manager — 1.19.4
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,10 +6,10 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.19.3 deployment:** Build the new source and create the VM password using
+**1.19.4 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 Install matching manager and helpers with `bash deploy/install.sh`, keeping existing
-persistent data, then confirm Release 1.19.3 in the Debug panel.
+persistent data, then confirm Release 1.19.4 in the Debug panel.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
 Proxmox/Ubuntu setup, source/image installation, VM passwords, lab workflows and recovery.
@@ -41,6 +41,24 @@ Containerlab extension. Each is a short block to paste as your normal account.
 ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
+
+## Changes in 1.19.4
+
+Engineer access for VS Code Remote - SSH and the Containerlab extension is now a
+setup step instead of a paste-in block. The two errors it removes are
+`Extension activation failed. Insufficient permissions. Ensure USER is in the
+clab_admins and docker group(s)` and `EACCES: permission denied, mkdir
+'/etc/containerlab/...'` from the VS Code file explorer. The new
+`deploy/setup-engineer-access.sh` adds one ordinary account to `docker` and
+`clab_admins`, makes every trusted lab root a group-writable `clab_admins`
+folder with the setgid bit so new files inherit the group, restores the
+containerlab SUID mode, and records the account so `start-manager.sh` reapplies
+it after operations setup or a containerlab upgrade resets those. The installer
+offers it in the standard flow and as menu option 3; `check-install` gains an
+**Engineer access** check that names the exact missing piece. Topologies the
+manager creates in such a folder are group-editable (0664; 0644 elsewhere)
+instead of root-only 0600, so the same lab can be edited in VS Code. The manager
+itself is unchanged and still uses sudo through its restricted gateway.
 
 ## Changes in 1.19.3
 

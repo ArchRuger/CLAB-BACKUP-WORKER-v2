@@ -1,3 +1,24 @@
+# Engineer access for VS Code — 1.19.4
+
+Read README.md "Changes in 1.19.4" and FRESH-VM-GUIDE-V2.md "VS Code Remote -
+SSH and the Containerlab extension". deploy/setup-engineer-access.sh is the
+only place that grants an ordinary account docker and clab_admins, makes the
+trusted lab roots (read from /etc/clab-manager/operations.json) group-writable
+clab_admins setgid folders and restores containerlab SUID; it records the account
+in /etc/clab-manager/engineer.json. start-manager.sh must keep calling it with
+--refresh after setup-operations.sh, because setup-operations resets the projects
+root to root:root 0755 and install-prerequisites strips SUID on a fresh
+containerlab install; --refresh must stay a no-op without engineer.json or
+operations.json. install-manager.py asks for it only when operations are enabled,
+runs it as phase 5 after verification, and offers it as menu option 3 (Check is 4,
+Exit is 5). check_host._engineer reads both JSON files with cat through the
+privileged runner, is INFO when unconfigured and FAIL naming each missing piece.
+host_operations.py create publishes 0664 in a setgid parent, else 0644; keep the
+0600 temporary. The manager never needs any of this and must keep working with
+root-owned roots. Validated on the dev VM: fresh-login groups, mkdir in
+/etc/containerlab as the engineer, sudo-less containerlab inspect, manager browse
+and read of the engineer-created folder through the gateway.
+
 # Bug-fix report follow-up — 1.19.3
 
 Read README.md "Changes in 1.19.3", HEALTH-CHECK.md and GIT-SETUP.md "One
