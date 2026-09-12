@@ -125,14 +125,12 @@ under `/etc/containerlab`.
 
 ## 7. VS Code
 
-Paste in the VM:
+If you answered **1** to the installer's *VS Code / Containerlab extension
+access* question, skip the command. Otherwise paste in the VM, from the source
+folder:
 
 ```bash
-sudo groupadd -r -f clab_admins
-sudo usermod -aG docker,clab_admins "$(id -un)"
-sudo chmod u+s /usr/bin/containerlab
-ls -l /usr/bin/containerlab
-id "$(id -un)"
+sudo bash deploy/setup-engineer-access.sh --owner "$(id -un)"
 ```
 
 Then in **VS Code** on Windows:
@@ -140,7 +138,7 @@ Then in **VS Code** on Windows:
 1. Install the **Remote - SSH** extension.
 2. If VS Code was already connected to this VM: Command Palette → **Remote-SSH: Kill VS Code Server on Host...** → pick the VM.
 3. Connect to `archtop@VM_IP` and install the **Containerlab** extension in that remote window.
-4. Open a terminal there; `id -nG` must list `docker` and `clab_admins`.
+4. Open a terminal there; `id -nG` must list `docker` and `clab_admins`, and creating a folder under `/etc/containerlab` in the explorer must work.
 
 ## 8. Upload the lab and images
 

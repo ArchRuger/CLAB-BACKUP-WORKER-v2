@@ -192,24 +192,25 @@ reports:
 Extension activation failed. Insufficient permissions. Ensure archtop is in the clab_admins and docker group(s).
 ```
 
-The installer keeps your account out of those groups and removes the
-containerlab SUID bit because the manager does not need them. For VS Code,
-restore the standard containerlab setup for your own account:
+and its file explorer cannot create a lab folder in the root-owned
+`/etc/containerlab` (`EACCES: permission denied, mkdir`). The installer's
+**VS Code / Containerlab extension access** step, offered in the standard
+install and as menu option 3 afterwards, fixes both for your account. The same
+one command, from the source folder as your normal account:
 
 ```bash
-sudo groupadd -r -f clab_admins
-sudo usermod -aG docker,clab_admins "$(id -un)"
-sudo chmod u+s /usr/bin/containerlab
-ls -l /usr/bin/containerlab
-id "$(id -un)"
+sudo bash deploy/setup-engineer-access.sh --owner "$(id -un)"
 ```
 
-Then run **Remote-SSH: Kill VS Code Server on Host...** from the VS Code Command
-Palette and reconnect, because the VS Code server already running on the VM
-keeps the old groups. Both groups give root-equivalent access; add only your
-own account. See [the VS Code details](FRESH-VM-GUIDE-V2.md#vscode-access),
-including the `~/.vscode-server` ownership fix and why the block must be rerun
-after a containerlab package upgrade.
+It adds you to `docker` and `clab_admins`, makes the trusted lab folders
+group-writable `clab_admins` folders (setgid, so new files inherit the group),
+and restores the containerlab SUID mode. Then run **Remote-SSH: Kill VS Code
+Server on Host...** from the VS Code Command Palette and reconnect, because the
+VS Code server already running on the VM keeps the old groups. Both groups give
+root-equivalent access; grant them only to your own account. `start-manager.sh`
+reapplies the access on upgrades, and `check-install` reports it as **Engineer
+access**. See [the VS Code details](FRESH-VM-GUIDE-V2.md#vscode-access),
+including the `~/.vscode-server` ownership fix.
 
 ## Finish in the browser
 

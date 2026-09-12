@@ -487,7 +487,7 @@ still effective.
 
 <a id="vscode-access"></a>
 
-### VS Code Remote - SSH and the Containerlab extension (paste-in fix)
+### VS Code Remote - SSH and the Containerlab extension (one-command fix)
 
 Connecting VS Code to the VM with **Remote - SSH** as `archtop` works, but the
 **Containerlab** extension then stops with:
@@ -496,59 +496,62 @@ Connecting VS Code to the VM with **Remote - SSH** as `archtop` works, but the
 Extension activation failed. Insufficient permissions. Ensure archtop is in the clab_admins and docker group(s).
 ```
 
-The extension checks the groups of the account it runs under and needs both
-`docker` and `clab_admins`; containerlab itself must also be able to run as
-root without a password prompt. The installer deliberately leaves your account
-out of those groups and removes the containerlab SUID bit, because the manager
-only needs its restricted `clab-discovery` account. VS Code needs the standard
-containerlab setup for your own account instead. Paste this block in the Ubuntu
-VM as your normal account:
+and its file explorer, which creates folders as that same account, fails inside
+the root-owned lab root:
 
-```bash
-sudo groupadd -r -f clab_admins
-sudo usermod -aG docker,clab_admins "$(id -un)"
-sudo chmod u+s /usr/bin/containerlab
-ls -l /usr/bin/containerlab
-id "$(id -un)"
+```text
+Error: EACCES: permission denied, mkdir '/etc/containerlab/my-lab'
 ```
 
-Expect `-rwsr-xr-x 1 root root` for the binary (the `s` is the restored SUID
-bit, the same mode the official containerlab package installs) and both groups
-in the `id` output. New groups apply only to new logins, and the VS Code server
-already running on the VM keeps the old ones, so:
+The extension checks the groups of the account it runs under and needs both
+`docker` and `clab_admins`; the explorer needs a lab folder you can write; and
+`containerlab deploy` from its terminal needs the sudo-less SUID mode. The
+installer deliberately leaves your account out of those groups, keeps the lab
+folders root-owned and removes the SUID bit, because the manager only needs its
+restricted `clab-discovery` account. `bash deploy/install.sh` therefore offers
+**VS Code / Containerlab extension access** in its standard flow, and as menu
+option 3 for an installation that already exists. The equivalent one command,
+run in the source folder as your normal account, is:
+
+```bash
+sudo bash deploy/setup-engineer-access.sh --owner "$(id -un)"
+```
+
+It creates `clab_admins`, adds your account to `docker` and `clab_admins`, turns
+every trusted lab root (`/etc/containerlab`, the manager's projects folder and
+any custom `--lab-root`) into a group-writable `clab_admins` folder with the
+setgid bit so new files inherit the group, restores the containerlab SUID mode
+(`-rwsr-xr-x root root`, the mode the official package installs) and records the
+account in `/etc/clab-manager/engineer.json`. New groups apply only to new
+logins, and the VS Code server already running on the VM keeps the old ones, so:
 
 1. Close the remote window, open the Command Palette and run
    **Remote-SSH: Kill VS Code Server on Host...**, choosing this VM.
 2. Reconnect. The Containerlab extension re-checks permissions when it activates.
-3. In the VS Code terminal, verify `id -nG`, `docker ps` and
-   `containerlab inspect --all`.
+3. In the VS Code terminal, verify that `id -nG` lists both groups, that
+   `docker ps` and `containerlab inspect --all` work without sudo, and that
+   creating a folder under `/etc/containerlab` in the explorer succeeds.
 
-Both groups grant root-equivalent control of the VM; add only your own engineer
-account, never `clab-discovery`. The manager keeps using sudo through its
-restricted gateway and does not need these changes, and later runs of
-`bash deploy/install.sh` leave them in place. A containerlab package upgrade
-installs a new binary without the SUID bit, so rerun the block if the extension
-activates but `containerlab deploy` reports a permission error afterwards. If
+Both groups grant root-equivalent control of the VM; grant them only to your own
+engineer account, never `clab-discovery`. The manager keeps using sudo through
+its restricted gateway and needs none of this. Later runs of
+`sudo bash deploy/start-manager.sh` reapply the recorded access automatically,
+which matters because the operations setup resets the projects folder and a
+containerlab package upgrade installs a new binary without the SUID bit; the
+manual equivalent is `sudo bash deploy/setup-engineer-access.sh --refresh`.
+Files you create in VS Code belong to you with group `clab_admins`, and
+topologies the manager creates in those folders are group-editable too.
+`bash deploy/check-install.sh` reports **Engineer access** and names the exact
+missing piece if either error returns.
+
+**Still `Extension activation failed. Insufficient permissions`?** The VS Code
+server on the VM was not restarted after the groups changed. Kill it from the
+Command Palette and reconnect; reloading the window is not enough. Confirm in a
+new VS Code terminal that `id -nG` lists `docker` and `clab_admins`. If
 Remote - SSH itself cannot install its server and reports a permission error on
 `~/.vscode-server`, that folder is no longer owned by you, usually after a
 root-level upload into your home directory; fix it with
 `sudo chown -R "$(id -un):$(id -gn)" "$HOME/.vscode-server"` and reconnect.
-
-**Still `Extension activation failed. Insufficient permissions. Ensure ... clab_admins
-and docker`?** New group membership applies only to a fresh login, and the VS Code
-server already running on the VM keeps the old groups. You must run **Remote-SSH:
-Kill VS Code Server on Host...** and reconnect after the block, not just reload the
-window. Confirm in a new VS Code terminal that `id -nG` lists both `docker` and
-`clab_admins`; if it does not, the kill/reconnect did not take effect yet.
-
-**`Error: EACCES: permission denied, mkdir '/etc/containerlab/...'` from the VS Code
-file explorer** is a separate issue from the extension: `/etc/containerlab` is owned
-by root, so your engineer account cannot create files there over plain SSH. Create
-and edit your lab in an engineer-owned project folder (step 9), which you own and can
-write without sudo, and reserve `/etc/containerlab` for root-owned uploads. If you
-must write into a root-owned folder, use WinSCP with the
-[root SFTP paste-in fix](#winscp-admin-sftp); VS Code Remote - SSH has no equivalent
-per-transfer sudo.
 [Containerlab VS Code extension](https://containerlab.dev/manual/gui/vsc-extension/),
 [containerlab installation and sudo-less operation](https://containerlab.dev/install/)
 
@@ -1018,7 +1021,7 @@ Retry the same installation step only after APT succeeds.
 | Git login, identity, checkout and registration | Git terminal wizard in step 6 |
 | Ordinary-user SFTP and actual workstation transfer | Explicit checkpoint in step 7 |
 | Optional administrative WinSCP access | Paste-in sudoers rule and matching WinSCP setting in step 7; not added by the installer |
-| VS Code Remote - SSH and the Containerlab extension | Paste-in group and SUID fix in step 7; not part of the installer |
+| VS Code Remote - SSH and the Containerlab extension | Installer option (VS Code / Containerlab extension access) or `setup-engineer-access.sh` in step 7; reapplied by `start-manager.sh` |
 | Full installation report after browser VM/Git setup | Second script `deploy/check-install.sh` in step 12; explicit service/helper/folder/Git results and recovery, with manual transfer/backup/push still required |
 | QEMU guest agent and firewall/network access | Step 8; outside the manager installer |
 | Vendor images, topology upload and lab deployment | Steps 9 and 11; your chosen lab |

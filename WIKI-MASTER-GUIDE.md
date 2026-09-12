@@ -370,17 +370,13 @@ If Docker already works, verify it and skip its installation block. Do not run C
 
 ## Step 5.1 — Allow the engineer to use Docker and Containerlab
 
-**Ubuntu VM:** the optional VS Code workflow needs the normal engineer account in the `docker` and `clab_admins` groups, and the containerlab binary must carry its SUID bit. The terminal installer in Part 6 installs containerlab without the SUID bit and adds your account to no group, because the manager only needs `clab-discovery`; the Containerlab extension then stops with `Extension activation failed. Insufficient permissions. Ensure archtop is in the clab_admins and docker group(s).` Paste this block as the engineer account:
+**Ubuntu VM:** the optional VS Code workflow needs the normal engineer account in the `docker` and `clab_admins` groups, lab folders that account can write, and the containerlab binary with its SUID bit. The terminal installer in Part 6 installs containerlab without the SUID bit, keeps `/etc/containerlab` root-owned and adds your account to no group, because the manager only needs `clab-discovery`; the Containerlab extension then stops with `Extension activation failed. Insufficient permissions. Ensure archtop is in the clab_admins and docker group(s).` and its explorer reports `EACCES: permission denied, mkdir '/etc/containerlab/...'`. Answer **1** to the installer's *VS Code / Containerlab extension access* question, choose menu option 3 later, or run the same step yourself from the source folder as the engineer account:
 
 ```bash
-sudo groupadd -r -f clab_admins
-sudo usermod -aG docker,clab_admins "$(id -un)"
-sudo chmod u+s /usr/bin/containerlab
-ls -l /usr/bin/containerlab
-id "$(id -un)"
+sudo bash deploy/setup-engineer-access.sh --owner "$(id -un)"
 ```
 
-Expect `-rwsr-xr-x 1 root root` for the binary, the same mode the official containerlab package sets, and both groups in the `id` output. The block is safe to rerun. Log out and establish a fresh SSH session, then verify:
+It creates `clab_admins`, adds your account to both groups, makes every trusted lab root a group-writable `clab_admins` folder with the setgid bit, restores `-rwsr-xr-x 1 root root` on the binary (the mode the official containerlab package sets) and records the account so `start-manager.sh` reapplies it on upgrades. It is safe to rerun. Log out and establish a fresh SSH session, then verify:
 
 ```bash
 id -nG
