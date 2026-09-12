@@ -1,3 +1,26 @@
+# Post-install paste-in fixes — documentation on 1.19.2
+
+FRESH-VM-GUIDE-V2.md (step 3 and step 7), INSTALL.md and WIKI-MASTER-GUIDE.md
+(Step 1.2, Part 5) now carry three copy-paste blocks; README links them. Clock:
+after a Proxmox snapshot rollback with memory state the guest keeps the snapshot
+time until timesyncd's next poll, so the fix is set-ntp true plus a timesyncd
+restart; the manual `timedatectl set-time "... UTC"` sequence is only a
+bootstrap when no time server is reachable, and set-ntp must be off for it.
+WinSCP: the passwordless root SFTP sudoers rule is written with tee + visudo -cf
+into /etc/sudoers.d/<owner>-sftp and tested with `sudo -k; sudo -n
+/usr/lib/openssh/sftp-server </dev/null`; WinSCP keeps `sudo -n
+/usr/lib/openssh/sftp-server` and check-install --require-admin-sftp verifies
+the same rule. VS Code: the vscode-containerlab extension runs `id -nG` in the
+VS Code server and refuses to activate without both clab_admins and docker
+("Extension activation failed. Insufficient permissions..."), so the block
+creates clab_admins, adds the engineer account to both groups and restores the
+upstream 4755 SUID mode on /usr/bin/containerlab; the user must then kill the
+VS Code server on the host and reconnect. The installer is unchanged: it still
+strips SUID on a fresh containerlab install and keeps the suid_setup_done marker,
+so the VS Code block must be rerun after a containerlab package upgrade. The
+manager never needs these groups. Documentation only; no version bump, no
+code change, no fresh-VM run of the blocks by the author.
+
 # Transport EOF and helper timeouts — 1.19.1
 
 Read README.md "Changes in 1.19.1". The 1.18.1 operations reader fix (wait for

@@ -9,8 +9,9 @@ This page is the short installation reference.
 
 This guide targets **1.19.2**, integrating storage-failure recovery, topology
 file protection and bounded Git operations with 1.19.1's SSH and timeout fixes.
-It is prepared from merged main `2c10037` (**1.19.1**).
-Obtain matching source after these changes merge.
+It is published as GitHub main `f9dbf44` (**1.19.2**). Starting from a Proxmox
+snapshot, or stuck on WinSCP or VS Code permissions? The three paste-in fixes
+below cover the VM clock, root SFTP access and the Containerlab extension.
 After updating, open **Debug panel** in the manager sidebar to verify the release
 and check VM helpers. See [development diagnostics](DEBUG-PANEL.md).
 
@@ -28,8 +29,21 @@ date -u
 timedatectl status
 ```
 
-Compare UTC with a trusted current clock. For a wrong clock or APT's
-`not valid yet` / `expired` error, follow [clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c).
+Compare UTC with a trusted current clock. After a Proxmox snapshot rollback the
+clock is usually stuck at the snapshot time; paste this to resynchronize now:
+
+```bash
+sudo timedatectl set-ntp true
+sudo systemctl restart systemd-timesyncd
+sleep 10
+date -u
+timedatectl status
+```
+
+If the date is still wrong, or APT reports `not valid yet` / `expired`, follow
+[the clock fix](FRESH-VM-GUIDE-V2.md#fix-the-clock), which includes a manual
+bootstrap for a VM that cannot reach a time server, and
+[clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c) for a paused installer.
 Then clone into a new source folder:
 
 ```bash
@@ -141,30 +155,60 @@ repository, invent commit identity, or publish commits during setup.
 Use SFTP on port 22 with your normal Ubuntu account, such as `archtop`. For
 uploads to your own directories, leave WinSCP's SFTP server setting at default.
 
-For **administrative access to root-owned files**, the installer does not add
-the required sudoers rule. On the VM, run:
+Lab folders such as `/etc/containerlab` belong to root, so uploads there report
+**Permission denied**, and a WinSCP site that launches SFTP with `sudo` fails
+with `sudo: a password is required` until the VM allows it. The installer does
+not add that sudoers rule. Paste this on the VM as the account WinSCP uses:
 
 ```bash
-sudo EDITOR=nano visudo -f /etc/sudoers.d/archtop-sftp
+sudo -v
+me="$(id -un)"
+printf '%s ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server\n' "$me" | sudo tee "/etc/sudoers.d/${me}-sftp" >/dev/null
+sudo chmod 0440 "/etc/sudoers.d/${me}-sftp"
+sudo visudo -cf "/etc/sudoers.d/${me}-sftp"
+sudo -k
+sudo -n /usr/lib/openssh/sftp-server </dev/null >/dev/null && echo "Root SFTP is ready for $me"
 ```
 
-Add this line for your actual VM account:
-
-```text
-archtop ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server
-```
-
-Save with **Ctrl+O**, **Enter**, **Ctrl+X**, then run `sudo visudo -c` and check
-for `parsed OK`. In WinSCP's **Advanced → Environment → SFTP → SFTP server**, use:
+Expect `parsed OK` and the `Root SFTP is ready` line; the block is safe to rerun.
+In WinSCP's **Advanced → Environment → SFTP → SFTP server**, use:
 
 ```text
 sudo -n /usr/lib/openssh/sftp-server
 ```
 
 Save and reconnect as **archtop** with its Ubuntu password. This session has
-root-level file access. See the [full procedure and troubleshooting](FRESH-VM-GUIDE-V2.md#winscp-admin-sftp)
-for checking the server binary and account. Use `clab-discovery` only for the
-manager connection.
+root-level file access, and uploaded files belong to root. See the
+[full procedure and troubleshooting](FRESH-VM-GUIDE-V2.md#winscp-admin-sftp).
+Use `clab-discovery` only for the manager connection.
+
+## VS Code access
+
+**Remote - SSH** connects as `archtop`, but the Containerlab extension then
+reports:
+
+```text
+Extension activation failed. Insufficient permissions. Ensure archtop is in the clab_admins and docker group(s).
+```
+
+The installer keeps your account out of those groups and removes the
+containerlab SUID bit because the manager does not need them. For VS Code,
+restore the standard containerlab setup for your own account:
+
+```bash
+sudo groupadd -r -f clab_admins
+sudo usermod -aG docker,clab_admins "$(id -un)"
+sudo chmod u+s /usr/bin/containerlab
+ls -l /usr/bin/containerlab
+id "$(id -un)"
+```
+
+Then run **Remote-SSH: Kill VS Code Server on Host...** from the VS Code Command
+Palette and reconnect, because the VS Code server already running on the VM
+keeps the old groups. Both groups give root-equivalent access; add only your
+own account. See [the VS Code details](FRESH-VM-GUIDE-V2.md#vscode-access),
+including the `~/.vscode-server` ownership fix and why the block must be rerun
+after a containerlab package upgrade.
 
 ## Finish in the browser
 

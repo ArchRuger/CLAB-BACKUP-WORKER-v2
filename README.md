@@ -27,6 +27,11 @@ The [short install guide](INSTALL.md) and
 For an existing installation, see [VM connection and recovery](VM-CONNECTION.md)
 and [migration instructions](STANDALONE-SETUP.md).
 
+**After a snapshot rollback or the installer:** the fresh VM guide's
+[paste-in fixes](FRESH-VM-GUIDE-V2.md#paste-in-fixes) resynchronize the VM clock,
+let WinSCP write to root-owned lab folders and let VS Code Remote - SSH run the
+Containerlab extension. Each is a short block to paste as your normal account.
+
 **Check a running installation:** Run `bash deploy/check-install.sh` as your
 ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
@@ -46,6 +51,11 @@ Retains 1.19.1's SSH EOF handling, longer helper/discovery/debug timeouts,
 dependency bounds and LF normalization. Install matching manager and helpers
 with `bash deploy/install.sh`, keeping existing persistent data, then confirm
 Release 1.19.2. See the audit for test evidence and live deployment limits.
+
+Documentation added after publication: the installation guides gain three
+paste-in fixes for the VM clock after a Proxmox snapshot rollback, passwordless
+root SFTP for WinSCP, and VS Code Remote - SSH with the Containerlab extension.
+The installer itself is unchanged and still leaves those choices to you.
 
 ## Changes in 1.19.1
 

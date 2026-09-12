@@ -143,6 +143,21 @@ follow [clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c) before continuing. A ru
 NTP service is not proof of synchronization; an intentionally manual/host-managed
 clock can also be correct without the NTP synchronization flag.
 
+After restoring a Proxmox snapshot that includes memory state, the guest keeps the
+snapshot's time until the time service's next scheduled poll. Force the
+correction now:
+
+```bash
+sudo timedatectl set-ntp true
+sudo systemctl restart systemd-timesyncd
+sleep 10
+date -u
+timedatectl status
+```
+
+If the date stays wrong, use the manual bootstrap in
+[the clock fix](FRESH-VM-GUIDE-V2.md#fix-the-clock).
+
 **Workstation:**
 
 ```text
@@ -355,23 +370,25 @@ If Docker already works, verify it and skip its installation block. Do not run C
 
 ## Step 5.1 — Allow the engineer to use Docker and Containerlab
 
-**Ubuntu VM:** the optional VS Code workflow needs the normal engineer account in both groups:
+**Ubuntu VM:** the optional VS Code workflow needs the normal engineer account in the `docker` and `clab_admins` groups, and the containerlab binary must carry its SUID bit. The terminal installer in Part 6 installs containerlab without the SUID bit and adds your account to no group, because the manager only needs `clab-discovery`; the Containerlab extension then stops with `Extension activation failed. Insufficient permissions. Ensure archtop is in the clab_admins and docker group(s).` Paste this block as the engineer account:
 
 ```bash
-getent group docker
-getent group clab_admins
-sudo usermod -aG docker,clab_admins archtop
+sudo groupadd -r -f clab_admins
+sudo usermod -aG docker,clab_admins "$(id -un)"
+sudo chmod u+s /usr/bin/containerlab
+ls -l /usr/bin/containerlab
+id "$(id -un)"
 ```
 
-If `clab_admins` is absent, check the Containerlab installation before continuing. Log out and establish a fresh SSH session, then verify:
+Expect `-rwsr-xr-x 1 root root` for the binary, the same mode the official containerlab package sets, and both groups in the `id` output. The block is safe to rerun. Log out and establish a fresh SSH session, then verify:
 
 ```bash
-id
+id -nG
 docker ps
 containerlab inspect --all
 ```
 
-These groups grant elevated host capabilities. Add the normal training administrator, **not** the restricted `clab-discovery` account. The [Containerlab VS Code setup guide](https://containerlab.dev/manual/gui/vsc-extension/) describes the required access.
+These groups grant root-equivalent host capabilities. Add the normal training administrator, **not** the restricted `clab-discovery` account. A containerlab package upgrade installs a new binary without the SUID bit; rerun the block afterwards. The [Containerlab VS Code setup guide](https://containerlab.dev/manual/gui/vsc-extension/) describes the required access.
 
 ## Step 5.2 — Create a writable lab workspace
 
@@ -395,29 +412,25 @@ Connect using SFTP, host `10.150.2.213`, port `22`, user `archtop`, and your nor
 
 ### Optional administrative SFTP
 
-Use this when you need root-level file administration or an existing WinSCP site
+Use this when you need root-level file administration, for example uploading a
+project into root-owned `/etc/containerlab`, or when an existing WinSCP site
 launches SFTP with `sudo`. The installer does not add this sudoers permission.
-First verify the server binary on Ubuntu:
+Paste this block on Ubuntu as the account WinSCP logs in with; it writes the
+rule for that account, validates it and tests it without a password:
 
 ```bash
-ls -l /usr/lib/openssh/sftp-server
+sudo -v
+me="$(id -un)"
+printf '%s ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server\n' "$me" | sudo tee "/etc/sudoers.d/${me}-sftp" >/dev/null
+sudo chmod 0440 "/etc/sudoers.d/${me}-sftp"
+sudo visudo -cf "/etc/sudoers.d/${me}-sftp"
+sudo -k
+sudo -n /usr/lib/openssh/sftp-server </dev/null >/dev/null && echo "Root SFTP is ready for $me"
 ```
 
-If the binary is missing, follow [SFTP package recovery](FRESH-VM-GUIDE-V2.md#recovery-b).
-Otherwise open the account's sudoers file:
-
-```bash
-sudo EDITOR=nano visudo -f /etc/sudoers.d/archtop-sftp
-```
-
-Add the following rule once, adjusting the username if needed:
-
-```text
-archtop ALL=(root) NOPASSWD: /usr/lib/openssh/sftp-server
-```
-
-Save with **Ctrl+O**, **Enter**, then **Ctrl+X**. Validate with `sudo visudo -c`
-and check for `parsed OK`. Correct syntax errors before continuing. In WinSCP,
+Expect `parsed OK` and the `Root SFTP is ready` line; the block is safe to rerun.
+If the server binary is reported missing, follow
+[SFTP package recovery](FRESH-VM-GUIDE-V2.md#recovery-b) and rerun. In WinSCP,
 open **Advanced → Environment → SFTP → SFTP server** and set it to:
 
 ```text
@@ -425,12 +438,13 @@ sudo -n /usr/lib/openssh/sftp-server
 ```
 
 Save, disconnect and reconnect as **archtop** with its Ubuntu password; no SSH
-restart is required. Test an upload in the intended directory. If WinSCP reports
-`sudo: a password is required`, check the sudoers account/path and validation.
-The `-n` option prevents an interactive sudo prompt.
+restart is required. Test an upload in the intended directory. If WinSCP still
+reports `sudo: a password is required`, the block ran as a different account
+than the WinSCP login. The `-n` option prevents an interactive sudo prompt.
 
-This session can modify root-owned files. It is optional for normal uploads and
-uses the normal administrator account, not `clab-discovery`. See the
+This session can modify root-owned files, and uploaded files belong to root. It
+is optional for normal uploads and uses the normal administrator account, not
+`clab-discovery`. See the
 [full administrative SFTP procedure](FRESH-VM-GUIDE-V2.md#winscp-admin-sftp) and
 [WinSCP's sudo/SFTP guidance](https://winscp.net/eng/docs/faq_su).
 
@@ -438,7 +452,7 @@ uses the normal administrator account, not `clab-discovery`. See the
 
 Install **Remote - SSH** on the workstation, connect to `archtop@10.150.2.213`, and open the VM project folder. Install the Containerlab extension in that **remote VM context**. Check `id`, `docker ps` and `containerlab inspect --all` in the integrated remote terminal.
 
-If an old VS Code server process retains the previous groups, close the connection and restart that remote server/session. A VM reboot is a fallback after saving work; a Proxmox host reboot is not required for group changes.
+A VS Code server process that was already running on the VM keeps the previous groups, so the Containerlab extension keeps reporting insufficient permissions. Close the remote window, run **Remote-SSH: Kill VS Code Server on Host...** from the Command Palette for this VM, then reconnect; the extension re-checks on activation. A VM reboot is a fallback after saving work; a Proxmox host reboot is not required for group changes. If Remote - SSH cannot install its server because `~/.vscode-server` is not writable, restore ownership with `sudo chown -R "$(id -un):$(id -gn)" "$HOME/.vscode-server"` and reconnect.
 
 ## Step 5.4 — Obtain required device images
 
@@ -1385,7 +1399,9 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 | Lab discovered but upload is still manual | Verify both installed helpers match the image; image replacement alone does not update host file-transfer support. |
 | Old instructions request a UI access token | That login was removed in 1.12.0. Check the actual running version instead of searching for a new token. |
 | Map layout or right-click behavior looks like the old version | Verify the running image, refresh browser assets and reimport original map files if earlier imports discarded metadata. |
-| VS Code extension sees permission errors | Check both groups in a fresh remote session and write permissions on the exact project directory. |
+| Clock is stuck after a Proxmox snapshot rollback | Run the Step 1.2 clock block; otherwise the time service corrects it only at its next scheduled poll. |
+| WinSCP reports `sudo: a password is required`, or **Permission denied** under `/etc/containerlab` | Run the Part 5 administrative SFTP paste-in block as the same account WinSCP uses, keep the WinSCP SFTP server set to `sudo -n /usr/lib/openssh/sftp-server`, and reconnect. |
+| VS Code reports `Extension activation failed. Insufficient permissions` | Run the Step 5.1 paste-in block (both groups plus the containerlab SUID bit), then **Remote-SSH: Kill VS Code Server on Host...** and reconnect. For editing, also check write permission on the exact project directory. |
 | Junos/EVO remains in startup waits | Check device logs, `/dev/kvm`, guest CPU exposure and the image's resource/boot requirements. |
 | Disk still appears around 100 GiB | Compare `vgs`, `lvs` and `df`; the LV and filesystem are separate expansion steps. |
 
