@@ -294,3 +294,11 @@ guide for other distributions or offline staging.
 The detailed manual steps remain in [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md). They
 are useful for diagnostics and managed environments; you do not need to repeat
 their install commands after this menu has completed successfully.
+
+## Optional Wireshark capture
+
+After installing the complete 1.20.0 source, follow [Packet capture setup](CAPTURE.md).
+Reuse an existing Edgeshark installation or start the isolated pinned services;
+install cshargextcap on the workstation, then enable the capture provider in the
+manager environment. The default transport uses an SSH tunnel to a localhost
+endpoint. Capture is disabled by default and does not change backup permissions.

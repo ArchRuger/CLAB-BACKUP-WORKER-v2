@@ -1,0 +1,29 @@
+# Optional Edgeshark provider, isolated from the manager's Compose project.
+# Adapted from Siemens Edgeshark (MIT); see CAPTURE.md for provenance and access.
+# Public multi-architecture manifests resolved 2026-09-12; no moving latest tags.
+name: clab-manager-capture
+services:
+  gostwire:
+    image: ghcr.io/siemens/ghostwire@sha256:a01295061e2da65f9954659e5e05ef41b39dbe32d79bfe5194dea43a9c724e5c
+    restart: unless-stopped
+    read_only: true
+    user: "65534"
+    entrypoint: ["/gostwire", "--http=[::]:5000", "--brand=Edgeshark"]
+    pid: host
+    cgroup: host
+    cap_drop: [ALL]
+    cap_add: [SYS_ADMIN, SYS_CHROOT, SYS_PTRACE, DAC_READ_SEARCH, DAC_OVERRIDE, NET_RAW, NET_ADMIN]
+    security_opt: ["apparmor:unconfined"]
+  packetflix:
+    image: ghcr.io/siemens/packetflix@sha256:78bddc205684aa5aeed884a4517b2117c7cd7a6c25e08e3df8b0589188bf4e2d
+    restart: unless-stopped
+    read_only: true
+    user: "65534"
+    entrypoint: ["/packetflix", "--port=5001", "--discovery-service=gostwire", "--gw-port=5000", "--proxy-discovery"]
+    depends_on: [gostwire]
+    pid: host
+    cap_drop: [ALL]
+    cap_add: [SYS_ADMIN, SYS_CHROOT, SYS_PTRACE, NET_ADMIN, NET_RAW]
+    security_opt: ["apparmor:unconfined"]
+    ports:
+      - "${CAPTURE_BIND:-127.0.0.1}:${CAPTURE_PORT:-5001}:5001"

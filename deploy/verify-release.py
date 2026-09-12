@@ -14,7 +14,7 @@ FIELDS = {
     # Footer fallback shown before the first /api/state response arrives.
     'clab-backup-ui/app/static/app.js': r"state\.version\|\|'([^']+)'",
 }
-for name in ('index.html', 'terminal.html', 'workspace.html', 'vm-connection.html', 'debug.html'):
+for name in ('index.html', 'terminal.html', 'workspace.html', 'vm-connection.html', 'debug.html', 'capture-setup.html'):
     FIELDS['clab-backup-ui/app/static/' + name] = r'/static/[^"\s?]+\?v=([^"\s]+)'
 
 

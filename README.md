@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.19.4
+# Containerlab Node Manager — 1.20.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,10 +6,10 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.19.4 deployment:** Build the new source and create the VM password using
+**1.20.0 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 Install matching manager and helpers with `bash deploy/install.sh`, keeping existing
-persistent data, then confirm Release 1.19.4 in the Debug panel.
+persistent data, then confirm Release 1.20.0 in the Debug panel.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
 Proxmox/Ubuntu setup, source/image installation, VM passwords, lab workflows and recovery.
@@ -41,6 +41,21 @@ Containerlab extension. Each is a short block to paste as your normal account.
 ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
+
+## Changes in 1.20.0
+
+Optional Wireshark capture is available from node actions, either endpoint of a
+map link, and a searchable live interface browser. All host targets includes
+bridges, physical NICs and other namespaces. Multiple interfaces in one namespace
+can be selected together. The manager rechecks selections before preparing a
+native Wireshark handoff; packets stream directly from Edgeshark to the workstation.
+
+Follow [Packet capture setup](CAPTURE.md) to install or reuse Edgeshark, install
+the Siemens cshargextcap plugin, and configure the manager. The optional services
+use a separate Compose project with pinned images and a localhost binding.
+Capture stays disabled until enabled; existing backup and SSH workflows retain
+their permissions and storage. Live Linux/Windows-plugin acceptance remains to
+be performed; see [validation evidence](clab-backup-ui/VALIDATION.md).
 
 ## Changes in 1.19.4
 

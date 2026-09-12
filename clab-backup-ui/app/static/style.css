@@ -84,3 +84,20 @@ dialog.node-details{position:fixed;inset:0 0 0 auto;margin:0;width:min(560px,94v
 @media(max-width:760px){.git-progress-bar{flex-direction:column;align-items:stretch;gap:14px;padding:16px}.git-save-control{align-self:flex-end}.git-save-options{width:min(260px,calc(100vw - 65px))}.git-diff-columns{grid-template-columns:1fr}.git-repository-card,.git-binding-form,.git-saves{padding:16px}.git-node-scope{grid-template-columns:1fr}.git-repository-card .actions{width:auto}.git-repository-card .button{white-space:normal}.git-node-scope .checkbox-label span{overflow-wrap:anywhere}#git-version-dialog .actions{flex-wrap:wrap}#git-version-dialog .button{white-space:normal}}
 /* Development diagnostics share the manager's existing palette and controls. */
 .debug-page{max-width:1400px;margin:auto}.debug-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.debug-card{background:#fff;border:1px solid #dce4e8;border-radius:12px;padding:24px;margin:20px 0}.debug-grid .debug-card{margin:0}.debug-card h2{margin-top:0}.debug-card dl{display:grid;grid-template-columns:1fr 1fr;gap:10px}.debug-card dt{color:#416377}.debug-card dd{margin:0;overflow-wrap:anywhere}.debug-input{display:flex;gap:12px;align-items:center}.debug-input input{flex:1;min-width:0}.debug-failure{color:#a12d1b}.debug-page td{overflow-wrap:anywhere}.debug-page code{overflow-wrap:anywhere}@media(max-width:800px){.debug-grid{grid-template-columns:1fr}.debug-input{flex-direction:column;align-items:stretch}.debug-page .section-heading{align-items:flex-start;flex-direction:column}}
+/* Optional packet capture: native dialog and provider-owned interface controls. */
+.capture-dialog{width:min(740px,94vw);max-height:90vh;overflow:auto}
+.capture-guide{max-width:900px;margin:40px auto;padding:24px;line-height:1.65}
+.capture-guide h2{margin-top:28px}.capture-guide pre{overflow:auto;padding:18px;background:#edf3f5;border-radius:8px}
+.capture-controls{display:flex;gap:16px;align-items:end;flex-wrap:wrap}
+.capture-controls label{flex:1}
+.capture-interfaces{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px;max-height:240px;overflow:auto}
+.capture-interface{display:flex;align-items:center;gap:8px;overflow-wrap:anywhere;margin:0;min-height:34px}
+.capture-interface input{width:auto}
+.capture-dialog fieldset{border:1px solid #cbd5db;border-radius:8px;padding:14px;margin-top:16px}
+.capture-dialog [hidden]{display:none!important}
+.control-row>.actions{flex-wrap:wrap}
+#topology-view .section-heading .actions{flex-wrap:wrap}
+.capture-dialog .dialog-actions{flex-wrap:wrap}
+.topology-wire[role="button"]{cursor:pointer}
+.topology-wire[role="button"]:hover path,.topology-wire[role="button"]:focus path{stroke:#F15B40;stroke-width:5}
+.topology-wire[role="button"] path.capture-hit{stroke:transparent;stroke-width:16;pointer-events:stroke}
