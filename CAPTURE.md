@@ -1,9 +1,13 @@
-# Browser Wireshark — 1.21.1
+# Browser Wireshark — 1.22.0
 
 Select **Capture packets**, a node's **Capture** action, or either endpoint of a
-topology link. Select one or more live Linux interfaces and click **Start browser
-capture**, then **Open Wireshark in browser**. Wireshark runs on the Containerlab
-VM; the workstation only needs a browser that can reach the manager.
+topology link. The dialog lists the interfaces the topology wires to that node first
+(a single one is already ticked; a link opens on its first endpoint). *All live Linux
+interfaces* holds the rest of that namespace, and *Advanced* holds the scope, search
+and capture-target selector for bridges, host NICs, other namespaces or a node that
+discovery did not match; it unfolds by itself only when no target could be resolved.
+Click **Start browser capture**, then **Open Wireshark in browser**. Wireshark runs on
+the Containerlab VM; the workstation only needs a browser that can reach the manager.
 
 ## Install or migrate from 1.20.x
 
@@ -60,7 +64,9 @@ configured to capture from arbitrary remote Edgeshark hosts.
 
 ## Sessions and files
 
-- Stop capture in Wireshark, then **File → Save As** under **/pcaps**.
+- Stop capture in Wireshark, then **File → Save As** under **/pcaps**, typing the
+  full file name ending in `.pcapng`: Wireshark on the VM does not add the extension.
+  The viewer's *How to save a capture* toggle repeats these steps.
 - Click **Download saved captures (.tar)** and extract the archive to obtain the
   PCAP/PCAPNG files. Files saved outside `/pcaps` are not included. While nothing
   has been saved there yet, the button reports "No saved captures yet" instead of
@@ -83,7 +89,7 @@ Clearing cookies loses access until automatic cleanup.
 
 Live node management/data ports, host NICs, bridges, veth, VLAN, VXLAN, loopback
 and other namespace interfaces are selectable when exposed by Edgeshark. **All
-host targets** includes interfaces outside the drawing. Shared host namespaces
+host targets** (under *Advanced*) includes interfaces outside the drawing. Shared host namespaces
 are deduplicated with aliases; node/lab views retain exact container-name matching.
 Multiple interfaces in one namespace share a PCAPNG stream. Separate namespaces
 use separate sessions. Either link endpoint captures that side's traffic.

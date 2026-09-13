@@ -14,6 +14,17 @@ PLATFORMS = {
     'cisco_xrv9k': {'label': 'IOS-XR', 'os': 'cisco.iosxr.iosxr', 'command': 'show running-config', 'suffix': 'cfg'},
     'arista_ceos': {'label': 'EOS', 'os': 'arista.eos.eos', 'command': 'show running-config', 'suffix': 'cfg'},
 }
+# Default logins published on containerlab.dev for each supported kind. They are the
+# image vendors' documented lab defaults, not secrets: a node without a profile or an
+# inventory login uses them so a freshly deployed lab can be opened at once. A
+# credential profile or an inventory login always takes precedence.
+DEFAULT_CREDENTIALS = {
+    'juniper_cjunosevolved': ('admin', 'admin@123'),
+    'juniper_vqfx': ('admin', 'admin@123'),
+    'juniper_vjunosswitch': ('admin', 'admin@123'),
+    'cisco_xrv9k': ('clab', 'clab@123'),
+    'arista_ceos': ('admin', 'admin'),
+}
 ALIASES = {'junos': 'juniper_cjunosevolved', 'junipernetworks.junos.junos': 'juniper_cjunosevolved',
            'vr-vqfx': 'juniper_vqfx', 'vqfx': 'juniper_vqfx',
            'vr-vjunosswitch': 'juniper_vjunosswitch', 'vjunosswitch': 'juniper_vjunosswitch',

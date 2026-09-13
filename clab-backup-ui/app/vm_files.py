@@ -111,8 +111,14 @@ def prepare_lab(bundle, deployed_name, previous=None):
             # ones), profile assignments, selection, driver and manual endpoints.
             current_kind = node['kind']
             inferred_platform = node['platform']
+            synced_login = {key: node.get(key, '') for key in ('username', 'password', 'enable_password')}
             node.update(copy.deepcopy(saved))
             node['kind'] = current_kind
+            # A workspace saved from the topology YAML alone (Save to manager, Deploy
+            # lab) has no login at all; the generated inventory's login fills that
+            # gap. A login already saved with the node is kept as it is.
+            if not node.get('username') and synced_login['username']:
+                node.update(synced_login)
             # Explicit sync may recognize a previously unsupported kind, but
             # must not enable it or replace a user's existing driver selection.
             if not saved.get('platform') and inferred_platform in JUNOS_SWITCHES:

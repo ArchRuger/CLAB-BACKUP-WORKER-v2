@@ -93,10 +93,14 @@ class AppTests(unittest.TestCase):
         self.assertNotIn('keyphrase',r.text)
     def test_readiness_blocks_schedule_and_job(self):
         lab=self.upload()
-        for endpoint,data in [('schedule',{'interval':60}),('jobs',{'operation':'backup'})]:
-            method=self.client.put if endpoint=='schedule' else self.client.post
-            result=method(f'/api/labs/{lab["id"]}/{endpoint}',headers=self.auth,json=data)
-            self.assertEqual(result.status_code,400,result.text)
+        # Known kinds carry containerlab's documented default login, so the inventory
+        # above is Ready as imported; a kind without a published default still blocks.
+        self.assertEqual({n['credential_source'] for n in lab['nodes'] if n['enabled']},{'inventory','default'})
+        with patch.dict('app.inventory.DEFAULT_CREDENTIALS',{},clear=True):
+            for endpoint,data in [('schedule',{'interval':60}),('jobs',{'operation':'backup'})]:
+                method=self.client.put if endpoint=='schedule' else self.client.post
+                result=method(f'/api/labs/{lab["id"]}/{endpoint}',headers=self.auth,json=data)
+                self.assertEqual(result.status_code,400,result.text)
     @unittest.skipIf(os.name=='nt', 'Ansible control-node tests require Linux')
     def test_roundtrip_actual_generated_ansible_inventory(self):
         lab=self.upload(); raw=self.app.state.store.lab(lab['id']);node=next(n for n in raw['nodes'] if n['name'].endswith('PE1'))

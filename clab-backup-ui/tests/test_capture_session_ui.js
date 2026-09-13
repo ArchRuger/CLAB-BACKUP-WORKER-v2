@@ -27,7 +27,7 @@ test('a saved capture is handed to the browser as a native download after the ch
  await settle();await $('capture-download').onclick({preventDefault(){}});
  assert.equal(aborted.length,1);assert.equal(fetched.filter(f=>f.url.endsWith('/download')).length,1);
  const link=created.find(el=>el.tag==='a');assert.equal(link.href,base+'/download');assert.equal(link.download,'wireshark-captures.tar');assert.equal(link.clicked,1);
- assert.match($('viewer-status').textContent,/Downloading saved captures/);
+ assert.match($('viewer-status').textContent,/Downloading saved captures.*\.pcapng/);
 });
 test('ending a session only disconnects a live viewer and clears the download link',async()=>{
  const {c,$,fetched}=harness({...live,'/end':()=>({ok:true})});

@@ -27,6 +27,15 @@ test('saving sends password only, clears it, and tests the connection',async()=>
  assert.equal(h.calls[1].url,'/discovery/refresh');assert.equal(h.element('vm-password').value,'');
  assert.equal(h.element('vm-dialog').open,false);
 });
+test('automatic discovery and trusting a replacement host key are on by default',async()=>{
+ const h=harness({auth:'password',enabled:true});h.element('vm-settings').onclick();
+ assert.equal(h.element('vm-enabled').checked,true);assert.equal(h.element('vm-reset-key').checked,true);
+ h.element('vm-form').onsubmit({preventDefault(){},currentTarget:h.element('vm-form')});await Promise.all(h.pending);
+ assert.equal(h.calls[0].body.reset_fingerprint,true);assert.equal(h.calls[0].body.enabled,true);
+ const paused=harness({auth:'password',enabled:false});paused.element('vm-settings').onclick();
+ assert.equal(paused.element('vm-enabled').checked,false,'an explicitly paused discovery stays paused');
+ assert.equal(paused.element('vm-reset-key').checked,true);
+});
 test('first load prompts for the VM connection once when none is configured',()=>{
  const h=harness(undefined);
  h.context.state={discovery:{configured:false}};

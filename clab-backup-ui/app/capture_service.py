@@ -307,7 +307,8 @@ def create_app(sessions=None):
         if len(first) < 65536 and not tar_has_regular_file(first):
             upstream.close()
             raise HTTPException(409, 'No saved captures yet. In Wireshark stop the capture, use File > Save As '
-                                     'under /pcaps, then download again.')
+                                     'under /pcaps and type the full file name ending in .pcapng (Wireshark '
+                                     'on the VM does not add the extension), then download again.')
 
         def content():
             total = 0

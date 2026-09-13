@@ -37,9 +37,9 @@ Open **Lab actions** or right-click a saved lab (keyboard: Shift+F10).
 | Favorite | Sorts this saved lab above other labs. |
 | Edit topology diagram | Move nodes and annotations, add text/boxes/circles/lines, style, undo, save and export JSON/draw.io. |
 | Delete undeployed VM YAML | Separate source deletion; refused while its deployment exists. Keeps a VM recovery copy. |
-| Deploy New Lab → Lab Topologies | Same-tab landing page with an explicit browser button. Expand folders to select .clab.yaml/.clab.yml files; existing files are read-only. |
+| Deploy New Lab → Lab Topologies | Same-tab landing page with an explicit browser button; the workspace landing page and its header button open the same browser in place when no lab is saved yet. Expand folders to select .clab.yaml/.clab.yml files; existing files are read-only. |
 | New topology | Creates a new VM YAML after structure preview and confirmation; never replaces an existing file. |
-| Add project / deploy project | Read an existing file, add a saved manager workspace, or separately review deployment. |
+| Save to manager / Deploy lab | Read an existing file and save a manager workspace without deploying, or deploy: Deploy lab saves the workspace (nodes, map, VM source path) first and then reviews the containerlab command, so the lab is in the manager at once and nothing needs importing afterwards. |
 | Clone repository / popular labs | Optional HTTPS project acquisition, followed by review of files and separate deployment. |
 
 Removed in earlier releases: existing VM YAML editing, copy topology path, manual
@@ -48,6 +48,25 @@ layout, horizontal/vertical diagram exports, SSHX/GoTTY and SR Linux fcli. These
 commands are rejected by the current manager and installed helper. Upgrade the
 host helper as well as the image. Previously created sharing containers are not
 automatically stopped or deleted by an upgrade; manage those on the VM if present.
+
+## NOS readiness after deployment
+
+A running container is not a network OS that accepts a login: cEOS, vJunos and
+XRv9k boot for one to several minutes. For every linked lab the manager logs in to
+each running node over SSH and asks for `show version` every 20 seconds (with its
+credential profile, the inventory login, or containerlab's documented default for the
+kind) until the NOS answers.
+The deployment bar shows *NOS booting 1/2 nodes accept SSH login so far* and then
+*NOS ready 2/2*; each answer is recorded in the Nodes table's *Last SSH check*
+column as an automatic check. SSH actions, the map's SSH menu entry and **SSH all
+nodes** open as nodes answer, and **Test NOS login** runs once by itself when every
+node has answered, so the show version result is in Backup history without a click.
+A node that stops or restarts must answer again. A failed automatic test sends its
+nodes back to booting and is retried up to three times per boot. A login refused three
+times in a row is shown as failed with the remedy (assign a credential profile) and is
+retried each minute; **Test login** in the node details stays available for a manual
+retry. Every backup or login test runs with its own empty `known_hosts`, so a
+redeployed lab (new SSH host keys) never fails with *host key mismatch*.
 
 ## Interactive diagram and topology actions
 

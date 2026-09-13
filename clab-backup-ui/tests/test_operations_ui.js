@@ -38,6 +38,33 @@ test('quick start deploys absent labs, starts stopped labs and guards unknown or
  }
 });
 
+test('operation output leads with a green success banner and a red failure banner',()=>{
+ const good=context.opJobBanner({action:'deploy',name:'ceos-pair',status:'succeeded',exit_code:0,message:'Operation completed'});
+ assert.equal(JSON.stringify(good),JSON.stringify({tone:'good',title:'✔ Deploy lab succeeded',detail:'ceos-pair · Exit 0 · Operation completed'}));
+ const bad=context.opJobBanner({action:'destroy',name:'ceos-pair',status:'failed',exit_code:1,message:'Host command returned an error'});
+ assert.equal(bad.tone,'bad');assert.equal(bad.title,'✖ Destroy deployment failed');assert.match(bad.detail,/Exit 1 · Host command/);
+ const running=context.opJobBanner({action:'inspect',name:'ceos-pair',status:'running',exit_code:null,message:'Executing on the VM'});
+ assert.equal(running.tone,'running');assert.equal(running.title,'Inspect lab running…');assert.equal(running.detail,'ceos-pair · Executing on the VM');
+ assert.equal(context.opJobBanner({action:'clone',name:'x',status:'interrupted',exit_code:null,message:'Manager restarted'}).tone,'bad');
+});
+test('deploy lab saves the workspace first and reuses one that already tracks the deployment',async()=>{
+ const registered=[],settings=[],items=new Map();
+ const page=vm.createContext({$:()=>null,esc:String,state:{labs:[{id:'old',deployment_name:'ceos-pair',vm_project_path:'/etc/containerlab/ceos-pair/ceos-pair.clab.yaml'}]},activeId:'',
+  sessionStorage:{setItem:(k,v)=>items.set(k,v),getItem:k=>items.get(k)},FormData:class{constructor(){this.parts=[];}append(...a){this.parts.push(a);}},Blob:class{constructor(parts){this.parts=parts;}},
+  api:async(url,options)=>{registered.push({url,options});return {json:async()=>({id:'new'})};},
+  json:async(url,method,data)=>{settings.push({url,method,data});return {};}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),page);
+ const source={text:'name: fresh\ntopology:\n  nodes:\n    r1:\n      kind: linux\n'};
+ assert.equal(await page.opSaveWorkspace('/etc/containerlab/fresh/fresh.clab.yaml',source,{name:'fresh'}),'new');
+ assert.equal(registered[0].url,'/lab-definitions');assert.equal(registered[0].options.method,'POST');
+ assert.equal(registered[0].options.body.parts[0][2],'fresh.clab.yaml');
+ assert.equal(JSON.stringify(settings[0]),JSON.stringify({url:'/labs/new/operations-settings',method:'PUT',data:{path:'/etc/containerlab/fresh/fresh.clab.yaml'}}));
+ assert.equal(page.activeId,'new');assert.equal(items.get('activeLab'),'new');
+ assert.equal(await page.opSaveWorkspace('/etc/containerlab/ceos-pair/ceos-pair.clab.yaml',source,{name:'ceos-pair'}),'old');
+ assert.equal(registered.length,1,'an existing workspace is never registered twice');assert.equal(settings[1].url,'/labs/old/operations-settings');
+ assert.equal(await page.opSaveWorkspace('/other.clab.yaml',source,{name:'other'},'given'),'given');
+ assert.equal(registered.length,1);
+});
 test('deployment landing page opens topology browser only on an explicit click',async()=>{
  const elements=new Map(),element=id=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);};
  let browses=0;
