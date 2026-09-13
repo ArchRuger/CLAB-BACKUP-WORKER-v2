@@ -50,6 +50,9 @@ class RenderTests(unittest.TestCase):
         text = render([view(links=links)], NOW)
         self.assertIn('clab_telemetry_node_state{lab="demo",lab_id="lab",node="r1",container="clab-demo-r1",platform="arista_ceos",state="streaming"} 1', text)
         self.assertIn('clab_telemetry_node_sample_age_seconds{lab="demo",lab_id="lab",node="r1",container="clab-demo-r1",platform="arista_ceos"} 3.0', text)
+        self.assertIn('clab_telemetry_node_state_code{lab="demo",lab_id="lab",node="r1",container="clab-demo-r1",platform="arista_ceos"} 3', text, 'streaming = 3 for the lab map')
+        self.assertIn('clab_telemetry_node_state_code{lab="demo",lab_id="lab",node="r1",container="clab-demo-r1",platform="arista_ceos"} -1',
+                      render([view(nodes=[dict(view()['nodes'][0], state='failed')])], NOW))
         self.assertIn('clab_bgp_neighbor_established{lab="demo",lab_id="lab",node="r1",container="clab-demo-r1",platform="arista_ceos",neighbor="10.0.0.2",instance="default",afi="IPV4_UNICAST"} 1', text)
         self.assertIn('clab_bgp_neighbor_prefixes_received{', text); self.assertNotIn('clab_bgp_neighbor_prefixes_sent{', text)
         self.assertIn('clab_link_status{lab="demo",lab_id="lab",a_node="r1",a_interface="eth1",z_node="r2",z_interface="eth1",status="up"} 1', text)

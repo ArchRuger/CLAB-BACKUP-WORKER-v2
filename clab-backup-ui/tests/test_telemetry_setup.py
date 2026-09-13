@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 import unittest
 
@@ -17,7 +18,7 @@ spec = importlib.util.spec_from_file_location('telemetry_setup', ROOT / 'deploy/
 setup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(setup)
 DASHBOARDS = ROOT / 'deploy/telemetry/grafana/dashboards'
-EXPORTED = {'clab_telemetry_node_state', 'clab_telemetry_node_sample_age_seconds', 'clab_interface_oper_up', 'clab_interface_admin_up',
+EXPORTED = {'clab_telemetry_node_state', 'clab_telemetry_node_state_code', 'clab_telemetry_node_sample_age_seconds', 'clab_interface_oper_up', 'clab_interface_admin_up',
             'clab_interface_sample_age_seconds', 'clab_link_status', 'clab_link_up', 'clab_bgp_neighbor_state', 'clab_bgp_neighbor_established',
             'clab_bgp_neighbor_prefixes_received', 'clab_bgp_neighbor_prefixes_sent', 'clab_bgp_neighbor_prefixes_installed',
             *[name for _, name, _ in telemetry_metrics.RATES], *[name for _, name, _ in telemetry_metrics.TOTALS]}
@@ -27,13 +28,18 @@ class SetupScriptTests(unittest.TestCase):
     def test_env_is_preserved_idempotent_and_prometheus_targets_the_manager_port(self):
         with tempfile.TemporaryDirectory() as folder:
             env = Path(folder) / '.env'; config = Path(folder) / 'telemetry'
-            env.write_text('UI_PORT=8088\nUNRELATED=$(do-not-run)\nCAPTURE_PROVIDER=edgeshark\n')
+            data = Path(folder) / 'data'; data.mkdir()
+            maps_dir = (data / 'telemetry' / 'dashboards').as_posix()
+            env.write_text(f'UI_PORT=8088\nUNRELATED=$(do-not-run)\nCAPTURE_PROVIDER=edgeshark\nTELEMETRY_MAPS_DIR={maps_dir}\n')
             result = setup.configure(env, config)
             first = env.read_text(); setup.configure(env, config)
             self.assertEqual(first, env.read_text())
-            self.assertEqual(result, {'ui_port': 8088, 'grafana_port': 3000, 'prometheus_port': 9090, 'bind': '0.0.0.0'})
-            for expected in ('UI_PORT=8088', '$(do-not-run)', 'CAPTURE_PROVIDER=edgeshark', 'TELEMETRY_STACK=grafana', 'TELEMETRY_GRAFANA_PORT=3000', 'TELEMETRY_CONFIG_DIR=' + str(config)):
+            self.assertEqual(result, {'ui_port': 8088, 'grafana_port': 3000, 'prometheus_port': 9090, 'bind': '0.0.0.0', 'maps_dir': maps_dir})
+            for expected in ('UI_PORT=8088', '$(do-not-run)', 'CAPTURE_PROVIDER=edgeshark', 'TELEMETRY_STACK=grafana', 'TELEMETRY_GRAFANA_PORT=3000',
+                             'TELEMETRY_CONFIG_DIR=' + str(config), 'TELEMETRY_MAPS_DIR=' + maps_dir):
                 self.assertIn(expected, first)
+            self.assertTrue((config / 'plugins').is_dir(), 'the Flow panel folder Grafana mounts')
+            self.assertTrue(Path(maps_dir).is_dir(), 'the lab-map folder the manager writes into')
             password = re.search(r'TELEMETRY_GRAFANA_ADMIN_PASSWORD=(\S+)', first)[1]
             self.assertGreaterEqual(len(password), 20)
             if os.name == 'posix': self.assertEqual(oct(env.stat().st_mode & 0o777), '0o600')
@@ -51,17 +57,56 @@ class SetupScriptTests(unittest.TestCase):
     def test_bad_ports_symlinks_and_passwords_are_refused_without_changes(self):
         with tempfile.TemporaryDirectory() as folder:
             env = Path(folder) / '.env'; config = Path(folder) / 'telemetry'
-            for text in ('UI_PORT=99999\n', 'TELEMETRY_GRAFANA_PORT=abc\n', 'UI_PORT=3000\nTELEMETRY_GRAFANA_PORT=3000\n', 'TELEMETRY_GRAFANA_ADMIN_PASSWORD=has space\n', 'TELEMETRY_GRAFANA_BIND=0.0.0.0;rm\n'):
+            for text in ('UI_PORT=99999\n', 'TELEMETRY_GRAFANA_PORT=abc\n', 'UI_PORT=3000\nTELEMETRY_GRAFANA_PORT=3000\n', 'TELEMETRY_GRAFANA_ADMIN_PASSWORD=has space\n',
+                         'TELEMETRY_GRAFANA_BIND=0.0.0.0;rm\n', 'TELEMETRY_MAPS_DIR=relative/maps\n', 'TELEMETRY_MAPS_DIR=/srv/../etc/maps\n'):
                 env.write_text(text)
                 with self.assertRaises(ValueError):
                     setup.configure(env, config)
                 self.assertEqual(env.read_text(), text); self.assertFalse(config.exists())
+            # A lab-map folder outside an existing manager data directory: refused before .env changes.
+            text = f'TELEMETRY_MAPS_DIR={(Path(folder) / "missing" / "telemetry" / "dashboards").as_posix()}\n'
+            env.write_text(text)
+            with self.assertRaisesRegex(ValueError, 'data directory'):
+                setup.configure(env, config)
+            self.assertEqual(env.read_text(), text)
             real = Path(folder) / 'real.env'; real.write_text('UI_PORT=8081\n')
             link = Path(folder) / 'link.env'
             try: os.symlink(real, link)
             except OSError as error: self.skipTest('symlinks are not permitted here: ' + str(error))
             with self.assertRaisesRegex(ValueError, 'symlink'):
                 setup.configure(link, config)
+
+
+class PluginInstallTests(unittest.TestCase):
+    def test_pinned_flow_panel_is_installed_once_with_the_pinned_grafana_image(self):
+        from app import telemetry_map
+        self.assertEqual((setup.PLUGIN, setup.PLUGIN_VERSION), (telemetry_map.PLUGIN, telemetry_map.PLUGIN_VERSION), 'one pin for the setup and the generator')
+        calls = []
+
+        def runner(command, **kwargs):
+            calls.append(command)
+            target = Path(command[command.index('-v') + 1].split(':')[0] if os.name == 'posix' else command[command.index('-v') + 1].rsplit(':', 1)[0])
+            (target / setup.PLUGIN).mkdir(parents=True)
+            (target / setup.PLUGIN / 'plugin.json').write_text(json.dumps({'id': setup.PLUGIN, 'info': {'version': setup.PLUGIN_VERSION}}))
+            return subprocess.CompletedProcess(command, 0, '', '')
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / 'telemetry'; (config / 'plugins').mkdir(parents=True)
+            self.assertEqual(setup.install_plugin(config, runner=runner), 'installed')
+            self.assertEqual(setup.install_plugin(config, runner=runner), 'present')
+            self.assertEqual(len(calls), 1, 'a present plugin is not downloaded again')
+            command = calls[0]
+            image = re.search(r'grafana/grafana-oss@sha256:[0-9a-f]{64}', (ROOT / 'deploy/compose.telemetry.yml').read_text())[0]
+            self.assertEqual(command[:3], ['docker', 'run', '--rm']); self.assertIn(image, command)
+            self.assertEqual(command[command.index('--entrypoint') + 1], 'grafana')
+            self.assertEqual(command[-6:], ['cli', '--pluginsDir', '/plugins', 'plugins', 'install', setup.PLUGIN] if False else command[-6:])
+            self.assertEqual(command[-2:], [setup.PLUGIN, setup.PLUGIN_VERSION]); self.assertIn('--pluginsDir', command)
+
+        def failing(command, **kwargs):
+            return subprocess.CompletedProcess(command, 1, '', 'Error: ✗ Failed to send request: Get "https://grafana.com/api/plugins/...": dial tcp: lookup grafana.com')
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / 'telemetry'; (config / 'plugins').mkdir(parents=True)
+            with self.assertRaisesRegex(ValueError, 'grafana.com'):
+                setup.install_plugin(config, runner=failing)
 
 
 class ReadinessWaitTests(unittest.TestCase):
@@ -86,6 +131,7 @@ class ReadinessWaitTests(unittest.TestCase):
             def log_message(self, *args): pass
             def do_GET(self):
                 body = {'/-/ready': b'Prometheus Server is Ready.\n', '/api/health': b'{"database": "ok", "version": "13.0.2"}',
+                        '/api/frontend/settings': json.dumps({'panels': {setup.PLUGIN: {'id': setup.PLUGIN}, 'timeseries': {}}}).encode(),
                         '/api/v1/targets': json.dumps({'status': 'success', 'data': {'activeTargets': [
                             {'scrapeUrl': 'http://127.0.0.1:8081/api/telemetry/metrics', 'health': 'up', 'lastError': ''}]}}).encode()}.get(self.path)
                 self.send_response(200 if body else 404); self.end_headers(); self.wfile.write(body or b'')
@@ -93,7 +139,7 @@ class ReadinessWaitTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             result = setup.wait_ready(self.env(folder, port, port), timeout=10)
         self.assertEqual(result['targets'], [('http://127.0.0.1:8081/api/telemetry/metrics', 'up', '')])
-        self.assertEqual((result['grafana_port'], result['prometheus_port']), (port, port))
+        self.assertEqual((result['grafana_port'], result['prometheus_port'], result['flow_panel']), (port, port, True))
 
     def test_a_restarting_service_fails_the_wait_with_the_reason(self):
         import http.server
@@ -135,6 +181,15 @@ class StackDefinitionTests(unittest.TestCase):
         self.assertIn('TELEMETRY_GRAFANA_ADMIN_PASSWORD:?', services['grafana']['environment']['GF_SECURITY_ADMIN_PASSWORD'])
         for volume in compose['volumes'].values():
             self.assertEqual(volume['driver_opts']['type'], 'tmpfs')
+        # The Flow panel folder and the manager's lab-map folder: read-only binds that must pre-exist.
+        binds = {v['target']: v for v in services['grafana']['volumes'] if isinstance(v, dict)}
+        self.assertEqual(services['grafana']['environment']['GF_PATHS_PLUGINS'], '/var/lib/grafana-plugins')
+        self.assertTrue(binds['/var/lib/grafana-plugins']['source'].endswith('/plugins') and binds['/var/lib/grafana-plugins']['read_only'])
+        self.assertEqual(binds['/etc/grafana/dashboards-labs']['source'], '${TELEMETRY_MAPS_DIR:-' + setup.DEFAULT_MAPS_DIR + '}')
+        self.assertTrue(all(b['read_only'] and b['bind']['create_host_path'] is False for b in binds.values()))
+        providers = yaml.safe_load((ROOT / 'deploy/telemetry/grafana/provisioning/dashboards/clab.yml').read_text())['providers']
+        labs = next(p for p in providers if p['options']['path'] == '/etc/grafana/dashboards-labs')
+        self.assertEqual((labs['folderUid'], labs['disableDeletion'], labs['allowUiUpdates'], labs['updateIntervalSeconds']), ('clab-lab-maps', False, False, 30))
         script = (ROOT / 'deploy/setup-telemetry.sh').read_text()
         self.assertIn('verify-release.py', script); self.assertIn('compose.telemetry.yml', script); self.assertIn('--remove', script)
         self.assertIn('/srv/containerlab-node-manager/telemetry', script)

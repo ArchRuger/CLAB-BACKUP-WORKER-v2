@@ -88,7 +88,8 @@ function renderTelemetryView(){
  telemetryCharts();
  $('telemetry-status').textContent=`Updated ${new Date(data.generated_at).toLocaleTimeString()} · window ${teleState.window/60} min · samples every ${data.sample_interval} s.`;
  const grafana=$('telemetry-grafana');
- if(grafana){const url=telemetryGrafanaUrl(data,'clab-lab-overview');grafana.hidden=!url;if(url)grafana.href=url;else grafana.removeAttribute('href');}
+ // The generated lab map (Flow panel) when the stack serves one for this lab, else the lab overview.
+ if(grafana){const map=data.grafana?.map_uid||'';const url=telemetryGrafanaUrl(data,map||'clab-lab-overview');grafana.hidden=!url;if(url)grafana.href=url;else grafana.removeAttribute('href');grafana.textContent=map?'Open lab map in Grafana ↗':'Open Grafana ↗';}
 }
 function telemetryLegend(data){
  const legend=$('map-live-legend');if(!legend)return;

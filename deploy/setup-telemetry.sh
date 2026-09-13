@@ -20,10 +20,13 @@ if $remove; then
     docker compose --env-file "$env_file" -f "$script_dir/compose.telemetry.yml" down --volumes --remove-orphans || true
   fi
   /usr/bin/python3 "$script_dir/setup_telemetry.py" "$env_file" "$config_dir" --remove
+  rm -rf "$config_dir/plugins"
   echo 'Recreate the manager (deploy/install.sh, or the compose command below) so it stops offering the Grafana link.'
 else
   /usr/bin/python3 "$script_dir/setup_telemetry.py" "$env_file" "$config_dir"
   docker compose --env-file "$env_file" -f "$script_dir/compose.telemetry.yml" pull
+  # The Flow panel that renders the manager-generated lab maps: installed once, pinned, kept on disk.
+  /usr/bin/python3 "$script_dir/setup_telemetry.py" "$env_file" "$config_dir" --plugin
   # Recreate every service so a changed port or password takes effect.
   docker compose --env-file "$env_file" -f "$script_dir/compose.telemetry.yml" up -d --force-recreate --remove-orphans
   # A service that starts and then crash-loops (a rejected flag, an unreadable scrape

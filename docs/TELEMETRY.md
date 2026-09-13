@@ -1,4 +1,4 @@
-# Network telemetry — 1.23.1
+# Network telemetry — 1.24.0
 
 Live interface rates, link state and BGP neighbour state from the nodes of a
 deployed lab, collected automatically and kept in memory for the last hour. No
@@ -211,6 +211,9 @@ What this does:
   rates, errors and discards, an operational-state timeline, an interface table,
   filtered by lab, node and interface) and **BGP neighbours** (session table,
   established timeline, prefixes received and sent).
+- **Lab maps** (1.24.0): the folder *Lab maps* holds one generated weathermap per lab,
+  drawn from the manager's drawing and animated by the exported rates; the setup installs
+  the Flow panel plugin it needs. See [GRAFANA-MAP.md](GRAFANA-MAP.md).
 - The setup then waits until Prometheus answers `/-/ready` and Grafana `/api/health`
   (90 s at most) and prints the scrape target's health. A service that starts and
   then crash-loops fails the setup with the Compose status and its last log lines
@@ -245,8 +248,9 @@ failed nodes, and a manual step to confirm charts and link colours follow real
 traffic and an interface shutdown. **Grafana telemetry dashboards** is INFO when the
 stack is not installed, and otherwise checks Grafana's health endpoint, that
 Prometheus answers at all (a crash-looping container is reported with the Compose
-commands that show its state and logs) and that it scrapes the manager (a scrape
-error is classified, for example a 404 from a manager older than 1.23.0).
+commands that show its state and logs), that it scrapes the manager (a scrape
+error is classified, for example a 404 from a manager older than 1.23.0), that the
+Flow panel is loaded and that the manager can write its lab maps (a WARN otherwise).
 
 ## Live acceptance procedure
 

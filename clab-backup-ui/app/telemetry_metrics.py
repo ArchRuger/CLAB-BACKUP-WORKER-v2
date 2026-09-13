@@ -11,6 +11,9 @@ RATES = (('rx_bps', 'clab_interface_receive_bits_per_second', 'Received bit rate
          ('tx_bps', 'clab_interface_transmit_bits_per_second', 'Transmitted bit rate derived from counter deltas'),
          ('rx_pps', 'clab_interface_receive_packets_per_second', 'Received packet rate derived from counter deltas'),
          ('tx_pps', 'clab_interface_transmit_packets_per_second', 'Transmitted packet rate derived from counter deltas'))
+# The node state as a number, for dashboards that colour by value (the Grafana lab map).
+STATE_CODES = {'failed': -1, 'disabled': 0, 'unsupported': 0, 'unmonitored': 0,
+               'waiting': 1, 'configuring': 1, 'connecting': 1, 'stale': 2, 'streaming': 3}
 TOTALS = (('in-errors', 'clab_interface_receive_errors_total', 'Device receive error counter'),
           ('out-errors', 'clab_interface_transmit_errors_total', 'Device transmit error counter'),
           ('in-discards', 'clab_interface_receive_discards_total', 'Device receive discard counter'),
@@ -51,6 +54,8 @@ def render(views, now):
             base = {**lab, 'node': node['short_name'], 'container': node['name'], 'platform': node.get('platform', '')}
             add('clab_telemetry_node_state', 'gauge', 'Current telemetry state of the node (one series per node, value 1)',
                 {**base, 'state': node['state']}, 1)
+            add('clab_telemetry_node_state_code', 'gauge', 'Telemetry state as a number: -1 failed, 0 off or unsupported, 1 waiting, configuring or connecting, 2 stale, 3 streaming',
+                base, STATE_CODES.get(node['state'], 0))
             if node.get('last_sample'):
                 add('clab_telemetry_node_sample_age_seconds', 'gauge', 'Seconds since the last usable sample from the node',
                     base, max(0.0, now - node['last_sample']))

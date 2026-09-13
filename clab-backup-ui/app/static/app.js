@@ -23,7 +23,7 @@ function sshHint(n){const s=n.nos_login?.status;return s==='booting'?'NOS is sti
 function render(){
  const lab=current();
  $('labs').innerHTML=state.labs.length?[...state.labs].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)).map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${l.favorite?'★ ':''}${esc(l.name)}<small>${l.nodes.length} nodes · ${esc(l.deployment?.status||'Unlinked')}</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
- const version=state.version||'1.23.1';$('app-version').textContent='v'+version;
+ const version=state.version||'1.24.0';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Supported device types as of release '+version;
  $('worker-state').textContent=(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status))?'Saving lab progress':busy()?'SSH job in progress':'Worker idle';
  $('empty').hidden=!!lab;$('lab-content').hidden=!lab;

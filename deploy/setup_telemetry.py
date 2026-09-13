@@ -12,7 +12,16 @@ import sys
 import tempfile
 
 KEYS = ('TELEMETRY_STACK', 'TELEMETRY_GRAFANA_PORT', 'TELEMETRY_GRAFANA_BIND', 'TELEMETRY_PROMETHEUS_PORT',
-        'TELEMETRY_GRAFANA_ADMIN_PASSWORD', 'TELEMETRY_CONFIG_DIR')
+        'TELEMETRY_GRAFANA_ADMIN_PASSWORD', 'TELEMETRY_CONFIG_DIR', 'TELEMETRY_MAPS_DIR')
+# The manager (uid 10001 in its container, /data) writes one generated lab-map dashboard per lab here;
+# Grafana reads the folder through a read-only bind mount. Keep in step with clab-backup-ui/compose.yml.
+DEFAULT_MAPS_DIR = '/srv/containerlab-node-manager/data/telemetry/dashboards'
+MANAGER_UID = 10001
+GRAFANA_UID = 472
+# The Flow panel that draws the lab maps (srl-telemetry-lab uses the same plugin); Apache-2.0,
+# community-signed, pinned and installed once into TELEMETRY_CONFIG_DIR/plugins so restarts work offline.
+PLUGIN = 'andrewbmchugh-flow-panel'
+PLUGIN_VERSION = '1.20.1'
 PROMETHEUS = '''# Written by deploy/setup-telemetry.sh for the manager on port {ui_port}. Rerun the setup after changing UI_PORT.
 global:
   scrape_interval: 10s
@@ -76,19 +85,91 @@ def configure(env_path, config_dir, enable=True):
     password = values.get('TELEMETRY_GRAFANA_ADMIN_PASSWORD') or secrets.token_urlsafe(18)
     if not re.fullmatch(r'[A-Za-z0-9_.~-]{12,128}', password):
         raise ValueError('Existing TELEMETRY_GRAFANA_ADMIN_PASSWORD contains unsupported characters; it was not replaced.')
+    maps_dir = values.get('TELEMETRY_MAPS_DIR') or DEFAULT_MAPS_DIR
+    absolute = maps_dir.startswith('/') or bool(re.match(r'^[A-Za-z]:[/\\]', maps_dir))     # the drive form only for tests
+    if not absolute or '..' in re.split(r'[/\\]', maps_dir) or not re.fullmatch(r'[A-Za-z0-9_./:\\ -]{1,220}', maps_dir):
+        raise ValueError('TELEMETRY_MAPS_DIR in .env must be an absolute path inside the manager data directory.')
     config_dir = Path(config_dir)
     updates = {'TELEMETRY_STACK': 'grafana' if enable else 'disabled', 'TELEMETRY_GRAFANA_PORT': str(grafana_port),
                'TELEMETRY_GRAFANA_BIND': bind, 'TELEMETRY_PROMETHEUS_PORT': str(prometheus_port),
-               'TELEMETRY_GRAFANA_ADMIN_PASSWORD': password, 'TELEMETRY_CONFIG_DIR': str(config_dir)}
+               'TELEMETRY_GRAFANA_ADMIN_PASSWORD': password, 'TELEMETRY_CONFIG_DIR': str(config_dir), 'TELEMETRY_MAPS_DIR': maps_dir}
     lines = [line for line in old.splitlines() if not any(re.match(r'^\s*' + key + r'\s*=', line) for key in KEYS)]
     lines.extend(key + '=' + value for key, value in updates.items())
+    if enable:
+        # Folders first: a missing manager data directory must fail before .env changes.
+        config_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+        prepare_folders(config_dir, Path(maps_dir))
     write_atomic(env_path, '\n'.join(lines) + '\n', stat.S_IRUSR | stat.S_IWUSR, metadata.st_uid, metadata.st_gid)
     if enable:
-        config_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
         # World-readable: Prometheus runs as nobody and only needs to read it.
         write_atomic(config_dir / 'prometheus.yml', PROMETHEUS.format(ui_port=ui_port), 0o644,
                      getattr(os, 'getuid', lambda: 0)(), getattr(os, 'getgid', lambda: 0)())
-    return {'ui_port': ui_port, 'grafana_port': grafana_port, 'prometheus_port': prometheus_port, 'bind': bind}
+    return {'ui_port': ui_port, 'grafana_port': grafana_port, 'prometheus_port': prometheus_port, 'bind': bind, 'maps_dir': maps_dir}
+
+
+def is_root():
+    return getattr(os, 'geteuid', lambda: 1)() == 0
+
+
+def owned_dir(path, uid):
+    """Create a folder the given service account can use; existing folders are left as they are.
+    Without root (tests, CI) the folder simply belongs to the caller."""
+    if path.is_dir():
+        return
+    path.mkdir(mode=0o755)
+    if is_root():
+        os.chown(path, uid, uid)
+
+
+def prepare_folders(config_dir, maps_dir):
+    """The plugin folder (Grafana's user) and the lab-map folder (the manager's user); Compose refuses
+    to create bind sources itself, so both must exist before the stack starts."""
+    owned_dir(Path(config_dir) / 'plugins', GRAFANA_UID)
+    data_dir = maps_dir.parent.parent
+    if not data_dir.is_dir():
+        raise ValueError(f'The manager data directory {data_dir} does not exist yet. Run deploy/start-manager.sh (or install.sh) first.')
+    owned_dir(maps_dir.parent, MANAGER_UID)
+    owned_dir(maps_dir, MANAGER_UID)
+
+
+def grafana_image(compose_path):
+    match = re.search(r'image:\s*(grafana/grafana-oss@sha256:[0-9a-f]{64})', Path(compose_path).read_text(encoding='utf-8'))
+    if not match:
+        raise ValueError('compose.telemetry.yml does not pin the Grafana image by digest.')
+    return match[1]
+
+
+def plugin_installed(plugins_dir):
+    try:
+        import json
+        meta = json.loads((Path(plugins_dir) / PLUGIN / 'plugin.json').read_text(encoding='utf-8'))
+        return meta.get('id') == PLUGIN and meta.get('info', {}).get('version') == PLUGIN_VERSION
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def install_plugin(config_dir, compose_path=None, runner=None):
+    """Install the pinned Flow panel into config_dir/plugins with the pinned Grafana image's own CLI.
+
+    Runs once (idempotent on the recorded version); needs grafana.com during setup only. The plugin is
+    community-signed, and Grafana verifies that signature when it loads the folder.
+    """
+    import subprocess
+    plugins = Path(config_dir) / 'plugins'
+    if plugin_installed(plugins):
+        return 'present'
+    image = grafana_image(compose_path or Path(__file__).with_name('compose.telemetry.yml'))
+    # As root (the setup script) the files belong to Grafana's user; otherwise (CI smoke) to the caller,
+    # which is fine because Grafana only reads the folder.
+    user = f'{GRAFANA_UID}:{GRAFANA_UID}' if is_root() else f'{getattr(os, "getuid", lambda: 0)()}:{getattr(os, "getgid", lambda: 0)()}'
+    command = ['docker', 'run', '--rm', '--user', user, '--entrypoint', 'grafana',
+               '-v', f'{plugins}:/plugins', image, 'cli', '--pluginsDir', '/plugins', 'plugins', 'install', PLUGIN, PLUGIN_VERSION]
+    result = (runner or subprocess.run)(command, capture_output=True, text=True)
+    if result.returncode != 0 or not plugin_installed(plugins):
+        detail = re.sub(r'\s+', ' ', (result.stderr or result.stdout or '').strip())[-300:]
+        raise ValueError(f'Installing the Grafana Flow panel ({PLUGIN} {PLUGIN_VERSION}) failed; the VM needs access to '
+                         f'grafana.com during this setup. {detail}'.rstrip())
+    return 'installed'
 
 
 def wait_ready(env_path, timeout=90, base='http://127.0.0.1'):
@@ -143,7 +224,15 @@ def wait_ready(env_path, timeout=90, base='http://127.0.0.1'):
         if active:
             break
         time.sleep(2)
-    return {'grafana_port': grafana_port, 'prometheus_port': prometheus_port,
+    # Anonymous viewers may read the frontend settings; the installed panel plugins are listed there.
+    flow_panel = False
+    try:
+        with opener.open(f'{base}:{grafana_port}/api/frontend/settings', timeout=5) as response:
+            panels = json.loads(response.read(4 << 20).decode('utf-8', 'replace')).get('panels', {})
+            flow_panel = isinstance(panels, dict) and PLUGIN in panels
+    except (HTTPError, URLError, OSError, ValueError):
+        flow_panel = False
+    return {'grafana_port': grafana_port, 'prometheus_port': prometheus_port, 'flow_panel': flow_panel,
             'targets': [(t.get('scrapeUrl', ''), t.get('health', ''), t.get('lastError', '')) for t in active if isinstance(t, dict)]}
 
 
@@ -156,12 +245,18 @@ if __name__ == '__main__':
             for url, health, error in targets:
                 print(f'Scrape target {url}: {health}' + (f' ({error})' if error else '')
                       + ('' if health == 'up' else '. The manager answers /api/telemetry/metrics from release 1.23.0; recreate it after this setup and rerun check-install.sh.'))
+            print(f'Flow panel {PLUGIN} {PLUGIN_VERSION}: ' + ('loaded; the manager-generated lab maps will render.' if result['flow_panel']
+                  else 'NOT loaded; lab maps stay empty. Rerun sudo bash deploy/setup-telemetry.sh with access to grafana.com and check the grafana service logs.'))
+            sys.exit(0)
+        if '--plugin' in sys.argv[3:]:
+            state = install_plugin(sys.argv[2])
+            print(f'Flow panel {PLUGIN} {PLUGIN_VERSION} {state} in {Path(sys.argv[2]) / "plugins"}.')
             sys.exit(0)
         enable = '--remove' not in sys.argv[3:]
         result = configure(sys.argv[1], sys.argv[2], enable)
     except (OSError, ValueError, IndexError) as error:
-        sys.exit(str(error) or 'Usage: setup_telemetry.py ENV_FILE CONFIG_DIR [--remove] | setup_telemetry.py ENV_FILE --wait')
+        sys.exit(str(error) or 'Usage: setup_telemetry.py ENV_FILE CONFIG_DIR [--remove | --plugin] | setup_telemetry.py ENV_FILE --wait')
     if enable:
-        print(f"Telemetry dashboard settings saved: Grafana on {result['bind']}:{result['grafana_port']}, Prometheus on 127.0.0.1:{result['prometheus_port']} scraping the manager on port {result['ui_port']}. Unrelated settings and an existing admin password were retained.")
+        print(f"Telemetry dashboard settings saved: Grafana on {result['bind']}:{result['grafana_port']}, Prometheus on 127.0.0.1:{result['prometheus_port']} scraping the manager on port {result['ui_port']}; lab maps are provisioned from {result['maps_dir']}. Unrelated settings and an existing admin password were retained.")
     else:
         print('Telemetry dashboards disabled in .env; the admin password was retained for a later reinstall.')

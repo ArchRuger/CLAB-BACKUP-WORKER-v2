@@ -690,8 +690,23 @@ def check_telemetry_dashboards(ctx):
                 + (': ' + '; '.join(errors) if errors else '') + '.',
                 'The manager must be release 1.23.0 or later and recreated with the current .env; then rerun sudo bash deploy/setup-telemetry.sh (it rewrites the scrape target for the current UI_PORT).')
         return
-    ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana on TCP {port} is healthy and Prometheus scrapes the manager metrics endpoint.')
-    ctx.manual.append(f'Grafana: open http://VM_IP:{port}/ from the workstation and confirm the Lab overview dashboard shows the deployed lab.')
+    settings_result, settings = ctx.http('/api/frontend/settings', base=f'http://127.0.0.1:{port}')
+    panels = settings.get('panels') if settings_result.ok and isinstance(settings, dict) else None
+    maps = health.get('maps') if isinstance(health.get('maps'), dict) else {}
+    if not isinstance(panels, dict) or 'andrewbmchugh-flow-panel' not in panels:
+        ctx.add('telemetry-dashboards', 'WARN', title, f'Grafana on TCP {port} is healthy and Prometheus scrapes the manager, but the Flow panel '
+                '(andrewbmchugh-flow-panel) is not loaded, so the generated lab maps render empty.',
+                'Rerun sudo bash deploy/setup-telemetry.sh with access to grafana.com (it installs the pinned plugin into TELEMETRY_CONFIG_DIR/plugins), '
+                'then check: sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.telemetry.yml logs --tail=40 grafana')
+        return
+    if maps.get('error'):
+        ctx.add('telemetry-dashboards', 'WARN', title, 'Grafana and Prometheus are healthy, but the manager cannot write its lab maps: ' + safe_text(maps['error'], 200),
+                'Rerun sudo bash deploy/setup-telemetry.sh (it creates TELEMETRY_MAPS_DIR for the manager user) and recreate the manager.')
+        return
+    ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana on TCP {port} is healthy, Prometheus scrapes the manager metrics endpoint, the Flow panel is loaded'
+            + (f' and {maps["dashboards"]} lab map(s) are provisioned.' if isinstance(maps.get('dashboards'), int) else '.'))
+    ctx.manual.append(f'Grafana: open http://VM_IP:{port}/ from the workstation and confirm the Lab overview dashboard shows the deployed lab and the '
+                      'Lab maps folder holds a map per lab with links coloured by traffic.')
 
 
 def valid_path(path):
