@@ -42,7 +42,24 @@ ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
 
-## Changes in 1.21.0
+## Changes in 1.21.1
+
+Fixes from vetting the 1.21.0 browser Wireshark on a live Ubuntu VM. The viewer now
+connects: the pinned Wireshark image's websockify only completes a handshake that
+offers the `binary` WebSocket subprotocol, so the session service and the manager
+relay offer it (and answer it only to a browser that asked). **Download saved
+captures** returns what Wireshark saved under `/pcaps`: that folder is now a
+tmpfs-backed Docker volume the daemon can read instead of a container tmpfs that the
+archive API never sees; the same size, ownership and cleanup limits apply, and an
+empty folder answers "No saved captures yet" instead of an empty archive. The viewer
+checks a download before handing it to the browser so that message is shown in
+place. `setup-capture.sh` recreates the capture services, so upgrading a 1.20.x
+stack no longer stops on the renamed project network. The CI smoke test reads the
+container's temporary and saved files from inside the container, where tmpfs
+contents live, and checks the empty-folder response. See
+[Browser capture setup](CAPTURE.md) and [validation evidence](clab-backup-ui/VALIDATION.md).
+
+## Changes in 1.21.0 (historical)
 
 Wireshark now runs on the lab VM and opens in the browser. The workstation plugin,
 external-app launcher and public Edgeshark URL setting are removed. A separate

@@ -12,7 +12,9 @@ docker info >/dev/null
 image='ghcr.io/srl-labs/wireshark-vnc-docker@sha256:682c8bd42282c44f991e0d6015ce3303e5a3aa08a1e2c2b6937fd554ddb31186'
 docker pull "$image"
 /usr/bin/python3 "$script_dir/setup_capture.py" "$repo_dir/clab-backup-ui/.env"
-docker compose --env-file "$repo_dir/clab-backup-ui/.env" -f "$script_dir/compose.capture.yml" up -d --build
+# Recreate every service: an upgrade can rename the project network, and a plain
+# 'up' would only restart the old Edgeshark containers on the removed network.
+docker compose --env-file "$repo_dir/clab-backup-ui/.env" -f "$script_dir/compose.capture.yml" up -d --build --force-recreate --remove-orphans
 echo 'Browser capture services installed. Recreate/upgrade the manager using deploy/install.sh to load the settings.'
 echo 'For an already installed matching manager, from this checkout run:'
 echo 'sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui'

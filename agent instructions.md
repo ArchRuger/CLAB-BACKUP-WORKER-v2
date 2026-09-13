@@ -1,3 +1,26 @@
+# Browser Wireshark fixes — 1.21.1
+
+Read README.md "Changes in 1.21.1" and CAPTURE.md. Three facts learned on the live
+VM must survive future edits. (1) The pinned wireshark-vnc-docker image's websockify
+answers HTTP 400 to any WebSocket handshake that does not offer the `binary`
+subprotocol; the service then closed before accept, which Starlette reports as 403,
+so every 1.21.0 viewer failed. capture_service.desktop and capture_sessions.desktop
+offer VNC_SUBPROTOCOL upstream and echo it only when the client offered it (noVNC in
+that image offers none, and a browser drops a reply that ignores its offer). (2) The
+Docker archive API and docker cp read the container filesystem through the daemon:
+volumes are visible, a tmpfs mounted inside the container is not. /pcaps is
+therefore a tmpfs-backed anonymous local volume (PCAPS_VOLUME_OPTIONS, labelled,
+removed with v=true, dangling ones swept by cleanup_orphans); /tmp and /config stay
+container tmpfs, so smoke.py reads /tmp with docker exec tar and saves into /pcaps
+with docker exec tar -x, never docker cp. (3) Compose only restarts containers whose
+service config hash is unchanged even when the project network was renamed, so
+setup-capture.sh runs up with --force-recreate --remove-orphans; keep that. The
+service refuses a directory-only archive with 409 (tar_has_regular_file on the first
+64 KiB chunk), the manager passes the service's own detail through, and
+capture-session.js fetches the download first and only then hands the URL to the
+browser (tests/test_capture_session_ui.js). Validated on the dev VM; see
+VALIDATION.md "Browser Wireshark fixes — 1.21.1".
+
 # Browser Wireshark — 1.21.0
 
 This supersedes the 1.20.x workstation handoff instructions below. Read CAPTURE.md.

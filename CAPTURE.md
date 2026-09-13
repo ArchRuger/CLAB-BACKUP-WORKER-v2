@@ -1,4 +1,4 @@
-# Browser Wireshark — 1.21.0
+# Browser Wireshark — 1.21.1
 
 Select **Capture packets**, a node's **Capture** action, or either endpoint of a
 topology link. Select one or more live Linux interfaces and click **Start browser
@@ -17,7 +17,10 @@ bash deploy/install.sh
 Optional setup pulls the pinned Wireshark image, builds the session service,
 starts the capture Compose project, and configures `clab-backup-ui/.env`. It
 preserves unrelated settings and the existing service token, and removes the
-obsolete `CAPTURE_EDGESHARK_PUBLIC_URL`. The normal installer upgrades the manager
+obsolete `CAPTURE_EDGESHARK_PUBLIC_URL`. It recreates the Edgeshark and session
+containers every time (an upgrade can rename the project network, and only a
+recreated container joins the new one), so discovery pauses for a few seconds and
+running browser sessions are removed. The normal installer upgrades the manager
 and matching helpers while preserving data and VM credentials.
 
 If the manager already runs 1.21.0, apply changed capture settings with:
@@ -59,7 +62,9 @@ configured to capture from arbitrary remote Edgeshark hosts.
 
 - Stop capture in Wireshark, then **File → Save As** under **/pcaps**.
 - Click **Download saved captures (.tar)** and extract the archive to obtain the
-  PCAP/PCAPNG files. Files saved outside `/pcaps` are not included.
+  PCAP/PCAPNG files. Files saved outside `/pcaps` are not included. While nothing
+  has been saved there yet, the button reports "No saved captures yet" instead of
+  handing over an empty archive.
 - **Reconnect viewer** returns to the existing session. Closing a tab leaves it
   available under **Sessions in this browser** until idle expiry.
 - **End session** deletes its container and temporary files, with confirmation.
@@ -94,6 +99,15 @@ outside this view. Guest capture or mirroring is needed for unexposed traffic.
 HTTP/WebSocket relay. `app/capture_service.py` runs separately and creates only
 fixed-image, labelled Wireshark containers. `static/capture-session.js` embeds the
 noVNC RFB module supplied by the pinned image, without VS Code or CDN dependencies.
+
+`/pcaps` is a tmpfs-backed anonymous Docker volume (256 MiB, owned by the desktop
+user, labelled, removed with the container and swept at service start) rather than a
+container tmpfs: the daemon's archive API behind the download reads volumes but never
+a tmpfs mounted inside the container. `/tmp` and `/config` stay container tmpfs, so
+tools that inspect them must run inside the container (`docker exec`), never
+`docker cp`. Both WebSocket relays offer websockify's `binary` subprotocol upstream
+and echo it only to a browser that offered it; the pinned image's websockify rejects
+a handshake without it.
 
 The session service alone mounts the Docker socket, which gives it host-level
 administrative power. Keep it restricted to trusted VM operators. The manager
@@ -135,6 +149,13 @@ the pinned image without starting capture. It cannot prove live packets arrived.
 If the desktop starts slowly, reconnect after initialization. If Wireshark exits,
 download saved files, end the old session and create another. A capture outage
 does not disable backups, topology, SSH or lab operations.
+
+The browser console logs `noVNC requires a secure context (TLS)` on every viewer
+load over plain HTTP; it is harmless here because the desktop stream uses VNC
+security type None inside the VM. A viewer that disconnects immediately while the
+sessions log shows `websockify ... 403` means the service could not complete the
+websockify handshake (1.21.0 omitted the `binary` subprotocol): rebuild the
+sessions service with `sudo bash deploy/setup-capture.sh`.
 
 To disable capture, download/end sessions, set `CAPTURE_PROVIDER=disabled` and
 recreate the manager. Remove the optional stack using:
