@@ -131,11 +131,18 @@ def wait_ready(env_path, timeout=90, base='http://127.0.0.1'):
                          + ', '.join(f'{name} on 127.0.0.1:{prometheus_port if name == "Prometheus" else grafana_port} ({last.get(name, "no answer")})' for name in pending)
                          + '. The services are not healthy; inspect their logs before using the dashboards.')
     target = f'{base}:{prometheus_port}/api/v1/targets'
-    try:
-        with opener.open(target, timeout=5) as response:
-            active = json.loads(response.read(1 << 20).decode('utf-8', 'replace')).get('data', {}).get('activeTargets', [])
-    except (HTTPError, URLError, OSError, ValueError):
-        active = []
+    active = []
+    # The scrape manager registers its targets a moment after /-/ready; give it a few seconds
+    # so the setup can report the manager target instead of an empty list.
+    for _ in range(5):
+        try:
+            with opener.open(target, timeout=5) as response:
+                active = json.loads(response.read(1 << 20).decode('utf-8', 'replace')).get('data', {}).get('activeTargets', [])
+        except (HTTPError, URLError, OSError, ValueError):
+            active = []
+        if active:
+            break
+        time.sleep(2)
     return {'grafana_port': grafana_port, 'prometheus_port': prometheus_port,
             'targets': [(t.get('scrapeUrl', ''), t.get('health', ''), t.get('lastError', '')) for t in active if isinstance(t, dict)]}
 

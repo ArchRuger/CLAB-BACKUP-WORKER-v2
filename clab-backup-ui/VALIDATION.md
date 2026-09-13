@@ -51,9 +51,45 @@ deploy the latest main on the dev VM and validate the whole setup and deployment
 | Retry cap for a port that does not answer | after `docker restart` the node retried every 30 s (`connecting` every fourth 10 s poll) instead of backing off to minutes; note that a bare `docker restart` also removes containerlab's veth links (Ethernet1 disappeared on the restarted cEOS and its gNMI server stayed "not yet running"), so the lab was recovered with a manager redeploy — see below |
 | check-install hints | unit tests cover the "Prometheus does not answer" and "target down with classified error" cases; the FAIL text no longer echoes scrape errors |
 
-## Redeploy, disable and remove, other features while streaming
+## Final run on the re-staged 1.23.1 tree (commit `f8f4f9a`, 21:01–21:08 UTC)
 
-Filled in below from the final run on the re-staged 1.23.1 tree.
+`git archive` of the commit to `~/projects/v1.23.1`, `.env` carried over, then the
+documented scripts in order:
+
+| Step | Result |
+|---|---|
+| `deploy/verify-release.py` | `Source release verified: 1.23.1` |
+| `start-manager.sh --enable-operations` | exit 0 (image rebuilt, helpers verified, engineer access refreshed) |
+| `setup-capture.sh` | exit 0 (`clab-capture-service:1.23.1`, stack recreated) |
+| `setup-telemetry.sh` | settings kept (existing admin password retained), stack recreated, then the new gate: `Prometheus on 127.0.0.1:9090 and Grafana on TCP 3000 are ready.`; exit 0 |
+| manager recreated with the `.env` | `/api/state` version 1.23.1; `/api/telemetry/health` enabled, `grafana {enabled: true, port: 3000, prometheus_port: 9090}` |
+| `check-install.sh` | **PASS 61 / FAIL 0 / WARN 1** (folder coverage budget) / INFO 5, with `[PASS] Network telemetry` and `[PASS] Grafana telemetry dashboards` |
+| Lab redeployed through the manager (`containerlab redeploy`, 45 s) | `telemetry.clear: lab operation redeploy submitted`; after boot both nodes streaming with a fresh generation (`first_sample 21:06:02`, `samples=94 dropped=0`), Ethernet1 `UP/UP`, link *up* from both ends, `applied=0` |
+| `PUT /telemetry/settings {auto:false}` | summary `disabled`, both nodes *Automatic telemetry is off for this lab*, `telemetry.clear: automatic telemetry disabled`, buffers empty |
+| `POST /telemetry/remove-config` | `started: []`, both nodes skipped (no manager-owned lines on cEOS), message states that only recorded lines are removed |
+| `PUT /telemetry/settings {auto:true}` | streaming again after 5 s with a new generation (`first_sample 21:06:52`), `dropped=0` |
+| `POST /jobs {operation: backup}` while streaming | job succeeded on both nodes in 5 s; telemetry kept streaming |
+| Capture, Grafana, Prometheus | `/api/capture/health ready`, Grafana `/api/health` ok (13.0.2), Prometheus target `up` with no error |
+| Browser (fresh tab) | *Lab overview*: Nodes streaming 2, Nodes with telemetry 2, Links up 1, node and link tables filled; no page error, no console error |
+
+## Tests
+
+- Windows: `test_telemetry_store` 8, `test_telemetry_collector` 7, `test_telemetry_gnmi` 6
+  (new idle-group test against the in-process server), `test_telemetry_adapters` 12,
+  `test_telemetry_setup` 8 (new readiness-wait tests; one symlink test skips on Windows),
+  `test_telemetry_metrics` 4, `test_check_install` 37, release consistency 7: all green.
+  `test_telemetry_manager` 13 passes apart from the known Windows `state.enc` rename
+  flake. Full suite: 581 tests, the only failures are that flake and the `test_git_progress`
+  timing flakes that vary run to run on Windows; Linux CI is authoritative.
+- Browser: 85 JS tests green (`node --test tests/*.js`).
+- CI adds `deploy/telemetry/smoke.py` (real Prometheus and Grafana against a fixture
+  manager); its result is on the pull request.
+
+## Not covered
+
+- XRv9k and cJunosEvolved adapters: no KVM on the dev VM; still fixture-only.
+- The Wireshark browser session was not opened again in this session (targets and the
+  service health were checked); the capture stack is the 1.21.1 design, unchanged.
 
 # Automatic network telemetry — 1.23.0
 
