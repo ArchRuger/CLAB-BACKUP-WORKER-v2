@@ -39,7 +39,7 @@ test('prepare stays disabled until an interface is ticked and a target-less dial
  $('capture-interfaces').checked=[];$('capture-interfaces').onchange();assert.equal($('capture-prepare').disabled,true);
  $('capture-interfaces').checked=[{value:'eth2'}];$('capture-interfaces').onchange();assert.equal($('capture-prepare').disabled,false);
  $('capture-target').value='';c.renderCaptureInterfaces();
- assert.match($('capture-interfaces').innerHTML,/Choose a capture target above/);assert.equal($('capture-prepare').disabled,true);
+ assert.match($('capture-interfaces').innerHTML,/Choose a capture target under Advanced/);assert.equal($('capture-prepare').disabled,true);
 });
 test('shared namespaces and loopback-only targets are labelled and aliases are searchable',()=>{
  const {c,$}=harness();
@@ -76,6 +76,59 @@ test('disabled providers and outages have an actionable local message',async()=>
 test('untrusted labels are escaped and unsupported launch schemes cannot navigate',async()=>{
  const {c,$}=harness();vm.runInContext(`captureTargets=[{id:'a',name:'<img onerror=x>',prefix:'<script>',kind:'docker',interfaces:['eth2']}];`,c);c.filterCaptureTargets();assert.doesNotMatch($('capture-target').innerHTML,/<img|<script>/);assert.match($('capture-target').innerHTML,/&lt;img/);
  $('capture-interfaces').checked=[{value:'eth2'}];c.json=async()=>({url:'javascript:alert(1)'});await $('capture-form').onsubmit({preventDefault(){}});assert.equal($('capture-launch').href,undefined);assert.match($('capture-status').textContent,/Unsupported/);
+});
+function mapHarness(live,links){
+ const h=harness();
+ h.c.api=async url=>{h.calls.push(url);return {json:async()=>url.includes('/status')?{enabled:true}:url.includes('/topology')?{nodes:[{id:'r1',inventory_name:'clab-demo-r1'},{id:'r2',inventory_name:'clab-demo-r2'}],links}:{targets:[{id:'a'.repeat(64),name:'clab-demo-r1',kind:'docker',prefix:'',interfaces:live}],message:'live'}};};
+ return h;
+}
+test('a node lists its wired ports first and keeps the rest behind a toggle',async()=>{
+ const h=mapHarness(['eth0','eth1','eth2','fabric','lo'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}],[{node:'r1',interface:'eth2'},{node:'r2',interface:'eth2'}]]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint=''",h.c);
+ await h.c.refreshCaptureTargets();
+ assert.ok(h.calls.includes('/labs/lab/topology'));
+ const first=h.$('capture-interfaces').innerHTML,rest=h.$('capture-interfaces-all').innerHTML;
+ assert.match(first,/value="eth1"/);assert.match(first,/value="eth2"/);assert.doesNotMatch(first,/value="fabric"|value="eth0"|value="lo"/);
+ assert.doesNotMatch(first,/checked/);
+ assert.match(rest,/value="eth0"/);assert.match(rest,/value="fabric"/);assert.doesNotMatch(rest,/value="eth1"/);
+ assert.equal(h.$('capture-more').hidden,false);assert.equal(h.$('capture-more-label').textContent,'All live Linux interfaces (3)');
+ assert.equal(h.$('capture-primary-legend').textContent,'Topology interfaces');
+ assert.equal(h.$('capture-advanced').open,false);assert.match(h.$('capture-status').textContent,/Tick the interfaces/);
+});
+test('a node with a single wired port starts ticked and ready to capture',async()=>{
+ const h=mapHarness(['eth0','eth1','lo'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint=''",h.c);
+ await h.c.refreshCaptureTargets();
+ assert.match(h.$('capture-interfaces').innerHTML,/value="eth1" checked/);assert.equal(h.$('capture-prepare').disabled,false);
+ assert.match(h.$('capture-status').textContent,/Selected live interface eth1/);
+ assert.equal(h.$('capture-more-label').textContent,'All live Linux interfaces (2)');
+});
+test('without a map the live list is shown and an unresolved target unfolds the advanced selector',async()=>{
+ const h=mapHarness(['eth0','eth1'],[]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint=''",h.c);
+ await h.c.refreshCaptureTargets();
+ assert.equal(h.$('capture-primary-legend').textContent,'Live Linux interfaces');assert.match(h.$('capture-interfaces').innerHTML,/value="eth0"/);
+ assert.equal(h.$('capture-more').hidden,true);assert.equal(h.$('capture-advanced').open,false);
+ h.c.api=async url=>({json:async()=>url.includes('/status')?{enabled:true}:url.includes('/topology')?{nodes:[],links:[]}:{targets:[{id:'x',name:'a',kind:'docker',prefix:'',interfaces:['eth0']},{id:'y',name:'b',kind:'docker',prefix:'',interfaces:['eth0']}],message:'live'}});
+ vm.runInContext("captureNode=''",h.c);await h.c.refreshCaptureTargets();
+ assert.equal(h.$('capture-advanced').open,true);assert.match(h.$('capture-interfaces').innerHTML,/Choose a capture target under Advanced/);
+});
+test('ticked interfaces from both lists are captured together',async()=>{
+ const h=mapHarness(['eth0','eth1'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint=''",h.c);
+ await h.c.refreshCaptureTargets();
+ h.$('capture-interfaces').checked=[{value:'eth1'}];h.$('capture-interfaces-all').checked=[{value:'eth0'}];
+ await h.$('capture-form').onsubmit({preventDefault(){}});
+ assert.equal(JSON.stringify(h.calls.find(c=>c?.url==='/capture/launch').data.interfaces),'["eth1","eth0"]');
+});
+test('a link opens on its first endpoint with that port ticked',async()=>{
+ const h=mapHarness(['eth0','eth1','eth2'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}],[{node:'r1',interface:'eth2'},{node:'r2',interface:'eth2'}]]);
+ vm.runInContext("activeId='lab'",h.c);
+ h.c.openCapture('','',[{node:'clab-demo-r1',label:'r1',interface:'eth2'},{node:'clab-demo-r2',label:'r2',interface:'eth2'}]);
+ await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));await new Promise(r=>setImmediate(r));
+ assert.equal(h.$('capture-context').textContent,'Link endpoint: r1: eth2');
+ assert.match(h.$('capture-interfaces').innerHTML,/value="eth2" checked/);assert.doesNotMatch(h.$('capture-interfaces').innerHTML,/value="eth1" checked/);
+ assert.equal(h.$('capture-prepare').disabled,false);
 });
 test('every rendered link including coincident nodes exposes both endpoint actions',()=>{
  const {c}=harness();vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/topology-render.js'),'utf8'),c);

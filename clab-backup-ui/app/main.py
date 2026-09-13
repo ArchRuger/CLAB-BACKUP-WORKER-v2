@@ -17,8 +17,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.background import BackgroundTask
 from .inventory import PLATFORMS, parse_inventory, literal, address, port
 from .store import Store
-from .runner import Runner, readiness, now, effective_credentials
+from .runner import Runner, readiness, now, effective_credentials, credential_source
 from .node_services import NodeServices
+from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
 from .discovery import Discovery, lab_status, node_available
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
@@ -35,6 +36,7 @@ def create_app(data_dir=None):
     migrate_download_metadata(store)
     runner=Runner(store)
     services=NodeServices(store)
+    readiness_monitor=ReadinessMonitor(store,services,runner)
     discovery=Discovery(store)
     operations=LabOperations(store,discovery)
     git_progress=GitProgress(store,runner)
@@ -43,10 +45,12 @@ def create_app(data_dir=None):
         print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
         runner.start()
         discovery.start()
+        readiness_monitor.start()
         yield
         git_progress.close()
         operations.close()
         discovery.close()
+        readiness_monitor.close()
         services.close()
         runner.close()
     app=FastAPI(title='Containerlab Node Manager',version=__version__,lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
@@ -60,6 +64,7 @@ def create_app(data_dir=None):
     app.state.git_progress=git_progress
     git_progress.install(app)
     app.state.node_services=services
+    app.state.readiness=readiness_monitor
     services.install(app)
     topology.install(app,store)
     app.state.captures = Captures(store)
@@ -111,14 +116,21 @@ def create_app(data_dir=None):
         result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml')}
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
         result['nodes']=[]
+        with services.lock: checks={k:copy.deepcopy(v) for k,v in services.checks.items() if k[0]==lab['id']}
         for n in lab['nodes']:
             row={k:copy.deepcopy(v) for k,v in n.items() if k not in ('username','password','enable_password','container_name')}
             row['available']=node_available(store.state,lab,n)
             row['readiness']=readiness(lab,n) if row['available'] else 'Lab unavailable'
             row['inventory_credentials']=bool(n.get('username') and n.get('password'))
-            row['ssh_ready']=row['available'] and bool(effective_credentials(lab,n).get('username'))
+            row['credential_source']=credential_source(lab,n)
+            row['login_configured']=row['available'] and bool(effective_credentials(lab,n).get('username'))
+            # SSH opens once the NOS has answered a login (linked labs); labs without a
+            # deployment keep offering SSH whenever a login is configured.
+            row['nos_login']=login_state(lab,n,row['available'],checks.get((lab['id'],n['name'])))
+            row['ssh_ready']=row['login_configured'] and row['nos_login']['status'] in ('ready','unmonitored')
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)
+        result['nos_readiness']=summarize([row['nos_login'] for row in result['nodes']])
         return result
     discovery.install(app,public_lab)
     class ResetManager(BaseModel):
@@ -138,7 +150,7 @@ def create_app(data_dir=None):
                     raise HTTPException(409, 'Close SSH sessions and wait for connection checks before resetting.')
                 try: store.reset()
                 except OSError: raise HTTPException(500, 'Storage reset could not finish. Check data directory permissions and free space, then retry Start fresh or restart the manager.')
-                services.checks.clear(); services.tickets.clear()
+                services.checks.clear(); services.tickets.clear(); readiness_monitor.reset()
                 discovery.sources.clear(); discovery.import_previews.clear()
                 operations.previews.clear(); operations.cap_cache = None
             discovery.wake.set()

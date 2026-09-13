@@ -1,3 +1,44 @@
+# Deploy-first UI and automatic NOS login — 1.22.0
+
+Read README.md "Changes in 1.22.0". (1) `inventory.DEFAULT_CREDENTIALS` holds the
+login containerlab documents for each supported kind; `runner.effective_credentials`
+falls back to it after profiles and inventory logins, `runner.credential_source` names
+the origin, and the public node row carries `credential_source`, `login_configured`
+and `nos_login`, with `nos_readiness` on the lab. Keep the order profile > inventory
+> default and never add a kind default that is not published on containerlab.dev.
+(2) `app/node_readiness.py` (`ReadinessMonitor`, started in the lifespan) probes
+running nodes in linked labs (fresh discovery, `node_available`, never during a lab
+operation) by SSH login plus `show version` over an exec channel (`cli_answers`,
+judged with `runner.CLI_ERROR`; SSH can authenticate while the cEOS CLI is still
+starting), stores results in `NodeServices.checks` with `source: 'automatic'`,
+forgets a node whose runtime signature changes, reports a refused login only after
+three consecutive refusals, submits one `test` job per boot cycle through
+`runner.submit(..., source='automatic')` (jobs now carry `source`), and on a failed
+automatic test (`review_tests`) sends the failed nodes back to booting and allows
+`MAX_TEST_ATTEMPTS` tests per boot. `runner.job_environment` gives every
+ansible-playbook run HOME = its temp dir and `ANSIBLE_HOST_KEY_CHECKING=False`: lab
+containers regenerate SSH host keys on each deploy and the recorded keys in the
+manager's `~/.ssh/known_hosts` made every job after a redeploy fail with "host key
+mismatch" (seen live on the dev VM); never let a job read or write a shared
+known_hosts again. For linked labs
+`ssh_ready` requires `nos_login.status == 'ready'`; unlinked labs keep the old rule
+(login configured). Tests build a linked lab with a fresh discovery snapshot and an
+inline pool (tests/test_node_readiness.py). (3) `vm_files.prepare_lab` fills a blank
+saved login from the generated inventory on sync and never replaces a saved one. (4)
+operations.js `opSaveWorkspace` registers the workspace (POST /api/lab-definitions,
+PUT operations-settings) before a Deploy lab review; `openDeploy` opens the topology
+browser from the landing page and header; `opJobBanner` is the pure function behind
+the operation banner. (5) capture.js reads the lab drawing (`/api/labs/{id}/topology`)
+once per dialog open and lists the node's wired ports first (`mapInterfacesFor`); the
+other live interfaces render in `capture-interfaces-all`, so `captureChecked()` reads
+both lists; scope, search and target live in the `capture-advanced` details, which
+unfolds only when no target resolved; a link opens on its first endpoint. (6)
+management.js `renderLanding` and `renderNosReadiness` draw the landing page and the
+deployment-bar readiness line; `vm-reset-key` defaults to checked. New browser tests
+(`test_readiness_ui.js`, plus `test_vm_password_ui.js` and `test_download_ui.js`) and
+`test_node_readiness.py` / `test_vm_files.py` run in CI. Validated on the dev VM; see
+VALIDATION.md "Deploy-first UI and automatic NOS login — 1.22.0".
+
 # Browser Wireshark fixes — 1.21.1
 
 Read README.md "Changes in 1.21.1" and CAPTURE.md. Three facts learned on the live

@@ -78,14 +78,21 @@ function opInspectionRows(output){
  }}return rows;
 }
 function opInspectionTable(rows){return `<div class="op-inspection"><table><caption>${rows.length} deployed nodes</caption><thead><tr>${['Topology','Lab','Node','Kind / image','State / health','IPv4 / IPv6'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.topology)||'—'}</td><td>${esc(r.lab)}</td><td>${esc(r.node)}</td><td>${esc(r.kind)}<small>${esc(r.image)}</small></td><td>${esc(r.state)}</td><td>${esc(r.ipv4)}<small>${esc(r.ipv6)}</small></td></tr>`).join('')}</tbody></table></div>`;}
+// The outcome is what a reader looks for first: a large green (or red) banner names
+// the action, the lab and the exit code before the raw command output.
+function opJobBanner(job){
+ const label=opLabels[job.action]||job.action,done=job.status==='succeeded',failed=['failed','interrupted'].includes(job.status);
+ const detail=[job.name,job.exit_code===null||job.exit_code===undefined?'':'Exit '+job.exit_code,job.message].filter(Boolean).join(' · ');
+ return {tone:done?'good':failed?'bad':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:`${label} ${job.status}…`,detail};
+}
 async function opShowJob(id){
  clearTimeout(opOutputTimer);
- const dialog=opDialog('operation-output','Operation output','<p id="op-job-state"></p><pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
+ const dialog=opDialog('operation-output','Operation output','<div id="op-job-banner" class="op-banner" hidden></div><pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
  const poll=async()=>{
   if(!dialog.open)return;
   try{
    const job=await(await api('/operations/'+id)).json();
-   $('op-job-state').textContent=[job.name,opLabels[job.action]||job.action,job.status,job.exit_code===null?'':'Exit '+job.exit_code,job.message].filter(Boolean).join(' · ');
+   const banner=opJobBanner(job),shown=$('op-job-banner');shown.hidden=false;shown.className='op-banner '+banner.tone;shown.innerHTML=`<strong>${esc(banner.title)}</strong><span>${esc(banner.detail)}</span>`;
    const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for command output…';if(follow)pre.scrollTop=pre.scrollHeight;
    const rows=opInspectionRows(job.output||'');
    const inspectAction=['inspect','inspect-all'].includes(job.action);
@@ -104,6 +111,20 @@ async function opHistory(labId=''){
  const dialog=opDialog('operation-history','Operation history',`<p>Saved command output remains in persistent manager storage.</p><div class="op-history">${jobs.filter(j=>!labId||j.lab_id===labId).map(j=>`<button class="button secondary" data-job="${esc(j.id)}"><strong>${esc(j.name)} · ${esc(opLabels[j.action]||j.action)}</strong><small>${esc(j.status)} · ${esc(new Date(j.created).toLocaleString())}</small></button>`).join('')||'<p>No lab operations yet.</p>'}</div>`);
  dialog.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>opShowJob(b.dataset.job));
 }
+// Deploy lab keeps the manager in step with the VM: the workspace (nodes, map and VM
+// source link) is saved before the command runs, so the lab is in the sidebar at once
+// and NOS logins are verified as soon as its containers start. Nothing to import.
+async function opSaveWorkspace(path,source,parsed,labId=''){
+ let id=labId||(state.labs||[]).find(l=>l.deployment_name===parsed.name||opPath(l)===path)?.id||'';
+ if(!id){
+  const form=new FormData();form.append('definition',new Blob([source.text],{type:'text/yaml'}),path.split('/').pop());
+  id=(await(await api('/lab-definitions',{method:'POST',body:form})).json()).id;
+ }
+ await json('/labs/'+id+'/operations-settings','PUT',{path});
+ activeId=id;sessionStorage.setItem('activeLab',id);
+ return id;
+}
+function openDeploy(){return opTask(null,()=>opBrowse());}
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open workspace',`<p>Your browser may have blocked the new tab.</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open workspace ↗</a>`);}
 function opTopologyEntries(entries){return entries.filter(entry=>entry.directory||/\.clab\.ya?ml$/i.test(entry.name));}
 async function opBrowse(path=''){
@@ -142,7 +163,7 @@ async function opEdit(path,labId='',newPath=''){
  const value=path?await json('/operations/read','POST',{path}):{text:'name: new-lab\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:latest\n',path:newPath};
  const isYaml=/\.ya?ml$/i.test(value.path);
  opEditorContext={path:value.path,labId,isNew:!path};
- const dialog=opDialog('op-editor',path?'Lab topology':'Create lab topology',`<label>Absolute VM path<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology YAML':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">View the topology, then choose Deploy lab to create and start its devices on the VM. Saving to the manager alone does not deploy it. Existing files are read-only; edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Validate / preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Review creation on VM</button>':''}${path&&isYaml?'<button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Save to manager')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
+ const dialog=opDialog('op-editor',path?'Lab topology':'Create lab topology',`<label>Absolute VM path<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology YAML':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Choose Deploy lab to save this topology as a workspace and start its devices on the VM; the lab appears in the manager right away and SSH opens as the devices boot. Save to manager keeps the workspace without deploying. Existing files are read-only; edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Validate / preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Review creation on VM</button>':''}${path&&isYaml?'<button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Save to manager')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
  $('op-edit-path').value=value.path;$('op-edit-text').value=value.text;
  $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await json('/operations/parse-yaml','POST',{options:{text:$('op-edit-text').value}});opMapPreview(parsed.drawing,parsed.name);}));
  $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value}})));
@@ -158,7 +179,8 @@ async function opEdit(path,labId='',newPath=''){
  }));
  $('op-deploy-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
   const source=await json('/operations/read','POST',{path}),parsed=await json('/operations/parse-yaml','POST',{options:{text:source.text}});
-  await opReview({action:'deploy',lab_id:labId,path,name:parsed.name});
+  const id=await opSaveWorkspace(path,source,parsed,labId);
+  await opReview({action:'deploy',lab_id:id,path,name:parsed.name});
  }));
 }
 function opClone(url='',project=''){
@@ -196,9 +218,10 @@ function renderLabOperations(){
  else{for(const id of ['update-definition','link-deployment'])if($(id))$(id).disabled=false;}
 }
 if($('import-top')){
- $('import-top').insertAdjacentHTML('beforebegin','<button class="button secondary" id="lab-actions">Lab actions ▾</button>');
+ $('import-top').insertAdjacentHTML('beforebegin','<button class="button secondary" id="lab-actions" hidden>Lab actions ▾</button>');
 
  $('map-edit').onclick=()=>opTask(null,()=>opLayout(activeId));
+ if($('deploy-empty'))$('deploy-empty').onclick=openDeploy;
  $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>location.assign('/static/workspace.html#mode=folder');$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opHistory();$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
  $('labs').addEventListener('contextmenu',e=>{const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}});
  $('labs').addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}}});

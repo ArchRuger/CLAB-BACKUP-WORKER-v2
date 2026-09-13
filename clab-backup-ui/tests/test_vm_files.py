@@ -132,6 +132,17 @@ class VMFilesTests(unittest.TestCase):
         self.assertEqual(self.sync(lab, envelope()).status_code, 200)
         self.assertEqual(lab['drawing']['custom'], 'retained')
 
+    def test_sync_fills_a_blank_login_from_the_generated_inventory(self):
+        # A workspace saved from the topology YAML alone (Save to manager, Deploy lab)
+        # has no login; the first sync takes the generated inventory's login. A login
+        # already saved with the node (previous test) is never replaced.
+        public = self.register(); lab = self.store.lab(public['id'])
+        self.assertEqual((lab['nodes'][0]['username'], lab['nodes'][0]['password']), ('', ''))
+        self.host(); self.poll()
+        self.assertEqual(self.sync(lab, envelope()).status_code, 200)
+        self.assertEqual((lab['nodes'][0]['username'], lab['nodes'][0]['password']), ('fixture-user', 'fixture-device-secret'))
+        self.assertEqual(lab['vm_source']['status'], 'Up to date')
+
     def test_annotation_changes_replace_map_only_after_sync(self):
         ann = json.dumps({'nodeAnnotations': [dict(id='r1', position={'x': 77, 'y': 88})]}).encode()
         self.host(); self.poll(envelope(annotations=ann)); lab = self.store.state['labs'][0]

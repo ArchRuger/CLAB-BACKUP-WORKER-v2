@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.21.0
+# Containerlab Node Manager — 1.22.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,10 +6,12 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.21.0 deployment:** Build the new source and create the VM password using
+**1.22.0 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 Install matching manager and helpers with `bash deploy/install.sh`, keeping existing
-persistent data, then confirm Release 1.21.0 in the Debug panel.
+persistent data, then confirm Release 1.22.0 in the Debug panel. If the optional
+browser capture stack is installed, run `sudo bash deploy/setup-capture.sh` as well so
+the session service image matches the release.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
 Proxmox/Ubuntu setup, source/image installation, VM passwords, lab workflows and recovery.
@@ -42,7 +44,52 @@ ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
 
-## Changes in 1.21.1
+## Changes in 1.22.0
+
+The manager leads with deployment instead of import, and a freshly deployed lab is
+usable without any manual setup.
+
+- **Deploy-first landing page.** With no saved lab, the workspace offers **Deploy a
+  new lab** (the VM topology browser, in place), lists labs already running on the VM
+  with a one-click **Import**, and asks for the VM connection first when none exists.
+  Importing a lab definition or an Ansible inventory stays available as links.
+- **Deploy lab saves the workspace.** **Deploy lab** in the topology browser registers
+  the workspace (nodes, map and VM source path) before containerlab runs, so the lab is
+  in the sidebar at once and nothing has to be imported afterwards. **Save to
+  manager** still saves without deploying.
+- **Automatic NOS login.** Nodes of supported kinds use containerlab's documented
+  default login when no credential profile or inventory login exists: cEOS
+  `admin`/`admin`, vJunos-switch, vQFX and cJunosEvolved `admin`/`admin@123`, XRv9k
+  `clab`/`clab@123`. A profile or an inventory login always wins; the Nodes table shows
+  *Containerlab default login* when the default is in use. A readiness monitor logs in
+  to every running node of a linked lab over SSH and asks for `show version` every
+  20 seconds until the NOS answers, shows *NOS booting 0/2* and then *NOS ready 2/2*
+  in the deployment bar, records each answer in the *Last SSH check* column, and runs
+  **Test NOS login** once when every node has answered after a deployment. SSH, the
+  SSH menu entry and **SSH all nodes** open as nodes answer; a node that stops or
+  restarts must answer again, and a failed automatic test sends its nodes back to
+  booting and is retried up to three times per boot. A login refused three times in
+  a row is reported as failed with the fix (assign a profile) and keeps being retried
+  each minute. **Sync from VM** fills a blank saved login from the generated inventory.
+- **Backups and login tests survive a redeploy.** Lab containers generate new SSH host
+  keys on every deploy, and the Ansible transport used to record the old keys in the
+  manager's `known_hosts` and then refuse the node with *host key mismatch* until the
+  manager was recreated. Every job now runs with its own empty `known_hosts`.
+- **Operation output** starts with a large green banner such as *✔ Deploy lab
+  succeeded · Exit 0 · Operation completed*; failures are red, running jobs blue.
+- **VM connection** opens with *Enable automatic discovery* and *Trust a replacement
+  SSH host key on the next connection* both checked.
+- **Capture dialog.** Opened from a node or a link, it lists that node's topology
+  interfaces first (a single one is already ticked, and a link opens on its first
+  endpoint). The remaining live Linux interfaces sit under *All live Linux
+  interfaces*; scope, search and the capture-target selector sit under *Advanced* and
+  unfold only when no target could be resolved.
+- **Wireshark viewer.** One toolbar row with the status inline and the instructions
+  under *How to save a capture*, which say to type the full file name ending in
+  `.pcapng` because Wireshark on the VM does not add the extension; the *No saved
+  captures yet* message says the same.
+
+## Changes in 1.21.1 (historical)
 
 Fixes from vetting the 1.21.0 browser Wireshark on a live Ubuntu VM. The viewer now
 connects: the pinned Wireshark image's websockify only completes a handshake that

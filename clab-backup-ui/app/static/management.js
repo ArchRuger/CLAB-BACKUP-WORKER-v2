@@ -46,7 +46,7 @@ document.body.insertAdjacentHTML('beforeend', `
  <p class="form-help">Install the supplied VM setup script for the helper. The restricted helper reads deployment state and the original YAML, annotations, generated inventory and topology export. New labs appear for import confirmation. Direct mode reads these files through SFTP with the same VM account. The installed helper supports root-owned lab files.</p>
  <label class="checkbox-label"><input id="vm-enabled" type="checkbox" checked> Enable automatic discovery</label>
  <p id="vm-fingerprint" class="form-help"></p><p class="form-help">The first successful connection trusts and saves the VM SSH fingerprint. Later key changes block discovery.</p>
- <label class="checkbox-label"><input id="vm-reset-key" type="checkbox"> Trust a replacement SSH host key on the next connection</label>
+ <label class="checkbox-label"><input id="vm-reset-key" type="checkbox" checked> Trust a replacement SSH host key on the next connection</label>
  <p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Cancel</button><button type="submit" class="button primary">Save and test connection</button></div>
 </form></dialog>
 <dialog id="binding-dialog"><form id="binding-form">
@@ -66,6 +66,7 @@ function renderManagement(){
  $('discovery-file-list').innerHTML=Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file results yet. Refresh discovery. If using an older helper, update it on the VM.</p>';
  $('excluded-labs').innerHTML=(discovery.ignored_labs||[]).length?'<p class="side-hint">Excluded from automatic import</p>'+(discovery.ignored_labs||[]).map(name=>`<button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again · Right-click to clear exclusion</small></button>`).join(''):'';
  maybePromptVmConnection();
+ renderLanding(discovery,lab);
  if(!lab)return;
  $('remove-lab').disabled=state.jobs.some(j=>j.lab_id===lab.id&&['queued','running'].includes(j.status));
  const source=lab.vm_source, sync=$('sync-vm');
@@ -75,6 +76,26 @@ function renderManagement(){
  $('deployment-status').textContent=lab.deployment?.status||'Unlinked';
  $('deployment-message').textContent=lab.deployment?.message||'Link this workspace to a deployed lab.';
  $('deployment-checked').textContent=lab.deployment?.last_success?'Last successful inspection: '+new Date(lab.deployment.last_success).toLocaleString():'';
+ renderNosReadiness(lab);
+}
+// Container state alone never proves a NOS is usable; the readiness monitor's verdict
+// sits under the deployment status in plain words.
+function renderNosReadiness(lab){
+ const nos=lab.nos_readiness||{status:'idle'};
+ $('deployment-nos').className='deployment-nos '+nos.status;
+ $('deployment-nos').textContent=nos.status==='ready'?`NOS ready · ${nos.ready}/${nos.total} nodes accept SSH login`:nos.status==='booting'?`NOS booting · ${nos.ready}/${nos.total} nodes accept SSH login so far. SSH and the login test open automatically when they answer.`:nos.status==='failed'?`NOS login failed on ${nos.failed} of ${nos.total} nodes · assign credentials, then Test login`:'';
+}
+// Deploy-first landing page: connect the VM, then deploy or pick up a running lab.
+function renderLanding(discovery,lab){
+ if(lab||!$('deploy-empty'))return;
+ const configured=!!discovery.configured,connected=!!discovery.connected;
+ $('vm-connect-empty').hidden=configured;
+ $('deploy-empty').disabled=!connected;
+ $('deploy-empty').title=connected?'':'Connect the VM to browse its topologies';
+ $('empty-vm-note').textContent=!configured?'Connect this manager to your containerlab VM first. Deployment, discovery and node logins all run over that connection.':!connected?(discovery.error||'Waiting for the VM connection. Deployment opens as soon as discovery answers.'):'';
+ const running=(discovery.discovered||[]).filter(l=>!l.imported);
+ $('empty-discovered').hidden=!running.length;
+ $('empty-discovered-list').innerHTML=running.map(l=>`<div class="empty-lab"><div><strong>${esc(l.name)}</strong><small>${l.running}/${l.nodes} containers running${l.excluded?' · removed from this manager earlier':''}</small></div><button type="button" class="button secondary" data-setup-name="${esc(l.name)}">Import</button></div>`).join('');
 }
 function openSetup(replace=false, deployedName=''){
  const lab=replace?current():null;$('setup-form').reset();$('setup-form').querySelector('.form-error').textContent='';
@@ -84,7 +105,10 @@ function openSetup(replace=false, deployedName=''){
  $('setup-title').textContent=lab?'Update lab definition':'Import a lab';$('setup-dialog').showModal();
 }
 $('new-lab').onclick=$('import-empty').onclick=()=>openSetup();
-$('import-top').onclick=()=>current()?openImport(true):openSetup();
+$('import-inventory-empty').onclick=()=>openImport();
+$('vm-connect-empty').onclick=()=>openVmDialog();
+$('empty-discovered-list').onclick=e=>{const b=e.target.closest('[data-setup-name]');if(b)importDiscovered(b.dataset.setupName);};
+$('import-top').onclick=()=>current()?openImport(true):openDeploy();
 $('update-definition').onclick=()=>openSetup(true);
 $('legacy-import').onclick=()=>{$('setup-dialog').close();openImport(!!$('setup-lab-id').value);};
 $('discovered-labs').onclick=e=>{const b=e.target.closest('[data-setup-name]');if(b)importDiscovered(b.dataset.setupName);};
@@ -95,6 +119,9 @@ $('setup-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()
 function openVmDialog(){
  const h=state.discovery?.host||{};$('vm-form').reset();$('vm-form').querySelector('.form-error').textContent='';
  $('vm-address').value=h.address||'127.0.0.1';$('vm-port').value=h.port||22;$('vm-user').value=h.username||'clab-discovery';$('vm-command').value=h.command_mode||'helper';$('vm-enabled').checked=h.enabled!==false;
+ // Lab VMs get rebuilt and re-keyed; trusting the replacement key on the next
+ // connection is the default so a rebuilt VM reconnects without a second visit here.
+ $('vm-reset-key').checked=true;
  $('vm-fingerprint').textContent=h.fingerprint?'Saved fingerprint: '+h.fingerprint:'No VM fingerprint saved yet.';$('vm-password-migration').hidden=h.auth!=='key';$('vm-password').required=!h.auth||h.auth!=='password';$('vm-dialog').showModal();
 }
 $('vm-settings').onclick=openVmDialog;

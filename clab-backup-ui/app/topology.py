@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from fastapi import File, UploadFile, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
-from .inventory import read_data
+from .inventory import read_data, DEFAULT_CREDENTIALS
 from .runner import effective_credentials
 
 
@@ -186,10 +186,6 @@ def bind_drawing(lab):
     return result
 
 
-DEFAULT_USERS={'juniper_cjunosevolved':'admin','juniper_vqfx':'admin','juniper_vjunosswitch':'admin',
-               'cisco_xrv9k':'clab','arista_ceos':'admin'}
-
-
 def session_xml(lab, include_passwords=False):
     root=ET.Element('ArrayOfSessionData'); used=set()
     def segment(value):
@@ -200,7 +196,7 @@ def session_xml(lab, include_passwords=False):
         if name.casefold() in used: raise ValueError('Duplicate session short names; edit node names before exporting')
         used.add(name.casefold())
         creds=effective_credentials(lab,n)
-        username=creds.get('username') or n.get('username') or DEFAULT_USERS.get(n.get('platform'),'')
+        username=creds.get('username') or n.get('username') or DEFAULT_CREDENTIALS.get(n.get('platform') or '',('',''))[0]
         if any(ord(c)<32 for c in username): raise ValueError('Username contains unsupported control characters')
         password=creds.get('password','') if creds.get('auth')=='password' else ''
         extra=''

@@ -28,7 +28,7 @@ async function connectViewer(){
   const {default:RFB}=await import(base+'/assets/core/rfb.js');
   rfb=new RFB($('capture-screen'),(location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/websockify');
   rfb.scaleViewport=true;rfb.resizeSession=true;
-  rfb.addEventListener('connect',()=>{rfbConnected=true;$('viewer-status').textContent='Connected to Wireshark on the VM. Check its packet list for live traffic.';});
+  rfb.addEventListener('connect',()=>{rfbConnected=true;$('viewer-status').textContent='Connected to Wireshark on the VM.';});
   rfb.addEventListener('disconnect',()=>{rfbConnected=false;if(!ended)$('viewer-status').textContent='Viewer disconnected. Reconnect to the existing session; capture may still be running.';});
   rfb.addEventListener('securityfailure',()=>{$('viewer-status').textContent='Viewer authentication failed. Check the pinned capture image and service configuration.';});
  }catch(error){$('viewer-status').textContent=error.message;}
@@ -45,7 +45,7 @@ async function downloadCaptures(event){
   control.abort();
   const link=document.createElement('a');link.href=base+'/download';link.download='wireshark-captures.tar';
   document.body.appendChild(link);link.click();link.remove();
-  $('viewer-status').textContent='Downloading saved captures. Extract the archive to get your PCAPNG files.';
+  $('viewer-status').textContent='Downloading saved captures. Extract the archive to get your .pcapng files.';
  }catch(error){$('viewer-status').textContent=error.name==='AbortError'?'Download cancelled.':error.message;}
 }
 $('capture-download').onclick=downloadCaptures;

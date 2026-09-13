@@ -18,7 +18,7 @@ from app.discovery import parse_definition
 from app.git_progress import captured_snapshot, decoded_snapshot
 from app.inventory import PLATFORMS, parse_inventory
 from app.main import create_app
-from app.runner import effective_credentials, filename, make_inventory, readiness
+from app.runner import credential_source, effective_credentials, filename, make_inventory, readiness
 from app.topology import session_xml
 from app.vm_files import prepare_lab
 
@@ -221,8 +221,12 @@ class JunosKindAppTests(unittest.TestCase):
         for item in self.lab['nodes']:
             item.update(username='', password='')
         for platform in KINDS:
-            self.assertEqual(readiness(self.lab, next(n for n in self.lab['nodes']
-                if n['platform'] == platform)), 'Needs credentials')
+            # Without a profile or inventory login, containerlab's documented default
+            # (admin / admin@123 for these Junos kinds) makes the node usable at once.
+            item = next(n for n in self.lab['nodes'] if n['platform'] == platform)
+            self.assertEqual(readiness(self.lab, item), 'Ready')
+            self.assertEqual(credential_source(self.lab, item), 'default')
+            self.assertEqual((effective_credentials(self.lab, item)['username'], effective_credentials(self.lab, item)['password']), ('admin', 'admin@123'))
             response = self.client.post('/api/labs/junos-lab/profiles', data={
                 'label': platform, 'platform': platform, 'username': 'admin-' + platform,
                 'auth': 'password', 'password': 'private-' + platform})
@@ -236,9 +240,14 @@ class JunosKindAppTests(unittest.TestCase):
             self.assertEqual(effective_credentials(self.lab, item)['username'], 'admin-' + platform)
             display = next(n for n in state['labs'][0]['nodes'] if n['platform'] == platform)
             self.assertEqual(display['readiness'], 'Ready')
+            self.assertEqual(display['credential_source'], 'profile')
             self.assertTrue(display['ssh_ready'])
             self.assertNotIn('private-' + platform, public.text)
-        self.assertEqual(readiness(self.lab, self.lab['nodes'][2]), 'Needs credentials')
+        # cJunosEvolved has no profile here: the documented default applies, never a
+        # profile created for a different Junos kind.
+        self.assertEqual(credential_source(self.lab, self.lab['nodes'][2]), 'default')
+        self.assertEqual(effective_credentials(self.lab, self.lab['nodes'][2])['username'], 'admin')
+        self.assertNotIn('admin@123', public.text)
         self.assertEqual(len(set(self.lab['defaults'].values())), 2)
         self.assertNotEqual(PLATFORMS['juniper_vqfx']['label'], PLATFORMS['juniper_vjunosswitch']['label'])
         with patch('app.git_progress.remote_git') as remote:

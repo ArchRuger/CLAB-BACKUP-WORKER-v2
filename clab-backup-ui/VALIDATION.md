@@ -1,3 +1,95 @@
+# Deploy-first UI and automatic NOS login — 1.22.0
+
+Prepared on `claude/deploy-first-ui` from main `873366f` (1.21.1) for eight UI requests
+(landing page, VM connection defaults, operation output, automatic NOS login, capture
+interface list, capture target, viewer banner, `.pcapng` guidance). Everything below was
+run on the Ubuntu 24.04 dev VM (Docker 29.8, Compose v5.5.1, containerlab 0.79.0, two
+`arista_ceos` nodes, no KVM) against the staged 1.22.0 source (`git archive` of the
+release commit), with the manager image and `clab-capture-service:1.22.0` rebuilt.
+
+**Local checks (Windows workstation).** `python deploy/verify-release.py` reports
+1.22.0. `node --test` over the ten browser test files: 74 pass, 0 fail (new
+`test_readiness_ui.js`; extended `test_capture_ui.js`, `test_operations_ui.js`,
+`test_vm_password_ui.js`, `test_capture_session_ui.js`). Python:
+`test_node_readiness.py` (10 tests, new), `test_app.py`, `test_nodes.py`,
+`test_junos_kinds.py`, `test_vm_files.py` (+1), `test_discovery.py`,
+`test_import_confirmation.py`, `test_capture_sessions.py`, `test_capture_proxy.py`,
+`test_runner_resilience.py`, `test_logging.py`, `test_topology.py`, `test_remove_lab.py`
+and `test_manager_reset.py` pass in isolation; the full 500-test run shows only the
+known Windows `os.replace` flake on random tests, each green on rerun. Linux CI is
+authoritative.
+
+**Verified on the VM, first staging (12:41 UTC):**
+
+- Health: `check-install` PASS 59 / FAIL 0 / WARN 1 (folder coverage) with
+  `[PASS] Running application version` and `[PASS] Optional packet capture`; helper
+  1.22.0 connected; `/api/capture/health` ready.
+- Readiness on the pair that was already running: within 6 s of the manager restart
+  both nodes were probed with the saved profile, answered, the automatic NOS login
+  test ran (`2/2 NOS sessions completed successfully`), the deployment bar read *NOS
+  ready · 2/2 nodes accept SSH login* and the Nodes table showed *reachable* with the
+  automatic-check timestamps.
+- VM connection dialog: *Enable automatic discovery* and *Trust a replacement SSH
+  host key on the next connection* both checked on open.
+- Capture from the ceos1 row: *Topology interfaces* listed eth1 ticked, *All live
+  Linux interfaces (14)* and *Advanced: other capture targets* collapsed, Start
+  enabled. The session started; the viewer showed the one-row toolbar with the status
+  inline and live STP/LLDP frames on eth1; *Download saved captures* answered in
+  place with *No saved captures yet … type the full file name ending in .pcapng
+  (Wireshark on the VM does not add the extension)*; *How to save a capture* opened
+  with the same steps; the session was ended.
+- Destroy lab from the deployment bar: Operation output opened with the green banner
+  *✓ Destroy deployment succeeded · ceos-pair · Exit 0 · Operation completed*; the
+  destroyed lab then reported *Not deployed* with both nodes *unavailable* and lab
+  readiness idle.
+- With the saved workspace removed, the landing page showed *Deploy a new lab*
+  enabled, no VM note, no *Already running on the VM* list (nothing deployed), the
+  two import links, and no *Lab actions* button.
+- Deploy a new lab → Lab Topologies (in place) → /etc/containerlab → ceos-pair →
+  ceos-pair.clab.yaml → Deploy lab: the workspace existed before containerlab ran
+  (`lab.register` 13:04:26, deploy operation 13:04:42, VM path linked, both nodes on
+  the containerlab default login, status booting); the banner read *Deploy lab
+  running…* and then *✓ Deploy lab succeeded · Exit 0*; the monitor reported both
+  nodes booting at 13:05:33 and answering at 13:05:53.
+
+**Found and fixed during that run.** The automatic login test at 13:05:53 failed
+`0/2` with `host key mismatch for 172.20.20.3`: the redeployed containers had new SSH
+host keys (and swapped management addresses), and Ansible's paramiko transport had
+recorded the old keys in the manager container's `~/.ssh/known_hosts` at 12:41 (the
+inventory's `ansible_host_key_checking: False` does not reach the paramiko
+sub-connection that ansible.netcommon opens, which loads and records known_hosts when
+its own option is on). Before 1.22.0 every backup and login test after a redeploy
+therefore failed until the manager container was recreated. Fixed by giving each job
+HOME in its temporary directory plus `ANSIBLE_HOST_KEY_CHECKING=False`
+(`runner.job_environment`), by making the readiness probe require a `show version`
+answer over an SSH exec channel (checked against both live nodes: 0.5 s, exit 0,
+`Arista cEOSLab …`) so SSH accepting a login while the CLI still starts no longer
+counts, and by sending the nodes of a failed automatic test back to booting with up to
+three automatic tests per boot. The shared not-ready pattern now also matches cEOS's
+`% System is not yet ready` reply, which the backup path had accepted as output.
+
+**Verified after the second staging (13:15 UTC, same manager container throughout).**
+Right after the restart both running nodes answered `show version` and the automatic
+test succeeded `2/2`. Then, through the API (the same preview/confirm path the UI
+uses): destroy succeeded in 2 s; deploy succeeded in 46 s; 48 s after the deploy
+started both nodes were *booting* (SSH not answering yet, addresses ceos1 172.20.20.3
+and ceos2 172.20.20.2 reconciled by discovery); at 73 s both answered *NOS accepted SSH
+login and answered show version*, the deployment bar state went to *ready*, `ssh_ready`
+turned true for both, and the automatic NOS login test ran and succeeded `2/2` at
+13:18:03 with the containers' new host keys. A manual backup on the redeployed lab
+then succeeded `2/2` (13:18:15), and the manager container has no `~/.ssh` directory
+at all afterwards: the jobs' known_hosts lived and died with their temporary
+directories. `check-install` after the second staging: PASS 59 / FAIL 0 / WARN 1.
+One API-only quirk seen while scripting this: a preview issued within about two
+seconds of an operation finishing gets 409 *Wait for the current lab operation to
+finish* while the manager runs its post-operation discovery refresh; the UI cannot
+click that fast and the retry succeeds.
+
+**Not run here.** vJunos, vQFX and XRv9k nodes cannot boot on this VM (no KVM): their
+default logins are taken from containerlab.dev and their `show version` exec answers
+were not exercised. `deploy/capture/smoke.py` is left to CI (`release-check`). The
+Wireshark Save As dialog was not driven through noVNC.
+
 # Browser Wireshark fixes — 1.21.1
 
 Prepared on `claude/browser-capture-fixes` from main `7032daa` (1.21.0) after live

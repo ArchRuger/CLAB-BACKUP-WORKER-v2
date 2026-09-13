@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
 import yaml
-from .inventory import PLATFORMS
+from .inventory import PLATFORMS, DEFAULT_CREDENTIALS
 from .discovery import automatic_ready, node_available
 from .downloads import short_name
 
@@ -30,7 +30,19 @@ def effective_credentials(lab, node):
         return profile or {}
     if node.get('username') and node.get('password'):
         return {'username':node['username'],'password':node['password'],'auth':'password','enable_password':node.get('enable_password','')}
+    default = DEFAULT_CREDENTIALS.get(node.get('platform') or '')
+    if default:
+        return {'username':default[0],'password':default[1],'auth':'password','enable_password':'','default':True}
     return {}
+
+def credential_source(lab, node):
+    """'profile', 'inventory', 'default' (containerlab's documented login) or '' when none applies."""
+    profile_id = node.get('profile_id') or lab.get('defaults',{}).get(node.get('platform') or 'ssh')
+    if profile_id:
+        return 'profile' if any(p['id']==profile_id for p in lab['profiles']) else ''
+    if node.get('username') and node.get('password'):
+        return 'inventory'
+    return 'default' if (node.get('platform') or '') in DEFAULT_CREDENTIALS else ''
 
 def readiness(lab,node):
     if node['platform'] not in PLATFORMS:
@@ -75,16 +87,37 @@ def filename(node):
     digest=hashlib.sha256(node['name'].encode()).hexdigest()[:8]
     return f'{base}-{digest}.{PLATFORMS[node["platform"]]["suffix"]}'
 
+# CLI answers that mean the command did not run: syntax errors, denied commands and
+# the not-ready replies a NOS gives while it is still booting.
+CLI_ERROR=re.compile(r'(?im)^\s*(?:%\s*(?:Invalid|Error|Incomplete|Ambiguous|Authorization|Access denied|System is not yet ready)|error:|syntax error|System is not yet ready|Waiting for editing of configuration)')
+
 def normalized(platform, text):
     if not isinstance(text,str):
         raise ValueError('NOS returned an unexpected output type; previous backup retained')
     if platform=='cisco_xrv9k':
         text='\n'.join(x for x in text.splitlines() if not re.match(r'^(Building configuration|[A-Z][a-z]{2} [A-Z][a-z]{2} +\d+ )',x))
-    if re.search(r'(?im)^\s*(?:%\s*(?:Invalid|Error|Incomplete|Ambiguous|Authorization|Access denied)|error:|syntax error|System is not yet ready|Waiting for editing of configuration)',text):
+    if CLI_ERROR.search(text):
         raise ValueError('NOS returned a CLI error or is not ready; previous backup retained')
     if not text.strip():
         raise ValueError('NOS returned empty output; previous backup retained')
     return text.rstrip()+'\n'
+
+def job_environment(work, event):
+    """Environment for one ansible-playbook run.
+
+    HOME is the job's temporary directory: lab containers generate new SSH host
+    keys on every deploy, and Ansible's paramiko transport records the keys it
+    accepts in ~/.ssh/known_hosts and then refuses a changed key with "host key
+    mismatch". A per-job home starts without known_hosts, so a redeployed lab is
+    backed up and tested without recreating the manager. Collections come from the
+    image's explicit ANSIBLE_COLLECTIONS_PATH, never from the home directory.
+    """
+    (work/'.ssh').mkdir(mode=0o700, exist_ok=True)
+    return {**os.environ,'HOME':str(work),'ANSIBLE_CONFIG':str(APP/'ansible/ansible.cfg'),
+            'ANSIBLE_CALLBACK_PLUGINS':str(APP/'ansible/callback_plugins'),
+            'ANSIBLE_STDOUT_CALLBACK':'backup_events','BACKUP_EVENT_FILE':str(event),
+            'ANSIBLE_HOST_KEY_CHECKING':'False','ANSIBLE_PERSISTENT_LOG_MESSAGES':'False',
+            'ANSIBLE_DEBUG':'False','ANSIBLE_VERBOSITY':'0'}
 
 class Runner:
     def __init__(self, store):
@@ -123,7 +156,7 @@ class Runner:
             if missing:
                 raise ValueError('Complete NOS and credentials for: '+', '.join(missing[:8]))
             job={'id':uuid.uuid4().hex,'lab_id':lab_id,'lab_name':lab['name'],
-                 'operation':operation,'created':now(),'status':'queued','message':'Waiting for SSH worker',
+                 'operation':operation,'source':source,'created':now(),'status':'queued','message':'Waiting for SSH worker',
                  'nodes':[{'name':n['name'],'status':'queued'} for n in nodes]}
             if progress_id:
                 job.update(progress_id=progress_id, progress_context=copy.deepcopy(progress_context or {}))
@@ -200,10 +233,7 @@ class Runner:
                         + ('show version' if operation=='test' else PLATFORMS[node['platform']]['command']),node=node['name'])
                 inv=work/'inventory.yml'; inv.write_text(yaml.safe_dump(inventory,sort_keys=False)); inv.chmod(0o600)
                 event=work/'events.jsonl'; event.touch(mode=0o600)
-                env={**os.environ,'ANSIBLE_CONFIG':str(APP/'ansible/ansible.cfg'),
-                     'ANSIBLE_CALLBACK_PLUGINS':str(APP/'ansible/callback_plugins'),
-                     'ANSIBLE_STDOUT_CALLBACK':'backup_events','BACKUP_EVENT_FILE':str(event),
-                     'ANSIBLE_PERSISTENT_LOG_MESSAGES':'False','ANSIBLE_DEBUG':'False','ANSIBLE_VERBOSITY':'0'}
+                env=job_environment(work,event)
                 results={}
                 offset=0
                 def consume():
