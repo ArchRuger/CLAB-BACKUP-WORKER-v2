@@ -30,6 +30,7 @@ last written for in its first heading.
 
 | Document | Contents |
 |---|---|
+| [Tour](TOUR.md) | Screenshots of the UI: the deploy-to-ready sequence, node actions, SSH, backups, Git and Wireshark in the browser. |
 | [Architecture](ARCHITECTURE.md) | Diagrams of the system, the VM access boundary, the deploy-to-ready sequence, the capture stack and persistence, plus a module map and the VM paths. |
 | [Changelog](CHANGELOG.md) | Release notes for every version since 1.10, newest first. |
 | [Repository maintenance](REPOSITORY-MAINTENANCE.md) | Release consistency checks, packaging rules and the CI workflow. |

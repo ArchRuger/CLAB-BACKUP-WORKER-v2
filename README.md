@@ -32,6 +32,19 @@ Current release: **1.22.0** · [changelog](docs/CHANGELOG.md) · [all documentat
 Device kinds with backup and login-test drivers: Arista cEOS, Juniper cJunosEvolved,
 vJunos-switch and vQFX, Cisco XRv9k. Any node that speaks SSH gets a terminal.
 
+## A quick look
+
+![Lab overview: deployment bar with NOS ready, metrics, Save progress and the topology map](docs/images/00-hero.png)
+
+| | |
+|---|---|
+| ![Deploy lab succeeded](docs/images/15-deploy-succeeded.png) | ![NOS booting](docs/images/16-nos-booting.png) |
+| *Every host command is reviewed, then runs with live output and a clear verdict.* | *A running container is not a usable device; the manager says when the NOS answers.* |
+| ![Wireshark in the browser](docs/images/07-wireshark-in-browser.png) | ![SSH terminal](docs/images/05-ssh-terminal.png) |
+| *Wireshark runs on the VM and streams to the browser: a ping crossing the captured link.* | *SSH to any node in a browser tab with the credentials the manager already holds.* |
+
+More in the [tour](docs/TOUR.md).
+
 ## Quick start on a fresh VM
 
 You need Ubuntu Server 24.04, your ordinary account (not root), internet access and
@@ -110,6 +123,7 @@ and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 | Read this | When you want to |
 |---|---|
+| [Tour](docs/TOUR.md) | See the UI and the deploy-to-ready flow in screenshots |
 | [Quick install](docs/QUICK-INSTALL.md) | Follow the shortest route: paste, type, click |
 | [Fresh VM guide](docs/FRESH-VM-GUIDE-V2.md) | Build a VM from Proxmox settings to the first Git save, with recovery steps |
 | [Guided installation](docs/INSTALL.md) | Understand the installer's menu and phases |
@@ -129,7 +143,8 @@ route, the migration guide, the Wiki.js master guide and the archive.
 ```text
 ├── README.md                this page
 ├── LICENSE                  MIT
-├── docs/                    guides, architecture, changelog (docs/README.md is the index)
+├── docs/                    guides, architecture, changelog, tour (docs/README.md is the index)
+│   ├── images/              screenshots used by the README and the tour
 │   └── archive/             superseded guides kept for history
 ├── deploy/                  installer, VM setup scripts, health check, capture stack, CI smoke test
 ├── clab-backup-ui/          the manager: FastAPI app, static UI, Dockerfile, Compose file, tests
