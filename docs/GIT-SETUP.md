@@ -21,7 +21,7 @@ advanced administrator/owner workflow below.
 
 ## First setup
 
-1. Install/start the manager using [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md), configure
+1. Install/start the manager using [FRESH-VM-GUIDE.md](archive/FRESH-VM-GUIDE.md), configure
    its VM password, and confirm that a manual device backup works.
 2. On GitHub, create the repository that will hold your configurations. Choose
    the intended visibility and **Add a README** so it has an initial commit.

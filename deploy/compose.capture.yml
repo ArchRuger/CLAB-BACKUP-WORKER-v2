@@ -1,5 +1,5 @@
 # Optional Edgeshark provider, isolated from the manager's Compose project.
-# Adapted from Siemens Edgeshark (MIT); see CAPTURE.md for provenance and access.
+# Adapted from Siemens Edgeshark (MIT); see docs/CAPTURE.md for provenance and access.
 # Public multi-architecture manifests resolved 2026-09-12; no moving latest tags.
 name: clab-manager-capture
 networks:

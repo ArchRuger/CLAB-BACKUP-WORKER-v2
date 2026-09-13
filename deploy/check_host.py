@@ -120,7 +120,7 @@ def _admin_sftp(ctx):
     else:
         ctx.add('sftp.admin', severity, 'Optional WinSCP root file access',
                 'Passwordless root SFTP is not confirmed. Ordinary SFTP to folders owned by your account does not need this permission.',
-                'If needed, follow INSTALL.md: edit the owner-specific sudoers file with visudo, validate it, and set the WinSCP SFTP server command.')
+                'If needed, follow docs/INSTALL.md: edit the owner-specific sudoers file with visudo, validate it, and set the WinSCP SFTP server command.')
 
 
 def _ssh(ctx):
@@ -164,7 +164,7 @@ def _ssh(ctx):
         ctx.add('sftp.normal', status, 'Ordinary account SFTP configuration',
                 'SFTP subsystem and ordinary password policy are present; verify a real WinSCP login and upload as your Ubuntu account.' if status == 'PASS' else
                 'SFTP subsystem, forced command or password policy needs review. Key-only or client-specific policies may be intentional.',
-                '' if status == 'PASS' else 'Use your ordinary Ubuntu account, not clab-discovery. Follow the SSH/SFTP recovery section in FRESH-VM-GUIDE-V2.md.')
+                '' if status == 'PASS' else 'Use your ordinary Ubuntu account, not clab-discovery. Follow the SSH/SFTP recovery section in docs/FRESH-VM-GUIDE-V2.md.')
     _admin_sftp(ctx)
 
 
@@ -255,5 +255,5 @@ def check_host(ctx):
     ctx.add('host.kvm', 'PASS' if kvm else 'FAIL' if ctx.require_kvm else 'INFO', 'KVM device for VM-based network images',
             '/dev/kvm is present. Image-specific permissions and successful guest boot remain to be tested.' if kvm else
             '/dev/kvm is absent. VM-based NOS images need nested virtualization; ordinary container images may not.',
-            '' if kvm else 'If using VM-based images, check the Proxmox host nested-virtualization setting and VM CPU type in FRESH-VM-GUIDE-V2.md.')
+            '' if kvm else 'If using VM-based images, check the Proxmox host nested-virtualization setting and VM CPU type in docs/FRESH-VM-GUIDE-V2.md.')
     _engineer(ctx)

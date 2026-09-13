@@ -1,6 +1,6 @@
 # Deploy-first UI and automatic NOS login — 1.22.0
 
-Read README.md "Changes in 1.22.0". (1) `inventory.DEFAULT_CREDENTIALS` holds the
+Read docs/CHANGELOG.md "Changes in 1.22.0". (1) `inventory.DEFAULT_CREDENTIALS` holds the
 login containerlab documents for each supported kind; `runner.effective_credentials`
 falls back to it after profiles and inventory logins, `runner.credential_source` names
 the origin, and the public node row carries `credential_source`, `login_configured`
@@ -41,7 +41,7 @@ VALIDATION.md "Deploy-first UI and automatic NOS login — 1.22.0".
 
 # Browser Wireshark fixes — 1.21.1
 
-Read README.md "Changes in 1.21.1" and CAPTURE.md. Three facts learned on the live
+Read docs/CHANGELOG.md "Changes in 1.21.1" and docs/CAPTURE.md. Three facts learned on the live
 VM must survive future edits. (1) The pinned wireshark-vnc-docker image's websockify
 answers HTTP 400 to any WebSocket handshake that does not offer the `binary`
 subprotocol; the service then closed before accept, which Starlette reports as 403,
@@ -64,7 +64,7 @@ VALIDATION.md "Browser Wireshark fixes — 1.21.1".
 
 # Browser Wireshark — 1.21.0
 
-This supersedes the 1.20.x workstation handoff instructions below. Read CAPTURE.md.
+This supersedes the 1.20.x workstation handoff instructions below. Read docs/CAPTURE.md.
 Browser sessions replace all native workstation launches; cshargextcap only runs
 inside the pinned VM Wireshark image. capture.py keeps Edgeshark discovery and HMAC
 identity fields (exclude interface churn). capture_sessions.py is the manager
@@ -80,7 +80,7 @@ configuration do not establish a real VM capture until smoke/live acceptance run
 
 # Wireshark capture — 1.20.0 (Codex) and 1.20.1 fixes
 
-Read README.md "Changes in 1.20.0/1.20.1" and CAPTURE.md. The provider boundary is
+Read docs/CHANGELOG.md "Changes in 1.20.0/1.20.1" and docs/CAPTURE.md. The provider boundary is
 app/capture.py (Edgeshark only, explicit factory, no client-supplied URLs) and the
 dialog is static/capture.js; everything else only registers routes and entry points.
 Contract verified live on the dev VM against Edgeshark packetflix 0.9.7: the real
@@ -109,7 +109,7 @@ observe whether Wireshark opened or packets arrived.
 
 # Engineer access for VS Code — 1.19.4
 
-Read README.md "Changes in 1.19.4" and FRESH-VM-GUIDE-V2.md "VS Code Remote -
+Read docs/CHANGELOG.md "Changes in 1.19.4" and docs/FRESH-VM-GUIDE-V2.md "VS Code Remote -
 SSH and the Containerlab extension". deploy/setup-engineer-access.sh is the
 only place that grants an ordinary account docker and clab_admins, makes the
 trusted lab roots (read from /etc/clab-manager/operations.json) group-writable
@@ -130,7 +130,7 @@ and read of the engineer-created folder through the gateway.
 
 # Bug-fix report follow-up — 1.19.3
 
-Read README.md "Changes in 1.19.3", HEALTH-CHECK.md and GIT-SETUP.md "One
+Read docs/CHANGELOG.md "Changes in 1.19.3", docs/HEALTH-CHECK.md and docs/GIT-SETUP.md "One
 repository, one subfolder per lab". diagnostics.failure_hint must keep the
 gateway/account/permission fragments ahead of the password rules ('authentication
 failed', 'password setup required'): a bare 'password' match misreported the
@@ -155,7 +155,7 @@ the WinError 5 state.enc rename flake remains and passes on isolated rerun.
 
 # Post-install paste-in fixes — documentation on 1.19.2
 
-FRESH-VM-GUIDE-V2.md (step 3 and step 7), INSTALL.md and WIKI-MASTER-GUIDE.md
+docs/FRESH-VM-GUIDE-V2.md (step 3 and step 7), docs/INSTALL.md and docs/WIKI-MASTER-GUIDE.md
 (Step 1.2, Part 5) now carry three copy-paste blocks; README links them. Clock:
 after a Proxmox snapshot rollback with memory state the guest keeps the snapshot
 time until timesyncd's next poll, so the fix is set-ntp true plus a timesyncd
@@ -173,7 +173,7 @@ upstream 4755 SUID mode on /usr/bin/containerlab; the user must then kill the
 VS Code server on the host and reconnect. The installer is unchanged: it still
 strips SUID on a fresh containerlab install and keeps the suid_setup_done marker,
 so the VS Code block must be rerun after a containerlab package upgrade. The
-manager never needs these groups. QUICK-INSTALL.md is the paste-only ordered
+manager never needs these groups. docs/QUICK-INSTALL.md is the paste-only ordered
 walkthrough of the same route; its prompt wording is copied from
 install-manager.py, setup-password.sh (passwd) and git-onboard.py, so update
 it when those prompts change. Documentation only; no version bump, no code
@@ -181,7 +181,7 @@ change, no fresh-VM run of the blocks by the author.
 
 # Transport EOF and helper timeouts — 1.19.1
 
-Read README.md "Changes in 1.19.1". The 1.18.1 operations reader fix (wait for
+Read docs/CHANGELOG.md "Changes in 1.19.1". The 1.18.1 operations reader fix (wait for
 stream EOF; exit status is metadata OpenSSH may send before draining the helper
 pipe) now also applies to discovery.py inspect_host and git_progress.remote_git.
 Keep all three loops identical in shape; new SSH readers must copy it and carry
@@ -199,7 +199,7 @@ on state.enc rename; rerun failures alone or trust Linux CI.
 
 # Consolidated terminal installation — 1.16.0
 
-Read INSTALL.md. Ordinary users run deploy/install.sh, which delegates privileged
+Read docs/INSTALL.md. Ordinary users run deploy/install.sh, which delegates privileged
 prerequisites/launcher tasks to sudo and keeps Git auth/config in the original
 owner HOME. Retain step retry/cancel, existing data/password/.env and custom Git
 registrations. APT media repair requires runtime confirmation and backups; other
@@ -221,7 +221,7 @@ Based on merged main 0658562; no publication or VM deployment is implied.
 Reject GitHub browser page URLs before login/clone and reprompt for Code > HTTPS.
 Keep the checkout in the ordinary owner's persistent home. Package failures must
 identify APT recovery, without changing sources or bypassing signature checks.
-GIT-SETUP.md and the master wiki describe obsolete file:/cdrom source repair.
+docs/GIT-SETUP.md and the master wiki describe obsolete file:/cdrom source repair.
 Prepared on main 698fabb; older release and audit notes below are historical.
 
 # CLAB Backup Worker — Agent Instructions
@@ -229,7 +229,7 @@ Prepared on main 698fabb; older release and audit notes below are historical.
 ## 1.15.1 repository consistency repair
 
 GitHub main b0389ba had VERSION 1.15.0 with 1.15.1 app/helpers. Read
-REPOSITORY-MAINTENANCE.md and run deploy/verify-release.py before delivery.
+docs/REPOSITORY-MAINTENANCE.md and run deploy/verify-release.py before delivery.
 The launcher checks consistency before host changes. Old root patch artifacts
 and the unused deploy/clab_manager_files.py development shim were removed;
 historical references below do not require restoring them. The production
@@ -239,7 +239,7 @@ runtime data and credentials out of the repository and Docker context.
 
 ## Release 1.15.1 — guided Git setup
 
-Read GIT-SETUP.md first. `bash deploy/setup-git.sh` as the ordinary VM account
+Read docs/GIT-SETUP.md first. `bash deploy/setup-git.sh` as the ordinary VM account
 launches the wizard; explicit sudo registration and --refresh remain supported.
 Standalone uses the existing Linux account, not a new engineer account. Keep all
 Git, clone, config and GitHub login commands under that owner's account and HOME.
@@ -255,7 +255,7 @@ Linux interactive onboarding still needs VM validation; local tests are not that
 ## Release 1.15.0 — Save lab progress to Git
 
 The approved Git architecture is implemented as owner-scoped VM repository export,
-commit and push. Read GIT-PROGRESS.md. Save progress captures an explicit node scope
+commit and push. Read docs/GIT-PROGRESS.md. Save progress captures an explicit node scope
 and frozen topology provenance, then exports only a complete immutable job snapshot.
 Do not use the rolling latest directory or claim current topology for a legacy job.
 Keep capture success independent of manager-internal Git failure and remote push.
@@ -282,7 +282,7 @@ of their supplied master wiki. Sidebar actions are static and ordered; Topology 
 the default tab, with Credentials/Action logs under More. The basic diagram editor
 persists visual annotations only, with revision conflict checks and JSON/draw.io
 exports. VM YAML and wiring are not edited. Preserve imported annotation styles.
-WIKI-MASTER-GUIDE.md supersedes its old key instructions and uses source builds by
+docs/WIKI-MASTER-GUIDE.md supersedes its old key instructions and uses source builds by
 default. The supplied Proxmox/Ubuntu sections are retained. Version 1.14.0 is a local
 source delivery, not a published Hub image. Continue preserving password restrictions,
 persistent data, device credentials and explicit host-operation review.
@@ -300,7 +300,7 @@ preserves the VM fingerprint. Device credential key support remains intact.
 The shared gateway is forced by a Match User clab-discovery policy in sshd_config;
 setup verifies effective restrictions before reload and revokes old authorized_keys.
 Preserve helpers/operations permissions, all labs/history and state.key on upgrades.
-Read VM-CONNECTION.md. This is local source delivery; no push or live deployment.
+Read docs/VM-CONNECTION.md. This is local source delivery; no push or live deployment.
 
 
 ## Release 1.12.1 addendum — deployment navigation
@@ -319,7 +319,7 @@ no remote synchronization or push was performed for this release.
 ## Release 1.12.0 addendum — approved simplification
 
 This supersedes the 1.11.0 feature inventory. Retain VM connection and document
-setup/recovery in VM-CONNECTION.md. UI token login and lock removed; retain
+setup/recovery in docs/VM-CONNECTION.md. UI token login and lock removed; retain
 same-origin API/WS protections and SSH ticket/credential handling. Remove VM YAML
 editing, path/link/folder lab shortcuts, separate layout menu, SSHX/GoTTY and fcli
 from UI/API/helper/setup. Retain New topology, VM browser, clone/catalog, source
@@ -337,7 +337,7 @@ matches the delivered 1.11.0 ZIP. Source packages/patches remain in ignored dist
 
 User approved all lab-level commands in LAB-COMMANDS-PLAN.md. This supersedes
 older read-only-only scope statements for explicitly enabled host operations.
-No individual node lifecycle/interface tools were requested. Read LAB-OPERATIONS.md.
+No individual node lifecycle/interface tools were requested. Read docs/LAB-OPERATIONS.md.
 Host helper uses a forced SSH gateway, structured stdin, fixed argv, trusted roots,
 review digests and one host flock. Keep Remove lab manager-only; VM source deletion
 is separate and preserves recovery copies. Existing keys/data survive setup.
@@ -408,7 +408,7 @@ New deployed labs import automatically; existing workspaces require Sync from VM
 Only source hashes/paths/status are public. Raw file bundles stay in memory; accepted
 YAML, drawings and normalized credentials persist through the existing Store.
 Keep old-helper/direct inspection compatibility. Missing labs/files retain state.
-Read FRESH-VM-GUIDE.md for fresh Ubuntu setup and helper/key-preserving upgrades.
+Read docs/archive/FRESH-VM-GUIDE.md for fresh Ubuntu setup and helper/key-preserving upgrades.
 
 ## Release 1.7.0 addendum — standalone persistent manager
 
@@ -418,7 +418,7 @@ do not add host metrics, Docker socket mounts or lab lifecycle commands.
 
 Default compose.yml now runs independently of containerlab, with Linux host
 networking, UI port 8081, fixed project name and a /srv/containerlab-node-manager/data
-bind mount. Image UID/GID are both 10001. Read STANDALONE-SETUP.md for setup,
+bind mount. Image UID/GID are both 10001. Read docs/STANDALONE-SETUP.md for setup,
 restricted SSH helper/account, migration, key handling and old-worker removal.
 
 app/discovery.py owns YAML registration, optional layout import, VM configuration,
@@ -456,7 +456,7 @@ Right-click SSH was connected to a local fixture; right-click backup selected on
 PE1 through the real API with background execution stubbed. No live NOS was touched.
 Versioned static URLs prevent older browser assets from hiding the menu after upgrade.
 
-See FRESH-IMAGE.md before replacing the worker: the supplied YAML has no /data mount.
+See docs/archive/FRESH-IMAGE.md before replacing the worker: the supplied YAML has no /data mount.
 Preserve its data and encryption key before recreation. The screenshot was v1.5.0;
 verify the actual running container and footer are 1.6.1, then reimport the drawing.
 Keep source ZIP/patch delivery; no GitHub push, Docker build, or deployment is implied.

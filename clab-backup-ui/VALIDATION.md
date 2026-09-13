@@ -202,7 +202,7 @@ configuration with a successful Docker build or live capture.
 
 On the real VM also exercise a topology link, Wireshark filters, Stop / File →
 Save As under `/pcaps`, archive download, reconnect, timeout and explicit End.
-Confirm existing backup/SSH/lab operations continue. See CAPTURE.md for setup,
+Confirm existing backup/SSH/lab operations continue. See docs/CAPTURE.md for setup,
 limits, trust boundary, migration and cleanup. Historical validation below applies
 to the releases named there, not to the new browser runtime.
 
@@ -222,7 +222,7 @@ to the releases named there, not to the new browser runtime.
   after a disposable container restart; 403 cross-origin; 502 with a safe message when
   packetflix was stopped while the operations probe kept passing. Against packetflix
   0.9.7 a wrong PID, wrong start time, another live namespace identifier and a
-  netns-only request **all captured**, which is why CAPTURE.md no longer describes the
+  netns-only request **all captured**, which is why docs/CAPTURE.md no longer describes the
   `container=` identity as a stale-namespace check. A host-namespace launch returned
   200, then **409 after an unrelated container started** (a new veth), then 200 after
   it stopped: the identity hashed the whole interface list.
@@ -304,7 +304,7 @@ or invoked, and no live packets, router NOS, host capture capabilities, SSH tunn
 TLS proxy or Linux namespace lifecycle were tested. Browser checks prove capture
 selection and handoff generation, not packet streaming.
 
-Follow [CAPTURE.md](../CAPTURE.md) for installation, research sources, known
+Follow [docs/CAPTURE.md](../docs/CAPTURE.md) for installation, research sources, known
 Linux/VM visibility limits, and the disposable-lab live acceptance procedure.
 Prepared URLs include Packetflix namespace/process identity checks; processless
 namespaces retain the upstream namespace-reuse limitation. The provider is
@@ -434,7 +434,7 @@ optional, has no manager socket/capability changes, and is disabled by default.
 - No Docker build, fresh Ubuntu install, live VM helper call, device action or
   remote Git push was performed. The real Linux Git inherited-stdout timeout
   regression is skipped locally and included in CI. Full deployment validation
-  remains outstanding; see the [audit report](../DEPLOYMENT-AUDIT.md).
+  remains outstanding; see the [audit report](../docs/archive/DEPLOYMENT-AUDIT.md).
 
 # Transport EOF, helper timeouts and hygiene — 1.19.1
 
@@ -1085,7 +1085,7 @@ optional, has no manager socket/capability changes, and is disabled by default.
 
 - Updated the restricted helper installation and added a key-preserving upgrade.
 
-  Added FRESH-VM-GUIDE.md covering clean Ubuntu installation through deployment,
+  Added docs/archive/FRESH-VM-GUIDE.md covering clean Ubuntu installation through deployment,
 
   connectivity, keys, persistence, first lab, backups and upgrades.
 
@@ -1237,7 +1237,7 @@ validation. No real NOS backup, SuperPuTTY import, or live host discovery was ru
 
 
 
-Follow STANDALONE-SETUP.md for a deployment test: preserve existing data, start one
+Follow docs/STANDALONE-SETUP.md for a deployment test: preserve existing data, start one
 
 standalone manager, configure the restricted account, import an edited lab YAML,
 

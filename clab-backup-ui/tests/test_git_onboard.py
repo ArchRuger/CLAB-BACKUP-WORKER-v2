@@ -369,7 +369,7 @@ class GitOnboardTests(unittest.TestCase):
         with patch.object(onboard, 'run', return_value=subprocess.CompletedProcess([], 100)) as run:
             with self.assertRaisesRegex(ValueError, 'file:/cdrom') as error:
                 onboard.install_package('gh', {})
-        self.assertIn('GIT-SETUP.md', str(error.exception))
+        self.assertIn('docs/GIT-SETUP.md', str(error.exception))
         self.assertIn('clock', str(error.exception))
         self.assertEqual([call.args[0] for call in run.call_args_list],
                          [['sudo', '/usr/bin/python3', str(onboard.SOURCE / 'deploy/apt_update.py')]])

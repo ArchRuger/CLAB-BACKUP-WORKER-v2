@@ -15,7 +15,7 @@ done
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(dirname -- "$script_dir")
 /usr/bin/python3 "$script_dir/verify-release.py" "$repo_dir"
-command -v docker >/dev/null || { echo 'Install Docker first; see FRESH-VM-GUIDE.md.' >&2; exit 1; }
+command -v docker >/dev/null || { echo 'Install Docker first; see docs/FRESH-VM-GUIDE-V2.md.' >&2; exit 1; }
 docker compose version >/dev/null
 docker info >/dev/null
 bash "$script_dir/setup-discovery.sh" "${password_args[@]}"
@@ -63,7 +63,7 @@ print("yes" if any(m.get("Source", "").rstrip("/") == "/srv/containerlab-node-ma
   project=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$container")
   service=$(docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' "$container")
   if [[ "$project" != containerlab-node-manager || "$service" != backup-ui ]]; then
-    echo 'Another running container uses the manager data. Follow the Docker-run migration in FRESH-VM-GUIDE.md before starting Compose.' >&2
+    echo 'Another running container uses the manager data. Follow the Docker-run migration in docs/FRESH-VM-GUIDE-V2.md before starting Compose.' >&2
     exit 1
   fi
 done
@@ -71,6 +71,6 @@ docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
 docker compose -f clab-backup-ui/compose.yml ps
 echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery password are retained.'
 printf 'Optional Git setup: as your ordinary VM account, run (without sudo):\n  bash %q\n' "$script_dir/setup-git.sh"
-echo 'Use the guided prompts to configure commit name/email and GitHub login, then register. See GIT-SETUP.md.'
+echo 'Use the guided prompts to configure commit name/email and GitHub login, then register. See docs/GIT-SETUP.md.'
 echo 'The UI opens directly without a login. VM and device SSH credentials remain in persistent storage.'
 printf 'After configuring the VM connection, run the full health report as your ordinary account:\n  bash %q\n' "$script_dir/check-install.sh"

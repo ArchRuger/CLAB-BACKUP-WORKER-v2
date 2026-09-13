@@ -15,7 +15,7 @@ fixed discovery and explicitly enabled privileged lab commands. It does not moun
 the Docker socket. See [LAB-OPERATIONS.md](LAB-OPERATIONS.md) to enable commands
 and configure trusted project roots while retaining the current password.
 
-For a VM with nothing installed, begin with [the complete fresh VM guide](FRESH-VM-GUIDE.md).
+For a VM with nothing installed, begin with [the complete fresh VM guide](archive/FRESH-VM-GUIDE.md).
 This shorter guide covers an already prepared Linux host and old-worker migration.
 
 ## 1. Prepare permanent storage
@@ -184,7 +184,7 @@ For a helper-only repair (including password migration when needed):
 sudo bash deploy/setup-discovery.sh --update-helper
 ```
 
-See [the complete guide](FRESH-VM-GUIDE.md) for file locations, limits, fresh setup,
+See [the complete guide](archive/FRESH-VM-GUIDE.md) for file locations, limits, fresh setup,
 Docker-run-to-Compose upgrades and troubleshooting. Manual import remains available:
 
 

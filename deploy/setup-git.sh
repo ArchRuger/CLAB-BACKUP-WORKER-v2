@@ -148,7 +148,7 @@ then
       printf '  bash %q --guided --repo %q\n' "$script_dir/setup-git.sh" "$repo" >&2
       echo 'This reuses the checkout, prompts for missing/invalid commit identity, and checks login before registration.' >&2
     else
-      echo 'Repair identity/login as the owner using GIT-SETUP.md, then retry the original registration command with the same --remote, --prefix and --label options.' >&2
+      echo 'Repair identity/login as the owner using docs/GIT-SETUP.md, then retry the original registration command with the same --remote, --prefix and --label options.' >&2
     fi
   fi
   exit 1

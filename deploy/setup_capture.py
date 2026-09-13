@@ -14,7 +14,7 @@ import tempfile
 def configure(path):
     path = Path(path)
     if path.is_symlink():
-        raise ValueError('Refusing a symlinked .env. Configure capture settings manually; see CAPTURE.md.')
+        raise ValueError('Refusing a symlinked .env. Configure capture settings manually; see docs/CAPTURE.md.')
     old = path.read_text(encoding='utf-8') if path.exists() else ''
     metadata = path.stat() if path.exists() else path.parent.stat()
     values = {}
@@ -25,7 +25,7 @@ def configure(path):
     for key, expected in [('CAPTURE_EDGESHARK_URL', 'http://127.0.0.1:5001'),
                           ('CAPTURE_SESSION_URL', 'http://127.0.0.1:5801')]:
         if values.get(key, '').rstrip('/') not in ('', expected):
-            raise ValueError('Custom capture URL detected. Retain your settings and follow the manual configuration in CAPTURE.md.')
+            raise ValueError('Custom capture URL detected. Retain your settings and follow the manual configuration in docs/CAPTURE.md.')
     token = values.get('CAPTURE_SESSION_TOKEN') or secrets.token_hex(32)
     if not re.fullmatch(r'[0-9a-f]{64}', token):
         raise ValueError('Existing CAPTURE_SESSION_TOKEN is invalid; it was not replaced.')

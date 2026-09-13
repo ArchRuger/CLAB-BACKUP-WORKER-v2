@@ -18,7 +18,7 @@ required. Linux host networking uses this port directly, without `-p` forwarding
 Data stays in `/srv/containerlab-node-manager/data` (UID/GID 10001, mode 700).
 
 See [VM connection setup and recovery](VM-CONNECTION.md) and the
-[fresh VM installation guide](FRESH-VM-GUIDE.md). Lab commands require the dedicated
+[fresh VM installation guide](archive/FRESH-VM-GUIDE.md). Lab commands require the dedicated
 clab-discovery account, its password and the installed helper mode. Direct
 inspection accounts do not automatically gain the operations protocol.
 
