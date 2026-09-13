@@ -28,6 +28,14 @@ connection settings and the node's saved configuration history.
 The details drawer shows configured settings separately from the last SSH check.
 Checks are on demand, with timestamps; no host metrics or collector are used.
 
+## Telemetry (1.23.0)
+
+**View telemetry** in the node menu, the details drawer and the right-click link
+menu opens the Telemetry tab filtered to that node or link end. Interface rates,
+link state and BGP neighbours are streamed over gNMI after the readiness monitor has
+a `show version` answer, and the map colours its links from both ends. Nothing is
+stored on disk; see [docs/TELEMETRY.md](../docs/TELEMETRY.md).
+
 ## Node actions
 
 - **Test login** in the details drawer authenticates to SSH without issuing a command. Its timestamped

@@ -216,6 +216,47 @@ class InstallationCheckTests(unittest.TestCase):
         self.assertEqual(by_id(ctx, 'capture')['status'], 'SKIP')
         ctx.http.assert_not_called()
 
+    def test_telemetry_check_reports_disabled_ready_and_failed_labs(self):
+        def router(enabled, labs):
+            def request(path, payload=None, **kwargs):
+                if path == '/api/telemetry/health':
+                    return check.Result(0), {'enabled': enabled, 'collector': 'gnmi' if enabled else 'disabled', 'library': 'pygnmi',
+                                             'message': PRIVATE if enabled else 'Telemetry is disabled by TELEMETRY_COLLECTOR=disabled in the manager environment.'}
+                if path == '/api/state':
+                    return check.Result(0), {'labs': labs}
+                return check.Result(reason='unexpected route'), None
+            return request
+        ctx = context()
+        ctx.http = Mock(side_effect=router(False, []))
+        check.check_telemetry(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'INFO')
+        self.assertIn('TELEMETRY_COLLECTOR', by_id(ctx, 'telemetry')['fix'])
+        self.assertEqual([call.args[0] for call in ctx.http.call_args_list], ['/api/telemetry/health'])
+        ctx = context()
+        ctx.http = Mock(side_effect=router(True, []))
+        check.check_telemetry(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'PASS')
+        self.assertIn('no deployed lab is linked', by_id(ctx, 'telemetry')['detail'])
+        self.assertTrue(any('Telemetry:' in item for item in ctx.manual))
+        self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
+        labs = [{'deployment_name': 'a', 'telemetry': {'status': 'streaming'}}, {'deployment_name': 'b', 'telemetry': {'status': 'waiting'}}, {'name': 'unlinked'}]
+        ctx = context()
+        ctx.http = Mock(side_effect=router(True, labs))
+        check.check_telemetry(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'PASS')
+        self.assertIn('2 linked lab(s): 1 streaming, 1 waiting', by_id(ctx, 'telemetry')['detail'])
+        ctx = context()
+        ctx.http = Mock(side_effect=router(True, [{'deployment_name': 'a', 'telemetry': {'status': 'failed'}}]))
+        check.check_telemetry(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'WARN')
+        self.assertIn('Retry now', by_id(ctx, 'telemetry')['fix'])
+        ctx = context()
+        ctx.base_url = ''
+        ctx.http = Mock()
+        check.check_telemetry(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'SKIP')
+        ctx.http.assert_not_called()
+
     def test_untrusted_helper_cannot_be_executed_or_reached_over_http(self):
         ctx = context(require_git=True)
         ctx.trusted_helpers = {'inspect': False, 'operate': False, 'git': False}

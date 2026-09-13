@@ -23,6 +23,7 @@ last written for in its first heading.
 | [Git setup](GIT-SETUP.md) | You register a VM checkout so *Save progress* can commit and push with the owner's login. |
 | [Save lab progress](GIT-PROGRESS.md) | You use saves, checkpoints, baselines, history and loads. |
 | [Browser Wireshark](CAPTURE.md) | You install the capture stack, start sessions, download captures, or need the security boundary of the capture services. |
+| [Network telemetry](TELEMETRY.md) | You want live interface rates, link state and BGP neighbours from a deployed lab: how automatic provisioning works per NOS, the node states, settings, bounds, security notes and the live acceptance procedure. |
 | [Health check](HEALTH-CHECK.md) | You read `deploy/check-install.sh` output and fix FAIL or WARN lines. |
 | [Debug panel](DEBUG-PANEL.md) | You use the development diagnostics page to probe VM helpers and file browsing. |
 

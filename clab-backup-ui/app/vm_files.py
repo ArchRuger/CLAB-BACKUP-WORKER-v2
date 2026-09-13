@@ -100,9 +100,10 @@ def prepare_lab(bundle, deployed_name, previous=None):
         try: drawing = parse_drawing(b'{"nodeAnnotations":[]}', files['definition'])
         except (ValueError, TypeError, AttributeError, RecursionError):
             raise FileImportError('The YAML wiring could not be imported. Upload a supported lab definition.')
+    from .telemetry_settings import default_settings
     lab = copy.deepcopy(previous) if previous else dict(
         id=uuid.uuid4().hex, name=deployed_name, profiles=[], defaults={}, interval=0,
-        next_run=None, created=stamp(), nodes=[])
+        next_run=None, created=stamp(), nodes=[], telemetry=default_settings())
     old = {n.get('definition_node') or n.get('short_name') or n['name'].removeprefix('clab-' + lab['name'] + '-'): n for n in lab['nodes']}
     for node in parsed['nodes']:
         saved = old.get(node['definition_node'])

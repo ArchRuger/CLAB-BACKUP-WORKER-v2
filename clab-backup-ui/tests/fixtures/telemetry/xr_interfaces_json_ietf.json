@@ -1,0 +1,60 @@
+[
+ {
+  "update": {
+   "timestamp": 1757764800000000000,
+   "prefix": "",
+   "update": [
+    {
+     "path": "openconfig-interfaces:interfaces/interface[name=GigabitEthernet0/0/0/0]/state/counters",
+     "val": {
+      "in-octets": "100000",
+      "out-octets": "50000",
+      "in-pkts": "700",
+      "out-pkts": "400",
+      "in-errors": "0",
+      "out-errors": "0",
+      "in-discards": "0",
+      "out-discards": "0",
+      "last-clear": "2026-09-13T10:00:00Z"
+     }
+    },
+    {
+     "path": "openconfig-interfaces:interfaces/interface[name=GigabitEthernet0/0/0/0]/state/oper-status",
+     "val": "UP"
+    },
+    {
+     "path": "openconfig-interfaces:interfaces/interface[name=GigabitEthernet0/0/0/0]/state/admin-status",
+     "val": "UP"
+    },
+    {
+     "path": "openconfig-interfaces:interfaces/interface[name=MgmtEth0/RP0/CPU0/0]/state/oper-status",
+     "val": "UP"
+    }
+   ]
+  }
+ },
+ {
+  "sync_response": true
+ },
+ {
+  "update": {
+   "timestamp": 1757764810000000000,
+   "prefix": "",
+   "update": [
+    {
+     "path": "openconfig-interfaces:interfaces/interface[name=GigabitEthernet0/0/0/0]/state/counters",
+     "val": {
+      "in-octets": "1100000",
+      "out-octets": "60000",
+      "in-pkts": "800",
+      "out-pkts": "500",
+      "in-errors": "1",
+      "out-errors": "0",
+      "in-discards": "0",
+      "out-discards": "0"
+     }
+    }
+   ]
+  }
+ }
+]

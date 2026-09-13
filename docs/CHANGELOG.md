@@ -4,6 +4,62 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.23.0
+
+Live network telemetry for disposable labs, automatic from deploy to chart, kept in
+memory only. See [TELEMETRY.md](TELEMETRY.md).
+
+- **Automatic provisioning.** Once the readiness monitor has a `show version` answer
+  from a node of a lab with *Automatic telemetry* on, the manager opens an SSH shell
+  with the node's saved login, reads the gRPC/gNMI service configuration and adds only
+  the missing lines with the NOS's own scoped commit: cEOS `management api gnmi` /
+  `transport grpc default` (running-config only, never `write`), IOS XR `grpc` +
+  `port 57400` with `commit`, Junos Evolved `set system services extension-service
+  request-response grpc clear-text port 32767` in `configure private`. Containerlab's
+  cEOS and XRv9k defaults already enable gNMI, so those usually need no change.
+  Every added line is logged and recorded per node; repeat checks write nothing.
+- **gNMI dial-in collector** in the manager process (pygnmi, BSD-3; grpcio) using the
+  host-network path the manager already uses for SSH: interface counters every 10 s,
+  oper/admin state (on change on EOS), BGP neighbour session state and prefix counts
+  where the model is advertised. Transport (TLS with the device certificate, or plain
+  text) and encoding follow the node; rejected subscriptions fall back to broader
+  paths; a login refusal never probes further.
+- **Session-only store.** Bounded rings (60 minutes, 400 points per series, 96
+  interfaces and 64 neighbours per node, 512 nodes), rates from counter deltas with
+  reset, gap and out-of-order handling, generation tags so a previous deployment with
+  the same name and address never feeds a new one. Cleared on stop, destroy, redeploy
+  (operations submitted through the manager), removal, manager reset and restart.
+  Nothing is written to the encrypted state, backups, Git or the data directory.
+- **Telemetry tab**: lab verdict, node cards with state and reason, interface table
+  (wired peer, admin/oper, RX/TX bit and packet rates, errors, discards, last sample),
+  SVG charts for 5/15/60 minutes, BGP neighbour table and prefix chart, settings
+  dialog (automatic on/off, gNMI password profile, removal of manager-added lines),
+  clear empty, off, waiting, stale, partial and failed states. Unsupported metrics
+  show `n/a`, never zero; no utilisation percentages.
+- **Topology overlay**: links coloured from both ends (up, up on one observed end,
+  down with a mismatch marker, stale, no telemetry), hover text with rates, a status
+  dot per node, a right-click link menu with *Capture packets* and *Telemetry* per
+  end, *View telemetry* in the node menu and details drawer. Pan, zoom, annotations
+  and the existing SSH, backup and capture actions are unchanged. Interface names are
+  mapped per kind (`eth1` → `Ethernet1`, `eth1` → `GigabitEthernet0/0/0/0`, `eth4` →
+  `et-0/0/0`), never guessed across kinds.
+- **Node states**: Off, Waiting, Configuring, Connecting, Streaming, Stale,
+  Unsupported, Failed with an actionable reason; streaming means usable samples
+  arrived. Telemetry defers while a lab operation or backup job runs and never blocks
+  terminals, captures, backups or deployments.
+- **Settings and safety**: automatic telemetry is on for labs created from 1.23.0;
+  earlier labs show an explicit *Enable automatic telemetry* step before any device
+  write. gNMI uses the saved password login (SSH keys cannot be used; a password
+  profile can be chosen). `TELEMETRY_COLLECTOR=disabled` turns the collector off.
+  Secrets never enter responses or logs; failures are classified, not echoed.
+- **Health check** gains *Network telemetry*; `check-install` reports the collector
+  and each linked lab's verdict plus a manual traffic check.
+- **Tests**: 61 new Python tests (names, store, adapters, scripted SSH sessions for the
+  three NOS families, notification fixtures, the state machine on the app, an
+  in-process gRPC gNMI server driven through the real pygnmi client) and a browser
+  test file for charts, view states, overlay and menus. No live device validation was
+  possible for this release; the acceptance procedure is in TELEMETRY.md.
+
 ## Changes in 1.22.0
 
 The manager leads with deployment instead of import, and a freshly deployed lab is

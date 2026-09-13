@@ -17,7 +17,7 @@ function closeNodeMenu(restore=false){nodeMenu.hidden=true;if(restore)contextNod
 function openNodeMenu(element,x,y){
  const n=current()?.nodes.find(n=>n.name===element.dataset.mapNode);if(!n)return;
  contextLab=activeId;contextNode=element;
- nodeMenu.innerHTML=`<div class="context-node-name">${esc(n.short_name||n.name)}<small>${esc(n.address)}:${n.port}</small></div><button role="menuitem" data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture packets</button><button role="menuitem" data-terminal="${esc(n.name)}" ${n.ssh_ready?'':`disabled title="${esc(typeof sshHint==='function'?sshHint(n):'Assign credentials first')}"`}><span aria-hidden="true">›_</span> SSH <small>New tab ↗</small></button><button role="menuitem" data-backup="${esc(n.name)}" ${!busy()&&n.readiness==='Ready'?'':'disabled'}><span aria-hidden="true">↓</span> Back up configuration</button><button role="menuitem" data-details="${esc(n.name)}"><span aria-hidden="true">ⓘ</span> Node details</button>`;
+ nodeMenu.innerHTML=`<div class="context-node-name">${esc(n.short_name||n.name)}<small>${esc(n.address)}:${n.port}</small></div><button role="menuitem" data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture packets</button><button role="menuitem" data-terminal="${esc(n.name)}" ${n.ssh_ready?'':`disabled title="${esc(typeof sshHint==='function'?sshHint(n):'Assign credentials first')}"`}><span aria-hidden="true">›_</span> SSH <small>New tab ↗</small></button><button role="menuitem" data-backup="${esc(n.name)}" ${!busy()&&n.readiness==='Ready'?'':'disabled'}><span aria-hidden="true">↓</span> Back up configuration</button><button role="menuitem" data-telemetry="${esc(n.name)}"><span aria-hidden="true">∿</span> View telemetry</button><button role="menuitem" data-details="${esc(n.name)}"><span aria-hidden="true">ⓘ</span> Node details</button>`;
  nodeMenu.hidden=false;nodeMenu.style.left=Math.max(8,Math.min(x,window.innerWidth-nodeMenu.offsetWidth-8))+'px';nodeMenu.style.top=Math.max(8,Math.min(y,window.innerHeight-nodeMenu.offsetHeight-8))+'px';nodeMenu.querySelector('button:not(:disabled)')?.focus();
 }
 map.addEventListener('contextmenu',e=>{const element=e.target.closest('[data-map-node]');if(!element)return;e.preventDefault();openNodeMenu(element,e.clientX,e.clientY);});
@@ -39,6 +39,7 @@ async function refreshMap(force=false){
  map.innerHTML=topologyMarkup(drawing);
  map.classList.toggle('labels-on-select',drawing.settings?.labelMode==='on-select');
  mapBounds=measureTopology(map);mapBox=[...mapBounds];setMapBox();
+ if(typeof applyTelemetryOverlay==='function')applyTelemetryOverlay();
  if(drawing.schema!==3)$('map-status').textContent+=' Reimport the original annotations and lab YAML to restore complete styling and NOS interface labels.';
 
  }catch(e){if(request===mapRequest)$('map-status').textContent='Could not load map: '+e.message;}

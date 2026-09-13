@@ -2,7 +2,7 @@ name: containerlab-node-manager
 services:
   backup-ui:
     build: .
-    image: clab-backup:1.22.0
+    image: clab-backup:1.23.0
     restart: unless-stopped
     network_mode: host
     command: ["uvicorn", "app.main:create_app", "--factory", "--host", "${UI_BIND:-0.0.0.0}", "--port", "${UI_PORT:-8081}", "--workers", "1"]
@@ -12,6 +12,7 @@ services:
       CAPTURE_EDGESHARK_URL: ${CAPTURE_EDGESHARK_URL:-}
       CAPTURE_SESSION_URL: ${CAPTURE_SESSION_URL:-http://127.0.0.1:5801}
       CAPTURE_SESSION_TOKEN: ${CAPTURE_SESSION_TOKEN:-}
+      TELEMETRY_COLLECTOR: ${TELEMETRY_COLLECTOR:-gnmi}
     volumes:
       - type: bind
         source: /srv/containerlab-node-manager/data

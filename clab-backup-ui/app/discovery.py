@@ -606,7 +606,8 @@ class Discovery:
                 if any(l is not lab and l.get('deployment_name')==parsed['deployed_name'] for l in self.store.state['labs']):
                     raise HTTPException(409,'Deployment already linked to another workspace')
                 if lab is None:
-                    lab = dict(id=uuid.uuid4().hex,name=parsed['name'],profiles=[],defaults={},interval=0,next_run=None,created=stamp(),nodes=[])
+                    from .telemetry_settings import default_settings
+                    lab = dict(id=uuid.uuid4().hex,name=parsed['name'],profiles=[],defaults={},interval=0,next_run=None,created=stamp(),nodes=[],telemetry=default_settings())
                     self.store.state['labs'].append(lab)
                 old = {n.get('definition_node') or n.get('short_name') or n['name'].removeprefix('clab-'+lab['name']+'-'):n for n in lab['nodes']}
                 for n in parsed['nodes']:

@@ -604,6 +604,46 @@ def check_capture(ctx):
             'verify CAPTURE_EDGESHARK_URL in clab-backup-ui/.env, then recreate the manager.')
 
 
+def check_telemetry(ctx):
+    """Read-only: the gNMI collector's availability and each linked lab's telemetry verdict."""
+    title = 'Network telemetry'
+    if not ctx.base_url:
+        ctx.add('telemetry', 'SKIP', title, 'Manager HTTP is unavailable; the telemetry collector could not be queried.')
+        return
+    result, health = ctx.http('/api/telemetry/health')
+    if not result.ok or not isinstance(health, dict):
+        ctx.add('telemetry', 'WARN', title, 'The manager did not report a telemetry collector status.',
+                'Update to a release with network telemetry (1.23.0 or later) and rerun.')
+        return
+    if not health.get('enabled'):
+        ctx.add('telemetry', 'INFO', title, 'Disabled; the manager works without it. ' + safe_text(health.get('message') or '', 300),
+                'Rebuild the manager from this source so pygnmi is installed, or remove TELEMETRY_COLLECTOR=disabled from clab-backup-ui/.env, then recreate the manager.')
+        return
+    result, state = ctx.http('/api/state')
+    labs = [l for l in (state or {}).get('labs', []) if isinstance(l, dict) and l.get('deployment_name')] if result.ok and isinstance(state, dict) else None
+    if labs is None:
+        ctx.add('telemetry', 'WARN', title, 'The collector is ready but the lab list could not be read through the manager.',
+                'Rerun after the manager answers /api/state; check its logs if this persists.')
+        return
+    ctx.manual.append('Telemetry: generate traffic across a wired link and confirm the RX/TX chart and the map link colour follow it; '
+                      'shut an interface and confirm the link turns red; check a BGP neighbour state change where BGP runs.')
+    if not labs:
+        ctx.add('telemetry', 'PASS', title, 'gNMI dial-in collector ready (' + safe_text(health.get('library') or 'pygnmi', 40)
+                + '); no deployed lab is linked yet, so nothing is being collected.')
+        return
+    verdicts = {}
+    for lab in labs:
+        status = (lab.get('telemetry') or {}).get('status') if isinstance(lab.get('telemetry'), dict) else None
+        verdicts[status if isinstance(status, str) else 'unknown'] = verdicts.get(status if isinstance(status, str) else 'unknown', 0) + 1
+    summary = ', '.join(f'{count} {name}' for name, count in sorted(verdicts.items()))
+    if verdicts.get('failed'):
+        ctx.add('telemetry', 'WARN', title, f'{len(labs)} linked lab(s): {summary}. At least one node reports a telemetry failure.',
+                'Open Telemetry in the manager for the failure reason (credentials, gNMI port or NOS service), fix it and use Retry now.')
+        return
+    ctx.add('telemetry', 'PASS', title, f'gNMI dial-in collector ready; {len(labs)} linked lab(s): {summary}. '
+            'Streaming means usable samples arrived; waiting labs are still booting or have telemetry turned off.')
+
+
 def valid_path(path):
     return isinstance(path, str) and len(path) <= 4096 and path.startswith('/') \
         and '..' not in Path(path).parts and not any(ord(c) < 32 or ord(c) == 127 for c in path)
@@ -695,7 +735,7 @@ def main(argv=None):
               ('Installed helper files and sudoers', check_helper_files), ('Restricted helper execution', check_helpers),
               ('Manager SSH and topology folders', check_manager_routes), ('Git helper over saved SSH', check_git_route),
               ('Registered Git checkouts', lambda c: module('check_git').check_git(c)),
-              ('Optional packet capture', check_capture)]
+              ('Optional packet capture', check_capture), ('Network telemetry', check_telemetry)]
     for title, fn in groups:
         if time.monotonic() >= ctx.deadline:
             ctx.add('deadline', 'SKIP', 'Remaining checks', 'Overall report time budget expired.',

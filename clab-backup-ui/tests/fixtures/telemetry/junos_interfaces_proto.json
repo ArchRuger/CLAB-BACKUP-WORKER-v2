@@ -1,0 +1,105 @@
+[
+ {
+  "update": {
+   "timestamp": 1757764800000000000,
+   "prefix": "interfaces/interface[name=et-0/0/0]/state/counters",
+   "update": [
+    {
+     "path": "in-octets",
+     "val": 5000
+    },
+    {
+     "path": "out-octets",
+     "val": 4000
+    },
+    {
+     "path": "in-pkts",
+     "val": 50
+    },
+    {
+     "path": "out-pkts",
+     "val": 40
+    },
+    {
+     "path": "in-errors",
+     "val": 0
+    },
+    {
+     "path": "out-errors",
+     "val": 0
+    },
+    {
+     "path": "in-discards",
+     "val": 0
+    },
+    {
+     "path": "out-discards",
+     "val": 0
+    },
+    {
+     "path": "__timestamp__",
+     "val": 1757764800000
+    },
+    {
+     "path": "__junos_re_stream_creation_timestamp__",
+     "val": 1757764700000
+    }
+   ]
+  }
+ },
+ {
+  "update": {
+   "timestamp": 1757764800000000000,
+   "prefix": "interfaces/interface[name=et-0/0/0]/state",
+   "update": [
+    {
+     "path": "oper-status",
+     "val": "UP"
+    },
+    {
+     "path": "admin-status",
+     "val": "UP"
+    }
+   ]
+  }
+ },
+ {
+  "update": {
+   "timestamp": 1757764800000000000,
+   "prefix": "interfaces/interface[name=et-0/0/0.0]/state",
+   "update": [
+    {
+     "path": "oper-status",
+     "val": "UP"
+    }
+   ]
+  }
+ },
+ {
+  "sync_response": true
+ },
+ {
+  "update": {
+   "timestamp": 1757764810000000000,
+   "prefix": "interfaces/interface[name=et-0/0/0]/state/counters",
+   "update": [
+    {
+     "path": "in-octets",
+     "val": 15000
+    },
+    {
+     "path": "out-octets",
+     "val": 9000
+    },
+    {
+     "path": "in-pkts",
+     "val": 150
+    },
+    {
+     "path": "out-pkts",
+     "val": 90
+    }
+   ]
+  }
+ }
+]
