@@ -20,7 +20,7 @@ from test_capture import fixture
 
 class CaptureProxyTests(unittest.TestCase):
     def setUp(self):
-        broker=FastAPI();self.who='';self.seen=[]
+        broker=FastAPI();self.who='';self.seen=[];self.offered=[];self.empty=False
         def auth(request):
             self.seen.append(dict(request.headers))
             if request.headers.get('authorization')!='Bearer '+'a'*64:
@@ -36,10 +36,14 @@ class CaptureProxyTests(unittest.TestCase):
             auth(request);return Response('export default class RFB {}',media_type='text/javascript')
         @broker.get('/sessions/{sid}/download')
         async def download(sid:str,request:Request):
-            auth(request);return Response(b'synthetic-tar',media_type='application/x-tar')
+            auth(request)
+            if self.empty:raise HTTPException(409,'No saved captures yet. Use File > Save As under /pcaps.')
+            return Response(b'synthetic-tar',media_type='application/x-tar')
         @broker.websocket('/sessions/{sid}/websockify')
         async def desktop(ws:WebSocket,sid:str):
-            auth(ws);await ws.accept();await ws.send_bytes(b'RFB 003.008\n')
+            auth(ws);self.offered.append(list(ws.scope.get('subprotocols',[])))
+            await ws.accept(subprotocol='binary' if 'binary' in ws.scope.get('subprotocols',[]) else None)
+            await ws.send_bytes(b'RFB 003.008\n')
             await ws.send_bytes(await ws.receive_bytes());await ws.close()
         sock=socket.socket();sock.bind(('127.0.0.1',0))
         self.port=sock.getsockname()[1]
@@ -81,6 +85,8 @@ class CaptureProxyTests(unittest.TestCase):
         response=self.client.get(base+'/download')
         self.assertEqual(response.content,b'synthetic-tar')
         self.assertIn('wireshark-captures.tar',response.headers['content-disposition'])
+        self.empty=True;response=self.client.get(base+'/download')
+        self.assertEqual(response.status_code,409);self.assertIn('Save As',response.json()['detail']);self.empty=False
         with TestClient(self.app) as other:
             self.assertEqual(other.get(base+'/download').status_code,404)
         for path in ('index.html','core/test.html','app/ui.js'):
@@ -92,6 +98,11 @@ class CaptureProxyTests(unittest.TestCase):
         with self.client.websocket_connect(base+'/websockify',headers={'Origin':'http://testserver'}) as ws:
             self.assertEqual(ws.receive_bytes(),b'RFB 003.008\n')
             ws.send_bytes(b'\x00\x01\xff');self.assertEqual(ws.receive_bytes(),b'\x00\x01\xff')
+            self.assertIsNone(ws.accepted_subprotocol)
+        # The relay always offers websockify's subprotocol upstream and echoes it only to a browser that asked.
+        self.assertEqual(self.offered[-1],['binary'])
+        with self.client.websocket_connect(base+'/websockify',headers={'Origin':'http://testserver'},subprotocols=['binary']) as ws:
+            self.assertEqual(ws.accepted_subprotocol,'binary');self.assertEqual(ws.receive_bytes(),b'RFB 003.008\n')
         for origin in ('https://evil',''):
             with self.assertRaises(WebSocketDisconnect):
                 with self.client.websocket_connect(base+'/websockify',headers={'Origin':origin}):pass

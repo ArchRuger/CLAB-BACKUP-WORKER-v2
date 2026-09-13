@@ -5,6 +5,7 @@ Session ownership is browser-cookie isolation within the manager's trusted lab U
 not a replacement for user authentication at a shared/public reverse proxy.
 """
 import asyncio
+import json
 import re
 import secrets
 from urllib.parse import urlsplit
@@ -19,6 +20,10 @@ from websockets.exceptions import WebSocketException
 TOKEN = re.compile(r'^[0-9a-f]{64}$')
 ASSET = re.compile(r'^(?:core|vendor)/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+\.js$')
 COOKIE = 'clab_capture_owner'
+# noVNC in the pinned image offers no subprotocol; websockify behind the service
+# requires this one, so the relay offers it upstream and echoes it back only when
+# a browser asked for it (a browser drops a connection whose reply ignores its offer).
+VNC_SUBPROTOCOL = 'binary'
 
 
 def owner(request, response=None):
@@ -152,7 +157,18 @@ def install(app, captures):
             upstream = await client.send(client.build_request('GET', adapter.url + path,
                                          headers=adapter.headers(who)), stream=True)
             if upstream.status_code != 200:
-                raise HTTPException(409, 'Capture files unavailable. Check the session and save files in /pcaps first.')
+                # The service explains why (nothing saved yet, session gone); pass its
+                # own wording through, never the transport or Docker output.
+                detail = ''
+                try:
+                    detail = (json.loads(await upstream.aread()) or {}).get('detail', '')
+                except ValueError:
+                    pass
+                await upstream.aclose()
+                if upstream.status_code == 404:
+                    raise HTTPException(404, 'Capture session ended or is not owned by this browser.')
+                raise HTTPException(409, detail if isinstance(detail, str) and detail else
+                                    'Capture files unavailable. Check the session and save files in /pcaps first.')
         except (httpx.HTTPError, HTTPException) as error:
             await client.aclose()
             if isinstance(error, HTTPException):
@@ -185,8 +201,9 @@ def install(app, captures):
             headers = adapter.headers(owner(ws))
             url = adapter.url.replace('https:', 'wss:', 1).replace('http:', 'ws:', 1)
             async with connect(url + session_path(sid) + '/websockify', additional_headers=headers,
-                               proxy=None, max_size=4 * 1024 * 1024, open_timeout=15) as upstream:
-                await ws.accept()
+                               subprotocols=[VNC_SUBPROTOCOL], proxy=None, max_size=4 * 1024 * 1024,
+                               open_timeout=15) as upstream:
+                await ws.accept(subprotocol=VNC_SUBPROTOCOL if VNC_SUBPROTOCOL in ws.scope.get('subprotocols', []) else None)
                 await relay(ws, upstream)
         except (HTTPException, OSError, ValueError, WebSocketException, WebSocketDisconnect):
             pass

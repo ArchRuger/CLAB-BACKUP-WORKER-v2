@@ -10,6 +10,7 @@ import hmac
 import ipaddress
 import json
 import os
+import re
 import time
 
 import httpx
@@ -27,6 +28,35 @@ LABEL = 'org.clab-manager.capture-owner'
 IDLE_SECONDS = 15 * 60
 LIFETIME_SECONDS = 2 * 60 * 60
 MAX_SESSIONS = 4
+# Saved captures live on a tmpfs-backed anonymous volume, not a container tmpfs: the
+# Docker archive API behind the download reads the container filesystem through the
+# daemon, which sees volumes but never a tmpfs mounted inside the container.
+PCAPS_VOLUME_OPTIONS = 'size=256m,uid=1000,gid=1000,mode=0700,nosuid,nodev,noexec'
+# The pinned image's websockify only completes the handshake for this subprotocol.
+VNC_SUBPROTOCOL = 'binary'
+VOLUME_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$')
+
+
+def _chain(first, rest):
+    yield first
+    yield from rest
+
+
+def tar_has_regular_file(buffer):
+    """True when a tar stream prefix holds at least one regular file entry."""
+    offset = 0
+    while offset + 512 <= len(buffer):
+        header = buffer[offset:offset + 512]
+        if header == b'\0' * 512:
+            return False
+        try:
+            size = int(header[124:136].split(b'\0', 1)[0].strip() or b'0', 8)
+        except ValueError:
+            return False
+        if header[156:157] in (b'0', b'\0', b'7'):
+            return True
+        offset += 512 + ((size + 511) // 512) * 512
+    return False
 
 
 class StartRequest(BaseModel):
@@ -88,6 +118,17 @@ class Sessions:
             # Recheck the label even if a daemon ignores filters.
             if row.get('Labels', {}).get(LABEL) == self.label:
                 self.remove(row['Id'])
+        # A container removal always carries v=true; still sweep capture volumes left
+        # behind by a forced removal without it, so saved captures never outlive a session.
+        volumes = self.docker_request('GET', '/volumes', params={
+            'filters': json.dumps({'label': [LABEL + '=' + self.label], 'dangling': ['true']})})
+        for volume in volumes.get('Volumes') or []:
+            name = volume.get('Name', '')
+            if volume.get('Labels', {}).get(LABEL) == self.label and VOLUME_NAME.fullmatch(name):
+                try:
+                    self.docker.delete('/volumes/' + name)
+                except httpx.HTTPError:
+                    print('Capture volume cleanup failed; automatic cleanup will retry.', flush=True)
 
     def reap(self):
         for name in list(self.pending):
@@ -141,8 +182,11 @@ class Sessions:
             'HostConfig': {'NetworkMode': self.network, 'Memory': 1024 * 1024 * 1024,
                            'NanoCpus': 1500000000, 'PidsLimit': 256, 'ShmSize': 64 * 1024 * 1024,
                            'CapDrop': ['NET_RAW'], 'SecurityOpt': ['no-new-privileges:true'],
-                           'Tmpfs': {'/pcaps': 'rw,nosuid,nodev,size=256m,uid=1000,gid=1000,mode=0700',
-                                     '/config': 'rw,nosuid,nodev,size=64m', '/tmp': 'rw,nosuid,nodev,size=256m'},
+                           'Mounts': [{'Type': 'volume', 'Target': '/pcaps', 'VolumeOptions': {
+                               'Labels': {LABEL: self.label},
+                               'DriverConfig': {'Name': 'local', 'Options': {
+                                   'type': 'tmpfs', 'device': 'tmpfs', 'o': PCAPS_VOLUME_OPTIONS}}}}],
+                           'Tmpfs': {'/config': 'rw,nosuid,nodev,size=64m', '/tmp': 'rw,nosuid,nodev,size=256m'},
                            'LogConfig': {'Type': 'json-file', 'Config': {'max-size': '2m', 'max-file': '1'}}}}
         self.pending.add(name)
         try:
@@ -256,11 +300,19 @@ def create_app(sessions=None):
         if upstream.status_code != 200:
             upstream.close()
             raise HTTPException(409, 'Save captures in /pcaps first.')
+        chunks = upstream.iter_bytes(65536)
+        first = next(chunks, b'')
+        # An archive of an empty folder is only the directory entry plus padding, so a
+        # short first chunk without any file means nothing was saved yet.
+        if len(first) < 65536 and not tar_has_regular_file(first):
+            upstream.close()
+            raise HTTPException(409, 'No saved captures yet. In Wireshark stop the capture, use File > Save As '
+                                     'under /pcaps, then download again.')
 
         def content():
             total = 0
             try:
-                for chunk in upstream.iter_bytes(65536):
+                for chunk in _chain(first, chunks):
                     total += len(chunk)
                     if total > 272 * 1024 * 1024:
                         raise RuntimeError('Capture archive exceeded limit')
@@ -273,9 +325,12 @@ def create_app(sessions=None):
     async def desktop(ws: WebSocket, sid: str):
         try:
             row = sessions.get(sid, sessions.owner(ws))
+            # websockify in the pinned image answers 400 to a handshake that does not
+            # offer the binary subprotocol; the manager's relay offers it as well.
             async with connect('ws://' + row['address'] + ':5800/websockify', proxy=None,
-                               max_size=4 * 1024 * 1024, open_timeout=10) as upstream:
-                await ws.accept()
+                               subprotocols=[VNC_SUBPROTOCOL], max_size=4 * 1024 * 1024,
+                               open_timeout=10) as upstream:
+                await ws.accept(subprotocol=VNC_SUBPROTOCOL if VNC_SUBPROTOCOL in ws.scope.get('subprotocols', []) else None)
                 await relay(ws, upstream)
         except (HTTPException, OSError, ValueError, WebSocketException, WebSocketDisconnect):
             pass

@@ -95,11 +95,17 @@ def main():
                         capture_output=True, text=True).stdout.splitlines()
         name = next(n for n in names if n.endswith(sid))
 
+        # Nothing saved yet: the download must say so instead of handing over an empty archive.
+        assert client.get('/sessions/' + sid + '/download').status_code == 409, 'Empty /pcaps must not download'
+
         def captured():
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
                 for _ in range(20):
                     udp.sendto(b'clab-browser-capture-smoke', ('127.0.0.1', 59999))
-            content = command('docker', 'cp', name + ':/tmp', '-', capture_output=True).stdout
+            # Wireshark writes its live file to a tmpfs, which docker cp never sees; read
+            # it from inside the container. tar may report the growing file as changed.
+            content = subprocess.run(['docker', 'exec', name, 'tar', '-C', '/tmp', '-cf', '-', '.'],
+                                     capture_output=True).stdout
             with tarfile.open(fileobj=io.BytesIO(content)) as archive:
                 for entry in archive:
                     if entry.isfile() and 0 < entry.size < 16 * 1024 * 1024:
@@ -113,7 +119,9 @@ def main():
         with tarfile.open(fileobj=stream, mode='w') as archive:
             entry = tarfile.TarInfo('smoke.pcapng');entry.size = len(data);entry.mode = 0o600;entry.uid = 1000
             archive.addfile(entry, io.BytesIO(data))
-        command('docker', 'cp', '-', name + ':/pcaps', input=stream.getvalue(), capture_output=True)
+        # Save the way Wireshark does: as the desktop user, inside the container's /pcaps.
+        command('docker', 'exec', '-i', '-u', '1000:1000', name, 'tar', '-C', '/pcaps', '-xf', '-',
+                input=stream.getvalue(), capture_output=True)
         download = client.get('/sessions/' + sid + '/download').raise_for_status()
         with tarfile.open(fileobj=io.BytesIO(download.content)) as archive:
             entry = next(e for e in archive if e.name.endswith('smoke.pcapng'))

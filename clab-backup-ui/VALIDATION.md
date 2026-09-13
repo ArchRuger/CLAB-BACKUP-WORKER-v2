@@ -1,3 +1,71 @@
+# Browser Wireshark fixes — 1.21.1
+
+Prepared on `claude/browser-capture-fixes` from main `7032daa` (1.21.0) after live
+bug testing of 1.21.0 on the Ubuntu 24.04 dev VM (Docker 29.8, Compose v5.5.1,
+containerlab 0.79.0, two `arista_ceos` nodes, no KVM). Everything below was run on
+that VM against the staged 1.21.1 source (`git archive` of the release commit), with
+the manager image and the `clab-capture-service:1.21.1` image both rebuilt from it.
+
+**What 1.21.0 did on the VM before the fixes.** Every browser viewer failed with
+*Viewer disconnected* (WebSocket close 1006): the pinned `wireshark-vnc-docker`
+image's websockify answers HTTP 400 to a handshake without the `binary`
+subprotocol, the session service closed before accept (403 in its log), and the
+manager relayed the 403. CI's smoke step failed on `main` for the same reason. A
+file written inside the container's `/pcaps` (what File → Save As does) was absent
+from **Download saved captures** because the Docker archive API reads the container
+filesystem through the daemon and never sees a tmpfs mounted inside the container.
+`sudo bash deploy/setup-capture.sh` on a VM running the 1.20.1 stack ended with
+`could not find a network matching network mode clab-manager-capture_default`
+twice in a row and left Edgeshark stopped.
+
+**Verified on the VM with 1.21.1:**
+
+- **Migration.** The 1.20.1 capture stack was recreated on its original
+  `clab-manager-capture_default` network, then the 1.21.1 `setup-capture.sh` ran:
+  it rebuilt the service image, recreated gostwire and packetflix, created
+  `sessions`, removed the old network and exited 0. `/api/capture/status` enabled,
+  `/api/capture/health` `{"ready": true}`; `check-install` PASS 59 / FAIL 0 / WARN 1
+  (folder coverage) with `[PASS] Optional packet capture`.
+- **Viewer.** Through the manager relay from a stdlib-free `websockets` client:
+  `RFB 003.008` greeting, version echo and security-type list `[1, 1]` both with no
+  subprotocol offered (what the served noVNC does) and with `binary` offered
+  (negotiated `binary`). In the desktop-app browser, **Start browser capture →
+  Open Wireshark in browser** on `clab-ceos-pair-ceos1 eth1` rendered the real
+  Wireshark desktop with *live capture in progress* and listed ICMP echo
+  request/reply pairs from `ping 10.0.0.1` on ceos2 plus LLDP; Reconnect viewer
+  reloaded into the same session. Cross-origin and foreign-cookie WebSocket
+  attempts still return 403.
+- **Downloads.** The Wireshark container now carries a labelled tmpfs-backed
+  anonymous volume on `/pcaps` (256 MiB, uid/gid 1000, mode 0700, nosuid/nodev/noexec)
+  and container tmpfs only for `/tmp` and `/config`. With nothing saved, the API
+  answers 409 *No saved captures yet…* and the viewer shows that sentence in place
+  instead of opening JSON. After copying the live capture file into `/pcaps` as
+  uid 1000 inside the container, the download returned a tar with
+  `pcaps/<name>.pcapng` whose bytes matched the file inside the container (pcapng
+  magic, interface block present), and the viewer's Download button reported
+  *Downloading saved captures*. A foreign cookie gets 404.
+- **Cleanup.** End session removed the container and its volume; a dangling volume
+  created by hand with the capture label was swept when the session service
+  restarted; sessions survive a manager container restart.
+- **Unchanged behaviour rechecked:** owner cookie flags, idempotent retry,
+  409/422/404/429 paths, asset allow-list, no token in any manager response,
+  service 403 without a bearer, backup job 2/2 cEOS nodes with ZIP download,
+  inspect operation through the gateway.
+
+**Not run here:** `deploy/capture/smoke.py` refuses a host with an existing capture
+stack and the maintainer was using the VM's stack during this session, so its
+run is left to CI (`release-check` executes it on push); it now reads `/tmp` and
+saves into `/pcaps` with `docker exec`, never `docker cp`, and asserts the
+empty-folder 409. Wireshark's own Save As dialog was not driven through noVNC
+(keyboard modifiers do not reach the remote desktop from the desktop-app browser
+pane); the file was written inside the container as the desktop user instead.
+
+**Windows:** `python -m unittest discover -s tests -t tests -p "test_capture*.py"`
+40 tests OK (with `websockets` and `uvicorn` installed), `test_release_consistency.py`
+and `test_check_install.py` OK, `node --test` on the five UI suites 33 passed
+including the new `tests/test_capture_session_ui.js`, `bash -n` on every deploy
+script, `python deploy/verify-release.py` = 1.21.1, `git diff --check` clean.
+
 # Browser Wireshark — 1.21.0
 
 Prepared on `codex/browser-wireshark` from latest main `1d7e0f9` (1.20.1).

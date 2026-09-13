@@ -1,6 +1,6 @@
 // noVNC is provided by the pinned VM image; no CDN or workstation installation.
 const $=id=>document.getElementById(id),sid=location.hash.slice(1);
-let rfb,ended=false,heartbeat;
+let rfb,rfbConnected=false,ended=false,heartbeat;
 const valid=/^[0-9a-f]{64}$/.test(sid),base='/api/capture/sessions/'+sid;
 async function status(){
  const response=await fetch(base,{cache:'no-store'});
@@ -28,18 +28,38 @@ async function connectViewer(){
   const {default:RFB}=await import(base+'/assets/core/rfb.js');
   rfb=new RFB($('capture-screen'),(location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/websockify');
   rfb.scaleViewport=true;rfb.resizeSession=true;
-  rfb.addEventListener('connect',()=>{$('viewer-status').textContent='Connected to Wireshark on the VM. Check its packet list for live traffic.';});
-  rfb.addEventListener('disconnect',()=>{if(!ended)$('viewer-status').textContent='Viewer disconnected. Reconnect to the existing session; capture may still be running.';});
+  rfb.addEventListener('connect',()=>{rfbConnected=true;$('viewer-status').textContent='Connected to Wireshark on the VM. Check its packet list for live traffic.';});
+  rfb.addEventListener('disconnect',()=>{rfbConnected=false;if(!ended)$('viewer-status').textContent='Viewer disconnected. Reconnect to the existing session; capture may still be running.';});
   rfb.addEventListener('securityfailure',()=>{$('viewer-status').textContent='Viewer authentication failed. Check the pinned capture image and service configuration.';});
  }catch(error){$('viewer-status').textContent=error.message;}
 }
+// Check first, then let the browser stream the archive itself: a plain link would
+// render the manager's JSON explanation (nothing saved yet, session ended) as a page.
+async function downloadCaptures(event){
+ event.preventDefault();
+ $('viewer-status').textContent='Checking for saved captures…';
+ const control=new AbortController();
+ try{
+  const response=await fetch(base+'/download',{cache:'no-store',signal:control.signal});
+  if(!response.ok){let detail='Capture files unavailable.';try{detail=(await response.json()).detail||detail;}catch{}throw Error(detail);}
+  control.abort();
+  const link=document.createElement('a');link.href=base+'/download';link.download='wireshark-captures.tar';
+  document.body.appendChild(link);link.click();link.remove();
+  $('viewer-status').textContent='Downloading saved captures. Extract the archive to get your PCAPNG files.';
+ }catch(error){$('viewer-status').textContent=error.name==='AbortError'?'Download cancelled.':error.message;}
+}
+$('capture-download').onclick=downloadCaptures;
 $('capture-reconnect').onclick=()=>location.reload();
 $('capture-end').onclick=async()=>{
  if(!confirm('End this session and delete its temporary captures? Download saved files first.'))return;
  try{
   const response=await fetch(base+'/end',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!response.ok)throw Error((await response.json()).detail||'Could not end session.');
-  ended=true;clearInterval(heartbeat);rfb?.disconnect();$('capture-end').disabled=true;$('capture-download').hidden=true;
+  ended=true;clearInterval(heartbeat);
+  // Ending removes the container, which already closed the desktop socket; only a
+  // live viewer needs an explicit disconnect.
+  if(rfbConnected)rfb.disconnect();
+  $('capture-end').disabled=true;$('capture-download').hidden=true;
   $('viewer-status').textContent='Session ended. Temporary captures were removed from the VM.';
  }catch(error){$('viewer-status').textContent=error.message;}
 };

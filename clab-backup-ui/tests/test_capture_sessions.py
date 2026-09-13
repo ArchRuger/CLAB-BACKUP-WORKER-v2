@@ -15,20 +15,51 @@ import httpx
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.capture_service import IMAGE, LABEL, IDLE_SECONDS, LIFETIME_SECONDS, Sessions, create_app
+from starlette.websockets import WebSocketDisconnect
+
+from app.capture_service import IMAGE, LABEL, IDLE_SECONDS, LIFETIME_SECONDS, Sessions, create_app, tar_has_regular_file
 from app.capture_sessions import BrowserSessions
 from test_capture import fixture
 
 
+class FakeDesktop:
+    """Stands in for the container's websockify: one greeting, then the stream ends."""
+    def __init__(self):
+        self.greeted=False;self.sent=[]
+
+    async def __aenter__(self):return self
+
+    async def __aexit__(self,*exc):return False
+
+    def __aiter__(self):return self
+
+    async def __anext__(self):
+        if self.greeted:raise StopAsyncIteration
+        self.greeted=True;return b'RFB 003.008\n'
+
+    async def send(self,message):self.sent.append(message)
+
+
+def directory_only_archive():
+    stream=io.BytesIO()
+    with tarfile.open(fileobj=stream,mode='w') as archive:
+        entry=tarfile.TarInfo('pcaps');entry.type=tarfile.DIRTYPE;archive.addfile(entry)
+    return stream.getvalue()
+
+
 class DockerFixture:
     def __init__(self):
-        self.calls=[];self.containers={};self.fail='';self.archive=b''
+        self.calls=[];self.containers={};self.volumes=[];self.fail='';self.archive=b''
 
     def handle(self, request):
         path=request.url.path;self.calls.append(request)
         if self.fail and self.fail in path:return httpx.Response(500,json={'message':'PRIVATE daemon output'})
         if path.startswith('/images/'):
             return httpx.Response(200,json={'Id':IMAGE})
+        if path=='/volumes':
+            return httpx.Response(200,json={'Volumes':self.volumes or None})
+        if path.startswith('/volumes/') and request.method=='DELETE':
+            self.volumes=[v for v in self.volumes if v['Name']!=path.split('/')[2]];return httpx.Response(204)
         if path=='/containers/json':
             return httpx.Response(200,json=[{'Id':k,'Labels':v['Labels']} for k,v in self.containers.items()])
         if path=='/containers/create':
@@ -71,7 +102,15 @@ class CaptureSessionTests(unittest.TestCase):
         for field in ('Binds','PortBindings','Privileged','PidMode'):
             self.assertNotIn(field,config)
         self.assertEqual(config['Memory'],1024**3)
-        self.assertIn('size=256m',config['Tmpfs']['/pcaps'])
+        # Saved captures sit on a labelled tmpfs-backed volume the archive API can read;
+        # a container tmpfs is invisible to downloads. No host path is ever mounted.
+        self.assertNotIn('/pcaps',config['Tmpfs']);self.assertIn('size=256m',config['Tmpfs']['/tmp'])
+        mount,=config['Mounts']
+        self.assertEqual((mount['Type'],mount['Target']),('volume','/pcaps'));self.assertNotIn('Source',mount)
+        self.assertEqual(mount['VolumeOptions']['Labels'],{LABEL:self.sessions.label})
+        driver=mount['VolumeOptions']['DriverConfig']
+        self.assertEqual((driver['Name'],driver['Options']['type']),('local','tmpfs'))
+        for option in ('size=256m','uid=1000','mode=0700','noexec'):self.assertIn(option,driver['Options']['o'])
         self.assertEqual(self.client.get('/sessions/'+sid,headers=self.headers).json()['running'],True)
 
     def test_auth_ownership_and_unknown_fields_fail_closed(self):
@@ -120,6 +159,13 @@ class CaptureSessionTests(unittest.TestCase):
         restarted.cleanup_orphans()
         self.assertFalse(self.docker.containers)
 
+    def test_orphan_capture_volumes_are_swept_and_unrelated_volumes_kept(self):
+        self.docker.volumes=[{'Name':'f'*64,'Labels':{LABEL:self.sessions.label}},{'Name':'lab-data','Labels':{}}]
+        self.sessions.cleanup_orphans()
+        self.assertEqual([v['Name'] for v in self.docker.volumes],['lab-data'])
+        deletes=[r.url.path for r in self.docker.calls if r.method=='DELETE']
+        self.assertEqual(deletes,['/volumes/'+'f'*64])
+
     def test_end_idle_and_hard_expiry_remove_only_owned_containers(self):
         sid=self.start();self.docker.containers['unrelated-lab']={'Labels':{}}
         self.assertEqual(self.client.post('/sessions/'+sid+'/end',headers=self.headers,json={}).status_code,200)
@@ -148,8 +194,33 @@ class CaptureSessionTests(unittest.TestCase):
         response=self.client.get('/sessions/'+sid+'/download',headers=self.headers)
         self.assertEqual(response.content,stream.getvalue())
         self.assertEqual(self.docker.calls[-1].url.params['path'],'/pcaps')
+        # An archive holding only the folder entry means nothing was saved: explain, do not hand over an empty tar.
+        self.docker.archive=directory_only_archive()
+        response=self.client.get('/sessions/'+sid+'/download',headers=self.headers)
+        self.assertEqual(response.status_code,409);self.assertIn('Save As',response.json()['detail'])
+        self.assertFalse(tar_has_regular_file(directory_only_archive()));self.assertTrue(tar_has_regular_file(stream.getvalue()))
+        self.assertFalse(tar_has_regular_file(b''));self.assertFalse(tar_has_regular_file(b'x'*600))
         for path in ('index.html','app/ui.js','vendor/../config.js','core/evil.html'):
             self.assertEqual(self.client.get('/sessions/'+sid+'/assets/'+path,headers=self.headers).status_code,404)
+
+    def test_desktop_relay_negotiates_the_binary_subprotocol_websockify_requires(self):
+        sid=self.start();seen={}
+        def connect(url,**kwargs):
+            seen['url']=url;seen.update(kwargs);return FakeDesktop()
+        with patch('app.capture_service.connect',connect):
+            # Starlette's test client adds handshake headers to the dict it is given; pass copies.
+            with self.client.websocket_connect('/sessions/'+sid+'/websockify',headers={**self.headers},subprotocols=['binary']) as ws:
+                self.assertEqual(ws.accepted_subprotocol,'binary')
+                self.assertEqual(ws.receive_bytes(),b'RFB 003.008\n')
+                with self.assertRaises(WebSocketDisconnect):ws.receive_bytes()
+        self.assertEqual(seen['url'],'ws://172.30.0.7:5800/websockify')
+        self.assertEqual(seen['subprotocols'],['binary'])
+        # A client that offers nothing (noVNC's default) is still served, without an invented reply protocol.
+        with patch('app.capture_service.connect',connect):
+            with self.client.websocket_connect('/sessions/'+sid+'/websockify',headers={**self.headers}) as ws:
+                self.assertIsNone(ws.accepted_subprotocol);self.assertEqual(ws.receive_bytes(),b'RFB 003.008\n')
+        with self.assertRaises(WebSocketDisconnect):
+            with self.client.websocket_connect('/sessions/'+sid+'/websockify',headers={**self.headers,'X-Capture-Owner':'d'*64}):pass
 
     def test_service_health_requires_credentials_and_image(self):
         self.assertEqual(self.client.get('/health').status_code,403)
@@ -162,6 +233,8 @@ class CaptureSetupTests(unittest.TestCase):
     def test_setup_pulls_the_same_fixed_image_that_sessions_launch(self):
         text=(Path(__file__).resolve().parents[2]/'deploy/setup-capture.sh').read_text()
         self.assertIn("image='"+IMAGE+"'",text)
+        # Upgrades rename the project network; only recreated containers can join it.
+        self.assertIn('up -d --build --force-recreate',text)
 
     def test_migration_retains_other_settings_and_token_without_evaluating_shell(self):
         path=Path(__file__).resolve().parents[2]/'deploy/setup_capture.py'
