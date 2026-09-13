@@ -172,6 +172,29 @@ class GnmiPipelineTests(unittest.TestCase):
         finally:
             server.stop()
 
+    def test_a_quiet_subscription_reports_idle_and_stays_open_until_data_arrives(self):
+        # EOS sends nothing at all for a sampled BGP path without neighbours; 1.23.0 closed the
+        # group as "failed" after two minutes and painted the BGP pill red on every lab without BGP.
+        from unittest import mock
+        from app import telemetry_collector
+        fixtures = {'interfaces': EOS['interfaces'], 'bgp': []}
+        servicer = Servicer(['openconfig-interfaces', 'openconfig-network-instance'], ['json_ietf'], fixtures)
+        server = Server(servicer)
+        try:
+            with mock.patch.object(telemetry_collector, 'GROUP_IDLE', 1.0):
+                run = Run(ADAPTERS['arista_ceos'], server.port)
+                self.assertTrue(run.wait(lambda: run.group('interfaces', 'streaming') and run.group('bgp', 'subscribed')), run.events)
+                self.assertTrue(run.wait(lambda: run.group('bgp', 'idle'), timeout=10), run.events)
+                self.assertFalse(run.group('bgp', 'failed')); self.assertFalse(any(e['event'] == 'failed' for e in run.events))
+                self.assertIn('bgp', run.collector.streams, 'the subscription stays open')
+                self.assertFalse(run.group('interfaces', 'idle'), 'a streaming group is never idle')
+                fixtures['bgp'] = EOS['bgp']     # a neighbour appears: the same subscription delivers it
+                self.assertTrue(run.wait(lambda: run.group('bgp', 'streaming'), timeout=10), run.events)
+                self.assertTrue(run.wait(lambda: any(r['metric'] == 'session-state' for r in run.records())))
+                run.stop()
+        finally:
+            server.stop()
+
     def test_xr_origins_string_counters_and_on_change_fallback(self):
         servicer = Servicer(['openconfig-interfaces', 'openconfig-network-instance'], ['json_ietf', 'proto'], XR)
         server = Server(servicer)

@@ -1,3 +1,41 @@
+# Telemetry live fixes — 1.23.1
+
+Read docs/CHANGELOG.md "Changes in 1.23.1" and docs/TELEMETRY.md. Everything below was
+found by running 1.23.0 on the dev VM (cEOS 4.35.0F) and is verified there; keep it.
+(1) `deploy/compose.telemetry.yml`: Prometheus (kingpin) boolean flags take `--flag` or
+`--no-flag`; `--flag=false` aborts start-up with "unexpected false" and the stack
+crash-loops while every Grafana panel shows "An error occurred within the plugin". Never
+add such a flag; `test_telemetry_setup` rejects `=true/=false` command entries.
+`deploy/setup-telemetry.sh` calls `setup_telemetry.py ENV --wait` (`wait_ready`) after
+`up` and exits 1 with `compose ps` and `logs` when Prometheus `/-/ready` or Grafana
+`/api/health` do not answer within 90 s; CI runs `deploy/telemetry/smoke.py` (stdlib
+only: fixture manager on a free port, real stack, data source health, three provisioned
+dashboards, every panel and variable query, anonymous `/api/ds/query`). (2)
+`telemetry_store`: device timestamps order the samples of ONE leaf only
+(`Series.accept`, per-leaf `stamps`; records with `synthetic=True`, whose device time
+the collector replaced, are never compared); rates, chart points, `at` and `last_sample`
+use `record['received']` (the collector's receive time; the store falls back to `ts`).
+cEOS stamps each notification with the last change time of its leaves, so one cycle is
+several notifications minutes apart; the old per-interface clock dropped half of them.
+`POINT_MERGE` (5 s) joins the notifications of one cycle into one chart point and
+`Series.rates` keeps the newest rate per field so a direction never flips to n/a between
+two notifications. (3) `EosAdapter.subscriptions`: the on-change state leaves carry
+`heartbeat_interval=SAMPLE_NS` because cEOS answers a plain on-change subscription with
+the sync marker only (no initial value); verified with a raw pygnmi probe. (4)
+`NodeCollector`: a group without notifications for `GROUP_IDLE` is reported `idle` and
+stays subscribed (EOS sends nothing for an empty sampled path such as BGP without
+neighbours); it returns to subscribed/streaming when data arrives; never close it as
+failed. (5) `TelemetryManager.schedule_retry`: reason `connect` caps the backoff at
+`RETRY_CONNECT_MAX` (30 s) because a `docker restart` keeps the node's signature and
+nothing else resets it; other reasons keep doubling, `auth` stays at `RETRY_MAX`. (6)
+cEOS in a container reports 0 transmit octets on data ports; TX rates of 0 on cEOS links
+are the platform, not a bug. (7) `check_install.check_telemetry_dashboards` reports a
+Prometheus that does not answer separately (compose ps/logs hint) and classifies scrape
+errors with `scrape_problem` (never echoes them). Hot-loading changed `app/*.py` into the
+running manager container with `docker cp` + `docker restart` is a fast way to try a
+fix on the VM before the full `start-manager.sh` rebuild; the final validation must come
+from a re-stage of the commit. See VALIDATION.md "Telemetry live fixes — 1.23.1".
+
 # Automatic network telemetry — 1.23.0
 
 Read docs/TELEMETRY.md and docs/CHANGELOG.md "Changes in 1.23.0". No live device was

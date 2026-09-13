@@ -1,3 +1,60 @@
+# Telemetry live fixes — 1.23.1
+
+Prepared on `claude/v1.23.0-validation` from main `c8a2e26` (1.23.0) on 2026-09-13.
+Scope: the first live run of the 1.23.0 telemetry release and the fixes it needed.
+The user reported "the Grafana dashboard says there was an error"; the task was to
+deploy the latest main on the dev VM and validate the whole setup and deployment.
+
+## Environment
+
+- Dev VM `clab-dev-llm` (Ubuntu 24.04.4, Docker 29.8, Compose v5.5.1, containerlab
+  0.79.0, no KVM), manager 1.23.0 staged from main `c8a2e26` with
+  `deploy/start-manager.sh --enable-operations` (image rebuilt, pygnmi installed),
+  capture stack on `clab-capture-service:1.22.0` images, `sudo bash
+  deploy/setup-telemetry.sh` (Prometheus v3.14.0 and Grafana OSS 13.0.2 pulled by
+  digest), manager recreated with the new `.env`.
+- Lab `ceos-pair` (two `arista_ceos` nodes, `n24l/ceos:4.35.0F`, `eth1`–`eth1`),
+  saved by 1.22.0 (no telemetry setting yet), deployed through the manager's
+  operations API; Ethernet1 addressed 10.0.0.1/24 and 10.0.0.2/24 by hand for link
+  traffic. NOS login: containerlab default `admin`/`admin`.
+- Browser checks in the desktop app's browser pane at 1280x900, console watched for
+  errors; API checks with curl and stdlib Python on the VM.
+
+## What 1.23.0 did on the VM before any fix
+
+| Check | Result |
+|---|---|
+| `deploy/verify-release.py` on the staged tree | `Source release verified: 1.23.0` |
+| `start-manager.sh` rebuild + helpers | exit 0; `/api/telemetry/health` enabled, pygnmi present, states `disabled: 2` (pre-1.23.0 lab) |
+| `setup-telemetry.sh` | exit 0 and "Grafana dashboards installed", although `docker ps` showed `clab-manager-telemetry-prometheus-1 Restarting (1)`; its log: `Error parsing command line arguments: unexpected false` / `prometheus: error: unexpected false` |
+| Grafana `/api/health` | `{"database":"ok","version":"13.0.2"}`; data source `clab-prometheus` and the three dashboards provisioned in folder *Containerlab Node Manager*; anonymous read of a dashboard 200 with `canEdit:false` |
+| Grafana in the browser | every panel of *Lab overview* showed a red triangle, **"An error occurred within the plugin"** and *No data* (the user's report reproduced) |
+| `check-install.sh` | PASS 60 / FAIL 1 / WARN 1: `[FAIL] Grafana telemetry dashboards — Grafana answers, but Prometheus on 127.0.0.1:9090 is not scraping the manager`; its *Next* step (rerun the setup) would not have fixed a rejected flag |
+| Telemetry tab (pre-1.23.0 lab) | banner *Automatic telemetry is not enabled for this lab yet* with the **Enable** button, *Open Grafana ↗* offered, nodes *Off*; no console errors |
+| **Enable automatic telemetry** on the live cEOS pair | both nodes went Waiting → Configuring → Connecting → Streaming within seconds; `applied=0` (containerlab's default `management api gnmi` / `transport grpc default` found, nothing written, no `telemetry.configure` event); endpoint `172.20.20.x:6030` plain text, JSON_IETF |
+| Store after two minutes of streaming | `samples=116 dropped=60` and `samples=124 dropped=52`; Ethernet1 `rx_bps=None`, admin/oper empty on every interface; map link *unknown* |
+| Raw pygnmi probe from the manager container | one 10 s cycle of `Ethernet1 counters` arrived as four notifications with timestamp ages 718 s (idle counters), 2 s (`in-octets`, `in-pkts`), 247 s (`in-unicast-pkts`) and 0.1 s (`last-update`): cEOS stamps each notification with the last change time of its leaves; a plain on-change subscription for `oper-status`/`admin-status` returned the sync marker and nothing else in 14 s, on-change with a 5 s heartbeat and sample mode both delivered the value every interval |
+| After two quiet minutes | both nodes' BGP group `failed` ("No notifications for two minutes; resubscribing.") on a lab without BGP; the pill was red in the Telemetry tab |
+| `docker restart clab-ceos-pair-ceos2` | the node reported *failed: The gNMI port did not answer* and the retry delay grew 15, 30, 60, 120, 240 s (`attempts=5` after eight minutes) |
+
+## Fixes and their live verification (hot-loaded into the running container, then re-staged)
+
+| Fix | Verification |
+|---|---|
+| `compose.telemetry.yml` without `--web.enable-remote-write-receiver=false` | Prometheus ready 2 s after `up -d --force-recreate`; target `http://127.0.0.1:8081/api/telemetry/metrics` `up`; Grafana data-source health `Successfully queried the Prometheus API`; *Lab overview* rendered with no error (find "error" on the page: none), Lab variable resolved to `ceos-pair`, *Nodes with telemetry* 2 |
+| `setup-telemetry.sh` waits (`setup_telemetry.py --wait`) | unit-tested against stub servers (ready path, Prometheus down path, Grafana down path); exercised on the final re-stage (see below) |
+| `deploy/telemetry/smoke.py` in CI | stdlib script; runs in the release-check workflow on push (result recorded in the PR checks) |
+| Store: per-leaf ordering, receive-time rates and points, `POINT_MERGE`, per-field newest rate | after the hot-load: `dropped=0` on both nodes, Management0 rates present, Ethernet1 `rx_bps` follows traffic; with 10 pps × 1400 B ping between the nodes both ends showed ≈111 kb/s RX (`111244` / `111242` b/s), chart in the Telemetry tab drew the ramp; `tx_bps` 0 because the cEOS container reports 0 `out-octets` on data ports (`show interfaces Ethernet1 counters`: OutOctets 0 while InOctets grew by exactly the ping bytes) |
+| EOS on-change state with heartbeat | admin/oper `UP/UP` on every interface within 10 s; map link *up* from both ends, green wire, green node dots, live legend |
+| Flap | `shutdown` on ceos2 Ethernet1: link *down*, both ends `DOWN`, within 3 s; `no shutdown`: *up* within 3 s; rates resumed; Grafana *Interfaces* operational-state timeline showed the red gap |
+| Idle groups | after the hot-load the BGP group reads `idle` ("nothing to report on this path"), interfaces `streaming`; in-process gNMI server test drives the same transition and the return to streaming when a neighbour appears |
+| Retry cap for a port that does not answer | after `docker restart` the node retried every 30 s (`connecting` every fourth 10 s poll) instead of backing off to minutes; note that a bare `docker restart` also removes containerlab's veth links (Ethernet1 disappeared on the restarted cEOS and its gNMI server stayed "not yet running"), so the lab was recovered with a manager redeploy — see below |
+| check-install hints | unit tests cover the "Prometheus does not answer" and "target down with classified error" cases; the FAIL text no longer echoes scrape errors |
+
+## Redeploy, disable and remove, other features while streaming
+
+Filled in below from the final run on the re-staged 1.23.1 tree.
+
 # Automatic network telemetry — 1.23.0
 
 Prepared on `claude/keen-dirac-qk9zzi` from main `36dfdf6` (1.22.0). Scope: the

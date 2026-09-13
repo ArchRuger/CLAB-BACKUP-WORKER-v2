@@ -258,14 +258,17 @@ class InstallationCheckTests(unittest.TestCase):
         ctx.http.assert_not_called()
 
     def test_telemetry_dashboard_check_probes_grafana_and_prometheus(self):
-        def router(grafana, healthy=True, scraping=True):
+        def router(grafana, healthy=True, scraping=True, prometheus=True):
             def request(path, payload=None, base=None, **kwargs):
                 if path == '/api/telemetry/health':
                     return check.Result(0), {'enabled': True, 'grafana': grafana}
                 if path == '/api/health' and base == 'http://127.0.0.1:3100':
                     return check.Result(0), {'database': 'ok' if healthy else 'failing', 'version': PRIVATE}
                 if path == '/api/v1/targets' and base == 'http://127.0.0.1:9090':
-                    return check.Result(0), {'status': 'success', 'data': {'activeTargets': [{'health': 'up' if scraping else 'down', 'scrapeUrl': PRIVATE}]}}
+                    if not prometheus:
+                        return check.Result(reason='connection refused'), None
+                    return check.Result(0), {'status': 'success', 'data': {'activeTargets': [{'health': 'up' if scraping else 'down', 'scrapeUrl': PRIVATE,
+                                                                                                    'lastError': '' if scraping else 'server returned HTTP status 404 Not Found ' + PRIVATE}]}}
                 return check.Result(reason='unexpected route'), None
             return request
         ctx = context()
@@ -286,6 +289,16 @@ class InstallationCheckTests(unittest.TestCase):
         ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, scraping=False))
         check.check_telemetry_dashboards(ctx)
         self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL'); self.assertIn('scrape target', by_id(ctx, 'telemetry-dashboards')['fix'])
+        self.assertIn('answered 404', by_id(ctx, 'telemetry-dashboards')['detail'], 'the scrape error is classified, not echoed')
+        self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
+        # A crash-looping Prometheus (1.23.0 shipped a rejected command-line flag) answers nothing:
+        # point at its container state and logs, not at the scrape target.
+        ctx = context()
+        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, prometheus=False))
+        check.check_telemetry_dashboards(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL')
+        self.assertIn('every dashboard panel shows an error', by_id(ctx, 'telemetry-dashboards')['detail'])
+        self.assertIn('logs --tail=40 prometheus', by_id(ctx, 'telemetry-dashboards')['fix'])
         ctx = context()
         ctx.http = Mock(side_effect=router({'enabled': True, 'port': 0, 'prometheus_port': 9090}))
         check.check_telemetry_dashboards(ctx)

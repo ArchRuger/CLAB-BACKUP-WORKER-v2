@@ -36,10 +36,11 @@ class SetupScriptTests(unittest.TestCase):
                 self.assertIn(expected, first)
             password = re.search(r'TELEMETRY_GRAFANA_ADMIN_PASSWORD=(\S+)', first)[1]
             self.assertGreaterEqual(len(password), 20)
-            self.assertEqual(oct(env.stat().st_mode & 0o777), '0o600')
+            if os.name == 'posix': self.assertEqual(oct(env.stat().st_mode & 0o777), '0o600')
             rendered = (config / 'prometheus.yml').read_text()
             self.assertIn("targets: ['127.0.0.1:8088']", rendered); self.assertIn('metrics_path: /api/telemetry/metrics', rendered)
-            self.assertIn('scrape_interval: 10s', rendered); self.assertEqual(oct((config / 'prometheus.yml').stat().st_mode & 0o777), '0o644')
+            self.assertIn('scrape_interval: 10s', rendered)
+            if os.name == 'posix': self.assertEqual(oct((config / 'prometheus.yml').stat().st_mode & 0o777), '0o644')
             yaml.safe_load(rendered)
             env.write_text(first.replace('TELEMETRY_GRAFANA_PORT=3000', 'TELEMETRY_GRAFANA_PORT=3100'))
             self.assertEqual(setup.configure(env, config)['grafana_port'], 3100)
@@ -56,9 +57,61 @@ class SetupScriptTests(unittest.TestCase):
                     setup.configure(env, config)
                 self.assertEqual(env.read_text(), text); self.assertFalse(config.exists())
             real = Path(folder) / 'real.env'; real.write_text('UI_PORT=8081\n')
-            link = Path(folder) / 'link.env'; os.symlink(real, link)
+            link = Path(folder) / 'link.env'
+            try: os.symlink(real, link)
+            except OSError as error: self.skipTest('symlinks are not permitted here: ' + str(error))
             with self.assertRaisesRegex(ValueError, 'symlink'):
                 setup.configure(link, config)
+
+
+class ReadinessWaitTests(unittest.TestCase):
+    """setup-telemetry.sh must not report success while Prometheus or Grafana are restarting."""
+    def serve(self, handler):
+        import http.server
+        import threading
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        return server.server_address[1]
+
+    def env(self, folder, grafana, prometheus):
+        env = Path(folder) / '.env'
+        env.write_text(f'TELEMETRY_STACK=grafana\nTELEMETRY_GRAFANA_PORT={grafana}\nTELEMETRY_PROMETHEUS_PORT={prometheus}\n')
+        return env
+
+    def test_ready_when_both_services_answer_and_targets_are_reported(self):
+        import http.server
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_GET(self):
+                body = {'/-/ready': b'Prometheus Server is Ready.\n', '/api/health': b'{"database": "ok", "version": "13.0.2"}',
+                        '/api/v1/targets': json.dumps({'status': 'success', 'data': {'activeTargets': [
+                            {'scrapeUrl': 'http://127.0.0.1:8081/api/telemetry/metrics', 'health': 'up', 'lastError': ''}]}}).encode()}.get(self.path)
+                self.send_response(200 if body else 404); self.end_headers(); self.wfile.write(body or b'')
+        port = self.serve(Handler)
+        with tempfile.TemporaryDirectory() as folder:
+            result = setup.wait_ready(self.env(folder, port, port), timeout=10)
+        self.assertEqual(result['targets'], [('http://127.0.0.1:8081/api/telemetry/metrics', 'up', '')])
+        self.assertEqual((result['grafana_port'], result['prometheus_port']), (port, port))
+
+    def test_a_restarting_service_fails_the_wait_with_the_reason(self):
+        import http.server
+        import socket
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args): pass
+            def do_GET(self):
+                self.send_response(200); self.end_headers(); self.wfile.write(b'{"database": "ok"}')
+        grafana = self.serve(Handler)
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0)); closed = probe.getsockname()[1]
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(ValueError, r'Not ready after 3 s: Prometheus on 127\.0\.0\.1:\d+ \(no answer\)') as caught:
+                setup.wait_ready(self.env(folder, grafana, closed), timeout=3)
+            self.assertNotIn('Grafana', str(caught.exception))
+            with self.assertRaisesRegex(ValueError, 'Grafana on'):
+                setup.wait_ready(self.env(folder, closed, grafana), timeout=3)
 
 
 class StackDefinitionTests(unittest.TestCase):
@@ -73,6 +126,11 @@ class StackDefinitionTests(unittest.TestCase):
             self.assertNotIn('ports', service); self.assertNotIn('/var/run/docker.sock', json.dumps(service))
         self.assertIn('--web.listen-address=127.0.0.1:${TELEMETRY_PROMETHEUS_PORT:-9090}', services['prometheus']['command'])
         self.assertIn('--storage.tsdb.retention.time=2h', services['prometheus']['command'])
+        # Prometheus (kingpin) boolean flags take --flag or --no-flag; '--flag=false' aborts start-up
+        # with 'unexpected false' and the whole stack crash-loops (seen live in 1.23.0).
+        self.assertEqual([c for c in services['prometheus']['command'] if c.endswith(('=false', '=true'))], [])
+        self.assertFalse(any('remote-write-receiver' in c for c in services['prometheus']['command']))
+        self.assertIn('setup_telemetry.py" "$env_file" --wait', (ROOT / 'deploy/setup-telemetry.sh').read_text(), 'setup waits for a healthy stack')
         self.assertEqual(services['grafana']['environment']['GF_AUTH_ANONYMOUS_ORG_ROLE'], 'Viewer')
         self.assertIn('TELEMETRY_GRAFANA_ADMIN_PASSWORD:?', services['grafana']['environment']['GF_SECURITY_ADMIN_PASSWORD'])
         for volume in compose['volumes'].values():
@@ -94,7 +152,7 @@ class StackDefinitionTests(unittest.TestCase):
         self.assertEqual([f.stem for f in files], ['bgp', 'interface', 'lab-overview'])
         uids = set()
         for path in files:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding='utf-8'))
             uids.add(data['uid'])
             self.assertFalse(data['editable']); self.assertEqual(data['refresh'], '10s'); self.assertIn('lab', [v['name'] for v in data['templating']['list']])
             for variable in data['templating']['list']:
@@ -111,7 +169,7 @@ class StackDefinitionTests(unittest.TestCase):
                     self.assertIn('lab="$lab"', target['expr'])
         self.assertEqual(uids, {'clab-lab-overview', 'clab-interface', 'clab-bgp'})
         for path in files:
-            for link in json.loads(path.read_text())['links']:
+            for link in json.loads(path.read_text(encoding='utf-8'))['links']:
                 self.assertTrue(link['url'].startswith('/d/clab-'))
 
     def test_manager_announces_the_stack_from_its_environment(self):

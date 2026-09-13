@@ -26,6 +26,14 @@ else
   docker compose --env-file "$env_file" -f "$script_dir/compose.telemetry.yml" pull
   # Recreate every service so a changed port or password takes effect.
   docker compose --env-file "$env_file" -f "$script_dir/compose.telemetry.yml" up -d --force-recreate --remove-orphans
+  # A service that starts and then crash-loops (a rejected flag, an unreadable scrape
+  # configuration, a busy port) must fail here, not as errors on every dashboard panel.
+  if ! /usr/bin/python3 "$script_dir/setup_telemetry.py" "$env_file" --wait; then
+    echo 'The telemetry services did not become ready. Last log lines:' >&2
+    docker compose --env-file "$env_file" -f "$script_dir/compose.telemetry.yml" ps >&2 || true
+    docker compose --env-file "$env_file" -f "$script_dir/compose.telemetry.yml" logs --tail=20 >&2 || true
+    exit 1
+  fi
   port=$(grep -E '^TELEMETRY_GRAFANA_PORT=' "$env_file" | tail -1 | cut -d= -f2)
   echo "Grafana dashboards installed on TCP ${port:-3000}; anonymous viewers can read them, admin edits need the password in clab-backup-ui/.env (TELEMETRY_GRAFANA_ADMIN_PASSWORD)."
 fi

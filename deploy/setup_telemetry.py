@@ -86,16 +86,74 @@ def configure(env_path, config_dir, enable=True):
     if enable:
         config_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
         # World-readable: Prometheus runs as nobody and only needs to read it.
-        write_atomic(config_dir / 'prometheus.yml', PROMETHEUS.format(ui_port=ui_port), 0o644, os.getuid(), os.getgid())
+        write_atomic(config_dir / 'prometheus.yml', PROMETHEUS.format(ui_port=ui_port), 0o644,
+                     getattr(os, 'getuid', lambda: 0)(), getattr(os, 'getgid', lambda: 0)())
     return {'ui_port': ui_port, 'grafana_port': grafana_port, 'prometheus_port': prometheus_port, 'bind': bind}
+
+
+def wait_ready(env_path, timeout=90, base='http://127.0.0.1'):
+    """Block until Prometheus answers /-/ready and Grafana /api/health, else raise with the reason.
+
+    A stack that starts but crash-loops (a rejected command-line flag, an unreadable
+    scrape configuration, a port already in use) must fail the setup loudly instead of
+    leaving dashboards that show only errors.
+    """
+    import json
+    import time
+    from urllib.error import HTTPError, URLError
+    from urllib.request import ProxyHandler, build_opener
+    values = read_values(Path(env_path).read_text(encoding='utf-8'))
+    grafana_port = port_value(values, 'TELEMETRY_GRAFANA_PORT', 3000)
+    prometheus_port = port_value(values, 'TELEMETRY_PROMETHEUS_PORT', 9090)
+    opener = build_opener(ProxyHandler({}))
+    checks = {'Prometheus': (f'{base}:{prometheus_port}/-/ready', None),
+              'Grafana': (f'{base}:{grafana_port}/api/health', 'database')}
+    deadline = time.monotonic() + timeout
+    pending = dict(checks)
+    last = {}
+    while pending and time.monotonic() < deadline:
+        for name, (url, key) in list(pending.items()):
+            try:
+                with opener.open(url, timeout=5) as response:
+                    body = response.read(65536)
+                    if key is None or json.loads(body.decode('utf-8', 'replace')).get(key) == 'ok':
+                        pending.pop(name)
+                        continue
+                    last[name] = 'unexpected answer'
+            except HTTPError as error:
+                last[name] = f'HTTP {error.code}'
+            except (URLError, OSError, ValueError) as error:
+                last[name] = 'no answer'
+        if pending:
+            time.sleep(2)
+    if pending:
+        raise ValueError('Not ready after ' + str(timeout) + ' s: '
+                         + ', '.join(f'{name} on 127.0.0.1:{prometheus_port if name == "Prometheus" else grafana_port} ({last.get(name, "no answer")})' for name in pending)
+                         + '. The services are not healthy; inspect their logs before using the dashboards.')
+    target = f'{base}:{prometheus_port}/api/v1/targets'
+    try:
+        with opener.open(target, timeout=5) as response:
+            active = json.loads(response.read(1 << 20).decode('utf-8', 'replace')).get('data', {}).get('activeTargets', [])
+    except (HTTPError, URLError, OSError, ValueError):
+        active = []
+    return {'grafana_port': grafana_port, 'prometheus_port': prometheus_port,
+            'targets': [(t.get('scrapeUrl', ''), t.get('health', ''), t.get('lastError', '')) for t in active if isinstance(t, dict)]}
 
 
 if __name__ == '__main__':
     try:
+        if '--wait' in sys.argv[2:]:
+            result = wait_ready(sys.argv[1])
+            targets = result['targets']
+            print(f"Prometheus on 127.0.0.1:{result['prometheus_port']} and Grafana on TCP {result['grafana_port']} are ready.")
+            for url, health, error in targets:
+                print(f'Scrape target {url}: {health}' + (f' ({error})' if error else '')
+                      + ('' if health == 'up' else '. The manager answers /api/telemetry/metrics from release 1.23.0; recreate it after this setup and rerun check-install.sh.'))
+            sys.exit(0)
         enable = '--remove' not in sys.argv[3:]
         result = configure(sys.argv[1], sys.argv[2], enable)
     except (OSError, ValueError, IndexError) as error:
-        sys.exit(str(error) or 'Usage: setup_telemetry.py ENV_FILE CONFIG_DIR [--remove]')
+        sys.exit(str(error) or 'Usage: setup_telemetry.py ENV_FILE CONFIG_DIR [--remove] | setup_telemetry.py ENV_FILE --wait')
     if enable:
         print(f"Telemetry dashboard settings saved: Grafana on {result['bind']}:{result['grafana_port']}, Prometheus on 127.0.0.1:{result['prometheus_port']} scraping the manager on port {result['ui_port']}. Unrelated settings and an existing admin password were retained.")
     else:

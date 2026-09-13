@@ -56,8 +56,11 @@ class NormalizeTests(unittest.TestCase):
     def test_timestamps_far_from_now_are_replaced_by_receive_time(self):
         now = time.time()
         message = {'update': {'timestamp': int((now - 3600) * 1e9), 'prefix': '/interfaces/interface[name=Ethernet1]/state', 'update': [{'path': 'oper-status', 'val': 'DOWN'}]}}
-        self.assertEqual(normalize(message, now)[0]['ts'], now)
+        replaced = normalize(message, now)[0]
+        self.assertEqual((replaced['ts'], replaced['received'], replaced['synthetic']), (now, now, True))
         message['update']['timestamp'] = int((now - 5) * 1e9)
+        genuine = normalize(message, now)[0]
+        self.assertEqual((genuine['received'], genuine['synthetic']), (now, False), 'every record carries the receive time; only replaced stamps are synthetic')
         self.assertAlmostEqual(normalize(message, now)[0]['ts'], now - 5, places=3)
         self.assertEqual(normalize({'sync_response': True}, now), []); self.assertEqual(normalize(None, now), [])
 

@@ -1,4 +1,4 @@
-# Network telemetry — 1.23.0
+# Network telemetry — 1.23.1
 
 Live interface rates, link state and BGP neighbour state from the nodes of a
 deployed lab, collected automatically and kept in memory for the last hour. No
@@ -76,10 +76,16 @@ sequenceDiagram
 4. **Normalisation.** Records carry the lab, the node, a generation (one per boot
    cycle and provisioning attempt), the interface or neighbour, the metric, the
    device timestamp (or receive time when the device clock is off by more than five
-   minutes) and the collection method. Rates come from counter deltas over elapsed
-   device time. A counter that goes backwards is a reset (no rate, counted per
-   interface), the first sample and a sample after a gap longer than five minutes
-   produce no rate, out-of-order samples are ignored, and a record from another
+   minutes), the manager's receive time and the collection method. Rates come from
+   counter deltas over the elapsed receive time; the device timestamp only orders
+   the samples of one leaf. That distinction matters on cEOS, which stamps every
+   notification with the last change time of the leaves it carries: one 10 s cycle
+   arrives as several notifications whose timestamps differ by minutes (idle
+   counters, changing counters and interface state each in their own), and ordering
+   a whole interface on one clock discarded half of them. A counter that goes
+   backwards is a reset (no rate, counted per interface), the first sample and a
+   sample after a gap longer than five minutes produce no rate, a sample older than
+   the last accepted sample of the same leaf is ignored, and a record from another
    generation is dropped, so a previous deployment with the same node name and
    address can never feed the new one.
 
@@ -100,8 +106,10 @@ commit alone leaves the node in *Configuring* or *Connecting*.
 | Failed | A concrete reason: login refused, port unreachable, NOS rejected the configuration, gNMI needs a password login, enable password missing | Fix it and press *Retry now*; retries also happen by themselves with a growing delay (15 s to 5 min) |
 
 A partially supported node (for example interfaces streaming, BGP model not
-advertised) stays *Streaming* and shows the BGP group as unavailable. Unsupported
-metrics show as `n/a`, never as zero.
+advertised) stays *Streaming* and shows the BGP group as unavailable. A group whose
+path has nothing behind it (BGP subscribed on a node without neighbours) shows
+*idle* after two quiet minutes: the subscription stays open and turns streaming
+when a neighbour appears. Unsupported metrics show as `n/a`, never as zero.
 
 ## Settings
 
@@ -134,11 +142,11 @@ The manager environment variable `TELEMETRY_COLLECTOR` (`gnmi`, the default, or
 | Service the manager expects | `management api gnmi`, `transport grpc default`, TCP 6030 | `grpc` with `no-tls`, TCP 57400 | `system services extension-service request-response grpc clear-text`, TCP 32767 |
 | Lines added when missing | `management api gnmi` / `transport grpc default` (/ `vrf X`) | `grpc` / `port 57400` / `no-tls` (/ `vrf X`), or `no-tls` alone under an existing `grpc` | `set … grpc clear-text port 32767` (/ `routing-instance mgmt_junos`) |
 | Commit semantics | running-config only, no save | `commit` of this session's candidate | `configure private` + `commit and-quit` |
-| Interface counters and state | OpenConfig `/interfaces/interface/state` (counters sampled every 10 s, oper/admin on change with a sampled fallback) | `openconfig-interfaces:` origin, everything sampled every 10 s | OpenConfig `/interfaces/interface/state`, sampled every 10 s |
+| Interface counters and state | OpenConfig `/interfaces/interface/state` (counters sampled every 10 s, oper/admin on change with a 10 s heartbeat because cEOS sends no initial value for a plain on-change subscription; sampled fallback) | `openconfig-interfaces:` origin, everything sampled every 10 s | OpenConfig `/interfaces/interface/state`, sampled every 10 s |
 | BGP neighbours | `/network-instances/…/bgp/neighbors/neighbor/state/session-state` and `afi-safis/afi-safi/state/prefixes` | same with the `openconfig-network-instance:` origin | same, when the image advertises the model |
 | Encodings tried | JSON_IETF, JSON, PROTO | JSON_IETF, PROTO | JSON_IETF, PROTO |
 | Wiring name mapping | `eth1` → `Ethernet1`, `eth1_1` → `Ethernet1/1` | `eth1` → `GigabitEthernet0/0/0/0`, `Gi0/0/0/N` accepted | `eth4` → `et-0/0/0` (eth1–3 reserved), `et-0/0/N[.unit]` accepted |
-| Validation status (1.23.0) | fixture and in-process gNMI server only | fixture and in-process gNMI server only | fixture and in-process gNMI server only |
+| Validation status (1.23.1) | live on the dev VM (cEOS 4.35.0F): provisioning check, streaming, rates under traffic, link colours, shutdown/no shutdown, node restart, Grafana | fixture and in-process gNMI server only | fixture and in-process gNMI server only |
 
 Other kinds (vQFX, vJunos-switch, Linux, unmapped) report *Unsupported* and their
 links show as *no telemetry*.
@@ -203,11 +211,22 @@ What this does:
   rates, errors and discards, an operational-state timeline, an interface table,
   filtered by lab, node and interface) and **BGP neighbours** (session table,
   established timeline, prefixes received and sent).
+- The setup then waits until Prometheus answers `/-/ready` and Grafana `/api/health`
+  (90 s at most) and prints the scrape target's health. A service that starts and
+  then crash-loops fails the setup with the Compose status and its last log lines
+  instead of leaving dashboards whose every panel shows an error (1.23.0 shipped a
+  Prometheus flag that v3.14.0 rejects; CI now starts the real stack against a
+  fixture manager and runs every dashboard query, `deploy/telemetry/smoke.py`).
 - The manager, once recreated with the new `.env`, shows **Open Grafana ↗** in the
   Telemetry tab (the Lab overview filtered to the lab) and **Grafana ↗** on the
   selected node (the Interfaces dashboard filtered to that node and port). The links
   use the manager's own host name with the Grafana port, so they work from any
   workstation that reaches the manager.
+
+A state timeline with nothing to show yet (*Session established* on a lab without
+BGP, *Operational state* for a filter that matches no interface) says *Data does not
+have a time field*: that is Grafana's wording for an empty query result, not a
+failure; it fills in as soon as the manager exports the series.
 
 Open `http://VM_IP:3000/`. Anonymous visitors are Viewers (read-only); editing needs
 the `admin` login with `TELEMETRY_GRAFANA_ADMIN_PASSWORD` from `clab-backup-ui/.env`.
@@ -224,8 +243,10 @@ are listed in `deploy/TELEMETRY-THIRD-PARTY-NOTICES.md`.
 collector is disabled, PASS with the linked labs' verdicts, WARN when a lab reports
 failed nodes, and a manual step to confirm charts and link colours follow real
 traffic and an interface shutdown. **Grafana telemetry dashboards** is INFO when the
-stack is not installed, and otherwise checks Grafana's health endpoint and that
-Prometheus scrapes the manager.
+stack is not installed, and otherwise checks Grafana's health endpoint, that
+Prometheus answers at all (a crash-looping container is reported with the Compose
+commands that show its state and logs) and that it scrapes the manager (a scrape
+error is classified, for example a 404 from a manager older than 1.23.0).
 
 ## Live acceptance procedure
 
@@ -247,9 +268,15 @@ Run this on a lab VM with one node of each kind, after installing 1.23.0 with
    confirm the other end still reports, with *the two ends disagree* in the title.
 6. Where BGP runs, clear a session and confirm the neighbour state and prefix
    counts change.
-7. Restart one node (`docker restart` or *Restart lab nodes*): the node returns to
-   Waiting, then streams again with a new generation and an empty chart;
-   `telemetry.clear` appears when the operation is submitted through the manager.
+7. Restart one node. Through the manager (*Restart lab nodes*, stop, destroy or
+   redeploy) the lab's session is cleared at once (`telemetry.clear` in the action
+   log) and the node returns to Waiting. After a bare `docker restart` the address
+   and running state do not change, so the node reports *Failed: the gNMI port did
+   not answer* while the NOS boots and retries every 30 s; it streams again with a
+   new generation and an empty chart shortly after the service answers. Prefer the
+   manager's operations for this: a bare `docker restart` also removes the veth links
+   containerlab created (on the dev VM the restarted cEOS came back without
+   Ethernet1 and never started its gNMI server), which only a redeploy repairs.
    Redeploy the lab and confirm no old samples appear under the new deployment.
 8. Turn automatic telemetry off, use **Remove manager-added lines…**, and confirm
    only the manager's lines are gone (Junos: the `grpc clear-text` statement; EOS
@@ -260,13 +287,17 @@ Run this on a lab VM with one node of each kind, after installing 1.23.0 with
 Record the versions of the three images and the outcome of each step in
 `clab-backup-ui/VALIDATION.md`.
 
-## Limitations in 1.23.0
+## Limitations in 1.23.1
 
-- No live device validation was possible for this release; the three adapters were
-  validated against fixtures and an in-process gNMI server. The paths, encodings,
-  prompts and configuration lines follow the vendors' documentation and containerlab
-  defaults, but a specific image may reject a path or need an extra line; the node
-  then reports the exact failure and *Retry now* re-checks it.
+- cEOS is validated live (4.35.0F on the dev VM, see VALIDATION.md); the XRv9k and
+  cJunosEvolved adapters are still validated against fixtures and an in-process gNMI
+  server only. Their paths, encodings, prompts and configuration lines follow the
+  vendors' documentation and containerlab defaults, but a specific image may reject
+  a path or need an extra line; the node then reports the exact failure and *Retry
+  now* re-checks it.
+- cEOS in a container reports transmit counters of 0 on its data ports (the
+  container data plane has no hardware TX counters), so TX rates on cEOS links read
+  0 b/s while RX on the far end shows the traffic. Management0 counts both ways.
 - Utilisation percentages are not shown: a virtual interface's speed does not
   describe real throughput. Discards and errors are device counters, not measured
   end-to-end loss.

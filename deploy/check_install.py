@@ -644,6 +644,18 @@ def check_telemetry(ctx):
             'Streaming means usable samples arrived; waiting labs are still booting or have telemetry turned off.')
 
 
+def scrape_problem(text):
+    """A controlled description of a Prometheus scrape error; the raw text is never printed."""
+    lowered = str(text or '').lower()
+    if 'status 404' in lowered:
+        return 'the manager answered 404 for /api/telemetry/metrics (a release before 1.23.0, or another service on UI_PORT)'
+    if 'connection refused' in lowered or 'no such host' in lowered or 'timeout' in lowered or 'deadline' in lowered:
+        return 'the manager port did not answer'
+    if 'status' in lowered:
+        return 'the manager answered with an unexpected HTTP status'
+    return 'the scrape failed'
+
+
 def check_telemetry_dashboards(ctx):
     """Read-only: the optional Grafana stack, when the manager announces it."""
     title = 'Grafana telemetry dashboards'
@@ -664,13 +676,19 @@ def check_telemetry_dashboards(ctx):
     ready_result, ready = ctx.http('/api/health', base=f'http://127.0.0.1:{port}')
     if not ready_result.ok or not isinstance(ready, dict) or ready.get('database') != 'ok':
         ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana did not answer /api/health on 127.0.0.1:{port}.',
-                'Run sudo bash deploy/setup-telemetry.sh and inspect: sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.telemetry.yml logs --tail=80 grafana')
+                'Inspect: sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.telemetry.yml ps; then logs --tail=80 grafana; then rerun sudo bash deploy/setup-telemetry.sh.')
         return
     targets_result, targets = ctx.http('/api/v1/targets', base=f'http://127.0.0.1:{prometheus}')
-    active = targets.get('data', {}).get('activeTargets', []) if targets_result.ok and isinstance(targets, dict) and isinstance(targets.get('data'), dict) else None
+    if not targets_result.ok:
+        ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana answers, but Prometheus on 127.0.0.1:{prometheus} does not: every dashboard panel shows an error.',
+                'Inspect: sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.telemetry.yml ps; then logs --tail=40 prometheus (a restarting container names the rejected flag or file); then rerun sudo bash deploy/setup-telemetry.sh.')
+        return
+    active = targets.get('data', {}).get('activeTargets', []) if isinstance(targets, dict) and isinstance(targets.get('data'), dict) else None
     if not isinstance(active, list) or not any(isinstance(t, dict) and t.get('health') == 'up' for t in active):
-        ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana answers, but Prometheus on 127.0.0.1:{prometheus} is not scraping the manager.',
-                'Rerun sudo bash deploy/setup-telemetry.sh (it rewrites the scrape target for the current UI_PORT) and check the prometheus service logs.')
+        errors = sorted({scrape_problem(t.get('lastError')) for t in (active or []) if isinstance(t, dict) and t.get('lastError')})
+        ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana and Prometheus answer, but Prometheus on 127.0.0.1:{prometheus} is not scraping the manager'
+                + (': ' + '; '.join(errors) if errors else '') + '.',
+                'The manager must be release 1.23.0 or later and recreated with the current .env; then rerun sudo bash deploy/setup-telemetry.sh (it rewrites the scrape target for the current UI_PORT).')
         return
     ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana on TCP {port} is healthy and Prometheus scrapes the manager metrics endpoint.')
     ctx.manual.append(f'Grafana: open http://VM_IP:{port}/ from the workstation and confirm the Lab overview dashboard shows the deployed lab.')

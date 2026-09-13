@@ -5,13 +5,19 @@ neighbour, a bounded number of interfaces and neighbours per node and of nodes p
 manager. Nothing is written to the encrypted state, the backups, Git or the data
 directory, so a manager restart starts empty and a browser refresh changes nothing.
 
-Rates are derived from counter deltas over the elapsed device time. A counter that
-goes backwards (device restart, interface re-creation) is recorded as a reset and
+Rates are derived from counter deltas over the elapsed time at the manager (the
+receive time of the two samples). Device timestamps only order the samples of one
+leaf: EOS stamps every notification with the last change time of the leaves it
+carries, so one 10 s cycle arrives as several notifications whose timestamps differ by
+minutes, and a per-interface clock would discard whichever group is older (seen live
+on cEOS: half the samples dropped, no receive rate, no operational state). A counter
+that goes backwards (device restart, interface re-creation) is recorded as a reset and
 produces no rate; the first sample of a series and a sample that follows a long gap
-produce no rate either, so a chart never shows a negative value or a giant spike.
-Out-of-order samples are ignored. A record whose generation is not the generation
-the store currently accepts for that node (an earlier deployment of the same lab and
-node name, possibly with the same address) is dropped and counted.
+produce no rate either, so a chart never shows a negative value or a giant spike. A
+sample older than the last accepted sample of the same leaf is ignored. A record whose
+generation is not the generation the store currently accepts for that node (an earlier
+deployment of the same lab and node name, possibly with the same address) is dropped
+and counted.
 """
 from collections import deque
 import threading
@@ -24,7 +30,8 @@ MAX_INTERFACES = 96             # per node
 MAX_PEERS = 64                  # per node
 MAX_NODES = 512                 # per manager
 MAX_GAP = 300                   # seconds; a longer gap between counter samples restarts the rate
-MIN_GAP = 0.5                   # seconds; closer samples are merged into the previous point
+MIN_GAP = 0.5                   # seconds; ordering slack between device timestamps of one leaf
+POINT_MERGE = INTERVAL / 2      # seconds; the notifications of one sample cycle share one chart point
 STALE_AFTER = 45                # seconds without a sample marks a node or series stale
 COUNTERS = {'in-octets': 'rx_bps', 'out-octets': 'tx_bps', 'in-pkts': 'rx_pps', 'out-pkts': 'tx_pps',
             'in-errors': 'rx_errors', 'out-errors': 'tx_errors',
@@ -56,38 +63,53 @@ def _enum(value):
 
 
 class Series:
-    """One interface: latest snapshot plus a bounded ring of rate points."""
-    __slots__ = ('name', 'points', 'last', 'latest', 'resets', 'method', 'at')
+    """One interface: latest snapshot plus a bounded ring of rate points (keyed by receive time)."""
+    __slots__ = ('name', 'points', 'last', 'latest', 'resets', 'method', 'at', 'stamps', 'rates')
 
     def __init__(self, name):
         self.name = name
-        self.points = deque(maxlen=POINTS)   # dicts: t plus the RATE_FIELDS that were computable
-        self.last = {}                       # counter leaf -> (t, value) of the previous sample
+        self.points = deque(maxlen=POINTS)   # dicts: t (receive time) plus the RATE_FIELDS that were computable
+        self.last = {}                       # counter leaf -> (receive time, value) of the previous sample
         self.latest = {}                     # counter leaf -> value; plus oper/admin status
+        self.stamps = {}                     # leaf -> device timestamp of the last accepted genuine sample
+        self.rates = {}                      # rate field -> (receive time, rate or None) of the newest sample
         self.resets = 0
         self.method = ''
-        self.at = 0.0
+        self.at = 0.0                        # receive time of the newest accepted sample
+
+    def accept(self, leaf, t, synthetic):
+        """Order the samples of one leaf by the device's own clock. A synthetic timestamp (the
+        collector replaced a device time that was off by more than its slack) is never compared,
+        so a skewed clock cannot shadow the device's later genuine timestamps."""
+        stamp = self.stamps.get(leaf)
+        if synthetic:
+            return True
+        if stamp is not None and t + MIN_GAP < stamp:
+            return False
+        self.stamps[leaf] = max(stamp or 0.0, t)
+        return True
 
     def counter(self, leaf, value, t):
-        """Record a counter sample; return (field, rate) or None when no rate is derivable."""
+        """Record a counter sample; return (field, rate), with rate None when none is derivable."""
         field = COUNTERS[leaf]
         previous = self.last.get(leaf)
         self.last[leaf] = (t, value)
         self.latest[leaf] = value
         if previous is None:
-            return None
+            return field, None
         elapsed = t - previous[0]
         if elapsed <= 0 or elapsed > MAX_GAP:
-            return None
+            return field, None
         if value < previous[1]:
             self.resets += 1
-            return None
+            return field, None
         rate = (value - previous[1]) / elapsed
         return field, rate * 8 if field in BITS else rate
 
     def point(self, t):
-        """The ring point for time t: the previous one when t is within MIN_GAP, else a new one."""
-        if self.points and abs(self.points[-1]['t'] - t) < MIN_GAP:
+        """The ring point for time t: the previous one when t is within POINT_MERGE (a device may
+        spread one sample cycle over several notifications a second or two apart), else a new one."""
+        if self.points and abs(self.points[-1]['t'] - t) < POINT_MERGE:
             return self.points[-1]
         if self.points and t < self.points[-1]['t']:
             return None
@@ -171,20 +193,23 @@ class TelemetryStore:
             if not isinstance(t, (int, float)) or t <= 0:
                 item.dropped += 1
                 return False
+            received = record.get('received')
+            if not isinstance(received, (int, float)) or received <= 0:
+                received = t          # records without a receive time (older collectors, tests) use the device clock
             kind = record.get('kind')
             if kind == 'interface':
-                changed = self._interface(item, record, float(t))
+                changed = self._interface(item, record, float(t), float(received))
             elif kind == 'bgp':
-                changed = self._peer(item, record, float(t))
+                changed = self._peer(item, record, float(received))
             else:
                 item.dropped += 1
                 return False
             if changed:
                 item.samples += 1
-                item.last_sample = max(item.last_sample, float(t))
+                item.last_sample = max(item.last_sample, float(received))
             return changed
 
-    def _interface(self, item, record, t):
+    def _interface(self, item, record, t, received):
         name = record.get('ident')
         if not isinstance(name, str) or not name or len(name) > 64:
             item.dropped += 1
@@ -202,26 +227,27 @@ class TelemetryStore:
             number = _number(value)
             if number is None:
                 return False
-            if t + MIN_GAP < series.at:
+            if not series.accept(metric, t, bool(record.get('synthetic'))):
                 item.dropped += 1
                 return False
-            result = series.counter(metric, number, t)
-            series.at = max(series.at, t)
+            field, rate = series.counter(metric, number, received)
+            series.rates[field] = (received, rate)
+            series.at = max(series.at, received)
             # A point exists for every counter sample, so a reset or a gap reads as
             # "no rate" rather than as the previous rate lingering in the chart.
-            point = series.point(t)
-            if result and point is not None:
-                point[result[0]] = result[1]
+            point = series.point(received)
+            if rate is not None and point is not None:
+                point[field] = rate
             return True
         if metric in STATES:
             text = _enum(value)
             if not text:
                 return False
-            if t + MIN_GAP < series.at:
+            if not series.accept(metric, t, bool(record.get('synthetic'))):
                 item.dropped += 1
                 return False
             series.latest[metric] = text
-            series.at = max(series.at, t)
+            series.at = max(series.at, received)
             return True
         return False
 
@@ -283,13 +309,15 @@ class TelemetryStore:
             self._expire(item, now)
             interfaces = []
             for series in item.interfaces.values():
-                latest = series.points[-1] if series.points else {}
                 row = {'name': series.name, 'oper': series.latest.get('oper-status', ''),
                        'admin': series.latest.get('admin-status', ''),
                        'at': series.at, 'fresh': now - series.at <= STALE_AFTER, 'method': series.method,
                        'resets': series.resets, 'totals': {k: v for k, v in series.latest.items() if k in COUNTERS}}
+                # Each rate is the newest one computed for its own counter: the notifications of one
+                # cycle may arrive seconds apart, so the last chart point alone would hide a direction.
                 for field in RATE_FIELDS:
-                    row[field] = latest.get(field) if now - latest.get('t', 0) <= STALE_AFTER else None
+                    at, rate = series.rates.get(field, (0.0, None))
+                    row[field] = rate if now - at <= STALE_AFTER else None
                 interfaces.append(row)
             peers = []
             for series in item.peers.values():
