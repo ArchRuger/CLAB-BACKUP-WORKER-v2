@@ -25,7 +25,7 @@ from .telemetry_store import COUNTERS, STATES
 
 CONNECT_TIMEOUT = 8
 FIRST_SAMPLE_TIMEOUT = 45      # seconds for the first usable interface record after subscribing
-GROUP_IDLE = 120               # seconds without any notification before a group is declared dead
+GROUP_IDLE = 120               # seconds without any notification before a group is reported idle (it stays open)
 CLOCK_SLACK = 300              # device timestamps further from now than this are replaced by receive time
 KEYS = {'interface': ('name',), 'subinterface': ('index',), 'neighbor': ('neighbor-address',),
         'afi-safi': ('afi-safi-name',), 'network-instance': ('name',), 'protocol': ('identifier', 'name')}
@@ -98,7 +98,10 @@ def normalize(message, received_at=None):
         return []
     stamp = body.get('timestamp') or 0
     ts = stamp / 1e9 if isinstance(stamp, (int, float)) and stamp > 1e15 else stamp
-    if not isinstance(ts, (int, float)) or abs(ts - now) > CLOCK_SLACK:
+    # The device timestamp only orders the samples of one leaf (EOS stamps each notification
+    # with the last change time of its leaves); rates, charts and freshness use the receive time.
+    synthetic = not isinstance(ts, (int, float)) or abs(ts - now) > CLOCK_SLACK
+    if synthetic:
         ts = now
     records = []
     for update in body.get('update', []) or []:
@@ -108,6 +111,8 @@ def normalize(message, received_at=None):
             record = classify(path, value)
             if record:
                 record['ts'] = ts
+                record['received'] = now
+                record['synthetic'] = synthetic
                 records.append(record)
     return records
 
@@ -149,6 +154,7 @@ class NodeCollector(threading.Thread):
         self.streams = {}                 # group -> subscriber
         self.last = {}                    # group -> monotonic time of the last notification
         self.usable = set()               # groups that delivered a chartable record
+        self.idle = set()                 # groups reported idle since their last notification
         self.dropped = 0
 
     def stop(self):
@@ -265,14 +271,23 @@ class NodeCollector(threading.Thread):
                     if subscriber.error is not None or (not subscriber._subscribe_thread.is_alive()):
                         reason, text = failure_reason(subscriber.error or RuntimeError('closed'))
                         self.drop_group(group, reason, text)
-                    elif time.monotonic() - self.last.get(group, 0) > GROUP_IDLE:
-                        self.drop_group(group, 'idle', 'No notifications for two minutes; resubscribing.')
+                    elif group not in self.idle and time.monotonic() - self.last.get(group, 0) > GROUP_IDLE:
+                        # A sampled path with nothing behind it (no BGP neighbour configured) sends
+                        # nothing at all on EOS; that is not a failure and the stream stays open. A
+                        # dead transport surfaces through subscriber.error and gRPC keepalive instead.
+                        self.idle.add(group)
+                        self.emit(event='group', group=group, status='idle',
+                                  message='No notifications for two minutes; the subscription stays open and the node has nothing to report on this path.')
                     continue
                 except Exception as error:
                     reason, text = failure_reason(error)
                     self.drop_group(group, reason, text)
                     continue
                 self.last[group] = time.monotonic()
+                if group in self.idle:
+                    self.idle.discard(group)
+                    self.emit(event='group', group=group, status='streaming' if group in self.usable else 'subscribed',
+                              message='Notifications resumed.')
                 self.handle(group, message, methods[group])
         if not self.stopping.is_set():
             raise RuntimeError('closed')

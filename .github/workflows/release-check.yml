@@ -72,6 +72,9 @@ jobs:
         env:
           TELEMETRY_GRAFANA_ADMIN_PASSWORD: fixture-password-not-secret
         run: docker compose -f deploy/compose.telemetry.yml config --quiet
+      - name: Start the real Grafana dashboards stack against a fixture manager
+        timeout-minutes: 10
+        run: python3 deploy/telemetry/smoke.py
       - name: Exercise browser Wireshark and real loopback packets
         timeout-minutes: 15
         run: '"$RUNNER_TEMP/clab-test-venv/bin/python" deploy/capture/smoke.py'

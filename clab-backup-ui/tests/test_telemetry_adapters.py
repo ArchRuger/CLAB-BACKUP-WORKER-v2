@@ -39,6 +39,9 @@ class EosAdapterTests(unittest.TestCase):
         variants = self.adapter.subscriptions('interfaces')
         self.assertEqual(variants[0][0], {'path': '/interfaces/interface/state/counters', 'mode': 'sample', 'sample_interval': SAMPLE_NS})
         self.assertEqual(variants[0][1]['mode'], 'on_change')
+        # cEOS sends no initial value for a plain on-change subscription; the heartbeat carries it.
+        self.assertEqual(variants[0][1]['heartbeat_interval'], SAMPLE_NS); self.assertEqual(variants[0][2]['heartbeat_interval'], SAMPLE_NS)
+        self.assertNotIn('heartbeat_interval', variants[1][1], 'the sampled fallback needs no heartbeat')
         self.assertTrue(all(v['mode'] == 'sample' for v in variants[1]))
         self.assertEqual(variants[-1], [{'path': '/interfaces/interface/state', 'mode': 'sample', 'sample_interval': SAMPLE_NS}])
         self.assertEqual(self.adapter.encodings[0], 'json_ietf')

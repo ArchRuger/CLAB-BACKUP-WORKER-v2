@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app import telemetry as manager_module
 from app.main import create_app
-from app.telemetry import RETRY_MAX, RETRY_MIN, TelemetryManager, end_status, link_status, summarize
+from app.telemetry import RETRY_CONNECT_MAX, RETRY_MAX, RETRY_MIN, TelemetryManager, end_status, link_status, summarize
 from app.telemetry_provision import ProvisionError
 
 
@@ -182,6 +182,14 @@ class TelemetryManagerTests(unittest.TestCase):
         self.assertEqual(len(FakeCollector.instances), 2)
         self.collector('clab-demo-r1').fail('connect', 'again')
         self.assertIn(f'Next attempt in {RETRY_MIN * 2} s', self.node_view('clab-demo-r1')['message'])
+        # A port that does not answer is a NOS booting after a container restart (its address and
+        # running state do not change, so nothing else resets the node): keep the retry short.
+        self.manager.status[('lab', 'clab-demo-r1')]['retry_at'] = 0
+        self.scan(); self.collector('clab-demo-r1').fail('connect', 'still booting')
+        self.assertIn(f'Next attempt in {RETRY_CONNECT_MAX} s', self.node_view('clab-demo-r1')['message'])
+        self.manager.status[('lab', 'clab-demo-r1')]['retry_at'] = 0
+        self.scan(); self.collector('clab-demo-r1').fail('error', 'unexpected')
+        self.assertIn(f'Next attempt in {RETRY_MIN * 2 ** 3} s', self.node_view('clab-demo-r1')['message'], 'other failures keep backing off')
         self.assertEqual(self.client.post('/api/labs/lab/telemetry/retry', json={'node': 'clab-demo-r1'}).json(), {'retried': ['clab-demo-r1']})
         self.scan()
         self.assertEqual(len(self.provisions), 2, 'an explicit retry checks the configuration again')

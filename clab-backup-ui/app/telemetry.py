@@ -46,6 +46,7 @@ MAX_PROVISIONING = 4            # concurrent SSH provisioning sessions
 MAX_COLLECTORS = 64             # concurrent gNMI sessions per manager
 RETRY_MIN = 15                  # seconds before the first retry after a failure
 RETRY_MAX = 300                 # backoff ceiling
+RETRY_CONNECT_MAX = 30          # ceiling while the gNMI port does not answer: a restarted NOS is booting
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'start', 'stop', 'restart', 'apply')
 STATES = ('disabled', 'waiting', 'configuring', 'connecting', 'streaming', 'stale', 'unsupported', 'failed')
 DOWN_STATES = ('DOWN', 'LOWER_LAYER_DOWN', 'NOT_PRESENT', 'TESTING', 'DORMANT')
@@ -368,6 +369,11 @@ class TelemetryManager:
             delay = min(RETRY_MAX, RETRY_MIN * 2 ** (status['attempts'] - 1))
             if reason == 'auth':
                 delay = RETRY_MAX
+            elif reason == 'connect':
+                # A container restart keeps the node's address and running state, so nothing
+                # else resets this node; a short retry brings it back as soon as the NOS answers
+                # (seen live: cEOS boots for about two minutes after docker restart).
+                delay = min(delay, RETRY_CONNECT_MAX)
             status['retry_at'] = time.monotonic() + delay
         self.set(key, 'failed', f'{message} Next attempt in {int(delay)} s.', log=True, level=level)
 
@@ -478,7 +484,9 @@ class TelemetryManager:
                      transport=event['transport'])
         elif kind == 'group':
             with self.lock:
-                status['groups'][event['group']] = {'status': event['status'], 'message': event['message'], 'encoding': event.get('encoding', '')}
+                previous = status['groups'].get(event['group'], {})
+                status['groups'][event['group']] = {'status': event['status'], 'message': event['message'],
+                                                    'encoding': event.get('encoding') or previous.get('encoding', '')}
                 groups = dict(status['groups'])
             if event['status'] == 'streaming' and status['state'] != 'streaming':
                 self.set(key, 'streaming', 'Usable samples are arriving.', log=True, first_sample=now())
@@ -487,10 +495,7 @@ class TelemetryManager:
             elif event['status'] == 'failed' and status['state'] == 'streaming' and all(g['status'] != 'streaming' for g in groups.values()):
                 pass   # the collector ends its session; check_stream schedules the reconnect
         elif kind == 'failed':
-            if event.get('reason') == 'auth':
-                self.schedule_retry(key, event['message'], reason='auth')
-            else:
-                self.schedule_retry(key, event['message'])
+            self.schedule_retry(key, event['message'], reason=event.get('reason') or '')
 
     def ingest(self):
         while not self.stopping.is_set():

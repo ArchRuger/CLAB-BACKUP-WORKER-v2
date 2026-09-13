@@ -19,7 +19,6 @@ services:
       - --storage.tsdb.retention.time=2h
       - --storage.tsdb.retention.size=200MB
       - --web.listen-address=127.0.0.1:${TELEMETRY_PROMETHEUS_PORT:-9090}
-      - --web.enable-remote-write-receiver=false
     volumes:
       - type: bind
         source: ${TELEMETRY_CONFIG_DIR:-/srv/containerlab-node-manager/telemetry}/prometheus.yml

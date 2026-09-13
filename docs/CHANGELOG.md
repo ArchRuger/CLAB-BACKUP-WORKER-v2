@@ -4,6 +4,46 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.23.1
+
+The first live run of 1.23.0 on the dev VM (cEOS 4.35.0F, Prometheus v3.14.0, Grafana
+13.0.2) found six defects in the telemetry release; all are fixed and re-validated live.
+See [TELEMETRY.md](TELEMETRY.md).
+
+- **Grafana showed "An error occurred within the plugin" on every panel.** Prometheus
+  v3.14.0 refuses `--web.enable-remote-write-receiver=false` ("unexpected false"), so the
+  container crash-looped and the provisioned data source had nothing to answer with,
+  while `setup-telemetry.sh` still reported success. The flag is gone (the receiver is off
+  by default), the setup script now waits for Prometheus `/-/ready` and Grafana
+  `/api/health` and fails with the container status and logs when they do not come up,
+  and CI starts the real stack against a fixture manager (`deploy/telemetry/smoke.py`),
+  checks the data source, the three provisioned dashboards and every panel and variable
+  query.
+- **cEOS samples were dropped, no receive rate, no link state.** cEOS stamps each
+  notification with the last change time of the leaves it carries, so one 10 s cycle
+  arrives as several notifications whose timestamps differ by minutes; the store ordered
+  all leaves of an interface on one clock and discarded whichever group came "earlier"
+  (half of all samples live). Samples are now ordered per leaf by the device clock while
+  rates, chart points and freshness use the manager's receive time; a cycle that arrives
+  in several notifications a second apart shares one chart point and each direction keeps
+  its own newest rate.
+- **Interface state stayed unknown on cEOS.** A plain on-change subscription is answered
+  with the sync marker only (no initial value), so oper/admin state and the map link
+  colour waited for the first flap. The EOS state subscription now carries a heartbeat of
+  one sample interval. Verified live: shutdown turns the link red within 3 s from both
+  ends, no shutdown turns it green again.
+- **"BGP: failed" on every lab without BGP.** EOS sends nothing for a sampled path with
+  nothing behind it; after two quiet minutes the group was closed as failed. A quiet group
+  now reports *idle*, stays subscribed and turns streaming when data appears.
+- **Slow recovery after `docker restart` of a node.** The address and running state do
+  not change, so nothing reset the node and the retry backoff grew to minutes. A port that
+  does not answer now retries every 30 s at most; the node streams again shortly after the
+  NOS boots.
+- **check-install** names a Prometheus that does not answer (with the Compose commands to
+  inspect it) separately from a target that is not scraped, and classifies scrape errors
+  instead of echoing them. Group pills keep their encoding; the telemetry setup tests run
+  on Windows as well.
+
 ## Changes in 1.23.0
 
 Live network telemetry for disposable labs, automatic from deploy to chart, kept in

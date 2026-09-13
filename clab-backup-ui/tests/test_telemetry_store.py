@@ -17,7 +17,56 @@ class StoreTests(unittest.TestCase):
         self.store = TelemetryStore()
         self.assertTrue(self.store.begin('lab', 'r1', 'g1'))
 
-    def test_rates_use_counter_deltas_over_elapsed_device_time(self):
+    def test_eos_last_change_timestamps_never_shadow_other_leaves(self):
+        """cEOS stamps each notification with the last change time of its leaves: in one 10 s cycle
+        the changing counters arrive with a fresh timestamp, idle counters with one minutes old
+        (replaced by receive time beyond the collector's slack) and the interface state with the
+        time it last flapped. Seen live: half the samples dropped, no receive rate, no state."""
+        def cycle(received, in_octets, in_stamp):
+            # Idle leaves: device stamp 12 minutes old, replaced by the receive time (synthetic).
+            yield record(received, 'out-octets', 0, received=received, synthetic=True)
+            yield record(received, 'out-pkts', 0, received=received, synthetic=True)
+            # Changing leaves: a genuine device stamp a second or two before receipt.
+            yield record(in_stamp, 'in-octets', in_octets, received=received, synthetic=False)
+            yield record(in_stamp, 'in-pkts', in_octets // 100, received=received, synthetic=False)
+        # The initial on-change state carries the time the interface came up, four minutes ago.
+        self.assertTrue(self.store.ingest(record(BASE - 240, 'oper-status', 'UP', received=BASE, synthetic=False)))
+        self.assertTrue(self.store.ingest(record(BASE - 240, 'admin-status', 'UP', received=BASE, synthetic=False)))
+        for received, octets in ((BASE, 1000), (BASE + 10, 2000), (BASE + 20, 4000)):
+            for item in cycle(received, octets, received - 2):
+                self.assertTrue(self.store.ingest(item), item)
+        snap = self.store.snapshot('lab', 'r1', now=BASE + 21)
+        row = snap['interfaces'][0]
+        self.assertEqual((snap['dropped'], snap['samples']), (0, 14))
+        self.assertEqual((row['oper'], row['admin']), ('UP', 'UP'))
+        self.assertEqual((row['rx_bps'], row['tx_bps'], row['rx_pps'], row['tx_pps']), (1600.0, 0.0, 2.0, 0.0), 'rates over receive time')
+        self.assertEqual([p['t'] for p in self.store.series('lab', 'r1', 'Ethernet1', 300, now=BASE + 21)], [BASE, BASE + 10, BASE + 20], 'one point per cycle')
+        # The idle group of the next cycle arrives 1.3 s before the changing group (seen live):
+        # both directions stay visible in the snapshot and share one chart point.
+        for item in (record(BASE + 30, 'out-octets', 0, received=BASE + 30, synthetic=True),
+                     record(BASE + 30, 'out-pkts', 0, received=BASE + 30, synthetic=True)):
+            self.assertTrue(self.store.ingest(item))
+        early = self.store.snapshot('lab', 'r1', now=BASE + 30.5)['interfaces'][0]
+        self.assertEqual((early['rx_bps'], early['tx_bps']), (1600.0, 0.0), 'the receive rate of the previous cycle stays until its own next sample')
+        for item in (record(BASE + 29, 'in-octets', 6000, received=BASE + 31.3, synthetic=False),
+                     record(BASE + 29, 'in-pkts', 60, received=BASE + 31.3, synthetic=False)):
+            self.assertTrue(self.store.ingest(item))
+        late = self.store.snapshot('lab', 'r1', now=BASE + 32)['interfaces'][0]
+        self.assertAlmostEqual(late['rx_bps'], 2000 * 8 / 11.3, places=3); self.assertEqual(late['tx_bps'], 0.0)
+        self.assertEqual([p['t'] for p in self.store.series('lab', 'r1', 'Ethernet1', 300, now=BASE + 32)], [BASE, BASE + 10, BASE + 20, BASE + 30])
+        self.assertIn('rx_bps', self.store.series('lab', 'r1', 'Ethernet1', 300, now=BASE + 32)[-1])
+        # The interface flaps: the new state carries a newer device stamp and replaces the old one;
+        # a late notification about the earlier state (older stamp) is ignored.
+        self.assertTrue(self.store.ingest(record(BASE + 25, 'oper-status', 'DOWN', received=BASE + 25.2, synthetic=False)))
+        self.assertFalse(self.store.ingest(record(BASE - 240, 'oper-status', 'UP', received=BASE + 25.4, synthetic=False)))
+        self.assertEqual(self.store.snapshot('lab', 'r1', now=BASE + 26)['interfaces'][0]['oper'], 'DOWN')
+        # A device whose clock is 200 s slow: its genuine stamps are older than the synthetic ones
+        # written for idle leaves, yet its next samples must still be accepted.
+        self.assertTrue(self.store.ingest(record(BASE + 30, 'out-octets', 0, received=BASE + 30, synthetic=True)))
+        self.assertTrue(self.store.ingest(record(BASE + 40 - 200, 'out-octets', 900, received=BASE + 40, synthetic=False)))
+        self.assertEqual(self.store.snapshot('lab', 'r1', now=BASE + 41)['interfaces'][0]['tx_bps'], 720.0)
+
+    def test_rates_use_counter_deltas_over_elapsed_receive_time(self):
         for t, rx, tx in ((BASE, 1000, 500), (BASE + 10, 2000, 1500), (BASE + 25, 5000, 1500)):
             self.assertTrue(self.store.ingest(record(t, 'in-octets', rx)))
             self.assertTrue(self.store.ingest(record(t, 'out-octets', str(tx))))

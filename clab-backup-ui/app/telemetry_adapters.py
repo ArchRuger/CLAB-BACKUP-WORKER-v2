@@ -99,7 +99,10 @@ class Adapter:
         sample = {'mode': 'sample', 'sample_interval': SAMPLE_NS}
         if group == 'interfaces':
             base = 'interfaces/interface/state/'
-            status_mode = ({'mode': 'on_change'} if self.state_mode == 'on_change' else sample)
+            # cEOS answers a plain on-change subscription with the sync marker only (no initial
+            # value, seen live on 4.35.0F), so the state would stay unknown until the first flap;
+            # the heartbeat makes the target resend the current value every interval.
+            status_mode = ({'mode': 'on_change', 'heartbeat_interval': SAMPLE_NS} if self.state_mode == 'on_change' else sample)
             leaves = [dict(path=self.path(self.interface_origin, base + 'counters'), **sample),
                       dict(path=self.path(self.interface_origin, base + 'oper-status'), **status_mode),
                       dict(path=self.path(self.interface_origin, base + 'admin-status'), **status_mode)]
