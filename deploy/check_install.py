@@ -585,7 +585,7 @@ def check_capture(ctx):
         return
     if not status.get('enabled'):
         ctx.add('capture', 'INFO', title, 'Disabled; the manager works without it. ' + safe_text(status.get('message') or '', 300),
-                'Follow CAPTURE.md: run sudo bash deploy/setup-capture.sh to configure CAPTURE_PROVIDER and the browser service, then recreate the manager.')
+                'Follow docs/CAPTURE.md: run sudo bash deploy/setup-capture.sh to configure CAPTURE_PROVIDER and the browser service, then recreate the manager.')
         return
     result, targets = ctx.http('/api/capture/targets', limit=4 * MIB)
     if result.ok and isinstance(targets, dict) and isinstance(targets.get('targets'), list):

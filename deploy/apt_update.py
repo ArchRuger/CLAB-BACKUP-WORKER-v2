@@ -92,11 +92,11 @@ def print_recovery(kinds):
               'If time stays wrong, check the configured time server, DNS and NTP network access. '
               'If UTC is correct but metadata is still future-dated, check the repository/mirror.\n'
               'Changing the timezone does not correct UTC. Keep APT date and signature checks enabled.\n'
-              'See FRESH-VM-GUIDE-V2.md, Recovery C, for Proxmox and provider-specific checks.')
+              'See docs/FRESH-VM-GUIDE-V2.md, Recovery C, for Proxmox and provider-specific checks.')
     if 'media' in kinds:
         print('\nAn obsolete CD-ROM installation source has no valid Release file. '
               'Return to the installer menu and accept installation-media repair, or follow '
-              'FRESH-VM-GUIDE-V2.md, Recovery A. Keep network sources enabled.')
+              'docs/FRESH-VM-GUIDE-V2.md, Recovery A. Keep network sources enabled.')
     if not kinds:
         print('\nAPT update failed. Resolve the source, DNS, signature, sudo or package-lock error above. '
               'Clock status alone does not identify this failure.')

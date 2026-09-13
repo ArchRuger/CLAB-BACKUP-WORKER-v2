@@ -1,5 +1,5 @@
 > Historical guide for earlier releases. For 1.15.1, use [VM-CONNECTION.md](VM-CONNECTION.md)
-> and [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md). Their password setup replaces the SSH client key steps below.
+> and [FRESH-VM-GUIDE.md](archive/FRESH-VM-GUIDE.md). Their password setup replaces the SSH client key steps below.
 > Build 1.15.1 from source; no new registry image is claimed by this delivery.
 
 # Pulled the Docker image? Start here
@@ -57,7 +57,7 @@ is not present yet, run `sudo docker pull archtop/clab-backup:1.12.0` first.
 
 If Compose is missing, install the Docker Compose plugin for your Docker Engine
 installation using [Docker's Ubuntu installation guide](https://docs.docker.com/engine/install/ubuntu/).
-For an entirely unconfigured machine, [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md) covers
+For an entirely unconfigured machine, [FRESH-VM-GUIDE.md](archive/FRESH-VM-GUIDE.md) covers
 Docker installation; return here to run the pulled image instead of building one.
 
 ## 2. Prepare the VM's SSH server and Containerlab

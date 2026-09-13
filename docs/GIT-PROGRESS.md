@@ -7,7 +7,7 @@ commit identity. The manager never asks for his Git token.
 
 This is a local source release. Build the 1.15.1 image and install its matching VM
 helpers; a previously published image does not acquire these features automatically.
-See [Fresh VM setup](FRESH-VM-GUIDE.md) and [VM connection](VM-CONNECTION.md).
+See [Fresh VM setup](archive/FRESH-VM-GUIDE.md) and [VM connection](VM-CONNECTION.md).
 
 ## What each save means
 
@@ -293,11 +293,11 @@ changing either outside the app requires deliberate registration and reconnectio
 Before adopting the workflow on a real lab, verify a first save and unchanged save
 against a disposable repository, then a locally saved commit and manual push retry.
 Check baseline replacement, a named checkpoint and ZIP retrieval. Review the
-release's [validation record](clab-backup-ui/VALIDATION.md) for the exact automated
+release's [validation record](../clab-backup-ui/VALIDATION.md) for the exact automated
 and platform-specific coverage. Linux owner switching, the external credential
 helper, the selected Git service and real network devices need validation in the
 deployment environment; a local source delivery does not establish those results.
 
-The earlier [architecture proposal](GIT-LAB-PROGRESS-PROPOSAL.md) records the broader
+The earlier [architecture proposal](archive/GIT-LAB-PROGRESS-PROPOSAL.md) records the broader
 save-and-resume design. This guide describes the delivered save/export workflow;
 the proposal's future restore and optional convenience stages remain separate work.

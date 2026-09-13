@@ -26,10 +26,10 @@ while [[ $# -gt 0 ]]; do
 done
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || fail 'Use the guided installer without sudo; it requests sudo for this prerequisite step.'
-[[ -r /etc/os-release ]] || fail 'Cannot identify this OS; install prerequisites manually using FRESH-VM-GUIDE.md.'
+[[ -r /etc/os-release ]] || fail 'Cannot identify this OS; install prerequisites manually using docs/FRESH-VM-GUIDE-V2.md.'
 # shellcheck disable=SC1091
 . /etc/os-release
-[[ ${ID:-} == ubuntu && ${VERSION_ID:-} == 24.04 ]] || fail 'Automatic prerequisite installation supports Ubuntu Server 24.04 only. Follow FRESH-VM-GUIDE.md for manual setup.'
+[[ ${ID:-} == ubuntu && ${VERSION_ID:-} == 24.04 ]] || fail 'Automatic prerequisite installation supports Ubuntu Server 24.04 only. Follow docs/FRESH-VM-GUIDE-V2.md for manual setup.'
 architecture=$(dpkg --print-architecture)
 [[ $architecture == amd64 || $architecture == arm64 ]] || fail 'Automatic installation supports amd64 and arm64 only.'
 [[ -x /usr/bin/python3 && -d /run/systemd/system ]] || fail 'This installer requires Ubuntu Server with Python 3 and systemd running.'

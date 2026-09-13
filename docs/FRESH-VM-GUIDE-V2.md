@@ -3,7 +3,7 @@
 This is the **installer-based walkthrough** for Containerlab Node Manager
 **1.19.2** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
 the application version. It supplements the [short install guide](INSTALL.md)
-and keeps the [original manual guide](FRESH-VM-GUIDE.md) available. For the
+and keeps the [original manual guide](archive/FRESH-VM-GUIDE.md) available. For the
 same route as bare numbered steps with only what to paste, use the
 [quick install](QUICK-INSTALL.md).
 

@@ -1,11 +1,11 @@
 # Containerlab Node Manager — 1.12.1
 
 Lab-level lifecycle, project and drawing controls are documented in
-[LAB-OPERATIONS.md](../LAB-OPERATIONS.md). Enable the host operations helper for
+[LAB-OPERATIONS.md](../docs/LAB-OPERATIONS.md). Enable the host operations helper for
 these features. Existing node SSH/backup actions remain available.
 
 The default deployment is now a standalone persistent manager. Follow
-[standalone setup and migration](../STANDALONE-SETUP.md); the older build/worker
+[standalone setup and migration](../docs/STANDALONE-SETUP.md); the older build/worker
 upgrade section below is historical. Linked lab discovery gates SSH and backups
 on fresh running nodes. Manual endpoints remain available as explicit overrides.
 
@@ -20,7 +20,7 @@ Direct mode also reads files over SFTP with the same account. Discovery file det
 shows attempted paths and errors; detected lab clicks try automatic import before
 offering manual uploads. Upgrade the helper for 1.12.0 without changing its key. Existing labs
 show file changes and offer Sync from VM without resetting saved node connections
-or history. Follow [the fresh VM guide](../FRESH-VM-GUIDE.md) for setup and upgrades.
+or history. Follow [the fresh VM guide](../docs/archive/FRESH-VM-GUIDE.md) for setup and upgrades.
 
 Click a lab to open its node dashboard. Every imported node is shown, including
 Linux and unmapped kinds. Details contains the last SSH authentication check,
@@ -100,7 +100,7 @@ by the worker. The archive's source folder is the complete current build context
 
 ## Build and upgrade
 
-See [fresh image and worker upgrade](../FRESH-IMAGE.md) for worker-only recreation
+See [fresh image and worker upgrade](../docs/archive/FRESH-IMAGE.md) for worker-only recreation
 and data preservation. The supplied lab YAML has no `/data` mount; copy its data
 before replacing that container.
 

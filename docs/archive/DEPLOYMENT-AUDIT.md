@@ -51,7 +51,7 @@ mocked host probes do not establish that an Ubuntu installation succeeds.
 The existing 1.19.0 independent file-browser/capability behavior remains covered.
 
 The full local test results are recorded in
-[VALIDATION.md](clab-backup-ui/VALIDATION.md). Local tests use temporary state,
+[VALIDATION.md](../../clab-backup-ui/VALIDATION.md). Local tests use temporary state,
 temporary repositories and localhost SSH fixtures. Docker, WSL and a live Ubuntu
 target were unavailable. This is not an end-to-end deployment certification.
 

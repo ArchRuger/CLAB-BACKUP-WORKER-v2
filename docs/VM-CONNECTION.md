@@ -12,7 +12,7 @@ SSH and backup credentials are configured separately and retain their existing o
 Run these commands in an interactive terminal using your normal VM administrator
 account. Start in the extracted source folder containing `deploy/` and `clab-backup-ui/`.
 Docker, Compose, Containerlab, Python 3, sudo and a running OpenSSH service are required;
-see [Fresh VM guide](FRESH-VM-GUIDE.md) for installation.
+see [Fresh VM guide](archive/FRESH-VM-GUIDE.md) for installation.
 
 ```bash
 cd "$HOME/projects/v1.15.1"

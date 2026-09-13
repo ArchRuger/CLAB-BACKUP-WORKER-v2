@@ -2,7 +2,7 @@
 
 Status: architecture proposed against 1.14.0. The 1.15.0 source implements the
 repository save/export, retry, milestone and version retrieval stages. Read
-[GIT-PROGRESS.md](GIT-PROGRESS.md) for the delivered behavior and setup. Live NOS
+[GIT-PROGRESS.md](../GIT-PROGRESS.md) for the delivered behavior and setup. Live NOS
 restore and optional convenience stages below remain future work.
 
 ## Recommended experience

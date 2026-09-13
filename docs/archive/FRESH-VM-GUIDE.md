@@ -1,7 +1,7 @@
 # Containerlab Node Manager 1.19.1 — a fresh VM to a working lab
 
 For the complete installer-based route starting with Proxmox, use the
-[Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md). It includes normal-user
+[Fresh VM guide, version 2](../FRESH-VM-GUIDE-V2.md). It includes normal-user
 WinSCP/SFTP verification and the first Git push. This original guide retains
 the manual installation alternative.
 
@@ -16,7 +16,7 @@ bash deploy/install.sh
 It combines prerequisites, optional backed-up APT media repair, password/helper
 setup, build/start, running-version/HTTP checks and Git setup. Menu **2** opens
 Git repair without rebuilding; menu **3** checks an existing installation. See
-[INSTALL.md](INSTALL.md) for the complete short path and upgrade settings.
+[INSTALL.md](../INSTALL.md) for the complete short path and upgrade settings.
 The numbered sections below are the **manual alternative**, not extra steps to
 repeat after the installer succeeds. Continue with browser VM/lab configuration.
 
@@ -24,7 +24,7 @@ repeat after the installer succeeds. Continue with browser VM/lab configuration.
 > images do not contain this release's Git progress workflow.
 
 If package setup fails with `file:/cdrom ... Release`, follow
-[package installation recovery](GIT-SETUP.md#package-installation-recovery) to
+[package installation recovery](../GIT-SETUP.md#package-installation-recovery) to
 disable the obsolete installer source, then rerun the failed package command.
 
 
@@ -134,7 +134,7 @@ credential profiles, schedules, backup history/files, action logs. State and cre
 `backups/`. Copy the entire data directory when backing up or moving the manager.
 
 If this is actually an upgrade from a worker that kept data inside its container,
-stop here and follow [the migration procedure](STANDALONE-SETUP.md#2-migrate-an-existing-worker-if-present)
+stop here and follow [the migration procedure](../STANDALONE-SETUP.md#2-migrate-an-existing-worker-if-present)
 before starting the new manager. A genuinely fresh VM has nothing to migrate.
 
 ## 5. Create the restricted VM account password
@@ -175,7 +175,7 @@ Some nonstandard or unresolved template-based definitions need manual import.
 First run `python3 deploy/verify-release.py` from the repository root. The launcher
 also checks that VERSION, app, helpers and image metadata match before changing
 the host. If the source reports 1.15.0 but helpers report 1.15.1, follow the
-[repair for the affected GitHub checkout](REPOSITORY-MAINTENANCE.md#repair-the-affected-fresh-vm).
+[repair for the affected GitHub checkout](../REPOSITORY-MAINTENANCE.md#repair-the-affected-fresh-vm).
 
 **VM, repository root:**
 
@@ -190,14 +190,14 @@ The launch script refreshes the helper and validates its version before building
 and recreating the manager. If step 5 was skipped, it prompts for the password here.
 An existing password is retained. --enable-operations adds reviewed lab commands.
 Only trusted VM
-projects under approved roots can be managed. Read [LAB-OPERATIONS.md](LAB-OPERATIONS.md)
+projects under approved roots can be managed. Read [LAB-OPERATIONS.md](../LAB-OPERATIONS.md)
 for command coverage, optional downloads and recovery. Without this flag,
 a fresh setup provides discovery/import only. Already enabled helpers are upgraded
 automatically on subsequent launches.
 
 Expect **1.19.1**. Open **`http://VM_IP:8081`** on your workstation. There is no
 UI access-token login. VM connection and device SSH authentication are separate.
-See [VM connection setup and recovery](VM-CONNECTION.md) for detailed help.
+See [VM connection setup and recovery](../VM-CONNECTION.md) for detailed help.
 
 
 Compose uses **Linux host networking**. The UI listens directly on the VM's port
@@ -401,7 +401,7 @@ bash deploy/setup-git.sh
 The wizard handles clone/reuse, GitHub login, commit identity and registration
 checks. On a headless VM, authorize its device code in your workstation browser
 and leave the terminal waiting. A missing VM browser is normal.
-Follow [GIT-SETUP.md](GIT-SETUP.md) for the short walkthrough and error recovery.
+Follow [GIT-SETUP.md](../GIT-SETUP.md) for the short walkthrough and error recovery.
 
 In the lab, choose **Git repository settings**, select the registered checkout,
 review the included devices and save the binding. **Save progress** now captures,
@@ -412,7 +412,7 @@ commands to devices.
 
 Git runs as the registered VM owner with that account’s authentication. The `clab-discovery` VM password
 remains separate. The UI has no user login: everyone given access shares the
-registered repositories' authority. Read [GIT-PROGRESS.md](GIT-PROGRESS.md) for
+registered repositories' authority. Read [GIT-PROGRESS.md](../GIT-PROGRESS.md) for
 service-context credentials, review, conflicts, recovery and persistence.
 
 Back up the owner's working checkout and the helper's registration/journal as well as
@@ -539,11 +539,11 @@ needed at runtime. SSH discovery and file import stay on the VM.
 Use these explicit helper commands for offline upgrades too; the normal
 `start-manager.sh` command intentionally builds with `--pull --no-cache` and
 requires package/image access. Retained lab command prerequisites are in
-[LAB-OPERATIONS.md](LAB-OPERATIONS.md); leave downloads disabled for offline VMs.
+[LAB-OPERATIONS.md](../LAB-OPERATIONS.md); leave downloads disabled for offline VMs.
 
 ## Validation boundary
 
 The release includes automated parser/API, persistence and SSH transport tests.
 Docker builds, root-owned helper installation, Linux filesystem protections and
 live vendor-node operations still require verification on your Linux VM. See
-[VALIDATION.md](clab-backup-ui/VALIDATION.md) for the exact evidence.
+[VALIDATION.md](../../clab-backup-ui/VALIDATION.md) for the exact evidence.

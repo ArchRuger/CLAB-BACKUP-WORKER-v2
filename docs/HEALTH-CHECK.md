@@ -1,6 +1,6 @@
 # Check an installed VM — 1.19.2
 
-This release also includes the remaining [deployment audit fixes](DEPLOYMENT-AUDIT.md).
+This release also includes the remaining [deployment audit fixes](archive/DEPLOYMENT-AUDIT.md).
 
 For a running 1.19.0 or later manager, the [Debug panel](DEBUG-PANEL.md) also checks
 folder browsing and helper versions and exports API request metadata. Use this

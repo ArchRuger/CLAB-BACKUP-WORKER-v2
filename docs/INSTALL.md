@@ -1,6 +1,6 @@
 # Guided VM installation — 1.19.2
 
-This release also includes the remaining [deployment audit fixes](DEPLOYMENT-AUDIT.md).
+This release also includes the remaining [deployment audit fixes](archive/DEPLOYMENT-AUDIT.md).
 
 Starting before Ubuntu is installed? Use the
 [Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) for Proxmox settings, first
@@ -291,7 +291,7 @@ needed. The helper does not deploy a lab, prune images or replace unrelated APT
 sources. The automated prerequisite path targets Ubuntu 24.04; use the manual
 guide for other distributions or offline staging.
 
-The detailed manual steps remain in [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md). They
+The detailed manual steps remain in [FRESH-VM-GUIDE.md](archive/FRESH-VM-GUIDE.md). They
 are useful for diagnostics and managed environments; you do not need to repeat
 their install commands after this menu has completed successfully.
 

@@ -18,4 +18,4 @@ docker compose --env-file "$repo_dir/clab-backup-ui/.env" -f "$script_dir/compos
 echo 'Browser capture services installed. Recreate/upgrade the manager using deploy/install.sh to load the settings.'
 echo 'For an already installed matching manager, from this checkout run:'
 echo 'sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui'
-echo 'No workstation plugin or capture-port SSH tunnel is needed. See CAPTURE.md.'
+echo 'No workstation plugin or capture-port SSH tunnel is needed. See docs/CAPTURE.md.'
