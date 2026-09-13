@@ -96,7 +96,7 @@ def create_app(data_dir=None):
         response.headers['Cache-Control']='no-store'
         # xterm's DOM renderer creates font, cell-width and ANSI-color styles.
         # Permit those only in its dedicated document; scripts remain self-only.
-        styles="'self' 'unsafe-inline'" if request.url.path=='/static/terminal.html' else "'self'"
+        styles="'self' 'unsafe-inline'" if request.url.path in ('/static/terminal.html', '/static/capture-session.html') else "'self'"
         response.headers['Content-Security-Policy']=f"default-src 'self'; script-src 'self'; style-src {styles}; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         return response
     diagnostics = Diagnostics(store, discovery, operations)

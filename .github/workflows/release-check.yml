@@ -27,7 +27,7 @@ jobs:
           python3 -m unittest discover -s tests -p test_check_git.py -v
       - name: Check installer shell syntax
         run: |
-          for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh; do
+          for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh deploy/setup-capture.sh; do
             bash -n "$script"
           done
       - name: Install application test dependencies
@@ -58,6 +58,11 @@ jobs:
         run: node --test tests/test_operations_ui.js tests/test_debug_ui.js tests/test_capture_ui.js tests/test_topology_ui.js
       - name: Check optional capture provider
         working-directory: clab-backup-ui
-        run: '"$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_capture.py -v'
+        run: '"$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p "test_capture*.py" -v'
       - name: Validate isolated capture deployment
+        env:
+          CAPTURE_SESSION_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         run: docker compose -f deploy/compose.capture.yml config --quiet
+      - name: Exercise browser Wireshark and real loopback packets
+        timeout-minutes: 15
+        run: '"$RUNNER_TEMP/clab-test-venv/bin/python" deploy/capture/smoke.py'

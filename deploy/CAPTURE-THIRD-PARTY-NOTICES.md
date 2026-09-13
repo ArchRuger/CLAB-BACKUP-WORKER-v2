@@ -4,8 +4,18 @@
 [Siemens Edgeshark](https://github.com/siemens/edgeshark/blob/main/deployments/wget/docker-compose-localhost.yaml).
 Changes include image digest pins, an isolated Compose project, local service DNS,
 configurable localhost port binding, and removal of debug logging and icon data.
-The upstream license follows. Upstream images and the separately installed desktop
-plugin retain their own licenses and notices; they are not bundled in this source.
+The upstream license follows. Upstream container images retain their own licenses
+and notices; they are pulled separately, not bundled in this source checkout.
+
+Browser sessions use the pinned [SR Labs Wireshark container](https://github.com/srl-labs/wireshark-vnc-docker),
+which includes [Wireshark](https://www.wireshark.org/),
+[Siemens cshargextcap](https://github.com/siemens/cshargextcap) and
+[noVNC](https://github.com/novnc/noVNC) on the
+[jlesage GUI base image](https://github.com/jlesage/docker-baseimage-gui).
+The manager loads noVNC modules from that image at runtime with their upstream
+notices intact. The session service and viewer here are original integration
+code, not a copy of the VS Code extension. Consult the upstream projects and
+image contents for their component licenses before redistributing images.
 
 MIT License
 

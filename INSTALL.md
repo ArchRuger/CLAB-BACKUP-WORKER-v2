@@ -295,10 +295,12 @@ The detailed manual steps remain in [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md). They
 are useful for diagnostics and managed environments; you do not need to repeat
 their install commands after this menu has completed successfully.
 
-## Optional Wireshark capture
+## Optional browser Wireshark capture
 
-After installing the complete 1.20.0 source, follow [Packet capture setup](CAPTURE.md).
-Reuse an existing Edgeshark installation or start the isolated pinned services;
-install cshargextcap on the workstation, then enable the capture provider in the
-manager environment. The default transport uses an SSH tunnel to a localhost
-endpoint. Capture is disabled by default and does not change backup permissions.
+From the complete source checkout on the VM, run `sudo bash deploy/setup-capture.sh`,
+then upgrade/recreate the manager using the normal installation flow. This starts
+the optional Edgeshark/session services and migrates old capture settings. Users
+open Wireshark in the browser without a workstation plugin or capture tunnel.
+Follow [Browser capture setup](CAPTURE.md) for saving, downloads, session limits
+and troubleshooting. Capture remains disabled until configured; manager backup
+permissions and persistent data remain unchanged.

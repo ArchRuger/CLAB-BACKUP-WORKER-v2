@@ -1,3 +1,51 @@
+# Browser Wireshark — 1.21.0
+
+Prepared on `codex/browser-wireshark` from latest main `1d7e0f9` (1.20.1).
+A final fetch found no additional main commits. This is source delivery, not a
+published image, pushed commit or VM deployment.
+
+- **490 Python tests completed across all 41 test files: 479 passed, 11 platform
+  skips.** Tests ran per file in isolated processes on Windows. The first combined
+  run was stopped while the Git integration suite was still running; a subsequent
+  100-second per-file budget also timed out that suite. Its independent rerun
+  completed all **24 Git tests in 248 seconds**, with no failures. The final **38
+  capture tests** include discovery, stale selection, fixed Docker policy,
+  ownership/authentication, retry idempotency, capacity, idle/hard expiry, partial
+  creation cleanup, token rotation, saved-file transport and configuration migration.
+- The manager's HTTP and binary WebSocket proxy was exercised over **real loopback
+  connections to a synthetic session service**. Tests cover browser-cookie
+  isolation, cross-origin rejection, upstream credential separation, JavaScript
+  asset restrictions, binary round trip, download bytes and scoped CSP.
+- **29 JavaScript regressions passed**, including 12 capture UI tests. Capture UI
+  tests were rerun after the final launch-key/reset wording change.
+- **Headless Chrome** exercised actual HTML/JS: live-interface selection against
+  a synthetic API, launch, the browser popup, loading the noVNC adapter contract,
+  viewer layout and ending a session. No browser script errors. Screenshots were
+  visually reviewed; fixture screenshots/logs remain ignored under `.build/`.
+  The displayed desktop was synthetic, not a real Wireshark GUI.
+- Release metadata verifies as **1.21.0**, including the new viewer page and
+  optional session-service image version. `bash -n deploy/setup-capture.sh`, Python
+  compilation, parsing the four affected YAML files, and `git diff --check` passed.
+- The public Wireshark image manifest was resolved and pinned to
+  `sha256:682c8bd42282c44f991e0d6015ce3303e5a3aa08a1e2c2b6937fd554ddb31186`
+  (Linux amd64 and arm64). Upstream Dockerfile/startup code and noVNC service paths
+  were inspected. Setup's image pin is checked against the service constant.
+
+**Still requires Linux/Docker acceptance:** no local Docker daemon was available.
+The new `deploy/capture/smoke.py` and CI step have been authored but not executed
+here. They start an isolated optional stack, check the real noVNC RFB greeting,
+find actual captured loopback packet bytes, download saved capture data and end
+its session. The smoke test refuses an existing capture stack/session and never
+operates a training lab. CI also validates Compose configuration and builds the
+session-service image. Do not equate local mocks, YAML parsing or this CI
+configuration with a successful Docker build or live capture.
+
+On the real VM also exercise a topology link, Wireshark filters, Stop / File →
+Save As under `/pcaps`, archive download, reconnect, timeout and explicit End.
+Confirm existing backup/SSH/lab operations continue. See CAPTURE.md for setup,
+limits, trust boundary, migration and cleanup. Historical validation below applies
+to the releases named there, not to the new browser runtime.
+
 # Capture vetting fixes — 1.20.1
 
 - Prepared on branch `claude/capture-vetting-fixes` from main `71fb0e5` (1.20.0).

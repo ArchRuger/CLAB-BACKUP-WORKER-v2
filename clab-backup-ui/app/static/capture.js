@@ -1,7 +1,7 @@
 'use strict';
 // Provider UI is intentionally separate from backups, SSH and the diagram editor.
 const captureDialog=$('capture-dialog');
-let captureRequest=0,captureTargets=[],captureLab='',captureNode='',captureHint='',captureTimer;
+let captureRequest=0,captureTargets=[],captureLab='',captureNode='',captureHint='',captureStarting=false,captureLaunchId='';
 // null until the provider status is known; node/menu Capture actions are disabled
 // only when the manager reports capture disabled, so the toolbar entry and the
 // dialog's setup link stay reachable.
@@ -9,16 +9,16 @@ let captureEnabled=null;
 function captureActionAttrs(){return captureEnabled===false?'disabled title="Packet capture is not enabled. Open Capture packets for setup."':'';}
 (async()=>{try{captureEnabled=!!(await(await api('/capture/status')).json()).enabled;}catch{captureEnabled=null;}})();
 function clearCaptureLaunch(){
- clearTimeout(captureTimer);$('capture-launch').hidden=true;$('capture-launch').removeAttribute('href');
+ $('capture-launch').hidden=true;$('capture-launch').removeAttribute('href');
 }
-function invalidateCapture(){captureRequest++;clearCaptureLaunch();}
+function invalidateCapture(){captureRequest++;captureLaunchId='';clearCaptureLaunch();}
 captureDialog.addEventListener('close',invalidateCapture);
 $('capture-close').onclick=()=>captureDialog.close();
 function captureSelected(){return captureTargets.find(t=>t.id===$('capture-target').value);}
 function captureChecked(){return [...$('capture-interfaces').querySelectorAll('input:checked')].map(el=>el.value);}
 // Prepare needs a target and at least one ticked interface; a matching imported
 // port counts because it is rendered ticked.
-function updateCapturePrepare(preselected=false){const target=captureSelected();$('capture-prepare').disabled=!(target&&(preselected||captureChecked().length));}
+function updateCapturePrepare(preselected=false){const target=captureSelected();$('capture-prepare').disabled=captureStarting||!(target&&(preselected||captureChecked().length));}
 function renderCaptureInterfaces(){
  invalidateCapture();const target=captureSelected();
  $('capture-interfaces').innerHTML=!target?'<p>Choose a capture target above.</p>':target.interfaces.map(n=>`<label class="capture-interface"><input type="checkbox" value="${esc(n)}" ${captureHint===n?'checked':''}> <span>${esc(n)}</span></label>`).join('')||'<p>No capturable interfaces in this namespace.</p>';
@@ -26,7 +26,7 @@ function renderCaptureInterfaces(){
  if(captureHint)$('capture-status').textContent=target?.interfaces.includes(captureHint)?`Selected live interface ${captureHint}.`:`Imported port ${captureHint} is not a live Linux interface name here. Select its Linux interface explicitly; NOS aliases can differ.`;
 }
 $('capture-target').onchange=renderCaptureInterfaces;
-$('capture-interfaces').onchange=()=>{invalidateCapture();updateCapturePrepare();$('capture-status').textContent='Selection changed. Prepare the capture again.';};
+$('capture-interfaces').onchange=()=>{invalidateCapture();updateCapturePrepare();$('capture-status').textContent='Selection changed. Start a capture for these interfaces.';};
 function captureTargetLabel(t){
  const aliases=t.aliases||[],shown=aliases.slice(0,2).join(', ')+(aliases.length>2?` +${aliases.length-2} more`:'');
  const shared=aliases.length?' · shares namespace with '+esc(shown):'',loopback=t.interfaces.length===1&&t.interfaces[0]==='lo'?' · loopback only':'';
@@ -45,6 +45,7 @@ async function refreshCaptureTargets(){
  invalidateCapture();const request=captureRequest;
  captureTargets=[];$('capture-target').innerHTML='';$('capture-interfaces').innerHTML='';$('capture-prepare').disabled=true;$('capture-search').disabled=true;
  $('capture-status').textContent='Discovering live capture targets…';
+ refreshCaptureSessions();
  try{
   const status=await(await api('/capture/status')).json();
   captureEnabled=!!status.enabled;
@@ -73,23 +74,41 @@ $('capture-open').onclick=()=>openCapture();
 $('capture-refresh').onclick=refreshCaptureTargets;
 $('capture-scope').onchange=()=>{captureHint='';refreshCaptureTargets();};
 $('capture-form').onsubmit=async event=>{
- event.preventDefault();clearCaptureLaunch();const target=captureSelected();
+ event.preventDefault();if(captureStarting)return;clearCaptureLaunch();const target=captureSelected();
  const interfaces=[...$('capture-interfaces').querySelectorAll('input:checked')].map(el=>el.value);
  if(!target||!interfaces.length){$('capture-status').textContent='Choose a target and at least one interface.';return;}
- const request=++captureRequest;$('capture-prepare').disabled=true;$('capture-status').textContent='Checking the selected namespace and interfaces…';
+ const request=++captureRequest;captureStarting=true;$('capture-prepare').disabled=true;$('capture-status').textContent='Checking interfaces and starting Wireshark on the VM…';
+ if(!captureLaunchId)captureLaunchId=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
  try{
-  const result=await json('/capture/launch','POST',{target_id:target.id,interfaces});
+  const result=await json('/capture/launch','POST',{target_id:target.id,interfaces,request_id:captureLaunchId});
+  refreshCaptureSessions();
   if(request!==captureRequest||!captureDialog.open)return;
-  // Defense in depth; only the provider's workstation protocol is navigable.
-  if(!/^packetflix:wss?:\/\//.test(result.uri))throw new Error('Unsupported capture launch address.');
-  $('capture-launch').href=result.uri;$('capture-launch').hidden=false;$('capture-status').textContent=result.message;
-  captureTimer=setTimeout(()=>{clearCaptureLaunch();$('capture-status').textContent='Launch link expired. Prepare again to refresh the capture target.';},60000);
+  if(!/^\/static\/capture-session\.html#[0-9a-f]{64}$/.test(result.url))throw new Error('Unsupported capture launch address.');
+  captureLaunchId=''; // A deliberate subsequent Start creates a new session; uncertain retries reuse their key.
+  $('capture-launch').href=result.url;$('capture-launch').hidden=false;$('capture-status').textContent=result.message;
  }catch(error){if(request===captureRequest&&captureDialog.open)$('capture-status').textContent=error.message;}
- finally{if(request===captureRequest)$('capture-prepare').disabled=false;}
+ finally{captureStarting=false;updateCapturePrepare();}
 };
-$('capture-launch').onclick=()=>{
- // No success claim: the browser cannot detect a native handler or live stream.
- $('capture-status').textContent='Wireshark handoff requested. Accept the browser prompt. If nothing opens, use Capture setup to install cshargextcap.';
+$('capture-launch').onclick=()=>{$('capture-status').textContent='Browser viewer opened. Sessions and saved files remain on the VM until ended or expired.';};
+let captureSessionRequest=0;
+async function refreshCaptureSessions(){
+ const request=++captureSessionRequest;
+ try{
+  const data=await(await api('/capture/sessions')).json();
+  if(request!==captureSessionRequest)return;
+  $('capture-sessions').innerHTML=(data.sessions||[]).map(s=>{
+   if(!/^[0-9a-f]{64}$/.test(s.id))return '';
+   return `<li><a href="/static/capture-session.html#${s.id}" target="_blank" rel="noopener">${esc(s.name)} · ${esc(s.interfaces.join(', '))}</a> <button type="button" class="button secondary" data-end-capture="${s.id}">End session</button></li>`;
+  }).join('')||'<li>No sessions in this browser.</li>';
+ }catch{$('capture-sessions').textContent='Browser capture service unavailable or disabled. See Capture setup.';}
+}
+$('capture-sessions-refresh').onclick=refreshCaptureSessions;
+$('capture-sessions').onclick=async event=>{
+ const button=event.target.closest('[data-end-capture]');if(!button)return;
+ if(!confirm('End this Wireshark session and delete its temporary captures? Download saved files first.'))return;
+ button.disabled=true;
+ try{await json('/capture/sessions/'+button.dataset.endCapture+'/end','POST',{});await refreshCaptureSessions();}
+ catch(error){$('capture-status').textContent=error.message;button.disabled=false;}
 };
 function openLinkCapture(element){
  const pair=element.dataset.captureEndpoints;if(!pair)return;

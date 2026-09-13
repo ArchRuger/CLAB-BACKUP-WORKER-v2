@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.20.1
+# Containerlab Node Manager — 1.21.0
 
 A persistent workspace for network engineers using containerlab. Run one manager
 per Linux VM as an independent Docker Compose service. Import lab definitions,
@@ -6,10 +6,10 @@ discover deployed labs over SSH, open node terminals, and retain configuration
 backups as training labs are replaced. Save lab progress directly to a registered
 VM Git checkout using its owner's existing Git login.
 
-**1.20.1 deployment:** Build the new source and create the VM password using
+**1.21.0 deployment:** Build the new source and create the VM password using
 [VM connection setup](VM-CONNECTION.md). This delivery does not publish a Docker image.
 Install matching manager and helpers with `bash deploy/install.sh`, keeping existing
-persistent data, then confirm Release 1.20.1 in the Debug panel.
+persistent data, then confirm Release 1.21.0 in the Debug panel.
 
 **Master wiki page:** [Build and operations guide](WIKI-MASTER-GUIDE.md) combines
 Proxmox/Ubuntu setup, source/image installation, VM passwords, lab workflows and recovery.
@@ -42,7 +42,20 @@ ordinary VM account. The [health report guide](HEALTH-CHECK.md) explains clear
 PASS/FAIL/WARN results, actual SSH/helper/folder checks, Git readiness and the
 remaining workstation/device/push tests.
 
-## Changes in 1.20.1
+## Changes in 1.21.0
+
+Wireshark now runs on the lab VM and opens in the browser. The workstation plugin,
+external-app launcher and public Edgeshark URL setting are removed. A separate
+session service creates isolated, pinned Wireshark containers; the manager keeps
+its existing permissions. Sessions support reconnect, saved-capture downloads,
+explicit removal, browser ownership and idle/lifetime/resource limits.
+
+Run `sudo bash deploy/setup-capture.sh` on the VM, then upgrade/recreate the
+manager. Existing 1.20.x local capture settings are migrated while unrelated
+settings are retained. No workstation capture tunnel is needed. See
+[Browser capture setup](CAPTURE.md) and [validation evidence](clab-backup-ui/VALIDATION.md).
+
+## Changes in 1.20.1 (historical)
 
 Fixes from vetting the 1.20.0 Wireshark capture on a live Ubuntu VM with Edgeshark.
 A selected host-namespace target no longer fails with "target changed" whenever any
@@ -61,7 +74,7 @@ guards. Root-run helpers (`setup-git.sh --list`, a privileged `check-install`) n
 longer leave root-owned Python bytecode in the ordinary owner's source folder, which
 blocked removing or re-staging that folder without sudo.
 
-## Changes in 1.20.0
+## Changes in 1.20.0 (historical; desktop launch replaced in 1.21.0)
 
 Optional Wireshark capture is available from node actions, either endpoint of a
 map link, and a searchable live interface browser. All host targets includes
@@ -69,12 +82,8 @@ bridges, physical NICs and other namespaces. Multiple interfaces in one namespac
 can be selected together. The manager rechecks selections before preparing a
 native Wireshark handoff; packets stream directly from Edgeshark to the workstation.
 
-Follow [Packet capture setup](CAPTURE.md) to install or reuse Edgeshark, install
-the Siemens cshargextcap plugin, and configure the manager. The optional services
-use a separate Compose project with pinned images and a localhost binding.
-Capture stays disabled until enabled; existing backup and SSH workflows retain
-their permissions and storage. Live Linux/Windows-plugin acceptance remains to
-be performed; see [validation evidence](clab-backup-ui/VALIDATION.md).
+The workstation handoff introduced in this release was replaced by VM-hosted
+browser sessions in 1.21.0. Use the current [capture setup](CAPTURE.md).
 
 ## Changes in 1.19.4
 

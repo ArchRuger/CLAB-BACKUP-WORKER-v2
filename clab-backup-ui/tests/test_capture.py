@@ -74,8 +74,8 @@ class CaptureContractTests(unittest.TestCase):
 
     def test_url_matches_upstream_packetflix_contract_and_encodes_special_characters(self):
         target=normalize_targets(fixture())[0];target['name']='name&"<>=?';target['prefix']='engine/x'
-        provider=EdgesharkProvider('http://internal:5001','https://[2001:db8::1]:8443/edge/')
-        uri=provider.launch(target,['eth0','eth2'])
+        provider=EdgesharkProvider('https://[2001:db8::1]:8443/edge/')
+        uri=provider.stream_uri(target,['eth0','eth2'])
         self.assertTrue(uri.startswith('packetflix:wss://[2001:db8::1]:8443/edge/capture?'))
         query=parse_qs(urlsplit(uri[len('packetflix:'):]).query)
         detail=json.loads(query['container'][0])
@@ -116,7 +116,7 @@ class CaptureContractTests(unittest.TestCase):
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         try:
             base=f'http://127.0.0.1:{server.server_port}'
-            provider=EdgesharkProvider(base+'/edge','http://workstation:5001')
+            provider=EdgesharkProvider(base+'/edge')
             self.assertEqual(len(provider.discover()),3)
             self.assertEqual(requests[0][0],'/edge/discover/mobyshark')
             self.assertNotIn('Authorization',requests[0][1]);self.assertNotIn('Cookie',requests[0][1])
@@ -134,7 +134,13 @@ class CaptureAPITests(unittest.TestCase):
         self.lab={'id':'lab','name':'demo','deployment_name':'demo','container_prefix':'clab',
                   'nodes':[{'name':'r1','definition_node':'r1'}]}
         self.app.state.store.state['labs'].append(self.lab)
-        self.captures.provider=EdgesharkProvider('http://internal:5001','http://localhost:5001')
+        self.captures.provider=EdgesharkProvider('http://internal:5001')
+        self.session_calls=[]
+        class FakeSessions:
+            def request(inner, method, path, who='', data=None):
+                self.session_calls.append(data)
+                return {'id':'a'*64}
+        self.captures.sessions=FakeSessions()
         self.payload=fixture()
         self.reader=patch('app.capture.read_discovery',side_effect=lambda url: copy.deepcopy(self.payload))
         self.reader.start()
@@ -154,7 +160,9 @@ class CaptureAPITests(unittest.TestCase):
         before=copy.deepcopy(self.app.state.store.state)
         data=self.selection();r=self.client.post('/api/capture/launch',json=data)
         self.assertEqual(r.status_code,200,r.text)
-        detail=json.loads(parse_qs(urlsplit(r.json()['uri'][len('packetflix:'):]).query)['container'][0])
+        self.assertEqual(r.json()['url'],'/static/capture-session.html#'+'a'*64)
+        self.assertNotIn('uri',r.json())
+        detail=self.session_calls[-1]['target'];detail['network-interfaces']=self.session_calls[-1]['interfaces']
         self.assertEqual(detail['network-interfaces'],['eth2'])
         self.assertEqual(detail['pid'],42);self.assertEqual(detail['starttime'],12345)
         self.assertEqual(self.app.state.store.state,before)
@@ -199,7 +207,7 @@ class CaptureAPITests(unittest.TestCase):
         self.captures.provider=None
         self.assertFalse(self.client.get('/api/capture/status').json()['enabled'])
         self.assertEqual(self.client.get('/api/capture/targets').status_code,503)
-        self.captures.provider=EdgesharkProvider('http://host','http://host')
+        self.captures.provider=EdgesharkProvider('http://host')
         self.payload={}
         self.assertEqual(self.client.get('/api/capture/targets').status_code,502)
         self.assertEqual(self.client.get('/').status_code,200)
@@ -232,7 +240,9 @@ class CaptureAPITests(unittest.TestCase):
         self.assertEqual([(t['name'],t['aliases']) for t in host],[('init',['containerlab-node-manager-backup-ui-1'])])
         r=self.client.post('/api/capture/launch',json={'target_id':host[0]['id'],'interfaces':['ens18']})
         self.assertEqual(r.status_code,200,r.text)
-        detail=json.loads(parse_qs(urlsplit(r.json()['uri'][len('packetflix:'):]).query)['container'][0])
+        self.assertEqual(r.json()['url'],'/static/capture-session.html#'+'a'*64)
+        self.assertNotIn('uri',r.json())
+        detail=self.session_calls[-1]['target'];detail['network-interfaces']=self.session_calls[-1]['interfaces']
         self.assertNotIn('aliases',detail);self.assertEqual(detail['name'],'init')
         # Lab and node views keep every container row so exact name matching still works.
         self.lab['nodes'].append({'name':'mgr','definition_node':'x'});self.lab['deployment_name']=''

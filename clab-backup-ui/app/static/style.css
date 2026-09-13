@@ -101,3 +101,5 @@ dialog.node-details{position:fixed;inset:0 0 0 auto;margin:0;width:min(560px,94v
 .topology-wire[role="button"]{cursor:pointer}
 .topology-wire[role="button"]:hover path,.topology-wire[role="button"]:focus path{stroke:#F15B40;stroke-width:5}
 .topology-wire[role="button"] path.capture-hit{stroke:transparent;stroke-width:16;pointer-events:stroke}
+
+.capture-viewer{height:100vh;display:flex;flex-direction:column;overflow:hidden;margin:0}.capture-viewer-toolbar{display:flex;gap:12px;align-items:center;padding:12px;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ccd5dd}.capture-viewer-toolbar strong{flex:1}.capture-viewer-help{font-size:13px;margin:6px 12px}.capture-viewer #viewer-status{margin:6px 12px}.capture-viewer #capture-screen{flex:1;min-height:0;background:#263340;overflow:hidden}

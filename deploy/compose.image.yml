@@ -13,7 +13,8 @@ services:
       DATA_DIR: /data
       CAPTURE_PROVIDER: ${CAPTURE_PROVIDER:-disabled}
       CAPTURE_EDGESHARK_URL: ${CAPTURE_EDGESHARK_URL:-}
-      CAPTURE_EDGESHARK_PUBLIC_URL: ${CAPTURE_EDGESHARK_PUBLIC_URL:-}
+      CAPTURE_SESSION_URL: ${CAPTURE_SESSION_URL:-http://127.0.0.1:5801}
+      CAPTURE_SESSION_TOKEN: ${CAPTURE_SESSION_TOKEN:-}
     volumes:
       - type: bind
         source: /srv/containerlab-node-manager/data
