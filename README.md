@@ -8,7 +8,7 @@ deploy a topology, watch the devices boot, open SSH to every node, capture packe
 Wireshark from the browser, back up device configurations and save lab progress to
 Git. Nothing is installed on your workstation; you only need a browser.
 
-Current release: **1.23.1** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
+Current release: **1.24.0** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
 
 ## What it does
 
@@ -69,7 +69,7 @@ a correct clock. The guided installer adds Docker, containerlab, the restricted
    password, and create a password for `clab-discovery` when asked (write it down).
    Choose `2` at *Next step* to set up Git later. The image build takes a few
    minutes; the installer ends with
-   `Manager 1.23.1: running; HTTP and version checks passed.`
+   `Manager 1.24.0: running; HTTP and version checks passed.`
 
 3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.
@@ -148,6 +148,7 @@ and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | [Git setup](docs/GIT-SETUP.md) and [Save lab progress](docs/GIT-PROGRESS.md) | Register a checkout and save, checkpoint, load and push |
 | [Browser Wireshark](docs/CAPTURE.md) | Install the capture stack, run sessions, download captures |
 | [Network telemetry](docs/TELEMETRY.md) | Enable automatic gNMI telemetry, read the charts and the live map, per-NOS support and the live acceptance procedure |
+| [Grafana lab map](docs/GRAFANA-MAP.md) | The generated weathermap per lab in Grafana: what a new lab gets by itself, what you still craft, how to make your own variant |
 | [Health check](docs/HEALTH-CHECK.md) and [Debug panel](docs/DEBUG-PANEL.md) | Read `check-install.sh` results and diagnose helpers |
 | [Architecture](docs/ARCHITECTURE.md) | See how the pieces connect and which module does what |
 | [Changelog](docs/CHANGELOG.md) | Read what changed in each release |

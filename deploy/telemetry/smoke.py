@@ -29,6 +29,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'clab-backup-ui'))
+from app import telemetry_map as maps  # noqa: E402
 from app.telemetry_metrics import render  # noqa: E402
 
 spec = importlib.util.spec_from_file_location('telemetry_setup', ROOT / 'deploy/setup_telemetry.py')
@@ -124,6 +125,19 @@ class Manager(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def fixture_lab():
+    """The manager-side view of the same lab: what MapPublisher would render a map from."""
+    lab = {'id': 'smoke0000000000000000000000000001', 'name': LAB,
+           'nodes': [{'name': 'clab-smoke-lab-r1', 'short_name': 'r1', 'platform': 'arista_ceos'},
+                     {'name': 'clab-smoke-lab-r2', 'short_name': 'r2', 'platform': 'arista_ceos'}]}
+    node = lambda ident, x, inventory: {'id': ident, 'alias': ident, 'label': ident, 'x': x, 'y': 80, 'icon': 'router', 'iconColor': '#0066ff',
+                                        'labelPosition': 'bottom', 'direction': 'up', 'iconCornerRadius': 4, 'inventory_name': inventory}
+    drawing = {'schema': 3, 'revision': 'smoke', 'settings': {'labelMode': 'show-all', 'endpointOffset': 20}, 'decorations': [],
+               'nodes': [node('r1', 60, 'clab-smoke-lab-r1'), node('r2', 360, 'clab-smoke-lab-r2')],
+               'links': [[{'node': 'r1', 'interface': 'eth1'}, {'node': 'r2', 'interface': 'eth1'}]]}
+    return lab, drawing
+
+
 def substitute(expr):
     return expr.replace('$lab', LAB).replace('$node', '.*').replace('$interface', '.*')
 
@@ -160,13 +174,26 @@ def main():
     # Prometheus runs as nobody and reads the rendered scrape configuration through a bind mount.
     os.chmod(folder, 0o755)
     env_file = folder / '.env'
+    data_dir = folder / 'data'
+    data_dir.mkdir()                     # stands in for the manager data directory
+    maps_dir = data_dir / 'telemetry' / 'dashboards'
     env_file.write_text(f'UI_PORT={ui_port}\nUNRELATED=kept\nTELEMETRY_GRAFANA_PORT={grafana_port}\n'
-                        f'TELEMETRY_PROMETHEUS_PORT={prometheus_port}\nTELEMETRY_GRAFANA_BIND=127.0.0.1\n')
+                        f'TELEMETRY_PROMETHEUS_PORT={prometheus_port}\nTELEMETRY_GRAFANA_BIND=127.0.0.1\nTELEMETRY_MAPS_DIR={maps_dir.as_posix()}\n')
     config_dir = folder / 'telemetry'
     result = setup.configure(env_file, config_dir)
-    assert result == {'ui_port': ui_port, 'grafana_port': grafana_port, 'prometheus_port': prometheus_port, 'bind': '127.0.0.1'}, result
+    assert result == {'ui_port': ui_port, 'grafana_port': grafana_port, 'prometheus_port': prometheus_port, 'bind': '127.0.0.1',
+                      'maps_dir': maps_dir.as_posix()}, result
     assert 'UNRELATED=kept' in env_file.read_text(encoding='utf-8')
+    assert maps_dir.is_dir() and (config_dir / 'plugins').is_dir()
     password = re.search(r'^TELEMETRY_GRAFANA_ADMIN_PASSWORD=(\S+)$', env_file.read_text(encoding='utf-8'), re.M)[1]
+    # The Flow panel, installed the way setup-telemetry.sh does it, and one generated lab map the way
+    # the manager publishes it.
+    plugin = setup.install_plugin(config_dir)
+    assert plugin in ('installed', 'present'), plugin
+    lab, drawing = fixture_lab()
+    map_uid = maps.map_uid(lab['id'])
+    (maps_dir / (map_uid + '.json')).write_text(maps.dashboard_json(lab, drawing), encoding='utf-8')
+    os.chmod(maps_dir / (map_uid + '.json'), 0o644)
     server = http.server.ThreadingHTTPServer(('127.0.0.1', ui_port), Manager)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     compose = ['docker', 'compose', '--env-file', str(env_file), '-f', str(COMPOSE)]
@@ -179,6 +206,7 @@ def main():
         # The same gate deploy/setup-telemetry.sh applies before it reports success.
         ready = setup.wait_ready(env_file, timeout=120)
         assert ready['prometheus_port'] == prometheus_port, ready
+        assert ready['flow_panel'], 'Grafana did not load the Flow panel from the plugins folder: ' + str(ready)
 
         def scraping():
             status, answer = fetch(prometheus + '/api/v1/targets')
@@ -201,6 +229,24 @@ def main():
             assert dashboard['dashboard']['uid'] == uid and dashboard['dashboard']['panels'], uid
         checked = sum(check_promql(prometheus, path) for path in sorted(DASHBOARDS.glob('*.json')))
         assert checked >= 20, checked
+        # The generated lab map: provisioned from the manager folder, its panel is the Flow panel and
+        # every series its cells bind to is answered by the queries in the panel.
+        def provisioned():
+            status, answer = fetch(grafana + '/api/dashboards/uid/' + map_uid)
+            return status == 200 and answer['meta']['provisioned'] and answer['dashboard']['panels'][0]['type'] == maps.PLUGIN
+        eventually(provisioned, what='the generated lab map to be provisioned')
+        panel = maps.dashboard(lab, drawing)['panels'][0]
+        names = set()
+        for query in panel['targets']:
+            status, answer = fetch(prometheus + '/api/v1/query?' + urlencode({'query': query['expr']}))
+            assert status == 200 and answer['data']['result'], (query['expr'], status, answer)
+            legend = query['legendFormat']
+            for row in answer['data']['result']:
+                names.add(re.sub(r'\{\{(\w+)\}\}', lambda m: row['metric'].get(m[1], ''), legend))
+        cells = json.loads(panel['options']['panelConfig'])['cells']
+        refs = {c.get('dataRef') or c['label']['dataRef'] for c in cells.values()}
+        assert refs <= names, (refs - names, names)
+        assert {'r2:Ethernet1:in', 'oper:r1:Ethernet1', 'state:r1'} <= refs, refs
         status, streaming = fetch(prometheus + '/api/v1/query?' + urlencode({'query': f'count(clab_telemetry_node_state{{lab="{LAB}", state="streaming"}}) or vector(0)'}))
         assert status == 200 and streaming['data']['result'][0]['value'][1] == '2', streaming
         # What a browser does on the Lab overview page: an anonymous query through Grafana's proxy.
@@ -213,7 +259,8 @@ def main():
         status, _ = fetch(grafana + '/api/datasources', data={'name': 'x', 'type': 'prometheus'})
         assert status in (401, 403), status
         print(f'PASS: Prometheus scrapes the manager exposition, Grafana provisioned the data source and {len(UIDS)} read-only dashboards, '
-              f'{checked} panel queries and every template variable answer, anonymous viewer queries work.')
+              f'{checked} panel queries and every template variable answer, anonymous viewer queries work, the Flow panel '
+              f'{maps.PLUGIN_VERSION} loaded and the generated lab map {map_uid} was provisioned with every cell series answered.')
     finally:
         server.shutdown()
         command(*compose, 'down', '--volumes', '--remove-orphans')

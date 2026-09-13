@@ -24,6 +24,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import paramiko
 from fastapi import HTTPException, Query
@@ -34,6 +35,7 @@ from .node_services import connect
 from .runner import effective_credentials, now
 from .telemetry_adapters import adapter_for, SUPPORTED
 from .telemetry_collector import AVAILABLE, NodeCollector
+from .telemetry_map import MapPublisher, dashboard as map_dashboard, map_uid, render as render_map
 from .telemetry_names import endpoint_candidates, interface_role
 from .telemetry_provision import ProvisionError, provision
 from .telemetry_settings import default_settings, settings_of
@@ -130,6 +132,10 @@ class TelemetryManager:
         except ValueError: prometheus = 0
         self.grafana = {'enabled': stack == 'grafana' and 1 <= port <= 65535, 'port': port if 1 <= port <= 65535 else 0,
                         'prometheus_port': prometheus if 1 <= prometheus <= 65535 else 0}
+        # One generated weathermap dashboard per drawn lab, provisioned by Grafana from the data
+        # directory (deploy/setup-telemetry.sh mounts it read-only); written only while the stack is on.
+        root = getattr(store, 'root', None)
+        self.maps = MapPublisher(Path(root) / 'telemetry' / 'dashboards' if root else None, self.grafana['enabled'])
         self.data = TelemetryStore()
         self.queue = queue.Queue(maxsize=QUEUE_SIZE)
         self.lock = threading.RLock()
@@ -266,6 +272,7 @@ class TelemetryManager:
         state = self.store.snapshot()
         fresh = discovery_fresh(state)
         self.review_operations(state)
+        self.publish_maps(state)
         present = set()
         with self.services.lock: checks = {k: v.get('status') for k, v in self.services.checks.items()}
         for lab in state['labs']:
@@ -339,6 +346,15 @@ class TelemetryManager:
             with self.lock:
                 self.status.pop(key, None); self.observed.pop(key, None)
             self.data.clear_node(*key)
+
+    def publish_maps(self, state):
+        """Keep the provisioned Grafana lab maps in step with the saved drawings (cheap: signatures)."""
+        if self.maps.folder is None:
+            return
+        try:
+            self.maps.reconcile((lab, bind_drawing(lab)) for lab in state['labs'])
+        except Exception:
+            logging.getLogger(__name__).warning('Grafana lab maps could not be refreshed; retrying on the next pass.')
 
     def restart_node(self, key):
         """Stop, restarted or redeployed node: new generation, empty buffers, provisioning again."""
@@ -547,7 +563,7 @@ class TelemetryManager:
                 'sessions': collectors, 'states': states, 'queue': self.queue.qsize(), 'queue_dropped': self.dropped_queue,
                 'bounds': {'collectors': MAX_COLLECTORS, 'provisioning': MAX_PROVISIONING, 'queue': QUEUE_SIZE},
                 'store': self.data.stats(), 'supported_kinds': list(SUPPORTED), 'grafana': self.grafana,
-                'metrics_path': '/api/telemetry/metrics'}
+                'maps': self.maps.stats(), 'metrics_path': '/api/telemetry/metrics'}
 
     def lab_view(self, lab):
         """Everything the Telemetry view and the map overlay need for one lab; bounded."""
@@ -615,7 +631,7 @@ class TelemetryManager:
                 links.append({'index': index, 'status': status, 'mismatch': mismatch, 'ends': ends})
         summary = summarize([n['state'] for n in nodes])
         return {'lab_id': lab['id'], 'lab_name': lab.get('name', ''), 'generated_at': now(), 'enabled': self.enabled, 'unavailable': self.unavailable,
-                'grafana': self.grafana,
+                'grafana': {**self.grafana, 'map_uid': map_uid(lab['id']) if self.grafana['enabled'] and drawing else ''},
                 'settings': {**settings, 'profile_label': profile['label'] if profile else ''},
                 'method': METHOD, 'sample_interval': INTERVAL, 'stale_after': STALE_AFTER, 'windows': list(WINDOWS),
                 'summary': summary, 'nodes': nodes, 'links': links, 'linked': bool(lab.get('deployment_name')),
@@ -658,6 +674,31 @@ class TelemetryManager:
             with self.store.lock:
                 lab = copy.deepcopy(lab_for(lab_id))
             return manager.lab_view(lab)
+
+        def drawn(lab_id):
+            with self.store.lock:
+                lab = copy.deepcopy(lab_for(lab_id))
+            drawing = bind_drawing(lab)
+            if not drawing: raise HTTPException(404, 'This lab has no drawing yet. Import its topology first.')
+            return lab, drawing
+
+        # The generated Grafana map, for a look or as the starting point of a hand-tuned draw.io copy.
+        @app.get('/api/labs/{lab_id}/telemetry/map.svg')
+        def map_svg(lab_id: str):
+            from fastapi.responses import Response
+            lab, drawing = drawn(lab_id)
+            return Response(render_map(drawing, lab)['svg'], media_type='image/svg+xml')
+
+        @app.get('/api/labs/{lab_id}/telemetry/map.yml')
+        def map_yaml(lab_id: str):
+            from fastapi.responses import PlainTextResponse
+            lab, drawing = drawn(lab_id)
+            return PlainTextResponse(render_map(drawing, lab)['panel_config'], media_type='text/plain; charset=utf-8')
+
+        @app.get('/api/labs/{lab_id}/telemetry/map.json')
+        def map_json(lab_id: str):
+            lab, drawing = drawn(lab_id)
+            return map_dashboard(lab, drawing)
 
         @app.get('/api/labs/{lab_id}/telemetry/series')
         def series(lab_id: str, node: str = Query(..., min_length=1, max_length=200), interface: str = Query(..., min_length=1, max_length=64),

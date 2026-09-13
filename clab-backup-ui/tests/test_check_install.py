@@ -258,12 +258,14 @@ class InstallationCheckTests(unittest.TestCase):
         ctx.http.assert_not_called()
 
     def test_telemetry_dashboard_check_probes_grafana_and_prometheus(self):
-        def router(grafana, healthy=True, scraping=True, prometheus=True):
+        def router(grafana, healthy=True, scraping=True, prometheus=True, plugin=True, maps=None):
             def request(path, payload=None, base=None, **kwargs):
                 if path == '/api/telemetry/health':
-                    return check.Result(0), {'enabled': True, 'grafana': grafana}
+                    return check.Result(0), {'enabled': True, 'grafana': grafana, 'maps': maps if maps is not None else {'enabled': True, 'dashboards': 2, 'error': ''}}
                 if path == '/api/health' and base == 'http://127.0.0.1:3100':
                     return check.Result(0), {'database': 'ok' if healthy else 'failing', 'version': PRIVATE}
+                if path == '/api/frontend/settings' and base == 'http://127.0.0.1:3100':
+                    return check.Result(0), {'panels': {'andrewbmchugh-flow-panel': {'id': 'andrewbmchugh-flow-panel'}} if plugin else {'timeseries': {}}, 'buildInfo': PRIVATE}
                 if path == '/api/v1/targets' and base == 'http://127.0.0.1:9090':
                     if not prometheus:
                         return check.Result(reason='connection refused'), None
@@ -279,8 +281,18 @@ class InstallationCheckTests(unittest.TestCase):
         ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}))
         check.check_telemetry_dashboards(ctx)
         self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'PASS')
-        self.assertTrue(any('Grafana: open http://VM_IP:3100/' in item for item in ctx.manual))
+        self.assertIn('Flow panel is loaded and 2 lab map(s)', by_id(ctx, 'telemetry-dashboards')['detail'])
+        self.assertTrue(any('Grafana: open http://VM_IP:3100/' in item and 'Lab maps' in item for item in ctx.manual))
         self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
+        ctx = context()
+        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, plugin=False))
+        check.check_telemetry_dashboards(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'WARN'); self.assertIn('setup-telemetry.sh', by_id(ctx, 'telemetry-dashboards')['fix'])
+        self.assertIn('Flow panel', by_id(ctx, 'telemetry-dashboards')['detail'])
+        ctx = context()
+        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, maps={'enabled': True, 'dashboards': 0, 'error': 'The Grafana lab map folder is not writable (Permission denied).'}))
+        check.check_telemetry_dashboards(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'WARN'); self.assertIn('TELEMETRY_MAPS_DIR', by_id(ctx, 'telemetry-dashboards')['fix'])
         ctx = context()
         ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, healthy=False))
         check.check_telemetry_dashboards(ctx)

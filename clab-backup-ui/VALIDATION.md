@@ -1,3 +1,50 @@
+# Grafana lab map — 1.24.0
+
+Prepared on `claude/grafana-lab-map` from main `70f30c9` (1.23.1) on 2026-09-13, after the
+user asked for a Grafana map "like srl-labs/srl-telemetry-lab". That lab uses the Flow panel
+plugin with an SVG and a YAML drawn per lab; this release generates both from the manager's
+drawing. Validated live on the dev VM (`clab-dev-llm`, cEOS 4.35.0F pair, Grafana OSS 13.0.2,
+Prometheus v3.14.0, Flow panel 1.20.1).
+
+## Setup and provisioning (documented scripts, re-staged from the final commit)
+
+| Step | Result |
+|---|---|
+| `setup-telemetry.sh` (first run) | settings saved with `TELEMETRY_MAPS_DIR`, `Flow panel andrewbmchugh-flow-panel 1.20.1 installed in /srv/containerlab-node-manager/telemetry/plugins` (owner 472), map folder created for uid 10001, stack recreated, readiness `Prometheus … and Grafana … are ready`, `Flow panel … loaded` |
+| `setup-telemetry.sh` (rerun) | `Flow panel … present` (no download), scrape target `up`, exit 0 |
+| Manager recreated | `/api/telemetry/health` → `maps: {enabled, folder /data/telemetry/dashboards, dashboards 1, error ''}`; the file `clab-map-35159c1aca7c447da2998e00.json` (0644, uid 10001) appeared within 5 s of start |
+| Grafana | `/api/search` lists `Lab map · ceos-pair` in folder *Lab maps* next to the three fixed dashboards; `/api/frontend/settings` lists the Flow panel; the bundled-app background installer no longer logs errors (`GF_PLUGINS_PREINSTALL_DISABLED`), the empty `provisioning/plugins` and `provisioning/alerting` files silence the two remaining start-up errors, Grafana Live is off |
+| `check-install.sh` | **PASS 61 / FAIL 0 / WARN 1** (folder budget); `[PASS] Grafana telemetry dashboards — … the Flow panel is loaded and 1 lab map(s) are provisioned.` |
+| Telemetry tab | button reads **Open lab map in Grafana ↗** and opens `/d/clab-map-35159c1aca7c447da2998e00` |
+
+## The map in the browser (desktop app browser pane, fresh tab)
+
+| Check | Result |
+|---|---|
+| First render | the panel needs about a minute to load the plugin bundle in this browser; then the two routers, `eth1` labels, node labels, port dots and rate labels render on the manager's cream canvas; no page error, no console error apart from Grafana Live's WebSocket (now disabled) |
+| Traffic (Linux `ping -i 0.05 -s 1400` between the cEOS nodes, ≈230 kb/s each way) | both link halves green with moving dashes, rate labels `↑ 232.3 kb/s` / `↑ 232.8 kb/s`, port and node dots green |
+| `shutdown` on ceos2 Ethernet1 | read from the DOM 40 s later: both port dots `rgba(255,49,84)` (red), both halves `rgba(190,200,210)` (grey), rate `↑ 0.0 b/s`, node dots green; `no shutdown` returned everything to green within the next refreshes |
+| Defects found and fixed live | (1) link halves stayed grey under traffic: the SVG stylesheet coloured `.link`, and a CSS rule beats the `stroke` attribute the plugin sets — colours the plugin drives are attributes only now; (2) on a short link the two rate labels met in the middle — they now sit beside the wire near their own node; (3) port dots were drawn under the icons; (4) a discrete value on a threshold level is ambiguous — every level now sits between the values it separates |
+| Learned about the plugin | it sets only `animation-duration`/`animation-direction` (the dash keyframes live in the SVG), replaces the text of a leaf holding one text node, `getColorFromNumber` compares `value < level`, and tool calls in one message run sequentially, so a flap test needs shutdown, inspection and restore as separate calls |
+
+## Tests
+
+- New `test_telemetry_map.py` (8: SVG structure, cells and NOS names, dashboard, signature,
+  publisher, manager routes and stack-off behaviour); `test_telemetry_setup.py` 9 (plugin
+  install with a fake runner, folders, compose binds and the second provider);
+  `test_check_install.py` 37 (plugin missing and folder error cases); `test_telemetry_metrics.py`
+  (state code); `test_telemetry_ui.js` (map link and button text); every telemetry module green
+  on Windows apart from the known `state.enc` rename flake; 69 JS tests green; release
+  consistency 1.24.0.
+- CI smoke (`deploy/telemetry/smoke.py`) now installs the plugin with the real Grafana image,
+  provisions a generated map for a fixture lab and checks that every series its cells bind to is
+  answered; its result is on the pull request.
+
+## Not covered
+
+- XRv9k and cJunosEvolved maps: interface-name mapping is unit-tested, no such node runs here.
+- Labs with more than two nodes and with annotations (groups, notes) render in unit tests only.
+
 # Telemetry live fixes — 1.23.1
 
 Prepared on `claude/v1.23.0-validation` from main `c8a2e26` (1.23.0) on 2026-09-13.

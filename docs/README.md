@@ -24,6 +24,7 @@ last written for in its first heading.
 | [Save lab progress](GIT-PROGRESS.md) | You use saves, checkpoints, baselines, history and loads. |
 | [Browser Wireshark](CAPTURE.md) | You install the capture stack, start sessions, download captures, or need the security boundary of the capture services. |
 | [Network telemetry](TELEMETRY.md) | You want live interface rates, link state and BGP neighbours from a deployed lab: how automatic provisioning works per NOS, the node states, settings, bounds, security notes and the live acceptance procedure. |
+| [Grafana lab map](GRAFANA-MAP.md) | You want the srl-telemetry-lab style weathermap in Grafana: how the manager generates one per lab, what a new lab needs, what you still craft, and how to build a hand-tuned variant from the generated SVG and configuration. |
 | [Health check](HEALTH-CHECK.md) | You read `deploy/check-install.sh` output and fix FAIL or WARN lines. |
 | [Debug panel](DEBUG-PANEL.md) | You use the development diagnostics page to probe VM helpers and file browsing. |
 

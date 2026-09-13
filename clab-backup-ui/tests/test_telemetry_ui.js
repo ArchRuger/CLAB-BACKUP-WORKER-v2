@@ -115,6 +115,12 @@ test('Grafana links appear only when the manager announces the stack and carry t
  assert.equal(h.$('telemetry-grafana').hidden,true);assert.doesNotMatch(h.$('telemetry-detail').innerHTML,/Grafana/);
  h.context.teleState.data=payload({grafana:{enabled:true,port:3100,prometheus_port:9090},lab_name:'de mo'});h.context.renderTelemetryView();
  assert.equal(h.$('telemetry-grafana').hidden,false);assert.equal(h.$('telemetry-grafana').href,'http://lab-vm:3100/d/clab-lab-overview?var-lab=de+mo&refresh=10s');
+ assert.equal(h.$('telemetry-grafana').textContent,'Open Grafana ↗');
+ // A generated lab map takes the button over; the lab overview stays reachable from the map's links.
+ h.context.teleState.data=payload({grafana:{enabled:true,port:3100,prometheus_port:9090,map_uid:'clab-map-a1b2c3d4e5f6a7b8c9d0e1f2'},lab_name:'de mo'});h.context.renderTelemetryView();
+ assert.equal(h.$('telemetry-grafana').href,'http://lab-vm:3100/d/clab-map-a1b2c3d4e5f6a7b8c9d0e1f2?var-lab=de+mo&refresh=10s');
+ assert.equal(h.$('telemetry-grafana').textContent,'Open lab map in Grafana ↗');
+ h.context.teleState.data=payload({grafana:{enabled:true,port:3100,prometheus_port:9090},lab_name:'de mo'});h.context.renderTelemetryView();
  assert.match(h.$('telemetry-detail').innerHTML,/href="http:\/\/lab-vm:3100\/d\/clab-interface\?var-lab=de\+mo&amp;var-node=r1&amp;var-interface=Ethernet1&amp;refresh=10s" target="_blank" rel="noopener">Grafana/);
  assert.equal(h.context.telemetryGrafanaUrl({grafana:{enabled:false}},'clab-bgp'),'');
 });

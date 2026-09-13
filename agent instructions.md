@@ -1,3 +1,40 @@
+# Grafana lab map — 1.24.0
+
+Read docs/GRAFANA-MAP.md and docs/CHANGELOG.md "Changes in 1.24.0". (1) `app/telemetry_map.py`
+is pure (stdlib + telemetry_names/telemetry_metrics): `render(drawing, lab)` draws the
+SVG from the bound drawing with the same geometry as `static/topology-render.js` (node at
+x+20/y+20, 40 px body, wire radius 20/max(|ux|,|uy|), label offsets) and returns the Flow
+panel cells; `dashboard(lab, drawing)` is the provisioned dashboard (uid `clab-map-` + 24
+chars of the lab id, one `andrewbmchugh-flow-panel` panel with inline `svg` and
+`panelConfig`, queries `clab_interface_receive_bits_per_second{lab=…}` →
+`{{node}}:{{interface}}:in`, `clab_interface_oper_up` → `oper:{{node}}:{{interface}}`,
+`clab_telemetry_node_state_code` → `state:{{node}}`). One SVG element per cell, ids
+`cell-link:<short>:<drawn>`, `cell-rate:…`, `cell-port:…`, `cell-node:<short>`: the plugin
+replaces the text of a leaf with one text node (the rate label starts as "↑" and
+`separator: space` appends the value), sets fill/stroke on the cell's elements and only
+sets animation-duration/direction, so the dash keyframes live in the SVG `<style>`. A half
+link binds to the FAR end's receive series (cEOS containers report zero transmit octets);
+unmatched drawing nodes get static grey elements without cells. The panel configuration is
+emitted as JSON (a YAML subset) with `cellIdPreamble: cell-`, `datapoint: lastNotNull` and
+a fixed canvas `background` for both themes. (2) `MapPublisher` writes
+`<store.root>/telemetry/dashboards/<uid>.json` (0644, atomic) from `TelemetryManager.scan`
+via `publish_maps` (signature = lab id, name, drawing revision, node identities), deletes
+files of vanished labs, removes all generated files while the stack is disabled, never
+raises (`stats()['error']`). (3) Deployment: `setup_telemetry.py` writes
+`TELEMETRY_MAPS_DIR` (default `/srv/containerlab-node-manager/data/telemetry/dashboards`,
+created for uid 10001; refuses when the data directory is missing, before touching .env),
+creates `TELEMETRY_CONFIG_DIR/plugins` (uid 472) and `--plugin` installs the pinned Flow
+panel with `docker run --entrypoint grafana <pinned image> cli --pluginsDir /plugins plugins
+install andrewbmchugh-flow-panel 1.20.1` (as 472 when root, else the caller); compose
+mounts both folders read-only (`GF_PATHS_PLUGINS=/var/lib/grafana-plugins`,
+`/etc/grafana/dashboards-labs`) and `clab.yml` has a second provider (folder *Lab maps*,
+`disableDeletion: false`, 30 s). `wait_ready` reports `flow_panel` from Grafana's
+anonymous `/api/frontend/settings`; check_install warns without it or with `maps.error`.
+Keep `PLUGIN`/`PLUGIN_VERSION` identical in setup_telemetry.py and telemetry_map.py
+(tested). (4) UI: `telemetry.js` opens `grafana.map_uid` when the lab view carries one.
+(5) CI smoke installs the plugin for real and provisions a generated map. Thresholds
+(`TRAFFIC_LEVELS`, `FLOW`) are constants documented in GRAFANA-MAP.md.
+
 # Telemetry live fixes — 1.23.1
 
 Read docs/CHANGELOG.md "Changes in 1.23.1" and docs/TELEMETRY.md. Everything below was
