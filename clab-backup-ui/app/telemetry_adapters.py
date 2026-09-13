@@ -232,12 +232,14 @@ class IosxrAdapter(Adapter):
                 vrf = match[1]
         present = any(re.match(r'^grpc\s*$', line) for line in grpc)
         if not present:
-            add = ['grpc', ' port ' + str(self.default_port)]
+            # The lab runs gRPC in plain text (the operator's choice for these
+            # disposable labs); no-tls is added together with the service.
+            add = ['grpc', ' port ' + str(self.default_port), ' no-tls']
             if vrf:
                 add.append(' vrf ' + vrf)
-            return Plan(self.default_port, 'tls', add=add, vrf=vrf)
+            return Plan(self.default_port, 'plaintext', add=add, vrf=vrf)
         port = self.default_port
-        transport = 'tls'
+        plaintext = False
         grpc_vrf = ''
         for line in grpc:
             body = line.strip()
@@ -245,16 +247,19 @@ class IosxrAdapter(Adapter):
             if match:
                 port = int(match[1])
             elif body == 'no-tls':
-                transport = 'plaintext'
+                plaintext = True
             elif body.startswith('vrf '):
                 grpc_vrf = body.split()[1]
         blockers = []
         if vrf and grpc_vrf != vrf:
             blockers.append(f'gRPC is not bound to the management VRF {vrf} (add "vrf {vrf}" under grpc) so the collector cannot reach it.')
-        return Plan(port, transport, blockers=blockers, vrf=grpc_vrf)
+        # An existing TLS-only service gets no-tls added (recorded as manager-owned).
+        return Plan(port, 'plaintext', add=[] if plaintext else [' no-tls'], blockers=blockers, vrf=grpc_vrf)
 
     def apply(self, plan):
         lines = ['configure terminal']
+        if not any(line.strip() == 'grpc' for line in plan.add):
+            lines.append('grpc')
         lines.extend(line.strip() for line in plan.add)
         lines.extend(['commit', 'end'])
         return lines
@@ -266,6 +271,8 @@ class IosxrAdapter(Adapter):
         owned = [l.strip() for l in lines]
         if 'grpc' in owned:
             return ['configure terminal', 'no grpc', 'commit', 'end']
+        if 'no-tls' in owned:
+            return ['configure terminal', 'grpc', 'no no-tls', 'commit', 'end']
         return []
 
 

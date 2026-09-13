@@ -120,6 +120,15 @@ class TelemetryManager:
             self.unavailable = 'The gNMI client library (pygnmi) is not installed in this image; rebuild the manager.'
         else:
             self.unavailable = ''
+        # The optional Grafana stack (deploy/setup-telemetry.sh) is announced to the UI
+        # by port only; the browser opens it on the manager's own host name.
+        stack = (config.get('TELEMETRY_STACK', '') or '').strip().lower()
+        try: port = int(config.get('TELEMETRY_GRAFANA_PORT', '3000') or 3000)
+        except ValueError: port = 0
+        try: prometheus = int(config.get('TELEMETRY_PROMETHEUS_PORT', '9090') or 9090)
+        except ValueError: prometheus = 0
+        self.grafana = {'enabled': stack == 'grafana' and 1 <= port <= 65535, 'port': port if 1 <= port <= 65535 else 0,
+                        'prometheus_port': prometheus if 1 <= prometheus <= 65535 else 0}
         self.data = TelemetryStore()
         self.queue = queue.Queue(maxsize=QUEUE_SIZE)
         self.lock = threading.RLock()
@@ -532,7 +541,8 @@ class TelemetryManager:
                 'library': 'pygnmi' if AVAILABLE else 'missing', 'method': METHOD, 'sample_interval': INTERVAL,
                 'sessions': collectors, 'states': states, 'queue': self.queue.qsize(), 'queue_dropped': self.dropped_queue,
                 'bounds': {'collectors': MAX_COLLECTORS, 'provisioning': MAX_PROVISIONING, 'queue': QUEUE_SIZE},
-                'store': self.data.stats(), 'supported_kinds': list(SUPPORTED)}
+                'store': self.data.stats(), 'supported_kinds': list(SUPPORTED), 'grafana': self.grafana,
+                'metrics_path': '/api/telemetry/metrics'}
 
     def lab_view(self, lab):
         """Everything the Telemetry view and the map overlay need for one lab; bounded."""
@@ -599,7 +609,8 @@ class TelemetryManager:
                 status, mismatch = link_status(ends[0]['state'], ends[1]['state'])
                 links.append({'index': index, 'status': status, 'mismatch': mismatch, 'ends': ends})
         summary = summarize([n['state'] for n in nodes])
-        return {'lab_id': lab['id'], 'generated_at': now(), 'enabled': self.enabled, 'unavailable': self.unavailable,
+        return {'lab_id': lab['id'], 'lab_name': lab.get('name', ''), 'generated_at': now(), 'enabled': self.enabled, 'unavailable': self.unavailable,
+                'grafana': self.grafana,
                 'settings': {**settings, 'profile_label': profile['label'] if profile else ''},
                 'method': METHOD, 'sample_interval': INTERVAL, 'stale_after': STALE_AFTER, 'windows': list(WINDOWS),
                 'summary': summary, 'nodes': nodes, 'links': links, 'linked': bool(lab.get('deployment_name')),
@@ -626,6 +637,16 @@ class TelemetryManager:
         @app.get('/api/telemetry/health')
         def health():
             return manager.health()
+
+        @app.get('/api/telemetry/metrics')
+        def metrics():
+            """Prometheus text exposition for the optional Grafana stack; names only, no secrets."""
+            from fastapi.responses import PlainTextResponse
+            from .telemetry_metrics import render
+            with self.store.lock:
+                labs = [copy.deepcopy(l) for l in self.store.state['labs'] if l.get('deployment_name')]
+            body = render([manager.lab_view(lab) for lab in labs], time.time())
+            return PlainTextResponse(body, media_type='text/plain; version=0.0.4; charset=utf-8')
 
         @app.get('/api/labs/{lab_id}/telemetry')
         def view(lab_id: str):

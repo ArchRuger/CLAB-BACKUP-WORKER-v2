@@ -53,10 +53,10 @@ sequenceDiagram
      VRF when Management0 is in one). Containerlab's default cEOS configuration
      already contains this, so usually nothing is written. Running configuration
      only; the manager never issues `write memory`.
-   - IOS XR: `grpc` with `port 57400` (plus `vrf` when the management interface is
-     in one), committed with `commit`. Containerlab's XRv9k boots with gNMI
-     pre-provisioned, so usually nothing is written. Whatever `no-tls` says decides
-     the transport.
+   - IOS XR: `grpc` with `port 57400` and `no-tls` (plus `vrf` when the management
+     interface is in one), committed with `commit`. Containerlab's XRv9k boots with
+     gNMI pre-provisioned; when that service lacks `no-tls`, only that line is added.
+     The lab runs gRPC in plain text by the operator's choice.
    - Junos Evolved: `set system services extension-service request-response grpc
      clear-text port 32767` (plus `routing-instance mgmt_junos` when the management
      instance is enabled), applied in `configure private` and committed with
@@ -67,9 +67,10 @@ sequenceDiagram
    on the VM and already reaches every node's management address for SSH, so the
    same path reaches TCP 6030 (EOS), 57400 (XR) and 32767 (Junos). The client is
    [pygnmi](https://github.com/akarneliuk/pygnmi) (BSD-3) over grpcio. The
-   transport recorded on the node is tried first (TLS with the device's own
-   certificate, unverified, or plain text) and the other one is probed only after a
-   transport error, never after a login refusal. Encodings are chosen from the
+   transport recorded on the node is tried first (plain text on all three kinds by
+   default; TLS with the device's own certificate, unverified, where a user configured
+   it on EOS or Junos) and the other one is probed only after a transport error, never
+   after a login refusal. Encodings are chosen from the
    node's capabilities in the adapter's preference order; a rejected subscription
    falls back to the next path variant (leaf paths, then the state container).
 4. **Normalisation.** Records carry the lab, the node, a generation (one per boot
@@ -130,8 +131,8 @@ The manager environment variable `TELEMETRY_COLLECTOR` (`gnmi`, the default, or
 
 | | cEOS / EOS | XRv9k / IOS XR | cJunosEvolved / Junos Evolved |
 |---|---|---|---|
-| Service the manager expects | `management api gnmi`, `transport grpc default`, TCP 6030 | `grpc`, TCP 57400, TLS unless `no-tls` | `system services extension-service request-response grpc clear-text`, TCP 32767 |
-| Lines added when missing | `management api gnmi` / `transport grpc default` (/ `vrf X`) | `grpc` / `port 57400` (/ `vrf X`) | `set … grpc clear-text port 32767` (/ `routing-instance mgmt_junos`) |
+| Service the manager expects | `management api gnmi`, `transport grpc default`, TCP 6030 | `grpc` with `no-tls`, TCP 57400 | `system services extension-service request-response grpc clear-text`, TCP 32767 |
+| Lines added when missing | `management api gnmi` / `transport grpc default` (/ `vrf X`) | `grpc` / `port 57400` / `no-tls` (/ `vrf X`), or `no-tls` alone under an existing `grpc` | `set … grpc clear-text port 32767` (/ `routing-instance mgmt_junos`) |
 | Commit semantics | running-config only, no save | `commit` of this session's candidate | `configure private` + `commit and-quit` |
 | Interface counters and state | OpenConfig `/interfaces/interface/state` (counters sampled every 10 s, oper/admin on change with a sampled fallback) | `openconfig-interfaces:` origin, everything sampled every 10 s | OpenConfig `/interfaces/interface/state`, sampled every 10 s |
 | BGP neighbours | `/network-instances/…/bgp/neighbors/neighbor/state/session-state` and `afi-safis/afi-safi/state/prefixes` | same with the `openconfig-network-instance:` origin | same, when the image advertises the model |
@@ -165,19 +166,66 @@ other than the lab's telemetry setting and the record of added lines.
   classified, not echoed.
 - gNMI uses the same password login as SSH, in gRPC metadata. Plain-text gRPC
   carries that login unencrypted on the containerlab management network, exactly
-  as the lab's default SSH host-key policy already assumes an isolated lab. When a
-  node already has TLS (XR by default, EOS with an `ssl profile`, Junos with
-  `grpc ssl`), the manager uses it with the device's own certificate, unverified.
-  The manager does not generate device certificates in this release.
+  as the lab's default SSH host-key policy already assumes an isolated lab; the
+  operator chose plain text on all three kinds. When an EOS or Junos node already
+  has TLS (`ssl profile`, `grpc ssl`), the manager uses it with the device's own
+  certificate, unverified. The manager does not generate device certificates.
+- Grafana, when installed, is reachable by anyone who reaches the VM's Grafana port
+  as a read-only Viewer, the same trust model as the manager UI itself. Keep both
+  on the trusted lab network.
 - The manager writes device configuration only for this service and only after
   the explicit per-lab setting is on; every change is logged with the exact lines.
+
+## Grafana dashboards in another tab
+
+The Telemetry tab is enough for most exercises. For Grafana-style dashboards in a
+separate browser tab, install the optional stack on the VM:
+
+```bash
+cd ~/projects/clab-manager
+sudo bash deploy/setup-telemetry.sh
+sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui
+```
+
+What this does:
+
+- `setup_telemetry.py` writes `TELEMETRY_STACK=grafana`, the Grafana port (3000),
+  bind address (0.0.0.0), the Prometheus port (9090, loopback only) and a generated
+  admin password into `clab-backup-ui/.env`, keeping unrelated settings and an
+  existing password, and renders the Prometheus scrape configuration for the
+  manager's actual `UI_PORT` into `/srv/containerlab-node-manager/telemetry/`.
+- `compose.telemetry.yml` starts Prometheus (`prom/prometheus` v3.14.0, pinned by
+  digest) and Grafana OSS (13.0.2, pinned by digest) with host networking, dropped
+  capabilities, memory and PID limits and tmpfs-backed data volumes. Prometheus
+  scrapes `http://127.0.0.1:<UI_PORT>/api/telemetry/metrics` every 10 s and keeps two
+  hours; Grafana serves three provisioned, read-only dashboards: **Lab overview**
+  (node and link states, per-node traffic, errors), **Interfaces** (bit and packet
+  rates, errors and discards, an operational-state timeline, an interface table,
+  filtered by lab, node and interface) and **BGP neighbours** (session table,
+  established timeline, prefixes received and sent).
+- The manager, once recreated with the new `.env`, shows **Open Grafana ↗** in the
+  Telemetry tab (the Lab overview filtered to the lab) and **Grafana ↗** on the
+  selected node (the Interfaces dashboard filtered to that node and port). The links
+  use the manager's own host name with the Grafana port, so they work from any
+  workstation that reaches the manager.
+
+Open `http://VM_IP:3000/`. Anonymous visitors are Viewers (read-only); editing needs
+the `admin` login with `TELEMETRY_GRAFANA_ADMIN_PASSWORD` from `clab-backup-ui/.env`.
+Dashboards come from files in the repository; UI edits are not saved. `sudo bash
+deploy/setup-telemetry.sh --remove` stops the stack, deletes its tmpfs data and sets
+`TELEMETRY_STACK=disabled`; recreate the manager afterwards to hide the links. The
+metrics endpoint (`/api/telemetry/metrics`, Prometheus text format) exposes names,
+states and rates only: no addresses, logins or configuration. Component licences
+are listed in `deploy/TELEMETRY-THIRD-PARTY-NOTICES.md`.
 
 ## Health check
 
 `bash deploy/check-install.sh` reports **Network telemetry**: INFO when the
 collector is disabled, PASS with the linked labs' verdicts, WARN when a lab reports
 failed nodes, and a manual step to confirm charts and link colours follow real
-traffic and an interface shutdown.
+traffic and an interface shutdown. **Grafana telemetry dashboards** is INFO when the
+stack is not installed, and otherwise checks Grafana's health endpoint and that
+Prometheus scrapes the manager.
 
 ## Live acceptance procedure
 
@@ -226,6 +274,9 @@ Record the versions of the three images and the outcome of each step in
 - Sampling is 10 s; interface state uses on-change subscriptions only on EOS.
 - Structured polling fallbacks for metrics a device does not stream are not
   implemented; such metrics show as unavailable.
+- The Grafana stack was validated by Compose configuration checks, dashboard JSON
+  checks and the metrics endpoint tests; Grafana and Prometheus themselves were not
+  started in the development session (no Docker daemon there).
 - Redeploys done outside the manager that complete within one discovery poll keep
   the previous minutes of history on the same node name; counter resets are still
   detected and never produce spikes.

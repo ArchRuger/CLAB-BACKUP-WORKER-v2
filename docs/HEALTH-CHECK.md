@@ -114,6 +114,7 @@ FAILURES FOUND (exit 1)
 | Optional Git remote read | With `--git-remote`, a bounded `ls-remote` as each registered owner; no fetch, commit or push |
 | Optional packet capture | Whether the provider is enabled, Edgeshark lists targets, and the browser session service and pinned image are ready; informational when disabled. Live packets, viewer interaction and saved-capture download remain acceptance checks |
 | Network telemetry | Whether the gNMI dial-in collector is available (informational when disabled), and each linked lab's telemetry verdict through the manager; a lab with failed nodes is a warning with the remedy. Charts and link colours following real traffic remain acceptance checks |
+| Grafana telemetry dashboards | Informational when the optional stack is not installed; otherwise Grafana's health endpoint and whether Prometheus scrapes the manager's metrics endpoint. Opening the dashboards from the workstation remains an acceptance check |
 
 Disabled online lab downloads are informational and do not explain a failed
 folder browse. Existing empty folders are valid. A missing folder, symlinked

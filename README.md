@@ -28,7 +28,8 @@ Current release: **1.23.0** · [changelog](docs/CHANGELOG.md) · [all documentat
 - **Watch the network live**: once a node answers, the manager configures its gNMI
   service if needed, subscribes to interface counters, link state and BGP neighbours,
   and shows charts in a Telemetry tab and live link colours on the map. The last hour
-  stays in memory only; nothing to configure per router or per lab.
+  stays in memory only; nothing to configure per router or per lab. Optional Grafana
+  dashboards open in another tab from the same data.
 - **Stay in step with the VM**: read-only discovery every 30 seconds over a
   restricted SSH account, automatic node addresses, VM file sync, a health report and
   a debug panel.
@@ -87,7 +88,15 @@ a correct clock. The guided installer adds Docker, containerlab, the restricted
    sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui
    ```
 
-6. Check the installation at any time with `bash deploy/check-install.sh`.
+6. Optional, Grafana dashboards in another tab:
+
+   ```bash
+   cd ~/projects/clab-manager
+   sudo bash deploy/setup-telemetry.sh
+   sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui
+   ```
+
+7. Check the installation at any time with `bash deploy/check-install.sh`.
 
 The [quick install](docs/QUICK-INSTALL.md) lists the same route step by step, the
 [fresh VM guide](docs/FRESH-VM-GUIDE-V2.md) starts before Ubuntu is installed, and
@@ -106,6 +115,7 @@ flowchart LR
         C["containerlab + Docker"]
         N[("Lab nodes<br/>cEOS · Junos · XRv9k")]
         W["Browser capture stack<br/>Edgeshark · session service · Wireshark containers"]
+        T["Optional dashboards<br/>Prometheus · Grafana"]
     end
     R[("Git remote")]
     B -- "HTTP + WebSocket" --> M
@@ -113,6 +123,7 @@ flowchart LR
     M -- "SSH" --> G --> H --> C --> N
     M -- "SSH terminals · login probes · Ansible · gNMI dial-in" --> N
     M -- "HTTP/WS relay" --> W
+    T -- "scrapes /api/telemetry/metrics" --> M
     W -. "captures inside the node namespaces" .-> N
     H -- "commit and push" --> R
 ```
@@ -183,7 +194,9 @@ Agents working on the code start with [agent instructions.md](agent%20instructio
 ## License
 
 [MIT](LICENSE). The browser capture stack adapts Siemens Edgeshark (MIT) and runs the
-SR Labs Wireshark container; the UI vendors xterm.js (MIT). Their notices are in
-[deploy/CAPTURE-THIRD-PARTY-NOTICES.md](deploy/CAPTURE-THIRD-PARTY-NOTICES.md) and
+SR Labs Wireshark container; the UI vendors xterm.js (MIT); telemetry uses pygnmi
+(BSD-3) and optionally runs Prometheus (Apache-2.0) and Grafana OSS (AGPL-3.0). Their
+notices are in [deploy/CAPTURE-THIRD-PARTY-NOTICES.md](deploy/CAPTURE-THIRD-PARTY-NOTICES.md),
+[deploy/TELEMETRY-THIRD-PARTY-NOTICES.md](deploy/TELEMETRY-THIRD-PARTY-NOTICES.md) and
 [clab-backup-ui/app/static/vendor/](clab-backup-ui/app/static/vendor/README.md).
 Vendor network OS images are licensed separately by their vendors.

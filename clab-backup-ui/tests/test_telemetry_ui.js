@@ -109,6 +109,16 @@ test('polling is scoped to the telemetry and topology tabs and to the selected l
  h.context.openTelemetry('clab-demo-r2','GigabitEthernet0/0/0/0');assert.ok(h.calls.includes('tab:telemetry'));assert.equal(h.context.teleState.node,'clab-demo-r2');
 });
 
+test('Grafana links appear only when the manager announces the stack and carry the selection',()=>{
+ const h=harness();h.context.location={protocol:'http:',hostname:'lab-vm'};
+ h.context.teleState.data=payload();h.context.renderTelemetryView();
+ assert.equal(h.$('telemetry-grafana').hidden,true);assert.doesNotMatch(h.$('telemetry-detail').innerHTML,/Grafana/);
+ h.context.teleState.data=payload({grafana:{enabled:true,port:3100,prometheus_port:9090},lab_name:'de mo'});h.context.renderTelemetryView();
+ assert.equal(h.$('telemetry-grafana').hidden,false);assert.equal(h.$('telemetry-grafana').href,'http://lab-vm:3100/d/clab-lab-overview?var-lab=de+mo&refresh=10s');
+ assert.match(h.$('telemetry-detail').innerHTML,/href="http:\/\/lab-vm:3100\/d\/clab-interface\?var-lab=de\+mo&amp;var-node=r1&amp;var-interface=Ethernet1&amp;refresh=10s" target="_blank" rel="noopener">Grafana/);
+ assert.equal(h.context.telemetryGrafanaUrl({grafana:{enabled:false}},'clab-bgp'),'');
+});
+
 test('the right-click link menu offers capture and per-end telemetry',()=>{
  const h=harness();h.context.teleState.data=payload();
  const wire=element();wire.dataset.captureEndpoints=JSON.stringify([{node:'clab-demo-r1',label:'r1',interface:'eth1'},{node:'clab-demo-r2',label:'r2',interface:'eth1'}]);

@@ -16,8 +16,9 @@ runs `adapter.show_commands()`, applies only `plan.add` with the NOS's scoped co
 (EOS running-config only, never `write`; XR `commit`; Junos `configure private` +
 `commit and-quit`), reads again to verify and records the exact lines in
 `lab['telemetry']['applied'][node]`; `mode='remove'` deletes only those recorded
-lines. Adapters live in `app/telemetry_adapters.py` (EOS 6030, XR 57400 with TLS
-unless `no-tls`, Junos Evolved 32767 clear-text; XR paths carry the
+lines. Adapters live in `app/telemetry_adapters.py` (EOS 6030, XR 57400 in plain text: the
+adapter ensures `no-tls` and records it as manager-owned, the operator's choice; Junos
+Evolved 32767 clear-text; XR paths carry the
 `openconfig-interfaces:`/`openconfig-network-instance:` origin, the others none;
 `subscriptions(group)` returns fallback variants, EOS state on-change first).
 (3) `app/telemetry_collector.py` uses pygnmi: `connect()` calls `capabilities()`
@@ -44,7 +45,19 @@ fail with an actionable message. `TELEMETRY_COLLECTOR=disabled` turns it off.
 `[data-map-node]` devices, `openLinkMenu` reuses `nodeMenu`), `telemetry-charts.js`
 (pure SVG). `topology-render.js` adds `data-link-index` and a `tele-dot`;
 `capture.js` delegates link right-clicks to `openLinkMenu` when defined.
-(7) Tests: `tests/test_telemetry_*.py` (the gNMI server test drives the real
+(7) Optional Grafana stack: `app/telemetry_metrics.py` renders Prometheus text at
+`/api/telemetry/metrics` from `lab_view()` (names, rates, states only; stale series
+keep state but drop rates); `deploy/compose.telemetry.yml` runs Prometheus v3.14.0
+and Grafana OSS 13.0.2 by digest with `network_mode: host`, tmpfs volumes and
+limits; `deploy/setup_telemetry.py` writes `TELEMETRY_STACK`, ports, bind, a kept
+admin password and `TELEMETRY_CONFIG_DIR` into `.env` and renders
+`/srv/containerlab-node-manager/telemetry/prometheus.yml` for the real `UI_PORT`;
+dashboards are generated JSON under `deploy/telemetry/grafana/dashboards/` (uids
+`clab-lab-overview`, `clab-interface`, `clab-bgp`; `test_telemetry_setup.py` checks
+they only use exported metric names); the manager announces `{enabled, port,
+prometheus_port}` as `grafana` in `/api/telemetry/health` and the lab view, and
+`telemetry.js` builds links from `location.hostname`. (8) Tests:
+`tests/test_telemetry_*.py` (the gNMI server test drives the real
 pygnmi client), `tests/test_telemetry_ui.js`, fixtures under
 `tests/fixtures/telemetry/` (modelled on the models and public examples, not
 captured from the lab images). CI runs `test_telemetry*.py` and the UI file.

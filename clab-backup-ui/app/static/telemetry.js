@@ -12,6 +12,15 @@ function telemetryLinkTitle(link){
  const ends=(link.ends||[]).map(e=>`${e.label}:${e.interface}${e.nos_interface&&e.nos_interface!==e.interface?' ('+e.nos_interface+')':''} ${e.state==='unknown'?'no data':e.state==='unsupported'?'unsupported':e.state.toUpperCase()}${e.state==='up'||e.state==='down'||e.state==='stale'?' · RX '+telemetryFormatRate(e.rx_bps,'bps')+' · TX '+telemetryFormatRate(e.tx_bps,'bps'):''}`);
  return (TELE_LINK_TITLES[link.status]||TELE_LINK_TITLES.unknown)+(link.mismatch?' · the two ends disagree':'')+'\n'+ends.join('\n');
 }
+// Grafana runs beside the manager on the VM (deploy/setup-telemetry.sh); the browser reaches it
+// on the manager's own host name. Dashboard uids are fixed by the provisioned files.
+function telemetryGrafanaUrl(data,uid,vars={}){
+ if(!data?.grafana?.enabled||typeof location==='undefined')return '';
+ const params=new URLSearchParams({'var-lab':data.lab_name||''});
+ for(const [key,value] of Object.entries(vars))if(value)params.set('var-'+key,value);
+ params.set('refresh','10s');
+ return `${location.protocol}//${location.hostname}:${data.grafana.port}/d/${uid}?${params}`;
+}
 function telemetrySummaryText(data){
  const s=data.summary||{};
  if(!data.enabled)return data.unavailable||'Telemetry is unavailable in this manager.';
@@ -39,7 +48,8 @@ function telemetryNodeCard(n,selected){
 function telemetryDetail(n,data){
  if(!n)return '<div class="blank-state"><h2>Select a node</h2><p>Choose a node on the left to see its interfaces, rates and BGP neighbours.</p></div>';
  const groups=n.groups||{};
- const head=`<div class="tele-detail-head"><div><h3>${esc(n.short_name)} <small class="mono">${esc(n.name)}</small></h3><p>${telemetryBadge(n.state)} ${esc(n.message||'')}</p><p class="form-help">${n.endpoint?`gNMI ${esc(n.endpoint)} · ${n.transport==='tls'?'TLS (certificate not verified)':'plain text'} · `:''}${esc(n.method||(n.supported?'Waiting for the NOS':'No telemetry adapter for this kind'))}${n.applied?` · ${n.applied} configuration line${n.applied===1?'':'s'} added by the manager`:''}</p><p class="tele-groups">${telemetryGroupPill('interfaces',groups.interfaces)} ${telemetryGroupPill('bgp',groups.bgp)}${n.last_sample?` <span class="timestamp">Last sample ${esc(telemetryAge(n.last_sample))}${n.fresh?'':' · stale'}</span>`:''}</p></div><div class="actions">${['failed','stale','unsupported'].includes(n.state)&&n.supported?`<button class="button secondary" data-tele-retry="${esc(n.name)}">Retry now</button>`:''}</div></div>`;
+ const grafana=telemetryGrafanaUrl(data,'clab-interface',{node:n.short_name,interface:teleState.interface});
+ const head=`<div class="tele-detail-head"><div><h3>${esc(n.short_name)} <small class="mono">${esc(n.name)}</small></h3><p>${telemetryBadge(n.state)} ${esc(n.message||'')}</p><p class="form-help">${n.endpoint?`gNMI ${esc(n.endpoint)} · ${n.transport==='tls'?'TLS (certificate not verified)':'plain text'} · `:''}${esc(n.method||(n.supported?'Waiting for the NOS':'No telemetry adapter for this kind'))}${n.applied?` · ${n.applied} configuration line${n.applied===1?'':'s'} added by the manager`:''}</p><p class="tele-groups">${telemetryGroupPill('interfaces',groups.interfaces)} ${telemetryGroupPill('bgp',groups.bgp)}${n.last_sample?` <span class="timestamp">Last sample ${esc(telemetryAge(n.last_sample))}${n.fresh?'':' · stale'}</span>`:''}</p></div><div class="actions">${grafana?`<a class="button secondary" href="${esc(grafana)}" target="_blank" rel="noopener">Grafana ↗</a>`:''}${['failed','stale','unsupported'].includes(n.state)&&n.supported?`<button class="button secondary" data-tele-retry="${esc(n.name)}">Retry now</button>`:''}</div></div>`;
  if(!n.interfaces.length&&!n.peers.length){
   const why=n.state==='streaming'||n.state==='connecting'?'Waiting for the first samples.':n.state==='unsupported'?'This node kind has no telemetry adapter; its links show as unknown on the map.':n.state==='disabled'?'Telemetry is off.':n.state==='failed'?'See the message above; Retry now checks the node again.':'Interfaces appear once the NOS answers and the gNMI session streams.';
   return head+`<div class="blank-state"><h2>No telemetry yet</h2><p>${esc(why)}</p></div>`;
@@ -77,6 +87,8 @@ function renderTelemetryView(){
  $('telemetry-detail').innerHTML=telemetryDetail(node,data);
  telemetryCharts();
  $('telemetry-status').textContent=`Updated ${new Date(data.generated_at).toLocaleTimeString()} · window ${teleState.window/60} min · samples every ${data.sample_interval} s.`;
+ const grafana=$('telemetry-grafana');
+ if(grafana){const url=telemetryGrafanaUrl(data,'clab-lab-overview');grafana.hidden=!url;if(url)grafana.href=url;else grafana.removeAttribute('href');}
 }
 function telemetryLegend(data){
  const legend=$('map-live-legend');if(!legend)return;

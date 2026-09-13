@@ -108,7 +108,8 @@ class Diagnostics:
                 return response
             finally:
                 route = getattr(request.scope.get('route'), 'path', '/api/unknown')
-                if status >= 400 or route not in ('/api/state', '/api/debug', '/api/debug/probe'):
+                if status >= 400 or route not in ('/api/state', '/api/debug', '/api/debug/probe', '/api/telemetry/metrics',
+                                                  '/api/labs/{lab_id}/telemetry', '/api/labs/{lab_id}/telemetry/series', '/api/labs/{lab_id}/telemetry/bgp-series'):
                     with self.lock:
                         self.requests.append({'time': timestamp(), 'id': request_id,
                             'method': request.method if request.method in ('GET','POST','PUT','PATCH','DELETE','OPTIONS','HEAD') else 'OTHER',

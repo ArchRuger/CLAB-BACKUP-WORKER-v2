@@ -108,10 +108,12 @@ flowchart LR
     S[("Session store<br/>memory only · 60 min rings<br/>rates from counter deltas")]
     A["/api/labs/{id}/telemetry<br/>series · settings · retry · remove-config"]
     U["Telemetry tab · map overlay"]
+    G["Optional: Prometheus scrapes /api/telemetry/metrics<br/>Grafana dashboards in another tab"]
     N[("NOS gNMI<br/>6030 · 57400 · 32767")]
     R --> T --> P --> N
     T --> C <--> N
     C --> S --> A --> U
+    S --> G
     T -. "stop, destroy, redeploy, removal, reset clear the lab" .-> S
 ```
 
@@ -171,7 +173,7 @@ lines.
 | `app/runner.py` | Ansible `network_cli` backups and login tests, per-job environment and `known_hosts`, output validation, Git history of backups |
 | `app/node_services.py` | SSH login checks and browser terminals over WebSocket |
 | `app/node_readiness.py` | Readiness monitor: login and `show version` probes, SSH gating, the automatic login test |
-| `app/telemetry.py`, `app/telemetry_adapters.py`, `app/telemetry_provision.py`, `app/telemetry_collector.py`, `app/telemetry_store.py`, `app/telemetry_names.py`, `app/telemetry_settings.py` | Automatic network telemetry: the per-node state machine and APIs, the EOS/IOS XR/Junos Evolved adapters (service lines, paths, encodings), the SSH provisioning driver, the pygnmi dial-in collector and normaliser, the bounded in-memory session store, wiring-name mapping and the persistent setting |
+| `app/telemetry.py`, `app/telemetry_adapters.py`, `app/telemetry_provision.py`, `app/telemetry_collector.py`, `app/telemetry_store.py`, `app/telemetry_names.py`, `app/telemetry_settings.py`, `app/telemetry_metrics.py` | Automatic network telemetry: the per-node state machine and APIs, the EOS/IOS XR/Junos Evolved adapters (service lines, paths, encodings), the SSH provisioning driver, the pygnmi dial-in collector and normaliser, the bounded in-memory session store, wiring-name mapping, the persistent setting and the Prometheus exposition for the optional Grafana stack (`deploy/compose.telemetry.yml`, `deploy/setup-telemetry.sh`) |
 | `app/capture.py`, `app/capture_sessions.py`, `app/capture_service.py` | Edgeshark discovery and identity checks, the manager-side relay, and the separate session service that owns the Docker socket |
 | `app/topology.py`, `app/layout.py`, `app/drawio_export.py` | Maps from annotations and YAML, layout persistence, draw.io and SuperPuTTY exports |
 | `app/diagnostics.py` | The debug panel and its VM probes |

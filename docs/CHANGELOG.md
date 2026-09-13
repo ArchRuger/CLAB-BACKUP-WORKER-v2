@@ -14,16 +14,17 @@ memory only. See [TELEMETRY.md](TELEMETRY.md).
   with the node's saved login, reads the gRPC/gNMI service configuration and adds only
   the missing lines with the NOS's own scoped commit: cEOS `management api gnmi` /
   `transport grpc default` (running-config only, never `write`), IOS XR `grpc` +
-  `port 57400` with `commit`, Junos Evolved `set system services extension-service
+  `port 57400` + `no-tls` with `commit`, Junos Evolved `set system services extension-service
   request-response grpc clear-text port 32767` in `configure private`. Containerlab's
   cEOS and XRv9k defaults already enable gNMI, so those usually need no change.
   Every added line is logged and recorded per node; repeat checks write nothing.
 - **gNMI dial-in collector** in the manager process (pygnmi, BSD-3; grpcio) using the
   host-network path the manager already uses for SSH: interface counters every 10 s,
   oper/admin state (on change on EOS), BGP neighbour session state and prefix counts
-  where the model is advertised. Transport (TLS with the device certificate, or plain
-  text) and encoding follow the node; rejected subscriptions fall back to broader
-  paths; a login refusal never probes further.
+  where the model is advertised. Plain-text gRPC on all three kinds (TLS with the
+  device certificate where an EOS or Junos node already has it); encodings follow the
+  node's capabilities; rejected subscriptions fall back to broader paths; a login
+  refusal never probes further.
 - **Session-only store.** Bounded rings (60 minutes, 400 points per series, 96
   interfaces and 64 neighbours per node, 512 nodes), rates from counter deltas with
   reset, gap and out-of-order handling, generation tags so a previous deployment with
@@ -52,13 +53,27 @@ memory only. See [TELEMETRY.md](TELEMETRY.md).
   write. gNMI uses the saved password login (SSH keys cannot be used; a password
   profile can be chosen). `TELEMETRY_COLLECTOR=disabled` turns the collector off.
   Secrets never enter responses or logs; failures are classified, not echoed.
-- **Health check** gains *Network telemetry*; `check-install` reports the collector
-  and each linked lab's verdict plus a manual traffic check.
-- **Tests**: 61 new Python tests (names, store, adapters, scripted SSH sessions for the
+- **Grafana dashboards in another tab (optional).** `sudo bash
+  deploy/setup-telemetry.sh` starts Prometheus (v3.14.0) and Grafana OSS (13.0.2),
+  digest-pinned, host-networked like the manager, with dropped capabilities, memory
+  and PID limits and tmpfs data (two-hour retention). Prometheus scrapes the new
+  `/api/telemetry/metrics` endpoint (Prometheus text format: node states, interface
+  rates and counters, link states, BGP neighbours; names only) every 10 s; Grafana
+  serves three provisioned read-only dashboards (Lab overview, Interfaces, BGP
+  neighbours) to anonymous Viewers, with a generated admin password kept in `.env`.
+  The Telemetry tab shows **Open Grafana ↗** and a per-node **Grafana ↗** link once
+  the manager is recreated with `TELEMETRY_STACK=grafana`. `--remove` takes the stack
+  down again. Licences are listed in `deploy/TELEMETRY-THIRD-PARTY-NOTICES.md`.
+- **Health check** gains *Network telemetry* and *Grafana telemetry dashboards*;
+  `check-install` reports the collector, each linked lab's verdict, Grafana's health
+  and Prometheus scraping, plus manual traffic and dashboard checks.
+- **Tests**: 74 new Python tests (names, store, adapters, scripted SSH sessions for the
   three NOS families, notification fixtures, the state machine on the app, an
-  in-process gRPC gNMI server driven through the real pygnmi client) and a browser
-  test file for charts, view states, overlay and menus. No live device validation was
-  possible for this release; the acceptance procedure is in TELEMETRY.md.
+  in-process gRPC gNMI server driven through the real pygnmi client, the metrics
+  endpoint, the Grafana stack definition and setup script, the health checks) and a
+  browser test file for charts, view states, overlay, Grafana links and menus. No live
+  device validation was possible for this release; the acceptance procedure is in
+  TELEMETRY.md.
 
 ## Changes in 1.22.0
 

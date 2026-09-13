@@ -257,6 +257,40 @@ class InstallationCheckTests(unittest.TestCase):
         self.assertEqual(by_id(ctx, 'telemetry')['status'], 'SKIP')
         ctx.http.assert_not_called()
 
+    def test_telemetry_dashboard_check_probes_grafana_and_prometheus(self):
+        def router(grafana, healthy=True, scraping=True):
+            def request(path, payload=None, base=None, **kwargs):
+                if path == '/api/telemetry/health':
+                    return check.Result(0), {'enabled': True, 'grafana': grafana}
+                if path == '/api/health' and base == 'http://127.0.0.1:3100':
+                    return check.Result(0), {'database': 'ok' if healthy else 'failing', 'version': PRIVATE}
+                if path == '/api/v1/targets' and base == 'http://127.0.0.1:9090':
+                    return check.Result(0), {'status': 'success', 'data': {'activeTargets': [{'health': 'up' if scraping else 'down', 'scrapeUrl': PRIVATE}]}}
+                return check.Result(reason='unexpected route'), None
+            return request
+        ctx = context()
+        ctx.http = Mock(side_effect=router({'enabled': False, 'port': 3000, 'prometheus_port': 9090}))
+        check.check_telemetry_dashboards(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'INFO'); self.assertIn('setup-telemetry.sh', by_id(ctx, 'telemetry-dashboards')['fix'])
+        ctx = context()
+        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}))
+        check.check_telemetry_dashboards(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'PASS')
+        self.assertTrue(any('Grafana: open http://VM_IP:3100/' in item for item in ctx.manual))
+        self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
+        ctx = context()
+        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, healthy=False))
+        check.check_telemetry_dashboards(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL'); self.assertIn('logs --tail=80 grafana', by_id(ctx, 'telemetry-dashboards')['fix'])
+        ctx = context()
+        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, scraping=False))
+        check.check_telemetry_dashboards(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL'); self.assertIn('scrape target', by_id(ctx, 'telemetry-dashboards')['fix'])
+        ctx = context()
+        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 0, 'prometheus_port': 9090}))
+        check.check_telemetry_dashboards(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL')
+
     def test_untrusted_helper_cannot_be_executed_or_reached_over_http(self):
         ctx = context(require_git=True)
         ctx.trusted_helpers = {'inspect': False, 'operate': False, 'git': False}

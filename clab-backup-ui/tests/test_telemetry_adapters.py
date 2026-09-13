@@ -49,21 +49,23 @@ class EosAdapterTests(unittest.TestCase):
 class IosxrAdapterTests(unittest.TestCase):
     adapter = ADAPTERS['cisco_xrv9k']
 
-    def test_absent_grpc_is_added_and_committed(self):
+    def test_absent_grpc_is_added_in_plain_text_and_committed(self):
         plan = self.adapter.plan(outputs(self.adapter, '% No such configuration item(s)\n', 'interface MgmtEth0/RP0/CPU0/0\n ipv4 address dhcp\n!\n'))
-        self.assertEqual(plan.add, ['grpc', ' port 57400']); self.assertEqual(plan.transport, 'tls')
-        self.assertEqual(self.adapter.apply(plan), ['configure terminal', 'grpc', 'port 57400', 'commit', 'end'])
+        self.assertEqual(plan.add, ['grpc', ' port 57400', ' no-tls']); self.assertEqual(plan.transport, 'plaintext')
+        self.assertEqual(self.adapter.apply(plan), ['configure terminal', 'grpc', 'port 57400', 'no-tls', 'commit', 'end'])
         self.assertEqual(self.adapter.abort(), ['abort'])
 
-    def test_existing_grpc_settings_decide_port_and_transport(self):
+    def test_existing_grpc_settings_decide_port_and_no_tls_is_ensured(self):
         plan = self.adapter.plan(outputs(self.adapter, 'grpc\n port 57400\n no-tls\n!\n', ''))
         self.assertTrue(plan.ready); self.assertEqual((plan.port, plan.transport), (57400, 'plaintext'))
         tls = self.adapter.plan(outputs(self.adapter, 'grpc\n port 57777\n!\n', ''))
-        self.assertEqual((tls.port, tls.transport), (57777, 'tls'))
-        vrf = self.adapter.plan(outputs(self.adapter, 'grpc\n!\n', 'interface MgmtEth0/RP0/CPU0/0\n vrf MGMT\n!\n'))
+        self.assertEqual((tls.port, tls.transport, tls.add), (57777, 'plaintext', [' no-tls']))
+        self.assertEqual(self.adapter.apply(tls), ['configure terminal', 'grpc', 'no-tls', 'commit', 'end'])
+        self.assertEqual(self.adapter.remove([' no-tls']), ['configure terminal', 'grpc', 'no no-tls', 'commit', 'end'])
+        vrf = self.adapter.plan(outputs(self.adapter, 'grpc\n no-tls\n!\n', 'interface MgmtEth0/RP0/CPU0/0\n vrf MGMT\n!\n'))
         self.assertIn('vrf MGMT', vrf.blockers[0])
         added = self.adapter.plan(outputs(self.adapter, '', 'interface MgmtEth0/RP0/CPU0/0\n vrf MGMT\n!\n'))
-        self.assertEqual(added.add, ['grpc', ' port 57400', ' vrf MGMT'])
+        self.assertEqual(added.add, ['grpc', ' port 57400', ' no-tls', ' vrf MGMT'])
 
     def test_paths_carry_the_module_origin_xr_requires(self):
         first = self.adapter.subscriptions('interfaces')[0]
@@ -71,7 +73,7 @@ class IosxrAdapterTests(unittest.TestCase):
         self.assertTrue(all(v['mode'] == 'sample' for v in first))
         bgp = self.adapter.subscriptions('bgp')[0]
         self.assertTrue(bgp[0]['path'].startswith('openconfig-network-instance:network-instances/'))
-        self.assertEqual(self.adapter.remove(['grpc', ' port 57400']), ['configure terminal', 'no grpc', 'commit', 'end'])
+        self.assertEqual(self.adapter.remove(['grpc', ' port 57400', ' no-tls']), ['configure terminal', 'no grpc', 'commit', 'end'])
         self.assertTrue(self.adapter.failed('% Failed to commit one or more configuration items'))
         self.assertEqual(self.adapter.failed('RP/0/RP0/CPU0:ios(config)#'), '')
 

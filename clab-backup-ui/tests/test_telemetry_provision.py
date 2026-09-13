@@ -109,19 +109,19 @@ class IosxrProvisionTests(unittest.TestCase):
         state = {'grpc': existing}
         def show(_): return state['grpc'] or '% No such configuration item(s)\n'
         def commit(_):
-            if not commit_output: state['grpc'] = 'grpc\n port 57400\n!\n'
+            if not commit_output: state['grpc'] = 'grpc\n port 57400\n no-tls\n!\n'
             return commit_output
         answers = {'terminal length 0': ('', None), 'terminal width 512': ('', None), XR_SHOW[0]: (show, None),
                    XR_SHOW[1]: ('interface MgmtEth0/RP0/CPU0/0\n ipv4 address dhcp\n!\n', None),
                    'configure terminal': ('', 'RP/0/RP0/CPU0:ios(config)#'), 'grpc': ('', 'RP/0/RP0/CPU0:ios(config-grpc)#'),
-                   'port 57400': ('', None), 'commit': (commit, None), 'end': ('', 'RP/0/RP0/CPU0:ios#'), 'abort': ('', 'RP/0/RP0/CPU0:ios#')}
+                   'port 57400': ('', None), 'no-tls': ('', None), 'commit': (commit, None), 'end': ('', 'RP/0/RP0/CPU0:ios#'), 'abort': ('', 'RP/0/RP0/CPU0:ios#')}
         channel = FakeChannel('\r\n\r\nRP/0/RP0/CPU0:ios#', answers, 'RP/0/RP0/CPU0:ios#')
         return channel, FakeClient(channel)
 
     def test_grpc_is_added_with_a_scoped_commit(self):
         channel, client = self.session()
         result = provision(client, ADAPTERS['cisco_xrv9k'], {})
-        self.assertEqual(result['applied'], ['grpc', ' port 57400']); self.assertEqual(result['transport'], 'tls')
+        self.assertEqual(result['applied'], ['grpc', ' port 57400', ' no-tls']); self.assertEqual(result['transport'], 'plaintext')
         self.assertLess(channel.sent.index('commit'), channel.sent.index('end'))
         self.assertEqual(channel.sent[-2:], XR_SHOW, 'the running configuration is read again to verify')
         self.assertNotIn('copy running-config startup-config', channel.sent)
@@ -137,6 +137,12 @@ class IosxrProvisionTests(unittest.TestCase):
         result = provision(client, ADAPTERS['cisco_xrv9k'], {})
         self.assertEqual((result['applied'], result['transport'], result['port']), ([], 'plaintext', 57400))
         self.assertNotIn('configure terminal', channel.sent)
+
+    def test_tls_only_grpc_gets_no_tls_added_under_the_existing_block(self):
+        channel, client = self.session(existing='grpc\n port 57400\n!\n')
+        result = provision(client, ADAPTERS['cisco_xrv9k'], {})
+        self.assertEqual((result['applied'], result['transport']), ([' no-tls'], 'plaintext'))
+        self.assertEqual(channel.sent[channel.sent.index('configure terminal'):channel.sent.index('end') + 1], ['configure terminal', 'grpc', 'no-tls', 'commit', 'end'])
 
 
 class JunosProvisionTests(unittest.TestCase):
