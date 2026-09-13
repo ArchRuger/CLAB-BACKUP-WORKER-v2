@@ -1,3 +1,98 @@
+# Automatic network telemetry — 1.23.0
+
+Prepared on `claude/keen-dirac-qk9zzi` from main `36dfdf6` (1.22.0). Scope: the
+telemetry feature described in docs/TELEMETRY.md (automatic gNMI provisioning over
+SSH, an in-process pygnmi dial-in collector, a bounded in-memory session store, the
+Telemetry tab, charts and the live link overlay on the map). No live lab VM or NOS
+image was available in this session; everything below is local evidence.
+
+**Round two (same branch): XR gRPC in plain text (`no-tls` ensured, recorded as
+manager-owned) at the operator's request, and the optional Grafana stack.** Added
+`app/telemetry_metrics.py` (Prometheus exposition at `/api/telemetry/metrics`),
+`deploy/compose.telemetry.yml` (Prometheus v3.14.0 and Grafana OSS 13.0.2 pinned by
+digest, host network, tmpfs volumes, memory and PID limits), `deploy/setup-telemetry.sh`
+with `setup_telemetry.py`, the provisioned data source and three dashboards, the
+*Grafana telemetry dashboards* health check and the **Open Grafana ↗** links. Evidence:
+`test_telemetry_metrics.py` (4), `test_telemetry_setup.py` (5: env preservation and
+refusals, Compose pinning/bounds, provisioning, dashboard JSON referencing only
+exported metrics and the provisioned data source), one more `test_check_install.py`
+case and one more browser test; `docker compose -f deploy/compose.telemetry.yml config`
+accepts the file; the browser smoke with the stack announced shows both links with
+the expected `var-lab`, `var-node` and `var-interface` parameters and a 73-line
+metrics document. Grafana and Prometheus were **not started** in the development
+session (no Docker daemon); their first run is part of the live acceptance.
+
+**Local checks (Linux container, Python 3.11.15, Node 22.22.2).**
+
+- `python3 deploy/verify-release.py`: `Source release verified: 1.23.0`;
+  `test_release_consistency.py` passes on the bumped tree.
+- Full Python suite, `.venv/bin/python -m unittest discover -s tests -t tests`:
+  577 tests, OK, 1 skipped (the opt-in EOS SSH fixture, as before). The 74 new
+  tests are `test_telemetry_names.py` (5), `test_telemetry_store.py` (7),
+  `test_telemetry_adapters.py` (12), `test_telemetry_provision.py` (12: scripted
+  EOS, IOS XR and Junos Evolved shells including enable password, privilege 15,
+  rejected lines and aborts, output and prompt time limits, repeat runs that write
+  nothing, removal of recorded lines only), `test_telemetry_collector.py` (7:
+  normalisation of the six vendor-shaped fixtures in `tests/fixtures/telemetry/`,
+  timestamp policy, failure classification without echoing details),
+  `test_telemetry_manager.py` (13: readiness-triggered provisioning on the running
+  app, repeat safety and backoff, credential failures and secret redaction in
+  state, logs and telemetry responses, unsupported and partially supported nodes,
+  stale detection and recovery, runtime change, lab operation, removal and reset
+  clearing the session, address reuse across generations, settings gating, series
+  API validation and bounds, explicit removal, link statuses from both ends,
+  environment disable), `test_telemetry_gnmi.py` (5: the real pygnmi client against
+  an in-process gRPC gNMI server that answers like EOS, XR and Junos, including
+  origins, encodings, on-change fallback, login refusal and stream loss, TLS-first
+  targets), `test_telemetry_metrics.py` (4), `test_telemetry_setup.py` (5) and two
+  telemetry cases in `test_check_install.py`. Earlier suites
+  (`test_app.py`, `test_node_readiness.py`, capture, operations, Git) are unchanged
+  and green.
+- Browser tests, `node --test tests/*.js`: 85 pass, 0 fail (new
+  `test_telemetry_ui.js`: charts, link classes and titles, view states, settings
+  save, overlay application, polling scope, Grafana links, link menu, renderer
+  attributes, node menu, details drawer and tab wiring, capture context-menu
+  delegation).
+- Real browser smoke (not committed; Playwright with the session's Chromium against
+  the app started with a seeded lab of one cEOS, one XRv9k and one cJunosEvolved
+  node and 60 minutes of fake samples): the Telemetry tab, node cards, interface
+  table, three charts, BGP table, settings dialog, the topology overlay (red
+  mismatched link, dotted unknown links, node dots, live legend), the right-click
+  link menu and *Telemetry r1:eth1* opening the tab preselected all rendered with
+  no console errors and no CSP violations. Screenshots were reviewed for the
+  legend/axis collision and the alias spacing, both fixed before delivery.
+- Linux build path: no Docker daemon in the session, so no image build. `pip
+  download --only-binary=:all: --python-version 3.12 --platform
+  manylinux2014_x86_64` resolves pygnmi 0.8.15, grpcio 1.83.1, protobuf 7.36.1,
+  dictdiffer and cryptography as wheels, so `pip install -r requirements.txt` in
+  the python:3.12-slim image needs no compiler. `docker compose -f
+  clab-backup-ui/compose.yml config --quiet` accepts the new
+  `TELEMETRY_COLLECTOR` variable. `git diff --check` and `bash -n` on the deploy
+  scripts are clean.
+
+**Per-NOS support and validation matrix.**
+
+| | cEOS | XRv9k | cJunosEvolved |
+|---|---|---|---|
+| Provisioning lines, prompts, scoped commit | fixture (scripted shell) | fixture (scripted shell) | fixture (scripted shell) |
+| gNMI subscribe, encodings, paths | in-process gNMI server through pygnmi | in-process gNMI server through pygnmi | in-process gNMI server through pygnmi |
+| Notification normalisation | fixture (`eos_*.json`) | fixture (`xr_*.json`) | fixture (`junos_*.json`) |
+| Interface name mapping | unit tests | unit tests | unit tests |
+| Live device: configuration, samples, traffic, link state, BGP, restart/redeploy, removal | **not verified** | **not verified** | **not verified** |
+
+**Unverified on real images and to be confirmed with docs/TELEMETRY.md "Live
+acceptance procedure":** that the containerlab defaults still enable gNMI on cEOS
+and XRv9k as documented; that adding `no-tls` under an existing XRv9k `grpc` block
+commits cleanly and the plain-text gRPC session accepts the password login; that
+the Grafana and Prometheus containers start on the VM with the host-network,
+tmpfs and dropped-capability settings; that cJunosEvolved 26.x accepts
+`configure private` from the admin user and streams OpenConfig interface counters
+with JSON_IETF or PROTO; which BGP paths each image serves (the BGP group reports
+*unsupported* with the NOS reason when none does); the exact prompt strings of the
+three CLIs (the drivers match generic prompt shapes and report a controlled
+"did not return to its prompt" failure otherwise); and the real sample cadence,
+which decides how quickly link colours follow an interface shutdown.
+
 # Deploy-first UI and automatic NOS login — 1.22.0
 
 Prepared on `claude/deploy-first-ui` from main `873366f` (1.21.1) for eight UI requests

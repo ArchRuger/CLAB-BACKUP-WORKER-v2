@@ -28,6 +28,8 @@ from .git_progress import GitProgress, public_job as public_git_job
 from . import __version__
 from .diagnostics import Diagnostics
 from .capture import Captures
+from .telemetry import TelemetryManager
+from .telemetry_settings import default_settings
 
 APP=Path(__file__).parent
 
@@ -40,13 +42,16 @@ def create_app(data_dir=None):
     discovery=Discovery(store)
     operations=LabOperations(store,discovery)
     git_progress=GitProgress(store,runner)
+    telemetry=TelemetryManager(store,services)
     @asynccontextmanager
     async def lifespan(app):
         print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
         runner.start()
         discovery.start()
         readiness_monitor.start()
+        telemetry.start()
         yield
+        telemetry.close()
         git_progress.close()
         operations.close()
         discovery.close()
@@ -69,6 +74,8 @@ def create_app(data_dir=None):
     topology.install(app,store)
     app.state.captures = Captures(store)
     app.state.captures.install(app)
+    app.state.telemetry=telemetry
+    telemetry.install(app)
     @app.middleware('http')
     async def guard(request, call_next):
         if request.url.path.startswith('/api/'):
@@ -113,7 +120,7 @@ def create_app(data_dir=None):
         if not lab: raise HTTPException(404,'Lab not found')
         return lab
     def public_lab(lab):
-        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml')}
+        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry')}
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
         result['nodes']=[]
         with services.lock: checks={k:copy.deepcopy(v) for k,v in services.checks.items() if k[0]==lab['id']}
@@ -128,9 +135,11 @@ def create_app(data_dir=None):
             # deployment keep offering SSH whenever a login is configured.
             row['nos_login']=login_state(lab,n,row['available'],checks.get((lab['id'],n['name'])))
             row['ssh_ready']=row['login_configured'] and row['nos_login']['status'] in ('ready','unmonitored')
+            row['telemetry']=telemetry.node_status(lab,n)
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)
         result['nos_readiness']=summarize([row['nos_login'] for row in result['nodes']])
+        result['telemetry']=telemetry.lab_summary(lab)
         return result
     discovery.install(app,public_lab)
     class ResetManager(BaseModel):
@@ -150,7 +159,7 @@ def create_app(data_dir=None):
                     raise HTTPException(409, 'Close SSH sessions and wait for connection checks before resetting.')
                 try: store.reset()
                 except OSError: raise HTTPException(500, 'Storage reset could not finish. Check data directory permissions and free space, then retry Start fresh or restart the manager.')
-                services.checks.clear(); services.tickets.clear(); readiness_monitor.reset()
+                services.checks.clear(); services.tickets.clear(); readiness_monitor.reset(); telemetry.reset()
                 discovery.sources.clear(); discovery.import_previews.clear()
                 operations.previews.clear(); operations.cap_cache = None
             discovery.wake.set()
@@ -195,6 +204,7 @@ def create_app(data_dir=None):
                 store.state = previous
                 raise HTTPException(500, 'Could not save the removal. The workspace was retained.')
             discovery.sources.pop(name, None)
+            telemetry.forget_lab(lab_id)
             with services.lock:
                 services.checks = {k:v for k,v in services.checks.items() if k[0] != lab_id}
                 services.tickets = {k:v for k,v in services.tickets.items() if v[1] != lab_id}
@@ -234,7 +244,7 @@ def create_app(data_dir=None):
             else:
                 lab={'id':uuid.uuid4().hex,'name':name,'nodes':nodes,'profiles':[],
                      'defaults':{},'interval':0,'next_run':None,'created':now(),'updated':now(),
-                     'source':Path(inventory.filename or 'inventory.yml').name}
+                     'source':Path(inventory.filename or 'inventory.yml').name,'telemetry':default_settings()}
                 store.state['labs'].append(lab)
             if lab['interval'] and any(readiness(lab,n)!='Ready' for n in lab['nodes'] if n['enabled']):
                 lab.update(interval=0,next_run=None)

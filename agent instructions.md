@@ -1,3 +1,69 @@
+# Automatic network telemetry — 1.23.0
+
+Read docs/TELEMETRY.md and docs/CHANGELOG.md "Changes in 1.23.0". No live device was
+touched in this session; VALIDATION.md "Automatic network telemetry — 1.23.0" lists
+what is fixture-only. Facts to preserve. (1) The collector is in-process:
+`app/telemetry.py` (`TelemetryManager`, started in the lifespan after the readiness
+monitor) owns a per-node state machine (disabled, waiting, configuring, connecting,
+streaming, stale, unsupported, failed) and only starts work for a running node of a
+linked lab whose `lab['telemetry']['auto']` is true, after
+`NodeServices.checks[(lab, node)]['status'] == 'reachable'` (the readiness monitor's
+real `show version` answer), and never while `operation_busy` or a backup/test job
+runs for that lab. `streaming` is set only by an accepted record in the store
+(`ingest_one`) or a collector `group streaming` event, never by a login or a commit.
+(2) `app/telemetry_provision.py` opens a paramiko shell with the node's SSH login,
+runs `adapter.show_commands()`, applies only `plan.add` with the NOS's scoped commit
+(EOS running-config only, never `write`; XR `commit`; Junos `configure private` +
+`commit and-quit`), reads again to verify and records the exact lines in
+`lab['telemetry']['applied'][node]`; `mode='remove'` deletes only those recorded
+lines. Adapters live in `app/telemetry_adapters.py` (EOS 6030, XR 57400 in plain text: the
+adapter ensures `no-tls` and records it as manager-owned, the operator's choice; Junos
+Evolved 32767 clear-text; XR paths carry the
+`openconfig-interfaces:`/`openconfig-network-instance:` origin, the others none;
+`subscriptions(group)` returns fallback variants, EOS state on-change first).
+(3) `app/telemetry_collector.py` uses pygnmi: `connect()` calls `capabilities()`
+itself and raises on a refused login; the transport recorded on the node is tried
+first and the other only after a transport error; `first_update` polls
+`subscriber.peek()/error` so a rejected variant fails in seconds, not after the 45 s
+first-sample timeout; `normalize()` flattens prefix+path+JSON/typed values into
+canonical leaf paths (module prefixes stripped, keyed lists expanded) before
+`classify()`. (4) `app/telemetry_store.py` is memory only: rates from counter deltas
+over device time, resets (value < previous) and gaps > 300 s give no rate,
+out-of-order samples and foreign generations are dropped; bounds POINTS 400,
+96 interfaces, 64 peers, 512 nodes; `_expire` is destructive. A generation is a
+fresh uuid per boot cycle and per provisioning attempt (`TelemetryManager.new_generation`),
+so a redeploy at the same address never merges. Runtime signature changes,
+lifecycle operations (`review_operations`), removal (`forget_lab`) and reset clear
+buffers. (5) Settings: `app/telemetry_settings.py` `default_settings()` is attached
+to labs created by inventory upload, YAML registration and VM import; older labs
+have no key and stay `decided=False` (no device writes) until
+`PUT /api/labs/{id}/telemetry/settings`. gNMI needs a password login; key profiles
+fail with an actionable message. `TELEMETRY_COLLECTOR=disabled` turns it off.
+(6) UI: `telemetry.js` (`var teleState`, `renderTelemetry` from `render()`,
+`refreshTelemetry` polls at most every 4.5 s on the telemetry/topology tabs,
+`applyTelemetryOverlay` sets `tele-*` classes on `[data-link-index]` wires and
+`[data-map-node]` devices, `openLinkMenu` reuses `nodeMenu`), `telemetry-charts.js`
+(pure SVG). `topology-render.js` adds `data-link-index` and a `tele-dot`;
+`capture.js` delegates link right-clicks to `openLinkMenu` when defined.
+(7) Optional Grafana stack: `app/telemetry_metrics.py` renders Prometheus text at
+`/api/telemetry/metrics` from `lab_view()` (names, rates, states only; stale series
+keep state but drop rates); `deploy/compose.telemetry.yml` runs Prometheus v3.14.0
+and Grafana OSS 13.0.2 by digest with `network_mode: host`, tmpfs volumes and
+limits; `deploy/setup_telemetry.py` writes `TELEMETRY_STACK`, ports, bind, a kept
+admin password and `TELEMETRY_CONFIG_DIR` into `.env` and renders
+`/srv/containerlab-node-manager/telemetry/prometheus.yml` for the real `UI_PORT`;
+dashboards are generated JSON under `deploy/telemetry/grafana/dashboards/` (uids
+`clab-lab-overview`, `clab-interface`, `clab-bgp`; `test_telemetry_setup.py` checks
+they only use exported metric names); the manager announces `{enabled, port,
+prometheus_port}` as `grafana` in `/api/telemetry/health` and the lab view, and
+`telemetry.js` builds links from `location.hostname`. (8) Tests:
+`tests/test_telemetry_*.py` (the gNMI server test drives the real
+pygnmi client), `tests/test_telemetry_ui.js`, fixtures under
+`tests/fixtures/telemetry/` (modelled on the models and public examples, not
+captured from the lab images). CI runs `test_telemetry*.py` and the UI file.
+Version markers are 1.23.0 in lockstep (verify-release.py). Prepared source only:
+no push, image build, VM deployment or live NOS validation happened here.
+
 # Deploy-first UI and automatic NOS login — 1.22.0
 
 Read docs/CHANGELOG.md "Changes in 1.22.0". (1) `inventory.DEFAULT_CREDENTIALS` holds the

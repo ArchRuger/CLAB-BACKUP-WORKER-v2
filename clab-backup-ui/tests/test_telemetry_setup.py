@@ -1,0 +1,129 @@
+"""The optional Grafana stack: setup script, Compose file, provisioning and dashboard definitions."""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import re
+import tempfile
+import unittest
+
+import yaml
+
+from app import telemetry_metrics
+from app.telemetry import TelemetryManager
+
+ROOT = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location('telemetry_setup', ROOT / 'deploy/setup_telemetry.py')
+setup = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(setup)
+DASHBOARDS = ROOT / 'deploy/telemetry/grafana/dashboards'
+EXPORTED = {'clab_telemetry_node_state', 'clab_telemetry_node_sample_age_seconds', 'clab_interface_oper_up', 'clab_interface_admin_up',
+            'clab_interface_sample_age_seconds', 'clab_link_status', 'clab_link_up', 'clab_bgp_neighbor_state', 'clab_bgp_neighbor_established',
+            'clab_bgp_neighbor_prefixes_received', 'clab_bgp_neighbor_prefixes_sent', 'clab_bgp_neighbor_prefixes_installed',
+            *[name for _, name, _ in telemetry_metrics.RATES], *[name for _, name, _ in telemetry_metrics.TOTALS]}
+
+
+class SetupScriptTests(unittest.TestCase):
+    def test_env_is_preserved_idempotent_and_prometheus_targets_the_manager_port(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env = Path(folder) / '.env'; config = Path(folder) / 'telemetry'
+            env.write_text('UI_PORT=8088\nUNRELATED=$(do-not-run)\nCAPTURE_PROVIDER=edgeshark\n')
+            result = setup.configure(env, config)
+            first = env.read_text(); setup.configure(env, config)
+            self.assertEqual(first, env.read_text())
+            self.assertEqual(result, {'ui_port': 8088, 'grafana_port': 3000, 'prometheus_port': 9090, 'bind': '0.0.0.0'})
+            for expected in ('UI_PORT=8088', '$(do-not-run)', 'CAPTURE_PROVIDER=edgeshark', 'TELEMETRY_STACK=grafana', 'TELEMETRY_GRAFANA_PORT=3000', 'TELEMETRY_CONFIG_DIR=' + str(config)):
+                self.assertIn(expected, first)
+            password = re.search(r'TELEMETRY_GRAFANA_ADMIN_PASSWORD=(\S+)', first)[1]
+            self.assertGreaterEqual(len(password), 20)
+            self.assertEqual(oct(env.stat().st_mode & 0o777), '0o600')
+            rendered = (config / 'prometheus.yml').read_text()
+            self.assertIn("targets: ['127.0.0.1:8088']", rendered); self.assertIn('metrics_path: /api/telemetry/metrics', rendered)
+            self.assertIn('scrape_interval: 10s', rendered); self.assertEqual(oct((config / 'prometheus.yml').stat().st_mode & 0o777), '0o644')
+            yaml.safe_load(rendered)
+            env.write_text(first.replace('TELEMETRY_GRAFANA_PORT=3000', 'TELEMETRY_GRAFANA_PORT=3100'))
+            self.assertEqual(setup.configure(env, config)['grafana_port'], 3100)
+            self.assertIn('TELEMETRY_GRAFANA_ADMIN_PASSWORD=' + password, env.read_text(), 'an existing password is kept')
+            setup.configure(env, config, enable=False)
+            self.assertIn('TELEMETRY_STACK=disabled', env.read_text()); self.assertIn('TELEMETRY_GRAFANA_ADMIN_PASSWORD=' + password, env.read_text())
+
+    def test_bad_ports_symlinks_and_passwords_are_refused_without_changes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env = Path(folder) / '.env'; config = Path(folder) / 'telemetry'
+            for text in ('UI_PORT=99999\n', 'TELEMETRY_GRAFANA_PORT=abc\n', 'UI_PORT=3000\nTELEMETRY_GRAFANA_PORT=3000\n', 'TELEMETRY_GRAFANA_ADMIN_PASSWORD=has space\n', 'TELEMETRY_GRAFANA_BIND=0.0.0.0;rm\n'):
+                env.write_text(text)
+                with self.assertRaises(ValueError):
+                    setup.configure(env, config)
+                self.assertEqual(env.read_text(), text); self.assertFalse(config.exists())
+            real = Path(folder) / 'real.env'; real.write_text('UI_PORT=8081\n')
+            link = Path(folder) / 'link.env'; os.symlink(real, link)
+            with self.assertRaisesRegex(ValueError, 'symlink'):
+                setup.configure(link, config)
+
+
+class StackDefinitionTests(unittest.TestCase):
+    def test_compose_file_is_pinned_host_networked_and_bounded(self):
+        compose = yaml.safe_load((ROOT / 'deploy/compose.telemetry.yml').read_text())
+        services = compose['services']
+        self.assertEqual(sorted(services), ['grafana', 'prometheus'])
+        for name, service in services.items():
+            self.assertRegex(service['image'], r'@sha256:[0-9a-f]{64}$', name)
+            self.assertEqual(service['network_mode'], 'host'); self.assertEqual(service['cap_drop'], ['ALL'])
+            self.assertIn('no-new-privileges:true', service['security_opt']); self.assertIn('mem_limit', service); self.assertIn('pids_limit', service)
+            self.assertNotIn('ports', service); self.assertNotIn('/var/run/docker.sock', json.dumps(service))
+        self.assertIn('--web.listen-address=127.0.0.1:${TELEMETRY_PROMETHEUS_PORT:-9090}', services['prometheus']['command'])
+        self.assertIn('--storage.tsdb.retention.time=2h', services['prometheus']['command'])
+        self.assertEqual(services['grafana']['environment']['GF_AUTH_ANONYMOUS_ORG_ROLE'], 'Viewer')
+        self.assertIn('TELEMETRY_GRAFANA_ADMIN_PASSWORD:?', services['grafana']['environment']['GF_SECURITY_ADMIN_PASSWORD'])
+        for volume in compose['volumes'].values():
+            self.assertEqual(volume['driver_opts']['type'], 'tmpfs')
+        script = (ROOT / 'deploy/setup-telemetry.sh').read_text()
+        self.assertIn('verify-release.py', script); self.assertIn('compose.telemetry.yml', script); self.assertIn('--remove', script)
+        self.assertIn('/srv/containerlab-node-manager/telemetry', script)
+
+    def test_provisioning_points_at_the_local_prometheus(self):
+        datasource = yaml.safe_load((ROOT / 'deploy/telemetry/grafana/provisioning/datasources/prometheus.yml').read_text())
+        item = datasource['datasources'][0]
+        self.assertEqual((item['uid'], item['type'], item['editable']), ('clab-prometheus', 'prometheus', False))
+        self.assertTrue(item['url'].startswith('http://127.0.0.1:'))
+        provider = yaml.safe_load((ROOT / 'deploy/telemetry/grafana/provisioning/dashboards/clab.yml').read_text())['providers'][0]
+        self.assertEqual(provider['options']['path'], '/etc/grafana/dashboards'); self.assertFalse(provider['allowUiUpdates'])
+
+    def test_dashboards_use_the_provisioned_datasource_and_exported_metrics_only(self):
+        files = sorted(DASHBOARDS.glob('*.json'))
+        self.assertEqual([f.stem for f in files], ['bgp', 'interface', 'lab-overview'])
+        uids = set()
+        for path in files:
+            data = json.loads(path.read_text())
+            uids.add(data['uid'])
+            self.assertFalse(data['editable']); self.assertEqual(data['refresh'], '10s'); self.assertIn('lab', [v['name'] for v in data['templating']['list']])
+            for variable in data['templating']['list']:
+                self.assertEqual(variable['datasource']['uid'], 'clab-prometheus')
+                self.assertTrue(variable['query']['query'].startswith('label_values('))
+            ids = [p['id'] for p in data['panels']]
+            self.assertEqual(len(ids), len(set(ids)), path.name)
+            for panel in data['panels']:
+                self.assertEqual(panel['datasource']['uid'], 'clab-prometheus', panel['title'])
+                self.assertIn(panel['type'], ('timeseries', 'stat', 'table', 'state-timeline'))
+                for target in panel['targets']:
+                    metrics = set(re.findall(r'clab_[a-z_]+', target['expr']))
+                    self.assertTrue(metrics, target['expr']); self.assertTrue(metrics <= EXPORTED, (path.name, metrics - EXPORTED))
+                    self.assertIn('lab="$lab"', target['expr'])
+        self.assertEqual(uids, {'clab-lab-overview', 'clab-interface', 'clab-bgp'})
+        for path in files:
+            for link in json.loads(path.read_text())['links']:
+                self.assertTrue(link['url'].startswith('/d/clab-'))
+
+    def test_manager_announces_the_stack_from_its_environment(self):
+        class Store:
+            lock = __import__('threading').RLock(); state = {'operations': []}
+        class Services:
+            lock = __import__('threading').RLock(); checks = {}
+        manager = TelemetryManager(Store(), Services(), environ={'TELEMETRY_STACK': 'grafana', 'TELEMETRY_GRAFANA_PORT': '3100', 'TELEMETRY_PROMETHEUS_PORT': '9090'})
+        self.assertEqual(manager.grafana, {'enabled': True, 'port': 3100, 'prometheus_port': 9090})
+        self.assertFalse(TelemetryManager(Store(), Services(), environ={'TELEMETRY_STACK': 'grafana', 'TELEMETRY_GRAFANA_PORT': 'x'}).grafana['enabled'])
+        self.assertFalse(TelemetryManager(Store(), Services(), environ={}).grafana['enabled'])
+
+
+if __name__ == '__main__':
+    unittest.main()

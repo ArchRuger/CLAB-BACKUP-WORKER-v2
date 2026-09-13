@@ -26,7 +26,7 @@ flowchart LR
     M -- "SSH, password, pinned host key" --> G --> H
     H --> C --> N
     H --> K -- "push with the owner's login" --> R
-    M -- "SSH terminals · readiness probes · Ansible network_cli" --> N
+    M -- "SSH terminals · readiness probes · Ansible network_cli · gNMI dial-in" --> N
     M -- "127.0.0.1:5001 discovery<br/>127.0.0.1:5801 sessions" --> W
     W -. "captures inside the node namespaces" .-> N
 ```
@@ -97,6 +97,31 @@ A node that stops or is redeployed goes back to *booting* and has to answer
 again. Every Ansible run gets its own empty `known_hosts`, because lab containers
 generate new SSH host keys on each deploy.
 
+## Network telemetry
+
+```mermaid
+flowchart LR
+    R["Readiness monitor<br/>show version answered"]
+    T["Telemetry manager<br/>state machine per node"]
+    P["Provisioning (SSH shell)<br/>read service · add missing lines · scoped commit"]
+    C["Collector thread per node<br/>pygnmi dial-in · capabilities · subscriptions"]
+    S[("Session store<br/>memory only · 60 min rings<br/>rates from counter deltas")]
+    A["/api/labs/{id}/telemetry<br/>series · settings · retry · remove-config"]
+    U["Telemetry tab · map overlay"]
+    G["Optional: Prometheus scrapes /api/telemetry/metrics<br/>Grafana dashboards in another tab"]
+    N[("NOS gNMI<br/>6030 · 57400 · 32767")]
+    R --> T --> P --> N
+    T --> C <--> N
+    C --> S --> A --> U
+    S --> G
+    T -. "stop, destroy, redeploy, removal, reset clear the lab" .-> S
+```
+
+Only the per-lab setting and the exact configuration lines the manager added are
+persisted, in the lab record. Samples never reach `state.enc`, the backups, Git or
+the data directory. Details, per-NOS support and the live acceptance procedure are in
+[TELEMETRY.md](TELEMETRY.md).
+
 ## Browser packet capture
 
 ```mermaid
@@ -148,9 +173,10 @@ lines.
 | `app/runner.py` | Ansible `network_cli` backups and login tests, per-job environment and `known_hosts`, output validation, Git history of backups |
 | `app/node_services.py` | SSH login checks and browser terminals over WebSocket |
 | `app/node_readiness.py` | Readiness monitor: login and `show version` probes, SSH gating, the automatic login test |
+| `app/telemetry.py`, `app/telemetry_adapters.py`, `app/telemetry_provision.py`, `app/telemetry_collector.py`, `app/telemetry_store.py`, `app/telemetry_names.py`, `app/telemetry_settings.py`, `app/telemetry_metrics.py` | Automatic network telemetry: the per-node state machine and APIs, the EOS/IOS XR/Junos Evolved adapters (service lines, paths, encodings), the SSH provisioning driver, the pygnmi dial-in collector and normaliser, the bounded in-memory session store, wiring-name mapping, the persistent setting and the Prometheus exposition for the optional Grafana stack (`deploy/compose.telemetry.yml`, `deploy/setup-telemetry.sh`) |
 | `app/capture.py`, `app/capture_sessions.py`, `app/capture_service.py` | Edgeshark discovery and identity checks, the manager-side relay, and the separate session service that owns the Docker socket |
 | `app/topology.py`, `app/layout.py`, `app/drawio_export.py` | Maps from annotations and YAML, layout persistence, draw.io and SuperPuTTY exports |
 | `app/diagnostics.py` | The debug panel and its VM probes |
 | `app/inventory.py` | Ansible inventory parsing, supported kinds and their documented default logins |
-| `app/static/` | The UI: `app.js` (workspace), `management.js` (VM connection, landing page, import), `operations.js` (lab commands, topology browser), `topology*.js` and `diagram-editor.js` (map), `capture*.js` (Wireshark), `git-progress.js`, `terminal.js`, `debug.js` |
+| `app/static/` | The UI: `app.js` (workspace), `management.js` (VM connection, landing page, import), `operations.js` (lab commands, topology browser), `topology*.js` and `diagram-editor.js` (map), `capture*.js` (Wireshark), `telemetry.js` and `telemetry-charts.js` (Telemetry tab, SVG charts, map overlay), `git-progress.js`, `terminal.js`, `debug.js` |
 | `deploy/` | `install.sh` and `install-manager.py` (guided installer), `start-manager.sh`, the `setup-*.sh` VM scripts, `check-install.sh` with `check_*.py`, the capture Compose file and `capture/smoke.py`, `verify-release.py` |

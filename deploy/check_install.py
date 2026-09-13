@@ -155,14 +155,14 @@ class Context:
         except OSError:
             return Result(reason='command unavailable or could not run')
 
-    def http(self, path, payload=None, limit=8*MIB):
-        if not self.base_url:
+    def http(self, path, payload=None, limit=8*MIB, base=None):
+        if not base and not self.base_url:
             return Result(reason='manager HTTP unavailable'), None
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
             return Result(reason='report time limit reached'), None
         data = None if payload is None else json.dumps(payload).encode()
-        request = Request(self.base_url + path, data=data,
+        request = Request((base or self.base_url) + path, data=data,
                           headers={'Content-Type': 'application/json'} if data else {})
         opener = build_opener(ProxyHandler({}), NoRedirect())
         until = min(self.deadline, time.monotonic() + 20)
@@ -604,6 +604,78 @@ def check_capture(ctx):
             'verify CAPTURE_EDGESHARK_URL in clab-backup-ui/.env, then recreate the manager.')
 
 
+def check_telemetry(ctx):
+    """Read-only: the gNMI collector's availability and each linked lab's telemetry verdict."""
+    title = 'Network telemetry'
+    if not ctx.base_url:
+        ctx.add('telemetry', 'SKIP', title, 'Manager HTTP is unavailable; the telemetry collector could not be queried.')
+        return
+    result, health = ctx.http('/api/telemetry/health')
+    if not result.ok or not isinstance(health, dict):
+        ctx.add('telemetry', 'WARN', title, 'The manager did not report a telemetry collector status.',
+                'Update to a release with network telemetry (1.23.0 or later) and rerun.')
+        return
+    if not health.get('enabled'):
+        ctx.add('telemetry', 'INFO', title, 'Disabled; the manager works without it. ' + safe_text(health.get('message') or '', 300),
+                'Rebuild the manager from this source so pygnmi is installed, or remove TELEMETRY_COLLECTOR=disabled from clab-backup-ui/.env, then recreate the manager.')
+        return
+    result, state = ctx.http('/api/state')
+    labs = [l for l in (state or {}).get('labs', []) if isinstance(l, dict) and l.get('deployment_name')] if result.ok and isinstance(state, dict) else None
+    if labs is None:
+        ctx.add('telemetry', 'WARN', title, 'The collector is ready but the lab list could not be read through the manager.',
+                'Rerun after the manager answers /api/state; check its logs if this persists.')
+        return
+    ctx.manual.append('Telemetry: generate traffic across a wired link and confirm the RX/TX chart and the map link colour follow it; '
+                      'shut an interface and confirm the link turns red; check a BGP neighbour state change where BGP runs.')
+    if not labs:
+        ctx.add('telemetry', 'PASS', title, 'gNMI dial-in collector ready (' + safe_text(health.get('library') or 'pygnmi', 40)
+                + '); no deployed lab is linked yet, so nothing is being collected.')
+        return
+    verdicts = {}
+    for lab in labs:
+        status = (lab.get('telemetry') or {}).get('status') if isinstance(lab.get('telemetry'), dict) else None
+        verdicts[status if isinstance(status, str) else 'unknown'] = verdicts.get(status if isinstance(status, str) else 'unknown', 0) + 1
+    summary = ', '.join(f'{count} {name}' for name, count in sorted(verdicts.items()))
+    if verdicts.get('failed'):
+        ctx.add('telemetry', 'WARN', title, f'{len(labs)} linked lab(s): {summary}. At least one node reports a telemetry failure.',
+                'Open Telemetry in the manager for the failure reason (credentials, gNMI port or NOS service), fix it and use Retry now.')
+        return
+    ctx.add('telemetry', 'PASS', title, f'gNMI dial-in collector ready; {len(labs)} linked lab(s): {summary}. '
+            'Streaming means usable samples arrived; waiting labs are still booting or have telemetry turned off.')
+
+
+def check_telemetry_dashboards(ctx):
+    """Read-only: the optional Grafana stack, when the manager announces it."""
+    title = 'Grafana telemetry dashboards'
+    if not ctx.base_url:
+        ctx.add('telemetry-dashboards', 'SKIP', title, 'Manager HTTP is unavailable; the dashboard settings could not be read.')
+        return
+    result, health = ctx.http('/api/telemetry/health')
+    grafana = health.get('grafana') if result.ok and isinstance(health, dict) else None
+    if not isinstance(grafana, dict) or not grafana.get('enabled'):
+        ctx.add('telemetry-dashboards', 'INFO', title, 'Not installed; the Telemetry tab works without Grafana.',
+                'Run sudo bash deploy/setup-telemetry.sh, then recreate the manager, to get Grafana dashboards in another browser tab.')
+        return
+    port, prometheus = grafana.get('port'), grafana.get('prometheus_port')
+    if not all(isinstance(v, int) and 1 <= v <= 65535 for v in (port, prometheus)):
+        ctx.add('telemetry-dashboards', 'FAIL', title, 'The manager announces Grafana with an invalid port.',
+                'Check TELEMETRY_GRAFANA_PORT and TELEMETRY_PROMETHEUS_PORT in clab-backup-ui/.env and rerun setup-telemetry.sh.')
+        return
+    ready_result, ready = ctx.http('/api/health', base=f'http://127.0.0.1:{port}')
+    if not ready_result.ok or not isinstance(ready, dict) or ready.get('database') != 'ok':
+        ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana did not answer /api/health on 127.0.0.1:{port}.',
+                'Run sudo bash deploy/setup-telemetry.sh and inspect: sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.telemetry.yml logs --tail=80 grafana')
+        return
+    targets_result, targets = ctx.http('/api/v1/targets', base=f'http://127.0.0.1:{prometheus}')
+    active = targets.get('data', {}).get('activeTargets', []) if targets_result.ok and isinstance(targets, dict) and isinstance(targets.get('data'), dict) else None
+    if not isinstance(active, list) or not any(isinstance(t, dict) and t.get('health') == 'up' for t in active):
+        ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana answers, but Prometheus on 127.0.0.1:{prometheus} is not scraping the manager.',
+                'Rerun sudo bash deploy/setup-telemetry.sh (it rewrites the scrape target for the current UI_PORT) and check the prometheus service logs.')
+        return
+    ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana on TCP {port} is healthy and Prometheus scrapes the manager metrics endpoint.')
+    ctx.manual.append(f'Grafana: open http://VM_IP:{port}/ from the workstation and confirm the Lab overview dashboard shows the deployed lab.')
+
+
 def valid_path(path):
     return isinstance(path, str) and len(path) <= 4096 and path.startswith('/') \
         and '..' not in Path(path).parts and not any(ord(c) < 32 or ord(c) == 127 for c in path)
@@ -695,7 +767,8 @@ def main(argv=None):
               ('Installed helper files and sudoers', check_helper_files), ('Restricted helper execution', check_helpers),
               ('Manager SSH and topology folders', check_manager_routes), ('Git helper over saved SSH', check_git_route),
               ('Registered Git checkouts', lambda c: module('check_git').check_git(c)),
-              ('Optional packet capture', check_capture)]
+              ('Optional packet capture', check_capture), ('Network telemetry', check_telemetry),
+              ('Grafana telemetry dashboards', check_telemetry_dashboards)]
     for title, fn in groups:
         if time.monotonic() >= ctx.deadline:
             ctx.add('deadline', 'SKIP', 'Remaining checks', 'Overall report time budget expired.',

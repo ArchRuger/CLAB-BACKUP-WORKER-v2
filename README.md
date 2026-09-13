@@ -8,7 +8,7 @@ deploy a topology, watch the devices boot, open SSH to every node, capture packe
 Wireshark from the browser, back up device configurations and save lab progress to
 Git. Nothing is installed on your workstation; you only need a browser.
 
-Current release: **1.22.0** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
+Current release: **1.23.0** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
 
 ## What it does
 
@@ -25,6 +25,11 @@ Current release: **1.22.0** · [changelog](docs/CHANGELOG.md) · [all documentat
   and pushes to your Git repository from the VM with your existing login.
 - **See the packets**: Wireshark runs on the VM in an isolated container and streams
   to your browser. Pick a node's port on the map and start.
+- **Watch the network live**: once a node answers, the manager configures its gNMI
+  service if needed, subscribes to interface counters, link state and BGP neighbours,
+  and shows charts in a Telemetry tab and live link colours on the map. The last hour
+  stays in memory only; nothing to configure per router or per lab. Optional Grafana
+  dashboards open in another tab from the same data.
 - **Stay in step with the VM**: read-only discovery every 30 seconds over a
   restricted SSH account, automatic node addresses, VM file sync, a health report and
   a debug panel.
@@ -64,7 +69,7 @@ a correct clock. The guided installer adds Docker, containerlab, the restricted
    password, and create a password for `clab-discovery` when asked (write it down).
    Choose `2` at *Next step* to set up Git later. The image build takes a few
    minutes; the installer ends with
-   `Manager 1.22.0: running; HTTP and version checks passed.`
+   `Manager 1.23.0: running; HTTP and version checks passed.`
 
 3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.
@@ -72,7 +77,8 @@ a correct clock. The guided installer adds Docker, containerlab, the restricted
 4. Click **Deploy a new lab**, expand `/etc/containerlab`, pick a `.clab.yaml` and
    choose **Deploy lab**. The lab appears in the sidebar at once; the deployment bar
    shows *NOS booting* and then *NOS ready*, SSH opens on each node as it answers,
-   and the login test runs by itself.
+   and the login test runs by itself. Open **Telemetry** to watch interface rates and
+   link state stream in; the map colours its links as the nodes report.
 
 5. Optional, Wireshark in the browser:
 
@@ -82,7 +88,15 @@ a correct clock. The guided installer adds Docker, containerlab, the restricted
    sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui
    ```
 
-6. Check the installation at any time with `bash deploy/check-install.sh`.
+6. Optional, Grafana dashboards in another tab:
+
+   ```bash
+   cd ~/projects/clab-manager
+   sudo bash deploy/setup-telemetry.sh
+   sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui
+   ```
+
+7. Check the installation at any time with `bash deploy/check-install.sh`.
 
 The [quick install](docs/QUICK-INSTALL.md) lists the same route step by step, the
 [fresh VM guide](docs/FRESH-VM-GUIDE-V2.md) starts before Ubuntu is installed, and
@@ -101,13 +115,15 @@ flowchart LR
         C["containerlab + Docker"]
         N[("Lab nodes<br/>cEOS · Junos · XRv9k")]
         W["Browser capture stack<br/>Edgeshark · session service · Wireshark containers"]
+        T["Optional dashboards<br/>Prometheus · Grafana"]
     end
     R[("Git remote")]
     B -- "HTTP + WebSocket" --> M
     M --- D
     M -- "SSH" --> G --> H --> C --> N
-    M -- "SSH terminals · login probes · Ansible" --> N
+    M -- "SSH terminals · login probes · Ansible · gNMI dial-in" --> N
     M -- "HTTP/WS relay" --> W
+    T -- "scrapes /api/telemetry/metrics" --> M
     W -. "captures inside the node namespaces" .-> N
     H -- "commit and push" --> R
 ```
@@ -131,6 +147,7 @@ and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | [Lab operations](docs/LAB-OPERATIONS.md) | Deploy, destroy, inspect, edit diagrams, read NOS readiness |
 | [Git setup](docs/GIT-SETUP.md) and [Save lab progress](docs/GIT-PROGRESS.md) | Register a checkout and save, checkpoint, load and push |
 | [Browser Wireshark](docs/CAPTURE.md) | Install the capture stack, run sessions, download captures |
+| [Network telemetry](docs/TELEMETRY.md) | Enable automatic gNMI telemetry, read the charts and the live map, per-NOS support and the live acceptance procedure |
 | [Health check](docs/HEALTH-CHECK.md) and [Debug panel](docs/DEBUG-PANEL.md) | Read `check-install.sh` results and diagnose helpers |
 | [Architecture](docs/ARCHITECTURE.md) | See how the pieces connect and which module does what |
 | [Changelog](docs/CHANGELOG.md) | Read what changed in each release |
@@ -177,7 +194,9 @@ Agents working on the code start with [agent instructions.md](agent%20instructio
 ## License
 
 [MIT](LICENSE). The browser capture stack adapts Siemens Edgeshark (MIT) and runs the
-SR Labs Wireshark container; the UI vendors xterm.js (MIT). Their notices are in
-[deploy/CAPTURE-THIRD-PARTY-NOTICES.md](deploy/CAPTURE-THIRD-PARTY-NOTICES.md) and
+SR Labs Wireshark container; the UI vendors xterm.js (MIT); telemetry uses pygnmi
+(BSD-3) and optionally runs Prometheus (Apache-2.0) and Grafana OSS (AGPL-3.0). Their
+notices are in [deploy/CAPTURE-THIRD-PARTY-NOTICES.md](deploy/CAPTURE-THIRD-PARTY-NOTICES.md),
+[deploy/TELEMETRY-THIRD-PARTY-NOTICES.md](deploy/TELEMETRY-THIRD-PARTY-NOTICES.md) and
 [clab-backup-ui/app/static/vendor/](clab-backup-ui/app/static/vendor/README.md).
 Vendor network OS images are licensed separately by their vendors.

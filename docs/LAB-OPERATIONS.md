@@ -68,6 +68,17 @@ retried each minute; **Test login** in the node details stays available for a ma
 retry. Every backup or login test runs with its own empty `known_hosts`, so a
 redeployed lab (new SSH host keys) never fails with *host key mismatch*.
 
+## Telemetry after readiness
+
+With *Automatic telemetry* on (the default for labs created from 1.23.0; earlier
+labs enable it once in the Telemetry tab), every node that has answered `show
+version` is checked over SSH for its gNMI service, missing lines are added with the
+NOS's scoped commit, and a gNMI subscription streams interface rates, link state
+and BGP neighbours into memory. The Telemetry tab shows charts; the map colours
+links from both ends. A stop, destroy, redeploy or removal clears the session.
+Details, per-NOS support and the acceptance procedure are in
+[TELEMETRY.md](TELEMETRY.md).
+
 ## Interactive diagram and topology actions
 
 Choose **Edit diagram** in the topology toolbar to move nodes, add text, boxes, circles and lines, or edit appearance. Undo reverses edits; closing offers to discard unsaved changes. Save persists the manager map. Download annotations JSON or Export draw.io includes unsaved edits without writing VM files. Concurrent edits are rejected if the saved map changed; reopen it before editing again.
