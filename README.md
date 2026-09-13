@@ -128,6 +128,7 @@ route, the migration guide, the Wiki.js master guide and the archive.
 
 ```text
 ├── README.md                this page
+├── LICENSE                  MIT
 ├── docs/                    guides, architecture, changelog (docs/README.md is the index)
 │   └── archive/             superseded guides kept for history
 ├── deploy/                  installer, VM setup scripts, health check, capture stack, CI smoke test
@@ -157,3 +158,11 @@ limits and the version-bump checklist are in
 [docs/REPOSITORY-MAINTENANCE.md](docs/REPOSITORY-MAINTENANCE.md); each release's
 evidence is in [clab-backup-ui/VALIDATION.md](clab-backup-ui/VALIDATION.md).
 Agents working on the code start with [agent instructions.md](agent%20instructions.md).
+
+## License
+
+[MIT](LICENSE). The browser capture stack adapts Siemens Edgeshark (MIT) and runs the
+SR Labs Wireshark container; the UI vendors xterm.js (MIT). Their notices are in
+[deploy/CAPTURE-THIRD-PARTY-NOTICES.md](deploy/CAPTURE-THIRD-PARTY-NOTICES.md) and
+[clab-backup-ui/app/static/vendor/](clab-backup-ui/app/static/vendor/README.md).
+Vendor network OS images are licensed separately by their vendors.
