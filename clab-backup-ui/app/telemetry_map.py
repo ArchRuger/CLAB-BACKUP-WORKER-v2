@@ -34,23 +34,28 @@ UID_PREFIX = 'clab-map-'
 FOLDER_UID = 'clab-lab-maps'             # Grafana folder holding the provisioned lab maps
 DATASOURCE = {'type': 'prometheus', 'uid': 'clab-prometheus'}
 CANVAS = '#fdf6e3'                       # the manager map's own canvas, used in both Grafana themes
+# Threshold levels sit strictly between the values they separate (a discrete value never lands
+# on a level, so the colour does not depend on the plugin's comparison rule; seen live: a port at
+# exactly 0 kept its previous colour with a level of 0).
 # Link colour by the far end's receive rate (bit/s): idle grey, then the srl-telemetry-lab palette.
-TRAFFIC_LEVELS = ((0, '#bec8d2'), (10_000, '#4bdd33'), (500_000, '#ffff00'), (1_000_000, '#ff8000'), (5_000_000, '#ff3154'))
+TRAFFIC_LEVELS = ((-1, '#bec8d2'), (10_000, '#4bdd33'), (500_000, '#ffff00'), (1_000_000, '#ff8000'), (5_000_000, '#ff3154'))
 # Dash animation: still below 2 kbit/s, one cycle in 2.5 s at 10 kbit/s, 0.3 s from 5 Mbit/s up.
 FLOW = {'thresholdOffValue': 2_000, 'thresholdLwrValue': 10_000, 'thresholdLwrDurationSecs': 2.5,
         'thresholdUprValue': 5_000_000, 'thresholdUprDurationSecs': 0.3, 'unidirectional': True}
-PORT_LEVELS = ((0, '#ff3154'), (1, '#4bdd33'))                       # oper-status down / up
-NODE_LEVELS = ((-1, '#ff3154'), (0, '#bec8d2'), (1, '#79e8f6'), (2, '#ff8000'), (3, '#4bdd33'))   # STATE_CODES
+PORT_LEVELS = ((-0.5, '#ff3154'), (0.5, '#4bdd33'))                  # oper-status 0 down / 1 up
+NODE_LEVELS = ((-1.5, '#ff3154'), (-0.5, '#bec8d2'), (0.5, '#79e8f6'), (1.5, '#ff8000'), (2.5, '#4bdd33'))   # STATE_CODES -1 … 3
 SIZE, R = 40, 20
 ICONS = {'switch': 'M-13-8H13M-13 8H13M8-13L13-8L8-3M-8 3L-13 8L-8 13',
          'server': 'M-12-13H12V13H-12ZM-12-4H12M-12 4H12M-7-9H-3M-7 0H-3M-7 9H-3',
          'router': 'M-14-5H-5V-14M-9-10L-5-14L-1-10M5-14V-5H14M10-9L14-5L10-1M14 5H5V14M1 10L5 14L9 10M-5 14V5H-14M-10 1L-14 5L-10 9'}
+# Colours the plugin drives (stroke of a link, fill of a dot) are presentation attributes on the
+# element, never stylesheet rules: a CSS rule would win over the attribute the plugin sets.
 STYLE = ('@keyframes clab-flow{to{stroke-dashoffset:-24}}'
-         '.link{stroke:#bec8d2;stroke-width:3;fill:none;stroke-linecap:round}'
+         '.link{stroke-width:3;fill:none;stroke-linecap:round}'
          '.flow{stroke-dasharray:14 10;animation-name:clab-flow;animation-timing-function:linear;animation-iteration-count:infinite;animation-duration:0s}'
          '.plain{stroke:#87a9ab;stroke-width:2;fill:none}'
          '.iface rect{fill:#fffdf4;fill-opacity:.95}.iface text{fill:#607d8b;font-size:10px}'
-         '.rate{fill:#334155;font-size:11px;font-weight:600}'
+         '.rate{font-size:11px;font-weight:600}'
          '.device-body{stroke:#fff;stroke-width:1}.device-symbol{stroke:#fff;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;fill:none}'
          '.device-label rect{fill:#454545}.device-label text{fill:#fff;font-size:11px}'
          '.port{stroke:#fff;stroke-width:1.2}.status{stroke:#fff;stroke-width:1.5}'
@@ -174,6 +179,7 @@ def render(drawing, lab):
     box = bounds(drawing)
     cells = {}
     parts = []
+    dots = []          # port dots are drawn last so the node icons never cover them
 
     def matched(node):
         """(short name, platform, inventory name) for a drawn node matched to the inventory, else None."""
@@ -207,7 +213,9 @@ def render(drawing, lab):
             own, peer = matched(node), matched(peer_node)
             drawn = str(endpoint.get('interface', ''))
             half = f'M{fmt(origin[0])} {fmt(origin[1])}L{fmt(mid[0])} {fmt(mid[1])}'
-            rate_at = ((origin[0] + mid[0]) / 2 + nx * 13, (origin[1] + mid[1]) / 2 + ny * 13 + 4)
+            # The rate sits beside the wire near its own node (40 % of the way to the middle, so the two
+            # labels of a short link never meet), clear of the interface label that stays on the wire.
+            rate_at = (origin[0] + (mid[0] - origin[0]) * .4 - nx * 15, origin[1] + (mid[1] - origin[1]) * .4 - ny * 15 + 4)
             if own and peer:
                 short, platform, _ = own
                 peer_short, peer_platform, _ = peer
@@ -215,9 +223,9 @@ def render(drawing, lab):
                 # receive counter (cEOS in a container reports no transmit octets on data ports).
                 sent = series_in(peer_short, nos_interface(peer_platform, str(peer_endpoint.get('interface', ''))))
                 link_id, rate_id, port_id = f'link:{short}:{drawn}', f'rate:{short}:{drawn}', f'port:{short}:{drawn}'
-                parts.append(f'<path id="cell-{esc(link_id)}" class="link flow" d="{half}"/>')
-                parts.append(f'<circle id="cell-{esc(port_id)}" class="port" cx="{fmt(origin[0])}" cy="{fmt(origin[1])}" r="4" fill="#bec8d2"/>')
-                parts.append(f'<text id="cell-{esc(rate_id)}" class="rate" x="{fmt(rate_at[0])}" y="{fmt(rate_at[1])}" text-anchor="middle">&#8593;</text>')
+                parts.append(f'<path id="cell-{esc(link_id)}" class="link flow" stroke="#bec8d2" d="{half}"/>')
+                dots.append(f'<circle id="cell-{esc(port_id)}" class="port" cx="{fmt(origin[0])}" cy="{fmt(origin[1])}" r="4.5" fill="#bec8d2"/>')
+                parts.append(f'<text id="cell-{esc(rate_id)}" class="rate" x="{fmt(rate_at[0])}" y="{fmt(rate_at[1])}" text-anchor="middle" fill="#334155">&#8593;</text>')
                 cells[link_id] = {'dataRef': sent, 'strokeColor': {'thresholds': thresholds(TRAFFIC_LEVELS)}, 'flowAnimation': dict(FLOW)}
                 cells[rate_id] = {'label': {'dataRef': sent, 'units': 'bps', 'decimalPoints': 1, 'separator': 'space'}}
                 cells[port_id] = {'dataRef': series_oper(short, nos_interface(platform, drawn)), 'fillColor': {'thresholds': thresholds(PORT_LEVELS)}}
@@ -248,6 +256,7 @@ def render(drawing, lab):
             body += f'<circle id="cell-{esc(node_id)}" class="status" cx="{R - 2}" cy="{-R + 2}" r="5" fill="#bec8d2"/>'
             cells[node_id] = {'dataRef': series_state(own[0]), 'fillColor': {'thresholds': thresholds(NODE_LEVELS)}}
         parts.append(f'<g transform="translate({fmt(cx)} {fmt(cy)})">{body}</g>')
+    parts.extend(dots)
     svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{box[0]} {box[1]} {box[2]} {box[3]}" width="{box[2]}" height="{box[3]}" '
            f'font-family="Segoe UI, Helvetica, Arial, sans-serif"><style>{STYLE}</style>'
            f'<rect x="{box[0]}" y="{box[1]}" width="{box[2]}" height="{box[3]}" fill="{CANVAS}"/>' + ''.join(parts) + '</svg>')

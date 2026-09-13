@@ -244,7 +244,8 @@ if __name__ == '__main__':
             print(f"Prometheus on 127.0.0.1:{result['prometheus_port']} and Grafana on TCP {result['grafana_port']} are ready.")
             for url, health, error in targets:
                 print(f'Scrape target {url}: {health}' + (f' ({error})' if error else '')
-                      + ('' if health == 'up' else '. The manager answers /api/telemetry/metrics from release 1.23.0; recreate it after this setup and rerun check-install.sh.'))
+                      + ('' if health == 'up' else ' (first scrape pending).' if health == 'unknown'
+                         else '. The manager answers /api/telemetry/metrics from release 1.23.0; recreate it after this setup and rerun check-install.sh.'))
             print(f'Flow panel {PLUGIN} {PLUGIN_VERSION}: ' + ('loaded; the manager-generated lab maps will render.' if result['flow_panel']
                   else 'NOT loaded; lab maps stay empty. Rerun sudo bash deploy/setup-telemetry.sh with access to grafana.com and check the grafana service logs.'))
             sys.exit(0)

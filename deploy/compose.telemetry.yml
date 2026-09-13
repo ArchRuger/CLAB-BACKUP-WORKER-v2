@@ -49,6 +49,9 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      # No background installs of Grafana's bundled apps: the plugin folder is read-only and the VM
+      # may be offline; the only plugin (the Flow panel) is installed by setup-telemetry.sh.
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
       GF_NEWS_NEWS_FEED_ENABLED: "false"
       GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 5s
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/lab-overview.json

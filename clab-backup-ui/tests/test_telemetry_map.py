@@ -60,6 +60,11 @@ class RenderTests(unittest.TestCase):
         self.assertIn('flow', by_id['cell-link:ceos1:eth1'].get('class'))
         style = root.find(SVG + 'style').text
         self.assertIn('@keyframes clab-flow', style); self.assertIn('animation-duration:0s', style)
+        # The plugin sets stroke/fill attributes; a stylesheet colour would silently win over them.
+        self.assertEqual(by_id['cell-link:ceos1:eth1'].get('stroke'), '#bec8d2'); self.assertEqual(by_id['cell-port:ceos1:eth1'].get('fill'), '#bec8d2')
+        self.assertNotRegex(style, r'\.link\{[^}]*(?<![-\w])stroke:#'); self.assertNotRegex(style, r'\.(port|status|rate)\{[^}]*(?<![-\w])fill:#')
+        elements = list(root.iter())
+        self.assertGreater(elements.index(by_id['cell-port:ceos1:eth1']), elements.index(by_id['cell-node:ceos1']), 'port dots are drawn above the icons')
         self.assertEqual(root.find(SVG + 'rect').get('fill'), maps.CANVAS, 'the canvas colour makes the map theme independent')
         texts = [e.text for e in root.iter(SVG + 'text')]
         self.assertIn('eth1', texts); self.assertIn('Fabric', texts); self.assertIn('host', texts)
@@ -78,10 +83,15 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(cells['rate:ceos1:eth1'], {'label': {'dataRef': 'ceos2:Ethernet1:in', 'units': 'bps', 'decimalPoints': 1, 'separator': 'space'}})
         self.assertEqual(cells['port:ceos1:eth1']['dataRef'], 'oper:ceos1:Ethernet1')
         self.assertEqual(cells['node:ceos1']['dataRef'], 'state:ceos1')
-        self.assertEqual([t['level'] for t in cells['link:ceos1:eth1']['strokeColor']['thresholds']], [0, 10000, 500000, 1000000, 5000000])
+        self.assertEqual([t['level'] for t in cells['link:ceos1:eth1']['strokeColor']['thresholds']], [-1, 10000, 500000, 1000000, 5000000])
         self.assertEqual(cells['link:ceos1:eth1']['flowAnimation'], dict(maps.FLOW))
-        self.assertEqual({t['level'] for t in cells['node:ceos1']['fillColor']['thresholds']}, set(STATE_CODES.values()) | {-1})
-        self.assertEqual([t['level'] for t in cells['port:ceos1:eth1']['fillColor']['thresholds']], [0, 1])
+        # Levels sit between the discrete values: every state code and both oper values fall inside a band.
+        node_levels = [t['level'] for t in cells['node:ceos1']['fillColor']['thresholds']]
+        self.assertEqual(node_levels, [-1.5, -0.5, 0.5, 1.5, 2.5])
+        for code in set(STATE_CODES.values()):
+            self.assertNotIn(code, node_levels); self.assertLess(node_levels[0], code)
+        self.assertEqual([t['level'] for t in cells['port:ceos1:eth1']['fillColor']['thresholds']], [-0.5, 0.5])
+        self.assertEqual(cells['port:ceos1:eth1']['fillColor']['thresholds'][0]['color'], '#ff3154')
         hidden = maps.render(drawing(settings={'labelMode': 'hide'}), lab())
         self.assertNotIn('>eth1<', hidden['svg']); self.assertIn('cell-rate:ceos1:eth1', hidden['svg'], 'hidden interface labels keep the rate labels')
 
