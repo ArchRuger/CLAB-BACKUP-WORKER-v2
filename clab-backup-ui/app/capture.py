@@ -1,7 +1,7 @@
-"""Optional packet capture control plane. Packet bytes never traverse the manager.
+"""Optional packet discovery and browser capture control plane.
 
-Providers return normalized targets and construct launch URLs. The only registered
-provider is Edgeshark; no dynamic imports, shell commands or client-supplied URLs.
+Edgeshark streams to VM-hosted Wireshark. The manager relays the desktop and saved
+downloads through a separate session service; it never receives Docker access.
 """
 import hashlib
 import hmac
@@ -14,9 +14,9 @@ import time
 from typing import Protocol
 from urllib.error import URLError
 from urllib.parse import urlencode, urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request as URLRequest, build_opener
 
-from fastapi import HTTPException, Query
+from fastapi import HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_RESPONSE = 4 * 1024 * 1024
@@ -33,7 +33,7 @@ class CaptureError(ValueError):
 
 class Provider(Protocol):
     def discover(self) -> list[dict]: ...
-    def launch(self, target: dict, interfaces: list[str]) -> str: ...
+    def stream_uri(self, target: dict, interfaces: list[str]) -> str: ...
 
 
 def service_url(value):
@@ -62,7 +62,7 @@ def read_discovery(url):
     try:
         opener = build_opener(ProxyHandler({}), NoRedirect())
         started = time.monotonic()
-        with opener.open(Request(url, headers={'Accept': 'application/json'}), timeout=8) as response:
+        with opener.open(URLRequest(url, headers={'Accept': 'application/json'}), timeout=8) as response:
             content = bytearray()
             while len(content) <= MAX_RESPONSE:
                 chunk = response.read1(min(65536, MAX_RESPONSE + 1 - len(content)))
@@ -153,9 +153,8 @@ def merge_shared_namespaces(rows):
 
 
 class EdgesharkProvider:
-    def __init__(self, internal_url, public_url):
+    def __init__(self, internal_url):
         self.internal_url = service_url(internal_url)
-        self.public_url = service_url(public_url)
         self.skipped = 0
 
     def discover(self):
@@ -164,8 +163,8 @@ class EdgesharkProvider:
         self.skipped = len(skipped)
         return rows
 
-    def launch(self, target, interfaces):
-        u = urlsplit(self.public_url)
+    def stream_uri(self, target, interfaces):
+        u = urlsplit(self.internal_url)
         # Only the identity fields travel; display-only keys such as aliases do not.
         detail = {**{k: target[k] for k in IDENTITY_FIELDS}, 'network-interfaces': interfaces}
         query = urlencode({'container': json.dumps(detail, separators=(',', ':')), 'nif': '/'.join(interfaces)})
@@ -180,16 +179,16 @@ def configured_provider(environ) -> Provider | None:
     if name != 'edgeshark':
         raise CaptureError('Unknown capture provider. Supported values: disabled, edgeshark.')
     internal = environ.get('CAPTURE_EDGESHARK_URL', '')
-    public = environ.get('CAPTURE_EDGESHARK_PUBLIC_URL', '')
-    if not internal or not public:
-        raise CaptureError('Set CAPTURE_EDGESHARK_URL and CAPTURE_EDGESHARK_PUBLIC_URL, then recreate the manager.')
-    return EdgesharkProvider(internal, public)
+    if not internal:
+        raise CaptureError('Run deploy/setup-capture.sh to enable browser capture, then recreate the manager.')
+    return EdgesharkProvider(internal)
 
 
 class LaunchRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     target_id: str = Field(min_length=64, max_length=64, pattern=r'^[0-9a-f]{64}$')
     interfaces: list[str] = Field(min_length=1, max_length=128)
+    request_id: str = Field(default_factory=lambda: secrets.token_hex(32), pattern=r'^[0-9a-f]{64}$')
 
 
 def expected_container(lab, node):
@@ -206,8 +205,14 @@ class Captures:
         self.secret = secrets.token_bytes(32)
         self.slots = threading.BoundedSemaphore(4)
         self.error = ''
+        self.sessions = None
         try:
-            self.provider = configured_provider(os.environ if environ is None else environ)
+            config = os.environ if environ is None else environ
+            self.provider = configured_provider(config)
+            if self.provider:
+                from .capture_sessions import BrowserSessions
+                self.sessions = BrowserSessions(config.get('CAPTURE_SESSION_URL', 'http://127.0.0.1:5801'),
+                                                config.get('CAPTURE_SESSION_TOKEN', ''))
         except CaptureError as error:
             self.provider = None
             self.error = str(error)
@@ -235,6 +240,8 @@ class Captures:
             self.slots.release()
 
     def install(self, app):
+        from .capture_sessions import install, owner
+        install(app, self)
         @app.get('/api/capture/status')
         def status():
             return {'enabled': bool(self.provider), 'provider': 'edgeshark' if self.provider else 'disabled',
@@ -272,14 +279,22 @@ class Captures:
                     'message': message}
 
         @app.post('/api/capture/launch')
-        def launch(data: LaunchRequest):
+        def launch(data: LaunchRequest, request: Request, response: Response):
+            if not self.sessions:
+                raise HTTPException(503, self.error or 'Browser capture is disabled. Follow Capture setup.')
             rows = self.discover()  # Always revalidate; never launch from a cached PID.
             target = next((t for t in rows if hmac.compare_digest(self.identity(t), data.target_id)), None)
             if target is None:
                 raise HTTPException(409, 'Capture target changed or disappeared. Refresh interfaces and select it again.')
             if len(set(data.interfaces)) != len(data.interfaces) or any(n not in target['network-interfaces'] for n in data.interfaces):
                 raise HTTPException(409, 'Select interfaces from the refreshed live list.')
-            uri = self.provider.launch(target, data.interfaces)
-            self.store.event('capture.launch', 'Prepared Wireshark handoff for ' + target['name'] +
-                             ' (' + ', '.join(data.interfaces) + '). Capture starts only in the workstation plugin.')
-            return {'uri': uri, 'message': 'Open Wireshark to start. Stop and save the capture in Wireshark.'}
+            session = self.sessions.request('POST', 'sessions', owner(request, response),
+                                            {'target': {k: target[k] for k in (*IDENTITY_FIELDS, 'network-interfaces')},
+                                             'interfaces': data.interfaces, 'request_id': data.request_id})
+            from .capture_sessions import TOKEN
+            if not isinstance(session.get('id'), str) or not TOKEN.fullmatch(session['id']):
+                raise HTTPException(502, 'Browser capture service returned an invalid session.')
+            self.store.event('capture.launch', 'Started browser Wireshark session for ' + target['name'] +
+                             ' (' + ', '.join(data.interfaces) + ').')
+            return {'id': session['id'], 'url': '/static/capture-session.html#' + session['id'],
+                    'message': 'Wireshark session started on the VM. Open the browser viewer to inspect packets.'}

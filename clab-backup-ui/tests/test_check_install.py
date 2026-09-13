@@ -187,6 +187,8 @@ class InstallationCheckTests(unittest.TestCase):
                                              'message': PRIVATE if enabled else 'Packet capture is optional.'}
                 if path == '/api/capture/targets':
                     return discovery
+                if path == '/api/capture/health':
+                    return check.Result(0), {'ready': True}
                 return check.Result(reason='unexpected route'), None
             return request
         ctx = context()
@@ -200,7 +202,7 @@ class InstallationCheckTests(unittest.TestCase):
         check.check_capture(ctx)
         self.assertEqual(by_id(ctx, 'capture')['status'], 'PASS')
         self.assertIn('2 capture target(s)', by_id(ctx, 'capture')['detail'])
-        self.assertTrue(any('cshargextcap' in item for item in ctx.manual))
+        self.assertTrue(any('browser capture' in item for item in ctx.manual))
         self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
         ctx = context()
         ctx.http = Mock(side_effect=router(True, (check.Result(502, reason='HTTP 502'), None)))

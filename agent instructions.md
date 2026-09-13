@@ -1,3 +1,19 @@
+# Browser Wireshark — 1.21.0
+
+This supersedes the 1.20.x workstation handoff instructions below. Read CAPTURE.md.
+Browser sessions replace all native workstation launches; cshargextcap only runs
+inside the pinned VM Wireshark image. capture.py keeps Edgeshark discovery and HMAC
+identity fields (exclude interface churn). capture_sessions.py is the manager
+adapter and same-origin HTTP/WS relay; capture_service.py alone has Docker access.
+Never expose its socket/API to browsers or accept client image/command/mount/URL
+parameters. Preserve browser cookie ownership, fixed network/image, labels,
+revalidation in both manager and service, resource limits and expiry/cleanup.
+setup-capture.sh/setup_capture.py migrate the old public URL and preserve other
+.env values and the service token. Service restart deletes its labelled temporary
+sessions; never delete other lab containers or manager data. Keep pinned image
+values consistent. See VALIDATION.md: local mocked/transport checks and CI smoke
+configuration do not establish a real VM capture until smoke/live acceptance runs.
+
 # Wireshark capture — 1.20.0 (Codex) and 1.20.1 fixes
 
 Read README.md "Changes in 1.20.0/1.20.1" and CAPTURE.md. The provider boundary is

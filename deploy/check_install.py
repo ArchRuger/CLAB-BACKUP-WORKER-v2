@@ -573,7 +573,7 @@ def check_git_route(ctx):
 
 
 def check_capture(ctx):
-    """Optional Wireshark handoff: provider configured in the manager and Edgeshark discoverable through it."""
+    """Read-only Edgeshark discovery and browser-session/image readiness."""
     title = 'Optional packet capture'
     if not ctx.base_url:
         ctx.add('capture', 'SKIP', title, 'Manager HTTP is unavailable; the capture provider could not be queried.')
@@ -585,19 +585,22 @@ def check_capture(ctx):
         return
     if not status.get('enabled'):
         ctx.add('capture', 'INFO', title, 'Disabled; the manager works without it. ' + safe_text(status.get('message') or '', 300),
-                'To enable Wireshark handoffs follow CAPTURE.md: start Edgeshark, set CAPTURE_PROVIDER, CAPTURE_EDGESHARK_URL and '
-                'CAPTURE_EDGESHARK_PUBLIC_URL in clab-backup-ui/.env, then recreate the manager.')
+                'Follow CAPTURE.md: run sudo bash deploy/setup-capture.sh to configure CAPTURE_PROVIDER and the browser service, then recreate the manager.')
         return
     result, targets = ctx.http('/api/capture/targets', limit=4 * MIB)
     if result.ok and isinstance(targets, dict) and isinstance(targets.get('targets'), list):
+        ready_result, ready = ctx.http('/api/capture/health')
+        if not ready_result.ok or not isinstance(ready, dict) or ready.get('ready') is not True:
+            ctx.add('capture', 'FAIL', title, 'Edgeshark discovery works, but the browser session service or its pinned Wireshark image is unavailable.',
+                    'Run sudo bash deploy/setup-capture.sh, recreate the manager and check the sessions service logs.')
+            return
         ctx.add('capture', 'PASS', title, f"Edgeshark discovery through the manager listed {len(targets['targets'])} capture target(s); "
-                'no capture was started. The workstation plugin, tunnel and live packets are separate checks.')
-        ctx.manual.append('Wireshark: install cshargextcap, open the SSH tunnel to the Edgeshark port, prepare a capture in the '
-                          'manager and confirm live packets arrive.')
+                'the browser session service and pinned image are ready. No capture was started.')
+        ctx.manual.append('Wireshark: start a browser capture, confirm live packets, save in /pcaps, download the archive and end the session.')
         return
     ctx.add('capture', 'FAIL', title, 'The capture provider is enabled but discovery through the manager failed: '
             + (result.reason or 'invalid response') + '.',
-            'On the VM run sudo docker compose -f deploy/compose.capture.yml ps and curl --fail http://127.0.0.1:5001/version; '
+            'On the VM inspect deploy/compose.capture.yml services and curl --fail http://127.0.0.1:5001/version; '
             'verify CAPTURE_EDGESHARK_URL in clab-backup-ui/.env, then recreate the manager.')
 
 

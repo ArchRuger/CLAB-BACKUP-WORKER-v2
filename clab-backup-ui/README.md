@@ -1,4 +1,4 @@
-# Containerlab Node Manager — 1.20.1
+# Containerlab Node Manager — 1.21.0
 
 Git setup: from the project root on the VM, run `bash deploy/setup-git.sh` as your
 ordinary account, without sudo. See [the guided setup](../GIT-SETUP.md).
@@ -17,15 +17,14 @@ Use [deploy/compose.image.yml](../deploy/compose.image.yml) for this path; it ha
 For an existing installation, see [VM connection and recovery](../VM-CONNECTION.md)
 and [migration instructions](../STANDALONE-SETUP.md).
 
-## Changes in 1.20.1
+## Changes in 1.21.0
 
-[Packet capture and Wireshark](../CAPTURE.md) adds optional Edgeshark integration:
-node capture, both endpoints of map links, live host/interface discovery and
-multi-interface selection. The provider and UI are separate modules. Configure
-it explicitly and install cshargextcap on the workstation; no additional manager
-capabilities or device credentials are required. Start with the setup link in
-the capture dialog. See VALIDATION.md for automated and browser evidence and
-remaining live acceptance checks.
+[Browser Wireshark](../CAPTURE.md) keeps node/link/live-interface capture and
+replaces the workstation plugin with isolated Wireshark sessions on the VM.
+Run `sudo bash deploy/setup-capture.sh` from the source root, then upgrade/recreate
+the manager. Reconnect, download saved captures and end sessions in the browser.
+The manager gains no Docker socket or additional host permissions. See
+VALIDATION.md for executed checks and remaining Linux/VM acceptance.
 
 ## Changes in 1.19.2
 

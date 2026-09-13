@@ -1,0 +1,9 @@
+**
+!clab-backup-ui/
+clab-backup-ui/*
+!clab-backup-ui/app/
+clab-backup-ui/app/*
+!clab-backup-ui/app/__init__.py
+!clab-backup-ui/app/capture.py
+!clab-backup-ui/app/capture_sessions.py
+!clab-backup-ui/app/capture_service.py

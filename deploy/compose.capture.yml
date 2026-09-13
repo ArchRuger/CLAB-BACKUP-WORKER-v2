@@ -2,7 +2,29 @@
 # Adapted from Siemens Edgeshark (MIT); see CAPTURE.md for provenance and access.
 # Public multi-architecture manifests resolved 2026-09-12; no moving latest tags.
 name: clab-manager-capture
+networks:
+  default:
+    name: clab-manager-capture
 services:
+  sessions:
+    build:
+      context: ..
+      dockerfile: deploy/capture/Dockerfile
+    image: clab-capture-service:1.21.0
+    restart: unless-stopped
+    read_only: true
+    environment:
+      CAPTURE_SESSION_TOKEN: ${CAPTURE_SESSION_TOKEN:?Run sudo bash deploy/setup-capture.sh first}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    tmpfs:
+      - /tmp:size=32m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      - "127.0.0.1:5801:5801"
+    depends_on: [packetflix]
+    stop_grace_period: 45s
   gostwire:
     image: ghcr.io/siemens/ghostwire@sha256:a01295061e2da65f9954659e5e05ef41b39dbe32d79bfe5194dea43a9c724e5c
     restart: unless-stopped

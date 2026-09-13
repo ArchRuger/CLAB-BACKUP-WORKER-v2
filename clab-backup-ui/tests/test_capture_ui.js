@@ -5,9 +5,9 @@ function harness(){
  const elements=new Map(),timers=[];
  function $(id){if(!elements.has(id))elements.set(id,{value:'',innerHTML:'',textContent:'',hidden:false,open:false,disabled:false,listeners:{},checked:[],addEventListener(k,fn){this.listeners[k]=fn;},removeAttribute(k){delete this[k];},showModal(){this.open=true;},close(){this.open=false;this.listeners.close?.();},querySelectorAll(){return this.checked;}});return elements.get(id);}
  const calls=[];
- const c=vm.createContext({$,esc,URLSearchParams,activeId:'lab',current:()=>({name:'demo'}),map:$('map'),closeNodeMenu:()=>{},notify:()=>{},clearTimeout:()=>{},setTimeout:fn=>{timers.push(fn);return timers.length;},
+ const c=vm.createContext({$,esc,URLSearchParams,crypto:require('node:crypto').webcrypto,Uint8Array,confirm:()=>true,activeId:'lab',current:()=>({name:'demo'}),map:$('map'),closeNodeMenu:()=>{},notify:()=>{},clearTimeout:()=>{},setTimeout:fn=>{timers.push(fn);return timers.length;},
  api:async url=>{calls.push(url);return {json:async()=>url.includes('/status')?{enabled:true}:{targets:[{id:'a'.repeat(64),name:'clab-demo-r1',kind:'docker',prefix:'',interfaces:['lo','eth2']}],message:'live'}};},
- json:async(url,method,data)=>{calls.push({url,method,data});return {uri:'packetflix:ws://localhost:5001/capture?container=fixture',message:'Open Wireshark to start.'};}});
+ json:async(url,method,data)=>{calls.push({url,method,data});return {url:'/static/capture-session.html#'+'a'.repeat(64),id:'a'.repeat(64),message:'Session started.'};}});
  vm.runInContext(source,c);$('capture-dialog').open=true;
  return {c,$,calls,timers};
 }
@@ -20,16 +20,16 @@ test('all host scope removes lab filtering and missing aliases are never guessed
  const {c,$,calls}=harness();vm.runInContext("captureLab='lab';captureNode='r1';captureHint='Gi0/0/0/1'",c);$('capture-scope').value='host';
  await c.refreshCaptureTargets();assert.ok(calls.includes('/capture/targets?'));assert.doesNotMatch($('capture-interfaces').innerHTML,/checked/);assert.match($('capture-status').textContent,/Select its Linux interface explicitly/);
 });
-test('handoff requires selection and prepares an explicit native link',async()=>{
+test('capture requires selection and creates a same-origin browser session',async()=>{
  const {c,$,calls,timers}=harness();await c.refreshCaptureTargets();
  await $('capture-form').onsubmit({preventDefault(){}});assert.match($('capture-status').textContent,/at least one/);
  $('capture-interfaces').checked=[{value:'eth2'}];await $('capture-form').onsubmit({preventDefault(){}});
- assert.equal(calls.at(-1).data.interfaces[0],'eth2');assert.equal($('capture-launch').hidden,false);assert.match($('capture-launch').href,/^packetflix:ws:/);
- $('capture-launch').onclick();assert.match($('capture-status').textContent,/handoff requested/);
- timers.at(-1)();assert.equal($('capture-launch').hidden,true);assert.equal($('capture-launch').href,undefined);
+ assert.equal(calls.find(c=>c?.url==='/capture/launch').data.interfaces[0],'eth2');assert.equal($('capture-launch').hidden,false);assert.match($('capture-launch').href,/^\/static\/capture-session\.html#/);
+ $('capture-launch').onclick();assert.match($('capture-status').textContent,/Browser viewer opened/);
+ assert.equal(timers.length,0);
 });
 test('changing selection clears a prepared link and releases the prepare button',async()=>{
- const {c,$}=harness();await c.refreshCaptureTargets();$('capture-launch').href='packetflix:ws://old';$('capture-launch').hidden=false;$('capture-prepare').disabled=true;
+ const {c,$}=harness();await c.refreshCaptureTargets();$('capture-launch').href='/static/capture-session.html#'+'b'.repeat(64);$('capture-launch').hidden=false;$('capture-prepare').disabled=true;
  $('capture-interfaces').checked=[{value:'eth2'}];
  $('capture-interfaces').onchange();assert.equal($('capture-launch').hidden,true);assert.equal($('capture-launch').href,undefined);assert.equal($('capture-prepare').disabled,false);
 });
@@ -62,7 +62,7 @@ test('node and menu capture actions are disabled only once the manager reports c
 test('closing during an in-flight launch cannot restore a stale link',async()=>{
  const {c,$}=harness();await c.refreshCaptureTargets();$('capture-interfaces').checked=[{value:'eth2'}];let finish;
  c.json=()=>new Promise(resolve=>finish=resolve);const pending=$('capture-form').onsubmit({preventDefault(){}});
- $('capture-dialog').close();finish({uri:'packetflix:ws://old',message:'old'});await pending;assert.equal($('capture-launch').href,undefined);
+ $('capture-dialog').close();finish({url:'/static/capture-session.html#'+'b'.repeat(64),message:'old'});await pending;assert.equal($('capture-launch').href,undefined);
 });
 test('out of order discovery cannot replace newer results',async()=>{
  const {c,$}=harness();let finish;c.api=()=>new Promise(resolve=>finish=resolve);
@@ -75,7 +75,7 @@ test('disabled providers and outages have an actionable local message',async()=>
 });
 test('untrusted labels are escaped and unsupported launch schemes cannot navigate',async()=>{
  const {c,$}=harness();vm.runInContext(`captureTargets=[{id:'a',name:'<img onerror=x>',prefix:'<script>',kind:'docker',interfaces:['eth2']}];`,c);c.filterCaptureTargets();assert.doesNotMatch($('capture-target').innerHTML,/<img|<script>/);assert.match($('capture-target').innerHTML,/&lt;img/);
- $('capture-interfaces').checked=[{value:'eth2'}];c.json=async()=>({uri:'javascript:alert(1)'});await $('capture-form').onsubmit({preventDefault(){}});assert.equal($('capture-launch').href,undefined);assert.match($('capture-status').textContent,/Unsupported/);
+ $('capture-interfaces').checked=[{value:'eth2'}];c.json=async()=>({url:'javascript:alert(1)'});await $('capture-form').onsubmit({preventDefault(){}});assert.equal($('capture-launch').href,undefined);assert.match($('capture-status').textContent,/Unsupported/);
 });
 test('every rendered link including coincident nodes exposes both endpoint actions',()=>{
  const {c}=harness();vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/topology-render.js'),'utf8'),c);

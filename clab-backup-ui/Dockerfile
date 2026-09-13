@@ -1,5 +1,5 @@
 FROM python:3.12-slim
-LABEL org.opencontainers.image.version="1.20.1"
+LABEL org.opencontainers.image.version="1.21.0"
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git openssh-client tini \
  && rm -rf /var/lib/apt/lists/*
