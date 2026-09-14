@@ -5,10 +5,11 @@
 A browser workspace for engineers who run network labs with
 [containerlab](https://containerlab.dev). One small container on the lab VM lets you
 deploy a topology, watch the devices boot, open SSH to every node, capture packets in
-Wireshark from the browser, back up device configurations and save lab progress to
-Git. Nothing is installed on your workstation; you only need a browser.
+Wireshark from the browser, watch the network live in Grafana, back up device
+configurations and save lab progress to Git. Nothing is installed on your workstation;
+you only need a browser.
 
-Current release: **1.24.0** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
+Current release: **1.25.0** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
 
 ## What it does
 
@@ -25,11 +26,11 @@ Current release: **1.24.0** · [changelog](docs/CHANGELOG.md) · [all documentat
   and pushes to your Git repository from the VM with your existing login.
 - **See the packets**: Wireshark runs on the VM in an isolated container and streams
   to your browser. Pick a node's port on the map and start.
-- **Watch the network live**: once a node answers, the manager configures its gNMI
-  service if needed, subscribes to interface counters, link state and BGP neighbours,
-  and shows charts in a Telemetry tab and live link colours on the map. The last hour
-  stays in memory only; nothing to configure per router or per lab. Optional Grafana
-  dashboards open in another tab from the same data.
+- **Watch the network live, in Grafana.** Once a node answers, the manager configures
+  its gNMI service if needed and subscribes to interface counters, link state and BGP
+  neighbours. Grafana, installed beside the manager, shows three dashboards per lab and
+  a generated weathermap of the topology with links coloured by traffic; one button in
+  the lab opens it. Nothing to configure per router or per lab.
 - **Stay in step with the VM**: read-only discovery every 30 seconds over a
   restricted SSH account, automatic node addresses, VM file sync, a health report and
   a debug panel.
@@ -54,22 +55,25 @@ More in the [tour](docs/TOUR.md).
 
 You need Ubuntu Server 24.04, your ordinary account (not root), internet access and
 a correct clock. The guided installer adds Docker, containerlab, the restricted
-`clab-discovery` account and the manager itself.
+`clab-discovery` account, the manager, the browser Wireshark stack and the Grafana
+dashboards. Every command in this project works from any directory; the guides
+keep the source in `~/projects/clab-manager`, so replace that path if you clone
+elsewhere.
 
 1. Get the source and start the installer:
 
    ```bash
    command -v git >/dev/null || sudo apt-get install -y git
-   git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git ~/projects/clab-manager
-   bash ~/projects/clab-manager/deploy/install.sh
+   git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/clab-manager"
+   bash "$HOME/projects/clab-manager/deploy/install.sh"
    ```
 
-2. Answer the prompts. `1` at *Setup menu*, *Manager bind/port settings* and *Lab
-   operation access* takes the defaults; say `y` to the plan, enter your sudo
-   password, and create a password for `clab-discovery` when asked (write it down).
-   Choose `2` at *Next step* to set up Git later. The image build takes a few
-   minutes; the installer ends with
-   `Manager 1.24.0: running; HTTP and version checks passed.`
+2. Answer the prompts. `1` at *Setup menu*, *Manager bind/port settings*, *Lab
+   operation access* and *VS Code / Containerlab extension access* takes the
+   defaults; say `y` to the plan, enter your sudo password, and create a password for
+   `clab-discovery` when asked (write it down). Choose `2` at *Next step* to set up
+   Git later. The image build and the two stacks take a few minutes; the installer
+   ends with `Manager 1.25.0: running; HTTP and version checks passed.`
 
 3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.
@@ -77,26 +81,27 @@ a correct clock. The guided installer adds Docker, containerlab, the restricted
 4. Click **Deploy a new lab**, expand `/etc/containerlab`, pick a `.clab.yaml` and
    choose **Deploy lab**. The lab appears in the sidebar at once; the deployment bar
    shows *NOS booting* and then *NOS ready*, SSH opens on each node as it answers,
-   and the login test runs by itself. Open **Telemetry** to watch interface rates and
-   link state stream in; the map colours its links as the nodes report.
+   and the login test runs by itself.
 
-5. Optional, Wireshark in the browser:
+5. Click **Grafana ↗** in the lab header (or open `http://VM_IP:3000`) and watch the
+   interface rates, link state and the lab map fill in as the nodes report. Right-click
+   a node or click a link on the map for **Capture packets**: Wireshark opens in a
+   browser tab.
 
-   ```bash
-   cd ~/projects/clab-manager
-   sudo bash deploy/setup-capture.sh
-   sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui
-   ```
-
-6. Optional, Grafana dashboards in another tab:
+6. Check the installation at any time:
 
    ```bash
-   cd ~/projects/clab-manager
-   sudo bash deploy/setup-telemetry.sh
-   sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui
+   bash "$HOME/projects/clab-manager/deploy/check-install.sh"
    ```
 
-7. Check the installation at any time with `bash deploy/check-install.sh`.
+To upgrade later, pull the new source into the same folder and run the installer
+again. It rebuilds the manager, refreshes both stacks and keeps your data, passwords
+and settings:
+
+```bash
+git -C "$HOME/projects/clab-manager" pull --ff-only
+bash "$HOME/projects/clab-manager/deploy/install.sh"
+```
 
 The [quick install](docs/QUICK-INSTALL.md) lists the same route step by step, the
 [fresh VM guide](docs/FRESH-VM-GUIDE-V2.md) starts before Ubuntu is installed, and
@@ -115,10 +120,11 @@ flowchart LR
         C["containerlab + Docker"]
         N[("Lab nodes<br/>cEOS · Junos · XRv9k")]
         W["Browser capture stack<br/>Edgeshark · session service · Wireshark containers"]
-        T["Optional dashboards<br/>Prometheus · Grafana"]
+        T["Telemetry stack<br/>Prometheus · Grafana dashboards and lab maps · port 3000"]
     end
     R[("Git remote")]
     B -- "HTTP + WebSocket" --> M
+    B -- "HTTP" --> T
     M --- D
     M -- "SSH" --> G --> H --> C --> N
     M -- "SSH terminals · login probes · Ansible · gNMI dial-in" --> N
@@ -132,8 +138,8 @@ The manager never gets a Docker socket or root on the VM. Everything it does on
 the host goes through one SSH account whose only command is a gateway that starts
 three exact helper programs (`sudoers` lists them), and lab commands touch only
 the topology folders you trusted at install time. More diagrams (the VM access
-boundary, the deploy-to-ready sequence, the capture stack and where data lives)
-and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+boundary, the deploy-to-ready sequence, the telemetry path, the capture stack and
+where data lives) and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Documentation
 
@@ -142,19 +148,19 @@ and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | [Tour](docs/TOUR.md) | See the UI and the deploy-to-ready flow in screenshots |
 | [Quick install](docs/QUICK-INSTALL.md) | Follow the shortest route: paste, type, click |
 | [Fresh VM guide](docs/FRESH-VM-GUIDE-V2.md) | Build a VM from Proxmox settings to the first Git save, with recovery steps |
-| [Guided installation](docs/INSTALL.md) | Understand the installer's menu and phases |
+| [Guided installation](docs/INSTALL.md) | Understand the installer's menu and phases, upgrades and the two stacks |
 | [VM connection](docs/VM-CONNECTION.md) | Set up or repair the `clab-discovery` account and password |
 | [Lab operations](docs/LAB-OPERATIONS.md) | Deploy, destroy, inspect, edit diagrams, read NOS readiness |
 | [Git setup](docs/GIT-SETUP.md) and [Save lab progress](docs/GIT-PROGRESS.md) | Register a checkout and save, checkpoint, load and push |
-| [Browser Wireshark](docs/CAPTURE.md) | Install the capture stack, run sessions, download captures |
-| [Network telemetry](docs/TELEMETRY.md) | Enable automatic gNMI telemetry, read the charts and the live map, per-NOS support and the live acceptance procedure |
-| [Grafana lab map](docs/GRAFANA-MAP.md) | The generated weathermap per lab in Grafana: what a new lab gets by itself, what you still craft, how to make your own variant |
+| [Browser Wireshark](docs/CAPTURE.md) | Run capture sessions, download captures, repair or remove the capture stack |
+| [Network telemetry](docs/TELEMETRY.md) | Understand what the manager collects, the Grafana dashboards, per-NOS support and the live acceptance procedure |
+| [Grafana lab map](docs/GRAFANA-MAP.md) | The generated weathermap per lab: what a new lab gets by itself, what you still craft, how to make your own variant |
 | [Health check](docs/HEALTH-CHECK.md) and [Debug panel](docs/DEBUG-PANEL.md) | Read `check-install.sh` results and diagnose helpers |
 | [Architecture](docs/ARCHITECTURE.md) | See how the pieces connect and which module does what |
 | [Changelog](docs/CHANGELOG.md) | Read what changed in each release |
 
-The [documentation index](docs/README.md) lists everything, including the Docker Hub
-route, the migration guide, the Wiki.js master guide and the archive.
+The [documentation index](docs/README.md) lists everything, including the manual
+setup and migration guide, the Wiki.js master guide, the release rules and the archive.
 
 ## Repository layout
 
@@ -164,7 +170,7 @@ route, the migration guide, the Wiki.js master guide and the archive.
 ├── docs/                    guides, architecture, changelog, tour (docs/README.md is the index)
 │   ├── images/              screenshots used by the README and the tour
 │   └── archive/             superseded guides kept for history
-├── deploy/                  installer, VM setup scripts, health check, capture stack, CI smoke test
+├── deploy/                  installer, VM setup scripts, health check, capture and telemetry stacks, release checks, CI smoke tests
 ├── clab-backup-ui/          the manager: FastAPI app, static UI, Dockerfile, Compose file, tests
 │   ├── app/                 application modules; host_*.py are the helpers installed on the VM
 │   ├── app/static/          the UI (vanilla JavaScript, no build step)
@@ -175,19 +181,22 @@ route, the migration guide, the Wiki.js master guide and the archive.
 
 ## Development
 
-Tests run without a VM. From `clab-backup-ui`:
+Tests run without a VM. The unit tests import the application from the folder they
+live next to, so the one command that needs a working directory changes into it
+itself:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt httpx
-.venv/bin/python -m unittest discover -s tests -t tests
-node --test tests/*.js
+python3 -m venv "$HOME/projects/clab-manager/clab-backup-ui/.venv"
+"$HOME/projects/clab-manager/clab-backup-ui/.venv/bin/pip" install -r "$HOME/projects/clab-manager/clab-backup-ui/requirements.txt" httpx
+(cd "$HOME/projects/clab-manager/clab-backup-ui" && .venv/bin/python -m unittest discover -s tests -t tests && node --test tests/*.js)
 ```
 
-`python deploy/verify-release.py` checks that every file carrying the release
-number agrees with `clab-backup-ui/VERSION`; the CI workflow runs it, the test
-suites and a real browser-capture smoke test on every push. Release rules, packaging
-limits and the version-bump checklist are in
+`python3 deploy/verify-release.py` checks that every file carrying the release
+number agrees with `clab-backup-ui/VERSION` and that the guides name only the current
+release; `python3 deploy/set-release.py NEW` moves every marker for the next release.
+The CI workflow runs the checks, the test suites and real browser-capture and
+Grafana smoke tests on every push. Release rules, the documentation conventions and
+the version-bump checklist are in
 [docs/REPOSITORY-MAINTENANCE.md](docs/REPOSITORY-MAINTENANCE.md); each release's
 evidence is in [clab-backup-ui/VALIDATION.md](clab-backup-ui/VALIDATION.md).
 Agents working on the code start with [agent instructions.md](agent%20instructions.md).
@@ -196,8 +205,9 @@ Agents working on the code start with [agent instructions.md](agent%20instructio
 
 [MIT](LICENSE). The browser capture stack adapts Siemens Edgeshark (MIT) and runs the
 SR Labs Wireshark container; the UI vendors xterm.js (MIT); telemetry uses pygnmi
-(BSD-3) and optionally runs Prometheus (Apache-2.0) and Grafana OSS (AGPL-3.0). Their
-notices are in [deploy/CAPTURE-THIRD-PARTY-NOTICES.md](deploy/CAPTURE-THIRD-PARTY-NOTICES.md),
+(BSD-3) and runs Prometheus (Apache-2.0), Grafana OSS (AGPL-3.0) and the Flow panel
+plugin (Apache-2.0). Their notices are in
+[deploy/CAPTURE-THIRD-PARTY-NOTICES.md](deploy/CAPTURE-THIRD-PARTY-NOTICES.md),
 [deploy/TELEMETRY-THIRD-PARTY-NOTICES.md](deploy/TELEMETRY-THIRD-PARTY-NOTICES.md) and
 [clab-backup-ui/app/static/vendor/](clab-backup-ui/app/static/vendor/README.md).
 Vendor network OS images are licensed separately by their vendors.

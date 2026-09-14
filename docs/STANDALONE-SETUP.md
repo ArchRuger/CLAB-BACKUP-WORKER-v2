@@ -1,12 +1,11 @@
-# Standalone persistent Node Manager — 1.15.1
+# Manual setup and migration
 
-For Git publishing, use the VM account you already have. Once the manager and a
-device backup work, run `bash deploy/setup-git.sh` without sudo from this source
-directory. Follow [GIT-SETUP.md](GIT-SETUP.md); no additional Linux user is needed.
-
-> Already pulled the release image from Docker Hub? Use [DOCKER-HUB-SETUP.md](DOCKER-HUB-SETUP.md)
-> for a launch that uses that image without rebuilding it, plus the required host-helper setup.
-
+The guided installer (`bash "$HOME/projects/clab-manager/deploy/install.sh"`, see
+[INSTALL.md](INSTALL.md)) runs everything on this page for you. Read it when you
+want the pieces one by one on an already prepared Linux host, when you are moving
+data out of the older in-lab worker container, or when you want to launch a
+prebuilt image instead of building one. Every command works from any directory;
+the source folder is `~/projects/clab-manager`.
 
 Run one manager per engineer's Linux VM. It is a separate Docker Compose service,
 outside every containerlab topology. Lab deployment/destruction does not manage
@@ -15,15 +14,14 @@ fixed discovery and explicitly enabled privileged lab commands. It does not moun
 the Docker socket. See [LAB-OPERATIONS.md](LAB-OPERATIONS.md) to enable commands
 and configure trusted project roots while retaining the current password.
 
-For a VM with nothing installed, begin with [the complete fresh VM guide](archive/FRESH-VM-GUIDE.md).
-This shorter guide covers an already prepared Linux host and old-worker migration.
+For Git publishing, use the VM account you already have. Once the manager and a
+device backup work, run `bash "$HOME/projects/clab-manager/deploy/setup-git.sh"`
+without sudo. Follow [GIT-SETUP.md](GIT-SETUP.md); no additional Linux user is needed.
 
 ## 1. Prepare permanent storage
 
-From this source repository on the Linux VM:
-
 ```bash
-sudo bash deploy/setup-vm.sh
+sudo bash "$HOME/projects/clab-manager/deploy/setup-vm.sh"
 ```
 
 This creates `/srv/containerlab-node-manager/data`, owned by UID/GID 10001 with
@@ -46,7 +44,7 @@ Do this **before starting the new manager**, while the destination is empty.
 For the previously supplied BGP lab:
 
 ```bash
-sudo bash deploy/migrate-worker-data.sh clab-BGP_TheoryToPractice-Backup-Worker
+sudo bash "$HOME/projects/clab-manager/deploy/migrate-worker-data.sh" clab-BGP_TheoryToPractice-Backup-Worker
 ```
 
 Use your actual old container name. The script stops only that container, copies
@@ -76,31 +74,33 @@ running before discovery is configured. No migration automatically resets schedu
 
 ## 3. Build and start the independent manager
 
-After configuring the discovery account in section 4 (or the fresh VM guide),
-run from the repository root:
+After configuring the discovery account in section 4, run the launcher. It also
+installs the browser Wireshark stack and the Grafana dashboards (skip them with
+`--manager-only`):
 
 ```bash
-sudo bash deploy/start-manager.sh
-docker compose -f clab-backup-ui/compose.yml exec backup-ui \
+sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh"
+sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" exec backup-ui \
   python -c "from app import __version__; print(__version__)"
-docker compose -f clab-backup-ui/compose.yml logs backup-ui
+sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" logs backup-ui
 ```
 
-Expect version **1.15.1**. Open `http://VM_ADDRESS:8081`; no UI login is required.
-See [VM connection setup and troubleshooting](VM-CONNECTION.md).
+Expect the release in `clab-backup-ui/VERSION`. Open `http://VM_ADDRESS:8081`; no UI
+login is required. See [VM connection setup and troubleshooting](VM-CONNECTION.md).
 Docker must start at VM boot; `restart: unless-stopped` restarts the manager with
 Docker unless you explicitly stopped it.
 
-Equivalent image-only build, from the repository root:
+Equivalent image-only build, tagged with the release:
 
 ```bash
-docker build --pull --no-cache -t clab-backup:1.15.1 ./clab-backup-ui
+sudo docker build --pull --no-cache -t "clab-backup:$(cat "$HOME/projects/clab-manager/clab-backup-ui/VERSION")" "$HOME/projects/clab-manager/clab-backup-ui"
 ```
 
 The final path is the required build context. Builds require the base image and
 Debian/Python/Ansible dependencies or internal mirrors. In an airgapped environment,
 build on a connected build host, then transfer the image with `docker save`/`docker load`.
-After loading it, start Compose with `up -d --no-build`.
+After loading it, launch it with `deploy/compose.image.yml` as described in the
+[master guide's airgapped section](WIKI-MASTER-GUIDE.md#part-20).
 
 Host networking shares the VM's network namespace. The UI binds directly to port
 8081, and the manager can reach node addresses that are reachable from the VM.
@@ -114,7 +114,7 @@ SSH readiness still apply; deployment status is not proof of a successful NOS lo
 On the VM, in an interactive administrator terminal, create the account password:
 
 ```bash
-sudo bash deploy/setup-discovery.sh
+sudo bash "$HOME/projects/clab-manager/deploy/setup-discovery.sh"
 ```
 
 Setup prompts twice without echo. The Linux account hash persists in /etc/shadow;
@@ -162,7 +162,7 @@ if you want to test immediate rediscovery. Both paths require confirmation befor
 a new workspace is saved; cancelling Import again retains its exclusion. Other labs and the VM connection remain.
 
 
-The 1.15.1 helper reads deployed lab files automatically. New labs wait for
+The installed helper reads deployed lab files automatically. New labs wait for
 confirmation: click Ready to import, review files, and choose Import lab or Cancel. Existing
 workspaces show Updates available and offer **Sync from VM**, preserving matching
 node settings, credentials, profiles, schedules and history. Missing files never
@@ -170,21 +170,21 @@ delete a saved workspace. Optional files must be valid and match the YAML; inval
 files block sync without partial changes. A missing annotation retains an existing
 map. Original YAML is required. New labs can import the YAML while reporting an
 invalid optional file; credentials from a mismatched inventory are skipped.
-Old inspection-only helpers discover nodes only. Update the helper for 1.15.1.
-The standard generated folder beside the YAML is tried even without Docker labels.
-**Discovery file details** shows paths and results; clicking a detected lab retries
-automatic import before offering manual upload.
+Old inspection-only helpers discover nodes only; the launcher installs the matching
+helper. The standard generated folder beside the YAML is tried even without Docker
+labels. **Discovery file details** shows paths and results; clicking a detected lab
+retries automatic import before offering manual upload.
 
-Normal setup/upgrades use `sudo bash deploy/start-manager.sh`, which updates and
-verifies the helper before building/recreating the manager. It preserves existing
+Normal setup/upgrades use the installer or the launcher, which update and verify
+the helper before building/recreating the manager. They preserve existing
 passwords/data. First launch prompts for a password when needed.
 For a helper-only repair (including password migration when needed):
 
 ```bash
-sudo bash deploy/setup-discovery.sh --update-helper
+sudo bash "$HOME/projects/clab-manager/deploy/setup-discovery.sh" --update-helper
 ```
 
-See [the complete guide](archive/FRESH-VM-GUIDE.md) for file locations, limits, fresh setup,
+See the [master guide](WIKI-MASTER-GUIDE.md) for file locations, limits,
 Docker-run-to-Compose upgrades and troubleshooting. Manual import remains available:
 
 
@@ -238,10 +238,10 @@ still be accessed individually. Legacy unlinked inventory behavior is retained.
 For a consistent full backup, briefly stop the manager (lab nodes keep running):
 
 ```bash
-docker compose -f clab-backup-ui/compose.yml stop backup-ui
+sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" stop backup-ui
 sudo tar -C /srv/containerlab-node-manager -czf \
   /root/node-manager-data-$(date +%Y%m%d-%H%M%S).tgz data
-docker compose -f clab-backup-ui/compose.yml start backup-ui
+sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" start backup-ui
 ```
 
 Restore into an empty data directory with the manager stopped. Restore the complete
@@ -249,10 +249,11 @@ Restore into an empty data directory with the manager stopped. Restore the compl
 directory mode 0700. Start one manager and verify its labs/history. Persistence
 survives container changes, not destruction of the VM disk without a backup.
 
-To update the manager, retain the same host directory, build/load the new image,
-and run Compose `up -d --no-build --force-recreate`. Stop or remove the old lab worker
-first to avoid duplicate schedules or a port conflict. Imported workspaces and
-backups remain. No router configuration is automatically restored by this feature.
+To update the manager, retain the same host directory and run the installer or the
+launcher again; for a prebuilt image, load it and recreate the container with the
+image Compose file. Stop or remove the old lab worker first to avoid duplicate
+schedules or a port conflict. Imported workspaces and backups remain. No router
+configuration is automatically restored by this feature.
 
 For golden VM templates, provision the empty directory and software, then initialize
 each engineer's manager and VM password separately. Cloning initialized data also clones

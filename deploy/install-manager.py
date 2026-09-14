@@ -203,6 +203,28 @@ def engineer_access(env):
           '"Remote-SSH: Kill VS Code Server on Host..." then reconnect before using the Containerlab extension.')
 
 
+def stack_command(name):
+    # Same privileged environment as the launcher: the local rootful daemon, never a remote context.
+    return ['sudo', 'env', 'DOCKER_HOST=unix:///var/run/docker.sock', 'bash', str(SOURCE / 'deploy' / name)]
+
+
+def capture_stack(env):
+    # Browser Wireshark: Edgeshark discovery, the session service built from this source and the
+    # pinned Wireshark image. Part of every installation; the script recreates the manager itself.
+    command_step(stack_command('setup-capture.sh'), env)
+
+
+def telemetry_stack(env):
+    # Grafana dashboards and the generated lab maps, fed by the manager's telemetry collector.
+    command_step(stack_command('setup-telemetry.sh'), env)
+
+
+def stacks(env):
+    phase('Browser Wireshark capture stack', lambda: capture_stack(env))
+    phase('Grafana dashboards and lab maps', lambda: telemetry_stack(env))
+    print('Wireshark opens from the map (Capture packets); Grafana is on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM.')
+
+
 def verify_manager(env, version):
     # A source build can outlast sudo's timestamp; renew on the real terminal
     # before checks that deliberately capture output and have no stdin.
@@ -240,28 +262,35 @@ def install(env, version):
     print('  Existing password/data retained; first setup asks you to create the password.')
     print('  Rebuild/recreate only the manager; existing lab containers remain in place.')
     print('  Lab operations: ' + ('enabled with default trusted roots' if operations == '1' else 'existing permissions retained'))
+    print('  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).')
+    print('  Grafana dashboards: pull Prometheus and Grafana, install the Flow panel, provision the dashboards and lab maps (TCP 3000).')
     print('  Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'))
     print('  Settings: ' + ('copy ' + str(env_source) if env_source else 'retain current .env or use defaults'))
     print('  Installation-media APT repair: ' + ('enabled with backup' if repair else 'not selected'))
     print('  Check running version/HTTP, then offer Git setup under ' + env['USER'] + '.')
     if not confirm('Proceed with this plan?'):
         raise Cancelled()
-    total = '5' if engineer == '1' else '4'
+    total = '7' if engineer == '1' else '6'
     phase('1/' + total + ' Administrator access and settings', lambda: command_step(['sudo', '-v'], env))
     copy_env(env_source)
     prereqs = ['sudo', 'bash', str(SOURCE / 'deploy/install-prerequisites.sh'), '--docker', '--containerlab']
     if repair:
         prereqs.append('--repair-install-media')
     phase('2/' + total + ' VM prerequisites', lambda: command_step(prereqs, env))
+    # The two stacks are separate phases so a failed image pull or plugin download is retried
+    # on its own instead of repeating the password, helper and image-build step.
     launch = ['sudo', 'env', 'DOCKER_HOST=unix:///var/run/docker.sock',
-              'bash', str(SOURCE / 'deploy/start-manager.sh')]
+              'bash', str(SOURCE / 'deploy/start-manager.sh'), '--manager-only']
     if operations == '1':
         launch.append('--enable-operations')
     phase('3/' + total + ' Password, helpers, image and manager', lambda: command_step(launch, env))
-    phase('4/' + total + ' Running manager verification', lambda: verify_manager(env, version))
+    phase('4/' + total + ' Browser Wireshark capture stack', lambda: capture_stack(env))
+    phase('5/' + total + ' Grafana dashboards and lab maps', lambda: telemetry_stack(env))
+    phase('6/' + total + ' Running manager verification', lambda: verify_manager(env, version))
     if engineer == '1':
-        phase('5/5 Engineer access for VS Code', lambda: engineer_access(env))
+        phase('7/7 Engineer access for VS Code', lambda: engineer_access(env))
     print('\nManager installation is ready. Git is a separate setup step under your ordinary account.')
+    print('Wireshark opens from the map (Capture packets); Grafana is on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM.')
     if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
         git_setup(env)
     print('In VM connection use clab-discovery and the password you created. Verify the host fingerprint.')
@@ -291,8 +320,9 @@ def main(argv=None):
         choice = menu('Setup menu', [('1', 'Install or update manager, then set up Git'),
                       ('2', 'Git setup / repair only (no rebuild)'),
                       ('3', 'VS Code / Containerlab extension access for ' + account.pw_name + ' (no rebuild)'),
-                      ('4', 'Check running installation'), ('5', 'Exit')])
-        if choice == '5':
+                      ('4', 'Browser Wireshark and Grafana stacks only (reinstall or upgrade both, no rebuild)'),
+                      ('5', 'Check running installation'), ('6', 'Exit')])
+        if choice == '6':
             return 0
         try:
             if choice == '1':
@@ -301,6 +331,8 @@ def main(argv=None):
                 git_setup(env)
             elif choice == '3':
                 phase('Engineer access for VS Code', lambda: engineer_access(env))
+            elif choice == '4':
+                stacks(env)
             else:
                 health_report(env)
         except Cancelled:

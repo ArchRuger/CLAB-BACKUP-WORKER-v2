@@ -137,6 +137,34 @@ class InstallManagerTests(unittest.TestCase):
             else:
                 self.assertEqual(engineer, [])
 
+    def test_wireshark_and_grafana_stacks_are_standard_phases_between_launch_and_verification(self):
+        order = []
+
+        def record(args, env, capture=False):
+            order.append(' '.join(args))
+            return subprocess.CompletedProcess([], 0)
+
+        with patch.object(install, 'choose_env_copy', return_value=None), patch.object(install, 'menu', side_effect=['1', '2', '2']), \
+                patch.object(install, 'confirm', side_effect=[False, True]), patch.object(install, 'copy_env'), \
+                patch.object(install, 'verify_manager', side_effect=lambda env, version: order.append('verify')), \
+                patch.object(install, 'run', side_effect=record):
+            install.install({'USER': 'owner', 'HOME': '/home/owner'}, '1.25.0')
+        launch = next(i for i, c in enumerate(order) if 'start-manager.sh' in c)
+        capture = next(i for i, c in enumerate(order) if 'setup-capture.sh' in c)
+        grafana = next(i for i, c in enumerate(order) if 'setup-telemetry.sh' in c)
+        self.assertIn('--manager-only', order[launch], 'the launcher leaves the stacks to their own retryable phases')
+        self.assertEqual([launch, capture, grafana, order.index('verify')], sorted([launch, capture, grafana, order.index('verify')]))
+        for index in (capture, grafana):
+            self.assertTrue(order[index].startswith('sudo env DOCKER_HOST=unix:///var/run/docker.sock bash ' + str(install.SOURCE / 'deploy')))
+            self.assertNotIn('--no-recreate', order[index], 'standalone stack setup recreates the manager itself')
+
+    def test_stack_menu_reinstalls_both_stacks_without_a_rebuild(self):
+        commands = []
+        with patch.object(install, 'run', side_effect=lambda args, env, capture=False: (commands.append(' '.join(args)), subprocess.CompletedProcess([], 0))[1]):
+            install.stacks({'USER': 'owner'})
+        self.assertEqual([c for c in commands if 'start-manager.sh' in c], [])
+        self.assertTrue(any('setup-capture.sh' in c for c in commands) and any('setup-telemetry.sh' in c for c in commands))
+
     def test_declined_plan_runs_no_commands_and_copies_no_settings(self):
         with patch.object(install, 'choose_env_copy', return_value=None), \
                 patch.object(install, 'menu', return_value='1'), \

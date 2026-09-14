@@ -246,8 +246,8 @@ class TelemetryManagerTests(unittest.TestCase):
         r1 = self.node_view('clab-demo-r1')
         self.assertEqual(r1['state'], 'stale'); self.assertFalse(r1['fresh']); self.assertIsNone(r1['interfaces'][0]['rx_bps'])
         self.assertEqual(r1['interfaces'][0]['totals']['in-octets'], 2000, 'recent history stays available')
-        points = self.client.get('/api/labs/lab/telemetry/series', params={'node': 'clab-demo-r1', 'interface': 'Ethernet1', 'window': 300}).json()['points']
-        self.assertEqual(len(points), 2)
+        # The bounded rate history stays in the store for Prometheus' next scrape; the UI draws no charts.
+        self.assertEqual(len(self.manager.data.series('lab', 'clab-demo-r1', 'Ethernet1', 300)), 2)
         collector.push(time.time(), 'Ethernet1', {'in-octets': 3000}); self.drain()
         self.assertEqual(self.node_view('clab-demo-r1')['state'], 'streaming')
         collector.alive = False; self.scan()
@@ -295,14 +295,13 @@ class TelemetryManagerTests(unittest.TestCase):
         self.assertIn('telemetry.settings', self.logs())
         self.assertEqual(self.client.put('/api/labs/lab/telemetry/settings', json={'auto': True, 'extra': 1}).status_code, 422)
 
-    def test_series_api_validates_input_and_stays_bounded(self):
+    def test_view_api_stays_bounded_and_the_chart_routes_are_gone(self):
         self.scan(); self.stream('clab-demo-r1')
-        ok = self.client.get('/api/labs/lab/telemetry/series', params={'node': 'clab-demo-r1', 'interface': 'Ethernet1', 'window': 900}).json()
-        self.assertEqual(ok['interval'], 10); self.assertEqual(len(ok['points']), 2); self.assertEqual(ok['points'][1]['rx_bps'], 800.0)
-        self.assertEqual(self.client.get('/api/labs/lab/telemetry/series', params={'node': 'clab-demo-r1', 'interface': 'Ethernet1', 'window': 42}).status_code, 400)
-        self.assertEqual(self.client.get('/api/labs/lab/telemetry/series', params={'node': 'ghost', 'interface': 'Ethernet1'}).status_code, 404)
-        self.assertEqual(self.client.get('/api/labs/lab/telemetry/series', params={'node': 'clab-demo-r1', 'interface': 'x' * 65}).status_code, 422)
-        self.assertEqual(self.client.get('/api/labs/lab/telemetry/series', params={'node': 'clab-demo-r1', 'interface': 'Ethernet9'}).status_code, 404)
+        view = self.view()
+        self.assertEqual(view['nodes'][0]['interfaces'][0]['rx_bps'], 800.0); self.assertNotIn('windows', view)
+        self.assertEqual(set(view['grafana']), {'enabled', 'port', 'prometheus_port', 'map_uid'})
+        # Charts moved to Grafana: the per-series routes no longer exist.
+        self.assertEqual(self.client.get('/api/labs/lab/telemetry/series', params={'node': 'clab-demo-r1', 'interface': 'Ethernet1'}).status_code, 404)
         self.assertEqual(self.client.get('/api/labs/lab/telemetry/bgp-series', params={'node': 'clab-demo-r1', 'peer': '10.0.0.2'}).status_code, 404)
         self.assertEqual(self.client.get('/api/labs/nope/telemetry').status_code, 404)
         self.assertEqual(self.client.get('/api/labs/lab/telemetry', headers={'Origin': 'https://other.example'}).status_code, 403)

@@ -1,33 +1,41 @@
-# Network telemetry — 1.24.0
+# Network telemetry
 
 Live interface rates, link state and BGP neighbour state from the nodes of a
-deployed lab, collected automatically and kept in memory for the last hour. No
-collector to install, no target files, no dashboards to build per lab: enable
-telemetry once, deploy, and watch the charts and the map follow what you do on the
+deployed lab, collected by the manager and shown in Grafana. No collector to install
+by hand, no target files, no dashboards to build per lab: deploy the lab, click
+**Grafana ↗**, and watch the dashboards and the lab map follow what you do on the
 routers.
 
 ## What you get
 
-- **Telemetry tab** in the lab workspace: a lab-level verdict, one card per node
-  with its state and the reason, an interface table (admin/oper state, RX/TX bit
-  rate, packet rate, error and discard counters, last sample), charts for the
-  selected interface over the last 5, 15 or 60 minutes, and a BGP neighbour table
-  with session state and received/sent prefix counts where the node exposes them.
-- **Live link state on the topology map**: green for up, red for down, dashed
-  green when only one end is observed, amber dashes for stale and grey dots for no
-  telemetry. Hovering a link shows both ends with their rates. A right-click on a
-  link offers *Capture packets* and *Telemetry* for either end; the node menu and
-  the node details drawer have a *View telemetry* entry that opens the tab already
-  filtered.
-- **Nothing persistent**: samples live in a bounded ring per interface and
-  neighbour in the manager's memory. A browser refresh changes nothing; a manager
-  restart, a stop, destroy, redeploy or removal clears the lab's session.
+- **Grafana on the VM**, installed beside the manager by the installer and reachable
+  on `http://VM_IP:3000`. Three provisioned dashboards, each filtered by lab:
+  **Lab overview** (node and link states, per-node traffic, errors), **Interfaces**
+  (bit and packet rates, errors and discards, an operational-state timeline, an
+  interface table, by node and interface) and **BGP neighbours** (session table,
+  established timeline, prefixes received and sent). The folder **Lab maps** holds
+  one generated weathermap per lab, links coloured and animated by traffic, port and
+  node dots by state; see [GRAFANA-MAP.md](GRAFANA-MAP.md). Anyone who reaches the
+  port is a read-only Viewer; editing needs the `admin` login whose password is in
+  `clab-backup-ui/.env` (`TELEMETRY_GRAFANA_ADMIN_PASSWORD`).
+- **One button in the manager.** The lab header shows **Lab map in Grafana ↗** when
+  the lab has a drawing, else **Grafana ↗** for the lab overview, both filtered to the
+  lab and opened in a new tab on the manager's own host name. The manager's own map
+  shows the imported wiring; live state is Grafana's job.
+- **Telemetry settings** under **Lab actions**: automatic telemetry on or off for the
+  lab, the gNMI login profile, removal of the configuration lines the manager added,
+  the reason a node is not streaming, and a retry for failed nodes.
+- **Nothing persistent in the manager.** Samples live in a bounded ring per interface
+  and neighbour in the manager's memory (the last hour) so that Prometheus can scrape
+  rates and states every 10 seconds; Prometheus keeps two hours on tmpfs. A manager
+  restart, a stop, destroy, redeploy or removal of the lab clears its session; a VM
+  reboot clears Grafana's history.
 
 ## How it works
 
 ```mermaid
 sequenceDiagram
-    participant U as Browser
+    participant G as Grafana / Prometheus
     participant M as Manager
     participant N as NOS (cEOS, XRv9k, cJunosEvolved)
     Note over M: readiness monitor records "show version" answered
@@ -39,13 +47,15 @@ sequenceDiagram
         N-->>M: interface counters, oper/admin state, BGP neighbour state and prefixes
         M->>M: normalise, derive rates from deltas, keep 60 minutes in memory
     end
-    U->>M: GET /api/labs/{id}/telemetry (every 5 s while the tab or map is open)
-    M-->>U: node states, interface rows, link states, chart series
+    loop every 10 s
+        G->>M: GET /api/telemetry/metrics (Prometheus text format)
+        M-->>G: node states, interface rates and counters, link states, BGP neighbours
+    end
 ```
 
 1. **Readiness first.** A node is touched only after the readiness monitor has
-   recorded a real `show version` answer over SSH (the *NOS ready* state of 1.22.0).
-   A running container is not a ready NOS.
+   recorded a real `show version` answer over SSH (the *NOS ready* state). A running
+   container is not a ready NOS.
 2. **Provisioning over SSH**, with the node's saved login (profile, inventory or
    the containerlab default), reads the current service configuration and adds
    only what is missing, using each NOS's own scoped commit:
@@ -70,9 +80,9 @@ sequenceDiagram
    transport recorded on the node is tried first (plain text on all three kinds by
    default; TLS with the device's own certificate, unverified, where a user configured
    it on EOS or Junos) and the other one is probed only after a transport error, never
-   after a login refusal. Encodings are chosen from the
-   node's capabilities in the adapter's preference order; a rejected subscription
-   falls back to the next path variant (leaf paths, then the state container).
+   after a login refusal. Encodings are chosen from the node's capabilities in the
+   adapter's preference order; a rejected subscription falls back to the next path
+   variant (leaf paths, then the state container).
 4. **Normalisation.** Records carry the lab, the node, a generation (one per boot
    cycle and provisioning attempt), the interface or neighbour, the metric, the
    device timestamp (or receive time when the device clock is off by more than five
@@ -80,48 +90,52 @@ sequenceDiagram
    counter deltas over the elapsed receive time; the device timestamp only orders
    the samples of one leaf. That distinction matters on cEOS, which stamps every
    notification with the last change time of the leaves it carries: one 10 s cycle
-   arrives as several notifications whose timestamps differ by minutes (idle
-   counters, changing counters and interface state each in their own), and ordering
-   a whole interface on one clock discarded half of them. A counter that goes
-   backwards is a reset (no rate, counted per interface), the first sample and a
-   sample after a gap longer than five minutes produce no rate, a sample older than
-   the last accepted sample of the same leaf is ignored, and a record from another
-   generation is dropped, so a previous deployment with the same node name and
-   address can never feed the new one.
+   arrives as several notifications whose timestamps differ by minutes. A counter
+   that goes backwards is a reset (no rate, counted per interface), the first sample
+   and a sample after a gap longer than five minutes produce no rate, a sample older
+   than the last accepted sample of the same leaf is ignored, and a record from
+   another generation is dropped, so a previous deployment with the same node name
+   and address can never feed the new one.
+5. **Exposition.** `/api/telemetry/metrics` renders the current snapshot in the
+   Prometheus text format: names, states and rates only, never addresses, logins or
+   configuration. Stale series keep their state but drop their rates.
 
 **Streaming** means usable samples arrived. A successful login or a successful
 commit alone leaves the node in *Configuring* or *Connecting*.
 
 ## Node states
 
+The state of every node is shown in **Lab actions → Telemetry settings…** (with the
+reason for failed and stale nodes), in the Lab overview dashboard as the node state
+code, and by the health check.
+
 | State | Meaning | What to do |
 |---|---|---|
-| Off | Automatic telemetry is off (or not yet enabled) for this lab, or the collector is disabled in the manager environment | Enable it in the Telemetry tab |
+| Off | Automatic telemetry is off (or not yet enabled) for this lab, or the collector is disabled in the manager environment | Turn it on in Telemetry settings |
 | Waiting | The node is not running, discovery is stale, the NOS has not answered `show version`, or a lab operation/backup job is running | Nothing; it proceeds by itself |
 | Configuring | An SSH session is reading and, if needed, adding the telemetry service | Nothing |
 | Connecting | gNMI connected or connecting; subscriptions not yet delivering | Nothing; becomes Streaming or Failed |
-| Streaming | Usable samples are arriving | Use the charts and the map |
+| Streaming | Usable samples are arriving | Open Grafana |
 | Stale | No sample for more than 45 s while the session is open; recent history stays visible until it ages out | Check the node; the session reconnects by itself |
-| Unsupported | No adapter for this kind (only cEOS, XRv9k and cJunosEvolved have one) | Nothing; its links show as *no telemetry* |
-| Failed | A concrete reason: login refused, port unreachable, NOS rejected the configuration, gNMI needs a password login, enable password missing | Fix it and press *Retry now*; retries also happen by themselves with a growing delay (15 s to 5 min) |
+| Unsupported | No adapter for this kind (only cEOS, XRv9k and cJunosEvolved have one) | Nothing; its links stay grey on the map |
+| Failed | A concrete reason: login refused, port unreachable, NOS rejected the configuration, gNMI needs a password login, enable password missing | Fix it and press *Retry failed nodes*; retries also happen by themselves with a growing delay (15 s to 5 min, 30 s at most for an unreachable port) |
 
 A partially supported node (for example interfaces streaming, BGP model not
-advertised) stays *Streaming* and shows the BGP group as unavailable. A group whose
+advertised) stays *Streaming* and reports the BGP group as unavailable. A group whose
 path has nothing behind it (BGP subscribed on a node without neighbours) shows
 *idle* after two quiet minutes: the subscription stays open and turns streaming
-when a neighbour appears. Unsupported metrics show as `n/a`, never as zero.
+when a neighbour appears. Unsupported metrics are absent, never zero.
 
 ## Settings
 
-Open **Telemetry → Telemetry settings**:
+Open **Lab actions → Telemetry settings…**:
 
-- **Automatic telemetry**: on by default for labs created with 1.23.0 or later
-  (deploy, import, YAML registration or inventory upload). Labs saved earlier show
-  *Automatic telemetry is not enabled for this lab yet* with an **Enable automatic
-  telemetry** button; nothing is written to a device before that click. Once on,
-  setup and recovery proceed without further confirmations. Turning it off stops
-  collection and provisioning and clears the lab's buffers; it leaves the device
-  configuration as it is.
+- **Automatic telemetry**: on by default for labs created since 1.23.0 (deploy,
+  import, YAML registration or inventory upload). Labs saved earlier show *This lab
+  was saved before automatic telemetry existed*; nothing is written to a device before
+  you tick the box and save. Once on, setup and recovery proceed without further
+  confirmations. Turning it off stops collection and provisioning and clears the
+  lab's buffers; it leaves the device configuration as it is.
 - **gNMI login**: by default each node's saved password login (profile, inventory
   or containerlab default). gNMI cannot use an SSH key, so a node whose profile is
   key-based needs a password profile chosen here; the node reports *Failed* with
@@ -130,10 +144,11 @@ Open **Telemetry → Telemetry settings**:
   off. It removes, over SSH and on running nodes only, exactly the lines the manager
   recorded as its own (`no transport grpc default`, `no grpc`, `delete … grpc
   clear-text`), never a transport or service the user configured.
+- **Retry failed nodes** re-checks every failed or stale node at once.
 
 The manager environment variable `TELEMETRY_COLLECTOR` (`gnmi`, the default, or
 `disabled`) turns the collector off globally; `compose.yml` reads it from
-`clab-backup-ui/.env`.
+`clab-backup-ui/.env`. With the collector off, Grafana stays empty.
 
 ## Per-NOS support
 
@@ -146,21 +161,21 @@ The manager environment variable `TELEMETRY_COLLECTOR` (`gnmi`, the default, or
 | BGP neighbours | `/network-instances/…/bgp/neighbors/neighbor/state/session-state` and `afi-safis/afi-safi/state/prefixes` | same with the `openconfig-network-instance:` origin | same, when the image advertises the model |
 | Encodings tried | JSON_IETF, JSON, PROTO | JSON_IETF, PROTO | JSON_IETF, PROTO |
 | Wiring name mapping | `eth1` → `Ethernet1`, `eth1_1` → `Ethernet1/1` | `eth1` → `GigabitEthernet0/0/0/0`, `Gi0/0/0/N` accepted | `eth4` → `et-0/0/0` (eth1–3 reserved), `et-0/0/N[.unit]` accepted |
-| Validation status (1.23.1) | live on the dev VM (cEOS 4.35.0F): provisioning check, streaming, rates under traffic, link colours, shutdown/no shutdown, node restart, Grafana | fixture and in-process gNMI server only | fixture and in-process gNMI server only |
+| Validation status | live on the dev VM (cEOS 4.35.0F): provisioning check, streaming, rates under traffic, map colours, shutdown/no shutdown, node restart, Grafana | fixture and in-process gNMI server only | fixture and in-process gNMI server only |
 
 Other kinds (vQFX, vJunos-switch, Linux, unmapped) report *Unsupported* and their
-links show as *no telemetry*.
+links stay grey on the lab map.
 
 ## Bounds
 
 | Limit | Value |
 |---|---|
-| History per series | 60 minutes; at most 400 points |
+| History per series in the manager | 60 minutes; at most 400 points |
 | Interfaces per node / neighbours per node / nodes per manager | 96 / 64 / 512 |
 | Concurrent gNMI sessions / SSH provisioning sessions | 64 / 4 |
 | Record queue between collectors and the store | 5,000 records (overflow is counted) |
-| Chart windows | 5, 15, 60 minutes |
-| Series response | one interface or neighbour, at most 400 points |
+| Prometheus | scrape every 10 s, retention 2 hours or 200 MB on tmpfs |
+| Grafana | dashboards refresh every 10 s, lab maps re-provisioned within 30 s of a change |
 
 Nothing in this feature touches Docker, the VM helpers or the encrypted state
 other than the lab's telemetry setting and the record of added lines.
@@ -178,110 +193,103 @@ other than the lab's telemetry setting and the record of added lines.
   operator chose plain text on all three kinds. When an EOS or Junos node already
   has TLS (`ssl profile`, `grpc ssl`), the manager uses it with the device's own
   certificate, unverified. The manager does not generate device certificates.
-- Grafana, when installed, is reachable by anyone who reaches the VM's Grafana port
-  as a read-only Viewer, the same trust model as the manager UI itself. Keep both
-  on the trusted lab network.
+- Grafana is reachable by anyone who reaches the VM's Grafana port as a read-only
+  Viewer, the same trust model as the manager UI itself. Prometheus listens on the
+  loopback address only. Keep the VM on the trusted lab network.
 - The manager writes device configuration only for this service and only after
   the explicit per-lab setting is on; every change is logged with the exact lines.
 
-## Grafana dashboards in another tab
+## The Grafana stack
 
-The Telemetry tab is enough for most exercises. For Grafana-style dashboards in a
-separate browser tab, install the optional stack on the VM:
+The installer sets the stack up as its fifth phase and every later install or
+upgrade refreshes it. The same script works on its own from any directory and
+recreates the manager itself so it announces Grafana:
 
 ```bash
-cd ~/projects/clab-manager
-sudo bash deploy/setup-telemetry.sh
-sudo docker compose --env-file clab-backup-ui/.env -f clab-backup-ui/compose.yml up -d --no-deps backup-ui
+sudo bash "$HOME/projects/clab-manager/deploy/setup-telemetry.sh"
 ```
 
-What this does:
+What it does:
 
-- `setup_telemetry.py` writes `TELEMETRY_STACK=grafana`, the Grafana port (3000),
-  bind address (0.0.0.0), the Prometheus port (9090, loopback only) and a generated
-  admin password into `clab-backup-ui/.env`, keeping unrelated settings and an
-  existing password, and renders the Prometheus scrape configuration for the
-  manager's actual `UI_PORT` into `/srv/containerlab-node-manager/telemetry/`.
-- `compose.telemetry.yml` starts Prometheus (`prom/prometheus` v3.14.0, pinned by
-  digest) and Grafana OSS (13.0.2, pinned by digest) with host networking, dropped
-  capabilities, memory and PID limits and tmpfs-backed data volumes. Prometheus
-  scrapes `http://127.0.0.1:<UI_PORT>/api/telemetry/metrics` every 10 s and keeps two
-  hours; Grafana serves three provisioned, read-only dashboards: **Lab overview**
-  (node and link states, per-node traffic, errors), **Interfaces** (bit and packet
-  rates, errors and discards, an operational-state timeline, an interface table,
-  filtered by lab, node and interface) and **BGP neighbours** (session table,
-  established timeline, prefixes received and sent).
-- **Lab maps** (1.24.0): the folder *Lab maps* holds one generated weathermap per lab,
-  drawn from the manager's drawing and animated by the exported rates; the setup installs
-  the Flow panel plugin it needs. See [GRAFANA-MAP.md](GRAFANA-MAP.md).
-- The setup then waits until Prometheus answers `/-/ready` and Grafana `/api/health`
-  (90 s at most) and prints the scrape target's health. A service that starts and
-  then crash-loops fails the setup with the Compose status and its last log lines
-  instead of leaving dashboards whose every panel shows an error (1.23.0 shipped a
-  Prometheus flag that v3.14.0 rejects; CI now starts the real stack against a
-  fixture manager and runs every dashboard query, `deploy/telemetry/smoke.py`).
-- The manager, once recreated with the new `.env`, shows **Open Grafana ↗** in the
-  Telemetry tab (the Lab overview filtered to the lab) and **Grafana ↗** on the
-  selected node (the Interfaces dashboard filtered to that node and port). The links
-  use the manager's own host name with the Grafana port, so they work from any
-  workstation that reaches the manager.
+- creates the manager data directory if it is missing, then writes
+  `TELEMETRY_STACK=grafana`, the Grafana port (3000), bind address (0.0.0.0), the
+  Prometheus port (9090, loopback only), a generated admin password and the two
+  folders it uses into `clab-backup-ui/.env`, keeping unrelated settings and an
+  existing password;
+- renders the Prometheus scrape configuration for the manager's actual `UI_PORT`
+  into `/srv/containerlab-node-manager/telemetry/`, creates the plugin folder there
+  for Grafana's user and the lab-map folder (`TELEMETRY_MAPS_DIR`, default
+  `/srv/containerlab-node-manager/data/telemetry/dashboards`) for the manager's user;
+- pulls Prometheus and Grafana OSS by digest and installs the pinned Flow panel
+  plugin once with the Grafana image's own CLI (access to grafana.com is needed
+  during this step only);
+- starts both with host networking, dropped capabilities, memory and PID limits and
+  tmpfs-backed data volumes (`deploy/compose.telemetry.yml`), then waits until
+  Prometheus answers `/-/ready` and Grafana `/api/health` (90 s at most) and prints
+  the scrape target's health and whether the Flow panel loaded. A service that
+  starts and then crash-loops fails the setup with the Compose status and its last
+  log lines instead of leaving dashboards whose every panel shows an error; CI
+  starts the real stack against a fixture manager on every push
+  (`deploy/telemetry/smoke.py`);
+- recreates the manager so it reads the new settings (unless `--no-recreate`, which
+  the launcher passes because it creates the manager afterwards).
+
+To take the stack down, add `--remove`: it stops both services, deletes their tmpfs
+data and the plugin folder and writes `TELEMETRY_STACK=disabled`, so later upgrades
+leave it alone; the admin password is kept for a later reinstall. Rerun without
+`--remove` to bring it back. The manager's own behaviour never depends on the
+stack: the collector runs either way, and the button in the lab header simply hides.
 
 A state timeline with nothing to show yet (*Session established* on a lab without
 BGP, *Operational state* for a filter that matches no interface) says *Data does not
 have a time field*: that is Grafana's wording for an empty query result, not a
-failure; it fills in as soon as the manager exports the series.
-
-Open `http://VM_IP:3000/`. Anonymous visitors are Viewers (read-only); editing needs
-the `admin` login with `TELEMETRY_GRAFANA_ADMIN_PASSWORD` from `clab-backup-ui/.env`.
-Dashboards come from files in the repository; UI edits are not saved. `sudo bash
-deploy/setup-telemetry.sh --remove` stops the stack, deletes its tmpfs data and sets
-`TELEMETRY_STACK=disabled`; recreate the manager afterwards to hide the links. The
-metrics endpoint (`/api/telemetry/metrics`, Prometheus text format) exposes names,
-states and rates only: no addresses, logins or configuration. Component licences
-are listed in `deploy/TELEMETRY-THIRD-PARTY-NOTICES.md`.
+failure; it fills in as soon as the manager exports the series. Dashboards come from
+files in the repository; edits made in the Grafana UI are not saved. Component
+licences are listed in `deploy/TELEMETRY-THIRD-PARTY-NOTICES.md`.
 
 ## Health check
 
-`bash deploy/check-install.sh` reports **Network telemetry**: INFO when the
-collector is disabled, PASS with the linked labs' verdicts, WARN when a lab reports
-failed nodes, and a manual step to confirm charts and link colours follow real
-traffic and an interface shutdown. **Grafana telemetry dashboards** is INFO when the
-stack is not installed, and otherwise checks Grafana's health endpoint, that
-Prometheus answers at all (a crash-looping container is reported with the Compose
-commands that show its state and logs), that it scrapes the manager (a scrape
-error is classified, for example a 404 from a manager older than 1.23.0), that the
-Flow panel is loaded and that the manager can write its lab maps (a WARN otherwise).
+`bash "$HOME/projects/clab-manager/deploy/check-install.sh"` reports **Network
+telemetry**: INFO when the collector is disabled, PASS with the linked labs'
+verdicts, WARN when a lab reports failed nodes, and a manual step to confirm in
+Grafana that the Interfaces dashboard and the lab map follow real traffic and an
+interface shutdown. **Grafana telemetry dashboards** is WARN when the stack is not
+installed, and otherwise checks Grafana's health endpoint, that Prometheus answers
+at all (a crash-looping container is reported with the Compose commands that show
+its state and logs), that it scrapes the manager (a scrape error is classified, for
+example a 404 from a manager older than 1.23.0), that the Flow panel is loaded and
+that the manager can write its lab maps (a WARN otherwise). Every `Next:` line is a
+command that works from any directory.
 
 ## Live acceptance procedure
 
-Run this on a lab VM with one node of each kind, after installing 1.23.0 with
-`bash deploy/install.sh` (the image build installs pygnmi):
+Run this on a lab VM with one node of each kind, after installing with
+`bash "$HOME/projects/clab-manager/deploy/install.sh"`:
 
 1. Deploy a lab from the manager. Wait for *NOS ready* in the deployment bar.
-2. Open **Telemetry**. Each supported node should pass Waiting → Configuring →
-   Connecting → Streaming without a click. Check the action log for
-   `telemetry.configure` lines (expected on cJunosEvolved; usually none on cEOS and
-   XRv9k, whose containerlab defaults already enable gNMI).
+2. Open **Lab actions → Telemetry settings…**. Each supported node should pass
+   Waiting → Configuring → Connecting → Streaming without a click. Check the action
+   log for `telemetry.configure` lines (expected on cJunosEvolved; usually none on
+   cEOS and XRv9k, whose containerlab defaults already enable gNMI).
 3. On each node, confirm the service by hand: `show management api gnmi` (EOS),
    `show grpc status` (XR), `show system connections | match 32767` (Junos).
-4. Generate traffic across a wired link (`ping` with a size and count, or an
-   `iperf` container) and confirm the RX/TX chart of both ends and the link's
-   hover text follow it within about 20 s.
-5. Shut the interface on one end; the link must turn red within a minute and the
-   table must show the oper state; unshut and confirm green. Shut only one end and
-   confirm the other end still reports, with *the two ends disagree* in the title.
+4. Click **Grafana ↗**. Generate traffic across a wired link (`ping` with a size and
+   count, or an `iperf` container) and confirm the Interfaces dashboard of both ends
+   and the lab map's link colour and rate labels follow it within about 20 s.
+5. Shut the interface on one end; the map link must turn red within a minute and the
+   Interfaces dashboard must show the oper state; unshut and confirm green.
 6. Where BGP runs, clear a session and confirm the neighbour state and prefix
-   counts change.
+   counts change on the BGP neighbours dashboard.
 7. Restart one node. Through the manager (*Restart lab nodes*, stop, destroy or
    redeploy) the lab's session is cleared at once (`telemetry.clear` in the action
    log) and the node returns to Waiting. After a bare `docker restart` the address
    and running state do not change, so the node reports *Failed: the gNMI port did
    not answer* while the NOS boots and retries every 30 s; it streams again with a
-   new generation and an empty chart shortly after the service answers. Prefer the
-   manager's operations for this: a bare `docker restart` also removes the veth links
-   containerlab created (on the dev VM the restarted cEOS came back without
-   Ethernet1 and never started its gNMI server), which only a redeploy repairs.
-   Redeploy the lab and confirm no old samples appear under the new deployment.
+   new generation shortly after the service answers. Prefer the manager's operations
+   for this: a bare `docker restart` also removes the veth links containerlab
+   created (on the dev VM the restarted cEOS came back without Ethernet1 and never
+   started its gNMI server), which only a redeploy repairs. Redeploy the lab and
+   confirm no old samples appear under the new deployment.
 8. Turn automatic telemetry off, use **Remove manager-added lines…**, and confirm
    only the manager's lines are gone (Junos: the `grpc clear-text` statement; EOS
    and XR: nothing, when the defaults were already present).
@@ -291,27 +299,24 @@ Run this on a lab VM with one node of each kind, after installing 1.23.0 with
 Record the versions of the three images and the outcome of each step in
 `clab-backup-ui/VALIDATION.md`.
 
-## Limitations in 1.23.1
+## Limitations
 
-- cEOS is validated live (4.35.0F on the dev VM, see VALIDATION.md); the XRv9k and
-  cJunosEvolved adapters are still validated against fixtures and an in-process gNMI
-  server only. Their paths, encodings, prompts and configuration lines follow the
-  vendors' documentation and containerlab defaults, but a specific image may reject
-  a path or need an extra line; the node then reports the exact failure and *Retry
-  now* re-checks it.
+- cEOS is validated live (see VALIDATION.md); the XRv9k and cJunosEvolved adapters
+  are validated against fixtures and an in-process gNMI server only. Their paths,
+  encodings, prompts and configuration lines follow the vendors' documentation and
+  containerlab defaults, but a specific image may reject a path or need an extra
+  line; the node then reports the exact failure and *Retry failed nodes* re-checks it.
 - cEOS in a container reports transmit counters of 0 on its data ports (the
   container data plane has no hardware TX counters), so TX rates on cEOS links read
-  0 b/s while RX on the far end shows the traffic. Management0 counts both ways.
+  0 b/s while RX on the far end shows the traffic; the lab map therefore draws every
+  link half from the far end's receive rate. Management0 counts both ways.
 - Utilisation percentages are not shown: a virtual interface's speed does not
   describe real throughput. Discards and errors are device counters, not measured
   end-to-end loss.
-- One address family per BGP neighbour is charted (the first seen).
+- One address family per BGP neighbour is exported (the first seen).
 - Sampling is 10 s; interface state uses on-change subscriptions only on EOS.
 - Structured polling fallbacks for metrics a device does not stream are not
-  implemented; such metrics show as unavailable.
-- The Grafana stack was validated by Compose configuration checks, dashboard JSON
-  checks and the metrics endpoint tests; Grafana and Prometheus themselves were not
-  started in the development session (no Docker daemon there).
+  implemented; such metrics are absent.
 - Redeploys done outside the manager that complete within one discovery poll keep
   the previous minutes of history on the same node name; counter resets are still
   detected and never produce spikes.

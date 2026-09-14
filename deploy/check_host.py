@@ -14,7 +14,9 @@ GATEWAY = '/usr/local/sbin/clab-manager-gateway'
 SFTP_SERVER = '/usr/lib/openssh/sftp-server'
 ENGINEER_CONFIG = '/etc/clab-manager/engineer.json'
 OPERATIONS_CONFIG = '/etc/clab-manager/operations.json'
-ENGINEER_FIX = 'Run sudo bash deploy/setup-engineer-access.sh --refresh (or choose VS Code access in bash deploy/install.sh), then reconnect SSH and kill the VS Code server on the host.'
+SOURCE = Path(__file__).resolve().parents[1]
+ENGINEER_FIX = (f'Run sudo bash {SOURCE / "deploy/setup-engineer-access.sh"} --refresh (or choose VS Code access in bash '
+                f'{SOURCE / "deploy/install.sh"}), then reconnect SSH and kill the VS Code server on the host.')
 POLICY = {
     'authenticationmethods': 'password', 'passwordauthentication': 'yes',
     'kbdinteractiveauthentication': 'no', 'pubkeyauthentication': 'no',
@@ -22,7 +24,7 @@ POLICY = {
     'disableforwarding': 'yes', 'permittty': 'no', 'permittunnel': 'no',
     'permituserrc': 'no', 'permituserenvironment': 'no',
 }
-SSH_FIX = 'Run bash deploy/install.sh to install prerequisites and the VM connection helpers.'
+SSH_FIX = f'Run bash {SOURCE / "deploy/install.sh"} to install prerequisites and the VM connection helpers.'
 
 
 def _read(path):
@@ -197,7 +199,7 @@ def _engineer(ctx):
         ctx.add('host.engineer', 'INFO', title,
                 'Not configured. The manager does not need it; VS Code Remote - SSH with the Containerlab extension does '
                 '(docker and clab_admins groups, group-writable lab folders, containerlab SUID).',
-                'Run sudo bash deploy/setup-engineer-access.sh --owner YOUR_VM_USER, or choose VS Code access in bash deploy/install.sh.')
+                f'Run sudo bash {SOURCE / "deploy/setup-engineer-access.sh"} --owner YOUR_VM_USER, or choose VS Code access in bash {SOURCE / "deploy/install.sh"}.')
         return
     problems = []
     groups = ctx.run(['id', '-nG', owner], timeout=5)

@@ -1,8 +1,8 @@
 # Third-party components of the telemetry feature
 
-The manager's telemetry collector and the optional dashboards use the following
-components. None of them is modified; the images are pulled by digest and the Python
-packages are installed from PyPI during the image build.
+The manager's telemetry collector and the Grafana dashboards installed beside it use
+the following components. None of them is modified; the images are pulled by digest
+and the Python packages are installed from PyPI during the image build.
 
 | Component | Use | Licence |
 |---|---|---|

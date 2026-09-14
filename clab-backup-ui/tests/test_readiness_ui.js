@@ -73,3 +73,18 @@ test('the deployment bar reports NOS readiness in plain words',()=>{
  delete lab.nos_readiness;h.context.renderManagement();
  assert.equal(h.element('deployment-nos').textContent,'');
 });
+
+test('the Grafana link opens the lab map or the overview on the manager host and hides without the stack',()=>{
+ const {context,document}=appHarness();
+ context.location={protocol:'http:',hostname:'10.0.0.5'};
+ const link=document.getElementById('grafana-open');link.removeAttribute=function(name){delete this[name];};
+ const lab={id:'lab',name:'bgp lab',nodes:[],telemetry:{grafana:{enabled:true,port:3000,map_uid:'clab-map-abc'}}};
+ context.renderGrafanaLink(lab);
+ assert.equal(link.hidden,false);assert.equal(link.href,'http://10.0.0.5:3000/d/clab-map-abc?var-lab=bgp+lab&refresh=10s');assert.equal(link.textContent,'Lab map in Grafana ↗');
+ lab.telemetry.grafana.map_uid='';context.renderGrafanaLink(lab);
+ assert.equal(link.href,'http://10.0.0.5:3000/d/clab-lab-overview?var-lab=bgp+lab&refresh=10s');assert.equal(link.textContent,'Grafana ↗');
+ lab.telemetry.grafana.enabled=false;context.renderGrafanaLink(lab);
+ assert.equal(link.hidden,true);assert.equal(link.href,undefined);
+ context.renderGrafanaLink({id:'x',name:'unlinked',nodes:[],telemetry:{status:'unmonitored',total:0}});
+ assert.equal(link.hidden,true);
+});

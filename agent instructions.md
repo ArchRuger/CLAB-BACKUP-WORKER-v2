@@ -1,3 +1,47 @@
+# Documentation and installation audit — 1.25.0
+
+Read docs/CHANGELOG.md "Changes in 1.25.0", docs/REPOSITORY-MAINTENANCE.md and
+docs/INSTALL.md. (1) Telemetry UI: `static/telemetry.js`, `telemetry-charts.js` and
+`tests/test_telemetry_ui.js` are deleted; `topology-render.js` and `style.css` are
+byte-identical to their 1.22.0 versions (no `tele-*` classes, `data-link-index` or
+`tele-dot`), and `capture.js` handles link right-clicks itself again. Never put a
+stroke rule (a `stroke-dasharray` above all) on `.topology-wire path` without
+excluding `path.capture-hit`: the 16 px transparent hit path uses
+`pointer-events: stroke`, so a dashed stroke makes the hover zone flicker along the
+wire (the bug this release fixed). The only telemetry UI left is `renderGrafanaLink`
+in app.js (reads `lab.telemetry.grafana` = `{enabled, port, map_uid}` from
+`TelemetryManager.grafana_link`, now part of `lab_summary`) and
+`openTelemetrySettings` in operations.js (Lab actions → Telemetry settings…; reads
+`/api/labs/{id}/telemetry`, PUTs `settings`, POSTs `retry` and `remove-config`). The
+`/series` and `/bgp-series` routes are gone and `WINDOWS` is no longer imported;
+`TelemetryStore.series()` stays for the store tests. (2) Install flow:
+install-manager.py phases are 1 admin, 2 prerequisites, 3 `start-manager.sh
+--manager-only`, 4 `setup-capture.sh`, 5 `setup-telemetry.sh`, 6 verify, 7 engineer
+access; menu 4 = both stacks (`stacks()`), 5 = check, 6 = exit. `start-manager.sh`
+runs `setup-capture.sh --no-recreate` and `setup-telemetry.sh --no-recreate` after
+`setup-vm.sh` and before the image build unless `.env` has
+`CAPTURE_PROVIDER=disabled` / `TELEMETRY_STACK=disabled` or `--manager-only`
+(test_release_consistency checks that order). Both setup scripts end with
+`recreate-manager.sh` (`up -d --no-build --no-deps backup-ui` when a container exists)
+unless `--no-recreate`; both accept `--remove` (`setup_capture.py --remove` writes
+CAPTURE_PROVIDER=disabled and keeps the token); `setup-telemetry.sh` runs `setup-vm.sh`
+when the data directory is missing; VM scripts call `verify-release.py --runtime`.
+`check_install`: capture and dashboards are WARN (not INFO) when disabled, the capture
+title is *Browser Wireshark capture*, advice is built with `ctx.repair`, `ctx.command`
+and `ctx.compose` so every `Next:` is absolute; check_host's constants use `SOURCE`.
+(3) Release tracking: `verify-release.py` gained `verify_docs()` (rules in
+REPOSITORY-MAINTENANCE.md: living docs name only the current release, history as
+"since x.y.z"/"x.y.z or later", third-party versions named by component, no
+`projects/v1.x.y` or `clab-backup:1.x.y`, and README/CHANGELOG/VALIDATION/this file
+must lead with the current release); the default run does both checks, `--runtime`
+only the lockstep set. `set-release.py NEW` rewrites FIELDS and the current-release
+tokens in living docs (history phrases untouched). To cut a release: run set-release,
+write the three history sections, run verify-release. Docs convention: source folder
+`~/projects/clab-manager`, absolute commands (`bash "$HOME/projects/clab-manager/deploy/…"`),
+no version pins in guide headings; docs/DOCKER-HUB-SETUP.md and the 1.15.1 audit
+narrative are in docs/archive/. (4) See VALIDATION.md "Documentation and installation
+audit — 1.25.0" for what was run on the dev VM.
+
 # Grafana lab map — 1.24.0
 
 Read docs/GRAFANA-MAP.md and docs/CHANGELOG.md "Changes in 1.24.0". (1) `app/telemetry_map.py`

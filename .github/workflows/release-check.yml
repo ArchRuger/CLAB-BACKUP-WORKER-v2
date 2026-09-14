@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Check source versions
+      - name: Check source versions and that the documentation names the current release only
         run: python3 deploy/verify-release.py
       - name: Check release and helper regression tests
         working-directory: clab-backup-ui
@@ -27,7 +27,7 @@ jobs:
           python3 -m unittest discover -s tests -p test_check_git.py -v
       - name: Check installer shell syntax
         run: |
-          for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh deploy/setup-capture.sh deploy/setup-telemetry.sh; do
+          for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh deploy/setup-capture.sh deploy/setup-telemetry.sh deploy/recreate-manager.sh deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-operations.sh deploy/setup-password.sh deploy/migrate-worker-data.sh; do
             bash -n "$script"
           done
       - name: Install application test dependencies
@@ -60,7 +60,7 @@ jobs:
         run: '"$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p "test_telemetry*.py" -v'
       - name: Check browser regressions
         working-directory: clab-backup-ui
-        run: node --test tests/test_operations_ui.js tests/test_debug_ui.js tests/test_capture_ui.js tests/test_capture_session_ui.js tests/test_topology_ui.js tests/test_vm_password_ui.js tests/test_readiness_ui.js tests/test_download_ui.js tests/test_telemetry_ui.js
+        run: node --test tests/test_operations_ui.js tests/test_debug_ui.js tests/test_capture_ui.js tests/test_capture_session_ui.js tests/test_topology_ui.js tests/test_vm_password_ui.js tests/test_readiness_ui.js tests/test_download_ui.js
       - name: Check optional capture provider
         working-directory: clab-backup-ui
         run: '"$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p "test_capture*.py" -v'

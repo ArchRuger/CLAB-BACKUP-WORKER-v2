@@ -245,7 +245,8 @@ if __name__ == '__main__':
             for url, health, error in targets:
                 print(f'Scrape target {url}: {health}' + (f' ({error})' if error else '')
                       + ('' if health == 'up' else ' (first scrape pending).' if health == 'unknown'
-                         else '. The manager answers /api/telemetry/metrics from release 1.23.0; recreate it after this setup and rerun check-install.sh.'))
+                         else '. Prometheus retries every 10 s; the target is up once the manager runs with the current .env '
+                              '(start-manager.sh creates it, recreate-manager.sh reloads it). Confirm with deploy/check-install.sh.'))
             print(f'Flow panel {PLUGIN} {PLUGIN_VERSION}: ' + ('loaded; the manager-generated lab maps will render.' if result['flow_panel']
                   else 'NOT loaded; lab maps stay empty. Rerun sudo bash deploy/setup-telemetry.sh with access to grafana.com and check the grafana service logs.'))
             sys.exit(0)

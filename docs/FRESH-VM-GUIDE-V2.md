@@ -1,8 +1,8 @@
 # Fresh VM guide, version 2 — Proxmox to your first Git save
 
-This is the **installer-based walkthrough** for Containerlab Node Manager
-**1.19.2** on Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not
-the application version. It supplements the [short install guide](INSTALL.md)
+This is the **installer-based walkthrough** for Containerlab Node Manager on
+Ubuntu Server **24.04 LTS**. “Version 2” is the guide edition, not an application
+version; the guide describes the current release. It supplements the [short install guide](INSTALL.md)
 and keeps the [original manual guide](archive/FRESH-VM-GUIDE.md) available. For the
 same route as bare numbered steps with only what to paste, use the
 [quick install](QUICK-INSTALL.md).
@@ -28,12 +28,11 @@ a rollback and after the installer:
 Each block runs in the Ubuntu VM as your normal account, asks for your sudo
 password, and is safe to run again.
 
-The published baseline is GitHub main `f9dbf44` (**1.19.2**). Instructions were
-checked against source and the linked provider documentation. The administrative
-WinSCP procedure below was confirmed by the user. The clock and VS Code paste-in
-blocks were checked against the systemd, containerlab and VS Code extension
-documentation and source; a complete fresh-VM run of 1.19.2 with them has not
-been verified by its author.
+Instructions were checked against source and the linked provider documentation.
+The administrative WinSCP procedure below was confirmed by the user; the clock and
+VS Code blocks were checked against the systemd, containerlab and VS Code extension
+documentation and source. Every command works from any directory; the source folder
+is `~/projects/clab-manager` (replace it if you clone elsewhere).
 
 ## Before you start
 
@@ -49,7 +48,7 @@ This guide uses these examples; substitute your actual values:
 | Ubuntu VM name | `clab-3` |
 | Normal Ubuntu administrator | `archtop` |
 | VM LAN address | `10.150.2.213` |
-| Manager source folder | `/home/archtop/projects/v1.19.2` |
+| Manager source folder | `/home/archtop/projects/clab-manager` |
 | Uploaded files | `/home/archtop/uploads` |
 | Lab topology/project | `/etc/containerlab/practice-lab` |
 | Lab-config Git checkout | `/home/archtop/labs/my-lab` |
@@ -267,8 +266,8 @@ subshell stops at a failed command without closing your login session.
     sudo apt-get install -y git
   fi
   mkdir -p "$HOME/projects"
-  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.19.2"
-  bash "$HOME/projects/v1.19.2/deploy/install.sh"
+  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/clab-manager"
+  bash "$HOME/projects/clab-manager/deploy/install.sh"
 )
 ```
 
@@ -279,12 +278,12 @@ normal account. The source must be present before its installer can run.
 If that source folder already exists, reuse it instead of cloning over it:
 
 ```bash
-bash "$HOME/projects/v1.19.2/deploy/install.sh"
+bash "$HOME/projects/clab-manager/deploy/install.sh"
 ```
 
-The installer banner must identify **1.19.2** for this guide. A directory name
-does not pin a Git version; if main has advanced, use that release's matching
-guide. Its source consistency check must pass.
+The installer banner shows the release you cloned, and its source consistency
+check must pass. To upgrade later, pull into the same folder
+(`git -C "$HOME/projects/clab-manager" pull --ff-only`) and run the installer again.
 
 **Bootstrap APT failure:** if the initial Git installation fails with
 `file:/cdrom ... Release`, go to [recovery A](#recovery-a) below. If the error
@@ -303,6 +302,7 @@ VM, the normal selections are:
 |---|---|
 | Manager bind/port settings | With no existing `.env`, defaults are all VM interfaces and port **8081**; there is no separate port prompt |
 | Lab operation access | Enable reviewed lab operations |
+| VS Code / Containerlab extension access | **1** to set it up now (docker and clab_admins groups, writable lab folders, containerlab SUID); the VS Code block in step 7 then needs no command |
 | Back up and disable obsolete installation-media APT entries | **y** to repair the common leftover ISO/CD-ROM source; network sources are retained |
 | Installation plan | Review the source folder and account, then **y** |
 | sudo password | Your ordinary Ubuntu account password |
@@ -310,8 +310,10 @@ VM, the normal selections are:
 
 The installer handles missing Git, SSH, Docker/Compose and Containerlab;
 prepares persistent manager storage; installs and verifies helpers; builds and
-starts the manager; then checks its running version and HTTP response. Image
-builds can take time. Keep the terminal open and wait for the result.
+starts the manager; installs the browser Wireshark stack and the Grafana
+dashboards; then checks its running version and HTTP response. The image build
+and the two stacks take several minutes. Keep the terminal open and wait for the
+result.
 
 Before APT updates, setup displays UTC and NTP status. If a time service is
 already active but not yet synchronized, it waits up to 30 seconds before
@@ -322,11 +324,11 @@ for future-dated or expired repository metadata. Git/GitHub CLI package setup
 uses the same checks. If APT reports a clock error, follow [recovery C](#recovery-c).
 
 Existing `.env` settings, passwords, manager data and compatible installations
-are retained. This is a fresh-build guide; upgrades with customized settings
-should use the `.env` copy option described in [INSTALL.md](INSTALL.md).
+are retained. To upgrade later, pull into the same folder and run the installer
+again; see [INSTALL.md](INSTALL.md).
 
 If a step fails, read its output. Use **Retry this step** after fixing it, or
-**Return to menu**. Menu **3. Check running installation** opens the full
+**Return to menu**. Menu **5. Check running installation** opens the full
 [installation report](HEALTH-CHECK.md) without rebuilding. Before browser VM/Git
 setup, some checks will need attention; repeat it at the step 12 checkpoint.
 Do not continue as though an incomplete install passed.
@@ -342,7 +344,7 @@ with its initial README is ready. Otherwise choose **Finish; set up Git later**.
 You can reopen the Git wizard without rebuilding:
 
 ```bash
-bash "$HOME/projects/v1.19.2/deploy/install.sh" --git
+bash "$HOME/projects/clab-manager/deploy/install.sh" --git
 ```
 
 The six phases guide you through:
@@ -511,10 +513,10 @@ folders root-owned and removes the SUID bit, because the manager only needs its
 restricted `clab-discovery` account. `bash deploy/install.sh` therefore offers
 **VS Code / Containerlab extension access** in its standard flow, and as menu
 option 3 for an installation that already exists. The equivalent one command,
-run in the source folder as your normal account, is:
+run from any directory as your normal account, is:
 
 ```bash
-sudo bash deploy/setup-engineer-access.sh --owner "$(id -un)"
+sudo bash "$HOME/projects/clab-manager/deploy/setup-engineer-access.sh" --owner "$(id -un)"
 ```
 
 It creates `clab_admins`, adds your account to `docker` and `clab_admins`, turns
@@ -654,30 +656,35 @@ connection password are separate settings.
 
 ## 11. Deploy, import and verify a backup
 
-On the **Ubuntu VM**, deploy your intended topology using its actual filename:
+In the manager, click **Deploy a new lab**, expand `/etc/containerlab/practice-lab`,
+click the `.clab.yaml` and choose **Deploy lab**; the reviewed containerlab command
+runs with live output, the lab is saved at once, and the deployment bar reports
+*NOS booting* and then *NOS ready* as the devices answer. To deploy from the VM
+terminal instead:
 
 ```bash
 sudo containerlab deploy -t /etc/containerlab/practice-lab/practice-lab.clab.yaml
 sudo containerlab inspect --all --format json
 ```
 
-These commands deploy the training lab; the installer does not. Fresh
-Containerlab installation through this project uses sudo, so the Docker and
+Fresh Containerlab installation through this project uses sudo, so the Docker and
 `clab_admins` groups are not prerequisites for this workflow. If you applied the
-[VS Code paste-in fix](#vscode-access) in step 7, `containerlab` also runs
-without sudo for your own account.
+[VS Code fix](#vscode-access) in step 7, `containerlab` also runs without sudo for
+your own account. A lab deployed from the terminal appears on the landing page as
+**Already running on the VM**; click **Import** and confirm the preview.
 
-Wait for the devices to finish booting. A Docker container marked Running does
-not prove that its NOS SSH service is ready. In the manager:
+A Docker container marked Running does not prove that its NOS SSH service is
+ready; the manager says *NOS ready* when it is. Then:
 
-1. Refresh discovery or wait for the next poll.
-2. Select the detected lab marked **Ready to import**.
-3. Review its name, nodes, links and source files; confirm **Import lab**.
-4. Inspect the topology and node addresses. Verify imported credentials or set
-   appropriate device profiles. Do not use the VM password for a device unless
-   that device was deliberately configured with it.
-5. Test a device login, then take one backup and inspect/download the result.
-6. Once that succeeds, capture the full intended node set.
+1. Inspect the topology and node addresses. Nodes with containerlab's default login
+   need no credentials; otherwise add device profiles under **More → Credentials**.
+   Do not use the VM password for a device unless that device was deliberately
+   configured with it.
+2. Test a device login, then take one backup and inspect/download the result.
+3. Once that succeeds, capture the full intended node set.
+4. Click **Grafana ↗** in the lab header and confirm the lab map and the Interfaces
+   dashboard show the nodes; right-click a node for **Capture packets** and confirm
+   Wireshark opens in a browser tab.
 
 For the Juniper kinds added in 1.18.0, use these names in your topology and
 select the matching NOS when adding a credential profile:
@@ -717,13 +724,13 @@ After the Git wizard reported **Registered** and **Ready**:
 Now return to the **Ubuntu terminal** for the separate installation report:
 
 ```bash
-bash "$HOME/projects/v1.19.2/deploy/check-install.sh" --require-git
+bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-git
 ```
 
 If you completed the administrative WinSCP sudoers setup in step 7, use:
 
 ```bash
-bash "$HOME/projects/v1.19.2/deploy/check-install.sh" --require-git --require-admin-sftp
+bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-git --require-admin-sftp
 ```
 
 Approve sudo for inspection. The report checks services, SSH/SFTP policy,
@@ -735,7 +742,7 @@ or lab configuration. Normal request audit logs can still be written.
 **Checkpoint:** resolve failed checks and review every warning/skipped check.
 `AUTOMATED CHECKS PASSED` means the automated checks passed; your real WinSCP
 transfer, device backup and Git push remain separate evidence. Installer menu
-**3. Check running installation** runs this same report. The initial installation
+**5. Check running installation** runs this same report. The initial installation
 checked restricted helper execution and local container/version/HTTP readiness
 before browser setup; the saved SSH connection is checked here afterwards.
 
@@ -744,9 +751,8 @@ update both the image and helper from this matching source checkout and retest t
 actual failed folder:
 
 ```bash
-cd "$HOME/projects/v1.19.2"
-sudo bash deploy/start-manager.sh --enable-operations
-bash deploy/check-install.sh --require-git --lab-path /etc/containerlab/practice-lab
+sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh" --enable-operations
+bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-git --lab-path /etc/containerlab/practice-lab
 ```
 
 Substitute your failed folder. The launcher retains custom trusted roots and
@@ -793,7 +799,7 @@ The master wiki covers [manager data backup and recovery in Part 17](WIKI-MASTER
 
 At a suitable time, save lab work and perform a normal Ubuntu reboot. Afterwards
 verify WinSCP, the manager page, saved lab/history and VM connection. Reopen
-`bash "$HOME/projects/v1.19.2/deploy/install.sh"` and select **Check running
+`bash "$HOME/projects/clab-manager/deploy/install.sh"` and select **Check running
 installation** if needed. Training device restart behavior is separate; inspect
 your lab rather than assuming every NOS resumed. Do not delete persistent data
 or clone everything again to recover a failed check.
@@ -1018,10 +1024,11 @@ Retry the same installation step only after APT succeeds.
 | Correct UTC on host/guest and functioning time provider | Steps 1 and 3, with the step 3 clock paste-in after a snapshot rollback; recovery C if APT already failed. Installer checks status and waits briefly but does not set time |
 | Obtain source | Step 4; VM console/SSH bootstrap |
 | Docker, SSH, Containerlab, manager storage/password/helpers/build/start | Installer in step 5 |
+| Browser Wireshark stack and Grafana dashboards with lab maps | Installer phases 4 and 5 in step 5; menu 4 reinstalls both; checked in step 11 |
 | Git login, identity, checkout and registration | Git terminal wizard in step 6 |
 | Ordinary-user SFTP and actual workstation transfer | Explicit checkpoint in step 7 |
 | Optional administrative WinSCP access | Paste-in sudoers rule and matching WinSCP setting in step 7; not added by the installer |
-| VS Code Remote - SSH and the Containerlab extension | Installer option (VS Code / Containerlab extension access) or `setup-engineer-access.sh` in step 7; reapplied by `start-manager.sh` |
+| VS Code Remote - SSH and the Containerlab extension | Installer option (VS Code / Containerlab extension access) or `setup-engineer-access.sh` in step 7; reapplied by the launcher |
 | Full installation report after browser VM/Git setup | Second script `deploy/check-install.sh` in step 12; explicit service/helper/folder/Git results and recovery, with manual transfer/backup/push still required |
 | QEMU guest agent and firewall/network access | Step 8; outside the manager installer |
 | Vendor images, topology upload and lab deployment | Steps 9 and 11; your chosen lab |

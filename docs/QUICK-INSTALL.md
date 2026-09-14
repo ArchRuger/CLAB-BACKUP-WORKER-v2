@@ -6,7 +6,8 @@ in the [full fresh VM guide](FRESH-VM-GUIDE-V2.md).
 
 Run every block in the **Ubuntu VM terminal as your normal account**, not as
 root and not as `clab-discovery`, unless the step says **Proxmox**, **Windows**,
-**WinSCP**, **VS Code** or **browser**. Replace these placeholders:
+**WinSCP**, **VS Code** or **browser**. Every command works from any directory.
+Replace these placeholders:
 
 | Placeholder | Replace with |
 |---|---|
@@ -51,8 +52,8 @@ date -u
     sudo apt-get install -y git
   fi
   mkdir -p "$HOME/projects"
-  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.19.2"
-  bash "$HOME/projects/v1.19.2/deploy/install.sh"
+  git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/clab-manager"
+  bash "$HOME/projects/clab-manager/deploy/install.sh"
 )
 ```
 
@@ -63,14 +64,16 @@ date -u
 | `Setup menu` | `1` |
 | `Manager bind/port settings` | `1` |
 | `Lab operation access` | `1` |
+| `VS Code / Containerlab extension access for archtop` | `1` |
 | `Back up and disable obsolete installation-media APT entries if present? (y/N)` | `y` |
 | `Proceed with this plan? (y/N)` | `y` |
 | `[sudo] password for archtop:` | Your Ubuntu password |
 | `New password:` then `Retype new password:` (after `Create the clab-discovery password`) | A new password for the manager's VM login. **Write it down**; step 9 needs it |
 | `Next step` | `1` if your GitHub repository already exists, otherwise `2` and skip step 5 |
 
-Wait for `Manager 1.19.2: running; HTTP and version checks passed.` The image
-build takes several minutes. If a step fails, read the error, fix it in a second
+The browser Wireshark and Grafana phases run without questions. Wait for
+`Manager 1.25.0: running; HTTP and version checks passed.` The image build and the
+two stacks take several minutes. If a step fails, read the error, fix it in a second
 terminal, then type `1` to retry. A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.
 
@@ -92,7 +95,7 @@ Create the GitHub repository first, with **Add a README** selected. Then:
 Wait for `Registered ...` and `Ready.` To reopen the wizard later:
 
 ```bash
-bash "$HOME/projects/v1.19.2/deploy/install.sh" --git
+bash "$HOME/projects/clab-manager/deploy/install.sh" --git
 ```
 
 ## 6. WinSCP
@@ -126,11 +129,10 @@ under `/etc/containerlab`.
 ## 7. VS Code
 
 If you answered **1** to the installer's *VS Code / Containerlab extension
-access* question, skip the command. Otherwise paste in the VM, from the source
-folder:
+access* question, skip the command. Otherwise paste in the VM:
 
 ```bash
-sudo bash deploy/setup-engineer-access.sh --owner "$(id -un)"
+sudo bash "$HOME/projects/clab-manager/deploy/setup-engineer-access.sh" --owner "$(id -un)"
 ```
 
 Then in **VS Code** on Windows:
@@ -158,7 +160,8 @@ sudo docker load -i "$HOME/uploads/IMAGE.tar"
 
 ## 9. Connect the manager to the VM
 
-**Browser** on Windows: open `http://VM_IP:8081`, then **VM connection**:
+**Browser** on Windows: open `http://VM_IP:8081`. The **VM connection** dialog
+opens by itself the first time:
 
 | Field | Value |
 |---|---|
@@ -171,36 +174,48 @@ sudo docker load -i "$HOME/uploads/IMAGE.tar"
 
 Click **Save and test connection**.
 
-## 10. Deploy, import, back up
+## 10. Deploy the lab
 
-In the VM:
+In the **browser**:
 
-```bash
-sudo containerlab deploy -t /etc/containerlab/LAB_NAME/LAB_NAME.clab.yaml
-```
+1. **Deploy a new lab** → expand `/etc/containerlab` → `LAB_NAME` → click the
+   `.clab.yaml` → **Deploy lab** → confirm the reviewed command.
+2. Wait for the green banner, then for **NOS ready** in the deployment bar. The
+   login test runs by itself and appears in **Backup history**.
+3. Devices with their own logins: **More → Credentials → Add credential** for each
+   device type, then open a node → **Test login**. Nodes with containerlab's default
+   login need nothing.
+4. **Back up all configs** in the topology header.
 
-In the **browser**, once the devices have booted:
+Deployed from the VM terminal instead (`sudo containerlab deploy -t
+/etc/containerlab/LAB_NAME/LAB_NAME.clab.yaml`)? The lab appears on the landing
+page as **Already running on the VM**; click **Import**.
 
-1. **Refresh discovery** → click the lab marked **Ready to import** → **Import lab**.
-2. **Credentials** → **Add credential** for each device type, using the device's own username and password.
-3. Open a node → **Test login**. Then **Back up all configs** in the topology header.
+## 11. Watch it and capture
 
-## 11. Save to Git
+1. **Grafana ↗** in the lab header opens the lab map (or `http://VM_IP:3000` for the
+   dashboards). Links colour as traffic flows; the Interfaces dashboard shows rates.
+2. Right-click a node on the map → **Capture packets** → tick a port → **Start
+   browser capture** → **Open Wireshark in browser**.
+
+## 12. Save to Git
 
 1. **More → Git repository** → select the registered checkout and the devices → save.
 2. **Save progress** → wait for **Pushed** → check the files on GitHub.
 
-## 12. Check everything
+## 13. Check everything
 
 ```bash
-bash "$HOME/projects/v1.19.2/deploy/check-install.sh" --require-git --require-admin-sftp
+bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-git --require-admin-sftp
 ```
 
-Fix any **FAIL** using its `Next:` line, then rerun. Done.
+Fix any **FAIL** or **WARN** using its `Next:` line, then rerun. Done.
 
 ## Later
 
 - Clock wrong again after a rollback: step 2.
 - WinSCP says `sudo: a password is required`: step 6.
 - VS Code says `Insufficient permissions`: step 7.
-- Reopen the installer menu: `bash "$HOME/projects/v1.19.2/deploy/install.sh"`.
+- Upgrade: `git -C "$HOME/projects/clab-manager" pull --ff-only`, then step 3's
+  last line and step 4 again (existing passwords and settings are kept).
+- Reopen the installer menu: `bash "$HOME/projects/clab-manager/deploy/install.sh"`.

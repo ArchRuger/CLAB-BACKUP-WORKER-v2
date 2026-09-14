@@ -1,46 +1,35 @@
-# Check an installed VM — 1.19.2
+# Check an installed VM
 
-This release also includes the remaining [deployment audit fixes](archive/DEPLOYMENT-AUDIT.md).
-
-For a running 1.19.0 or later manager, the [Debug panel](DEBUG-PANEL.md) also checks
-folder browsing and helper versions and exports API request metadata. Use this
-terminal report when the manager is unavailable or host setup needs checking.
-
-Run the second script after installation and browser setup to get a clear
-**PASS / FAIL / WARN / SKIP / INFO** report with the next action for each problem.
-It checks the current installation and does not repair it automatically.
-
-This guide targets **1.19.2**, prepared from published main `2c10037` (**1.19.1**).
-The checker retains 1.19.1's 60-second discovery helper budget, matching the
-manager's own inspection budget, plus the sudo session fix and browser diagnostics.
-Obtain complete matching source after publication;
-copying only the launcher omits the Python check modules it needs. An earlier
-installed manager will be reported as a version mismatch until upgraded.
+`deploy/check-install.sh` inspects a VM after installation and browser setup and
+prints a **PASS / FAIL / WARN / SKIP / INFO** report with the next action for each
+problem. It checks the current installation and does not repair it. For a running
+manager, the [Debug panel](DEBUG-PANEL.md) also checks folder browsing and helper
+versions and exports API request metadata; use this terminal report when the manager
+is unavailable or host setup needs checking.
 
 ## Run the report
 
-From the manager source checkout **inside Ubuntu**, use your normal VM account:
+From any directory **inside Ubuntu**, as your normal VM account:
 
 ```bash
-bash deploy/check-install.sh
+bash "$HOME/projects/clab-manager/deploy/check-install.sh"
 ```
 
 Approve the sudo prompt for host inspection. Run without a leading `sudo` so
 the checker detects the ordinary account used for WinSCP. A leading `sudo` is
-also supported: the checker uses `SUDO_USER`, or an explicit `--owner archtop`. You can also select
-**3. Check running installation** in `bash deploy/install.sh`.
+also supported: the checker uses `SUDO_USER`, or an explicit `--owner archtop`.
+You can also select **5. Check running installation** in the installer menu.
 
 Before this final check, complete **VM connection → Save and test connection**,
 verify its saved host fingerprint, and connect the intended registered checkout
 under **More → Git repository**. You can run the report earlier for diagnostics;
 missing setup will be reported instead of assumed successful. The full install
 still performs its shorter container/version/HTTP check before browser setup.
-It does not automatically complete all of this second script's checks.
 
 For the standard Git workflow plus the administrative WinSCP setup:
 
 ```bash
-bash deploy/check-install.sh --require-git --require-admin-sftp
+bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-git --require-admin-sftp
 ```
 
 Use `--require-admin-sftp` when you deliberately configured root file access in
@@ -55,7 +44,7 @@ See [the working WinSCP setup](FRESH-VM-GUIDE-V2.md#winscp-admin-sftp).
 | `FAIL` | A required component failed or could not be verified; follow its `Next:` instruction |
 | `WARN` | Attention is needed, or the result has incomplete coverage |
 | `SKIP` | A prerequisite prevented a check from running; it is not a pass |
-| `INFO` | Optional functionality, a deliberate check boundary, or a remaining manual test |
+| `INFO` | A deliberate check boundary or a remaining manual test |
 
 The heading, counts and final line summarize the same result:
 
@@ -66,9 +55,10 @@ The heading, counts and final line summarize the same result:
 | `NEEDS ATTENTION` | `2` | No failed checks, but warnings or skipped checks remain |
 
 Run `echo "$?"` immediately after the command if you need its exit code.
-An unsynchronized clock, an intentionally stopped lab, incomplete folder coverage
-or an unconfigured optional Git workflow can produce a warning. Review the reason;
-do not start devices or alter settings solely to make a report green.
+An unsynchronized clock, an intentionally stopped lab, incomplete folder coverage,
+an unconfigured optional Git workflow or a deliberately removed stack can produce
+a warning. Review the reason; do not start devices or alter settings solely to
+make a report green. Every `Next:` line is a command that works from any directory.
 
 This is an **illustrative excerpt**, not output from your VM:
 
@@ -81,9 +71,12 @@ FAILURES FOUND
   The backup-ui container is running.
 [FAIL] Operations helper through restricted account
   Helper responds as root but not correctly through clab-discovery; check gateway/sudoers.
-  Next: sudo bash /home/archtop/projects/v1.19.2/deploy/setup-operations.sh
+  Next: sudo bash /home/archtop/projects/clab-manager/deploy/setup-operations.sh
 [FAIL] Topology browser over saved SSH connection
   The uncached browser request failed: HTTP 409
+[WARN] Grafana telemetry dashboards
+  Not installed. Grafana is where telemetry is shown; without it live rates, link state and the lab maps are not visible anywhere.
+  Next: Run sudo bash /home/archtop/projects/clab-manager/deploy/setup-telemetry.sh: it starts Prometheus and Grafana, installs the Flow panel and recreates the manager.
 [INFO] Git repository 1: push permission
   Not exercised. Remote read access does not prove write permission or acceptance by branch rules.
 
@@ -112,9 +105,9 @@ FAILURES FOUND (exit 1)
 | Lab folders | Real folder browsing through that connection, including subfolders within the configured coverage limit |
 | Git | Registry access through the manager, local registered owners/checkouts, initial commit, commit identity, registered branch/destination, and staged/managed-folder changes |
 | Optional Git remote read | With `--git-remote`, a bounded `ls-remote` as each registered owner; no fetch, commit or push |
-| Optional packet capture | Whether the provider is enabled, Edgeshark lists targets, and the browser session service and pinned image are ready; informational when disabled. Live packets, viewer interaction and saved-capture download remain acceptance checks |
-| Network telemetry | Whether the gNMI dial-in collector is available (informational when disabled), and each linked lab's telemetry verdict through the manager; a lab with failed nodes is a warning with the remedy. Charts and link colours following real traffic remain acceptance checks |
-| Grafana telemetry dashboards | Informational when the optional stack is not installed; otherwise Grafana's health endpoint, whether Prometheus answers at all (a restarting container is reported with the Compose status and log commands), whether it scrapes the manager's metrics endpoint (scrape errors are classified, never echoed), whether the Flow panel that draws the lab maps is loaded and whether the manager can write the maps (both a WARN with the remedy). Opening the dashboards from the workstation remains an acceptance check |
+| Browser Wireshark capture | Whether the provider is enabled (a WARN with the setup command when it is not, since the stack is part of every installation), Edgeshark lists targets, and the browser session service and pinned image are ready. Live packets, viewer interaction and saved-capture download remain acceptance checks |
+| Network telemetry | Whether the gNMI dial-in collector is available (informational when disabled), and each linked lab's telemetry verdict through the manager; a lab with failed nodes is a warning with the remedy. Dashboards and the lab map following real traffic in Grafana remain acceptance checks |
+| Grafana telemetry dashboards | A WARN with the setup command when the stack is not installed; otherwise Grafana's health endpoint, whether Prometheus answers at all (a restarting container is reported with the Compose status and log commands), whether it scrapes the manager's metrics endpoint (scrape errors are classified, never echoed), whether the Flow panel that draws the lab maps is loaded and whether the manager can write the maps (both a WARN with the remedy). Opening the dashboards from the workstation remains an acceptance check |
 
 Disabled online lab downloads are informational and do not explain a failed
 folder browse. Existing empty folders are valid. A missing folder, symlinked
@@ -129,7 +122,7 @@ should be the same VM; check the saved address if they disagree.
 Give `--lab-path` an **absolute folder**, not the topology YAML filename:
 
 ```bash
-bash deploy/check-install.sh --lab-path /etc/containerlab/vJunOS-SW
+bash "$HOME/projects/clab-manager/deploy/check-install.sh" --lab-path /etc/containerlab/vJunOS-SW
 ```
 
 The script checks specified folders first, then configured roots and discovered
@@ -141,7 +134,7 @@ also reports incomplete coverage.
 For a larger tree and an optional Git remote-read check:
 
 ```bash
-bash deploy/check-install.sh --require-git --git-remote \
+bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-git --git-remote \
   --lab-path /etc/containerlab/vJunOS-SW --max-folders 80 --deadline 600
 ```
 
@@ -156,75 +149,40 @@ with HTTP 409 (and Git registry also fails)**, the saved VM password is not the
 cause: connected discovery uses the same `clab-discovery` account and password.
 The clab-discovery SSH session is reaching the account but not running the
 operations gateway, so its `clab-manager-operations` command is reported as not
-found. From matching source on the VM, re-run:
+found. Rerun the launcher from the source folder:
 
 ```bash
-sudo bash deploy/start-manager.sh --enable-operations
+sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh" --enable-operations
 ```
 
 This reinstalls the gateway, operations helper and sudoers, verifies them through
-the restricted account, and recreates the manager container so the running image
-matches. Then reconnect in **VM connection** and reopen the folder. From 1.19.3 the
-Debug panel labels this a gateway/enablement problem (`did not run the operations
-gateway`) rather than an authentication failure, and `check-install` gives the same
-gateway-specific next step. If the local "Operations helper through restricted
-account" check itself fails, run `sudo bash deploy/setup-operations.sh` first.
-
-**If 1.17.0/1.18.0 reports administrator access PASS but Docker, SSH and every
-helper fail together**, first rerun the report as root. Those checker versions
-start commands in detached sessions which cannot reuse Ubuntu's terminal-scoped
-sudo authentication. Do not treat that pattern alone as a broken VM:
+the restricted account, refreshes the capture and Grafana stacks and recreates the
+manager container so the running image matches. Then reconnect in **VM connection**
+and reopen the folder. The Debug panel labels this a gateway/enablement problem
+(`did not run the operations gateway`) rather than an authentication failure, and
+the report gives the same gateway-specific next step. If the local "Operations
+helper through restricted account" check itself fails, refresh only the operations
+installation first:
 
 ```bash
-sudo bash deploy/check-install.sh --owner archtop --lab-path /etc/containerlab/vJunOS-SW
-```
-
-Substitute your ordinary account and actual folder. This workaround works on the
-existing source. Version 1.18.1 preserves the session while keeping command
-process groups and timeouts, and verifies privilege using the same command runner.
-
-The 1.18.1 launcher checks the restricted account's gateway and sudo permissions
-before building. The browser's saved SSH connection and actual folders still
-need the report after browser setup. Use **clab-discovery** as the saved VM
-username with **installed helper** mode; `archtop` is the ordinary Git/SFTP owner.
-An ordinary SSH shell does not implement the `clab-manager-operations` command.
-
-The manager's SSH reader also used to stop at exit status before the stream
-ended. A delayed final result reproduced the exact generic helper error in a
-local SSH test. Upgrading both image and helpers to 1.18.1 fixes that reader;
-a helper-only refresh cannot update code inside the running image:
-
-```bash
-sudo bash deploy/start-manager.sh --enable-operations
-```
-
-Run this from complete 1.18.1 source after publication, retaining any customized
-`.env` settings when moving to a new source folder. No automatic lab deployment
-or retry is performed. If a lifecycle command was interrupted, inspect current
-lab state before approving another operation.
-
-`clab_admins` is not required for manager operations. The installer deliberately
-keeps new Containerlab installations without SUID/group elevation; the fixed
-helper runs Containerlab through its restricted sudo rule.
-
-For an existing VM whose discovery account is already set up, refresh only the
-operations installation from its **matching source checkout**:
-
-```bash
-sudo bash deploy/setup-operations.sh
+sudo bash "$HOME/projects/clab-manager/deploy/setup-operations.sh"
 ```
 
 This refreshes the operations helper, gateway and sudoers entry while retaining
 custom trusted roots and any existing download permission. It does not rebuild
 the image or reset the VM password. Close and reopen the failed folder, then run
 the report again. If the discovery account itself is missing, complete the
-installer first. Use the existing installed release's source for a helper-only
-repair; a release upgrade should update the manager and helpers together.
+installer first. Use the installed release's source for a helper-only repair; a
+release upgrade should update the manager and helpers together.
 
 If local helper execution passes but browser SSH fails, review **VM connection**
-address, username, installed-helper mode, password and fingerprint. If only one folder fails, verify its existence
-and that its path is within a trusted root without symlink components. The checker
-does not create folders, change their ownership, or broaden trusted roots.
+address, username, installed-helper mode, password and fingerprint. If only one
+folder fails, verify its existence and that its path is within a trusted root
+without symlink components. The checker does not create folders, change their
+ownership, or broaden trusted roots. `clab_admins` is not required for manager
+operations: the installer keeps new containerlab installations without SUID/group
+elevation unless you choose VS Code access, and the helper runs containerlab
+through its restricted sudo rule.
 
 ## Options
 
@@ -250,7 +208,7 @@ is checked under its own registered Linux account and HOME.
 To keep the structured result in your home directory:
 
 ```bash
-bash deploy/check-install.sh --json --require-git > "$HOME/clab-health.json"
+bash "$HOME/projects/clab-manager/deploy/check-install.sh" --json --require-git > "$HOME/clab-health.json"
 check_status=$?
 printf 'Health report exit code: %s\n' "$check_status"
 ```
@@ -278,7 +236,9 @@ Even when automated checks pass, verify these actions yourself:
    destination. Configuration checks do not prove a real password login.
 3. Test an intended device login and capture/download its configuration. A
    running Docker container or `/dev/kvm` device does not prove NOS readiness.
-4. Use **Save progress** deliberately, wait for **Pushed**, and inspect the
+4. Open **Grafana ↗** from a deployed lab and confirm the dashboards and the lab map
+   follow traffic; start a browser capture and confirm packets arrive in Wireshark.
+5. Use **Save progress** deliberately, wait for **Pushed**, and inspect the
    expected remote files. A public remote can be readable anonymously;
    `ls-remote` does not prove GitHub write permission or branch-rule acceptance.
 

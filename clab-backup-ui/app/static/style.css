@@ -105,7 +105,6 @@ dialog.node-details{position:fixed;inset:0 0 0 auto;margin:0;width:min(560px,94v
 .capture-viewer{height:100vh;display:flex;flex-direction:column;overflow:hidden;margin:0}.capture-viewer-toolbar{display:flex;gap:12px;align-items:center;padding:12px;flex-wrap:wrap;background:#fff;border-bottom:1px solid #ccd5dd}.capture-viewer-toolbar strong{flex:0 1 auto;white-space:nowrap}.capture-viewer-help{font-size:13px;margin:6px 12px}.capture-viewer #viewer-status{margin:6px 12px}.capture-viewer #capture-screen{flex:1;min-height:0;background:#263340;overflow:hidden}
 
 /* 1.22.0: deploy-first landing page, NOS readiness, operation banner, capture dialog, compact viewer */
-/* 1.23.0: telemetry view, charts and live link state on the map (see the Telemetry block at the end) */
 .empty-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:8px}
 .empty-vm-note{font-size:12px;color:#805510;margin:14px auto 0!important;max-width:520px}
 .empty-vm-note:empty{display:none}
@@ -136,20 +135,3 @@ dialog.node-details{position:fixed;inset:0 0 0 auto;margin:0;width:min(560px,94v
 .capture-viewer-help summary{cursor:pointer;font-weight:600;color:#157d91;white-space:nowrap}
 .capture-viewer-help[open]{flex-basis:100%;order:10}
 .capture-viewer-help p{margin:8px 0 2px;font-size:12px;line-height:1.5}
-/* Telemetry view */
-.tele-banner{background:#fff;border:1px solid var(--line);border-left:4px solid #87a9ab;border-radius:5px;padding:14px 18px;margin-bottom:16px}.tele-banner strong{font-size:14px}.tele-banner p{margin:6px 0 0;font-size:12px;color:#5e6f78}.tele-banner button{margin-top:10px}.tele-banner.streaming{border-left-color:#256447}.tele-banner.partial,.tele-banner.waiting{border-left-color:#b08a2e}.tele-banner.failed{border-left-color:#a13135}
-.tele-window{font-size:12px;color:#5e6f78;display:flex;align-items:center;gap:6px}.tele-window select{padding:6px 8px;border:1px solid #cacbca;border-radius:6px;background:#fff}
-.tele-layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;align-items:start}.tele-nodes{display:flex;flex-direction:column;gap:8px;max-height:70vh;overflow:auto}
-.tele-node{display:grid;gap:4px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:6px;padding:10px 12px;color:var(--ink)}.tele-node.active{border-color:var(--coral);box-shadow:0 0 0 2px #f15b4033}.tele-node:hover{border-color:#a9c0cb}
-.tele-node-name{font-weight:600;display:flex;justify-content:space-between;gap:8px}.tele-node-name small{color:#6e7e86;font-weight:400}.tele-node-message{font-size:11px;color:#5e6f78;overflow-wrap:anywhere}
-.tele-detail{background:#fff;border:1px solid var(--line);border-radius:6px;padding:16px;min-height:200px}.tele-detail h4{margin:18px 0 8px;font-size:13px}.tele-detail-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.tele-detail-head h3 small{font-weight:400;font-size:11px;color:#6e7e86;margin-left:6px}.tele-detail-head p{margin:6px 0 0;font-size:12px}.tele-groups .badge{margin-right:6px;margin-left:0}
-.tele-table table{min-width:900px}.tele-detail tr[data-tele-interface],.tele-detail tr[data-tele-peer]{cursor:pointer}.tele-detail tr.selected td{background:#e5f6f9}.tele-detail td small{display:block;font-weight:400;color:#6e7e86}.tele-detail tr.stale td{color:#8a8f93}
-.tele-charts{display:grid;gap:12px;margin-top:12px}.tele-chart-caption{font-size:12px;color:#5e6f78;margin:0}.tele-chart{width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:6px}
-.tele-chart-title{font-size:12px;font-weight:600;fill:var(--ink)}.tele-grid{stroke:#e6ebec;stroke-width:1}.tele-axis{font-size:10px;fill:#6e7e86}.tele-line{fill:none;stroke-width:2;stroke-linejoin:round}.tele-empty{font-size:12px;fill:#6e7e86}.tele-legend text{font-size:11px;fill:var(--ink)}
-.badge.neutral{background:#edf2f4;color:#5e6f78}.badge.tele-badge{margin-left:0}
-/* Live link and node state on the map */
-.topology-wire.tele-up path{stroke:#2f9e5f}.topology-wire.tele-up-partial path{stroke:#2f9e5f;stroke-dasharray:9 5}.topology-wire.tele-down path{stroke:#d64545;stroke-width:3}.topology-wire.tele-stale path{stroke:#b08a2e;stroke-dasharray:3 4}.topology-wire.tele-unknown path{stroke:#9fb3b5;stroke-dasharray:1 3}.topology-wire.tele-mismatch path{stroke-dasharray:12 3 3 3}
-.map-device .tele-dot{display:none;stroke:#fff;stroke-width:1.5}.map-device.tele-streaming .tele-dot{display:block;fill:#2f9e5f}.map-device.tele-stale .tele-dot{display:block;fill:#b08a2e}.map-device.tele-failed .tele-dot{display:block;fill:#d64545}.map-device.tele-waiting .tele-dot,.map-device.tele-configuring .tele-dot,.map-device.tele-connecting .tele-dot{display:block;fill:#79e8f6}
-.tele-swatch{display:inline-block;width:14px;height:3px;vertical-align:middle;margin:0 3px 0 6px;background:#9fb3b5}.tele-swatch.up{background:#2f9e5f}.tele-swatch.partial{background:repeating-linear-gradient(90deg,#2f9e5f 0 5px,transparent 5px 8px)}.tele-swatch.down{background:#d64545}.tele-swatch.stale{background:#b08a2e}
-@media(max-width:900px){.tele-layout{grid-template-columns:1fr}}

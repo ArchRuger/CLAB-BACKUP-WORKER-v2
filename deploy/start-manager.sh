@@ -2,19 +2,21 @@
 # One host-side entry point for fresh setup and upgrades. Existing passwords are retained.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
-password_args=(); operations=false; operation_args=()
+password_args=(); operations=false; operation_args=(); manager_only=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --reset-password) password_args+=(--reset-password); shift;;
     --enable-operations) operations=true; shift;;
     --lab-root) [[ $# -ge 2 ]] || exit 64; operation_args+=("$1" "$2"); operations=true; shift 2;;
     --allow-downloads) operation_args+=("$1"); operations=true; shift;;
-    *) echo 'Options: --reset-password, --enable-operations, --lab-root PATH, --allow-downloads. Public keys are no longer used.' >&2; exit 64;;
+    --manager-only) manager_only=true; shift;;
+    *) echo 'Options: --reset-password, --enable-operations, --lab-root PATH, --allow-downloads, --manager-only (skip the browser Wireshark and Grafana stacks). Public keys are no longer used.' >&2; exit 64;;
   esac
 done
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(dirname -- "$script_dir")
-/usr/bin/python3 "$script_dir/verify-release.py" "$repo_dir"
+# The runtime lockstep set only: a documentation mismatch is CI's business, not the VM's.
+/usr/bin/python3 "$script_dir/verify-release.py" --runtime "$repo_dir"
 command -v docker >/dev/null || { echo 'Install Docker first; see docs/FRESH-VM-GUIDE-V2.md.' >&2; exit 1; }
 docker compose version >/dev/null
 docker info >/dev/null
@@ -49,6 +51,24 @@ fi
 # them. Exercise the same read-only requests under clab-discovery before build.
 /usr/bin/python3 "$script_dir/verify-gateway.py" "$expected" "${gateway_args[@]}"
 bash "$script_dir/setup-vm.sh"
+# The browser Wireshark stack and the Grafana dashboards are part of every installation and
+# follow the release (the session service image carries the version), so an upgrade refreshes
+# them before the manager is created with the settings they write into clab-backup-ui/.env.
+# An explicit 'disabled' written by setup-capture.sh --remove or setup-telemetry.sh --remove is respected.
+env_file="$repo_dir/clab-backup-ui/.env"
+env_value() { local value=''; if [[ -f "$env_file" ]]; then value=$(grep -E "^$1=" "$env_file" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
+if ! $manager_only; then
+  if [[ $(env_value CAPTURE_PROVIDER) == disabled ]]; then
+    echo 'Browser capture is disabled in clab-backup-ui/.env; its stack is left alone (sudo bash deploy/setup-capture.sh re-enables it).'
+  else
+    bash "$script_dir/setup-capture.sh" --no-recreate
+  fi
+  if [[ $(env_value TELEMETRY_STACK) == disabled ]]; then
+    echo 'Grafana dashboards are disabled in clab-backup-ui/.env; their stack is left alone (sudo bash deploy/setup-telemetry.sh re-enables them).'
+  else
+    bash "$script_dir/setup-telemetry.sh" --no-recreate
+  fi
+fi
 cd -- "$repo_dir"
 docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
 # Avoid starting a second manager over data owned by a docker-run installation.
@@ -70,6 +90,7 @@ done
 docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
 docker compose -f clab-backup-ui/compose.yml ps
 echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery password are retained.'
+$manager_only || echo 'Wireshark opens from the map (Capture packets); the Grafana dashboards and lab maps are on TCP 3000 (or TELEMETRY_GRAFANA_PORT).'
 printf 'Optional Git setup: as your ordinary VM account, run (without sudo):\n  bash %q\n' "$script_dir/setup-git.sh"
 echo 'Use the guided prompts to configure commit name/email and GitHub login, then register. See docs/GIT-SETUP.md.'
 echo 'The UI opens directly without a login. VM and device SSH credentials remain in persistent storage.'
