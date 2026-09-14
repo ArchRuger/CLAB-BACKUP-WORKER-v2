@@ -19,14 +19,19 @@ function opCommand(action,label=opLabels[action],options={}){
  const cap=opCaps?.actions?.[action], unavailable=cap&&!cap.available;
  return `<button class="button secondary" data-op-action="${esc(action)}" data-op-options="${esc(JSON.stringify(options))}" ${unavailable?'disabled':''}>${esc(label||action)}${unavailable?'<small>Unavailable on this VM</small>':''}</button>`;
 }
+// Destroy always runs containerlab destroy --cleanup: the containers go together with the generated
+// lab folder (clab-<name>: TLS material, generated startup files), so the next deploy starts clean.
+// The helper refuses the flag on a containerlab without it, so the flag is only sent when the
+// installed command is known to have it or the capabilities could not be read at all.
+function opDestroyOptions(caps=opCaps){return caps?.actions?.destroy?.cleanup===false?{}:{cleanup:true};}
 async function openLabOperations(id=activeId){
  opMenuLab=id;const lab=state.labs.find(l=>l.id===id);if(!lab)return;
  const dialog=opDialog('lab-operations-dialog',lab.name,'<p>Checking installed VM commands…</p>');
  let problem='';try{await opCapabilities();}catch(e){opCaps=null;problem=e.message;}
  if(!dialog.open)return;
- const cleanup=['deploy','redeploy','destroy'].filter(a=>opCaps?.actions[a]?.cleanup).map(a=>opCommand(a,opLabels[a]+' + cleanup',{cleanup:true})).join('');
+ const cleanup=['deploy','redeploy'].filter(a=>opCaps?.actions[a]?.cleanup).map(a=>opCommand(a,opLabels[a]+' + cleanup',{cleanup:true})).join('');
  opDialog(dialog.id,lab.name,`<p class="op-path">${esc(opPath(lab)||'Import the original VM lab files before using host commands.')}</p>${problem?`<p class="op-notice">${esc(problem)}</p>`:''}
- <div class="op-sections"><section><h3>Deployment & configuration</h3><div class="op-grid">${['deploy','redeploy','apply','start','stop','restart','inspect','save','destroy'].map(a=>opCommand(a)).join('')}${cleanup}</div><p class="form-help">Destroy removes containers. Cleanup also removes generated lab artifacts. Containerlab save supports selected device kinds; manager backups remain in Backup history.</p></section>
+ <div class="op-sections"><section><h3>Deployment & configuration</h3><div class="op-grid">${['deploy','redeploy','apply','start','stop','restart','inspect','save'].map(a=>opCommand(a)).join('')}${opCommand('destroy',opLabels.destroy,opDestroyOptions())}${cleanup}</div><p class="form-help">Destroy removes the containers and the generated lab folder (containerlab destroy --cleanup); redeploy keeps that folder unless you choose its cleanup variant. Containerlab save supports selected device kinds; manager backups remain in Backup history.</p></section>
  <section><h3>Workspace & access</h3><div class="op-grid"><button class="button secondary" data-local="ssh">SSH all nodes ↗</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove favorite':'Favorite lab'}</button><button class="button secondary" data-local="interactive">Edit topology diagram</button><button class="button secondary" data-local="telemetry">Telemetry settings…</button><button class="button secondary" data-local="history">Operation history</button>${opCommand('delete')}</div></section></div>`);
  dialog.querySelectorAll('[data-op-action]').forEach(b=>b.onclick=()=>{
   const action=b.dataset.opAction,options=JSON.parse(b.dataset.opOptions);
@@ -53,14 +58,25 @@ function telemetrySummaryText(data){
  const parts=['streaming','stale','waiting','configuring','connecting','failed','unsupported'].filter(k=>sum[k]).map(k=>`${sum[k]} ${teleStateLabels[k]}`);
  return `Automatic telemetry is on: ${sum.total||0} supported node${sum.total===1?'':'s'}${parts.length?' · '+parts.join(' · '):''}. Read the data in Grafana.`;
 }
+// Grafana runs on the VM only while someone reads it; the manager starts it from the lab header's
+// button and stops it after the idle time. Its state and a manual stop live in the same dialog.
+function telemetryGrafanaText(g){
+ if(!g)return 'Grafana: state unavailable.';
+ if(!g.enabled)return 'Grafana: not installed on this manager.';
+ if(g.running)return `Grafana: running on TCP ${g.port}${g.idle_minutes?`; stops after ${g.idle_minutes} minute${g.idle_minutes===1?'':'s'} without an open dashboard`:'; the automatic stop is off'}.`;
+ if(g.running===false)return 'Grafana: stopped; it starts when you open it from the lab header.';
+ return 'Grafana: not checked yet.';
+}
 async function openTelemetrySettings(id=activeId){
  const data=await(await api('/labs/'+id+'/telemetry')).json();
+ let grafana=null;try{grafana=await(await api('/telemetry/grafana')).json();}catch{grafana=null;}
  const s=data.settings||{},profiles=data.password_profiles||[],usable=data.enabled&&data.linked;
  const failed=(data.nodes||[]).filter(n=>['failed','stale'].includes(n.state));
- const dialog=opDialog('telemetry-settings-dialog','Telemetry settings',`<p class="form-help">${esc(telemetrySummaryText(data))}</p>${failed.length?`<ul class="form-help">${failed.map(n=>`<li><strong>${esc(n.short_name||n.name)}</strong> (${esc(teleStateLabels[n.state]||n.state)}): ${esc(n.message||'')}</li>`).join('')}</ul>`:''}<label class="checkbox-label"><input type="checkbox" id="tele-auto" ${s.auto?'checked':''} ${usable?'':'disabled'}> Automatic telemetry: configure the gNMI service on supported nodes and stream counters to Grafana</label><p class="form-help">Applies to cEOS, XRv9k and cJunosEvolved nodes once they answer show version. The manager adds only the missing service lines with each NOS's own scoped commit and never saves the whole running configuration. The manager keeps the last hour in memory for Prometheus to scrape; a stop, destroy, redeploy or removal clears it.</p><label>gNMI login<select id="tele-profile" ${usable?'':'disabled'}><option value="">Each node's saved password login (profile, inventory or containerlab default)</option>${profiles.map(p=>`<option value="${esc(p.id)}" ${p.id===s.profile_id?'selected':''}>${esc(p.label)} · ${esc(p.platform)}</option>`).join('')}</select></label><p class="form-help">gNMI needs a username and password; nodes that log in with an SSH key need a password profile here. Secrets never leave the manager.</p><div class="dialog-actions">${failed.length?'<button class="button secondary" id="tele-retry">Retry failed nodes</button>':''}<button class="button secondary" id="tele-remove" ${s.auto||!usable?'disabled title="Disable automatic telemetry first"':''}>Remove manager-added lines…</button><button class="button primary" id="tele-save" ${usable?'':'disabled'}>Save</button></div><p class="form-help">Remove deletes only the telemetry configuration lines this manager recorded as its own, on running nodes, over SSH. Disabling telemetry alone leaves the device configuration as it is.</p>`);
+ const dialog=opDialog('telemetry-settings-dialog','Telemetry settings',`<p class="form-help">${esc(telemetrySummaryText(data))}</p>${failed.length?`<ul class="form-help">${failed.map(n=>`<li><strong>${esc(n.short_name||n.name)}</strong> (${esc(teleStateLabels[n.state]||n.state)}): ${esc(n.message||'')}</li>`).join('')}</ul>`:''}<p class="form-help" id="tele-grafana">${esc(telemetryGrafanaText(grafana))}${grafana?.running?' <button class="button secondary" id="tele-grafana-stop" type="button">Stop Grafana now</button>':''}</p><label class="checkbox-label"><input type="checkbox" id="tele-auto" ${s.auto?'checked':''} ${usable?'':'disabled'}> Automatic telemetry: configure the gNMI service on supported nodes and stream counters to Grafana</label><p class="form-help">Applies to cEOS, XRv9k and cJunosEvolved nodes once they answer show version. The manager adds only the missing service lines with each NOS's own scoped commit and never saves the whole running configuration. The manager keeps the last 15 minutes in memory for Prometheus to scrape; a stop, destroy, redeploy or removal clears it.</p><label>gNMI login<select id="tele-profile" ${usable?'':'disabled'}><option value="">Each node's saved password login (profile, inventory or containerlab default)</option>${profiles.map(p=>`<option value="${esc(p.id)}" ${p.id===s.profile_id?'selected':''}>${esc(p.label)} · ${esc(p.platform)}</option>`).join('')}</select></label><p class="form-help">gNMI needs a username and password; nodes that log in with an SSH key need a password profile here. Secrets never leave the manager.</p><div class="dialog-actions">${failed.length?'<button class="button secondary" id="tele-retry">Retry failed nodes</button>':''}<button class="button secondary" id="tele-remove" ${s.auto||!usable?'disabled title="Disable automatic telemetry first"':''}>Remove manager-added lines…</button><button class="button primary" id="tele-save" ${usable?'':'disabled'}>Save</button></div><p class="form-help">Remove deletes only the telemetry configuration lines this manager recorded as its own, on running nodes, over SSH. Disabling telemetry alone leaves the device configuration as it is.</p>`);
  $('tele-save').onclick=()=>opTask(dialog,async()=>{const auto=$('tele-auto').checked;await json('/labs/'+id+'/telemetry/settings','PUT',{auto,profile_id:$('tele-profile').value||''});notify(auto?'Automatic telemetry enabled. Supported nodes are configured as they become ready; open Grafana to watch them.':'Automatic telemetry disabled; collection stopped.');dialog.close();await refresh();});
  $('tele-remove').onclick=()=>opTask(dialog,async()=>{if(!confirm('Remove the telemetry configuration lines the manager added on the running nodes of this lab?'))return;const result=await json('/labs/'+id+'/telemetry/remove-config','POST',{});notify(result.started.length?`Removal started on ${result.started.join(', ')}.`:'Nothing to remove on running nodes.');dialog.close();});
  if($('tele-retry'))$('tele-retry').onclick=()=>opTask(dialog,async()=>{await json('/labs/'+id+'/telemetry/retry','POST',{});notify('Retry requested for the failed nodes.');dialog.close();});
+ if($('tele-grafana-stop'))$('tele-grafana-stop').onclick=()=>opTask(dialog,async()=>{const result=await json('/telemetry/grafana/stop','POST',{});$('tele-grafana').textContent=telemetryGrafanaText(result);notify('Grafana stopped on the VM; it starts again when you open it.');});
  return dialog;
 }
 async function opReview(request){
@@ -137,12 +153,27 @@ async function opHistory(labId=''){
 // Deploy lab keeps the manager in step with the VM: the workspace (nodes, map and VM
 // source link) is saved before the command runs, so the lab is in the sidebar at once
 // and NOS logins are verified as soon as its containers start. Nothing to import.
+// The VS Code extension keeps a topology's node positions and styling in <file>.annotations.json
+// beside it. It is read with the topology so the preview, the saved workspace and the Grafana map
+// start from that layout instead of the default grid; a missing or unreadable file means the grid.
+async function opReadAnnotations(path){
+ if(!path)return '';
+ try{return (await json('/operations/read','POST',{path:path+'.annotations.json'})).text||'';}catch{return '';}
+}
+async function opParse(path,text){
+ const annotations=await opReadAnnotations(path);
+ const parsed=await json('/operations/parse-yaml','POST',{options:{text,annotations}});
+ return {...parsed,annotations:parsed.annotations_used?annotations:''};
+}
+function opWorkspaceForm(path,source,parsed){
+ const form=new FormData(),name=path.split('/').pop();
+ form.append('definition',new Blob([source.text],{type:'text/yaml'}),name);
+ if(parsed?.annotations)form.append('annotations',new Blob([parsed.annotations],{type:'application/json'}),name+'.annotations.json');
+ return form;
+}
 async function opSaveWorkspace(path,source,parsed,labId=''){
  let id=labId||(state.labs||[]).find(l=>l.deployment_name===parsed.name||opPath(l)===path)?.id||'';
- if(!id){
-  const form=new FormData();form.append('definition',new Blob([source.text],{type:'text/yaml'}),path.split('/').pop());
-  id=(await(await api('/lab-definitions',{method:'POST',body:form})).json()).id;
- }
+ if(!id)id=(await(await api('/lab-definitions',{method:'POST',body:opWorkspaceForm(path,source,parsed)})).json()).id;
  await json('/labs/'+id+'/operations-settings','PUT',{path});
  activeId=id;sessionStorage.setItem('activeLab',id);
  return id;
@@ -188,20 +219,20 @@ async function opEdit(path,labId='',newPath=''){
  opEditorContext={path:value.path,labId,isNew:!path};
  const dialog=opDialog('op-editor',path?'Lab topology':'Create lab topology',`<label>Absolute VM path<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology YAML':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Choose Deploy lab to save this topology as a workspace and start its devices on the VM; the lab appears in the manager right away and SSH opens as the devices boot. Save to manager keeps the workspace without deploying. Existing files are read-only; edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Validate / preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Review creation on VM</button>':''}${path&&isYaml?'<button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Save to manager')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
  $('op-edit-path').value=value.path;$('op-edit-text').value=value.text;
- $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await json('/operations/parse-yaml','POST',{options:{text:$('op-edit-text').value}});opMapPreview(parsed.drawing,parsed.name);}));
+ $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
  $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value}})));
  $('op-add-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
   // Always read the actual VM file; unsaved editor contents are not linked/imported.
-  const source=await json('/operations/read','POST',{path}),parsed=await json('/operations/parse-yaml','POST',{options:{text:source.text}});
-  const confirm=opDialog('op-add-confirm',labId?'Link lab topology?':'Save lab to manager?',`<p>${esc(parsed.name)} · ${parsed.drawing.nodes.length} nodes</p><p class="op-path">${esc(path)}</p><p>This saves a manager workspace and links its original VM source. It does not deploy containers. Device credentials can be imported from discovered VM files after deployment.</p><button class="button primary" id="op-add-confirm-button">${labId?'Link topology':'Save lab'}</button>`);
+  const source=await json('/operations/read','POST',{path}),parsed=await opParse(path,source.text);
+  const confirm=opDialog('op-add-confirm',labId?'Link lab topology?':'Save lab to manager?',`<p>${esc(parsed.name)} · ${parsed.drawing.nodes.length} nodes${parsed.annotations_used?' · positions from the annotations file':''}</p><p class="op-path">${esc(path)}</p><p>This saves a manager workspace and links its original VM source. It does not deploy containers. Device credentials can be imported from discovered VM files after deployment.</p><button class="button primary" id="op-add-confirm-button">${labId?'Link topology':'Save lab'}</button>`);
   $('op-add-confirm-button').onclick=()=>opTask(confirm,async()=>{
    let id=labId;
-   if(!id){const form=new FormData();form.append('definition',new Blob([source.text],{type:'text/yaml'}),path.split('/').pop());const lab=await(await api('/lab-definitions',{method:'POST',body:form})).json();id=lab.id;}
+   if(!id){const lab=await(await api('/lab-definitions',{method:'POST',body:opWorkspaceForm(path,source,parsed)})).json();id=lab.id;}
    await json('/labs/'+id+'/operations-settings','PUT',{path});activeId=id;sessionStorage.setItem('activeLab',id);confirm.close();dialog.close();await refresh();notify('Lab topology saved to the manager.');
   });
  }));
  $('op-deploy-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
-  const source=await json('/operations/read','POST',{path}),parsed=await json('/operations/parse-yaml','POST',{options:{text:source.text}});
+  const source=await json('/operations/read','POST',{path}),parsed=await opParse(path,source.text);
   const id=await opSaveWorkspace(path,source,parsed,labId);
   await opReview({action:'deploy',lab_id:id,path,name:parsed.name});
  }));
@@ -216,8 +247,8 @@ async function opPopular(){
  const dialog=opDialog('op-popular-dialog','Popular lab topologies','<p>SRL Labs repositories tagged clab-topo, ordered by GitHub stars. Cloning and deployment are separate reviewed steps.</p><div class="op-history">'+data.items.map((item,i)=>`<button class="button secondary" data-repo="${i}"><strong>${esc(item.name)}</strong><small>${esc(item.description)}</small></button>`).join('')+'</div>');
  dialog.querySelectorAll('[data-repo]').forEach(b=>b.onclick=()=>{const item=data.items[Number(b.dataset.repo)];opClone(item.url,item.name);});
 }
-function opMapPreview(drawing,name){
- const dialog=opDialog('op-map-preview','Topology preview · '+name,'<svg id="op-preview-map" class="topology-map op-layout-map" role="img" aria-label="Proposed topology"></svg><p>This previews YAML structure. Imported annotations remain in the saved map until explicitly replaced.</p>');
+function opMapPreview(drawing,name,positioned=false){
+ const dialog=opDialog('op-map-preview','Topology preview · '+name,`<svg id="op-preview-map" class="topology-map op-layout-map" role="img" aria-label="Proposed topology"></svg><p>${positioned?'Wiring from the YAML, node positions from the annotations file beside it; the saved workspace starts from this layout.':'Wiring from the YAML; the nodes sit on the default grid because no annotations file was found beside the topology (Edit diagram moves them later).'}</p>`);
  const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing);svg.setAttribute('viewBox',measureTopology(svg).join(' '));return dialog;
 }
 async function opLayout(id){return editDiagram(id);}
@@ -229,7 +260,9 @@ function opQuickActions(lab,discovery,isBusy=false){
 async function opQuickRun(kind){
  const lab=current(),actions=opQuickActions(lab,state.discovery,busy());
  if(!lab||!(kind==='start'?actions.canStart:actions.canDestroy))return;
- await opReview({lab_id:lab.id,action:kind==='start'?actions.startAction:'destroy'});
+ let options={};
+ if(kind!=='start'){try{await opCapabilities();}catch{opCaps=null;}options=opDestroyOptions();}
+ await opReview({lab_id:lab.id,action:kind==='start'?actions.startAction:'destroy',options});
 }
 function renderLabOperations(){
  const quick=opQuickActions(current(),state.discovery,busy());

@@ -90,7 +90,7 @@ done
 docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
 docker compose -f clab-backup-ui/compose.yml ps
 echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery password are retained.'
-$manager_only || echo 'Wireshark opens from the map (Capture packets); the Grafana dashboards and lab maps are on TCP 3000 (or TELEMETRY_GRAFANA_PORT).'
+$manager_only || echo 'Wireshark opens from the map (Capture packets); Grafana (dashboards and lab maps, TCP 3000 or TELEMETRY_GRAFANA_PORT) starts when you open it from a lab and stops itself when nobody reads it.'
 printf 'Optional Git setup: as your ordinary VM account, run (without sudo):\n  bash %q\n' "$script_dir/setup-git.sh"
 echo 'Use the guided prompts to configure commit name/email and GitHub login, then register. See docs/GIT-SETUP.md.'
 echo 'The UI opens directly without a login. VM and device SSH credentials remain in persistent storage.'

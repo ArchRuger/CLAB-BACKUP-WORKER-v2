@@ -52,6 +52,33 @@ class HostOperationTests(unittest.TestCase):
         self.missing.add('apply'); self.assertFalse(self.host.capabilities()['actions']['apply']['available'])
         with self.assertRaisesRegex(ValueError,'does not support'): self.host.plan(self.request('apply'))
 
+    def test_grafana_mode_starts_stops_and_inspects_the_named_container_only(self):
+        from app.host_operations import GRAFANA_CONTAINER
+        states = {'inspect': (0, 'exited\n')}
+        def run(argv):
+            self.calls.append(argv)
+            if argv[1] == 'start': states['inspect'] = (0, 'running\n'); return 0, ''
+            if argv[1] == 'stop': states['inspect'] = (0, 'exited\n'); return 0, ''
+            if argv[1] == 'inspect': return states['inspect']
+            return 1, ''
+        host = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', roots=[str(self.root)], projects=str(self.root)), run)
+        self.assertEqual(host.grafana('status'), {'container': GRAFANA_CONTAINER, 'state': 'exited'})
+        self.assertEqual(host.grafana('start'), {'container': GRAFANA_CONTAINER, 'state': 'running'})
+        self.assertEqual(host.grafana('stop'), {'container': GRAFANA_CONTAINER, 'state': 'exited'})
+        self.assertEqual([a[1:] for a in self.calls], [
+            ['inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER],
+            ['start', GRAFANA_CONTAINER], ['inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER],
+            ['stop', '-t', '10', GRAFANA_CONTAINER], ['inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER]])
+        self.assertTrue(all(a[0] == '/usr/bin/docker' for a in self.calls))
+        states['inspect'] = (1, '')
+        self.assertEqual(host.grafana('status')['state'], 'missing')
+        states['inspect'] = (0, 'running; rm -rf /\n')
+        self.assertEqual(host.grafana('status')['state'], 'missing', 'only a plain word is reported')
+        for action in ('restart', 'rm', '', None, ['start']):
+            with self.assertRaisesRegex(ValueError, 'Unsupported Grafana action'): host.grafana(action)
+        failing = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', roots=[str(self.root)], projects=str(self.root)), lambda argv: (1, ''))
+        with self.assertRaisesRegex(ValueError, 'Could not start the Grafana container'): failing.grafana('start')
+
     def test_redeploy_fallback_order_cleanup_and_name(self):
         self.missing.add('redeploy')
         plan=self.host.plan(self.request('redeploy',cleanup=True))
@@ -178,6 +205,22 @@ class OperationAPITests(unittest.TestCase):
         response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action=action,lab_id=self.lab_id,**extra))
         self.assertEqual(response.status_code,200,response.text);return response.json()
     def confirm(self,token):return self.client.post('/api/operations/confirm',headers=self.auth,json={'token':token})
+
+    def test_parse_yaml_places_nodes_from_the_annotations_file_and_falls_back_to_the_grid(self):
+        annotations=json.dumps({'nodeAnnotations':[{'id':'r1','position':{'x':380,'y':360}},{'id':'r2','position':{'x':520,'y':340}}]})
+        def parse(**options):
+            response=self.client.post('/api/operations/parse-yaml',headers=self.auth,json={'options':{'text':YAML.decode(),**options}})
+            self.assertEqual(response.status_code,200,response.text);return response.json()
+        placed=parse(annotations=annotations)
+        self.assertTrue(placed['annotations_used']);self.assertTrue(placed['drawing']['placed'])
+        self.assertEqual({n['id']:(n['x'],n['y']) for n in placed['drawing']['nodes']},{'r1':(380,360),'r2':(520,340)})
+        self.assertEqual(len(placed['drawing']['links']),1,'the wiring still comes from the YAML')
+        for options in ({},{'annotations':''},{'annotations':'{not json'},{'annotations':'{"other":1}'}):
+            grid=parse(**options)
+            self.assertFalse(grid['annotations_used']);self.assertFalse(grid['drawing']['placed'])
+            self.assertEqual([(n['x'],n['y']) for n in grid['drawing']['nodes']],[(0,0),(160,0)])
+        response=self.client.post('/api/operations/parse-yaml',headers=self.auth,json={'options':{'text':'not: [a topology','annotations':annotations}})
+        self.assertEqual(response.status_code,400)
 
     def test_auth_review_cancel_and_single_use_confirmation(self):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:

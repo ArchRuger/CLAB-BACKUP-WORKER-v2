@@ -1,3 +1,52 @@
+# Map positions, destroy cleanup, Grafana on demand — 1.26.0
+
+Read docs/CHANGELOG.md "Changes in 1.26.0", docs/TELEMETRY.md and docs/LAB-OPERATIONS.md.
+(1) Map positions: `parse_drawing` returns `placed` (True when at least one annotation
+node carried a position) and `topology.unplaced(drawing)` tells a default-grid drawing
+from a placed one (a drawing without the key, saved before 1.26.0, is judged by its
+coordinates against `grid_position(i)`). `PUT /api/labs/{id}/layout` sets `placed=True`
+(a person's layout is never replaced). `POST /api/operations/parse-yaml` takes
+`options.annotations` (the text of `<topology>.annotations.json`, read by the browser
+through the helper's `read` mode, which allows `.json`) and answers `annotations_used`;
+a broken file falls back to the grid. In operations.js `opParse(path, text)` reads the
+file and parses, `opWorkspaceForm(path, source, parsed)` adds the `annotations` part to
+the `/api/lab-definitions` form, and Validate/preview, Save to manager and Deploy lab
+all go through them (`opMapPreview` takes a third argument for its note). In
+`discovery.update_sources` a linked lab whose drawing is `unplaced` takes
+`candidate['drawing']` from a bundle that carries annotations (event
+`topology.positions`); everything else still waits for Sync from VM
+(`test_vm_files.test_annotations_beside_the_deployed_topology_place_a_grid_only_map_without_a_sync`).
+(2) Destroy: `opDestroyOptions(caps)` returns `{cleanup:true}` unless
+`caps.actions.destroy.cleanup === false`; both the menu's Destroy and the quick button
+use it, the "+ cleanup" extras are deploy/redeploy only; the helper's plan logic is
+unchanged. (3) Grafana on demand: `deploy/compose.telemetry.yml` has
+`container_name: clab-manager-grafana`, `restart: "no"`, Prometheus
+`--storage.tsdb.retention.time=15m` plus `--storage.tsdb.min/max-block-duration=15m`
+(hidden Prometheus flags; keep them together with the pinned image and never add a
+`=true/false` flag) and 64 MB tmpfs volumes. `setup_telemetry.py` writes
+`TELEMETRY_GRAFANA_IDLE_MINUTES` (default 15, 0-1440, 0 = never stop) and knows
+`GRAFANA_CONTAINER`; `setup-telemetry.sh` runs `stop grafana` after the `--wait` gate
+(test_telemetry_setup checks the order). `host_operations.py` mode `grafana` with
+`action` status/start/stop runs `docker start|stop -t 10|inspect` of that fixed name
+only. `app/grafana_control.py` (`GrafanaControl`, `app.state.grafana`,
+`GET /api/telemetry/grafana`, `POST /api/telemetry/grafana/start|stop`, monitor thread
+`run()`/`close()` in the lifespan after telemetry) probes `/api/health` and sums
+`grafana_http_request_duration_seconds_count` over every handler except `/metrics` and
+`/api/health` (`activity()`); a changed sum is a viewer; stop after the idle time once
+`GRACE` (90 s) has passed since the start; a failed stop backs off 300 s; the counter
+baseline is taken at start. `static/grafana.html` + `grafana.js` (in verify-release
+FIELDS and in the CI node list as tests/test_grafana_ui.js) take only `#path=` and
+`#title=`, validate the path against `^/d/[A-Za-z0-9_-]+(\?[A-Za-z0-9_=&%+.-]*)?$` and
+build the origin from `location` plus the manager-announced port; app.js
+`renderGrafanaLink` links there (`grafanaLaunch(lab)`, `grafanaPath(lab)`; `grafanaUrl`
+is gone). `openTelemetrySettings` shows `telemetryGrafanaText` and a "Stop Grafana now"
+button. `check_install.check_telemetry_dashboards` reads `/api/telemetry/grafana`:
+`running is False` means PASS "provisioned and stopped" after the Prometheus and maps
+checks, without any Grafana request; `deploy/telemetry/smoke.py` stops and starts the
+container and expects the dashboards, map and Flow panel back. Store: `WINDOW=900`,
+`WINDOWS=(300, 900)`, `POINTS=130`. The POST routes of the guard need a body
+(`content-length` 0 is refused), so the page posts `{}`.
+
 # Documentation and installation audit — 1.25.0
 
 Read docs/CHANGELOG.md "Changes in 1.25.0", docs/REPOSITORY-MAINTENANCE.md and

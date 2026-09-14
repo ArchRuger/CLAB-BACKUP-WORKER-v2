@@ -109,12 +109,12 @@ flowchart LR
     T["Telemetry manager<br/>state machine per node"]
     P["Provisioning (SSH shell)<br/>read service · add missing lines · scoped commit"]
     C["Collector thread per node<br/>pygnmi dial-in · capabilities · subscriptions"]
-    S[("Session store<br/>memory only · 60 min rings<br/>rates from counter deltas")]
+    S[("Session store<br/>memory only · 15 min rings<br/>rates from counter deltas")]
     X["/api/telemetry/metrics<br/>Prometheus text: names, states, rates"]
     A["/api/labs/{id}/telemetry<br/>settings · retry · remove-config"]
     U["Lab actions → Telemetry settings<br/>Grafana ↗ button in the lab header"]
     MP["Map publisher<br/>one provisioned dashboard per lab<br/>data/telemetry/dashboards"]
-    G["Prometheus scrapes every 10 s<br/>Grafana: Lab overview · Interfaces · BGP · Lab maps"]
+    G["Prometheus scrapes every 10 s, keeps 15 min<br/>Grafana on demand (started from the lab, stopped when idle):<br/>Lab overview · Interfaces · BGP · Lab maps"]
     N[("NOS gNMI<br/>6030 · 57400 · 32767")]
     R --> T --> P --> N
     T --> C <--> N

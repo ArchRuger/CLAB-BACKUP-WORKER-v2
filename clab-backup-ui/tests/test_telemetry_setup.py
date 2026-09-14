@@ -10,7 +10,7 @@ import unittest
 
 import yaml
 
-from app import telemetry_metrics
+from app import host_operations, telemetry_metrics
 from app.telemetry import TelemetryManager
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -34,7 +34,7 @@ class SetupScriptTests(unittest.TestCase):
             result = setup.configure(env, config)
             first = env.read_text(); setup.configure(env, config)
             self.assertEqual(first, env.read_text())
-            self.assertEqual(result, {'ui_port': 8088, 'grafana_port': 3000, 'prometheus_port': 9090, 'bind': '0.0.0.0', 'maps_dir': maps_dir})
+            self.assertEqual(result, {'ui_port': 8088, 'grafana_port': 3000, 'prometheus_port': 9090, 'bind': '0.0.0.0', 'maps_dir': maps_dir, 'idle_minutes': 15})
             for expected in ('UI_PORT=8088', '$(do-not-run)', 'CAPTURE_PROVIDER=edgeshark', 'TELEMETRY_STACK=grafana', 'TELEMETRY_GRAFANA_PORT=3000',
                              'TELEMETRY_CONFIG_DIR=' + str(config), 'TELEMETRY_MAPS_DIR=' + maps_dir):
                 self.assertIn(expected, first)
@@ -171,7 +171,28 @@ class StackDefinitionTests(unittest.TestCase):
             self.assertIn('no-new-privileges:true', service['security_opt']); self.assertIn('mem_limit', service); self.assertIn('pids_limit', service)
             self.assertNotIn('ports', service); self.assertNotIn('/var/run/docker.sock', json.dumps(service))
         self.assertIn('--web.listen-address=127.0.0.1:${TELEMETRY_PROMETHEUS_PORT:-9090}', services['prometheus']['command'])
-        self.assertIn('--storage.tsdb.retention.time=2h', services['prometheus']['command'])
+        # Fifteen minutes of history everywhere: retention alone would keep the two-hour head block in
+        # memory, so the block duration is fifteen minutes as well.
+        for flag in ('--storage.tsdb.retention.time=15m', '--storage.tsdb.min-block-duration=15m', '--storage.tsdb.max-block-duration=15m'):
+            self.assertIn(flag, services['prometheus']['command'])
+        self.assertEqual(services['prometheus']['restart'], 'unless-stopped', 'Prometheus keeps scraping while Grafana is stopped')
+        # Grafana is on demand: a fixed container name for the helper's docker start/stop, never restarted on its own.
+        self.assertEqual(services['grafana']['container_name'], setup.GRAFANA_CONTAINER)
+        self.assertEqual(services['grafana']['container_name'], host_operations.GRAFANA_CONTAINER)
+        self.assertEqual(str(services['grafana']['restart']), 'no')
+        script_text = (ROOT / 'deploy/setup-telemetry.sh').read_text()
+        self.assertIn('stop grafana', script_text, 'setup leaves Grafana stopped')
+        self.assertLess(script_text.index('--wait'), script_text.index('stop grafana'), 'the health gate runs before Grafana is stopped')
+        for path in sorted(DASHBOARDS.glob('*.json')):
+            picker = json.loads(path.read_text(encoding='utf-8'))['timepicker']
+            self.assertEqual([r['from'] for r in picker['quick_ranges']], ['now-5m', 'now-15m'], path.name)
+        # The manager's own Compose file passes named variables only: every telemetry key the manager
+        # reads must be listed there, or a value written into .env never reaches the container
+        # (the idle time was missing at first and the manager kept its default, seen live).
+        manager = yaml.safe_load((ROOT / 'clab-backup-ui/compose.yml').read_text())['services']['backup-ui']['environment']
+        for key in ('TELEMETRY_STACK', 'TELEMETRY_GRAFANA_PORT', 'TELEMETRY_PROMETHEUS_PORT', 'TELEMETRY_GRAFANA_IDLE_MINUTES'):
+            self.assertIn(key, manager, key)
+        self.assertEqual(manager['TELEMETRY_GRAFANA_IDLE_MINUTES'], '${TELEMETRY_GRAFANA_IDLE_MINUTES:-' + str(setup.DEFAULT_IDLE_MINUTES) + '}')
         # Prometheus (kingpin) boolean flags take --flag or --no-flag; '--flag=false' aborts start-up
         # with 'unexpected false' and the whole stack crash-loops (seen live in 1.23.0).
         self.assertEqual([c for c in services['prometheus']['command'] if c.endswith(('=false', '=true'))], [])

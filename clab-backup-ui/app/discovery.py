@@ -373,6 +373,15 @@ class Discovery:
                 previous = lab.get('vm_source', {})
                 lab['vm_source'] = {**previous, **metadata(bundle), 'can_sync': True,
                     'status': 'Up to date' if previous.get('synced_digest') == bundle['digest'] else 'Updates available'}
+                # A workspace saved from the topology YAML alone (Deploy lab, Save to manager) has its
+                # nodes on the default grid. The annotations file beside the deployed topology places
+                # them: apply it as soon as it is seen, without waiting for an explicit sync, as long
+                # as nobody has placed the nodes by hand. Logins, nodes and later annotation edits
+                # still arrive through Sync from VM only.
+                from .topology import unplaced
+                if bundle['files'].get('annotations') and unplaced(lab.get('drawing')) and not unplaced(candidate['drawing']):
+                    lab['drawing'] = candidate['drawing']
+                    self.store.event('topology.positions', 'Placed the map nodes from the annotations file beside the deployed topology', lab_id=lab['id'])
 
     def public(self):
         with self.store.lock:

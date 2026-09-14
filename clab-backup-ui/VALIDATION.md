@@ -1,3 +1,67 @@
+# Map positions, destroy cleanup, Grafana on demand — 1.26.0
+
+Prepared on `claude/map-positions-destroy-cleanup-grafana-on-demand` from main `478568a`
+(1.25.0) on 2026-09-14, after the user reported the topology map showing nodes in a flat
+line instead of the positions in the annotations file, and asked for destroy to use
+`--cleanup`, for Grafana to run only on request, and for the telemetry history to be
+capped at fifteen minutes everywhere.
+
+## Root cause of the flat map, found on the dev VM
+
+The `ceos-pair` workspace on the dev VM held ceos1 at (0,0) and ceos2 at (160,0), the
+default grid, while `/etc/containerlab/ceos-pair/ceos-pair.clab.yaml.annotations.json`
+placed them at (380,360) and (520,340) and discovery reported the file as found. The
+workspace had been created by *Deploy lab* (source `ceos-pair.clab.yaml`, `synced_at`
+null, status *Updates available*): that path registered the YAML alone, and only an
+explicit *Sync from VM* would ever have applied the file.
+
+## Local checks (Windows workstation, Python 3.12, Node)
+
+| Check | Result |
+|---|---|
+| `python -m unittest discover -s tests -t tests -p test_topology.py` (new `placed` / `unplaced` test) | 15 tests OK |
+| `test_lab_operations.py` (parse-yaml with annotations, helper `grafana` mode argv) | 24 tests OK, 2 platform skips |
+| `test_vm_files.py` (discovery places a grid-only drawing from the bundle's annotations, never a hand-placed one) | 26 tests OK, 1 skip |
+| `test_diagram_editor.py` (a saved layout is `placed`) | 5 tests OK |
+| `test_grafana_control.py` (new: activity parsing, idle stop, grace, retry back-off, API routes) | 8 tests OK |
+| `test_telemetry_setup.py` (compose flags, container name, restart policy, setup order, quick ranges, idle key) | 9 tests OK, 1 skip |
+| `test_check_install.py` (stopped Grafana passes read-only; a broken scrape still fails) | 37 tests OK, 1 skip |
+| `test_telemetry_store.py`, `test_telemetry_map.py`, `test_telemetry_manager.py`, `test_install_manager.py`, `test_app.py` | OK |
+| `node --test` operations, readiness and the new grafana page suites | 12 + 9 + 4 tests, 0 failures |
+| `test_discovery.py` | Once green, twice one `PermissionError` on `os.replace(state.enc.tmp)`: the known Windows open-handle rename flake, a different test each time; rerun on the VM below |
+| `node --test` of the whole CI list (9 suites) | 66 tests, 0 failures |
+| `python deploy/verify-release.py` | `Source release verified: 1.26.0` and `Documentation names only release 1.26.0` |
+| `bash -n` on every deploy script | clean |
+
+## Live validation on the dev VM (Ubuntu 24.04, containerlab 0.79.0, Compose v5.5.1)
+
+The working tree was staged into `~/projects/clab-manager` (the VM's `.env` kept) and upgraded
+in place with `sudo bash deploy/start-manager.sh --enable-operations`, which reinstalled the
+helpers, refreshed both stacks and rebuilt the manager. The session stopped at the user's
+request before a from-commit re-stage: the VM runs that staged tree plus the identical
+`compose.yml` line below; the committed tree differs from it only in the singular-minute
+wording of the Grafana status texts. Not exercised live: the *Stop Grafana now* button in
+Telemetry settings (unit-tested in `test_operations_ui.js`) and the CI smoke's Grafana
+stop/start step (runs in CI on the push).
+
+| Step | Result |
+|---|---|
+| Full Python suite on the VM (Linux venv from `requirements.txt` + httpx + pyyaml) | 611 tests, 610 pass, 1 skip; the one failure is `test_app.test_callback_and_archive_pipeline_offline`, whose `ansible-playbook` binary is not on that ad-hoc venv's PATH (unrelated to this change; the suites that flaked on Windows pass) |
+| Launcher phase 5 (`setup-telemetry.sh`) | `.env` gained `TELEMETRY_GRAFANA_IDLE_MINUTES=15`; Prometheus and Grafana reported ready, scrape target `up`, Flow panel loaded, then `Grafana dashboards installed for TCP 3000 and stopped again: …`; `docker ps -a` shows `clab-manager-grafana Exited (0)` and Prometheus up |
+| Prometheus `/api/v1/status/flags` | `storage.tsdb.retention.time=15m`, `min-block-duration=15m`, `max-block-duration=15m`, `retention.size=48MiB`: the hidden block flags are accepted by v3.14.0 |
+| Installed helper | `/usr/local/lib/clab-manager/host_operations.py` is 1.26.0 with the `grafana` mode |
+| `GET /api/telemetry/grafana` after the upgrade | `enabled true, running false, idle_minutes 15`, message *stopped; it starts when you open it from a lab* |
+| The flat `ceos-pair` map (grid positions, never synced) | On the first discovery pass after the upgrade the drawing became ceos1 (380,360), ceos2 (520,340), `placed true`; event `topology.positions` logged at 13:03:03 UTC and the lab-map dashboard file rewritten five seconds later; `vm_source` still *Updates available* (logins and nodes wait for a sync, as designed); the manager's own map shows the two nodes at their drawn places |
+| `check-install.sh` from `/tmp` | PASS 60 / FAIL 0 / WARN 2 (the exited lab nodes, the folder budget); **Grafana telemetry dashboards** PASS with *provisioned and stopped until someone opens it … stops it after 15 minutes … 1 lab map(s) are provisioned*; Network telemetry PASS |
+| Lab header button | `href` = `/static/grafana.html#path=%2Fd%2Fclab-map-…%3Fvar-lab%3Dceos-pair%26refresh%3D10s&title=ceos-pair`, `target=_blank`, title ends with *Grafana starts on the VM when it is not running* (the desktop pane blocks new tabs, so the page was opened in place) |
+| `/static/grafana.html` in the browser | Showed *Starting Grafana on the VM; this takes a few seconds…* and about twelve seconds later the tab was on `http://VM:3000/d/clab-map-…?var-lab=ceos-pair&refresh=10s` (*Lab map · ceos-pair*, Last 15 minutes, refresh 10s); the manager logged `grafana.start`, `started_at` set, `docker ps` shows the container up, `/api/health` ok, Flow panel loaded, `/metrics` counters for `/api/ds/query` and the dashboard routes growing while the tab was open |
+| Automatic stop (idle set to 1 minute in `.env` for the test, manager reloaded) | With the dashboard tab open the monitor kept `last_activity` moving; after the tab was navigated away Grafana was stopped at 13:22:05 UTC, event `grafana.stop … after 1 minutes without an open dashboard`, `running false`, container `Exited (0)`; idle restored to 15 |
+| Finding fixed during this run | `recreate-manager.sh` did not pick the idle value up at first: the manager's `compose.yml` passes named variables only and the new key was not listed, so the container kept the default. Added `TELEMETRY_GRAFANA_IDLE_MINUTES: ${TELEMETRY_GRAFANA_IDLE_MINUTES:-15}` to `clab-backup-ui/compose.yml`, pinned by `test_telemetry_setup`, patched identically on the VM; a recreate then changed the container (the script's ps line showed the new container) and the status read `idle_minutes 1` |
+| Time picker in Grafana 13.0.2 | Quick ranges list *Last 5 minutes* and *Last 15 minutes* only (`quick_ranges` is honoured); the lab map's SVG is in the page with its eight cells and no panel error |
+| Lab actions menu | *Destroy deployment* plus *Redeploy + cleanup*; no separate *Destroy + cleanup*; help text names `containerlab destroy --cleanup` |
+| Destroy from the menu | Review showed *Cleanup removes generated lab artifacts. Expected lab directory: /etc/containerlab/ceos-pair/clab-ceos-pair* and the command `"/usr/bin/containerlab" "destroy" "-t" "…/ceos-pair.clab.yaml" "--name" "ceos-pair" "--cleanup"`; `Destroy deployment succeeded · Exit 0`; afterwards the folder holds only the YAML and the annotations file, `clab-ceos-pair` is gone and no lab container remains |
+| Deploy-first path (workspace removed, *Deploy a new lab* → `/etc/containerlab` → `ceos-pair` → `ceos-pair.clab.yaml`) | *Validate / preview topology* drew ceos1 lower left and ceos2 upper right with the note *Wiring from the YAML, node positions from the annotations file beside it*; *Deploy lab* registered a new workspace whose drawing was `placed true`, ceos1 (380,360), ceos2 (520,340) before the deploy even ran; `deploy succeeded · Exit 0`, both cEOS containers up, `clab-ceos-pair` recreated, the new lab's map dashboard published; opening Grafana for the new lab started it again in about ten seconds |
+
 # Documentation and installation audit — 1.25.0
 
 Prepared on `claude/docs-install-audit` from main `a4cb89f` (1.24.0) on 2026-09-14, after the

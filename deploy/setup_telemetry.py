@@ -12,12 +12,17 @@ import sys
 import tempfile
 
 KEYS = ('TELEMETRY_STACK', 'TELEMETRY_GRAFANA_PORT', 'TELEMETRY_GRAFANA_BIND', 'TELEMETRY_PROMETHEUS_PORT',
-        'TELEMETRY_GRAFANA_ADMIN_PASSWORD', 'TELEMETRY_CONFIG_DIR', 'TELEMETRY_MAPS_DIR')
+        'TELEMETRY_GRAFANA_ADMIN_PASSWORD', 'TELEMETRY_CONFIG_DIR', 'TELEMETRY_MAPS_DIR', 'TELEMETRY_GRAFANA_IDLE_MINUTES')
 # The manager (uid 10001 in its container, /data) writes one generated lab-map dashboard per lab here;
 # Grafana reads the folder through a read-only bind mount. Keep in step with clab-backup-ui/compose.yml.
 DEFAULT_MAPS_DIR = '/srv/containerlab-node-manager/data/telemetry/dashboards'
 MANAGER_UID = 10001
 GRAFANA_UID = 472
+# Grafana is on demand: the manager starts the container by this name (compose.telemetry.yml
+# container_name, clab-backup-ui/app/host_operations.py) when someone opens it and stops it after this
+# many minutes without a dashboard request; 0 keeps it running once started.
+GRAFANA_CONTAINER = 'clab-manager-grafana'
+DEFAULT_IDLE_MINUTES = 15
 # The Flow panel that draws the lab maps (srl-telemetry-lab uses the same plugin); Apache-2.0,
 # community-signed, pinned and installed once into TELEMETRY_CONFIG_DIR/plugins so restarts work offline.
 PLUGIN = 'andrewbmchugh-flow-panel'
@@ -89,10 +94,15 @@ def configure(env_path, config_dir, enable=True):
     absolute = maps_dir.startswith('/') or bool(re.match(r'^[A-Za-z]:[/\\]', maps_dir))     # the drive form only for tests
     if not absolute or '..' in re.split(r'[/\\]', maps_dir) or not re.fullmatch(r'[A-Za-z0-9_./:\\ -]{1,220}', maps_dir):
         raise ValueError('TELEMETRY_MAPS_DIR in .env must be an absolute path inside the manager data directory.')
+    idle = values.get('TELEMETRY_GRAFANA_IDLE_MINUTES') or str(DEFAULT_IDLE_MINUTES)
+    if not re.fullmatch(r'\d{1,4}', idle) or int(idle) > 1440:
+        raise ValueError('TELEMETRY_GRAFANA_IDLE_MINUTES in .env must be a whole number of minutes (0 to 1440; 0 never stops Grafana automatically).')
+    idle = str(int(idle))
     config_dir = Path(config_dir)
     updates = {'TELEMETRY_STACK': 'grafana' if enable else 'disabled', 'TELEMETRY_GRAFANA_PORT': str(grafana_port),
                'TELEMETRY_GRAFANA_BIND': bind, 'TELEMETRY_PROMETHEUS_PORT': str(prometheus_port),
-               'TELEMETRY_GRAFANA_ADMIN_PASSWORD': password, 'TELEMETRY_CONFIG_DIR': str(config_dir), 'TELEMETRY_MAPS_DIR': maps_dir}
+               'TELEMETRY_GRAFANA_ADMIN_PASSWORD': password, 'TELEMETRY_CONFIG_DIR': str(config_dir), 'TELEMETRY_MAPS_DIR': maps_dir,
+               'TELEMETRY_GRAFANA_IDLE_MINUTES': idle}
     lines = [line for line in old.splitlines() if not any(re.match(r'^\s*' + key + r'\s*=', line) for key in KEYS)]
     lines.extend(key + '=' + value for key, value in updates.items())
     if enable:
@@ -104,7 +114,8 @@ def configure(env_path, config_dir, enable=True):
         # World-readable: Prometheus runs as nobody and only needs to read it.
         write_atomic(config_dir / 'prometheus.yml', PROMETHEUS.format(ui_port=ui_port), 0o644,
                      getattr(os, 'getuid', lambda: 0)(), getattr(os, 'getgid', lambda: 0)())
-    return {'ui_port': ui_port, 'grafana_port': grafana_port, 'prometheus_port': prometheus_port, 'bind': bind, 'maps_dir': maps_dir}
+    return {'ui_port': ui_port, 'grafana_port': grafana_port, 'prometheus_port': prometheus_port, 'bind': bind, 'maps_dir': maps_dir,
+            'idle_minutes': int(idle)}
 
 
 def is_root():
@@ -259,6 +270,8 @@ if __name__ == '__main__':
     except (OSError, ValueError, IndexError) as error:
         sys.exit(str(error) or 'Usage: setup_telemetry.py ENV_FILE CONFIG_DIR [--remove | --plugin] | setup_telemetry.py ENV_FILE --wait')
     if enable:
-        print(f"Telemetry dashboard settings saved: Grafana on {result['bind']}:{result['grafana_port']}, Prometheus on 127.0.0.1:{result['prometheus_port']} scraping the manager on port {result['ui_port']}; lab maps are provisioned from {result['maps_dir']}. Unrelated settings and an existing admin password were retained.")
+        print(f"Telemetry dashboard settings saved: Grafana on {result['bind']}:{result['grafana_port']} (started on request, stopped after "
+              f"{result['idle_minutes']} idle minutes), Prometheus on 127.0.0.1:{result['prometheus_port']} scraping the manager on port {result['ui_port']}; "
+              f"lab maps are provisioned from {result['maps_dir']}. Unrelated settings and an existing admin password were retained.")
     else:
         print('Telemetry dashboards disabled in .env; the admin password was retained for a later reinstall.')

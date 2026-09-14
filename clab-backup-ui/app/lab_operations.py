@@ -169,11 +169,24 @@ class LabOperations:
 
         @app.post('/api/operations/parse-yaml')
         def parse_yaml(data: Request):
+            invalid = (ValueError, TypeError, AttributeError, RecursionError)
             try:
                 raw = str(data.options.get('text', '')).encode()
                 parsed = parse_definition(raw)
-                return {'name': parsed['name'], 'drawing': parse_drawing(b'{"nodeAnnotations":[]}', raw)}
-            except (ValueError, TypeError, AttributeError, RecursionError): raise HTTPException(400, 'Enter a valid literal Containerlab topology.')
+            except invalid: raise HTTPException(400, 'Enter a valid literal Containerlab topology.')
+            # The annotations file the VS Code extension keeps beside a topology carries the drawn node
+            # positions and styling. When the browser found one it comes along here, so the preview, the
+            # saved workspace and the Grafana map start from that layout instead of the default grid; a
+            # file that cannot be read falls back to the grid without failing the topology.
+            annotations = data.options.get('annotations', '')
+            drawing = None; used = False
+            if isinstance(annotations, str) and annotations.strip():
+                try: drawing = parse_drawing(annotations.encode(), raw); used = True
+                except invalid: drawing = None
+            if drawing is None:
+                try: drawing = parse_drawing(b'{"nodeAnnotations":[]}', raw)
+                except invalid: raise HTTPException(400, 'Enter a valid literal Containerlab topology.')
+            return {'name': parsed['name'], 'drawing': drawing, 'annotations_used': used}
 
         @app.post('/api/operations/preview')
         def preview(data: Request):
@@ -305,6 +318,8 @@ class LabOperations:
             for alias, point in positions.items():
                 if not isinstance(point, list) or len(point) != 2 or any(type(v) not in (int, float) or not -100000 <= v <= 100000 for v in point): raise HTTPException(400, 'Invalid node coordinates.')
                 aliases[alias].update(x=point[0], y=point[1])
+            # A layout saved by a person is theirs: discovery never replaces it with the VM annotations.
+            drawing['placed'] = True
             return drawing
 
         @app.put('/api/labs/{lab_id}/layout')

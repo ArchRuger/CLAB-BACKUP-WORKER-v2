@@ -76,7 +76,7 @@ FAILURES FOUND
   The uncached browser request failed: HTTP 409
 [WARN] Grafana telemetry dashboards
   Not installed. Grafana is where telemetry is shown; without it live rates, link state and the lab maps are not visible anywhere.
-  Next: Run sudo bash /home/archtop/projects/clab-manager/deploy/setup-telemetry.sh: it starts Prometheus and Grafana, installs the Flow panel and recreates the manager.
+  Next: Run sudo bash /home/archtop/projects/clab-manager/deploy/setup-telemetry.sh: it starts Prometheus, provisions Grafana (started on request from a lab) with the Flow panel and recreates the manager. See docs/TELEMETRY.md.
 [INFO] Git repository 1: push permission
   Not exercised. Remote read access does not prove write permission or acceptance by branch rules.
 
@@ -107,7 +107,7 @@ FAILURES FOUND (exit 1)
 | Optional Git remote read | With `--git-remote`, a bounded `ls-remote` as each registered owner; no fetch, commit or push |
 | Browser Wireshark capture | Whether the provider is enabled (a WARN with the setup command when it is not, since the stack is part of every installation), Edgeshark lists targets, and the browser session service and pinned image are ready. Live packets, viewer interaction and saved-capture download remain acceptance checks |
 | Network telemetry | Whether the gNMI dial-in collector is available (informational when disabled), and each linked lab's telemetry verdict through the manager; a lab with failed nodes is a warning with the remedy. Dashboards and the lab map following real traffic in Grafana remain acceptance checks |
-| Grafana telemetry dashboards | A WARN with the setup command when the stack is not installed; otherwise Grafana's health endpoint, whether Prometheus answers at all (a restarting container is reported with the Compose status and log commands), whether it scrapes the manager's metrics endpoint (scrape errors are classified, never echoed), whether the Flow panel that draws the lab maps is loaded and whether the manager can write the maps (both a WARN with the remedy). Opening the dashboards from the workstation remains an acceptance check |
+| Grafana telemetry dashboards | A WARN with the setup command when the stack is not installed; otherwise whether Prometheus answers at all (a restarting container is reported with the Compose status and log commands), whether it scrapes the manager's metrics endpoint (scrape errors are classified, never echoed) and whether the manager can write the lab maps (a WARN with the remedy). Grafana is on demand, so a stopped Grafana passes as *provisioned and stopped until someone opens it* and the check never starts it; while it runs (open it from a lab first) its health endpoint and the Flow panel that draws the lab maps are checked too. Opening the dashboards from the workstation remains an acceptance check |
 
 Disabled online lab downloads are informational and do not explain a failed
 folder browse. Existing empty folders are valid. A missing folder, symlinked

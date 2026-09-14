@@ -24,7 +24,7 @@ import threading
 import time
 
 INTERVAL = 10                   # counter sample spacing the collector asks for, seconds
-WINDOW = 3600                   # seconds of history kept per series
+WINDOW = 900                    # seconds of history kept per series: fifteen minutes, like Prometheus and Grafana
 POINTS = WINDOW // INTERVAL + 40  # ring size per series; bursts of on-change updates cannot grow it
 MAX_INTERFACES = 96             # per node
 MAX_PEERS = 64                  # per node
@@ -39,7 +39,7 @@ COUNTERS = {'in-octets': 'rx_bps', 'out-octets': 'tx_bps', 'in-pkts': 'rx_pps', 
 RATE_FIELDS = ('rx_bps', 'tx_bps', 'rx_pps', 'tx_pps', 'rx_errors', 'tx_errors', 'rx_discards', 'tx_discards')
 BITS = {'rx_bps', 'tx_bps'}
 STATES = ('oper-status', 'admin-status')
-WINDOWS = (300, 900, 3600)
+WINDOWS = (300, 900)
 
 
 def _number(value):

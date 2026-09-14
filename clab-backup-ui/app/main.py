@@ -30,6 +30,7 @@ from .diagnostics import Diagnostics
 from .capture import Captures
 from .telemetry import TelemetryManager
 from .telemetry_settings import default_settings
+from .grafana_control import GrafanaControl
 
 APP=Path(__file__).parent
 
@@ -43,6 +44,7 @@ def create_app(data_dir=None):
     operations=LabOperations(store,discovery)
     git_progress=GitProgress(store,runner)
     telemetry=TelemetryManager(store,services)
+    grafana=GrafanaControl(store,operations,telemetry)
     @asynccontextmanager
     async def lifespan(app):
         print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
@@ -50,7 +52,9 @@ def create_app(data_dir=None):
         discovery.start()
         readiness_monitor.start()
         telemetry.start()
+        grafana.run()
         yield
+        grafana.close()
         telemetry.close()
         git_progress.close()
         operations.close()
@@ -76,6 +80,8 @@ def create_app(data_dir=None):
     app.state.captures.install(app)
     app.state.telemetry=telemetry
     telemetry.install(app)
+    app.state.grafana=grafana
+    grafana.install(app)
     @app.middleware('http')
     async def guard(request, call_next):
         if request.url.path.startswith('/api/'):

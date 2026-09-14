@@ -222,7 +222,7 @@ def telemetry_stack(env):
 def stacks(env):
     phase('Browser Wireshark capture stack', lambda: capture_stack(env))
     phase('Grafana dashboards and lab maps', lambda: telemetry_stack(env))
-    print('Wireshark opens from the map (Capture packets); Grafana is on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM.')
+    print('Wireshark opens from the map (Capture packets); Grafana starts on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM when you open it from a lab and stops itself when nobody reads it.')
 
 
 def verify_manager(env, version):
@@ -263,7 +263,7 @@ def install(env, version):
     print('  Rebuild/recreate only the manager; existing lab containers remain in place.')
     print('  Lab operations: ' + ('enabled with default trusted roots' if operations == '1' else 'existing permissions retained'))
     print('  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).')
-    print('  Grafana dashboards: pull Prometheus and Grafana, install the Flow panel, provision the dashboards and lab maps (TCP 3000).')
+    print('  Grafana dashboards: pull Prometheus and Grafana, install the Flow panel, provision the dashboards and lab maps (TCP 3000, started on request).')
     print('  Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'))
     print('  Settings: ' + ('copy ' + str(env_source) if env_source else 'retain current .env or use defaults'))
     print('  Installation-media APT repair: ' + ('enabled with backup' if repair else 'not selected'))
@@ -290,7 +290,7 @@ def install(env, version):
     if engineer == '1':
         phase('7/7 Engineer access for VS Code', lambda: engineer_access(env))
     print('\nManager installation is ready. Git is a separate setup step under your ordinary account.')
-    print('Wireshark opens from the map (Capture packets); Grafana is on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM.')
+    print('Wireshark opens from the map (Capture packets); Grafana starts on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM when you open it from a lab and stops itself when nobody reads it.')
     if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
         git_setup(env)
     print('In VM connection use clab-discovery and the password you created. Verify the host fingerprint.')

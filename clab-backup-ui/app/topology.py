@@ -64,18 +64,37 @@ def opaque_color(value):
     return value
 
 
+def grid_position(index):
+    """Where a node without a saved position goes: a row of eight, 160 px apart, 120 px per row."""
+    return (index%8)*160, (index//8)*120
+
+
+def unplaced(drawing):
+    """True when the nodes still sit on the default grid: nobody and no annotations file placed them.
+
+    Drawings saved before the flag existed are judged by their coordinates, so a workspace that was
+    saved from the topology YAML alone (Deploy lab, Save to manager) can still take the positions of
+    the annotations file beside the deployed topology; a node moved by hand keeps the map as it is.
+    """
+    if not isinstance(drawing,dict) or not drawing.get('nodes'): return False
+    if 'placed' in drawing: return not drawing['placed']
+    return all((n.get('x'),n.get('y'))==grid_position(i) for i,n in enumerate(drawing['nodes']))
+
+
 def parse_drawing(raw, topology=None):
     if len(raw)>1024*1024: raise ValueError('Annotations must be smaller than 1 MiB')
     data=json.loads(raw)
     if not isinstance(data,dict) or not any(k in data for k in ('nodeAnnotations','networkNodeAnnotations','freeTextAnnotations','groupStyleAnnotations','freeShapeAnnotations')):
         raise ValueError('Upload a containerlab .annotations.json file')
-    nodes={}; links=[]; decorations=[]; skipped_links=0; kinds={}; aliases={}
+    nodes={}; links=[]; decorations=[]; skipped_links=0; kinds={}; aliases={}; placed=False
     for index,n in enumerate(rows(data,'nodeAnnotations')+rows(data,'networkNodeAnnotations')):
         ident=text(n.get('id'))
         if not ident or ident in nodes: raise ValueError('Drawing node IDs must be unique and nonempty')
         pos=n.get('position') or {}
+        if pos.get('x') is not None or pos.get('y') is not None: placed=True
+        default=grid_position(index)
         nodes[ident]={'id':ident,'alias':text(n.get('yamlNodeId') or n.get('copyFrom') or ident), 'label':text(n.get('label') or ident),
-                      'x':number(pos.get('x'),(index%8)*160),'y':number(pos.get('y'),(index//8)*120),
+                      'x':number(pos.get('x'),default[0]),'y':number(pos.get('y'),default[1]),
                       'icon':text(n.get('icon') or 'router'), 'iconColor':color(n.get('iconColor'),'#0066ff'),
                       'labelPosition':text(n.get('labelPosition') or 'bottom'),
                       'labelBackgroundColor':color(n.get('labelBackgroundColor'),'#454545'),
@@ -95,7 +114,7 @@ def parse_drawing(raw, topology=None):
                 if isinstance(alias,str): aliases[alias]=short
             # Export keys may be container names; annotations use short names.
             if short in nodes: continue
-            if short not in nodes: nodes[short]={'id':short,'alias':short,'label':short,'x':len(nodes)%8*160,'y':len(nodes)//8*120}
+            if short not in nodes: nodes[short]={'id':short,'alias':short,'label':short,**dict(zip(('x','y'),grid_position(len(nodes))))}
         for link in rows(body,'links'):
             endpoints=link.get('endpoints')
             if isinstance(endpoints,dict): endpoints=[endpoints[k] for k in ('a','z') if k in endpoints]
@@ -110,7 +129,7 @@ def parse_drawing(raw, topology=None):
                 node=text(node); interface=text(interface)
                 node=aliases.get(node,node)
                 if 'topology' not in topo: interface=exported_interface(interface,kinds.get(node,''))
-                if node not in nodes: nodes[node]={'id':node,'alias':node,'label':node,'x':len(nodes)%8*160,'y':len(nodes)//8*120}
+                if node not in nodes: nodes[node]={'id':node,'alias':node,'label':node,**dict(zip(('x','y'),grid_position(len(nodes))))}
                 pair.append({'node':node,'interface':interface})
             links.append(pair)
     for edge in rows(data,'edgeAnnotations'):
@@ -163,7 +182,7 @@ def parse_drawing(raw, topology=None):
     if len(nodes)>2000: raise ValueError('Too many drawing nodes')
     settings=data.get('viewerSettings') or {}
     if not isinstance(settings,dict): raise ValueError('Invalid viewer settings')
-    return {'schema':3,'nodes':list(nodes.values()),'links':links,'decorations':decorations,'has_links_source':bool(topology),'skipped_links':skipped_links,
+    return {'schema':3,'nodes':list(nodes.values()),'links':links,'decorations':decorations,'has_links_source':bool(topology),'skipped_links':skipped_links,'placed':placed,
             'settings':{'background':color(settings.get('gridBgColor'),'#fdf6e3'),
                         'gridColor':color(settings.get('gridColor'),'#d2cbb5'),
                         'labelMode':settings.get('linkLabelMode') if settings.get('linkLabelMode') in ('show-all','on-select','hide') else 'show-all',

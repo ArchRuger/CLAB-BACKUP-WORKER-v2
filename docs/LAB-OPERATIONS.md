@@ -29,7 +29,7 @@ Open **Lab actions** or right-click a saved lab (keyboard: Shift+F10).
 
 | Action | Behavior |
 |---|---|
-| Deploy / redeploy / destroy | Operates on the original VM topology; compatible cleanup variants are offered separately. Redeploy falls back to destroy then deploy when necessary. |
+| Deploy / redeploy / destroy | Operates on the original VM topology. Destroy always runs `containerlab destroy --cleanup`, so the containers and the generated lab folder (`clab-<name>`) go together and the next deploy starts clean; the review shows the folder before you confirm. Redeploy keeps that folder unless you choose its cleanup variant, and falls back to destroy then deploy when necessary. |
 | Apply | Applies the original VM YAML when supported by installed Containerlab. |
 | Start / stop / restart | Applies to every node in the selected lab. Stop retains containers; destroy removes them. |
 | Inspect lab / View running lab details | Readable table of topology, lab, node, kind/image, state/health and IPv4/IPv6. Failed or incomplete output remains visible for diagnosis. |
@@ -78,8 +78,10 @@ has answered `show version` is checked over SSH for its gNMI service, missing li
 are added with the NOS's scoped commit, and a gNMI subscription streams interface
 rates, link state and BGP neighbours into memory for Prometheus to scrape. The
 **Grafana ↗** button in the lab header opens the lab's dashboards and its generated
-map. A stop, destroy, redeploy or removal clears the session. Details, per-NOS
-support and the acceptance procedure are in [TELEMETRY.md](TELEMETRY.md).
+map, starting Grafana on the VM first when it is stopped (it stops itself after 15
+minutes without an open dashboard; **Telemetry settings…** shows its state and can
+stop it now). A stop, destroy, redeploy or removal clears the session. Details,
+per-NOS support and the acceptance procedure are in [TELEMETRY.md](TELEMETRY.md).
 
 ## Interactive diagram and topology actions
 

@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from app.discovery import parse_snapshot
 from app.store import Store
+from app.topology import parse_drawing
 from app.vm_files import PROTOCOL, decode_bundle
 import test_discovery as discovery_tests
 from test_discovery import YAML, response
@@ -151,6 +152,32 @@ class VMFilesTests(unittest.TestCase):
         self.assertEqual(lab['drawing']['nodes'][0]['x'], 77)
         self.assertEqual(self.sync(lab, envelope(annotations=ann2)).status_code, 200)
         self.assertEqual(lab['drawing']['nodes'][0]['x'], 99)
+
+    def test_annotations_beside_the_deployed_topology_place_a_grid_only_map_without_a_sync(self):
+        # Deploy lab and Save to manager register the YAML alone: the nodes sit on the default grid.
+        public = self.register(); lab = self.store.lab(public['id'])
+        self.assertFalse(lab['drawing']['placed'])
+        self.assertEqual([(n['x'], n['y']) for n in lab['drawing']['nodes']], [(0, 0), (160, 0)])
+        ann = json.dumps({'nodeAnnotations': [dict(id='r1', position={'x': 380, 'y': 360}), dict(id='r2', position={'x': 520, 'y': 340})]}).encode()
+        self.host(); self.poll(envelope(annotations=ann))
+        self.assertEqual([(n['x'], n['y']) for n in lab['drawing']['nodes']], [(380, 360), (520, 340)])
+        self.assertTrue(lab['drawing']['placed'])
+        self.assertEqual(lab['vm_source']['status'], 'Updates available', 'logins and nodes still wait for an explicit sync')
+        self.assertTrue(any(e['action'] == 'topology.positions' for e in self.store.events(lab_id=lab['id'])))
+        # Later edits of the file wait for Sync from VM, and a layout saved by hand is never replaced.
+        self.poll(envelope(annotations=ann.replace(b'380', b'10')))
+        self.assertEqual(lab['drawing']['nodes'][0]['x'], 380)
+        lab['drawing'] = {k: v for k, v in lab['drawing'].items() if k != 'placed'}; lab['drawing']['nodes'][0]['x'] = 5
+        self.poll(envelope(annotations=ann))
+        self.assertEqual(lab['drawing']['nodes'][0]['x'], 5)
+        # A pre-existing drawing without the flag whose nodes never left the grid is placed as well.
+        lab['drawing'] = parse_drawing(b'{"nodeAnnotations":[]}', YAML); lab['drawing'].pop('placed')
+        self.poll(envelope(annotations=ann))
+        self.assertEqual([(n['x'], n['y']) for n in lab['drawing']['nodes']], [(380, 360), (520, 340)])
+        # An annotations file without positions changes nothing.
+        lab['drawing'] = parse_drawing(b'{"nodeAnnotations":[]}', YAML)
+        self.poll(envelope(annotations=json.dumps({'nodeAnnotations': [dict(id='r1')]}).encode()))
+        self.assertFalse(lab['drawing']['placed'])
 
     def test_mismatched_inventory_does_not_import_other_lab_credentials(self):
         self.host(); result = self.poll(envelope(inventory=INVENTORY.replace(b'clab-training-', b'clab-wrong-')))
