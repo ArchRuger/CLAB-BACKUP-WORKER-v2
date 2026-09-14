@@ -1,29 +1,17 @@
-# Guided VM installation — 1.19.2
+# Guided VM installation
 
-This release also includes the remaining [deployment audit fixes](archive/DEPLOYMENT-AUDIT.md).
+One terminal installer takes an Ubuntu Server 24.04 VM from a bare account to a
+running manager with the browser Wireshark stack, the Grafana dashboards and, if you
+want it, Git setup. This page explains what its menu, phases and options do. The
+[quick install](QUICK-INSTALL.md) is the paste-only version of the same route and the
+[fresh VM guide](FRESH-VM-GUIDE-V2.md) starts before Ubuntu is installed.
 
-Starting before Ubuntu is installed? Use the
-[Fresh VM guide, version 2](FRESH-VM-GUIDE-V2.md) for Proxmox settings, first
-login, this installer, WinSCP/SFTP checks and your first successful Git save.
-This page is the short installation reference; the [quick install](QUICK-INSTALL.md)
-is the paste-only version of the whole route.
+Every command below works from any directory. The guides keep the source in
+`~/projects/clab-manager`; replace that path if you cloned elsewhere.
 
-This guide targets **1.19.2**, integrating storage-failure recovery, topology
-file protection and bounded Git operations with 1.19.1's SSH and timeout fixes.
-It is published as GitHub main `f9dbf44` (**1.19.2**). Starting from a Proxmox
-snapshot, or stuck on WinSCP or VS Code permissions? The three paste-in fixes
-below cover the VM clock, root SFTP access and the Containerlab extension.
-After updating, open **Debug panel** in the manager sidebar to verify the release
-and check VM helpers. See [development diagnostics](DEBUG-PANEL.md).
+## Before you start
 
-After cloning or extracting the source on your Ubuntu 24.04 VM, run one command
-as your existing ordinary VM account, **without sudo**:
-
-```bash
-bash deploy/install.sh
-```
-
-Before cloning or installing packages, check the VM clock:
+Check the VM clock; APT and Git refuse to work with a wrong one:
 
 ```bash
 date -u
@@ -31,7 +19,7 @@ timedatectl status
 ```
 
 Compare UTC with a trusted current clock. After a Proxmox snapshot rollback the
-clock is usually stuck at the snapshot time; paste this to resynchronize now:
+clock is usually stuck at the snapshot time; paste this to resynchronise now:
 
 ```bash
 sudo timedatectl set-ntp true
@@ -45,90 +33,140 @@ If the date is still wrong, or APT reports `not valid yet` / `expired`, follow
 [the clock fix](FRESH-VM-GUIDE-V2.md#fix-the-clock), which includes a manual
 bootstrap for a VM that cannot reach a time server, and
 [clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c) for a paused installer.
-Then clone into a new source folder:
+
+Then get the source and start the installer as your ordinary account, **without
+sudo** (it asks for sudo where the VM needs it):
 
 ```bash
-git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/v1.19.2"
-bash "$HOME/projects/v1.19.2/deploy/install.sh"
+command -v git >/dev/null || sudo apt-get install -y git
+git clone https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git "$HOME/projects/clab-manager"
+bash "$HOME/projects/clab-manager/deploy/install.sh"
 ```
 
-Git is needed for the clone. If Git is not yet installed, extract a source ZIP
-instead or install Git using the VM administrator. The installer requires the
-Python 3 and sudo normally present on Ubuntu Server; it explains missing
-requirements. Internet access is needed for packages, image builds and GitHub.
+The installer requires the Python 3 and sudo normally present on Ubuntu Server; it
+explains missing requirements. Internet access is needed for packages, images, the
+Grafana plugin and GitHub.
 
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.19.2 — guided setup
+Containerlab Node Manager 1.25.0 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
-Source: /home/your-account/projects/v1.19.2
+Source: /home/your-account/projects/clab-manager
 
 Setup menu
   1. Install or update manager, then set up Git
   2. Git setup / repair only (no rebuild)
-  3. Check running installation
-  4. Exit
+  3. VS Code / Containerlab extension access for your-account (no rebuild)
+  4. Browser Wireshark and Grafana stacks only (reinstall or upgrade both, no rebuild)
+  5. Check running installation
+  6. Exit
 ```
 
 Enter a number and press Enter. The menus work over SSH and VM consoles without
 curses, a desktop browser or extra terminal UI packages. Commands that need
-passwords or GitHub device authorization keep the terminal attached.
+passwords or GitHub device authorisation keep the terminal attached.
 
 ## What the full installation does
 
-Review the displayed plan, then approve it once. The installer:
+Menu **1** asks four questions (bind/port settings, lab operation access, VS Code
+access, APT media repair), shows the plan and asks once for approval. Then it runs:
 
-1. Retains an existing `.env`, or offers to copy one from an older source folder
-   without showing its contents. Defaults are all VM interfaces and port 8081.
-2. Installs missing prerequisites and enables Docker/SSH. Compatible tools stay
-   installed. Conflicting Docker packages stop with instructions instead of being
-   removed automatically. See the provider notes below.
-   A previously disabled Docker source gets a specific recovery message; setup
-   preserves that choice rather than silently enabling it or adding a duplicate.
-3. Optionally backs up and disables obsolete installation-media APT entries.
-   Only media entries/URIs are removed from use; network mirrors remain. Package
-   signature verification stays enabled.
-4. Runs the existing manager launcher to prepare persistent storage, create or
-   retain the restricted `clab-discovery` password, install/verify helpers, and
-   build/recreate the manager. You choose whether to enable reviewed lab operations;
-   existing operations permissions remain on upgrades. Before building, it tests
-   discovery and enabled operations/Git through the restricted account and gateway;
-   a failed permission or capability check stops the launch.
-5. Checks the running Compose container, application version and HTTP response
-   using the actual container bind address and port.
-6. Offers Git setup under the **original ordinary Linux account**. Git setup has
-   its own retry/cancel flow; a Git error does not undo a working manager.
+| Phase | What happens |
+|---|---|
+| 1 Administrator access and settings | Confirms sudo; retains an existing `clab-backup-ui/.env` or copies one from another folder without showing its contents. Defaults are all VM interfaces and port 8081. |
+| 2 VM prerequisites | Installs missing Git, SSH, Docker/Compose and containerlab and starts the services. Compatible tools stay installed; conflicting Docker packages stop with instructions. A previously disabled Docker source gets a specific recovery message. Optionally backs up and disables obsolete installation-media APT entries; network mirrors and signature checks stay. |
+| 3 Password, helpers, image and manager | Runs the launcher (`start-manager.sh --manager-only`): prepares persistent storage, creates or retains the restricted `clab-discovery` password, installs and verifies the VM helpers through the restricted account and gateway, builds the image and creates the manager. |
+| 4 Browser Wireshark capture stack | Pulls the pinned Wireshark image, builds the session service from this source, starts Edgeshark on localhost 5001/5801, writes the capture settings and recreates the manager so it loads them. |
+| 5 Grafana dashboards and lab maps | Pulls Prometheus and Grafana by digest, installs the pinned Flow panel plugin, writes the scrape configuration for the real UI port, starts both, waits until they answer and recreates the manager. Grafana listens on TCP 3000. |
+| 6 Running manager verification | Checks the Compose container, the application version and the HTTP response on the actual bind address and port. |
+| 7 Engineer access for VS Code | Only when chosen: `docker` and `clab_admins` groups for your account, group-writable trusted lab folders, the containerlab SUID mode. |
 
 Before APT updates, both installation paths display UTC/NTP status and wait up
-to 30 seconds only for already-active NTP. The check is read-only and does not
-require NTP when the clock is maintained another way. APT output and failure
-status are retained; clock-related failures get specific recovery instructions.
-The installer does not set the clock or change time services, servers or timezone.
+to 30 seconds only for already-active NTP. The check is read-only; the installer
+does not set the clock or change time services, servers or timezone.
 
 ```mermaid
 flowchart TD
     A[Run install.sh as ordinary VM user] --> B[Verify source and review plan]
     B --> C[Prerequisites and optional APT media repair]
-    C --> D[Password, helpers, persistent storage]
-    D --> E[Build and start manager]
-    E --> F[Container version and HTTP checks]
-    F --> G{Set up Git now?}
-    G -- Yes --> H[Git terminal wizard under original account]
-    G -- Later --> I[Manager ready; Git menu remains available]
-    H --> J[Register checkout, then connect lab in browser]
+    C --> D[Password, helpers, storage, image, manager]
+    D --> E[Browser Wireshark stack]
+    E --> F[Grafana dashboards and lab maps]
+    F --> G[Container version and HTTP checks]
+    G --> H{Set up Git now?}
+    H -- Yes --> I[Git terminal wizard under original account]
+    H -- Later --> J[Manager ready; Git menu remains available]
     C -. Failure .-> K[Retry failed step or return to menu]
     D -. Failure .-> K
     E -. Failure .-> K
     F -. Failure .-> K
+    G -. Failure .-> K
 ```
 
-Existing manager data, passwords, registered Git repositories and lab containers
-are retained. Source installation does not migrate data out of an old container
-that lacks persistent storage; use [the migration guide](STANDALONE-SETUP.md)
-first in that case. A new source folder does not automatically inherit another
-folder's `.env`; select the copy option if you customized the old one.
+Each phase offers **Retry this step** or **Return to menu** on failure, so a failed
+image pull or plugin download is retried on its own without repeating the password,
+helper and image-build step. Existing manager data, passwords, registered Git
+repositories and lab containers are retained. Source installation does not migrate
+data out of an old container that lacks persistent storage; use
+[the migration guide](STANDALONE-SETUP.md) first in that case.
+
+The installer ends with `Manager 1.25.0: running; HTTP and version checks passed.`
+and the local address. Open `http://VM_IP:8081` from your workstation (the VM's LAN
+address, not the workstation's `127.0.0.1`).
+
+## Upgrades
+
+Keep one source folder and pull into it; the installer detects what is installed
+and refreshes all of it while keeping data, passwords and `clab-backup-ui/.env`:
+
+```bash
+git -C "$HOME/projects/clab-manager" pull --ff-only
+bash "$HOME/projects/clab-manager/deploy/install.sh"
+```
+
+Choose **1** again. The launcher rebuilds the manager image, reinstalls the matching
+VM helpers, refreshes engineer access and the Git helper where they were set up, and
+the two stack phases rebuild the capture session service (its image carries the
+release) and re-provision Grafana. Running browser capture sessions are removed
+during the upgrade; download saved captures first.
+
+The launcher alone does the same when run by hand and is what the installer calls:
+
+```bash
+sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh"
+```
+
+It refreshes both stacks before it recreates the manager unless `clab-backup-ui/.env`
+says `CAPTURE_PROVIDER=disabled` or `TELEMETRY_STACK=disabled` (written by the
+`--remove` options below), or `--manager-only` is given.
+
+## Browser Wireshark and Grafana
+
+Both stacks are part of every installation. Menu **4** reinstalls or upgrades both
+without rebuilding the manager; the same two scripts work on their own from any
+directory and recreate the manager themselves so it loads the new settings:
+
+```bash
+sudo bash "$HOME/projects/clab-manager/deploy/setup-capture.sh"
+sudo bash "$HOME/projects/clab-manager/deploy/setup-telemetry.sh"
+```
+
+To take a stack down deliberately, add `--remove`. The capture stack stops and
+`CAPTURE_PROVIDER=disabled` is written (the session token is kept); the telemetry
+stack stops, its tmpfs data and the plugin folder are deleted and
+`TELEMETRY_STACK=disabled` is written (the admin password is kept). Later upgrades
+respect the choice; running the script without `--remove` brings the stack back.
+Details: [Browser Wireshark](CAPTURE.md), [Network telemetry](TELEMETRY.md),
+[Grafana lab map](GRAFANA-MAP.md).
+
+To reload the manager after editing `clab-backup-ui/.env` by hand, without a
+rebuild:
+
+```bash
+sudo bash "$HOME/projects/clab-manager/deploy/recreate-manager.sh"
+```
 
 ## Git setup and recovery
 
@@ -136,15 +174,14 @@ Use menu **2** whenever Git needs attention. It does not rebuild the manager.
 You can open it directly from any directory:
 
 ```bash
-bash "$HOME/projects/v1.19.2/deploy/install.sh" --git
+bash "$HOME/projects/clab-manager/deploy/install.sh" --git
 ```
 
 The wizard separates Linux owner, GitHub login, commit name/email and checkout
 directory. It checks the repository and identity before registration and supports
 existing checkout recovery. Already registered checkouts appear in a menu, so you
 can select the saved path without typing it again. Your account name is detected;
-there is no need to
-copy an example `--owner patrick` command or create another Linux account.
+there is no need to copy an example `--owner` command or create another Linux account.
 
 Read [GIT-SETUP.md](GIT-SETUP.md) for repository preparation, device-code login,
 registration and the detailed recovery table. You still create the destination
@@ -178,14 +215,14 @@ In WinSCP's **Advanced → Environment → SFTP → SFTP server**, use:
 sudo -n /usr/lib/openssh/sftp-server
 ```
 
-Save and reconnect as **archtop** with its Ubuntu password. This session has
+Save and reconnect as your account with its Ubuntu password. This session has
 root-level file access, and uploaded files belong to root. See the
 [full procedure and troubleshooting](FRESH-VM-GUIDE-V2.md#winscp-admin-sftp).
 Use `clab-discovery` only for the manager connection.
 
 ## VS Code access
 
-**Remote - SSH** connects as `archtop`, but the Containerlab extension then
+**Remote - SSH** connects as your account, but the Containerlab extension then
 reports:
 
 ```text
@@ -196,10 +233,10 @@ and its file explorer cannot create a lab folder in the root-owned
 `/etc/containerlab` (`EACCES: permission denied, mkdir`). The installer's
 **VS Code / Containerlab extension access** step, offered in the standard
 install and as menu option 3 afterwards, fixes both for your account. The same
-one command, from the source folder as your normal account:
+one command, from any directory as your normal account:
 
 ```bash
-sudo bash deploy/setup-engineer-access.sh --owner "$(id -un)"
+sudo bash "$HOME/projects/clab-manager/deploy/setup-engineer-access.sh" --owner "$(id -un)"
 ```
 
 It adds you to `docker` and `clab_admins`, makes the trusted lab folders
@@ -207,8 +244,8 @@ group-writable `clab_admins` folders (setgid, so new files inherit the group),
 and restores the containerlab SUID mode. Then run **Remote-SSH: Kill VS Code
 Server on Host...** from the VS Code Command Palette and reconnect, because the
 VS Code server already running on the VM keeps the old groups. Both groups give
-root-equivalent access; grant them only to your own account. `start-manager.sh`
-reapplies the access on upgrades, and `check-install` reports it as **Engineer
+root-equivalent access; grant them only to your own account. The launcher
+reapplies the access on upgrades, and the health check reports it as **Engineer
 access**. See [the VS Code details](FRESH-VM-GUIDE-V2.md#vscode-access),
 including the `~/.vscode-server` ownership fix.
 
@@ -216,22 +253,25 @@ including the `~/.vscode-server` ownership fix.
 
 The final terminal checks verify the local manager. On your workstation:
 
-1. Open `http://VM_ADDRESS:8081` (or the configured port).
-2. In **VM connection**, use `clab-discovery` and the password created during
-   setup. After the first successful connection saves its fingerprint, reopen
-   **VM connection** and compare it with the VM console host key.
-3. Import the intended lab, configure device credentials and verify a backup.
-4. In **More → Git repository**, select the registered checkout and devices.
+1. Open `http://VM_ADDRESS:8081` (or the configured port). The VM connection
+   dialog opens on its own when no connection exists: use `clab-discovery` and the
+   password created during setup. After the first successful connection saves its
+   fingerprint, reopen **VM connection** and compare it with the VM console host key.
+2. Click **Deploy a new lab**, pick a topology on the VM and deploy it, or import a
+   lab that already runs. Wait for *NOS ready*.
+3. Open **Grafana ↗** in the lab header and confirm the dashboards and the lab map
+   fill in; right-click a node for **Capture packets** and confirm Wireshark opens.
+4. Take a backup, then in **More → Git repository** select the registered checkout.
 5. Back in the VM terminal, run the [full installation report](HEALTH-CHECK.md):
 
    ```bash
-   bash deploy/check-install.sh --require-git
+   bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-git
    ```
 
    If you configured root file access in WinSCP, include that requirement:
 
    ```bash
-   bash deploy/check-install.sh --require-git --require-admin-sftp
+   bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-git --require-admin-sftp
    ```
 
 6. Resolve any **FAIL**, **WARN** or **SKIP** items using their displayed next
@@ -241,40 +281,41 @@ The final terminal checks verify the local manager. On your workstation:
 Host trust, lab selection and device credentials still require your choices in
 the browser. The installer does not deploy router labs or publish lab configs.
 
-Menu **3. Check running installation** opens the same full report. The installer
+Menu **5. Check running installation** opens the same full report. The installer
 still performs a shorter container/version/HTTP check during initial setup;
-the saved VM connection is configured afterwards in the browser. The second
-script checks services, permissions, helpers through `clab-discovery`, actual
-folder browsing through saved SSH, storage and registered Git checkouts. It
-reports problems without automatically fixing them. Automated success does not
-replace the real WinSCP transfer, device backup or deliberate Git push above.
+the saved VM connection is configured afterwards in the browser. The report checks
+services, permissions, helpers through `clab-discovery`, actual folder browsing
+through saved SSH, storage, registered Git checkouts, the capture stack and the
+Grafana stack. It reports problems without automatically fixing them. Automated
+success does not replace the real WinSCP transfer, device backup or deliberate Git
+push above.
 
-For **Operations helper is unavailable**, run from the matching source checkout:
+For **Operations helper is unavailable**, rerun the launcher (it reinstalls the
+gateway, helpers and sudoers, verifies them through the restricted account and
+recreates the manager), then check the failed folder:
 
 ```bash
-sudo bash deploy/start-manager.sh --enable-operations
-bash deploy/check-install.sh --lab-path /etc/containerlab/vJunOS-SW
+sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh" --enable-operations
+bash "$HOME/projects/clab-manager/deploy/check-install.sh" --lab-path /etc/containerlab/YOUR_LAB
 ```
 
-Use your actual failed folder and complete matching source. The first command
-updates both helpers and the manager image, retaining custom roots and data. Close
-and reopen the UI folder. The second command only checks. For older checkers with
-false sudo failures, use the [root-run workaround and recovery guide](HEALTH-CHECK.md#recover-the-operations-helper-error).
+Use your actual failed folder. Close and reopen the UI folder afterwards.
 
 ## Retry without starting over
 
 Each failed install phase offers **Retry this step** or **Return to menu**. Read
 the actual package/launcher error before retrying. A successful launch with an
-HTTP problem can be checked again using menu **3**, without rebuilding. If Git
-was canceled or failed, use menu **2**. Exiting retains completed work; on a
-later run, the scripts inspect the current VM and preserve existing setup.
+HTTP problem can be checked again using menu **5**, without rebuilding. If Git
+was cancelled or failed, use menu **2**. If only a stack failed, use menu **4**.
+Exiting retains completed work; on a later run, the scripts inspect the current VM
+and preserve existing setup.
 
 For `Release file ... is not valid yet`, keep the installer open, fix/check the
 VM clock in another terminal, then choose **1. Retry this step after fixing the
 error**. See [detailed clock recovery](FRESH-VM-GUIDE-V2.md#recovery-c). A successful
 CD-ROM source repair does not fix clock errors; no fresh VM or new clone is needed.
 
-If you accidentally run `sudo bash deploy/install.sh`, it prints the equivalent
+If you accidentally run the installer with `sudo`, it prints the equivalent
 ordinary-user command and stops before running Git as root. The installer uses
 sudo only where the VM needs administrator access. A separate repository owner
 without sudo access can use the advanced administrator/owner workflow in the Git
@@ -285,22 +326,11 @@ guide instead.
 Docker uses its [official Ubuntu signed APT repository](https://docs.docker.com/engine/install/ubuntu/).
 Containerlab uses the [official release packages](https://containerlab.dev/install/)
 with published checksum verification. New installations keep containerlab at
-normal executable permissions and use sudo for host operations. Existing
-containerlab installations are preserved. No Docker group change or re-login is
-needed. The helper does not deploy a lab, prune images or replace unrelated APT
-sources. The automated prerequisite path targets Ubuntu 24.04; use the manual
-guide for other distributions or offline staging.
-
-The detailed manual steps remain in [FRESH-VM-GUIDE.md](archive/FRESH-VM-GUIDE.md). They
-are useful for diagnostics and managed environments; you do not need to repeat
-their install commands after this menu has completed successfully.
-
-## Optional browser Wireshark capture
-
-From the complete source checkout on the VM, run `sudo bash deploy/setup-capture.sh`,
-then upgrade/recreate the manager using the normal installation flow. This starts
-the optional Edgeshark/session services and migrates old capture settings. Users
-open Wireshark in the browser without a workstation plugin or capture tunnel.
-Follow [Browser capture setup](CAPTURE.md) for saving, downloads, session limits
-and troubleshooting. Capture remains disabled until configured; manager backup
-permissions and persistent data remain unchanged.
+normal executable permissions and use sudo for host operations; the VS Code access
+step restores the SUID mode for your account. Existing containerlab installations
+are preserved. No Docker group change or re-login is needed for the manager. The
+helper does not deploy a lab, prune images or replace unrelated APT sources. The
+automated prerequisite path targets Ubuntu 24.04; use the
+[manual setup guide](STANDALONE-SETUP.md) and the
+[original fresh VM guide](archive/FRESH-VM-GUIDE.md) for other distributions or
+offline staging.

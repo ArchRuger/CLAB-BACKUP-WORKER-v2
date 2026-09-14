@@ -27,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import paramiko
-from fastapi import HTTPException, Query
+from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from .discovery import discovery_fresh, node_available
@@ -39,7 +39,7 @@ from .telemetry_map import MapPublisher, dashboard as map_dashboard, map_uid, re
 from .telemetry_names import endpoint_candidates, interface_role
 from .telemetry_provision import ProvisionError, provision
 from .telemetry_settings import default_settings, settings_of
-from .telemetry_store import INTERVAL, STALE_AFTER, WINDOWS, TelemetryStore
+from .telemetry_store import INTERVAL, STALE_AFTER, TelemetryStore
 from .topology import bind_drawing
 
 SCAN_INTERVAL = 5
@@ -57,7 +57,7 @@ METHOD = 'gNMI dial-in: counters sampled every 10 s'
 
 
 def summarize(states):
-    """Lab-level verdict for the deployment bar and the Telemetry view header."""
+    """Lab-level verdict for /api/state, the health check and the Telemetry settings dialog."""
     counted = [s for s in states if s in STATES and s != 'disabled']
     counts = {name: sum(s == name for s in states) for name in STATES}
     supported = [s for s in counted if s != 'unsupported']
@@ -545,12 +545,19 @@ class TelemetryManager:
             return {'state': status['state'], 'message': status['message'], 'at': status['at']}
 
     def lab_summary(self, lab):
+        """The lab's verdict and settings for /api/state, plus where Grafana shows the data."""
         if not lab.get('deployment_name'):
             return {'status': 'unmonitored', 'total': 0}
         states = [self.node_status(lab, n)['state'] for n in lab['nodes']]
         result = summarize(states)
         result.update(settings_of(lab))
+        result['grafana'] = self.grafana_link(lab)
         return result
+
+    def grafana_link(self, lab):
+        """Enabled, port and the generated map's uid (only labs with a drawing get a map)."""
+        return {'enabled': self.grafana['enabled'], 'port': self.grafana['port'],
+                'map_uid': map_uid(lab['id']) if self.grafana['enabled'] and lab.get('drawing') else ''}
 
     def health(self):
         with self.lock:
@@ -566,7 +573,10 @@ class TelemetryManager:
                 'maps': self.maps.stats(), 'metrics_path': '/api/telemetry/metrics'}
 
     def lab_view(self, lab):
-        """Everything the Telemetry view and the map overlay need for one lab; bounded."""
+        """One lab's telemetry: node states, interface rows and link states; bounded.
+
+        Read by the Prometheus exposition (the Grafana dashboards and lab maps), the
+        Telemetry settings dialog and the health check; the manager UI draws no charts."""
         settings = settings_of(lab)
         profile = next((p for p in lab['profiles'] if p['id'] == settings['profile_id']), None)
         drawing = bind_drawing(lab)
@@ -633,7 +643,7 @@ class TelemetryManager:
         return {'lab_id': lab['id'], 'lab_name': lab.get('name', ''), 'generated_at': now(), 'enabled': self.enabled, 'unavailable': self.unavailable,
                 'grafana': {**self.grafana, 'map_uid': map_uid(lab['id']) if self.grafana['enabled'] and drawing else ''},
                 'settings': {**settings, 'profile_label': profile['label'] if profile else ''},
-                'method': METHOD, 'sample_interval': INTERVAL, 'stale_after': STALE_AFTER, 'windows': list(WINDOWS),
+                'method': METHOD, 'sample_interval': INTERVAL, 'stale_after': STALE_AFTER,
                 'summary': summary, 'nodes': nodes, 'links': links, 'linked': bool(lab.get('deployment_name')),
                 'password_profiles': [{'id': p['id'], 'label': p['label'], 'platform': p['platform']} for p in lab['profiles'] if p.get('auth') == 'password']}
 
@@ -699,28 +709,6 @@ class TelemetryManager:
         def map_json(lab_id: str):
             lab, drawing = drawn(lab_id)
             return map_dashboard(lab, drawing)
-
-        @app.get('/api/labs/{lab_id}/telemetry/series')
-        def series(lab_id: str, node: str = Query(..., min_length=1, max_length=200), interface: str = Query(..., min_length=1, max_length=64),
-                   window: int = Query(WINDOWS[0])):
-            if window not in WINDOWS: raise HTTPException(400, 'Choose a window of 300, 900 or 3600 seconds.')
-            with self.store.lock:
-                lab = lab_for(lab_id)
-                if not any(n['name'] == node for n in lab['nodes']): raise HTTPException(404, 'Node not found')
-            points = self.data.series(lab_id, node, interface, window)
-            if points is None: raise HTTPException(404, 'No telemetry for this interface in the current session.')
-            return {'node': node, 'interface': interface, 'window': window, 'interval': INTERVAL, 'points': points, 'generated_at': now()}
-
-        @app.get('/api/labs/{lab_id}/telemetry/bgp-series')
-        def bgp_series(lab_id: str, node: str = Query(..., min_length=1, max_length=200), peer: str = Query(..., min_length=1, max_length=64),
-                       instance: str = Query('default', max_length=64), window: int = Query(WINDOWS[0])):
-            if window not in WINDOWS: raise HTTPException(400, 'Choose a window of 300, 900 or 3600 seconds.')
-            with self.store.lock:
-                lab = lab_for(lab_id)
-                if not any(n['name'] == node for n in lab['nodes']): raise HTTPException(404, 'Node not found')
-            points = self.data.peer_series(lab_id, node, instance, peer, window)
-            if points is None: raise HTTPException(404, 'No telemetry for this neighbour in the current session.')
-            return {'node': node, 'peer': peer, 'instance': instance, 'window': window, 'points': points, 'generated_at': now()}
 
         @app.put('/api/labs/{lab_id}/telemetry/settings')
         def settings(lab_id: str, data: Settings):

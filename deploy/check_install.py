@@ -202,6 +202,14 @@ class Context:
     def repair(self, script, *args):
         return shlex.join(['sudo', 'bash', str(self.source / 'deploy' / script), *args])
 
+    def command(self, script, *args):
+        return shlex.join(['bash', str(self.source / 'deploy' / script), *args])
+
+    def compose(self, stack):
+        """The Compose command line of the capture or telemetry stack, usable from any directory."""
+        return shlex.join(['sudo', 'docker', 'compose', '--env-file', str(self.source / 'clab-backup-ui/.env'),
+                           '-f', str(self.source / 'deploy' / f'compose.{stack}.yml')])
+
 
 def parse_json(result):
     if not result.ok:
@@ -237,14 +245,14 @@ def check_docker(ctx):
     compose = [*docker, 'compose', '-f', str(ctx.source / 'clab-backup-ui/compose.yml')]
     result = ctx.run([*compose, 'version'], privileged=True)
     if not result.ok:
-        ctx.add('compose', 'FAIL', 'Docker Compose', 'The Compose plugin is unavailable.', 'Rerun bash deploy/install.sh.')
+        ctx.add('compose', 'FAIL', 'Docker Compose', 'The Compose plugin is unavailable.', 'Rerun ' + ctx.command('install.sh') + '.')
         return
     ctx.add('compose', 'PASS', 'Docker Compose', 'Compose plugin is available.')
     result = ctx.run([*compose, 'ps', '--all', '--quiet', 'backup-ui'], privileged=True)
     ids = result.stdout.strip().splitlines() if result.ok else []
     if len(ids) != 1 or not re.fullmatch(r'[0-9a-f]{12,64}', ids[0]):
         ctx.add('manager', 'FAIL', 'Manager container', 'Exactly one Compose backup-ui container was not found.',
-                'Run bash deploy/install.sh from this checkout. Review any earlier failed installation phase.')
+                'Run ' + ctx.command('install.sh') + '. Review any earlier failed installation phase.')
         return
     ctx.container = ids[0]
     fmt = '{"state":{{json .State}},"mounts":{{json .Mounts}},"command":{{json .Config.Cmd}},' \
@@ -268,7 +276,7 @@ def check_docker(ctx):
                       'from app import __version__; print(__version__)'], privileged=True)
     ctx.add('manager-version', 'PASS' if result.ok and version_matches(ctx, result.stdout.strip()) else 'FAIL',
             'Running application version', 'Matches this source release.' if result.ok and version_matches(ctx, result.stdout.strip())
-            else 'Running application version does not match this source checkout.', 'Rebuild using bash deploy/install.sh.')
+            else 'Running application version does not match this source checkout.', 'Rebuild using ' + ctx.command('install.sh') + '.')
     check_storage(ctx, docker, details.get('mounts'))
     try:
         url = module('install-manager').health_url(details.get('command'))
@@ -325,7 +333,7 @@ def check_storage(ctx, docker, mounts):
 def check_containerlab(ctx):
     result = ctx.run(['containerlab', 'version'], privileged=True)
     if not result.ok:
-        ctx.add('containerlab', 'FAIL', 'Containerlab', 'Containerlab could not report its version.', 'Rerun bash deploy/install.sh.')
+        ctx.add('containerlab', 'FAIL', 'Containerlab', 'Containerlab could not report its version.', 'Rerun ' + ctx.command('install.sh') + '.')
         return
     ctx.add('containerlab', 'PASS', 'Containerlab', 'Installed CLI responds.')
     data = parse_json(ctx.run(['containerlab', 'inspect', '--all', '--format', 'json'], privileged=True, limit=8*MIB))
@@ -569,12 +577,12 @@ def check_git_route(ctx):
     else:
         ctx.add('git-http', 'FAIL' if ctx.require_git else 'WARN', 'Git registry through saved SSH connection',
                 'Git registry could not be listed through the manager.',
-                'Run bash deploy/install.sh --git as the ordinary checkout owner.')
+                'Run ' + ctx.command('install.sh', '--git') + ' as the ordinary checkout owner.')
 
 
 def check_capture(ctx):
     """Read-only Edgeshark discovery and browser-session/image readiness."""
-    title = 'Optional packet capture'
+    title = 'Browser Wireshark capture'
     if not ctx.base_url:
         ctx.add('capture', 'SKIP', title, 'Manager HTTP is unavailable; the capture provider could not be queried.')
         return
@@ -584,15 +592,16 @@ def check_capture(ctx):
                 'Update to a release with packet capture (1.20.0 or later) and rerun.')
         return
     if not status.get('enabled'):
-        ctx.add('capture', 'INFO', title, 'Disabled; the manager works without it. ' + safe_text(status.get('message') or '', 300),
-                'Follow docs/CAPTURE.md: run sudo bash deploy/setup-capture.sh to configure CAPTURE_PROVIDER and the browser service, then recreate the manager.')
+        ctx.add('capture', 'WARN', title, 'Disabled. Browser Wireshark is part of every installation; the node and link Capture actions stay greyed out until it runs. '
+                + safe_text(status.get('message') or '', 300),
+                'Run ' + ctx.repair('setup-capture.sh') + ': it sets CAPTURE_PROVIDER, starts the browser session service and recreates the manager. See docs/CAPTURE.md.')
         return
     result, targets = ctx.http('/api/capture/targets', limit=4 * MIB)
     if result.ok and isinstance(targets, dict) and isinstance(targets.get('targets'), list):
         ready_result, ready = ctx.http('/api/capture/health')
         if not ready_result.ok or not isinstance(ready, dict) or ready.get('ready') is not True:
             ctx.add('capture', 'FAIL', title, 'Edgeshark discovery works, but the browser session service or its pinned Wireshark image is unavailable.',
-                    'Run sudo bash deploy/setup-capture.sh, recreate the manager and check the sessions service logs.')
+                    'Run ' + ctx.repair('setup-capture.sh') + ' (it recreates the manager), then check: ' + ctx.compose('capture') + ' logs --tail=80 sessions')
             return
         ctx.add('capture', 'PASS', title, f"Edgeshark discovery through the manager listed {len(targets['targets'])} capture target(s); "
                 'the browser session service and pinned image are ready. No capture was started.')
@@ -600,8 +609,8 @@ def check_capture(ctx):
         return
     ctx.add('capture', 'FAIL', title, 'The capture provider is enabled but discovery through the manager failed: '
             + (result.reason or 'invalid response') + '.',
-            'On the VM inspect deploy/compose.capture.yml services and curl --fail http://127.0.0.1:5001/version; '
-            'verify CAPTURE_EDGESHARK_URL in clab-backup-ui/.env, then recreate the manager.')
+            'Inspect ' + ctx.compose('capture') + ' ps and curl --fail http://127.0.0.1:5001/version; verify CAPTURE_EDGESHARK_URL in '
+            + str(ctx.source / 'clab-backup-ui/.env') + ', then run ' + ctx.repair('setup-capture.sh') + '.')
 
 
 def check_telemetry(ctx):
@@ -616,8 +625,9 @@ def check_telemetry(ctx):
                 'Update to a release with network telemetry (1.23.0 or later) and rerun.')
         return
     if not health.get('enabled'):
-        ctx.add('telemetry', 'INFO', title, 'Disabled; the manager works without it. ' + safe_text(health.get('message') or '', 300),
-                'Rebuild the manager from this source so pygnmi is installed, or remove TELEMETRY_COLLECTOR=disabled from clab-backup-ui/.env, then recreate the manager.')
+        ctx.add('telemetry', 'INFO', title, 'Disabled; nothing is collected and Grafana stays empty. ' + safe_text(health.get('message') or '', 300),
+                'Rebuild the manager from this source so pygnmi is installed (' + ctx.repair('start-manager.sh') + '), or remove TELEMETRY_COLLECTOR=disabled from '
+                + str(ctx.source / 'clab-backup-ui/.env') + ' and run ' + ctx.repair('recreate-manager.sh') + '.')
         return
     result, state = ctx.http('/api/state')
     labs = [l for l in (state or {}).get('labs', []) if isinstance(l, dict) and l.get('deployment_name')] if result.ok and isinstance(state, dict) else None
@@ -625,8 +635,8 @@ def check_telemetry(ctx):
         ctx.add('telemetry', 'WARN', title, 'The collector is ready but the lab list could not be read through the manager.',
                 'Rerun after the manager answers /api/state; check its logs if this persists.')
         return
-    ctx.manual.append('Telemetry: generate traffic across a wired link and confirm the RX/TX chart and the map link colour follow it; '
-                      'shut an interface and confirm the link turns red; check a BGP neighbour state change where BGP runs.')
+    ctx.manual.append('Telemetry: in Grafana, generate traffic across a wired link and confirm the Interfaces dashboard and the lab map follow it; '
+                      'shut an interface and confirm the map link turns red; check a BGP neighbour state change where BGP runs.')
     if not labs:
         ctx.add('telemetry', 'PASS', title, 'gNMI dial-in collector ready (' + safe_text(health.get('library') or 'pygnmi', 40)
                 + '); no deployed lab is linked yet, so nothing is being collected.')
@@ -665,30 +675,30 @@ def check_telemetry_dashboards(ctx):
     result, health = ctx.http('/api/telemetry/health')
     grafana = health.get('grafana') if result.ok and isinstance(health, dict) else None
     if not isinstance(grafana, dict) or not grafana.get('enabled'):
-        ctx.add('telemetry-dashboards', 'INFO', title, 'Not installed; the Telemetry tab works without Grafana.',
-                'Run sudo bash deploy/setup-telemetry.sh, then recreate the manager, to get Grafana dashboards in another browser tab.')
+        ctx.add('telemetry-dashboards', 'WARN', title, 'Not installed. Grafana is where telemetry is shown; without it live rates, link state and the lab maps are not visible anywhere.',
+                'Run ' + ctx.repair('setup-telemetry.sh') + ': it starts Prometheus and Grafana, installs the Flow panel and recreates the manager. See docs/TELEMETRY.md.')
         return
     port, prometheus = grafana.get('port'), grafana.get('prometheus_port')
     if not all(isinstance(v, int) and 1 <= v <= 65535 for v in (port, prometheus)):
         ctx.add('telemetry-dashboards', 'FAIL', title, 'The manager announces Grafana with an invalid port.',
-                'Check TELEMETRY_GRAFANA_PORT and TELEMETRY_PROMETHEUS_PORT in clab-backup-ui/.env and rerun setup-telemetry.sh.')
+                'Check TELEMETRY_GRAFANA_PORT and TELEMETRY_PROMETHEUS_PORT in ' + str(ctx.source / 'clab-backup-ui/.env') + ' and rerun ' + ctx.repair('setup-telemetry.sh') + '.')
         return
     ready_result, ready = ctx.http('/api/health', base=f'http://127.0.0.1:{port}')
     if not ready_result.ok or not isinstance(ready, dict) or ready.get('database') != 'ok':
         ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana did not answer /api/health on 127.0.0.1:{port}.',
-                'Inspect: sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.telemetry.yml ps; then logs --tail=80 grafana; then rerun sudo bash deploy/setup-telemetry.sh.')
+                'Inspect: ' + ctx.compose('telemetry') + ' ps; then logs --tail=80 grafana; then rerun ' + ctx.repair('setup-telemetry.sh') + '.')
         return
     targets_result, targets = ctx.http('/api/v1/targets', base=f'http://127.0.0.1:{prometheus}')
     if not targets_result.ok:
         ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana answers, but Prometheus on 127.0.0.1:{prometheus} does not: every dashboard panel shows an error.',
-                'Inspect: sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.telemetry.yml ps; then logs --tail=40 prometheus (a restarting container names the rejected flag or file); then rerun sudo bash deploy/setup-telemetry.sh.')
+                'Inspect: ' + ctx.compose('telemetry') + ' ps; then logs --tail=40 prometheus (a restarting container names the rejected flag or file); then rerun ' + ctx.repair('setup-telemetry.sh') + '.')
         return
     active = targets.get('data', {}).get('activeTargets', []) if isinstance(targets, dict) and isinstance(targets.get('data'), dict) else None
     if not isinstance(active, list) or not any(isinstance(t, dict) and t.get('health') == 'up' for t in active):
         errors = sorted({scrape_problem(t.get('lastError')) for t in (active or []) if isinstance(t, dict) and t.get('lastError')})
         ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana and Prometheus answer, but Prometheus on 127.0.0.1:{prometheus} is not scraping the manager'
                 + (': ' + '; '.join(errors) if errors else '') + '.',
-                'The manager must be release 1.23.0 or later and recreated with the current .env; then rerun sudo bash deploy/setup-telemetry.sh (it rewrites the scrape target for the current UI_PORT).')
+                'Rerun ' + ctx.repair('setup-telemetry.sh') + ': it rewrites the scrape target for the current UI_PORT and recreates the manager with the current .env (the manager must be release 1.23.0 or later).')
         return
     settings_result, settings = ctx.http('/api/frontend/settings', base=f'http://127.0.0.1:{port}')
     panels = settings.get('panels') if settings_result.ok and isinstance(settings, dict) else None
@@ -696,12 +706,12 @@ def check_telemetry_dashboards(ctx):
     if not isinstance(panels, dict) or 'andrewbmchugh-flow-panel' not in panels:
         ctx.add('telemetry-dashboards', 'WARN', title, f'Grafana on TCP {port} is healthy and Prometheus scrapes the manager, but the Flow panel '
                 '(andrewbmchugh-flow-panel) is not loaded, so the generated lab maps render empty.',
-                'Rerun sudo bash deploy/setup-telemetry.sh with access to grafana.com (it installs the pinned plugin into TELEMETRY_CONFIG_DIR/plugins), '
-                'then check: sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.telemetry.yml logs --tail=40 grafana')
+                'Rerun ' + ctx.repair('setup-telemetry.sh') + ' with access to grafana.com (it installs the pinned plugin into TELEMETRY_CONFIG_DIR/plugins), '
+                'then check: ' + ctx.compose('telemetry') + ' logs --tail=40 grafana')
         return
     if maps.get('error'):
         ctx.add('telemetry-dashboards', 'WARN', title, 'Grafana and Prometheus are healthy, but the manager cannot write its lab maps: ' + safe_text(maps['error'], 200),
-                'Rerun sudo bash deploy/setup-telemetry.sh (it creates TELEMETRY_MAPS_DIR for the manager user) and recreate the manager.')
+                'Rerun ' + ctx.repair('setup-telemetry.sh') + ' (it creates TELEMETRY_MAPS_DIR for the manager user and recreates the manager).')
         return
     ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana on TCP {port} is healthy, Prometheus scrapes the manager metrics endpoint, the Flow panel is loaded'
             + (f' and {maps["dashboards"]} lab map(s) are provisioned.' if isinstance(maps.get('dashboards'), int) else '.'))
@@ -761,7 +771,7 @@ def arguments(argv=None):
 def main(argv=None):
     args = arguments(argv)
     if sys.platform != 'linux':
-        print('Run bash deploy/check-install.sh inside the Ubuntu VM.', file=sys.stderr)
+        print('Run bash ' + str(SOURCE / 'deploy/check-install.sh') + ' inside the Ubuntu VM.', file=sys.stderr)
         return 1
     import pwd
     owner = args.owner or (os.environ.get('SUDO_USER', '') if os.geteuid() == 0 else pwd.getpwuid(os.getuid()).pw_name)
@@ -791,7 +801,7 @@ def main(argv=None):
     ctx.add('privileges', 'PASS' if privileged else 'FAIL', 'Administrator inspection access',
             'The health-check command runner can execute administrator queries.' if privileged else
             'Administrator queries could not run through the health-check command runner; service health has not been established.',
-            'Rerun sudo bash deploy/check-install.sh --owner YOUR_VM_USER with the same check options, or approve sudo when prompted.')
+            'Rerun ' + ctx.repair('check-install.sh', '--owner', 'YOUR_VM_USER') + ' with the same check options, or approve sudo when prompted.')
     if not owner:
         ctx.add('owner', 'WARN', 'Normal VM account', 'Account-specific SSH/SFTP checks need a normal account.',
                 'Run without sudo as your ordinary account, or supply --owner YOUR_VM_USER.')
@@ -800,7 +810,7 @@ def main(argv=None):
               ('Installed helper files and sudoers', check_helper_files), ('Restricted helper execution', check_helpers),
               ('Manager SSH and topology folders', check_manager_routes), ('Git helper over saved SSH', check_git_route),
               ('Registered Git checkouts', lambda c: module('check_git').check_git(c)),
-              ('Optional packet capture', check_capture), ('Network telemetry', check_telemetry),
+              ('Browser Wireshark capture', check_capture), ('Network telemetry', check_telemetry),
               ('Grafana telemetry dashboards', check_telemetry_dashboards)]
     for title, fn in groups:
         if time.monotonic() >= ctx.deadline:

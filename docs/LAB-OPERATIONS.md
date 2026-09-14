@@ -1,24 +1,25 @@
-# Lab operations — Containerlab Node Manager 1.19.1
+# Lab operations
 
-## Upgrade
+## Enabling and upgrading
 
-Place the source directly in `~/projects/v1.19.1`, containing `deploy/` and
-`clab-backup-ui/`. Copy any customized `clab-backup-ui/.env` from the older folder.
-Keep the persistent directory and existing VM password.
+Lab operations (deploy, destroy, inspect and the rest of this page) are enabled by
+the guided installer's *Lab operation access* question and refreshed by every
+upgrade (`bash "$HOME/projects/clab-manager/deploy/install.sh"`, menu 1). The
+launcher it runs can also be used on its own, from any directory:
 
 ```bash
-cd "$HOME/projects/v1.19.1"
-sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
-sudo docker compose -f clab-backup-ui/compose.yml logs --tail=30 backup-ui
+sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh" --enable-operations --lab-root /etc/containerlab
+sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" logs --tail=30 backup-ui
 ```
 
-The script first checks source release consistency, refreshes and verifies host helpers, builds `clab-backup:1.19.1`
-without cache and recreates the manager. Open `http://VM_IP:8081`; no UI login is
-required. Linux host networking uses this port directly, without `-p` forwarding.
+The launcher first checks source release consistency, refreshes and verifies the
+host helpers, refreshes the browser Wireshark and Grafana stacks, builds the manager
+image without cache and recreates the manager. Open `http://VM_IP:8081`; no UI login
+is required. Linux host networking uses this port directly, without `-p` forwarding.
 Data stays in `/srv/containerlab-node-manager/data` (UID/GID 10001, mode 700).
 
 See [VM connection setup and recovery](VM-CONNECTION.md) and the
-[fresh VM installation guide](archive/FRESH-VM-GUIDE.md). Lab commands require the dedicated
+[installation guide](INSTALL.md). Lab commands require the dedicated
 clab-discovery account, its password and the installed helper mode. Direct
 inspection accounts do not automatically gain the operations protocol.
 
@@ -36,6 +37,7 @@ Open **Lab actions** or right-click a saved lab (keyboard: Shift+F10).
 | SSH all nodes | Opens a launcher tab with individual links and Open all ready sessions. Allow browser popups; at most 32 concurrent terminals/checks. |
 | Favorite | Sorts this saved lab above other labs. |
 | Edit topology diagram | Move nodes and annotations, add text/boxes/circles/lines, style, undo, save and export JSON/draw.io. |
+| Telemetry settings… | Automatic telemetry on/off for this lab, the gNMI login profile, the reason a node is not streaming, retry, removal of manager-added lines. |
 | Delete undeployed VM YAML | Separate source deletion; refused while its deployment exists. Keeps a VM recovery copy. |
 | Deploy New Lab → Lab Topologies | Same-tab landing page with an explicit browser button; the workspace landing page and its header button open the same browser in place when no lab is saved yet. Expand folders to select .clab.yaml/.clab.yml files; existing files are read-only. |
 | New topology | Creates a new VM YAML after structure preview and confirmation; never replaces an existing file. |
@@ -70,14 +72,14 @@ redeployed lab (new SSH host keys) never fails with *host key mismatch*.
 
 ## Telemetry after readiness
 
-With *Automatic telemetry* on (the default for labs created from 1.23.0; earlier
-labs enable it once in the Telemetry tab), every node that has answered `show
-version` is checked over SSH for its gNMI service, missing lines are added with the
-NOS's scoped commit, and a gNMI subscription streams interface rates, link state
-and BGP neighbours into memory. The Telemetry tab shows charts; the map colours
-links from both ends. A stop, destroy, redeploy or removal clears the session.
-Details, per-NOS support and the acceptance procedure are in
-[TELEMETRY.md](TELEMETRY.md).
+With *Automatic telemetry* on (the default for labs created since 1.23.0; earlier
+labs turn it on once under **Lab actions → Telemetry settings…**), every node that
+has answered `show version` is checked over SSH for its gNMI service, missing lines
+are added with the NOS's scoped commit, and a gNMI subscription streams interface
+rates, link state and BGP neighbours into memory for Prometheus to scrape. The
+**Grafana ↗** button in the lab header opens the lab's dashboards and its generated
+map. A stop, destroy, redeploy or removal clears the session. Details, per-NOS
+support and the acceptance procedure are in [TELEMETRY.md](TELEMETRY.md).
 
 ## Interactive diagram and topology actions
 
@@ -123,7 +125,7 @@ binaries and optional network permission. Defaults include `/etc/containerlab`
 and `/srv/containerlab-node-manager/projects`. Add a real directory with:
 
 ```bash
-sudo bash deploy/setup-operations.sh --lab-root /your/lab/projects
+sudo bash "$HOME/projects/clab-manager/deploy/setup-operations.sh" --lab-root /your/lab/projects
 ```
 
 Browse is limited to these roots, rejects symlink paths and caps each folder at
@@ -135,7 +137,7 @@ Optional cloning/catalog downloads require Git and network access on the VM:
 
 ```bash
 sudo apt install -y git
-sudo bash deploy/setup-operations.sh --allow-downloads
+sudo bash "$HOME/projects/clab-manager/deploy/setup-operations.sh" --allow-downloads
 ```
 
 They are disabled by default. To revoke downloads or remove a trusted root, use

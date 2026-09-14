@@ -27,7 +27,7 @@ async function openLabOperations(id=activeId){
  const cleanup=['deploy','redeploy','destroy'].filter(a=>opCaps?.actions[a]?.cleanup).map(a=>opCommand(a,opLabels[a]+' + cleanup',{cleanup:true})).join('');
  opDialog(dialog.id,lab.name,`<p class="op-path">${esc(opPath(lab)||'Import the original VM lab files before using host commands.')}</p>${problem?`<p class="op-notice">${esc(problem)}</p>`:''}
  <div class="op-sections"><section><h3>Deployment & configuration</h3><div class="op-grid">${['deploy','redeploy','apply','start','stop','restart','inspect','save','destroy'].map(a=>opCommand(a)).join('')}${cleanup}</div><p class="form-help">Destroy removes containers. Cleanup also removes generated lab artifacts. Containerlab save supports selected device kinds; manager backups remain in Backup history.</p></section>
- <section><h3>Workspace & access</h3><div class="op-grid"><button class="button secondary" data-local="ssh">SSH all nodes ↗</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove favorite':'Favorite lab'}</button><button class="button secondary" data-local="interactive">Edit topology diagram</button><button class="button secondary" data-local="history">Operation history</button>${opCommand('delete')}</div></section></div>`);
+ <section><h3>Workspace & access</h3><div class="op-grid"><button class="button secondary" data-local="ssh">SSH all nodes ↗</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove favorite':'Favorite lab'}</button><button class="button secondary" data-local="interactive">Edit topology diagram</button><button class="button secondary" data-local="telemetry">Telemetry settings…</button><button class="button secondary" data-local="history">Operation history</button>${opCommand('delete')}</div></section></div>`);
  dialog.querySelectorAll('[data-op-action]').forEach(b=>b.onclick=()=>{
   const action=b.dataset.opAction,options=JSON.parse(b.dataset.opOptions);
   opTask(dialog,()=>opReview({lab_id:id,action,options}));
@@ -37,8 +37,31 @@ async function openLabOperations(id=activeId){
   if(action==='ssh')opNewTab({mode:'ssh',lab:id});
   if(action==='favorite'){await json('/labs/'+id+'/operations-settings','PUT',{favorite:!lab.favorite});await refresh();dialog.close();}
   if(action==='interactive')await opLayout(id);
+  if(action==='telemetry'){dialog.close();await openTelemetrySettings(id);}
   if(action==='history')await opHistory(id);
  }));
+}
+// Per-lab telemetry: on/off, the gNMI login profile, the removal of manager-added lines and
+// the reason a node is not streaming. The data itself is read in Grafana, never here.
+const teleStateLabels={disabled:'off',waiting:'waiting',configuring:'configuring',connecting:'connecting',streaming:'streaming',stale:'stale',unsupported:'unsupported',failed:'failed',unmonitored:'unmonitored'};
+function telemetrySummaryText(data){
+ const s=data.settings||{},sum=data.summary||{};
+ if(!data.enabled)return data.unavailable||'The telemetry collector is disabled in this manager.';
+ if(!data.linked)return 'Telemetry is collected for labs linked to a VM deployment; this lab is not linked.';
+ if(!s.decided)return 'This lab was saved before automatic telemetry existed. Nothing is written to a device until you turn it on here.';
+ if(!s.auto)return 'Automatic telemetry is off for this lab; Grafana shows nothing for it.';
+ const parts=['streaming','stale','waiting','configuring','connecting','failed','unsupported'].filter(k=>sum[k]).map(k=>`${sum[k]} ${teleStateLabels[k]}`);
+ return `Automatic telemetry is on: ${sum.total||0} supported node${sum.total===1?'':'s'}${parts.length?' · '+parts.join(' · '):''}. Read the data in Grafana.`;
+}
+async function openTelemetrySettings(id=activeId){
+ const data=await(await api('/labs/'+id+'/telemetry')).json();
+ const s=data.settings||{},profiles=data.password_profiles||[],usable=data.enabled&&data.linked;
+ const failed=(data.nodes||[]).filter(n=>['failed','stale'].includes(n.state));
+ const dialog=opDialog('telemetry-settings-dialog','Telemetry settings',`<p class="form-help">${esc(telemetrySummaryText(data))}</p>${failed.length?`<ul class="form-help">${failed.map(n=>`<li><strong>${esc(n.short_name||n.name)}</strong> (${esc(teleStateLabels[n.state]||n.state)}): ${esc(n.message||'')}</li>`).join('')}</ul>`:''}<label class="checkbox-label"><input type="checkbox" id="tele-auto" ${s.auto?'checked':''} ${usable?'':'disabled'}> Automatic telemetry: configure the gNMI service on supported nodes and stream counters to Grafana</label><p class="form-help">Applies to cEOS, XRv9k and cJunosEvolved nodes once they answer show version. The manager adds only the missing service lines with each NOS's own scoped commit and never saves the whole running configuration. The manager keeps the last hour in memory for Prometheus to scrape; a stop, destroy, redeploy or removal clears it.</p><label>gNMI login<select id="tele-profile" ${usable?'':'disabled'}><option value="">Each node's saved password login (profile, inventory or containerlab default)</option>${profiles.map(p=>`<option value="${esc(p.id)}" ${p.id===s.profile_id?'selected':''}>${esc(p.label)} · ${esc(p.platform)}</option>`).join('')}</select></label><p class="form-help">gNMI needs a username and password; nodes that log in with an SSH key need a password profile here. Secrets never leave the manager.</p><div class="dialog-actions">${failed.length?'<button class="button secondary" id="tele-retry">Retry failed nodes</button>':''}<button class="button secondary" id="tele-remove" ${s.auto||!usable?'disabled title="Disable automatic telemetry first"':''}>Remove manager-added lines…</button><button class="button primary" id="tele-save" ${usable?'':'disabled'}>Save</button></div><p class="form-help">Remove deletes only the telemetry configuration lines this manager recorded as its own, on running nodes, over SSH. Disabling telemetry alone leaves the device configuration as it is.</p>`);
+ $('tele-save').onclick=()=>opTask(dialog,async()=>{const auto=$('tele-auto').checked;await json('/labs/'+id+'/telemetry/settings','PUT',{auto,profile_id:$('tele-profile').value||''});notify(auto?'Automatic telemetry enabled. Supported nodes are configured as they become ready; open Grafana to watch them.':'Automatic telemetry disabled; collection stopped.');dialog.close();await refresh();});
+ $('tele-remove').onclick=()=>opTask(dialog,async()=>{if(!confirm('Remove the telemetry configuration lines the manager added on the running nodes of this lab?'))return;const result=await json('/labs/'+id+'/telemetry/remove-config','POST',{});notify(result.started.length?`Removal started on ${result.started.join(', ')}.`:'Nothing to remove on running nodes.');dialog.close();});
+ if($('tele-retry'))$('tele-retry').onclick=()=>opTask(dialog,async()=>{await json('/labs/'+id+'/telemetry/retry','POST',{});notify('Retry requested for the failed nodes.');dialog.close();});
+ return dialog;
 }
 async function opReview(request){
  const value=await json('/operations/preview','POST',request);

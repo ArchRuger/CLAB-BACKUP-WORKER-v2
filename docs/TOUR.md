@@ -1,9 +1,10 @@
 # Tour
 
-Screenshots of release 1.22.0 on the development VM: Ubuntu 24.04, containerlab
-0.79, two Arista cEOS nodes wired `eth1` to `eth1`. Every image is the real UI as a
-browser on a workstation sees it, captured with a scripted headless browser; nothing
-is mocked.
+Screenshots taken on the development VM: Ubuntu 24.04, containerlab 0.79, two
+Arista cEOS nodes wired `eth1` to `eth1`. Every image is the real UI as a browser on
+a workstation sees it, captured with a scripted headless browser; nothing is mocked.
+The lab header has since gained a **Grafana ↗** button that opens the lab's live
+dashboards and map ([TELEMETRY.md](TELEMETRY.md)); the rest is as shown.
 
 ![Lab overview](images/00-hero.png)
 

@@ -1,4 +1,4 @@
-# Development debug panel — 1.19.2
+# Development debug panel
 
 Open **Debug panel** at the bottom of the manager sidebar. It is also linked
 from **Deploy New Lab** and the VM connection guide. No imported lab is required.
@@ -23,9 +23,12 @@ Capability checks bypass the normal cache to detect stale helpers after setup.
 Only one diagnostic probe runs at a time. Each of its two helper responses has
 a 90-second timeout, in addition to SSH connection setup time; the capabilities
 check runs several containerlab help commands on the VM, so a slow VM is
-reported as slow rather than as missing. Failed checks
-include controlled recovery hints; a helper-version mismatch requests a matching
-source installation. Rerun after changing VM settings.
+reported as slow rather than as missing. Failed checks include controlled recovery
+hints: a rejected VM password is reported as an authentication failure, and a
+connected account whose session does not run the operations gateway is reported as
+a gateway/enablement problem with the launcher command that repairs it. A
+helper-version mismatch requests a matching source installation. Rerun after
+changing VM settings.
 
 ## Report contents and limits
 
@@ -36,10 +39,10 @@ manager storage permissions and free space; the console also records a controlle
 warning. Logging resumes on the next successful write, but missed events are not
 replayed. This flag describes the last write, not a continuous storage probe.
 
-Request history contains
-the latest 200 API requests since startup, excluding successful state/debug
-polling. Failures are included even for those polling endpoints. Route templates
-omit actual lab/job identifiers; unknown routes use `/api/unknown`.
+Request history contains the latest 200 API requests since startup, excluding
+successful state/debug polling. Failures are included even for those polling
+endpoints. Route templates omit actual lab/job identifiers; unknown routes use
+`/api/unknown`.
 
 Reports omit credentials, host addresses, usernames, VM paths, file contents,
 headers, request bodies, query strings and raw logs. The optional folder value
@@ -50,20 +53,20 @@ including its same-origin API checks. It adds no terminal or arbitrary command
 execution endpoint.
 
 This is application diagnostics, not a replacement for installation checks.
-If the manager cannot start, run from the source root in the VM terminal:
+If the manager cannot start, run the [health report](HEALTH-CHECK.md) from any
+directory in the VM terminal:
 
 ```bash
-bash deploy/check-install.sh
+bash "$HOME/projects/clab-manager/deploy/check-install.sh"
 ```
 
-To install this source release or refresh mismatched helpers, use the existing
-installer from the complete 1.19.2 source checkout:
+To install a source release or refresh mismatched helpers, run the installer from
+the same source folder and choose the install/update option; it retains persistent
+data, VM credentials and settings:
 
 ```bash
-bash deploy/install.sh
+bash "$HOME/projects/clab-manager/deploy/install.sh"
 ```
 
-Choose the install/update option and retain your existing settings. Then reopen
-the debug page and confirm **Release 1.19.2** and matching helper results. The
-installer retains persistent data and VM credentials. This source change is
-not a published image or a completed VM deployment.
+Then reopen the debug page and confirm that **Release** shows the number in
+`clab-backup-ui/VERSION` and that the helper results match.

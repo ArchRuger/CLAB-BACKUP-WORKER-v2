@@ -21,25 +21,23 @@ advanced administrator/owner workflow below.
 
 ## First setup
 
-1. Install/start the manager using [FRESH-VM-GUIDE.md](archive/FRESH-VM-GUIDE.md), configure
+1. Install/start the manager using [the installation guide](INSTALL.md), configure
    its VM password, and confirm that a manual device backup works.
 2. On GitHub, create the repository that will hold your configurations. Choose
    the intended visibility and **Add a README** so it has an initial commit.
    Copy **Code → HTTPS**, for example `https://github.com/OWNER/REPOSITORY.git`.
    A browser address ending in `/tree/main` is not a clone URL.
    Your GitHub account needs write access.
-3. In the VM terminal, as your ordinary account, enter the release source
-   directory and run this command **without sudo**:
+3. In the VM terminal, as your ordinary account, run this command **without
+   sudo**, from any directory:
 
    ```bash
-   cd "$HOME/projects/v1.19.3"
-   bash deploy/setup-git.sh
+   bash "$HOME/projects/clab-manager/deploy/setup-git.sh"
    ```
 
 Use your actual source folder if it has a different name. This is the folder
 containing `deploy/` and `clab-backup-ui/`, not the lab-config checkout under
-`~/labs/`. You can also run `bash "$HOME/projects/v1.19.3/deploy/setup-git.sh"`
-from any directory. The launcher prints your actual absolute setup command.
+`~/labs/`. The launcher prints your actual absolute setup command.
 
 Finish the wizard until it reports **Registered** and **Ready** before connecting
 the repository in the UI. A running manager, successful GitHub login, and a clean
@@ -110,17 +108,18 @@ subfolders. An administrator can register subfolders non-interactively with
 ## Already working? Upgrade without setting it up again
 
 Keep your current Linux owner, checkout and login, including a separate account
-you have already configured. From the new source, use the normal launcher:
+you have already configured. Upgrade with the installer or the launcher, from any
+directory:
 
 ```bash
-sudo bash deploy/start-manager.sh
+sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh"
 ```
 
 The launcher refreshes an installed Git helper and retains registrations,
 passwords and manager data. For a helper-only refresh:
 
 ```bash
-sudo bash deploy/setup-git.sh --refresh
+sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh
 ```
 
 Do not clone again or create another Linux account just to upgrade. Guided setup
@@ -170,7 +169,7 @@ Run these in order; continue only after each command succeeds:
 ```bash
 sudo apt-get update
 sudo apt-get install -y git gh
-bash deploy/setup-git.sh
+bash "$HOME/projects/clab-manager/deploy/setup-git.sh"
 ```
 
 Run the wizard as your ordinary VM account, without sudo. If it stopped before
@@ -201,18 +200,17 @@ available to unattended manager saves.
 ## Recover an existing checkout that will not register
 
 Run guided setup as the Linux account that owns the checkout, **without sudo**.
-Version 1.16.0 and later preserve a selected existing registration's custom settings.
-In 1.15.3 and later
-you can supply the existing checkout directly:
+A selected existing registration keeps its custom settings, and you can supply the
+existing checkout directly:
 
 ```bash
-bash "$HOME/projects/v1.19.3/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
+bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --guided --repo "$HOME/labs/my-lab"
 ```
 
-Replace `my-lab` with the actual folder. This command works even when your current
-directory is the lab-config repository. It reuses that checkout and login, prompts
-for missing or invalid commit name/email, then offers registration. It does not
-clone again. For 1.15.2, run the wizard without arguments and choose **existing**.
+Replace `my-lab` with the actual folder. This command works from any directory,
+including the lab-config repository itself. It reuses that checkout and login,
+prompts for missing or invalid commit name/email, then offers registration. It does
+not clone again.
 The commit name/email identify the author; they are neither the Linux username
 nor a GitHub login. Valid existing settings are kept; new values are local to
 this checkout. Your Linux owner is automatically selected by the wizard.
@@ -227,11 +225,10 @@ git var GIT_AUTHOR_IDENT
 git var GIT_COMMITTER_IDENT
 ```
 
-Both checks must succeed. Then, from the manager source folder, register:
+Both checks must succeed. Then register, from any directory:
 
 ```bash
-cd "$HOME/projects/v1.19.3"
-sudo bash deploy/setup-git.sh --repo "$HOME/labs/my-lab"
+sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --repo "$HOME/labs/my-lab"
 ```
 
 Omitting `--owner` uses the ordinary account invoking sudo. For example, `archtop`
@@ -286,10 +283,10 @@ For an existing checkout, the VM administrator can register directly:
 
 ```bash
 # Defaults to the ordinary account invoking sudo:
-sudo bash deploy/setup-git.sh --repo "$HOME/labs/my-lab"
+sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --repo "$HOME/labs/my-lab"
 
 # An existing separate owner does not need to be in sudoers:
-sudo bash deploy/setup-git.sh --owner patrick --repo /home/patrick/labs/patricks-bgp-lab
+sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --owner patrick --repo /home/patrick/labs/patricks-bgp-lab
 ```
 
 For a separate owner, prepare its checkout/login/identity under that account, then

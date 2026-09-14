@@ -1,13 +1,12 @@
-# Save lab progress to Git — 1.15.1
+# Save lab progress to Git
 
 Connect a lab to an existing repository on its VM once, then use **Save progress**
 to capture its selected devices, save the complete capture in that repository,
 commit changed configurations and push. Ben keeps his existing Git login and
 commit identity. The manager never asks for his Git token.
 
-This is a local source release. Build the 1.15.1 image and install its matching VM
-helpers; a previously published image does not acquire these features automatically.
-See [Fresh VM setup](archive/FRESH-VM-GUIDE.md) and [VM connection](VM-CONNECTION.md).
+The Git helper is installed on the VM by the guided installer and refreshed by every
+upgrade; see [the installation guide](INSTALL.md) and [VM connection](VM-CONNECTION.md).
 
 ## What each save means
 
@@ -45,11 +44,11 @@ replace the repository snapshot.
 
 ## One-time setup
 
-Start with [GIT-SETUP.md](GIT-SETUP.md). From the release source on the Ubuntu VM,
-run this as the existing ordinary account, without sudo:
+Start with [GIT-SETUP.md](GIT-SETUP.md). On the Ubuntu VM, run this as the existing
+ordinary account, without sudo, from any directory:
 
 ```bash
-bash deploy/setup-git.sh
+bash "$HOME/projects/clab-manager/deploy/setup-git.sh"
 ```
 
 The guided flow prepares the checkout, owner-scoped HTTPS login and commit
@@ -244,7 +243,7 @@ flowchart TD
 | Commit exists; push failed or review is required | Review the recorded commit and use **Push saved progress**. No new capture is needed. |
 | Remote advanced / push rejected | Inspect the repository as Ben. Resolve divergence outside the app; never force push merely to clear the status. |
 | Unexpected branch, URL, owner or repository identity | Restore the registered destination or deliberately register/reconnect the intended checkout after resolving pending work. |
-| Helper unavailable or older than the manager | Run `sudo bash deploy/setup-git.sh --refresh` from the 1.15.1 source and refresh repository status. |
+| Helper unavailable or older than the manager | Run `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh` from the source that matches the running manager and refresh repository status. |
 | Manager restarted during a save | Open the recorded job and retry. The coordinator reconciles the recorded operation with the VM journal rather than silently recapturing. |
 | Git authentication expired | Repair Ben's Git login on the VM, then retry the existing push. Changing the VM SSH password does not repair Git credentials. |
 
@@ -276,10 +275,10 @@ the current topology as the topology used for that historical capture.
 
 ## Upgrade and validation
 
-Upgrade the manager from the 1.15.1 source, retaining its persistent data.
-`deploy/start-manager.sh` refreshes the Git helper when a registry already exists.
-To refresh only that helper, use `sudo bash deploy/setup-git.sh --refresh` from
-the same source. This preserves registration IDs and revisions. Existing VM
+Upgrade the manager with the installer, retaining its persistent data; the
+launcher refreshes the Git helper when a registry already exists. To refresh only
+that helper, use `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh"
+--refresh` from the same source. This preserves registration IDs and revisions. Existing VM
 passwords, labs, device profiles and backup files are retained. No remote repository is created,
 and no user repository is pushed merely by installing the helper.
 

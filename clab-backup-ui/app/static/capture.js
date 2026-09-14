@@ -145,5 +145,5 @@ function openLinkCapture(element){
  catch{notify('Could not read this link. Use Capture packets to browse live interfaces.');}
 }
 map.addEventListener('click',event=>{const element=event.target.closest('[data-capture-endpoints]');if(element)openLinkCapture(element);});
-map.addEventListener('contextmenu',event=>{const element=event.target.closest('[data-capture-endpoints]');if(element){event.preventDefault();closeNodeMenu();if(typeof openLinkMenu==='function')openLinkMenu(element,event.clientX,event.clientY);else openLinkCapture(element);}});
+map.addEventListener('contextmenu',event=>{const element=event.target.closest('[data-capture-endpoints]');if(element){event.preventDefault();closeNodeMenu();openLinkCapture(element);}});
 map.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key))return;const element=event.target.closest('[data-capture-endpoints]');if(element){event.preventDefault();openLinkCapture(element);}});

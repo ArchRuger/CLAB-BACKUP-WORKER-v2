@@ -2,6 +2,7 @@
 import asyncio
 import copy
 import importlib.util
+import re
 import io
 import json
 from pathlib import Path
@@ -235,6 +236,24 @@ class CaptureSetupTests(unittest.TestCase):
         self.assertIn("image='"+IMAGE+"'",text)
         # Upgrades rename the project network; only recreated containers can join it.
         self.assertIn('up -d --build --force-recreate',text)
+        # Part of every installation: the script applies its settings to a running manager itself
+        # unless the launcher, which creates the manager afterwards, asks it not to.
+        self.assertIn('recreate-manager.sh',text);self.assertIn('--no-recreate',text);self.assertIn('--remove',text)
+
+    def test_remove_keeps_the_token_and_urls_and_only_switches_the_provider_off(self):
+        path=Path(__file__).resolve().parents[2]/'deploy/setup_capture.py'
+        spec=importlib.util.spec_from_file_location('capture_setup',path)
+        setup=importlib.util.module_from_spec(spec);spec.loader.exec_module(setup)
+        with tempfile.TemporaryDirectory() as folder:
+            env=Path(folder)/'.env'
+            env.write_text('UI_PORT=8088\n')
+            setup.configure(env);before=env.read_text()
+            token=re.search(r'CAPTURE_SESSION_TOKEN=([0-9a-f]{64})',before)[1]
+            setup.disable(env);text=env.read_text()
+            self.assertIn('CAPTURE_PROVIDER=disabled',text);self.assertNotIn('CAPTURE_PROVIDER=edgeshark',text)
+            self.assertIn('CAPTURE_SESSION_TOKEN='+token,text);self.assertIn('UI_PORT=8088',text);self.assertIn('CAPTURE_SESSION_URL=',text)
+            setup.configure(env);again=env.read_text()
+            self.assertEqual(again.count('CAPTURE_PROVIDER='),1);self.assertIn('CAPTURE_PROVIDER=edgeshark',again);self.assertIn('CAPTURE_SESSION_TOKEN='+token,again)
 
     def test_migration_retains_other_settings_and_token_without_evaluating_shell(self):
         path=Path(__file__).resolve().parents[2]/'deploy/setup_capture.py'

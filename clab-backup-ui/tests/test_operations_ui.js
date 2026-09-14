@@ -101,3 +101,33 @@ test('browse renders before capabilities settle, survives failure and retries fo
  folder.open=false;await folder.ontoggle();folder.open=true;await folder.ontoggle();
  assert.equal(folderCalls,2);assert.equal(folder.children[1].children[0].textContent,'◇ lab.clab.yaml');
 });
+
+test('telemetry settings dialog reads the lab view, saves the setting and retries failed nodes',async()=>{
+ const calls=[],elements=new Map();
+ // Only the dialog and its controls exist; the workspace elements operations.js wires at load time do not.
+ const el=id=>{if(!/^tele/.test(id))return null;if(!elements.has(id))elements.set(id,{id,innerHTML:'',checked:false,value:'',open:false,disabled:false,textContent:'',querySelector(){return {textContent:'',onclick:null};},querySelectorAll(){return [];},showModal(){this.open=true;},close(){this.open=false;}});return elements.get(id);};
+ const view={enabled:true,linked:true,unavailable:'',settings:{auto:true,decided:true,profile_id:'p'},password_profiles:[{id:'p',label:'Ops',platform:'arista_ceos'}],
+  summary:{total:2,streaming:1,failed:1},nodes:[{name:'clab-demo-r1',short_name:'r1',state:'streaming',message:'ok'},{name:'clab-demo-r2',short_name:'r2',state:'failed',message:'gNMI login refused'}]};
+ const c=vm.createContext({$:el,esc:context.esc,activeId:'lab',state:{labs:[{id:'lab',name:'demo'}]},console,JSON,
+  document:{createElement(){return el('created');},body:{append(){}},querySelectorAll(){return [];}},
+  api:async url=>{calls.push(url);return {json:async()=>view};},json:async(url,method,data)=>{calls.push([url,method,data]);return {started:[]};},
+  notify(){},refresh:async()=>{calls.push('refresh');},confirm:()=>true});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ const dialog=await c.openTelemetrySettings('lab');
+ assert.equal(calls[0],'/labs/lab/telemetry');
+ assert.match(dialog.innerHTML,/Automatic telemetry is on: 2 supported nodes · 1 streaming · 1 failed\. Read the data in Grafana\./);
+ assert.match(dialog.innerHTML,/<strong>r2<\/strong> \(failed\): gNMI login refused/);assert.doesNotMatch(dialog.innerHTML,/<strong>r1<\/strong>/);
+ assert.match(dialog.innerHTML,/<option value="p" selected>Ops · arista_ceos<\/option>/);assert.match(dialog.innerHTML,/id="tele-retry"/);
+ assert.match(dialog.innerHTML,/id="tele-remove" disabled/,'removal needs automatic telemetry off first');
+ el('tele-auto').checked=false;el('tele-profile').value='';
+ await el('tele-save').onclick();
+ assert.equal(JSON.stringify(calls[1]),JSON.stringify(['/labs/lab/telemetry/settings','PUT',{auto:false,profile_id:''}]));assert.equal(calls[2],'refresh');assert.equal(dialog.open,false);
+ await el('tele-retry').onclick();
+ assert.equal(JSON.stringify(calls[3]),JSON.stringify(['/labs/lab/telemetry/retry','POST',{}]));
+ view.settings={auto:false,decided:false};view.summary={total:0};view.nodes=[];
+ const undecided=await c.openTelemetrySettings('lab');
+ assert.match(undecided.innerHTML,/saved before automatic telemetry existed/);assert.doesNotMatch(undecided.innerHTML,/tele-retry/);
+ view.enabled=false;view.unavailable='pygnmi is not installed in this image.';
+ assert.match((await c.openTelemetrySettings('lab')).innerHTML,/pygnmi is not installed/);
+ assert.match((await c.openTelemetrySettings('lab')).innerHTML,/id="tele-save" disabled/);
+});

@@ -97,7 +97,10 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/telemetry/metrics', headers={'Origin': 'https://other.example'}).status_code, 403)
         health = self.client.get('/api/telemetry/health').json()
         self.assertEqual(health['metrics_path'], '/api/telemetry/metrics'); self.assertEqual(health['grafana'], {'enabled': False, 'port': 3000, 'prometheus_port': 9090})
-        self.assertNotIn('grafana', self.client.get('/api/state').text)
+        # The lab header's Grafana link needs only these three values; no password, no Prometheus port.
+        labs = {lab['id']: lab for lab in self.client.get('/api/state').json()['labs']}
+        self.assertEqual(labs['lab']['telemetry']['grafana'], {'enabled': False, 'port': 3000, 'map_uid': ''})
+        self.assertNotIn('grafana', str(labs['unlinked']['telemetry']))
 
 
 if __name__ == '__main__':

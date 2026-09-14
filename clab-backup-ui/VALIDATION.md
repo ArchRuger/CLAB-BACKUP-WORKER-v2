@@ -1,3 +1,91 @@
+# Documentation and installation audit — 1.25.0
+
+Prepared on `claude/docs-install-audit` from main `a4cb89f` (1.24.0) on 2026-09-14, after the
+user asked for a top-to-bottom documentation and install audit: the Wireshark and Grafana stacks
+as part of the installation, version numbers tracked instead of left in the guides, every command
+runnable from any directory, the link-hover bug, and telemetry moved out of the manager UI into
+Grafana with the topology map back to its earlier state.
+
+## Environment
+
+- Dev VM `clab-dev-llm` (Ubuntu 24.04.4, Docker 29.8, Compose v5.5.1, containerlab 0.79.0, no
+  KVM), running 1.24.0 from `~/projects/v1.24.0` with the capture and telemetry stacks and the
+  `ceos-pair` lab (two cEOS 4.35.0F nodes) streaming telemetry when the session started.
+- Windows workstation for the unit and browser tests (Python 3.12, Node); the desktop app's
+  browser pane for the UI checks.
+
+## The guided installer, end to end, on the documented route
+
+| Step | Result |
+|---|---|
+| Working tree staged at `~/projects/clab-manager` (the folder every guide now uses), `.env` copied from the 1.24.0 folder | `verify-release.py --runtime` reports 1.25.0; `bash -n` passes on every deploy script |
+| `bash ~/projects/clab-manager/deploy/install.sh` started from `/tmp` through a pty driver that answers the prompts like a person (menu 1, bind/port retained, operations 1, VS Code 2, media repair n, plan y, next step 2, menu 6) | First attempt stopped in phase 3 with the recovery menu: `start-manager.sh` ran the release check without `--runtime`, so the not-yet-written validation section blocked a VM install. Fixed (`--runtime` in the launcher, pinned by `test_release_consistency`), re-staged, re-run: phases 1/6 to 6/6 all `Completed`, no recovery menu, closing line `Manager 1.25.0: running; HTTP and version checks passed.` |
+| Phase 4, browser Wireshark | pinned Wireshark image pulled, `clab-capture-service:1.25.0` built, Edgeshark and the session service recreated, `Manager recreated with the current clab-backup-ui/.env` |
+| Phase 5, Grafana | Flow panel reported `present` (no download), `Prometheus on 127.0.0.1:9090 and Grafana on TCP 3000 are ready`, scrape target `unknown (first scrape pending)` at that moment, `Flow panel … loaded`, manager recreated again |
+| Phase 1, `sudo -v` | Prompted for a password on this VM even with `clabllm ALL=(ALL) NOPASSWD: ALL`, because the account is also in the `sudo` group and sudo's `verifypw` default needs every entry to be NOPASSWD. For the unattended run `Defaults:clabllm verifypw = any` was added on the VM; a person at the console types the sudo password there, as the guides say |
+
+## After the install
+
+- `docker ps`: `clab-backup:1.25.0`, `clab-capture-service:1.25.0`, gostwire, packetflix,
+  prometheus and grafana all up; the two cEOS nodes untouched.
+- `/api/state`: version 1.25.0; `ceos-pair` reports `telemetry.status = streaming` and
+  `telemetry.grafana = {enabled: true, port: 3000, map_uid: clab-map-35159c1aca7c447da2998e00}`;
+  `/api/telemetry/health` reports one provisioned map and plugin 1.20.1; `/api/capture/status`
+  enabled; the Prometheus target is `up`; Grafana answers 200 for the map dashboard uid;
+  `/api/labs/x/telemetry/series` and `/static/telemetry.js` answer 404.
+- `bash ~/projects/clab-manager/deploy/check-install.sh` run from `/tmp`: **PASS 61 / FAIL 0 /
+  WARN 1** (the folder-coverage budget), including `[PASS] Browser Wireshark capture`,
+  `[PASS] Network telemetry`, `[PASS] Grafana telemetry dashboards`, `[PASS] Engineer access` and
+  the Git registry checks.
+
+## In the browser (desktop app browser pane, fresh tab)
+
+- Header tabs are Topology, Nodes, Backup history and More; no Telemetry tab and no
+  `#telemetry-view`; every asset carries `?v=1.25.0`; footer v1.25.0; no console errors.
+- **Lab map in Grafana ↗** links to
+  `http://192.168.233.131:3000/d/clab-map-35159c1aca7c447da2998e00?var-lab=ceos-pair&refresh=10s`;
+  opened in a second tab, `Lab map · ceos-pair` renders the two routers with green node and port
+  dots and `↑ 0.0 b/s` labels (no traffic at the time).
+- Map: legend reads "Links show imported wiring, not live status"; zero `data-link-index`
+  attributes and zero `.tele-dot` elements; the hit path's computed style is transparent,
+  16 px wide and `stroke-dasharray: none`; `elementFromPoint` along the link centre and at
+  6, 12, 18 and 23 px above and below returns `path.capture-hit`, the background at 26 px (the
+  SVG is scaled 3.01×, so the 16-unit band is ±24 px on screen); hovering paints the wire coral.
+- Right-click on ceos1: Capture packets, SSH, Back up configuration, Node details; no *View
+  telemetry*.
+- Lab actions → Telemetry settings…: "Automatic telemetry is on: 2 supported nodes · 2
+  streaming. Read the data in Grafana.", the checkbox on, the gNMI login select, *Remove
+  manager-added lines…* disabled while automatic telemetry is on, no retry button because no
+  node has failed. Saving, removal and retry are exercised by the browser test only.
+
+## Tests
+
+- Node: **76** tests pass (`tests/*.js`), including the new Telemetry settings dialog test and
+  the Grafana link test; `test_telemetry_ui.js` is deleted with the feature.
+- Python: **599** tests, 12 skipped. The full run on Windows reports the known `state.enc`
+  rename flake (`WinError 5`) in a varying handful of tests (different ones in two runs); every
+  affected file passes when run alone (`test_git_progress`, `test_capture`, `test_diagram_editor`,
+  `test_telemetry_manager`, `test_nodes`, `test_node_readiness`, `test_downloads`,
+  `test_vm_password`, `test_capture_proxy` re-run individually). New or changed:
+  `test_release_consistency` (documentation check, `set-release.py`, launcher order and
+  `--runtime`), `test_install_manager` (stack phases and menu 4), `test_check_install` (WARN and
+  absolute advice), `test_capture_sessions` (`--remove`), `test_telemetry_manager` (chart routes
+  gone, `grafana` in the view), `test_telemetry_metrics` (`grafana` in `/api/state`).
+- `python3 deploy/verify-release.py`: the runtime set and the documentation both name 1.25.0;
+  `set-release.py 1.25.0` was what moved the 19 runtime and documentation markers.
+
+## Not covered
+
+- `setup-capture.sh --remove`, `setup-telemetry.sh --remove` and a launcher run without
+  `--manager-only` (the refresh-both-stacks path) were not run on the VM: the user tests on this
+  VM and its stacks were left up. Unit tests cover the `.env` handling, the script contents and
+  the launcher's order of steps.
+- No fresh Ubuntu VM run: this VM already had every prerequisite, so phase 2 only reported them
+  present. The Git wizard was not re-run (next step 2).
+- The hover was verified geometrically and visually with telemetry streaming; the dotted
+  "no telemetry" link that flickered cannot occur any more because no overlay class is added.
+- XRv9k and cJunosEvolved are unchanged and were not touched.
+
 # Grafana lab map — 1.24.0
 
 Prepared on `claude/grafana-lab-map` from main `70f30c9` (1.23.1) on 2026-09-13, after the

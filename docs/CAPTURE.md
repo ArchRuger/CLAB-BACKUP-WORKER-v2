@@ -1,4 +1,4 @@
-# Browser Wireshark — 1.22.0
+# Browser Wireshark
 
 Select **Capture packets**, a node's **Capture** action, or either endpoint of a
 topology link. The dialog lists the interfaces the topology wires to that node first
@@ -9,36 +9,31 @@ discovery did not match; it unfolds by itself only when no target could be resol
 Click **Start browser capture**, then **Open Wireshark in browser**. Wireshark runs on
 the Containerlab VM; the workstation only needs a browser that can reach the manager.
 
-## Install or migrate from 1.20.x
+## The capture stack
 
-From this complete source checkout on the Linux VM:
-
-```bash
-sudo bash deploy/setup-capture.sh
-bash deploy/install.sh
-```
-
-Optional setup pulls the pinned Wireshark image, builds the session service,
-starts the capture Compose project, and configures `clab-backup-ui/.env`. It
-preserves unrelated settings and the existing service token, and removes the
-obsolete `CAPTURE_EDGESHARK_PUBLIC_URL`. It recreates the Edgeshark and session
-containers every time (an upgrade can rename the project network, and only a
-recreated container joins the new one), so discovery pauses for a few seconds and
-running browser sessions are removed. The normal installer upgrades the manager
-and matching helpers while preserving data and VM credentials.
-
-If the manager already runs 1.21.0, apply changed capture settings with:
+The stack is part of every installation: the installer sets it up as its fourth
+phase, and every later install or upgrade refreshes it (the session service image
+carries the release number). The same script works on its own from any directory
+and recreates the manager itself so it loads the settings:
 
 ```bash
-sudo docker compose --env-file clab-backup-ui/.env \
-  -f clab-backup-ui/compose.yml up -d --no-deps backup-ui
+sudo bash "$HOME/projects/clab-manager/deploy/setup-capture.sh"
 ```
 
-No Windows plugin, URL handler, VNC client or capture-port SSH tunnel is needed.
-An existing capture-only tunnel may be closed. Workstation software used by other
-tools is not uninstalled. Save and stop any old desktop captures yourself.
-Download browser captures before upgrading/restarting the session service: its
-startup reconciliation removes temporary session containers.
+It pulls the pinned Wireshark image, builds the session service from this source,
+starts the capture Compose project (Edgeshark on localhost 5001, the session service
+on localhost 5801), writes `CAPTURE_PROVIDER`, the two URLs and the service token into
+`clab-backup-ui/.env` while preserving unrelated settings and an existing token, and
+recreates the manager. It recreates the Edgeshark and session containers every time
+(an upgrade can rename the project network, and only a recreated container joins the
+new one), so discovery pauses for a few seconds and running browser sessions are
+removed: download saved captures before upgrading.
+
+To take the stack down deliberately, add `--remove`: it stops the services and
+writes `CAPTURE_PROVIDER=disabled` (the token is kept), the node and link Capture
+actions grey out, and later upgrades leave the stack alone. Rerun without `--remove`
+to bring it back. The health check reports a missing stack as a WARN with that
+command.
 
 The stack owns localhost ports **5001** (Edgeshark) and **5801** (sessions).
 Desktops have no published ports. If another Edgeshark installation owns 5001,
@@ -144,10 +139,10 @@ variation. Security updates still require deliberate review and a new pin. See
 ## Health, troubleshooting and removal
 
 ```bash
-sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.capture.yml ps
-sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.capture.yml logs --tail=80 sessions
+sudo docker compose --env-file "$HOME/projects/clab-manager/clab-backup-ui/.env" -f "$HOME/projects/clab-manager/deploy/compose.capture.yml" ps
+sudo docker compose --env-file "$HOME/projects/clab-manager/clab-backup-ui/.env" -f "$HOME/projects/clab-manager/deploy/compose.capture.yml" logs --tail=80 sessions
 curl --fail http://127.0.0.1:5001/discover/mobyshark
-bash deploy/check-install.sh
+bash "$HOME/projects/clab-manager/deploy/check-install.sh"
 ```
 
 The health checker verifies discovery, service authentication and availability of
@@ -160,14 +155,13 @@ The browser console logs `noVNC requires a secure context (TLS)` on every viewer
 load over plain HTTP; it is harmless here because the desktop stream uses VNC
 security type None inside the VM. A viewer that disconnects immediately while the
 sessions log shows `websockify ... 403` means the service could not complete the
-websockify handshake (1.21.0 omitted the `binary` subprotocol): rebuild the
-sessions service with `sudo bash deploy/setup-capture.sh`.
+websockify handshake (a session service built before 1.21.1 omitted the `binary`
+subprotocol): rebuild the stack with the setup command above.
 
-To disable capture, download/end sessions, set `CAPTURE_PROVIDER=disabled` and
-recreate the manager. Remove the optional stack using:
+To disable capture, download and end your sessions, then:
 
 ```bash
-sudo docker compose --env-file clab-backup-ui/.env -f deploy/compose.capture.yml down
+sudo bash "$HOME/projects/clab-manager/deploy/setup-capture.sh" --remove
 ```
 
 Normal shutdown removes this service's labelled Wireshark containers. After forced
@@ -183,9 +177,9 @@ survives token rotation. Do not remove unrelated containers or manager data.
 - [Packetflix API](https://github.com/siemens/packetflix/blob/main/api.md)
 - [Containerlab capture coverage](https://containerlab.dev/manual/wireshark/)
 
-From `clab-backup-ui`, run `python -m unittest discover -s tests -t tests -p
-"test_capture*.py"` and `node --test tests/test_capture_ui.js`. On an isolated Linux
-Docker host, `deploy/capture/smoke.py` exercises the pinned image and live Edgeshark
-loopback traffic; CI is configured to run it. See `clab-backup-ui/VALIDATION.md` for
-checks actually executed. VM acceptance also includes a topology link, expected
-packets, Wireshark Save As, download, reconnect and session removal.
+The unit tests (`test_capture*.py`, `test_capture_ui.js`) run with the rest of the
+suites; see the README's development section. On an isolated Linux Docker host,
+`deploy/capture/smoke.py` exercises the pinned image and live Edgeshark loopback
+traffic; CI runs it on every push. See `clab-backup-ui/VALIDATION.md` for checks
+actually executed. VM acceptance also includes a topology link, expected packets,
+Wireshark Save As, download, reconnect and session removal.

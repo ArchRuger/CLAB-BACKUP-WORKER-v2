@@ -1,69 +1,116 @@
-# Repository audit and release checks
+# Repository maintenance and release rules
 
-Rechecked GitHub `main` at `77d3c76` on 11 September 2026. VERSION now agrees
-with the 1.15.1 runtime metadata, and all seven release-consistency and four
-helper-preflight tests pass locally against that published source.
+How a release is cut, what must stay in lockstep, what the documentation may and
+may not say, and what CI checks. The history of the audit that introduced these
+checks is in the [archive](archive/REPOSITORY-AUDIT-1.15.1.md).
 
-The earlier `b0389ba` upload had source `clab-backup-ui/VERSION` that
-contained `1.15.0`, while the app, discovery/operations/Git helpers, Compose image
-tag and Docker image label contained `1.15.1`. This stopped fresh installation
-at helper verification, before the image build or container creation.
+## One release number, everywhere it matters
 
-Compared with the delivered 1.15.1 source ZIP, GitHub also lacked `.gitignore`
-and `.gitattributes`, and had a different validation document. Other shared
-files matched after normalizing line endings. A folder name or commit message
-does not determine the running release.
+`clab-backup-ui/VERSION` is the release. Every other place that carries the number
+must agree with it, because the launcher, the health check and the VM helpers all
+compare them and refuse a mixed tree:
 
-## Published changes and remaining web-upload items
+| Where | Checked by |
+|---|---|
+| `clab-backup-ui/app/__init__.py` (`__version__`, shown by the API and the footer) | `verify-release.py` |
+| `clab-backup-ui/app/host_files.py` (`helper_version`), `host_operations.py` and `host_git.py` (`VERSION`) | `verify-release.py`; the launcher compares the installed helpers with it |
+| `clab-backup-ui/Dockerfile` OCI label and `compose.yml` image tag | `verify-release.py`; the Docker build asserts the label |
+| `deploy/compose.capture.yml` session-service image tag | `verify-release.py` |
+| The `?v=` on every `/static/...` asset in the HTML pages, and the footer fallback in `app.js` | `verify-release.py` (stale browser assets hide new controls after an upgrade) |
+| `Current release: **x.y.z**` in the README | `verify-release.py` (documentation check) |
+| The first `## Changes in x.y.z` of `docs/CHANGELOG.md`, the first `# … — x.y.z` of `clab-backup-ui/VALIDATION.md` and of `agent instructions.md` | `verify-release.py` (documentation check) |
 
-- Corrected VERSION to 1.15.1, matching the existing release contents.
-- Removed unreferenced root `changes.patch` and `changes-1.2.0.patch` artifacts
-  (154,457 bytes combined). They remain retrievable from Git history.
-- Still to delete: the unused `deploy/clab_manager_files.py` development entry point.
-  The installer already uses `clab-backup-ui/app/host_files.py`; the installed
-  `/usr/local/lib/clab-manager/clab_manager_files.py` path is unchanged.
-- Still to upload: `.gitignore`, `.gitattributes`, `.github/workflows/release-check.yml`
-  and `clab-backup-ui/.dockerignore`. They were omitted from the web upload. The
-  completion bundle contains them at their exact repository paths.
-- Restore `LAB-OPERATIONS.md`: it was deleted, but current guides still link to
-  it. An updated 1.15.1 copy is included. The historical LAB-COMMANDS-PLAN.md is
-  not required for the running application and can remain deleted.
-- Kept vendor JavaScript/licenses, test fixtures and migration/reference guides:
-  those are intentional project content. Historical guides remain marked as such.
-
-## Before packaging, publishing or starting the manager
-
-Run from the source root; only Python's standard library is needed:
+Run the check from any directory; only Python's standard library is needed:
 
 ```bash
-python3 deploy/verify-release.py
+python3 "$HOME/projects/clab-manager/deploy/verify-release.py"
 ```
 
-The check compares VERSION with the app, all helpers, image label/tag and browser
-asset versions. `start-manager.sh` runs it before changing the host. The Docker
-build also checks VERSION against the app. After the missing workflow is uploaded,
-GitHub Actions will run the source check and its regression tests on pushes and
-pull requests. No successful Actions run is claimed for the current upload. Branch protection must
-require the check if merges should be blocked on failure.
+It prints `Source release verified: x.y.z` and `Documentation names only release
+x.y.z.`, or lists every mismatch with its file and line. The VM scripts run the
+runtime half (`--runtime`) before touching the host; `--docs` runs the
+documentation half alone. `tests/test_release_consistency.py` runs both against
+the checkout, and the CI workflow runs the script on every push and pull request.
 
-Commit the complete change with Git, including dotfiles, rather than replacing
-selected files through a browser upload. Use `git status --short` to review the
-changes. Keep source archives and patches in ignored `dist/` or release assets;
-keep local VM data and credentials outside the source tree.
+## What the documentation may say about versions
 
-## Repair the affected fresh VM
+The guides describe the current release and name no version of their own. A
+guide that says "this guide targets release X", clones into `~/projects/vX.Y.Z` or
+builds `clab-backup:X.Y.Z` goes stale at the next release and sends users to
+folders and images that do not exist; that is exactly what the documentation check
+refuses. The rules, enforced by `verify_docs()` in `deploy/verify-release.py`:
 
-For the audited 1.15.1 checkout whose only runtime-version mismatch is VERSION:
+- **Living guides** (`README.md`, `docs/*.md`, `deploy/*.md`, the app README,
+  `NODE-FEATURES.md`, the VM connection and capture setup pages) may name the
+  manager's release only where they mean the current one, for example the
+  installer's closing line `Manager 1.25.0: running`. Those mentions are moved by
+  the bump tool.
+- **Release history** is written with a relational phrase, which is allowed
+  anywhere: `since 1.23.0`, `before 1.21.1`, `introduced in 1.19.4`, `as of 1.22.0`,
+  `upgrading from 1.20.1`, `1.22.0 or later`, `1.18.0 and earlier`. Anything else
+  that names another release is reported with its file and line.
+- **A third-party version** that shares the manager's major number (the Flow panel
+  plugin, for example) is fine when the component is named shortly before it
+  (`andrewbmchugh-flow-panel 1.20.1`).
+- **Versioned source folders** (`projects/vX.Y.Z`) and **versioned image tags**
+  (`clab-backup:X.Y.Z`, `clab-capture-service:X.Y.Z`) are refused in the living
+  guides outright. The source folder is `~/projects/clab-manager`; an image tag is
+  the value of `clab-backup-ui/VERSION`.
+- **History files** may name any release: `docs/CHANGELOG.md`,
+  `clab-backup-ui/VALIDATION.md`, `agent instructions.md` and everything under
+  `docs/archive/`. Each of the first three must lead with the current release.
+- **Every documented command works from any directory.** Scripts locate the
+  checkout themselves; the guides write `bash "$HOME/projects/clab-manager/deploy/…"`
+  and the health check's `Next:` lines print absolute paths. A command that needs a
+  working directory (the unit tests) changes into it itself.
 
-```bash
-printf '1.15.1\n' > clab-backup-ui/VERSION
-sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
-```
+## Cutting a release
 
-Do not change the version blindly for other mixed releases. Obtain complete,
-matching source instead. The improved helper verifier now reports the expected
-and actual numeric versions without printing deployment files or credentials.
+1. Decide the number from the current checkout: patch for a compatible fix, minor
+   for a compatible feature, major for a breaking change.
+2. Move every marker at once and let the tool list what it touched:
 
-The version repair and obsolete-patch deletions are published. The additional
-completion files and updated documentation are prepared locally for web upload.
-No Docker publication or VM deployment is implied by this audit.
+   ```bash
+   python3 "$HOME/projects/clab-manager/deploy/set-release.py" X.Y.Z
+   ```
+
+   It rewrites `VERSION`, the runtime lockstep files and every current-release
+   mention in the living guides; history phrases and third-party versions are left
+   alone.
+3. Write the release history by hand: a `## Changes in X.Y.Z` section at the top
+   of `docs/CHANGELOG.md`, a `# <title> — X.Y.Z` section at the top of
+   `clab-backup-ui/VALIDATION.md` with what was actually tested (never claim a build,
+   VM deployment, live-device test or push that did not happen), and the same at the
+   top of `agent instructions.md` with what the next agent must preserve.
+4. Run the checks and the tests, then commit everything with Git, dotfiles
+   included; never replace selected files through a browser upload. Deploy scripts
+   and `VERSION` stay LF (`.gitattributes` enforces it).
+5. Push and open a pull request; CI runs the release check, the unit and browser
+   tests, the shell syntax check and the real capture and Grafana smoke tests.
+
+Do not overwrite an existing numbered release with different contents. A Git tag
+identifies source; a Docker tag identifies a built image; neither implies a
+deployment.
+
+## What stays out of the repository
+
+Generated archives, patches, runtime data, `.env` files, keys and credentials are
+ignored (`.gitignore`, `.dockerignore`). Keep source archives in an ignored `dist/`
+or in release assets, and local VM data outside the source tree. Vendor JavaScript
+and its licences, test fixtures and the archived guides are intentional content.
+
+## CI
+
+`.github/workflows/release-check.yml` runs on every push and pull request:
+
+1. `python3 deploy/verify-release.py` (runtime and documentation).
+2. The release, installer, Git onboarding, APT and health-check regression tests.
+3. `bash -n` on every deploy shell script.
+4. The application test suites in a virtual environment, the telemetry suites, the
+   browser test files under `node --test`, and the capture suites.
+5. `docker compose config` for both stacks, then the real Grafana stack against a
+   fixture manager (`deploy/telemetry/smoke.py`) and real browser Wireshark with
+   loopback packets (`deploy/capture/smoke.py`).
+
+Branch protection must require the workflow if merges are to be blocked on a red
+check.

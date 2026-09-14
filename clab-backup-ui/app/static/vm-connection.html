@@ -1,16 +1,16 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VM connection guide</title><link rel="stylesheet" href="/static/style.css?v=1.24.0"></head><body><main class="vm-guide"><a href="/">← Containerlab Node Manager</a><h1>VM connection — password setup and recovery, 1.24.0</h1>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VM connection guide</title><link rel="stylesheet" href="/static/style.css?v=1.25.0"></head><body><main class="vm-guide"><a href="/">← Containerlab Node Manager</a><h1>VM connection — password setup and recovery</h1>
 <p>Create the <code>clab-discovery</code> password <strong>on the VM during host setup, before launching
 the manager</strong>. The image build contains no user password. Each VM has its own
 user-created password, retained across reboots and manager upgrades.</p>
 <p>The manager connects to the Containerlab VM over SSH using this password. Device
 SSH and backup credentials are configured separately and retain their existing options.</p>
 <p><a href="/static/debug.html">Open Debug panel</a> to check the running version and VM helpers.</p><h2>First launch or migration from an SSH key</h2>
-<p>Run these commands in an interactive terminal using your normal VM administrator
-account. Start in the extracted source folder containing <code>deploy/</code> and <code>clab-backup-ui/</code>.
-Docker, Compose, Containerlab, Python 3, sudo and a running OpenSSH service are required;
-see <a href="https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2/blob/main/FRESH-VM-GUIDE.md">Fresh VM guide</a> for installation.</p>
-<pre><code class="language-bash">cd &quot;$HOME/projects/v1.24.0&quot;
-sudo bash deploy/start-manager.sh --enable-operations --lab-root /etc/containerlab
+<p>The guided installer (<code>bash &quot;$HOME/projects/clab-manager/deploy/install.sh&quot;</code>) does all of
+this; the command below is the launcher it runs. Run it in an interactive terminal using your normal VM
+administrator account, from any directory. Docker, Compose, Containerlab, Python 3, sudo and a running
+OpenSSH service are required; see
+<a href="https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2/blob/main/docs/INSTALL.md">the installation guide</a>.</p>
+<pre><code class="language-bash">sudo bash &quot;$HOME/projects/clab-manager/deploy/start-manager.sh&quot; --enable-operations --lab-root /etc/containerlab
 </code></pre>
 <p>Setup prompts twice for the new <code>clab-discovery</code> password without displaying it.
 This is separate from sudo's prompt for your administrator password. Use a unique
