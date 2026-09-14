@@ -182,7 +182,7 @@ def main():
     config_dir = folder / 'telemetry'
     result = setup.configure(env_file, config_dir)
     assert result == {'ui_port': ui_port, 'grafana_port': grafana_port, 'prometheus_port': prometheus_port, 'bind': '127.0.0.1',
-                      'maps_dir': maps_dir.as_posix()}, result
+                      'maps_dir': maps_dir.as_posix(), 'idle_minutes': setup.DEFAULT_IDLE_MINUTES}, result
     assert 'UNRELATED=kept' in env_file.read_text(encoding='utf-8')
     assert maps_dir.is_dir() and (config_dir / 'plugins').is_dir()
     password = re.search(r'^TELEMETRY_GRAFANA_ADMIN_PASSWORD=(\S+)$', env_file.read_text(encoding='utf-8'), re.M)[1]
@@ -258,9 +258,30 @@ def main():
         # An anonymous viewer cannot change anything.
         status, _ = fetch(grafana + '/api/datasources', data={'name': 'x', 'type': 'prometheus'})
         assert status in (401, 403), status
+        # Grafana is on demand: the manager stops and starts it by its fixed container name through the
+        # VM helper (docker stop / docker start, nothing else). A restart lands on a fresh tmpfs volume and
+        # re-provisions the data source, the dashboards and the lab map from files; Prometheus keeps running.
+        assert setup.GRAFANA_CONTAINER == 'clab-manager-grafana', setup.GRAFANA_CONTAINER
+        command('docker', 'stop', '-t', '10', setup.GRAFANA_CONTAINER)
+        state = command('docker', 'inspect', '--format', '{{.State.Status}}', setup.GRAFANA_CONTAINER, capture_output=True, text=True).stdout.strip()
+        assert state == 'exited', state
+        try:
+            status, _ = fetch(grafana + '/api/health', timeout=3)
+        except (URLError, OSError):
+            status = 0
+        assert status != 200, 'Grafana still answers after docker stop'
+        status, _ = fetch(prometheus + '/-/ready')
+        assert status == 200, 'Prometheus must keep running while Grafana is stopped'
+        command('docker', 'start', setup.GRAFANA_CONTAINER)
+        restarted = setup.wait_ready(env_file, timeout=120)
+        assert restarted['flow_panel'], 'the Flow panel must load again after a restart: ' + str(restarted)
+        eventually(provisioned, what='the generated lab map after a Grafana restart')
+        status, dashboard = fetch(grafana + '/api/dashboards/uid/' + UIDS[0])
+        assert status == 200 and dashboard['meta']['provisioned'], (status, dashboard.get('meta'))
         print(f'PASS: Prometheus scrapes the manager exposition, Grafana provisioned the data source and {len(UIDS)} read-only dashboards, '
               f'{checked} panel queries and every template variable answer, anonymous viewer queries work, the Flow panel '
-              f'{maps.PLUGIN_VERSION} loaded and the generated lab map {map_uid} was provisioned with every cell series answered.')
+              f'{maps.PLUGIN_VERSION} loaded, the generated lab map {map_uid} was provisioned with every cell series answered, '
+              f'and Grafana came back fully provisioned after a docker stop/start of {setup.GRAFANA_CONTAINER}.')
     finally:
         server.shutdown()
         command(*compose, 'down', '--volumes', '--remove-orphans')

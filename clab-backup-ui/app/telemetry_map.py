@@ -295,7 +295,10 @@ def dashboard(lab, drawing):
              'fieldConfig': {'defaults': {}, 'overrides': []}}
     return {'uid': map_uid(lab['id']), 'title': 'Lab map \u00b7 ' + name, 'tags': ['containerlab', 'node-manager', 'lab-map'],
             'editable': False, 'schemaVersion': 41, 'version': 1, 'refresh': '10s', 'graphTooltip': 1, 'timezone': 'browser',
-            'time': {'from': 'now-15m', 'to': 'now'}, 'timepicker': {'refresh_intervals': ['5s', '10s', '30s', '1m', '5m']},
+            'time': {'from': 'now-15m', 'to': 'now'},
+            'timepicker': {'refresh_intervals': ['5s', '10s', '30s', '1m', '5m'],
+                           'quick_ranges': [{'display': 'Last 5 minutes', 'from': 'now-5m', 'to': 'now'},
+                                            {'display': 'Last 15 minutes', 'from': 'now-15m', 'to': 'now'}]},
             'annotations': {'list': []}, 'templating': {'list': []}, 'links': links, 'panels': [panel],
             'description': f'Weathermap of lab {name}: generated from the manager drawing, not editable in Grafana.'}
 

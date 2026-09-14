@@ -50,7 +50,7 @@ Grafana plugin and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.25.0 — guided setup
+Containerlab Node Manager 1.26.0 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -79,7 +79,7 @@ access, APT media repair), shows the plan and asks once for approval. Then it ru
 | 2 VM prerequisites | Installs missing Git, SSH, Docker/Compose and containerlab and starts the services. Compatible tools stay installed; conflicting Docker packages stop with instructions. A previously disabled Docker source gets a specific recovery message. Optionally backs up and disables obsolete installation-media APT entries; network mirrors and signature checks stay. |
 | 3 Password, helpers, image and manager | Runs the launcher (`start-manager.sh --manager-only`): prepares persistent storage, creates or retains the restricted `clab-discovery` password, installs and verifies the VM helpers through the restricted account and gateway, builds the image and creates the manager. |
 | 4 Browser Wireshark capture stack | Pulls the pinned Wireshark image, builds the session service from this source, starts Edgeshark on localhost 5001/5801, writes the capture settings and recreates the manager so it loads them. |
-| 5 Grafana dashboards and lab maps | Pulls Prometheus and Grafana by digest, installs the pinned Flow panel plugin, writes the scrape configuration for the real UI port, starts both, waits until they answer and recreates the manager. Grafana listens on TCP 3000. |
+| 5 Grafana dashboards and lab maps | Pulls Prometheus and Grafana by digest, installs the pinned Flow panel plugin, writes the scrape configuration for the real UI port, starts both, waits until they answer, stops Grafana again and recreates the manager. Grafana (TCP 3000) is on demand: the manager starts it when you open it from a lab and stops it after 15 minutes without an open dashboard; Prometheus keeps running with 15 minutes of history. |
 | 6 Running manager verification | Checks the Compose container, the application version and the HTTP response on the actual bind address and port. |
 | 7 Engineer access for VS Code | Only when chosen: `docker` and `clab_admins` groups for your account, group-writable trusted lab folders, the containerlab SUID mode. |
 
@@ -112,7 +112,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The installer ends with `Manager 1.25.0: running; HTTP and version checks passed.`
+The installer ends with `Manager 1.26.0: running; HTTP and version checks passed.`
 and the local address. Open `http://VM_IP:8081` from your workstation (the VM's LAN
 address, not the workstation's `127.0.0.1`).
 
@@ -146,7 +146,11 @@ says `CAPTURE_PROVIDER=disabled` or `TELEMETRY_STACK=disabled` (written by the
 
 Both stacks are part of every installation. Menu **4** reinstalls or upgrades both
 without rebuilding the manager; the same two scripts work on their own from any
-directory and recreate the manager themselves so it loads the new settings:
+directory and recreate the manager themselves so it loads the new settings. Grafana
+is left stopped by its setup: the manager starts it on the VM when you open it from
+a lab and stops it after 15 minutes without an open dashboard
+(`TELEMETRY_GRAFANA_IDLE_MINUTES` in `clab-backup-ui/.env`; 0 keeps it running once
+started), so an idle VM does not carry Grafana's memory:
 
 ```bash
 sudo bash "$HOME/projects/clab-manager/deploy/setup-capture.sh"
@@ -259,8 +263,9 @@ The final terminal checks verify the local manager. On your workstation:
    fingerprint, reopen **VM connection** and compare it with the VM console host key.
 2. Click **Deploy a new lab**, pick a topology on the VM and deploy it, or import a
    lab that already runs. Wait for *NOS ready*.
-3. Open **Grafana ↗** in the lab header and confirm the dashboards and the lab map
-   fill in; right-click a node for **Capture packets** and confirm Wireshark opens.
+3. Open **Grafana ↗** in the lab header: the manager starts Grafana on the VM (a few
+   seconds) and shows the dashboards; confirm they and the lab map fill in.
+   Right-click a node for **Capture packets** and confirm Wireshark opens.
 4. Take a backup, then in **More → Git repository** select the registered checkout.
 5. Back in the VM terminal, run the [full installation report](HEALTH-CHECK.md):
 

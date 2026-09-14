@@ -10,7 +10,7 @@ and the Python packages are installed from PyPI during the image build.
 | [grpcio](https://github.com/grpc/grpc) | gRPC transport for pygnmi | Apache-2.0 |
 | [protobuf](https://github.com/protocolbuffers/protobuf) | gNMI message encoding | BSD-3-Clause |
 | [dictdiffer](https://github.com/inveniosoftware/dictdiffer) | pygnmi dependency | MIT |
-| [Prometheus](https://prometheus.io) (`prom/prometheus`) | Scrapes the manager's `/api/telemetry/metrics` every 10 s, two-hour retention on tmpfs | Apache-2.0 |
+| [Prometheus](https://prometheus.io) (`prom/prometheus`) | Scrapes the manager's `/api/telemetry/metrics` every 10 s, 15-minute retention on tmpfs | Apache-2.0 |
 | [Grafana OSS](https://grafana.com/oss/grafana/) (`grafana/grafana-oss`) | Serves the provisioned dashboards in a separate browser tab | AGPL-3.0 |
 | [Flow panel](https://github.com/andymchugh/andrewbmchugh-flow-panel) (`andrewbmchugh-flow-panel` 1.20.1, community-signed) | Renders the generated lab maps (SVG plus panel configuration) in Grafana; installed once by `setup-telemetry.sh` from the Grafana plugin catalog into `TELEMETRY_CONFIG_DIR/plugins` | Apache-2.0 |
 

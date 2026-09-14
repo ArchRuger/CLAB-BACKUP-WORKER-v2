@@ -72,7 +72,7 @@ date -u
 | `Next step` | `1` if your GitHub repository already exists, otherwise `2` and skip step 5 |
 
 The browser Wireshark and Grafana phases run without questions. Wait for
-`Manager 1.25.0: running; HTTP and version checks passed.` The image build and the
+`Manager 1.26.0: running; HTTP and version checks passed.` The image build and the
 two stacks take several minutes. If a step fails, read the error, fix it in a second
 terminal, then type `1` to retry. A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.
@@ -193,8 +193,10 @@ page as **Already running on the VM**; click **Import**.
 
 ## 11. Watch it and capture
 
-1. **Grafana ↗** in the lab header opens the lab map (or `http://VM_IP:3000` for the
-   dashboards). Links colour as traffic flows; the Interfaces dashboard shows rates.
+1. **Grafana ↗** in the lab header starts Grafana on the VM when it is stopped (a few
+   seconds) and opens the lab map. Links colour as traffic flows; the Interfaces
+   dashboard shows rates. Grafana stops itself after 15 minutes without an open
+   dashboard; the button brings it back.
 2. Right-click a node on the map → **Capture packets** → tick a port → **Start
    browser capture** → **Open Wireshark in browser**.
 

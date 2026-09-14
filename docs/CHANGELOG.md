@@ -4,6 +4,60 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.26.0
+
+The map takes its node positions from the annotations file, destroy cleans up, and
+Grafana runs only while someone reads it, with fifteen minutes of history everywhere.
+See [LAB-OPERATIONS.md](LAB-OPERATIONS.md), [TELEMETRY.md](TELEMETRY.md) and
+[GRAFANA-MAP.md](GRAFANA-MAP.md).
+
+- **Map positions come from the annotations file.** *Deploy lab* and *Save to manager*
+  registered the workspace from the topology YAML alone, so every node landed on the
+  default grid (a flat row) and the `.annotations.json` beside the topology was never
+  read; nothing applied it afterwards either, because discovery leaves a saved drawing
+  to an explicit *Sync from VM*. Now the browser reads the file with the topology
+  through the VM helper and sends it along, so the preview, the saved workspace and the
+  Grafana map start from the drawn layout (`/api/operations/parse-yaml` takes
+  `options.annotations` and reports `annotations_used`; a broken file falls back to the
+  grid without failing the topology). A drawing records whether its nodes were placed
+  (`placed`); discovery places a grid-only drawing from the annotations file beside the
+  deployed topology on its next pass, without a sync and without touching logins or
+  nodes, and never replaces a layout somebody saved in the editor. Drawings saved before
+  this release are recognised by their coordinates, so an existing flat lab is placed
+  as soon as its files are seen.
+- **Destroy cleans up.** *Destroy deployment* and the quick destroy button run
+  `containerlab destroy --cleanup`, so the containers go together with the generated
+  lab folder (`clab-<name>`) and the next deploy starts clean; the review names the
+  folder. The flag is sent unless the installed containerlab is known to lack it (the
+  helper refuses an unsupported flag itself). Redeploy keeps the folder unless its
+  cleanup variant is chosen; the separate *Destroy + cleanup* entry is gone.
+- **Grafana on demand.** Grafana idles at a few hundred MiB, so the telemetry stack
+  leaves it stopped: `deploy/compose.telemetry.yml` names the container
+  `clab-manager-grafana` with the restart policy `no`, and `setup-telemetry.sh` checks
+  the stack and then stops Grafana. The lab header's **Grafana ↗** button opens
+  `/static/grafana.html`, which asks the manager to start Grafana on the VM when it is
+  stopped (`docker start` of that one container through the reviewed operations helper,
+  new mode `grafana` with `status`, `start` and `stop`) and then moves the tab to the
+  dashboard on the manager's own host name; only a dashboard path travels in the link.
+  The manager (`app/grafana_control.py`, `GET /api/telemetry/grafana`,
+  `POST …/start`, `POST …/stop`) watches Grafana's request counters over the loopback
+  and stops it after `TELEMETRY_GRAFANA_IDLE_MINUTES` (default 15, written into `.env`
+  by the setup; 0 keeps it running once started) without a dashboard request; an open
+  dashboard refreshes every ten seconds and keeps it alive. **Lab actions → Telemetry
+  settings…** shows the state and has **Stop Grafana now**. Prometheus keeps running.
+  `check-install.sh` treats a stopped Grafana as the normal state (PASS, read-only,
+  never starts it) and checks its health and the Flow panel only while it runs; the CI
+  smoke stops and starts the container by name and expects everything re-provisioned.
+- **Fifteen minutes of history everywhere.** Prometheus keeps 15-minute blocks with a
+  15-minute retention (the block size matters: retention alone would keep the default
+  two-hour head block in memory), on a smaller tmpfs; the manager's session store keeps
+  15 minutes per series (130 points) instead of an hour; the dashboards and the
+  generated lab maps open on the last 15 minutes with 5- and 15-minute quick ranges.
+- **Operational notes.** The VM helper must be reinstalled for the new `grafana` mode
+  (`start-manager.sh` does it; an old helper answers with a message that says so).
+  Upgrading recreates both telemetry containers; Grafana's data volume is tmpfs and
+  everything in it is provisioned from files, so a stop loses nothing.
+
 ## Changes in 1.25.0
 
 A documentation and installation audit. Grafana is the one place where telemetry is

@@ -110,24 +110,74 @@ test('telemetry settings dialog reads the lab view, saves the setting and retrie
   summary:{total:2,streaming:1,failed:1},nodes:[{name:'clab-demo-r1',short_name:'r1',state:'streaming',message:'ok'},{name:'clab-demo-r2',short_name:'r2',state:'failed',message:'gNMI login refused'}]};
  const c=vm.createContext({$:el,esc:context.esc,activeId:'lab',state:{labs:[{id:'lab',name:'demo'}]},console,JSON,
   document:{createElement(){return el('created');},body:{append(){}},querySelectorAll(){return [];}},
-  api:async url=>{calls.push(url);return {json:async()=>view};},json:async(url,method,data)=>{calls.push([url,method,data]);return {started:[]};},
+  api:async url=>{calls.push(url);if(url==='/telemetry/grafana'&&grafana instanceof Error)throw grafana;return {json:async()=>url==='/telemetry/grafana'?grafana:view};},
+  json:async(url,method,data)=>{calls.push([url,method,data]);return url==='/telemetry/grafana/stop'?{enabled:true,port:3000,running:false,idle_minutes:15}:{started:[]};},
   notify(){},refresh:async()=>{calls.push('refresh');},confirm:()=>true});
+ let grafana={enabled:true,port:3000,running:true,idle_minutes:15};
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
  const dialog=await c.openTelemetrySettings('lab');
- assert.equal(calls[0],'/labs/lab/telemetry');
+ assert.equal(calls[0],'/labs/lab/telemetry');assert.equal(calls[1],'/telemetry/grafana');
  assert.match(dialog.innerHTML,/Automatic telemetry is on: 2 supported nodes · 1 streaming · 1 failed\. Read the data in Grafana\./);
  assert.match(dialog.innerHTML,/<strong>r2<\/strong> \(failed\): gNMI login refused/);assert.doesNotMatch(dialog.innerHTML,/<strong>r1<\/strong>/);
  assert.match(dialog.innerHTML,/<option value="p" selected>Ops · arista_ceos<\/option>/);assert.match(dialog.innerHTML,/id="tele-retry"/);
  assert.match(dialog.innerHTML,/id="tele-remove" disabled/,'removal needs automatic telemetry off first');
+ assert.match(dialog.innerHTML,/Grafana: running on TCP 3000; stops after 15 minutes without an open dashboard\./);assert.match(dialog.innerHTML,/id="tele-grafana-stop"/);
+ await el('tele-grafana-stop').onclick();
+ assert.equal(JSON.stringify(calls[2]),JSON.stringify(['/telemetry/grafana/stop','POST',{}]));
+ assert.equal(el('tele-grafana').textContent,'Grafana: stopped; it starts when you open it from the lab header.');
  el('tele-auto').checked=false;el('tele-profile').value='';
  await el('tele-save').onclick();
- assert.equal(JSON.stringify(calls[1]),JSON.stringify(['/labs/lab/telemetry/settings','PUT',{auto:false,profile_id:''}]));assert.equal(calls[2],'refresh');assert.equal(dialog.open,false);
+ assert.equal(JSON.stringify(calls[3]),JSON.stringify(['/labs/lab/telemetry/settings','PUT',{auto:false,profile_id:''}]));assert.equal(calls[4],'refresh');assert.equal(dialog.open,false);
  await el('tele-retry').onclick();
- assert.equal(JSON.stringify(calls[3]),JSON.stringify(['/labs/lab/telemetry/retry','POST',{}]));
+ assert.equal(JSON.stringify(calls[5]),JSON.stringify(['/labs/lab/telemetry/retry','POST',{}]));
+ grafana={enabled:true,port:3000,running:false,idle_minutes:0};
+ assert.match((await c.openTelemetrySettings('lab')).innerHTML,/Grafana: stopped; it starts when you open it from the lab header\./);
+ assert.doesNotMatch((await c.openTelemetrySettings('lab')).innerHTML,/tele-grafana-stop/);
+ grafana=new Error('manager restarting');
+ assert.match((await c.openTelemetrySettings('lab')).innerHTML,/Grafana: state unavailable\./,'the dialog still opens when the Grafana state cannot be read');
+ assert.equal(c.telemetryGrafanaText({enabled:true,port:3000,running:true,idle_minutes:0}),'Grafana: running on TCP 3000; the automatic stop is off.');
+ assert.equal(c.telemetryGrafanaText({enabled:false}),'Grafana: not installed on this manager.');
+ assert.equal(c.telemetryGrafanaText({enabled:true,running:null}),'Grafana: not checked yet.');
+ grafana={enabled:true,port:3000,running:true,idle_minutes:15};
  view.settings={auto:false,decided:false};view.summary={total:0};view.nodes=[];
  const undecided=await c.openTelemetrySettings('lab');
  assert.match(undecided.innerHTML,/saved before automatic telemetry existed/);assert.doesNotMatch(undecided.innerHTML,/tele-retry/);
  view.enabled=false;view.unavailable='pygnmi is not installed in this image.';
  assert.match((await c.openTelemetrySettings('lab')).innerHTML,/pygnmi is not installed/);
  assert.match((await c.openTelemetrySettings('lab')).innerHTML,/id="tele-save" disabled/);
+});
+test('destroy asks for cleanup unless the installed containerlab is known to lack it',()=>{
+ assert.equal(JSON.stringify(context.opDestroyOptions({actions:{destroy:{available:true,cleanup:true}}})),'{"cleanup":true}');
+ assert.equal(JSON.stringify(context.opDestroyOptions(null)),'{"cleanup":true}','unknown capabilities still ask; the helper refuses an unsupported flag itself');
+ assert.equal(JSON.stringify(context.opDestroyOptions({actions:{destroy:{available:true,cleanup:false}}})),'{}');
+ const button=context.opCommand('destroy','Destroy deployment',context.opDestroyOptions({actions:{destroy:{cleanup:true}}}));
+ assert.match(button,/data-op-action="destroy"/);assert.match(button,/data-op-options="\{&quot;cleanup&quot;:true\}"/);
+});
+test('the annotations file beside a topology places the preview and the saved workspace',async()=>{
+ const calls=[],registered=[];
+ const files={'/etc/containerlab/demo/demo.clab.yaml.annotations.json':'{"nodeAnnotations":[{"id":"r1","position":{"x":380,"y":360}}]}'};
+ const page=vm.createContext({$:()=>null,esc:String,state:{labs:[]},activeId:'',sessionStorage:{setItem(){},getItem(){}},
+  FormData:class{constructor(){this.parts=[];}append(...a){this.parts.push(a);}},Blob:class{constructor(parts,options){this.parts=parts;this.type=options?.type;}},
+  api:async(url,options)=>{registered.push({url,options});return {json:async()=>({id:'new'})};},
+  json:async(url,method,data)=>{calls.push([url,data]);
+   if(url==='/operations/read'){if(!files[data.path])throw new Error('This path is outside the trusted lab roots.');return {text:files[data.path]};}
+   if(url==='/operations/parse-yaml')return {name:'demo',drawing:{nodes:[{id:'r1'}]},annotations_used:/380/.test(data.options.annotations||'')};
+   return {};}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),page);
+ const source={text:'name: demo\ntopology:\n  nodes:\n    r1:\n      kind: linux\n'};
+ const placed=await page.opParse('/etc/containerlab/demo/demo.clab.yaml',source.text);
+ assert.equal(calls[0][1].path,'/etc/containerlab/demo/demo.clab.yaml.annotations.json');
+ assert.equal(calls[1][1].options.annotations,files[calls[0][1].path],'the file travels with the YAML to the parser');
+ assert.equal(placed.annotations_used,true);assert.equal(placed.annotations,files[calls[0][1].path]);
+ const form=page.opWorkspaceForm('/etc/containerlab/demo/demo.clab.yaml',source,placed);
+ assert.deepEqual(form.parts.map(p=>[p[0],p[2]]),[['definition','demo.clab.yaml'],['annotations','demo.clab.yaml.annotations.json']]);
+ assert.equal(form.parts[1][1].type,'application/json');
+ // No file beside the topology (or an unreadable one): the grid, and nothing extra in the form.
+ const grid=await page.opParse('/etc/containerlab/other/other.clab.yaml',source.text);
+ assert.equal(grid.annotations_used,false);assert.equal(grid.annotations,'');
+ assert.deepEqual(page.opWorkspaceForm('/etc/containerlab/other/other.clab.yaml',source,grid).parts.map(p=>p[0]),['definition']);
+ assert.equal((await page.opParse('',source.text)).annotations,'','a new, unsaved topology has no file beside it');
+ assert.equal(calls.filter(c=>c[0]==='/operations/read').length,2);
+ await page.opSaveWorkspace('/etc/containerlab/demo/demo.clab.yaml',source,placed);
+ assert.equal(registered[0].options.body.parts.length,2,'Deploy lab registers the annotations with the YAML');
 });

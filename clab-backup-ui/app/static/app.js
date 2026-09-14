@@ -23,21 +23,24 @@ function sshHint(n){const s=n.nos_login?.status;return s==='booting'?'NOS is sti
 // Telemetry is read in Grafana, which runs beside the manager on the VM (deploy/setup-telemetry.sh);
 // the browser reaches it on the manager's own host name. The lab's generated map when it has one,
 // else the lab overview dashboard, both filtered to this lab.
-function grafanaUrl(lab){
- const g=lab?.telemetry?.grafana;if(!g?.enabled||!g.port||typeof location==='undefined')return '';
- const params=new URLSearchParams({'var-lab':lab.name||'',refresh:'10s'});
- return `${location.protocol}//${location.hostname}:${g.port}/d/${g.map_uid||'clab-lab-overview'}?${params}`;
+// Grafana is on demand (stopped until someone opens it), so the button goes through /static/grafana.html:
+// that page asks the manager to start Grafana on the VM when needed and then moves on to the dashboard.
+// Only the dashboard path travels in the link; the page builds the Grafana origin from the manager's host.
+function grafanaPath(lab){
+ const g=lab?.telemetry?.grafana;if(!g?.enabled||!g.port)return '';
+ return `/d/${g.map_uid||'clab-lab-overview'}?${new URLSearchParams({'var-lab':lab.name||'',refresh:'10s'})}`;
 }
+function grafanaLaunch(lab){const path=grafanaPath(lab);return path?'/static/grafana.html#'+new URLSearchParams({path,title:lab.name||''}):'';}
 function renderGrafanaLink(lab){
- const link=$('grafana-open');if(!link)return;const url=grafanaUrl(lab);link.hidden=!url;
+ const link=$('grafana-open');if(!link)return;const url=grafanaLaunch(lab);link.hidden=!url;
  if(!url){link.removeAttribute('href');return;}
  link.href=url;link.textContent=lab.telemetry.grafana.map_uid?'Lab map in Grafana ↗':'Grafana ↗';
- link.title=lab.telemetry.grafana.map_uid?'Live weathermap of this lab in Grafana: link rates, port and node state':'Live dashboards for this lab in Grafana: interface rates, link state, BGP neighbours';
+ link.title=(lab.telemetry.grafana.map_uid?'Live weathermap of this lab in Grafana: link rates, port and node state.':'Live dashboards for this lab in Grafana: interface rates, link state, BGP neighbours.')+' Grafana starts on the VM when it is not running.';
 }
 function render(){
  const lab=current();
  $('labs').innerHTML=state.labs.length?[...state.labs].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)).map(l=>`<button class="lab-item ${l.id===activeId?'active':''}" data-lab="${esc(l.id)}">${l.favorite?'★ ':''}${esc(l.name)}<small>${l.nodes.length} nodes · ${esc(l.deployment?.status||'Unlinked')}</small></button>`).join(''):'<p class="side-hint">Your labs will appear here.</p>';
- const version=state.version||'1.25.0';$('app-version').textContent='v'+version;
+ const version=state.version||'1.26.0';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Supported device types as of release '+version;
  $('worker-state').textContent=(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status))?'Saving lab progress':busy()?'SSH job in progress':'Worker idle';
  $('empty').hidden=!!lab;$('lab-content').hidden=!lab;

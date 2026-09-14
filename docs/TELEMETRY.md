@@ -22,14 +22,27 @@ routers.
   the lab has a drawing, else **Grafana ↗** for the lab overview, both filtered to the
   lab and opened in a new tab on the manager's own host name. The manager's own map
   shows the imported wiring; live state is Grafana's job.
+- **Grafana runs only while someone reads it.** It idles at a few hundred MiB, so the
+  stack leaves it stopped. The button opens a small manager page that starts Grafana on
+  the VM (a `docker start` through the reviewed VM helper, a few seconds on a fresh
+  data volume) and moves on to the dashboard; the manager then watches Grafana's own
+  request counters and stops it again after 15 minutes without an open dashboard (a
+  dashboard tab refreshes every 10 seconds, so it keeps Grafana alive). **Lab actions →
+  Telemetry settings…** shows the state and has **Stop Grafana now**. The idle time is
+  `TELEMETRY_GRAFANA_IDLE_MINUTES` in `clab-backup-ui/.env` (0 keeps Grafana running once
+  started; reload the manager after a change with `recreate-manager.sh`). Prometheus keeps
+  running: it is small and must scrape while a lab streams.
 - **Telemetry settings** under **Lab actions**: automatic telemetry on or off for the
   lab, the gNMI login profile, removal of the configuration lines the manager added,
   the reason a node is not streaming, and a retry for failed nodes.
-- **Nothing persistent in the manager.** Samples live in a bounded ring per interface
-  and neighbour in the manager's memory (the last hour) so that Prometheus can scrape
-  rates and states every 10 seconds; Prometheus keeps two hours on tmpfs. A manager
+- **Nothing persistent in the manager, fifteen minutes of history everywhere.** Samples
+  live in a bounded ring per interface and neighbour in the manager's memory (the last
+  15 minutes) so that Prometheus can scrape rates and states every 10 seconds;
+  Prometheus keeps 15-minute blocks with a 15-minute retention on tmpfs, and the
+  dashboards open on the last 15 minutes with 5- and 15-minute quick ranges. A manager
   restart, a stop, destroy, redeploy or removal of the lab clears its session; a VM
-  reboot clears Grafana's history.
+  reboot, a stack removal or a Grafana stop clears Grafana's own data (everything in it
+  is provisioned from files, so nothing is lost).
 
 ## How it works
 
@@ -45,7 +58,7 @@ sequenceDiagram
     N-->>M: Capabilities (models, encodings), then Subscribe streams
     loop every 10 s (counters) / on change (state where supported)
         N-->>M: interface counters, oper/admin state, BGP neighbour state and prefixes
-        M->>M: normalise, derive rates from deltas, keep 60 minutes in memory
+        M->>M: normalise, derive rates from deltas, keep 15 minutes in memory
     end
     loop every 10 s
         G->>M: GET /api/telemetry/metrics (Prometheus text format)
@@ -170,12 +183,12 @@ links stay grey on the lab map.
 
 | Limit | Value |
 |---|---|
-| History per series in the manager | 60 minutes; at most 400 points |
+| History per series in the manager | 15 minutes; at most 130 points |
 | Interfaces per node / neighbours per node / nodes per manager | 96 / 64 / 512 |
 | Concurrent gNMI sessions / SSH provisioning sessions | 64 / 4 |
 | Record queue between collectors and the store | 5,000 records (overflow is counted) |
-| Prometheus | scrape every 10 s, retention 2 hours or 200 MB on tmpfs |
-| Grafana | dashboards refresh every 10 s, lab maps re-provisioned within 30 s of a change |
+| Prometheus | scrape every 10 s, 15-minute blocks with a 15-minute retention (15 to about 35 minutes visible) or 48 MB on tmpfs; always running |
+| Grafana | started on request, stopped after 15 minutes without an open dashboard (`TELEMETRY_GRAFANA_IDLE_MINUTES`); dashboards open on the last 15 minutes and refresh every 10 s; lab maps re-provisioned within 30 s of a change |
 
 Nothing in this feature touches Docker, the VM helpers or the encrypted state
 other than the lab's telemetry setting and the record of added lines.
@@ -230,7 +243,14 @@ What it does:
   starts and then crash-loops fails the setup with the Compose status and its last
   log lines instead of leaving dashboards whose every panel shows an error; CI
   starts the real stack against a fixture manager on every push
-  (`deploy/telemetry/smoke.py`);
+  (`deploy/telemetry/smoke.py`, which also stops and starts Grafana by its container
+  name the way the manager does);
+- stops Grafana again: it is on demand. The container is named
+  `clab-manager-grafana` with the restart policy `no`, so nothing but the manager
+  starts it (`docker start` through the VM helper when a lab's Grafana button is
+  used) and the manager stops it after `TELEMETRY_GRAFANA_IDLE_MINUTES` (default 15,
+  written into `.env` by this setup) without a dashboard request. Prometheus keeps
+  running with its 15-minute retention;
 - recreates the manager so it reads the new settings (unless `--no-recreate`, which
   the launcher passes because it creates the manager afterwards).
 
@@ -254,12 +274,14 @@ telemetry**: INFO when the collector is disabled, PASS with the linked labs'
 verdicts, WARN when a lab reports failed nodes, and a manual step to confirm in
 Grafana that the Interfaces dashboard and the lab map follow real traffic and an
 interface shutdown. **Grafana telemetry dashboards** is WARN when the stack is not
-installed, and otherwise checks Grafana's health endpoint, that Prometheus answers
-at all (a crash-looping container is reported with the Compose commands that show
-its state and logs), that it scrapes the manager (a scrape error is classified, for
-example a 404 from a manager older than 1.23.0), that the Flow panel is loaded and
-that the manager can write its lab maps (a WARN otherwise). Every `Next:` line is a
-command that works from any directory.
+installed, and otherwise checks that Prometheus answers at all (a crash-looping
+container is reported with the Compose commands that show its state and logs), that
+it scrapes the manager (a scrape error is classified, for example a 404 from a manager
+older than 1.23.0) and that the manager can write its lab maps (a WARN otherwise).
+A stopped Grafana is the normal state and passes as *provisioned and stopped until
+someone opens it*; the check stays read-only and never starts it. While Grafana runs
+(open it from a lab first) the check also covers its health endpoint and that the
+Flow panel is loaded. Every `Next:` line is a command that works from any directory.
 
 ## Live acceptance procedure
 

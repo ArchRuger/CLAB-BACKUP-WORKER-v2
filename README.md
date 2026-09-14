@@ -9,7 +9,7 @@ Wireshark from the browser, watch the network live in Grafana, back up device
 configurations and save lab progress to Git. Nothing is installed on your workstation;
 you only need a browser.
 
-Current release: **1.25.0** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
+Current release: **1.26.0** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
 
 ## What it does
 
@@ -30,7 +30,9 @@ Current release: **1.25.0** · [changelog](docs/CHANGELOG.md) · [all documentat
   its gNMI service if needed and subscribes to interface counters, link state and BGP
   neighbours. Grafana, installed beside the manager, shows three dashboards per lab and
   a generated weathermap of the topology with links coloured by traffic; one button in
-  the lab opens it. Nothing to configure per router or per lab.
+  the lab opens it, starting Grafana on the VM when it is stopped, and Grafana stops
+  itself when nobody reads it. Fifteen minutes of history, nothing to configure per
+  router or per lab.
 - **Stay in step with the VM**: read-only discovery every 30 seconds over a
   restricted SSH account, automatic node addresses, VM file sync, a health report and
   a debug panel.
@@ -73,7 +75,7 @@ elsewhere.
    defaults; say `y` to the plan, enter your sudo password, and create a password for
    `clab-discovery` when asked (write it down). Choose `2` at *Next step* to set up
    Git later. The image build and the two stacks take a few minutes; the installer
-   ends with `Manager 1.25.0: running; HTTP and version checks passed.`
+   ends with `Manager 1.26.0: running; HTTP and version checks passed.`
 
 3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.
@@ -83,10 +85,10 @@ elsewhere.
    shows *NOS booting* and then *NOS ready*, SSH opens on each node as it answers,
    and the login test runs by itself.
 
-5. Click **Grafana ↗** in the lab header (or open `http://VM_IP:3000`) and watch the
-   interface rates, link state and the lab map fill in as the nodes report. Right-click
-   a node or click a link on the map for **Capture packets**: Wireshark opens in a
-   browser tab.
+5. Click **Grafana ↗** in the lab header: the manager starts Grafana on the VM when it
+   is stopped and opens it on TCP 3000. Watch the interface rates, link state and the
+   lab map fill in as the nodes report. Right-click a node or click a link on the map
+   for **Capture packets**: Wireshark opens in a browser tab.
 
 6. Check the installation at any time:
 

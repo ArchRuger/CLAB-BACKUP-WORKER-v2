@@ -977,7 +977,7 @@ Open **Lab actions** or right-click a saved lab (keyboard: Shift+F10).
 
 | Action | Behavior |
 |---|---|
-| Deploy / redeploy / destroy | Operates on the original VM topology; compatible cleanup variants are offered separately. Redeploy falls back to destroy then deploy when necessary. |
+| Deploy / redeploy / destroy | Operates on the original VM topology. Destroy always runs `containerlab destroy --cleanup`, so the containers and the generated lab folder (`clab-<name>`) go together; the review names the folder. Redeploy keeps that folder unless you choose its cleanup variant, and falls back to destroy then deploy when necessary. |
 | Apply | Applies the original VM YAML when supported by installed Containerlab. |
 | Start / stop / restart | Applies to every node in the selected lab. Stop retains containers; destroy removes them. |
 | Inspect lab / View running lab details | Readable table of topology, lab, node, kind/image, state/health and IPv4/IPv6. Failed or incomplete output remains visible for diagnosis. |
@@ -1196,7 +1196,7 @@ settings. Neither is required for an image upgrade. Neither destroys live labs.
 | Clear exclusion | Allows discovery to offer that lab again; does not import it | Unchanged |
 | Start fresh, type `RESET` | Clears workspaces, device credentials, schedules, backups, jobs/logs and exclusions; retains VM connection and `state.key` | Unchanged |
 | Lab Stop | Workspace retained | Stops the selected lab's nodes; containers remain |
-| Lab Destroy | Workspace retained | Removes the selected deployment; cleanup variants have additional reviewed effects |
+| Lab Destroy | Workspace retained | Removes the selected deployment's containers and its generated lab folder (`containerlab destroy --cleanup`); the review names the folder |
 | Delete undeployed VM YAML | Separate operation | Removes original source only when undeployed; saves a recovery copy |
 
 After **Remove lab**, the default exclusion prevents immediate reappearance. Right-click the excluded lab and choose **Clear exclusion** to test discovery again. The next import still needs confirmation.

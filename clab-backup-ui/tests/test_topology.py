@@ -6,7 +6,7 @@ import unittest
 import xml.etree.ElementTree as ET
 from fastapi.testclient import TestClient
 from app.main import create_app
-from app.topology import parse_drawing, bind_drawing, session_xml
+from app.topology import parse_drawing, bind_drawing, session_xml, unplaced, grid_position
 
 
 class TopologyTests(unittest.TestCase):
@@ -15,6 +15,21 @@ class TopologyTests(unittest.TestCase):
         self.annotations={'nodeAnnotations':[{'id':'r1','position':{'x':12,'y':34}}]}
     def parse(self,data=None,topo=None):
         return parse_drawing(json.dumps(data or self.annotations).encode(),json.dumps(topo).encode() if topo else None)
+    def test_placed_flag_tells_annotation_positions_from_the_default_grid(self):
+        topo={'topology':{'nodes':{'r1':{},'r2':{},'r3':{}},'links':[]}}
+        placed=self.parse(topo=topo)
+        self.assertTrue(placed['placed']);self.assertFalse(unplaced(placed))
+        grid=parse_drawing(b'{"nodeAnnotations":[]}',json.dumps(topo).encode())
+        self.assertFalse(grid['placed']);self.assertTrue(unplaced(grid))
+        self.assertEqual([(n['x'],n['y']) for n in grid['nodes']],[grid_position(i) for i in range(3)])
+        # Annotations that name nodes without a position are the grid too.
+        self.assertFalse(self.parse({'nodeAnnotations':[{'id':'r1'}]},topo)['placed'])
+        # Drawings saved before the flag existed are judged by their coordinates.
+        legacy={k:v for k,v in grid.items() if k!='placed'}
+        self.assertTrue(unplaced(legacy))
+        moved=copy.deepcopy(legacy);moved['nodes'][1]['y']=250
+        self.assertFalse(unplaced(moved))
+        self.assertFalse(unplaced(None));self.assertFalse(unplaced({'nodes':[]}))
     def test_layout_and_yaml_links(self):
         d=self.parse(topo={'topology':{'nodes':{'r1':{},'r2':{}},'links':[{'endpoints':['r1:eth1','r2:eth2']}]}})
         self.assertEqual(d['nodes'][0]['x'],12)

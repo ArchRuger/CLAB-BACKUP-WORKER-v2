@@ -36,6 +36,7 @@ class DiagramEditorTests(unittest.TestCase):
         saved=Store(self.tmp.name).lab(self.lab['id'])['drawing']
         self.assertEqual(saved['decorations'],decorations(items))
         self.assertEqual(saved['nodes'],original['nodes']);self.assertEqual(saved['links'],original['links'])
+        self.assertTrue(saved['placed'],'a layout saved by a person is never replaced by the VM annotations')
         response=self.client.post(self.url+'/drawio',json={})
         xml=ET.fromstring(response.content)
         self.assertEqual(xml.find('.//mxCell[@id="annotation-0"]').get('value'),'<b>Training</b>\nNotes')

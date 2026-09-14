@@ -60,9 +60,11 @@ telemetry on (the default for labs created since 1.23.0), the sequence is:
    provisions gNMI as described in [TELEMETRY.md](TELEMETRY.md).
 2. Grafana picks the file up within 30 seconds: the dashboard appears in the **Lab
    maps** folder as `Lab map · <name>`.
-3. The lab header's button reads **Lab map in Grafana ↗** and opens it. Node and link
-   colours follow the nodes as they reach *Streaming*; rates appear after the first
-   two counter samples (about 20 seconds).
+3. The lab header's button reads **Lab map in Grafana ↗** and opens it; Grafana runs
+   only while someone reads it, so the button first starts it on the VM when it is
+   stopped (a few seconds) and then shows the map. Node and link colours follow the
+   nodes as they reach *Streaming*; rates appear after the first two counter samples
+   (about 20 seconds).
 4. Rename the lab, redraw it (*Edit diagram*, or re-import the annotations) or add nodes,
    and the map follows on the next pass. Remove the lab from the manager and its map
    disappears from Grafana within 30 seconds.

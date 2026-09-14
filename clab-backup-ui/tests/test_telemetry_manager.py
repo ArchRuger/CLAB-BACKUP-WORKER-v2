@@ -307,7 +307,7 @@ class TelemetryManagerTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/labs/lab/telemetry', headers={'Origin': 'https://other.example'}).status_code, 403)
         self.assertEqual(self.client.get('/api/telemetry/health').json()['collector'], 'gnmi')
         health = self.client.get('/api/telemetry/health').json()
-        self.assertEqual(health['bounds']['collectors'], 64); self.assertEqual(health['store']['bounds']['points_per_series'], 400)
+        self.assertEqual(health['bounds']['collectors'], 64); self.assertEqual(health['store']['bounds']['points_per_series'], 130)
 
     def test_explicit_removal_only_touches_recorded_lines_and_needs_auto_off(self):
         self.scan()

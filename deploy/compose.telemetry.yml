@@ -1,10 +1,16 @@
-# Optional Grafana dashboards for the manager's session telemetry, isolated from the
-# manager's Compose project. Host networking, like the manager: Prometheus scrapes
+# Grafana dashboards for the manager's session telemetry, isolated from the manager's
+# Compose project. Host networking, like the manager: Prometheus scrapes
 # 127.0.0.1:<UI_PORT>/api/telemetry/metrics every 10 s and listens on 127.0.0.1 only;
 # Grafana serves the provisioned dashboards on <TELEMETRY_GRAFANA_BIND>:<TELEMETRY_GRAFANA_PORT>.
-# Both data directories are tmpfs-backed volumes with a two-hour retention: nothing
-# survives a host reboot or a stack removal, matching the manager's session-only design.
-# Public multi-architecture manifests resolved 2026-09-13; no moving latest tags.
+# History is fifteen minutes everywhere: Prometheus keeps 15-minute blocks and drops them
+# past a 15-minute retention (the head block is cut every 15 minutes too, so the window is
+# 15 to about 35 minutes, not the two hours a default block size would keep in memory).
+# Grafana is on demand: restart policy "no" and a fixed container name, so the manager can
+# docker-start it through the VM helper when someone opens it and stop it again after
+# TELEMETRY_GRAFANA_IDLE_MINUTES without a dashboard request; setup-telemetry.sh leaves it
+# stopped. Both data directories are tmpfs-backed volumes: nothing survives a host reboot
+# or a stack removal, matching the manager's session-only design. Public
+# multi-architecture manifests resolved 2026-09-13; no moving latest tags.
 name: clab-manager-telemetry
 services:
   prometheus:
@@ -16,8 +22,10 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=2h
-      - --storage.tsdb.retention.size=200MB
+      - --storage.tsdb.retention.time=15m
+      - --storage.tsdb.retention.size=48MB
+      - --storage.tsdb.min-block-duration=15m
+      - --storage.tsdb.max-block-duration=15m
       - --web.listen-address=127.0.0.1:${TELEMETRY_PROMETHEUS_PORT:-9090}
     volumes:
       - type: bind
@@ -33,7 +41,10 @@ services:
     pids_limit: 256
   grafana:
     image: grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2  # 13.0.2
-    restart: unless-stopped
+    # On demand: the manager starts and stops this container by name through the VM helper
+    # (clab-backup-ui/app/host_operations.py GRAFANA_CONTAINER); never restarted on its own.
+    container_name: clab-manager-grafana
+    restart: "no"
     network_mode: host
     user: "472:472"
     depends_on: [prometheus]
@@ -91,10 +102,10 @@ volumes:
     driver_opts:
       type: tmpfs
       device: tmpfs
-      o: size=256m,uid=65534,gid=65534,mode=0700
+      o: size=64m,uid=65534,gid=65534,mode=0700
   grafana-data:
     driver: local
     driver_opts:
       type: tmpfs
       device: tmpfs
-      o: size=128m,uid=472,gid=472,mode=0700
+      o: size=64m,uid=472,gid=472,mode=0700

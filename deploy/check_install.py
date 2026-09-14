@@ -676,18 +676,25 @@ def check_telemetry_dashboards(ctx):
     grafana = health.get('grafana') if result.ok and isinstance(health, dict) else None
     if not isinstance(grafana, dict) or not grafana.get('enabled'):
         ctx.add('telemetry-dashboards', 'WARN', title, 'Not installed. Grafana is where telemetry is shown; without it live rates, link state and the lab maps are not visible anywhere.',
-                'Run ' + ctx.repair('setup-telemetry.sh') + ': it starts Prometheus and Grafana, installs the Flow panel and recreates the manager. See docs/TELEMETRY.md.')
+                'Run ' + ctx.repair('setup-telemetry.sh') + ': it starts Prometheus, provisions Grafana (started on request from a lab) with the Flow panel and recreates the manager. See docs/TELEMETRY.md.')
         return
     port, prometheus = grafana.get('port'), grafana.get('prometheus_port')
     if not all(isinstance(v, int) and 1 <= v <= 65535 for v in (port, prometheus)):
         ctx.add('telemetry-dashboards', 'FAIL', title, 'The manager announces Grafana with an invalid port.',
                 'Check TELEMETRY_GRAFANA_PORT and TELEMETRY_PROMETHEUS_PORT in ' + str(ctx.source / 'clab-backup-ui/.env') + ' and rerun ' + ctx.repair('setup-telemetry.sh') + '.')
         return
-    ready_result, ready = ctx.http('/api/health', base=f'http://127.0.0.1:{port}')
-    if not ready_result.ok or not isinstance(ready, dict) or ready.get('database') != 'ok':
-        ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana did not answer /api/health on 127.0.0.1:{port}.',
-                'Inspect: ' + ctx.compose('telemetry') + ' ps; then logs --tail=80 grafana; then rerun ' + ctx.repair('setup-telemetry.sh') + '.')
-        return
+    # Grafana is on demand: stopped until someone opens it from a lab, stopped again after the idle
+    # time. A stopped Grafana is the normal state, not a failure; this check stays read-only and
+    # verifies what it can (Prometheus, the scrape, the lab maps), leaving the Flow panel to a run.
+    control_result, control = ctx.http('/api/telemetry/grafana')
+    control = control if control_result.ok and isinstance(control, dict) else {}
+    stopped = control.get('running') is False
+    if not stopped:
+        ready_result, ready = ctx.http('/api/health', base=f'http://127.0.0.1:{port}')
+        if not ready_result.ok or not isinstance(ready, dict) or ready.get('database') != 'ok':
+            ctx.add('telemetry-dashboards', 'FAIL', title, f'The manager reports Grafana as running, but it did not answer /api/health on 127.0.0.1:{port}.',
+                    'Inspect: ' + ctx.compose('telemetry') + ' ps; then logs --tail=80 grafana; then rerun ' + ctx.repair('setup-telemetry.sh') + '.')
+            return
     targets_result, targets = ctx.http('/api/v1/targets', base=f'http://127.0.0.1:{prometheus}')
     if not targets_result.ok:
         ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana answers, but Prometheus on 127.0.0.1:{prometheus} does not: every dashboard panel shows an error.',
@@ -700,9 +707,22 @@ def check_telemetry_dashboards(ctx):
                 + (': ' + '; '.join(errors) if errors else '') + '.',
                 'Rerun ' + ctx.repair('setup-telemetry.sh') + ': it rewrites the scrape target for the current UI_PORT and recreates the manager with the current .env (the manager must be release 1.23.0 or later).')
         return
+    maps = health.get('maps') if isinstance(health.get('maps'), dict) else {}
+    if stopped:
+        if maps.get('error'):
+            ctx.add('telemetry-dashboards', 'WARN', title, 'Prometheus is healthy and Grafana is provisioned (stopped until opened), but the manager cannot write its lab maps: ' + safe_text(maps['error'], 200),
+                    'Rerun ' + ctx.repair('setup-telemetry.sh') + ' (it creates TELEMETRY_MAPS_DIR for the manager user and recreates the manager).')
+            return
+        idle = control.get('idle_minutes')
+        ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana is provisioned and stopped until someone opens it: the manager starts it on TCP {port} from a lab\'s Grafana button'
+                + (f' and stops it after {idle} minute{"" if idle == 1 else "s"} without an open dashboard' if isinstance(idle, int) and idle else '')
+                + '. Prometheus scrapes the manager metrics endpoint'
+                + (f' and {maps["dashboards"]} lab map(s) are provisioned.' if isinstance(maps.get('dashboards'), int) else '.'))
+        ctx.manual.append(f'Grafana: open Grafana ↗ from a deployed lab, confirm it starts within a minute and shows the Lab overview and the lab map '
+                          '(the Flow panel is verified while Grafana runs; rerun this check then for the full dashboard check).')
+        return
     settings_result, settings = ctx.http('/api/frontend/settings', base=f'http://127.0.0.1:{port}')
     panels = settings.get('panels') if settings_result.ok and isinstance(settings, dict) else None
-    maps = health.get('maps') if isinstance(health.get('maps'), dict) else {}
     if not isinstance(panels, dict) or 'andrewbmchugh-flow-panel' not in panels:
         ctx.add('telemetry-dashboards', 'WARN', title, f'Grafana on TCP {port} is healthy and Prometheus scrapes the manager, but the Flow panel '
                 '(andrewbmchugh-flow-panel) is not loaded, so the generated lab maps render empty.',
