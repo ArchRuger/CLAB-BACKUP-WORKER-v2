@@ -1,3 +1,43 @@
+# Repository folder browser, folder moves and connect by URL — 1.27.0
+
+Read docs/CHANGELOG.md "Changes in 1.27.0", docs/GIT-PROGRESS.md "Where this lab lives" and
+docs/GIT-SETUP.md "Connect or switch a repository from the manager".
+(1) Helper `app/host_git.py` (installed by `setup-git.sh --refresh`; VERSION must equal the
+manager): owner-level modes `browse` (ls-tree of HEAD bounded by MAX_TREE, last-save times, and
+the sibling registrations of the same checkout as `folders`, injected by main() as `_siblings`)
+and `move` (moves every `latest/`, `baseline/` and `checkpoints/` file of `source_prefix` into
+this binding's prefix through the same journal, `finish_export`, verify_tree and push machinery
+as a save; the staged-set checks use `diff --cached --no-renames`). Root-level modes
+`register-prefix` (plan_prefix, then `GitRepository.register()` in a privilege-dropped child via
+run_as_owner; `retire: true` removes the source registration afterwards so a lab registered at
+the repository root can move into a subfolder) and `connect` (plan_connect: owner = the single
+registered owner or /etc/clab-manager/engineer.json, path = an existing checkout of that push
+URL or `~/labs/<repository>`; `GitRepository.connect()` clones or adopts, `check_permission`
+runs gh auth status / setup-git / `api repos/... .permissions.push`, `ensure_identity` derives
+name and noreply email from `gh api user` when the checkout has none, then `register()`).
+`tool()` runs from the owner's home while the checkout does not exist yet. `register()` mirrors
+the inline child of deploy/setup-git.sh; keep the two equivalent. Keys starting with `_` never
+reach the registry. (2) Manager `app/git_progress.py`: `GET /api/git/repositories/{id}/tree`
+(folders decorated with the bound lab), `POST /api/git/repositories/{id}/folders`,
+`POST /api/labs/{id}/git/destination` (idle + pending guard, other-lab conflict check before the
+helper call, register-prefix with retire, rebind with the same devices and review flag, optional
+job with target `move` that execute() runs without any capture and pushes when wanted) and
+`POST /api/labs/{id}/git/connect` (acknowledge required; devices default to the previous
+selection or every supported node). (3) UI: `app/static/git-places.js` holds the pure tree
+model (`gitTreeModel`), the folder rules that mirror the VM rules (`gitFolderChoice`,
+`gitCanCreateIn`) and the panel renderer (`gitPlacesMarkup`, `gitPlacesShow`);
+`git-progress.js` renders the connected card with the folder path, the "Where this lab lives"
+panel and the dialogs Save this lab here, New folder, Use a different repository and Connect by
+URL; move jobs read as *Folder move* and open `latest`. Every interpolation goes through
+`esc()`; no inline styles (self-only CSP); the new script is `git-places.js?v=<release>`.
+(4) Tests: `HostGitPlacesTests` in tests/test_host_git.py (real git), `GitPlacesTests` in
+tests/test_git_progress.py (fake helper), tests/test_git_places_ui.js; the release-check
+workflow now runs test_host_git.py and both git UI suites. Preserve: no tokens or command text
+in the manager, pending saves block moves and reconnects, one registration per lab, retire only
+on a destination change, overlap and root-versus-subfolder rules on the VM. Prepared on
+`claude/git-folder-browser` from main 609fd4b and live-validated on the dev VM (VALIDATION.md);
+no push of the source and no image publication is implied.
+
 # Map positions, destroy cleanup, Grafana on demand — 1.26.0
 
 Read docs/CHANGELOG.md "Changes in 1.26.0", docs/TELEMETRY.md and docs/LAB-OPERATIONS.md.

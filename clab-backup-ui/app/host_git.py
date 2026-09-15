@@ -9,7 +9,7 @@ import contextlib
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import signal
 import stat
@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.26.0'
+VERSION = '1.27.0'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -30,6 +30,11 @@ HEX = re.compile(r'(?:[0-9a-f]{40}|[0-9a-f]{64})\Z')
 ID = re.compile(r'[0-9a-f]{32}\Z')
 SLUG = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\Z')
 PATH_PART = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}\Z')
+GITHUB_PART = re.compile(r'[A-Za-z0-9_.-]+\Z')
+GH = '/usr/bin/gh'
+ENGINEER = Path('/etc/clab-manager/engineer.json')
+MAX_TREE = 4000
+MAX_MOVE = 1500
 
 
 def digest(value):
@@ -54,6 +59,48 @@ def checked_url(value, allow_local=False):
     if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or url.fragment:
         raise ValueError('Configure one HTTPS remote without embedded credentials, query or fragment.')
     return value
+
+
+def clone_url(value):
+    """The HTTPS clone URL a student pastes. GitHub page links (tree/blob/...) resolve to the
+    repository's clone URL; nothing else is rewritten, and no credentials may be embedded."""
+    problem = 'Use the HTTPS clone URL (Code > HTTPS) without a username, token, query or fragment.'
+    if not isinstance(value, str) or not 1 <= len(value) <= 2048 or any(ord(c) <= 32 or ord(c) == 127 for c in value) or '%' in value or '\\' in value:
+        raise ValueError(problem)
+    url = urlsplit(value)
+    if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or url.fragment or not url.path.strip('/'):
+        raise ValueError(problem)
+    if url.hostname.lower() == 'github.com':
+        parts = url.path.strip('/').split('/')
+        if len(parts) > 2 and parts[2] in ('tree', 'blob', 'commit', 'commits', 'pull', 'pulls', 'issues', 'actions', 'settings', 'releases', 'wiki'):
+            parts = parts[:2]
+        if len(parts) != 2 or not all(GITHUB_PART.fullmatch(p) for p in parts) or any(p in ('.', '..') for p in parts) or not parts[1].removesuffix('.git'):
+            raise ValueError('Use the GitHub repository clone URL: https://github.com/OWNER/REPOSITORY.git (Code > HTTPS). Page links such as /tree/main are not clone URLs.')
+        return 'https://github.com/' + parts[0] + '/' + parts[1].removesuffix('.git') + '.git'
+    return checked_url(value)
+
+
+def same_repository(left, right):
+    def normalized(value):
+        host = urlsplit(value).hostname
+        if host and host.lower() == 'github.com':
+            return value.rstrip('/').removesuffix('.git').lower()
+        return value
+    return normalized(left) == normalized(right)
+
+
+def repository_name(url):
+    name = urlsplit(url).path.rstrip('/').rsplit('/', 1)[-1].removesuffix('.git')
+    if not PATH_PART.fullmatch(name) or name in ('.', '..'): raise ValueError('The repository name cannot be used as a VM folder name.')
+    return name
+
+
+def descriptor(binding):
+    return {k: binding[k] for k in ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')}
+
+
+def overlapping(prefix, other):
+    return not prefix or not other or prefix.startswith(other + '/') or other.startswith(prefix + '/')
 
 
 def no_links(path, require=True):
@@ -147,9 +194,9 @@ class GitRepository:
     The explicit executable/environment/local-remote parameters are test seams;
     protocol requests cannot select them.
     """
-    def __init__(self, binding, *, git=GIT, allow_local=False, env=None):
-        self.binding = binding; self.root = no_links(binding['path']); self.allow_local = allow_local
-        self.git = git
+    def __init__(self, binding, *, git=GIT, allow_local=False, env=None, gh=GH):
+        self.binding = binding; self.root = no_links(binding['path'], require=not binding.get('_pending')); self.allow_local = allow_local
+        self.git = git; self.gh = gh
         self.env = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': binding['home'],
                     'USER': binding['owner'], 'LOGNAME': binding['owner'], 'LANG': 'C.UTF-8',
                     'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'never', 'GIT_PAGER': 'cat',
@@ -157,6 +204,7 @@ class GitRepository:
         if env is not None: self.env.update(env)
         self.prefix = relpath(binding.get('prefix', ''), empty=True)
         self.control = no_links(self.root / '.git', False)
+        if binding.get('_pending') and not self.control.exists(): return
         if not self.control.exists(): raise ValueError('This directory is not a Git checkout: .git is missing. Run guided Git setup to clone a repository; mkdir alone is insufficient.')
         if not self.control.is_dir(): raise ValueError('Linked worktrees and bare repositories are not supported.')
         self.state = self.control / 'clab-manager'; no_links(self.state, False)
@@ -173,7 +221,7 @@ class GitRepository:
     def scope(self, name): return '/'.join(p for p in (self.prefix, name) if p)
 
     def registration(self, previous=None):
-        binding = dict(self.binding)
+        binding = {k: v for k, v in self.binding.items() if not k.startswith('_')}
         unchanged = previous and all(previous.get(k) == v for k, v in binding.items() if k not in ('revision', 'anchor'))
         if unchanged:
             binding['anchor'] = previous['anchor']
@@ -386,7 +434,7 @@ class GitRepository:
         if self.validate() != head: raise ValueError('The checkout changed during export. Preserve the snapshot and review the working files.')
         if any((self.control / marker).exists() for marker in ('MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-apply', 'rebase-merge', 'index.lock')):
             raise ValueError('Finish the existing Git operation before retrying export.')
-        staged = set(filter(None, self.run('diff', '--cached', '--name-only', '-z').split('\0')))
+        staged = set(filter(None, self.run('diff', '--cached', '--no-renames', '--name-only', '-z').split('\0')))
         if staged - set(changed): raise ValueError('Unrelated files entered the index during export; no commit was attempted.')
         for name in staged:
             code, raw = self.run('show', ':' + name, check=False, limit=MAX_FILE + 1)
@@ -411,7 +459,7 @@ class GitRepository:
             sync_directory(path.parent)
         if self.validate() != head: raise ValueError('The checkout changed before staging. Review the working files.')
         self.run('add', '-A', '--', *changed)
-        staged = set(filter(None, self.run('diff', '--cached', '--name-only', '-z').split('\0')))
+        staged = set(filter(None, self.run('diff', '--cached', '--no-renames', '--name-only', '-z').split('\0')))
         if staged != set(changed): raise ValueError('Git staging changed the approved file set. Review the index; nothing was pushed.')
         for name in changed:
             raw = expected[name]
@@ -614,6 +662,181 @@ class GitRepository:
         self.clean(entire=True); self.run('merge', '--ff-only', remote, timeout=90)
         return {'status': 'updated', 'head': self.validate(), 'message': 'Updated from remote using fast-forward only.'}
 
+    def tool(self, argv, timeout=30, limit=64 * 1024):
+        # Before a clone exists the checkout folder is missing; GitHub CLI checks then run from the owner's home.
+        return command(argv, self.root if self.root.is_dir() else self.binding['home'], self.env, limit, timeout)
+
+    def prepare_state(self):
+        self.control = no_links(self.root / '.git', False)
+        if not self.control.is_dir(): raise ValueError('Linked worktrees and bare repositories are not supported.')
+        self.state = self.control / 'clab-manager'; no_links(self.state, False)
+        self.state.mkdir(mode=0o700, exist_ok=True)
+        if os.name == 'posix':
+            if self.state.stat().st_uid != os.geteuid(): raise ValueError('Git progress storage must belong to the registered owner.')
+            self.state.chmod(0o700)
+
+    def browse(self):
+        """The committed tree at HEAD: what saves have put in the repository, never the working files."""
+        head = self.validate()
+        code, raw = self.tool([self.git, '-c', 'color.ui=false', 'ls-tree', '-r', '-l', '-z', head], timeout=60, limit=MAX_JSON)
+        if code: raise ValueError('Git could not list the repository contents. Check the repository as its registered owner.')
+        files = []; truncated = False
+        for line in filter(None, raw.decode('utf8', errors='replace').split('\0')):
+            meta, _, path = line.partition('\t')
+            fields = meta.split()
+            if len(fields) != 4 or fields[1] != 'blob' or not path: continue
+            if len(files) >= MAX_TREE: truncated = True; break
+            files.append({'path': path, 'size': int(fields[3]) if fields[3].isdigit() else 0})
+        saved = {}
+        for name in ('latest', 'baseline', 'checkpoints'):
+            code, raw = self.tool([self.git, '-c', 'color.ui=false', 'log', '-1', '--format=%ct', head, '--', self.scope(name)])
+            value = raw.decode('utf8', errors='replace').strip()
+            saved[name] = int(value) if not code and value.isdigit() else None
+        folders = [{'id': b['id'], 'label': b['label'], 'prefix': b['prefix']} for b in self.binding.get('_siblings', [descriptor(self.binding)])]
+        return {'repository': self.descriptor(), 'head': head, 'files': files, 'truncated': truncated, 'saved': saved, 'folders': folders}
+
+    def ensure_identity(self, url):
+        if not any(self.run('var', role, check=False)[0] for role in ('GIT_AUTHOR_IDENT', 'GIT_COMMITTER_IDENT')): return
+        name = email = ''
+        host = urlsplit(url).hostname
+        if host and host.lower() == 'github.com' and Path(self.gh).exists():
+            code, raw = self.tool([self.gh, 'api', 'user', '--jq', '[(.id|tostring), .login, (.name // "")] | @tsv'])
+            fields = raw.decode('utf8', errors='replace').strip().split('\t') if not code else []
+            if len(fields) == 3 and fields[0].isdigit() and GITHUB_PART.fullmatch(fields[1]):
+                name = (fields[2].strip() or fields[1])[:200]
+                email = fields[0] + '+' + fields[1] + '@users.noreply.github.com'
+        if not name or not email or any(ord(c) < 32 or ord(c) == 127 for c in name):
+            raise ValueError('This VM account has no Git commit identity yet. Run guided Git setup on the VM once, or set user.name and user.email inside the checkout as that account.')
+        self.run('config', '--local', 'user.name', name); self.run('config', '--local', 'user.email', email)
+        self.commit_identity()
+
+    def check_permission(self, url):
+        host = urlsplit(url).hostname
+        if not host or host.lower() != 'github.com': return
+        if not Path(self.gh).exists():
+            raise ValueError('GitHub CLI is not installed on the VM. Install gh and sign in as the VM account (gh auth login), or run guided Git setup on the VM.')
+        code, _ = self.tool([self.gh, 'auth', 'status', '--hostname', 'github.com'])
+        if code: raise ValueError('The VM account is not signed in to GitHub. On the VM, run gh auth login --hostname github.com --git-protocol https --web as that account, then try again.')
+        code, _ = self.tool([self.gh, 'auth', 'setup-git', '--hostname', 'github.com'])
+        if code: raise ValueError('GitHub CLI could not configure the Git credential helper for the VM account.')
+        slug = urlsplit(url).path.strip('/').removesuffix('.git')
+        code, raw = self.tool([self.gh, 'api', 'repos/' + slug, '--jq', '.permissions.push'])
+        if code or raw.strip() != b'true':
+            raise ValueError('The GitHub account signed in on the VM cannot push to ' + slug + '. Check the repository name, or grant that account write access on GitHub.')
+
+    def register(self, previous=None):
+        """Validate this checkout exactly as the terminal wizard does before it is registered.
+
+        Runs as the owner. Fills branch, push URL, anchor and revision into the binding it returns."""
+        binding = self.binding
+        if os.name == 'posix' and (self.root.stat().st_uid != os.geteuid() or self.control.stat().st_uid != os.geteuid()):
+            raise ValueError('The checkout and .git must be owned by the registered account.')
+        binding['branch'] = self.run('symbolic-ref', '--quiet', '--short', 'HEAD')
+        self.run('check-ref-format', '--branch', binding['branch'])
+        urls = self.run('remote', 'get-url', '--push', '--all', binding['remote']).splitlines()
+        if len(urls) != 1: raise ValueError('Configure exactly one HTTPS push URL.')
+        binding['push_url'] = checked_url(urls[0], self.allow_local)
+        binding['anchor'] = self.validate(); self.clean(); self.commit_identity()
+        if self.remote_head() != binding['anchor']:
+            raise ValueError('Before linking, synchronize the current branch with its existing remote branch using your ordinary Git login.')
+        self.check_push_access()
+        return self.registration(previous)
+
+    def connect(self, url):
+        """Clone (or adopt) the checkout for a pasted URL as the owner, then validate it for registration."""
+        path = self.root
+        if not (path / '.git').is_dir():
+            if path.exists() and (not path.is_dir() or any(path.iterdir())):
+                raise ValueError('The VM folder ' + str(path) + ' contains files but is not a Git checkout. Choose another repository name or clean that folder on the VM; nothing was overwritten.')
+            self.check_permission(url)
+            no_links(path.parent, False); path.parent.mkdir(parents=True, exist_ok=True)
+            code, _ = command([self.git, '-c', 'color.ui=false', 'clone', '--', url, str(path)], str(path.parent), self.env, MAX_JSON, 300)
+            if code: raise ValueError('Cloning failed. Check the URL and that the VM account is signed in to GitHub with access to this repository (gh auth login).')
+            self.root = no_links(path)
+        else:
+            self.check_permission(url)
+        self.prepare_state()
+        actual = checked_url(self.run('remote', 'get-url', '--push', self.binding['remote']), self.allow_local)
+        if not same_repository(actual, url):
+            raise ValueError('The VM folder ' + str(path) + ' already holds a different repository (' + actual + '). Choose another repository name.')
+        code, _ = self.run('rev-parse', '--verify', 'HEAD', check=False)
+        if code: raise ValueError('This repository has no commits yet. Add a README on GitHub first, then connect it.')
+        self.ensure_identity(url)
+        return self.register(None)
+
+    def other_scope(self, source, name): return '/'.join(p for p in (source, name) if p)
+
+    def move(self, req):
+        """Move every saved folder from another registered prefix of this checkout into this one, as one commit."""
+        operation = req.get('operation_id'); self.journal_path(operation)
+        source = relpath(req.get('source_prefix'), empty=True)
+        if source == self.prefix: raise ValueError('Choose a different folder for this lab.')
+        if not isinstance(req.get('message'), str) or not req['message'].strip(): raise ValueError('A move needs a commit note.')
+        request_digest = digest({k: v for k, v in req.items() if k not in ('push', 'expected_head')})
+        journal = self.load_journal(operation)
+        if journal:
+            if journal.get('request_digest') != request_digest: raise ValueError('This operation ID already belongs to a different action.')
+            if journal.get('commit'):
+                if not journal.get('verified') and journal.get('expected') and journal.get('parent'):
+                    try:
+                        expected = {p: None if b is None else base64.b64decode(b) for p, b in journal['expected'].items()}
+                        self.verify_tree(journal['commit'], expected, journal['changed_files'], journal['parent'])
+                        if self.validate() != journal['commit']: raise ValueError('The checkout moved after this change. Review its commit before retrying.')
+                        self.clean(); journal.update(status='committed', verified=True, message='Verified the move commit; not pushed.'); self.save_journal(journal)
+                    except ValueError as error:
+                        journal.update(status='needs_attention', message=str(error)); self.save_journal(journal); return self.result(journal)
+                if req.get('push') and journal.get('verified') and not journal.get('pushed'): return self.retry_push(req)
+                return self.result(journal)
+            if journal.get('parent'):
+                found = self.run('log', '-30', '--format=%H', '--fixed-strings', '--grep=Manager-Operation: ' + operation).splitlines()
+                if len(found) == 1:
+                    expected = {p: None if b is None else base64.b64decode(b) for p, b in journal['expected'].items()}
+                    try: self.verify_tree(found[0], expected, journal['changed_files'], journal['parent'])
+                    except ValueError as error:
+                        journal.update(status='needs_attention', commit=found[0], verified=False, message=str(error)); self.save_journal(journal); return self.result(journal)
+                    journal.update(status='committed', commit=found[0], verified=True, message='Recovered the move commit.'); self.save_journal(journal)
+                    return self.retry_push(req) if req.get('push') else self.result(journal)
+                try: return self.finish_export(journal, req)
+                except ValueError as error:
+                    journal.update(status='needs_attention', message=str(error)); self.save_journal(journal); return self.result(journal)
+        journal = {'operation_id': operation, 'request_digest': request_digest, 'binding_revision': self.binding['revision'],
+                   'status': 'needs_attention', 'commit': None, 'verified': False, 'changed_files': [], 'pushed': False,
+                   'snapshot_path': self.scope('latest'), 'message': 'Move prepared; nothing has been committed.'}
+        self.save_journal(journal)
+        try:
+            head = self.validate(); self.clean(); self.commit_identity()
+            if req.get('expected_head') != head: raise ValueError('The repository changed since it was selected. Refresh status and retry the move.')
+            old_folders = [self.other_scope(source, name) for name in ('latest', 'baseline', 'checkpoints')]
+            if self.run('status', '--porcelain=v1', '--untracked-files=all', '--', *old_folders):
+                raise ValueError('The current folder has unsaved edits. Resolve them as the repository owner before moving.')
+            listed = self.run('ls-tree', '-r', '--name-only', '-z', head, '--', *old_folders, limit=MAX_JSON)
+            paths = [p for p in listed.split('\0') if p]
+            if not paths: raise ValueError('There are no saved files to move yet.')
+            if len(paths) > MAX_MOVE: raise ValueError('Too many saved files to move in one step. Move the folder with Git on the VM instead.')
+            expected = {}; before = {}; total = 0
+            for old_path in paths:
+                relative = old_path[len(source) + 1:] if source else old_path
+                new_path = self.scope(relative)
+                if new_path in expected or relpath(new_path) != new_path: raise ValueError('The move produced an unsafe destination path.')
+                raw = self.file(old_path).read_bytes(); total += len(raw)
+                if len(raw) > MAX_FILE or total > MAX_TOTAL: raise ValueError('The saved folders are too large to move in one step. Move them with Git on the VM instead.')
+                if self.file(new_path).exists(): raise ValueError('The new folder already contains saved files. Choose an empty folder.')
+                expected[old_path] = None; before[old_path] = hashlib.sha256(raw).hexdigest()
+                expected[new_path] = raw; before[new_path] = None
+            changed = list(expected)
+            journal.update(parent=head, changed_files=changed, before=before, expected={p: None if b is None else base64.b64encode(b).decode() for p, b in expected.items()})
+            self.save_journal(journal)
+            if self.validate() != head: raise ValueError('The repository changed before the move.')
+            result = self.finish_export(journal, req)
+            for folder in sorted({str(PurePosixPath(p).parent) for p in paths}, key=len, reverse=True):
+                for candidate in (folder, *[str(x) for x in PurePosixPath(folder).parents]):
+                    if candidate in ('', '.') or (source and not (candidate == source or candidate.startswith(source + '/'))): break
+                    try: os.rmdir(self.root / candidate)
+                    except OSError: break
+            return result
+        except ValueError as error:
+            journal.update(status='needs_attention', message=str(error), pushed=False); self.save_journal(journal); return self.result(journal)
+
     def dispatch(self, req):
         if req.get('binding_id') != self.binding['id'] or req.get('revision') != self.binding['revision']:
             raise ValueError('The repository binding changed. Select it again.')
@@ -626,7 +849,132 @@ class GitRepository:
             if mode == 'read-version': return self.read_version(req)
             if mode == 'compare': return self.compare(req)
             if mode == 'update': return self.update(req)
+            if mode == 'browse': return self.browse()
+            if mode == 'move': return self.move(req)
             raise ValueError('Unsupported Git operation.')
+
+
+def registry_owner(config, requested=None):
+    """The VM account that owns new clones: the single registered owner, else the engineer account."""
+    owners = sorted({b['owner'] for b in config['repositories']})
+    if requested is not None:
+        if not isinstance(requested, str) or requested not in owners: raise ValueError('Choose a VM account that already owns a registered repository.')
+        return requested
+    if len(owners) == 1: return owners[0]
+    if not owners and ENGINEER.exists():
+        root_file(ENGINEER)
+        value = json.loads(ENGINEER.read_text(encoding='utf8'))
+        owner = value.get('owner') if isinstance(value, dict) else None
+        if isinstance(owner, str) and owner: return owner
+    if owners: raise ValueError('Several VM accounts own registered repositories. Run guided Git setup on the VM as the intended account instead.')
+    raise ValueError('No VM account is set up for Git yet. Run guided Git setup on the VM once (bash deploy/setup-git.sh).')
+
+
+def account_lookup(owner):
+    import pwd
+    return pwd.getpwnam(owner)
+
+
+def account_binding(owner, path, remote, prefix, label, lookup=None):
+    account = (lookup or account_lookup)(owner)
+    if account.pw_uid == 0 or owner == 'clab-discovery': raise ValueError('Choose the ordinary VM account that owns and authenticates this Git checkout.')
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}', remote): raise ValueError('Use a literal remote name.')
+    if not isinstance(label, str) or not label or len(label) > 100 or any(ord(c) < 32 for c in label): raise ValueError('Use a short repository label.')
+    return {'id': uuid.uuid4().hex, 'label': label, 'owner': owner, 'uid': account.pw_uid, 'gid': account.pw_gid, 'home': account.pw_dir,
+            'path': str(path), 'remote': remote, 'prefix': prefix, 'branch': '', 'push_url': '', 'revision': ''}
+
+
+def check_overlap(config, path, prefix, ignore=None):
+    for b in config['repositories']:
+        if b is ignore or b['path'] != str(path): continue
+        if overlapping(prefix, b['prefix']):
+            raise ValueError('Lab folders in one repository cannot overlap: ' + (b['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
+
+
+def plan_prefix(config, req, lookup=None):
+    """Root: describe a sibling registration of an existing checkout; nothing has run as the owner yet.
+
+    With retire, the source registration is about to be replaced by the new folder, so it does not
+    count as an overlap: a lab registered at the repository root can move into a subfolder."""
+    source = next((b for b in config['repositories'] if b['id'] == req.get('binding_id')), None)
+    if not source or source['revision'] != req.get('revision'): raise ValueError('The repository binding changed. Select it again.')
+    prefix = relpath(req.get('prefix'), empty=True)
+    if prefix == source['prefix']: return source, None
+    existing = next((b for b in config['repositories'] if b['path'] == source['path'] and b['prefix'] == prefix), None)
+    if existing: return existing, None
+    check_overlap(config, source['path'], prefix, ignore=source if req.get('retire') is True else None)
+    label = req.get('label') or (Path(source['path']).name + (' / ' + prefix if prefix else ''))
+    binding = account_binding(source['owner'], source['path'], source['remote'], prefix, label, lookup)
+    return None, binding
+
+
+def plan_connect(config, req, lookup=None):
+    """Root: resolve owner, checkout folder and registration for a pasted clone URL."""
+    url = clone_url(req.get('url')); prefix = relpath(req.get('prefix'), empty=True)
+    owner = registry_owner(config, req.get('owner'))
+    known = [b for b in config['repositories'] if b['owner'] == owner and same_repository(b['push_url'], url)]
+    if known:
+        path = known[0]['path']; remote = known[0]['remote']
+        existing = next((b for b in known if b['prefix'] == prefix), None)
+        if existing: return existing, None, url
+    else:
+        path = str(Path((lookup or account_lookup)(owner).pw_dir) / 'labs' / repository_name(url)); remote = 'origin'
+        if any(b['path'] == path for b in config['repositories']):
+            raise ValueError('The VM folder for this repository name already holds another registered repository. Choose a repository with a different name.')
+    check_overlap(config, path, prefix)
+    label = repository_name(url) + (' / ' + prefix if prefix else '')
+    binding = account_binding(owner, path, remote, prefix, label, lookup)
+    binding['_pending'] = True
+    return None, binding, url
+
+
+def run_as_owner(binding, work):
+    """Fork: the child drops privileges permanently, runs Git as the owner and reports one JSON result."""
+    read_fd, write_fd = os.pipe(); pid = os.fork()
+    if pid == 0:
+        os.close(read_fd)
+        try:
+            drop_owner(binding)
+            result = {'binding': work()}
+        except ValueError as error: result = {'error': str(error)}
+        except Exception: result = {'error': "Could not prepare the repository as its owner. Check checkout permissions and the owner's HTTPS Git login."}
+        with os.fdopen(write_fd, 'w') as stream: json.dump(result, stream)
+        os._exit(0)
+    os.close(write_fd)
+    with os.fdopen(read_fd) as stream: raw = stream.read(65537)
+    os.waitpid(pid, 0)
+    if len(raw) > 65536: raise ValueError('Unexpected registration response.')
+    result = json.loads(raw)
+    if 'error' in result: raise ValueError(result['error'])
+    return result['binding']
+
+
+def store_binding(config, binding):
+    binding = {k: v for k, v in binding.items() if not k.startswith('_')}
+    config['repositories'] = [b for b in config['repositories'] if b['id'] != binding['id']] + [binding]
+    atomic_json(REGISTRY, config)
+    return descriptor(binding)
+
+
+def register_prefix(config, req, run=run_as_owner, lookup=None):
+    existing, binding = plan_prefix(config, req, lookup)
+    if existing: result = descriptor(existing)
+    else:
+        binding = run(binding, lambda: GitRepository(binding).register(None))
+        binding = {k: v for k, v in binding.items() if not k.startswith('_')}
+        config['repositories'] = [b for b in config['repositories'] if b['id'] != binding['id']] + [binding]
+        result = descriptor(binding)
+    if req.get('retire') is True and result['id'] != req.get('binding_id'):
+        # The lab moved away: its previous folder registration is retired so it cannot block or confuse later choices.
+        config['repositories'] = [b for b in config['repositories'] if b['id'] != req.get('binding_id')]
+    if not existing or req.get('retire') is True: atomic_json(REGISTRY, config)
+    return result
+
+
+def connect(config, req, run=run_as_owner, lookup=None):
+    existing, binding, url = plan_connect(config, req, lookup)
+    if existing: return descriptor(existing)
+    return store_binding(config, run(binding, lambda: GitRepository(binding).connect(url)))
 
 
 def root_file(path):
@@ -664,13 +1012,17 @@ def main():
         if not isinstance(req, dict): raise ValueError('A structured Git request is required.')
         config = load_registry()
         if req.get('mode') == 'list':
-            result = {'protocol': PROTOCOL, 'version': VERSION,
-                      'repositories': [{k: b[k] for k in ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')} for b in config['repositories']]}
+            result = {'protocol': PROTOCOL, 'version': VERSION, 'repositories': [descriptor(b) for b in config['repositories']]}
+        elif req.get('mode') == 'register-prefix':
+            result = register_prefix(config, req)
+        elif req.get('mode') == 'connect':
+            result = connect(config, req)
         else:
             matches = [b for b in config['repositories'] if b['id'] == req.get('binding_id')]
             if len(matches) != 1: raise ValueError('Select a registered Git repository.')
             binding = dict(matches[0])
             binding['_approved_revisions'] = [b['revision'] for b in config['repositories'] if b['path'] == binding['path'] and b['push_url'] == binding['push_url'] and b['branch'] == binding['branch'] and b['uid'] == binding['uid']]
+            binding['_siblings'] = [{'id': b['id'], 'label': b['label'], 'prefix': b['prefix']} for b in config['repositories'] if b['path'] == binding['path'] and b['uid'] == binding['uid']]
             drop_owner(binding)
             result = GitRepository(binding).dispatch(req)
         output = json.dumps({'result': result}, ensure_ascii=False)

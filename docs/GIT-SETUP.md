@@ -7,6 +7,11 @@ additional Linux user. The VM username and GitHub username can be different.
 opens the Git terminal wizard. For a working manager, choose **Git setup / repair
 only**, or run `bash deploy/install.sh --git`. See [INSTALL.md](INSTALL.md).
 
+**From the manager:** once the VM account is signed in to GitHub CLI, a lab can also
+be connected without the terminal: open the lab → **More → Git repository** → **Connect
+a repository by URL**, paste the repository's HTTPS clone URL and choose its folder. See
+[Connect or switch a repository from the manager](#connect-or-switch-a-repository-from-the-manager).
+
 The Git wizard has numbered phases with **Retry**, **Sign in again** where
 applicable, and **Cancel and keep completed work**. It reads existing registered
 settings before proceeding, so a custom remote, label, prefix or branch is not
@@ -85,6 +90,39 @@ flowchart TD
     I -- No --> K[Keep snapshot and retry the same save]
 ```
 
+## Connect or switch a repository from the manager
+
+The manager can do the wizard's clone, checks and registration itself, driven from the
+browser, for a student who already has the repository and the GitHub login on the VM:
+
+1. Sign in to GitHub CLI on the VM once, as your ordinary account, without sudo:
+   `gh auth login --hostname github.com --git-protocol https --web`. The manager uses
+   this login for every clone and push; it never asks for a token or password.
+2. Open the lab → **More → Git repository**. With no repository connected, choose
+   **Connect a repository by URL**; with the wrong one connected, choose **Use a different
+   repository** and then **Connect by URL**.
+3. Paste the HTTPS clone URL (**Code → HTTPS**; a page link such as `/tree/main` is
+   turned into the clone URL for you), keep or change the lab's folder, acknowledge that
+   full configurations will be pushed, and confirm.
+
+The manager then, as the VM account that owns the registered repositories (the engineer
+account on a VM without any), reuses an existing checkout of that repository or clones it
+into `~/labs/REPOSITORY`, checks that the GitHub login has write permission for the
+repository, sets a commit name and email from the GitHub account (its private noreply
+address) when the checkout has none, registers the folder exactly as the wizard would
+(clean managed files, identity, remote synchronization, push dry run) and connects the
+lab. A repository the account cannot push to is refused before anything is cloned; a
+folder that would overlap another lab's folder is refused as well.
+
+**Use a different repository** also lists every checkout already registered on the VM.
+Choosing one opens the folder browser for it; pick the folder and confirm the devices to
+connect. Switching never deletes anything: the files saved in the previous repository stay
+there, and the lab's saved versions remain in that repository's history.
+
+Prefer the terminal wizard when the VM account is not signed in yet, when several VM
+accounts own repositories, or for a non-GitHub HTTPS host whose credential helper needs
+configuring first.
+
 ## One repository, one subfolder per lab
 
 To keep every lab of a course in a single repository, for example
@@ -104,6 +142,11 @@ Subfolders in one repository must not overlap: use `bgp` and `eth`, not `bgp` an
 `bgp/edge`. A repository registered at its root (blank subfolder) cannot also register
 subfolders. An administrator can register subfolders non-interactively with
 `--prefix`, described under [Advanced](#advanced-separate-owner-other-https-host-or-managed-prefix) below.
+
+Folders can also be created and changed from the manager: **More → Git repository**
+shows the repository's folders, **New folder…** registers another lab folder, and
+**Save this lab here** moves a lab to a folder, optionally with its saved files. See
+[Where this lab lives](GIT-PROGRESS.md#where-this-lab-lives).
 
 ## Already working? Upgrade without setting it up again
 
