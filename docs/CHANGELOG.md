@@ -4,6 +4,51 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.27.0
+
+Students can see where a lab keeps its files in the connected repository, move the lab
+to another folder, create folders, and swap a wrongly connected repository, all from
+**More → Git repository**. See [GIT-PROGRESS.md](GIT-PROGRESS.md#where-this-lab-lives)
+and [GIT-SETUP.md](GIT-SETUP.md#connect-or-switch-a-repository-from-the-manager).
+
+- **Where this lab lives.** The Git repository view shows the connected repository the
+  way a file browser would: the folder path at the top, a folder outline on the left and
+  the contents of the selected folder on the right, read from the VM checkout at its
+  current commit (new owner-level helper mode `browse`, served by
+  `GET /api/git/repositories/{id}/tree`). Lab folders are tagged with the lab that saves
+  there, `latest/`, `baseline/` and `checkpoints/` carry plain-language descriptions, and
+  a folder that is registered but not saved to yet reads *created on first save*. Nothing
+  is read from GitHub; the browser only ever sends registration IDs and folder names, and
+  the helper validates every path again.
+- **Save this lab here / New folder.** Selecting a folder and choosing *Save this lab
+  here*, or creating a new folder, registers that folder for the lab through the helper's
+  new root-level `register-prefix` mode and reconnects the lab to it, keeping the device
+  selection and the review preference (`POST /api/labs/{id}/git/destination`;
+  `POST /api/git/repositories/{id}/folders` registers a folder without connecting). The
+  lab's previous folder registration is retired, so a lab that saved at the repository
+  root can move into a subfolder. Optionally the files already saved under the old
+  folder move along in one commit that is pushed like a save (new owner-level helper
+  mode `move`, recorded as a *Folder move* job with the usual retry, review and push
+  handling; the journal, hook and filter checks of a save apply). Overlapping lab
+  folders and mixing a root registration with subfolders are still refused on the VM,
+  and a folder still cannot be nested inside another lab's folder. A pending save blocks
+  a move.
+- **Use a different repository.** The connected repository card names the push URL,
+  branch, VM account and the exact folder path, and offers *Use a different
+  repository*: pick another registered checkout, or paste an HTTPS clone URL. The
+  manager then does on the VM what the terminal wizard does (new root-level helper mode
+  `connect`, `POST /api/labs/{id}/git/connect`): it reuses a checkout that already holds
+  that repository or clones it under `~/labs/` as the VM account that owns the registered
+  repositories (or the engineer account on a fresh VM), checks that account's existing
+  GitHub CLI login and write permission, sets a commit identity from that GitHub account
+  when the checkout has none, registers the folder and connects the lab. GitHub page
+  links such as `/tree/main` are turned into the clone URL; a repository the account
+  cannot push to is refused before anything is cloned; no token or password ever enters
+  the manager. A lab on a VM with no repository yet gets the same *Connect a repository
+  by URL* button; the terminal wizard remains available and unchanged.
+- The VM Git helper must match the manager again; the installer and
+  `setup-git.sh --refresh` install it.
+
 ## Changes in 1.26.0
 
 The map takes its node positions from the annotations file, destroy cleans up, and

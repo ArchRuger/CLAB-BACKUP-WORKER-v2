@@ -1,3 +1,65 @@
+# Repository folder browser, folder moves and connect by URL — 1.27.0
+
+Prepared on `claude/git-folder-browser` from main `609fd4b` (1.26.0) on 2026-09-14, after the
+user asked for students to see where a lab's files land in the connected repository in a way
+familiar from a Mac file browser, to change that folder and create folders from the manager,
+and to recover from connecting the wrong repository without leaving the web UI.
+
+## Local checks (Windows workstation; Python 3.12 venv for the app suites, Python 3.14 for the stdlib suites; Node 24)
+
+| Check | Result |
+|---|---|
+| `test_host_git.py` with real Git in temporary repositories; new `HostGitPlacesTests`: clone-URL parsing, browse, `register()`, planning and overlap rules including retire, move with push, move refusals, connect (clone, adopt, wrong repository, occupied folder, missing identity), tools before the clone exists | 30 new tests OK; whole file 54 tests OK |
+| `test_git_progress.py`; new `GitPlacesTests`: tree with lab tags, folder registration and validation, destination change with a move job and no recapture, pending-save guard and a recoverable move failure, connect by URL with acknowledgement and the cross-lab conflict | 26 tests OK |
+| `test_git_transport.py`, `test_git_registrations.py`, `test_check_git.py`, `test_release_consistency.py` | 6 + 9 + 13 + 13 tests OK |
+| `node --test tests/test_git_places_ui.js` (new: tree model, path chips, folder rules, folder names, sizes, escaping of the browser markup, connected card, move-job labels, choosing a folder in a repository the lab is not connected to) and `tests/test_git_progress_ui.js` | 9 + 14 tests OK |
+| `node --test` of every UI suite (11 files) | 91 tests, 0 failures |
+| `node --check` on `git-progress.js` and `git-places.js`; `git diff --check` | clean |
+| `python deploy/verify-release.py` | `Source release verified: 1.27.0`; documentation names only 1.27.0 |
+
+## Live validation on the dev VM (Ubuntu 24.04, manager 1.27.0, VM Git helper 1.27.0)
+
+The working tree was staged into `~/projects/clab-manager` (the VM's `.env` kept), the helper
+refreshed with `sudo bash deploy/setup-git.sh --refresh`, and the manager rebuilt and recreated
+with `docker compose … build` and `up -d --force-recreate`. `/api/state` reported 1.27.0 and
+`/api/git/repositories` listed the registered checkout through the refreshed helper. The lab
+`clabllm-dev` (two Junos nodes) was connected to `~/labs/CLAB-MNGR-DEV-LLM`
+(github.com/pruger-dev/CLAB-MNGR-DEV-LLM, branch `main`) at the folder `GIT-DEV-TEST`, with one
+earlier save waiting for review. That save was pushed through the manager's own retry first:
+pending saves block folder changes and reconnects by design, and an unpushed branch makes a
+new registration refuse until it is synchronized, both of which the first run reported.
+
+| Step | Result |
+|---|---|
+| `GET /api/git/repositories/{id}/tree` | The committed files of the checkout at HEAD, the lab's folder tagged with the lab, the last-save time, no truncation |
+| `POST /api/labs/{id}/git/destination` with `labs/clabllm-dev` and `move_files` | Folder registered, lab reconnected with its two devices, previous registration retired; the *Folder move* job committed `Move clabllm-dev progress to labs/clabllm-dev/` (6 changed paths), pushed it, remote `main` equals the local head, old folder gone, `git status` clean |
+| Status, tree, history and review after the move | Ready; the `latest` manifest names the lab; history lists the move commit; the review shows both configurations as added under the new folder |
+| Same folder again; a folder nested inside a lab folder | Refused: "already saves to that folder" and "cannot overlap" |
+| `POST /api/git/repositories/{id}/folders` with `courses/week1` | Registered; the tree lists it as a lab folder without a lab |
+| Connect by URL to `ArchRuger/CLAB-BACKUP-WORKER-v2` (no push access) and to a repository that does not exist | Refused before cloning with "The GitHub account signed in on the VM cannot push to …"; no new checkout under `~/labs`. The first attempt reported a generic error because GitHub CLI was run inside the not-yet-existing checkout folder; fixed and re-run |
+| Connect by URL with the page link `…/CLAB-MNGR-DEV-LLM/tree/main` into `labs/clabllm-dev` | Existing checkout adopted, registration reused, the lab stays connected with its devices |
+| Full Python suite on the VM, `python -m unittest discover -s tests -t tests` | 645 tests, 1 platform skip, 0 failures |
+| Browser (desktop app browser, 1440 × 960) → lab → More → Git repository | Connected card with the push URL, branch, VM account and the path `CLAB-MNGR-DEV-LLM › labs/clabllm-dev › latest/`; "Where this lab lives" with the folder path, the outline (`ARISTA-LAB-TEST`, `courses`, `labs › clabllm-dev` tagged *This lab*), the listing `latest · Most recent save · 2.4 KB`, the footer with the last save and commit, *Save this lab here* disabled with "This lab already saves here."; both registrations in the settings select; the move listed as *Folder move → labs/clabllm-dev* under Progress saves |
+
+The VM ends with the lab saving to `labs/clabllm-dev` and the extra registered folder
+`courses/week1`, both left in place as the working example of the feature.
+
+## Not verified
+
+- A fresh clone through *Connect by URL* was not exercised against GitHub: the dev account
+  has one repository, which was already checked out. The clone path is covered by
+  `test_host_git.py` against a local bare repository; the refusal path was exercised live and
+  stops before cloning.
+- Automatic commit identity from the GitHub account (`gh api user`) was not exercised live:
+  the dev checkout already carries a local identity. Only the missing-identity refusal is unit
+  tested.
+- Moving `baseline/` and `checkpoints/` folders was covered by the real-Git unit test, not
+  live; the dev lab only had `latest/`.
+- No device capture was started by this validation; the saved files came from the user's
+  earlier save. The move, new folder and connect dialogs were driven through their API routes
+  and unit-tested render functions; they were not clicked through in a browser.
+- The terminal wizard (`deploy/setup-git.sh`) is unchanged and was only used for `--refresh`.
+
 # Map positions, destroy cleanup, Grafana on demand — 1.26.0
 
 Prepared on `claude/map-positions-destroy-cleanup-grafana-on-demand` from main `478568a`

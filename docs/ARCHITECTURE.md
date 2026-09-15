@@ -49,7 +49,7 @@ flowchart TB
     GW{"clab-manager-gateway<br/>switch on SSH_ORIGINAL_COMMAND"}
     I["clab-manager-inspect<br/>host_files.py · read-only<br/>containerlab inspect + lab file bundle"]
     O["clab-manager-operate<br/>host_operations.py · deploy, destroy, start, stop,<br/>inspect, save, create, clone · trusted roots only"]
-    Gt["clab-manager-git<br/>host_git.py · export, commit, push<br/>as the checkout owner"]
+    Gt["clab-manager-git<br/>host_git.py · export, commit, push, browse, move<br/>as the checkout owner; register as root"]
     X["anything else → exit 64"]
     T[("/etc/clab-manager<br/>operations.json · git.json · engineer.json")]
     M -- "SSH" --> S --> GW
@@ -68,7 +68,7 @@ What each side can and cannot do:
 | Manager container | Serve the UI, keep encrypted state, open SSH to nodes and to `clab-discovery`, run Ansible against nodes | Reach the Docker socket, run arbitrary VM commands, read lab files outside the helper bundle |
 | `clab-discovery` account | Start the three helpers through the gateway | Open a shell, run other commands, use SFTP in helper mode |
 | Operations helper | Run containerlab on topology files under the trusted roots in `operations.json`, with every command reviewed and confirmed in the UI first | Touch files outside those roots, run commands the manager did not preview |
-| Git helper | Export the workspace into a registered checkout and commit or push as its owner | Register checkouts (only root or the guided setup can), read other owners' repositories |
+| Git helper | Export the workspace into a registered checkout and commit, push, list or move folders as its owner; as root, register another folder of an already registered checkout, or clone and register a repository for the VM account that owns the registered ones | Run Git as root, accept command text or credentials, read other owners' repositories |
 | Capture session service | Create and remove labelled Wireshark containers from one pinned image | Accept images, commands, mounts or URLs from a client; it is never exposed to browsers |
 
 ## From topology file to usable lab
@@ -181,7 +181,7 @@ lines.
 | `app/store.py` | Encrypted state file, atomic saves, bounded audit log, reset journal |
 | `app/discovery.py`, `app/vm_files.py`, `app/host_files.py` | VM connection, 30-second inspection loop, address reconciliation, lab file bundles and import; `host_files.py` is the helper installed on the VM |
 | `app/lab_operations.py`, `app/host_operations.py` | Reviewed containerlab commands with preview tokens and persistent output, topology browser and editor, diagram layout API; `host_operations.py` runs on the VM |
-| `app/git_progress.py`, `app/host_git.py` | *Save progress*: capture, export, commit, push and history through the owner-scoped VM helper |
+| `app/git_progress.py`, `app/host_git.py` | *Save progress*: capture, export, commit, push and history through the owner-scoped VM helper; the repository folder browser, folder moves and connecting a repository by URL |
 | `app/runner.py` | Ansible `network_cli` backups and login tests, per-job environment and `known_hosts`, output validation, Git history of backups |
 | `app/node_services.py` | SSH login checks and browser terminals over WebSocket |
 | `app/node_readiness.py` | Readiness monitor: login and `show version` probes, SSH gating, the automatic login test |

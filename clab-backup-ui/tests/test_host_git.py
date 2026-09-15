@@ -351,3 +351,164 @@ class HostGitProductionDispatchTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+
+
+@unittest.skipUnless(shutil.which('git'), 'Git executable required')
+class HostGitPlacesTests(HostGitTests):
+    """Folder browsing, moving a lab between folders, and UI-driven registration."""
+
+    def account(self, owner):
+        return SimpleNamespace(pw_name=owner, pw_uid=1000, pw_gid=1000, pw_dir=str(self.home))
+
+    def sibling(self, prefix, label=None):
+        binding = {'id': uuid.uuid4().hex, 'label': label or ('repo / ' + prefix), 'owner': 'ben', 'path': str(self.repo), 'home': str(self.home),
+                   'remote': 'origin', 'branch': 'main', 'prefix': prefix, 'push_url': str(self.remote), 'revision': hashlib.sha256(prefix.encode()).hexdigest()}
+        return binding, GitRepository(binding, git=self.git, allow_local=True, env=self.env)
+
+    def test_clone_url_accepts_clone_urls_and_resolves_github_page_links(self):
+        self.assertEqual(host_git.clone_url('https://github.com/Owner/Lab-Repo'), 'https://github.com/Owner/Lab-Repo.git')
+        self.assertEqual(host_git.clone_url('https://github.com/Owner/Lab-Repo.git'), 'https://github.com/Owner/Lab-Repo.git')
+        self.assertEqual(host_git.clone_url('https://github.com/Owner/Lab-Repo/tree/main/bgp'), 'https://github.com/Owner/Lab-Repo.git')
+        self.assertEqual(host_git.clone_url('https://gitlab.example.com/team/lab.git'), 'https://gitlab.example.com/team/lab.git')
+        for bad in ('http://github.com/Owner/Lab', 'https://github.com/Owner', 'https://github.com/Owner/Lab?x=1', 'https://user:token@github.com/Owner/Lab.git',
+                    'https://github.com/Owner/Lab.git#frag', 'https://github.com/O wner/Lab', 'git@github.com:Owner/Lab.git', '', None, 'https://github.com/../x'):
+            with self.assertRaises(ValueError, msg=repr(bad)): host_git.clone_url(bad)
+        self.assertTrue(host_git.same_repository('https://github.com/Owner/Lab.git', 'https://github.com/owner/lab/'))
+        self.assertFalse(host_git.same_repository('https://gitlab.example.com/a.git', 'https://gitlab.example.com/a'))
+        self.assertEqual(host_git.repository_name('https://github.com/Owner/Lab-Repo.git'), 'Lab-Repo')
+
+    def test_browse_lists_committed_files_only_and_marks_lab_folders(self):
+        (self.repo / 'scratch.txt').write_text('not committed\n')
+        self.publish(push=True)
+        self.binding['_siblings'] = [{'id': self.binding['id'], 'label': 'Ben BGP', 'prefix': ''}, {'id': 'other', 'label': 'repo / eth', 'prefix': 'eth'}]
+        result = self.worker.dispatch(self.request('browse'))
+        paths = [f['path'] for f in result['files']]
+        self.assertEqual(paths, ['README.md', 'latest/PE1.cfg', 'latest/manifest.json'])
+        self.assertNotIn('scratch.txt', paths)
+        self.assertEqual(next(f for f in result['files'] if f['path'] == 'latest/PE1.cfg')['size'], len('router bgp 65001\n'))
+        self.assertIsInstance(result['saved']['latest'], int); self.assertIsNone(result['saved']['baseline'])
+        self.assertEqual([f['prefix'] for f in result['folders']], ['', 'eth'])
+        self.assertFalse(result['truncated']); self.assertEqual(result['head'], self.raw('rev-parse', 'HEAD'))
+        self.assertNotIn('_siblings', self.worker.registration())
+
+    def test_register_validates_the_checkout_like_the_wizard(self):
+        binding = {'id': uuid.uuid4().hex, 'label': 'repo / bgp', 'owner': 'ben', 'path': str(self.repo), 'home': str(self.home),
+                   'remote': 'origin', 'branch': '', 'push_url': '', 'prefix': 'bgp', 'revision': ''}
+        result = GitRepository(binding, git=self.git, allow_local=True, env=self.env).register(None)
+        self.assertEqual(result['branch'], 'main'); self.assertEqual(result['push_url'], str(self.remote))
+        self.assertEqual(result['anchor'], self.raw('rev-parse', 'HEAD')); self.assertRegex(result['revision'], r'^[0-9a-f]{64}$')
+        (self.repo / 'README.md').write_text('local edit\n'); self.raw('commit', '-am', 'ahead of remote')
+        binding.update(branch='', push_url='', revision='')
+        with self.assertRaisesRegex(ValueError, 'synchronize'):
+            GitRepository(binding, git=self.git, allow_local=True, env=self.env).register(None)
+
+    def test_planning_refuses_overlap_and_reuses_identical_folders(self):
+        config = {'repositories': [dict(self.binding, prefix='bgp', uid=1000, gid=1000, revision='r-bgp')]}
+        req = {'binding_id': self.binding['id'], 'revision': 'r-bgp'}
+        existing, planned = host_git.plan_prefix(config, dict(req, prefix='bgp'), self.account)
+        self.assertIs(existing, config['repositories'][0]); self.assertIsNone(planned)
+        for prefix in ('', 'bgp/edge'):
+            with self.assertRaisesRegex(ValueError, 'cannot overlap'): host_git.plan_prefix(config, dict(req, prefix=prefix), self.account)
+        with self.assertRaisesRegex(ValueError, 'binding changed'): host_git.plan_prefix(config, dict(req, revision='stale', prefix='eth'), self.account)
+        with self.assertRaises(ValueError): host_git.plan_prefix(config, dict(req, prefix='../eth'), self.account)
+        existing, planned = host_git.plan_prefix(config, dict(req, prefix='courses/eth'), self.account)
+        self.assertIsNone(existing); self.assertEqual(planned['prefix'], 'courses/eth'); self.assertEqual(planned['label'], 'repo / courses/eth')
+        rooted = {'repositories': [dict(self.binding, prefix='', uid=1000, gid=1000, revision='r-root')]}
+        with self.assertRaisesRegex(ValueError, 'cannot overlap'): host_git.plan_prefix(rooted, dict(req, revision='r-root', prefix='bgp'), self.account)
+        self.assertEqual(host_git.plan_prefix(rooted, dict(req, revision='r-root', prefix='bgp', retire=True), self.account)[1]['prefix'], 'bgp')
+        with patch.object(host_git, 'REGISTRY', self.base / 'registry.json'):
+            registered = host_git.register_prefix(rooted, dict(req, revision='r-root', prefix='bgp', retire=True), lambda binding, work: dict(binding, branch='main', push_url=str(self.remote), revision='r-bgp', anchor='a' * 40), lookup=self.account)
+            self.assertEqual(registered['prefix'], 'bgp'); self.assertNotIn('anchor', registered)
+            self.assertEqual([b['prefix'] for b in json.loads((self.base / 'registry.json').read_text())['repositories']], ['bgp'])
+            self.assertEqual([b['prefix'] for b in rooted['repositories']], ['bgp'])
+        self.assertEqual((planned['owner'], planned['uid'], planned['path'], planned['remote'], planned['branch']), ('ben', 1000, str(self.repo), 'origin', ''))
+        with patch.object(host_git, 'ENGINEER', self.base / 'missing-engineer.json'):
+            url = 'https://github.com/Owner/Course-Labs.git'
+            config = {'repositories': [dict(self.binding, uid=1000, gid=1000, push_url=url, prefix='bgp', revision='r')]}
+            existing, planned, resolved = host_git.plan_connect(config, {'url': 'https://github.com/owner/course-labs/tree/main', 'prefix': 'bgp'}, self.account)
+            self.assertIs(existing, config['repositories'][0]); self.assertTrue(host_git.same_repository(resolved, url))
+            existing, planned, _ = host_git.plan_connect(config, {'url': url, 'prefix': 'eth'}, self.account)
+            self.assertIsNone(existing); self.assertEqual(planned['path'], str(self.repo)); self.assertTrue(planned['_pending'])
+            with self.assertRaisesRegex(ValueError, 'cannot overlap'): host_git.plan_connect(config, {'url': url, 'prefix': ''}, self.account)
+            existing, planned, _ = host_git.plan_connect(config, {'url': 'https://github.com/Owner/Other-Lab', 'prefix': ''}, self.account)
+            self.assertEqual(planned['path'], str(self.home / 'labs' / 'Other-Lab')); self.assertEqual(planned['label'], 'Other-Lab')
+            with self.assertRaisesRegex(ValueError, 'No VM account'): host_git.plan_connect({'repositories': []}, {'url': url, 'prefix': ''}, self.account)
+            with self.assertRaisesRegex(ValueError, 'Several VM accounts'):
+                host_git.plan_connect({'repositories': [dict(self.binding, uid=1, gid=1, revision='a'), dict(self.binding, id='x', owner='alice', uid=2, gid=2, revision='b')]}, {'url': url, 'prefix': ''}, self.account)
+
+    def test_move_relocates_every_saved_folder_in_one_pushed_commit(self):
+        old_binding, old = self.sibling('old'); new_binding, new = self.sibling('new')
+        def publish(worker, binding, **options):
+            req = {'mode': 'publish', 'binding_id': binding['id'], 'revision': binding['revision'], 'operation_id': uuid.uuid4().hex,
+                   'expected_head': self.raw('rev-parse', 'HEAD'), 'target': 'latest', 'push': True, 'snapshot': self.capture()}
+            req.update(options); return worker.dispatch(req)
+        self.assertEqual(publish(old, old_binding)['status'], 'synced')
+        self.assertEqual(publish(old, old_binding, target='checkpoint', checkpoint='peering', snapshot=self.capture('peering\n'))['status'], 'synced')
+        (self.repo / 'README.md').write_text('Course notes\n'); self.raw('commit', '-am', 'course notes'); self.raw('push')
+        req = {'mode': 'move', 'binding_id': new_binding['id'], 'revision': new_binding['revision'], 'operation_id': uuid.uuid4().hex,
+               'expected_head': self.raw('rev-parse', 'HEAD'), 'source_prefix': 'old', 'push': True, 'message': 'Move BGP progress to new/'}
+        before = int(self.raw('rev-list', '--count', 'HEAD'))
+        result = new.dispatch(req)
+        self.assertEqual(result['status'], 'synced', result); self.assertTrue(result['pushed'])
+        self.assertEqual(int(self.raw('rev-list', '--count', 'HEAD')), before + 1)
+        self.assertEqual(self.raw('ls-remote', 'origin', 'refs/heads/main').split()[0], result['commit'])
+        self.assertEqual(self.raw('ls-tree', '-r', '--name-only', 'HEAD', '--', 'old'), '')
+        self.assertEqual(sorted(self.raw('ls-tree', '-r', '--name-only', 'HEAD', '--', 'new').splitlines()),
+                         ['new/checkpoints/peering/PE1.cfg', 'new/checkpoints/peering/manifest.json', 'new/latest/PE1.cfg', 'new/latest/manifest.json'])
+        self.assertEqual((self.repo / 'new/checkpoints/peering/PE1.cfg').read_text(), 'peering\n')
+        self.assertFalse((self.repo / 'old').exists()); self.assertEqual(self.raw('show', 'HEAD:README.md'), 'Course notes')
+        self.assertIn('Move BGP progress to new/', self.raw('log', '-1', '--format=%s'))
+        self.assertEqual(new.dispatch(req)['commit'], result['commit'])
+        self.assertEqual(len(new.dispatch({'mode': 'history', 'binding_id': new_binding['id'], 'revision': new_binding['revision']})['versions']), 2)
+        again = dict(req, operation_id=uuid.uuid4().hex, expected_head=self.raw('rev-parse', 'HEAD'))
+        self.assertEqual(new.dispatch(again)['status'], 'needs_attention'); self.assertIn('no saved files', new.dispatch(again)['message'])
+
+    def test_move_refuses_dirty_source_and_occupied_destination(self):
+        old_binding, old = self.sibling('old'); new_binding, new = self.sibling('new')
+        req = {'mode': 'publish', 'binding_id': old_binding['id'], 'revision': old_binding['revision'], 'operation_id': uuid.uuid4().hex,
+               'expected_head': self.raw('rev-parse', 'HEAD'), 'target': 'latest', 'push': True, 'snapshot': self.capture()}
+        self.assertEqual(old.dispatch(req)['status'], 'synced')
+        move = lambda **o: new.dispatch({'mode': 'move', 'binding_id': new_binding['id'], 'revision': new_binding['revision'], 'operation_id': uuid.uuid4().hex,
+                                         'expected_head': self.raw('rev-parse', 'HEAD'), 'source_prefix': 'old', 'push': False, 'message': 'Move', **o})
+        (self.repo / 'old/latest/PE1.cfg').write_text('edited by hand\n')
+        self.assertIn('unsaved edits', move()['message'])
+        self.raw('checkout', '--', 'old/latest/PE1.cfg')
+        (self.repo / 'new/latest').mkdir(parents=True); (self.repo / 'new/latest/PE1.cfg').write_text('occupied\n')
+        self.raw('add', 'new'); self.raw('commit', '-m', 'occupied'); self.raw('push')
+        self.assertIn('already contains saved files', move()['message'])
+        with self.assertRaisesRegex(ValueError, 'binding changed'): new.dispatch({'mode': 'move', 'binding_id': 'x', 'revision': 'y'})
+        with self.assertRaisesRegex(ValueError, 'different folder'): move(source_prefix='new')
+
+    def test_tools_run_before_the_checkout_exists(self):
+        import sys
+        binding = {'id': uuid.uuid4().hex, 'label': 'later', 'owner': 'ben', 'path': str(self.home / 'labs' / 'later'), 'home': str(self.home),
+                   'remote': 'origin', 'branch': '', 'push_url': '', 'prefix': '', 'revision': '', '_pending': True}
+        worker = GitRepository(binding, git=self.git, allow_local=True, env=self.env, gh=str(self.base / 'no-gh'))
+        code, raw = worker.tool([sys.executable, '-c', 'import os; print(os.getcwd())'])
+        self.assertEqual(code, 0); self.assertEqual(Path(raw.decode().strip()).resolve(), self.home.resolve())
+        with self.assertRaisesRegex(ValueError, 'GitHub CLI is not installed'):
+            worker.connect('https://github.com/Owner/Private-Lab.git')
+        self.assertFalse((self.home / 'labs' / 'later').exists(), 'nothing is cloned before the GitHub checks pass')
+
+    def test_connect_clones_or_adopts_a_checkout_and_registers_it(self):
+        env = dict(self.env, GIT_AUTHOR_NAME='Ben', GIT_AUTHOR_EMAIL='ben@example.invalid', GIT_COMMITTER_NAME='Ben', GIT_COMMITTER_EMAIL='ben@example.invalid')
+        self.raw('--git-dir', str(self.remote), 'symbolic-ref', 'HEAD', 'refs/heads/main')  # GitHub always has a default branch
+        path = self.home / 'labs' / 'remote'
+        binding = {'id': uuid.uuid4().hex, 'label': 'remote', 'owner': 'ben', 'path': str(path), 'home': str(self.home), 'remote': 'origin',
+                   'branch': '', 'push_url': '', 'prefix': '', 'revision': '', '_pending': True}
+        result = GitRepository(binding, git=self.git, allow_local=True, env=env).connect(str(self.remote))
+        self.assertTrue((path / '.git').is_dir()); self.assertEqual(result['branch'], 'main'); self.assertEqual(result['push_url'], str(self.remote))
+        self.assertNotIn('_pending', result); self.assertEqual(result['anchor'], self.raw('rev-parse', 'HEAD'))
+        adopted = {'id': uuid.uuid4().hex, 'label': 'existing', 'owner': 'ben', 'path': str(self.repo), 'home': str(self.home), 'remote': 'origin',
+                   'branch': '', 'push_url': '', 'prefix': 'bgp', 'revision': '', '_pending': True}
+        self.assertEqual(GitRepository(adopted, git=self.git, allow_local=True, env=env).connect(str(self.remote))['prefix'], 'bgp')
+        other = self.base / 'other.git'; self.raw('init', '--bare', str(other))
+        with self.assertRaisesRegex(ValueError, 'different repository'):
+            GitRepository(dict(adopted, id='z'), git=self.git, allow_local=True, env=env).connect(str(other))
+        occupied = self.home / 'labs' / 'occupied'; occupied.mkdir(parents=True); (occupied / 'notes.txt').write_text('x')
+        with self.assertRaisesRegex(ValueError, 'not a Git checkout'):
+            GitRepository(dict(binding, id='q', path=str(occupied)), git=self.git, allow_local=True, env=env).connect(str(self.remote))
+        missing = {'id': uuid.uuid4().hex, 'label': 'noid', 'owner': 'ben', 'path': str(self.home / 'labs' / 'noid'), 'home': str(self.home),
+                   'remote': 'origin', 'branch': '', 'push_url': '', 'prefix': '', 'revision': '', '_pending': True}
+        with self.assertRaisesRegex(ValueError, 'commit identity'):
+            GitRepository(missing, git=self.git, allow_local=True, env=self.env).connect(str(self.remote))

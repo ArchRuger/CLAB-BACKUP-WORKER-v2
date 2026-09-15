@@ -171,7 +171,44 @@ another lab's folder.
 | **Push saved progress** | Publish the existing saved commit without recapturing devices. |
 | **Update from remote** | Update an eligible clean checkout using a fast-forward; no merge/rebase conflict resolution. |
 | **Load version…** | Inspect or download a baseline, checkpoint or historical version as a ZIP. |
-| **Git repository settings** | Choose a registered repository and explicit device selection. |
+| **Git repository settings** | Choose a registered repository and explicit device selection; see the folders of the repository. |
+| **Save this lab here** | Move this lab to the selected folder of its repository, optionally with the files already saved. |
+| **New folder…** | Create a folder in the repository for this lab (or for a later lab). |
+| **Use a different repository…** | Switch to another registered checkout, or connect a repository by its HTTPS URL. |
+
+## Where this lab lives
+
+**More → Git repository** shows the connected repository as a file browser would: the
+folder path at the top, a folder outline on the left and the contents of the selected
+folder on the right. The listing is the repository's current commit as it is on the VM,
+so it matches what GitHub shows once the last save was pushed. The manager reads the
+checkout through the Git helper; it never reads GitHub, and the browser sends only
+registration IDs and folder names.
+
+- The folder this lab saves to is tagged **This lab**; a folder another lab saves to is
+  tagged with that lab's name. `latest/`, `baseline/` and `checkpoints/` are described in
+  plain words, and a lab folder that has never been saved to reads *created on first
+  save*, because Git only shows a folder once a file is committed in it.
+- **Save this lab here** moves the lab to the selected folder. The folder becomes the
+  lab's registered destination, the device selection and review preference stay as they
+  were, and the lab's previous folder registration is retired. When files were already
+  saved under the old folder, the confirmation offers to move them along: every
+  `latest/`, `baseline/` and `checkpoints/` file of the old folder is moved in one commit
+  and pushed, and the move is recorded as a *Folder move* job with the same retry, review
+  and push handling as a save. Earlier versions stay in Git history either way; a pending
+  save has to finish or be dismissed first.
+- **New folder…** creates a folder beside the existing ones. With *Save this lab here*
+  ticked, the lab moves into it immediately; otherwise the folder is only registered and
+  waits for a lab.
+- Folders of one repository never overlap: a folder cannot be created inside another
+  lab's folder, `latest/`, `baseline/` and `checkpoints/` cannot be chosen as
+  destinations, and a repository that a lab saves to at its root cannot also hold lab
+  folders unless that lab moves first. The VM helper enforces the same rules again.
+
+A moved lab keeps working with its old saves: *View changes / History* and *Load
+version* read the commits of the new folder, and the commit that moved the files lists
+every file as moved. A dismissed save whose commit was never pushed stays outside the
+new folder's history; publish it as the repository owner if it is still wanted.
 
 Git commands are constructed by the helper from fixed operations. The UI accepts
 repository IDs and reviewed choices, not arbitrary command lines. Commits include
@@ -213,7 +250,7 @@ not implemented by registering two Linux owners.
 | Immutable captured configurations | Manager `backups/<lab-id>/history/<backup-job-id>`; included in a complete data archive. |
 | Exported configurations and local Git commits | Ben's registered checkout; back it up independently until all intended commits are pushed. |
 | Git credentials | Ben's external credential configuration; provision it again when rebuilding a VM. |
-| Host registration | `/etc/clab-manager/git.json`; retain the root-owned registration when backing up the VM. |
+| Host registration | `/etc/clab-manager/git.json`, written by guided setup and by the manager's folder and connect actions through the helper; retain the root-owned registration when backing up the VM. |
 | Host journal and transfer snapshots | `<checkout>/.git/clab-manager/`; retain these with the complete checkout for interrupted-save recovery. |
 
 Back up the whole manager data directory, the registered checkout and its helper
@@ -243,6 +280,8 @@ flowchart TD
 | Commit exists; push failed or review is required | Review the recorded commit and use **Push saved progress**. No new capture is needed. |
 | Remote advanced / push rejected | Inspect the repository as Ben. Resolve divergence outside the app; never force push merely to clear the status. |
 | Unexpected branch, URL, owner or repository identity | Restore the registered destination or deliberately register/reconnect the intended checkout after resolving pending work. |
+| The wrong repository is connected | Choose **Use a different repository** in **More → Git repository**: pick another registered checkout, or connect the right one by its HTTPS URL. Nothing is deleted from either repository; files already saved stay where they are. |
+| The lab saves to the wrong folder | Select the intended folder in **Where this lab lives** and choose **Save this lab here**, optionally moving the files already saved. |
 | Helper unavailable or older than the manager | Run `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh` from the source that matches the running manager and refresh repository status. |
 | Manager restarted during a save | Open the recorded job and retry. The coordinator reconciles the recorded operation with the VM journal rather than silently recapturing. |
 | Git authentication expired | Repair Ben's Git login on the VM, then retry the existing push. Changing the VM SSH password does not repair Git credentials. |

@@ -395,3 +395,125 @@ class GitProgressTests(unittest.TestCase):
             with self.assertRaises(OSError): self.client.post(self.url+'/update', json={})
         self.assertEqual(self.store.state['git_jobs'][-1]['status'], 'dismissed')
         self.progress.idle()
+
+
+class GitPlacesTests(GitProgressTests):
+    """Repository browsing, changing a lab's folder, new folders and connecting a repository by URL."""
+
+    def remote(self, host, request, stopping=None):
+        if not hasattr(self, 'registry'): self.registry = [self.repo]
+        mode = request['mode']
+        if mode == 'list':
+            self.sent.append(copy.deepcopy(request))
+            return dict(protocol=PROTOCOL, version=__version__, repositories=[dict(r) for r in self.registry])
+        if mode == 'browse':
+            self.sent.append(copy.deepcopy(request))
+            repo = next(r for r in self.registry if r['id'] == request['binding_id'])
+            return dict(repository=repo, head='a'*40, files=[dict(path='README.md', size=12), dict(path='bgp/latest/r1.cfg', size=30), dict(path='bgp/latest/manifest.json', size=200)],
+                        truncated=False, saved={'latest': 1789128000, 'baseline': None, 'checkpoints': None},
+                        folders=[dict(id=r['id'], label=r['label'], prefix=r['prefix']) for r in self.registry if r['path'] == repo['path']])
+        if mode in ('register-prefix', 'connect'):
+            self.sent.append(copy.deepcopy(request))
+            if self.publish_error: raise ValueError(self.publish_error)
+            prefix = request['prefix']
+            existing = next((r for r in self.registry if r['prefix'] == prefix and (mode == 'register-prefix' or r.get('push_url') == request['url'])), None)
+            if existing: return dict(existing)
+            created = dict(self.repo, id=mode + '-' + (prefix or 'root'), prefix=prefix, revision='rev-' + (prefix or 'root'), label='Bens lab / ' + (prefix or 'root'))
+            if mode == 'connect': created.update(push_url=request['url'], path='/home/ben/labs/' + request['url'].rsplit('/', 1)[-1].removesuffix('.git'), label=request['url'].rsplit('/', 1)[-1])
+            self.registry.append(created)
+            return dict(created)
+        if mode == 'move':
+            self.sent.append(copy.deepcopy(request))
+            if self.publish_error: raise ValueError(self.publish_error)
+            return dict(status='committed', commit='c'*40, pushed=False, changed_files=['latest/r1.cfg', 'bgp/latest/r1.cfg'], snapshot_path='bgp/latest', message='Saved in the VM repository; not pushed.')
+        if mode == 'status':
+            self.sent.append(copy.deepcopy(request))
+            repo = next((r for r in self.registry if r['id'] == request.get('binding_id')), self.repo)
+            return dict(repository=repo, ready=True, head='a'*40, baseline_revision='', latest_manifest=None)
+        return super().remote(host, request, stopping)
+
+    def test_tree_reports_committed_files_and_which_lab_owns_each_folder(self):
+        response = self.client.get('/api/git/repositories/bens-lab/tree')
+        self.assertEqual(response.status_code, 200, response.text)
+        tree = response.json()
+        self.assertEqual([f['path'] for f in tree['files']], ['README.md', 'bgp/latest/r1.cfg', 'bgp/latest/manifest.json'])
+        self.assertEqual(tree['folders'][0]['lab'], dict(id=self.lab['id'], name=self.lab['name']))
+        self.assertEqual(tree['saved']['latest'], 1789128000); self.assertEqual(tree['head'], 'a'*40)
+        browse = next(r for r in self.sent if r['mode'] == 'browse')
+        self.assertEqual((browse['binding_id'], browse['revision']), ('bens-lab', 'binding-1'))
+        self.assertEqual(self.client.get('/api/git/repositories/missing/tree').status_code, 404)
+
+    def test_new_folder_registers_a_sibling_prefix_after_validation(self):
+        response = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='/courses/eth/'))
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['repository']['prefix'], 'courses/eth')
+        request = next(r for r in self.sent if r['mode'] == 'register-prefix')
+        self.assertEqual((request['prefix'], request['binding_id'], request['revision']), ('courses/eth', 'bens-lab', 'binding-1'))
+        for bad in ('../eth', 'eth/.git', 'a b', 'x' * 501):
+            self.assertIn(self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix=bad)).status_code, (400, 422), bad)
+        self.assertEqual(len([r for r in self.sent if r['mode'] == 'register-prefix']), 1)
+        catalog = self.client.get('/api/git/repositories').json()['repositories']
+        self.assertIn('courses/eth', [r['prefix'] for r in catalog])
+
+    def test_changing_the_folder_rebinds_the_lab_and_moves_files_without_recapturing(self):
+        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='')).status_code, 409)
+        response = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        self.assertEqual(response.status_code, 200, response.text)
+        binding = self.store.lab(self.lab['id'])['git_binding']
+        self.assertEqual(binding['binding_id'], 'register-prefix-bgp'); self.assertEqual(binding['repository']['prefix'], 'bgp')
+        self.assertEqual(binding['node_names'], self.names)
+        job = response.json()['job']
+        self.assertEqual(job['target'], 'move'); self.assertEqual(job['status'], 'queued')
+        with patch.object(self.app.state.runner, 'submit', side_effect=AssertionError('a move never captures devices')):
+            self.progress.execute(job['id'])
+        outcome = self.client.get('/api/git/jobs/' + job['id']).json()
+        self.assertEqual(outcome['status'], 'synced', outcome); self.assertEqual(outcome['commit'], 'b'*40)
+        move = next(r for r in self.sent if r['mode'] == 'move')
+        self.assertEqual((move['source_prefix'], move['expected_head'], move['binding_id'], move['push']), ('', 'a'*40, 'register-prefix-bgp', False))
+        self.assertTrue(next(r for r in self.sent if r['mode'] == 'register-prefix')['retire'])
+        self.assertEqual(move['message'], 'Move ' + self.lab['name'] + ' progress to bgp/')
+        self.assertFalse([r for r in self.sent if r['mode'] == 'publish'])
+        self.assertEqual(next(r for r in self.sent if r['mode'] == 'push')['operation_id'], job['id'])
+        again = self.client.post(self.url + '/destination', json=dict(prefix='bgp'))
+        self.assertEqual(again.status_code, 409); self.assertIn('already saves', again.text)
+        self.assertNotIn('binding_digest', json.dumps(self.client.get('/api/state').json()))
+
+    def test_a_pending_save_blocks_folder_changes_and_moves_stay_recoverable(self):
+        job, _ = self.save()
+        self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='bgp')).status_code, 409)
+        self.progress.update(job['id'], status='synced', pushed=True)  # the save finished; nothing pending
+        self.publish_error = 'The repository changed since it was selected. Refresh status and retry the move.'
+        response = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        self.assertEqual(response.status_code, 409, response.text)
+        self.publish_error = ''
+        response = self.client.post(self.url + '/destination', json=dict(prefix='bgp', move_files=True))
+        self.assertEqual(response.status_code, 200, response.text)
+        self.publish_error = 'The current folder has unsaved edits. Resolve them as the repository owner before moving.'
+        self.progress.execute(response.json()['job']['id'])
+        outcome = self.client.get('/api/git/jobs/' + response.json()['job']['id']).json()
+        self.assertEqual(outcome['status'], 'export_pending' if outcome.get('backup_job_id') else 'failed', outcome)
+        self.assertIn('unsaved edits', outcome['message'])
+
+    def test_connecting_by_url_needs_the_exposure_acknowledgement_and_binds_the_lab(self):
+        url = ' https://github.com/ben/Course-Labs '
+        refused = self.client.post(self.url + '/connect', json=dict(url=url, prefix='bgp'))
+        self.assertEqual(refused.status_code, 400); self.assertFalse([r for r in self.sent if r['mode'] == 'connect'])
+        response = self.client.post(self.url + '/connect', json=dict(url=url, prefix='bgp', acknowledge=True))
+        self.assertEqual(response.status_code, 200, response.text)
+        sent = next(r for r in self.sent if r['mode'] == 'connect')
+        self.assertEqual((sent['url'], sent['prefix']), ('https://github.com/ben/Course-Labs', 'bgp')); self.assertNotIn('binding_id', sent)
+        binding = self.store.lab(self.lab['id'])['git_binding']
+        self.assertEqual(binding['repository']['push_url'], 'https://github.com/ben/Course-Labs'); self.assertEqual(binding['node_names'], self.names)
+        other = self.register(discovery_tests.YAML.replace(b'name: training', b'name: other-lab'))
+        conflict = self.client.post('/api/labs/' + other['id'] + '/git/connect', json=dict(url=url, prefix='bgp', acknowledge=True))
+        self.assertEqual(conflict.status_code, 409); self.assertIn('another lab', conflict.text)
+        self.assertEqual(self.client.post(self.url + '/connect', json=dict(url='', prefix='', acknowledge=True)).status_code, 422)
+        self.publish_error = 'The VM account is not signed in to GitHub.'
+        failed = self.client.post(self.url + '/connect', json=dict(url='https://github.com/ben/Other', prefix='', acknowledge=True))
+        self.assertEqual(failed.status_code, 409); self.assertIn('not signed in', failed.text)
+        self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['push_url'], 'https://github.com/ben/Course-Labs')
+
+
+# The subclass only adds scenarios; the inherited scenarios already run once above.
+for _name in [n for n in dir(GitProgressTests) if n.startswith('test_')]:
+    setattr(GitPlacesTests, _name, None)

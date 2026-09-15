@@ -272,6 +272,20 @@ class GitProgress:
                                   changed_files=job.get('changed_files', []), snapshot_path=job.get('snapshot_path', ''))
                 self.finish(job, result)
                 return
+            if job.get('target') == 'move':
+                self.update(job_id, status='exporting', message='Moving the saved folders inside the repository.')
+                status = self.invoke({'mode': 'status'}, binding)
+                if not status.get('ready'): raise ValueError(status.get('problem') or 'Repository needs attention before moving folders.')
+                request = copy.deepcopy(job['request'])
+                request.update(mode='move', operation_id=job_id, expected_head=status.get('head', ''))
+                result = self.invoke(request, binding)
+                if result.get('commit'):
+                    self.update(job_id, commit=result['commit'], changed_files=result.get('changed_files', []), snapshot_path=result.get('snapshot_path', ''))
+                if job.get('want_push') and result.get('commit') and result.get('status') != 'needs_attention' and not result.get('pushed'):
+                    self.update(job_id, status='pushing', commit=result['commit'], message='Pushing the moved folders.')
+                    result = self.invoke({'mode': 'push', 'operation_id': job_id}, binding)
+                self.finish(job, result)
+                return
             backup_id = job.get('backup_job_id', '')
             if not backup_id:
                 if job.get('retry'):
@@ -394,6 +408,64 @@ class GitProgress:
             commit: str = Field(default='', max_length=64)
             path: str = Field(default='', max_length=250)
 
+        class Folder(BaseModel):
+            model_config = ConfigDict(extra='forbid')
+            prefix: str = Field(default='', max_length=500)
+
+        class Destination(BaseModel):
+            model_config = ConfigDict(extra='forbid')
+            prefix: str = Field(default='', max_length=500)
+            move_files: bool = False
+
+        class Connect(BaseModel):
+            model_config = ConfigDict(extra='forbid')
+            url: str = Field(min_length=1, max_length=2048)
+            prefix: str = Field(default='', max_length=500)
+            node_names: list[str] = Field(default=[], max_length=500)
+            review_before_push: bool = False
+            acknowledge: bool = False
+
+        def folder_value(value):
+            value = value.strip().strip('/')
+            if value and (len(value) > 500 or '\\' in value or any(not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', part) or part.lower() == '.git' or part in ('.', '..') for part in value.split('/'))):
+                raise HTTPException(400, 'Use folder names with letters, numbers, dashes or underscores; use / to nest. No leading slash, no .. and no .git parts.')
+            return value
+
+        def bound_labs():
+            return {lab['git_binding']['binding_id']: dict(id=lab['id'], name=lab['name']) for lab in self.store.state['labs'] if lab.get('git_binding')}
+
+        def catalog_binding(binding_id):
+            result = repositories()
+            repo = next((r for r in result['repositories'] if r['id'] == binding_id), None)
+            if not repo: raise HTTPException(404, 'This repository is not registered on the VM. Refresh the list.')
+            with self.store.lock: before = host_identity(self.store.state.get('host', {}))
+            return repo, dict(binding_id=repo['id'], revision=repo['revision'], repository=repo, host_identity=before)
+
+        def bind_lab(lab_id, repo, node_names, review, before, event, message):
+            """Point the lab at a registration after a live status check; the exposure acknowledgement is the caller's job."""
+            binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
+                           host_identity=before, node_names=node_names, review_before_push=review)
+            call({'mode': 'status'}, binding)
+            with self.store.lock:
+                self.idle(); self.guard_pending(lab_id)
+                if before != host_identity(self.store.state.get('host', {})): raise HTTPException(409, 'VM connection changed. Connect again.')
+                lab = self.store.lab(lab_id)
+                if not lab: raise HTTPException(404, 'Lab was removed.')
+                valid = {n['name'] for n in lab['nodes'] if n.get('platform') in PLATFORMS}
+                if len(set(node_names)) != len(node_names) or not node_names or not set(node_names) <= valid:
+                    raise HTTPException(400, 'Select distinct supported devices from this lab.')
+                for other in self.store.state['labs']:
+                    if other['id'] != lab_id and other.get('git_binding', {}).get('binding_id') == repo['id']:
+                        raise HTTPException(409, 'This folder is already connected to another lab (' + other['name'] + '). Choose a different folder.')
+                old = lab.get('git_binding'); lab['git_binding'] = binding
+                try: self.store.save()
+                except OSError:
+                    if old is None: lab.pop('git_binding', None)
+                    else: lab['git_binding'] = old
+                    raise HTTPException(500, 'Could not save the repository connection.')
+            self.store.event(event, message, lab_id=lab_id)
+            return binding
+
         def call(request, binding=None):
             try: return self.invoke(request, binding)
             except ValueError as exc: raise HTTPException(409, str(exc))
@@ -448,6 +520,76 @@ class GitProgress:
                     else: lab['git_binding'] = old
                     raise HTTPException(500, 'Could not save the repository connection.')
             self.store.event('git.connect', 'Lab connected to a registered VM repository.', lab_id=lab_id)
+            return {'saved': True, 'binding': binding}
+
+        @app.get('/api/git/repositories/{binding_id}/tree')
+        def tree(binding_id: str):
+            repo, binding = catalog_binding(binding_id)
+            result = call({'mode': 'browse'}, binding)
+            labs = {}
+            with self.store.lock: labs = bound_labs()
+            folders = [dict(f, lab=labs.get(f.get('id'))) for f in result.get('folders', []) if isinstance(f, dict)]
+            return dict(repository=result.get('repository', repo), head=result.get('head', ''), files=result.get('files', []),
+                        truncated=bool(result.get('truncated')), saved=result.get('saved', {}), folders=folders)
+
+        @app.post('/api/git/repositories/{binding_id}/folders')
+        def folder(binding_id: str, data: Folder):
+            prefix = folder_value(data.prefix)
+            repo, binding = catalog_binding(binding_id)
+            created = call({'mode': 'register-prefix', 'prefix': prefix}, binding)
+            if not isinstance(created, dict) or not created.get('id'): raise HTTPException(409, 'The VM did not return the new folder registration.')
+            self.store.event('git.folder', 'Repository folder registered for lab saves.', lab_id='')
+            return {'repository': created}
+
+        @app.post('/api/labs/{lab_id}/git/destination')
+        def destination(lab_id: str, data: Destination):
+            prefix = folder_value(data.prefix)
+            with self.store.lock:
+                self.idle(); self.guard_pending(lab_id); binding = self.binding(lab_id)
+                lab = self.store.lab(lab_id); before = host_identity(self.store.state.get('host', {}))
+                if binding['host_identity'] != before: raise HTTPException(409, 'Reconnect the original VM before changing the folder.')
+                name = lab['name']; node_names = list(binding['node_names']); review = binding.get('review_before_push', False)
+                source = binding['repository'].get('prefix', '')
+            if prefix == source: raise HTTPException(409, 'This lab already saves to that folder.')
+            catalog = repositories()
+            with self.store.lock: labs = bound_labs()
+            for repo in catalog['repositories']:
+                if repo['path'] == binding['repository'].get('path') and repo['prefix'] == prefix and labs.get(repo['id'], {}).get('id') not in (None, lab_id):
+                    raise HTTPException(409, 'This folder is already connected to another lab (' + labs[repo['id']]['name'] + '). Choose a different folder.')
+            created = call({'mode': 'register-prefix', 'prefix': prefix, 'retire': True}, binding)
+            if not isinstance(created, dict) or not created.get('id'): raise HTTPException(409, 'The VM did not return the new folder registration.')
+            new_binding = bind_lab(lab_id, created, node_names, review, before, 'git.destination', 'Lab repository folder changed to ' + (prefix or 'the repository root') + '.')
+            job = None
+            if data.move_files:
+                with self.store.lock:
+                    self.idle()
+                    request = dict(source_prefix=source, push=False, message='Move ' + name + ' progress to ' + (prefix + '/' if prefix else 'the repository root'))
+                    job = dict(id=uuid.uuid4().hex, lab_id=lab_id, lab_name=name, created=now(), status='queued', message='Folder move queued.',
+                               backup_job_id='', target='move', checkpoint='', note='', pushed=False, review_before_push=False,
+                               binding_digest=digest(new_binding), request=request, want_push=True, node_names=node_names, capture_context={})
+                    self.store.state['git_jobs'].append(job)
+                    try: self.store.save()
+                    except OSError:
+                        self.store.state['git_jobs'].remove(job); raise HTTPException(500, 'The folder changed, but the file move could not be queued.')
+                job = self.schedule(job)
+            return {'saved': True, 'binding': new_binding, 'job': job}
+
+        @app.post('/api/labs/{lab_id}/git/connect')
+        def connect(lab_id: str, data: Connect):
+            if not data.acknowledge: raise HTTPException(400, 'Acknowledge that full device configurations will be committed and pushed to this repository.')
+            prefix = folder_value(data.prefix)
+            with self.store.lock:
+                self.idle(); self.guard_pending(lab_id)
+                lab = self.store.lab(lab_id)
+                if not lab: raise HTTPException(404, 'Lab not found.')
+                before = host_identity(self.store.state.get('host', {}))
+                supported = [n['name'] for n in lab['nodes'] if n.get('platform') in PLATFORMS]
+                previous = lab.get('git_binding') or {}
+                node_names = list(data.node_names) or [n for n in previous.get('node_names', []) if n in supported] or supported
+                review = data.review_before_push if data.node_names else previous.get('review_before_push', data.review_before_push)
+            created = call({'mode': 'connect', 'url': data.url.strip(), 'prefix': prefix})
+            if not isinstance(created, dict) or not created.get('id'): raise HTTPException(409, 'The VM did not return the repository registration.')
+            binding = bind_lab(lab_id, created, node_names, review, before, 'git.connect', 'Lab connected to a repository from the manager.')
             return {'saved': True, 'binding': binding}
 
         @app.post('/api/labs/{lab_id}/git/unlink')
