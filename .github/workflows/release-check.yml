@@ -20,6 +20,7 @@ jobs:
           python3 -m unittest discover -s tests -p test_install_manager.py -v
           python3 -m unittest discover -s tests -p test_git_onboard.py -v
           python3 -m unittest discover -s tests -p test_git_registrations.py -v
+          python3 -m unittest discover -s tests -p test_scaffold_lab.py -v
           python3 -m unittest discover -s tests -p test_apt_sources.py -v
           python3 -m unittest discover -s tests -p test_apt_update.py -v
           python3 -m unittest discover -s tests -p test_check_install.py -v

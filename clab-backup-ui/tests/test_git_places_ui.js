@@ -110,3 +110,24 @@ test('nested folder helpers validate each segment and preview the full destinati
  assert.equal(gitDestinationPreview('CCNP-SP','  '),'','an empty or invalid entry previews nothing');
  assert.equal(gitDestinationPreview('CCNP-SP','bad/..'),'');
 });
+test('a folder whose latest carries a restore artifact is appliable from the browser',()=>{
+ const {gitTreeModel,gitPlacesMarkup}=makeContext();
+ const restoreFiles=[
+  {path:'labs/BGP-LAB/Broken/latest/PTX1.set',size:100},
+  {path:'labs/BGP-LAB/Broken/latest/PTX1.jcfg',size:200},
+  {path:'labs/BGP-LAB/Broken/latest/manifest.json',size:300},
+  {path:'labs/BGP-LAB/working/latest/PTX1.set',size:100},        // no .jcfg -> not restorable
+  {path:'labs/BGP-LAB/working/latest/manifest.json',size:300},
+ ];
+ const model=gitTreeModel(restoreFiles,[]);
+ assert.equal(model.nodes.get('labs/BGP-LAB/Broken').restorable,true);
+ assert.equal(model.nodes.get('labs/BGP-LAB/working').restorable,false);
+ assert.equal(model.nodes.get('labs/BGP-LAB').restorable,false,'a parent folder is not itself restorable');
+ // Apply shows for a restorable folder when the browser passes an apply handler.
+ const shown=gitPlacesMarkup(model,{selected:'labs/BGP-LAB/Broken',canApply:true,canAct:true});
+ assert.match(shown,/data-git-places-action="apply"/);
+ assert.match(shown,/Apply to running lab/);
+ // Hidden for a non-restorable folder or when applying is not offered.
+ assert.doesNotMatch(gitPlacesMarkup(model,{selected:'labs/BGP-LAB/working',canApply:true,canAct:true}),/data-git-places-action="apply"/);
+ assert.doesNotMatch(gitPlacesMarkup(model,{selected:'labs/BGP-LAB/Broken',canApply:false,canAct:true}),/data-git-places-action="apply"/);
+});

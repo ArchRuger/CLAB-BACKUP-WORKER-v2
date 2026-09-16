@@ -1725,7 +1725,7 @@ flowchart LR
 ## Step 21.3 — Connect the lab and save
 
 In the **Manager UI**, open the lab and choose **Connect Git repository** or
-**More → Git repository**. After connection, **Git repository settings** is also
+the **Git repository** tab. After connection, **Git repository settings** is also
 available from the save action menu. Select
 the registered checkout, review the included devices, review the branch/destination
 and acknowledge that device configurations will be committed there. The device

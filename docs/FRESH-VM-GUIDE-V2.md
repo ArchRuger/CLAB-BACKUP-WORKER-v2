@@ -717,7 +717,7 @@ discovery smoke test does not validate EOS/Junos/IOS-XR backup.
 
 After the Git wizard reported **Registered** and **Ready**:
 
-1. Open the lab's **More → Git repository** settings.
+1. Open the lab's **Git repository** tab settings.
 2. Select the registered checkout and the devices to include; review the
    destination and save the connection.
 

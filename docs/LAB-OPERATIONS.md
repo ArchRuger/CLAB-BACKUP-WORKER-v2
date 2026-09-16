@@ -172,7 +172,7 @@ manager save after authentication or export errors. No extra Linux user is requi
 
 A student who has saved a Junos configuration can put it back onto the running node
 without destroying the lab, editing startup files, redeploying containerlab or
-rebooting the router. In **More → Git repository → View changes / History**, open a
+rebooting the router. In the **Git repository** tab → **View changes / History**, open a
 saved version and choose **Apply to running lab…**. The review screen lists the source
 version, the target nodes, each node's NOS, and whether a node already matches the saved
 state. The manager backs up the current configuration of every target first, loads the

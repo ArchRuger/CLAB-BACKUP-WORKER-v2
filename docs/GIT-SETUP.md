@@ -8,7 +8,7 @@ opens the Git terminal wizard. For a working manager, choose **Git setup / repai
 only**, or run `bash deploy/install.sh --git`. See [INSTALL.md](INSTALL.md).
 
 **From the manager:** once the VM account is signed in to GitHub CLI, a lab can also
-be connected without the terminal: open the lab → **More → Git repository** → **Connect
+be connected without the terminal: open the lab → the **Git repository** tab → **Connect
 a repository by URL**, paste the repository's HTTPS clone URL and choose its folder. See
 [Connect or switch a repository from the manager](#connect-or-switch-a-repository-from-the-manager).
 
@@ -70,7 +70,7 @@ do not press Ctrl+C. This is [GitHub CLI's login flow](https://cli.github.com/ma
 saves write `latest/`, `baseline/` or checkpoints inside it. It is separate from
 the manager's application source directory under `~/projects/`.
 
-Finally, open your lab in the manager → **More → Git repository**, select the
+Finally, open your lab in the manager → the **Git repository** tab, select the
 checkout and devices, review the destination, and save the connection settings.
 Click **Save progress**. It captures, exports, commits and pushes automatically;
 there is no separate Commit button. Confirm the save reports **Pushed** and the
@@ -98,7 +98,7 @@ browser, for a student who already has the repository and the GitHub login on th
 1. Sign in to GitHub CLI on the VM once, as your ordinary account, without sudo:
    `gh auth login --hostname github.com --git-protocol https --web`. The manager uses
    this login for every clone and push; it never asks for a token or password.
-2. Open the lab → **More → Git repository**. With no repository connected, choose
+2. Open the lab → the **Git repository** tab. With no repository connected, choose
    **Connect a repository by URL**; with the wrong one connected, choose **Use a different
    repository** and then **Connect by URL**.
 3. Paste the HTTPS clone URL (**Code → HTTPS**; a page link such as `/tree/main` is
@@ -134,7 +134,7 @@ To keep every lab of a course in a single repository, for example
 2. For the next lab, run guided setup again and choose the **same** checkout. Because
    the repository is already registered, setup offers to reuse a saved destination or
    **register a new subfolder**; choose the new subfolder and enter, for example, `eth`.
-3. In the manager, open each lab → **More → Git repository** and select its subfolder
+3. In the manager, open each lab → the **Git repository** tab and select its subfolder
    registration (each is listed with its subfolder). **Save progress** pushes that lab
    to its own subfolder, for example `bgp/latest/`, without touching the others.
 
@@ -143,7 +143,7 @@ Subfolders in one repository must not overlap: use `bgp` and `eth`, not `bgp` an
 subfolders. An administrator can register subfolders non-interactively with
 `--prefix`, described under [Advanced](#advanced-separate-owner-other-https-host-or-managed-prefix) below.
 
-Folders can also be created and changed from the manager: **More → Git repository**
+Folders can also be created and changed from the manager: the **Git repository** tab
 shows the repository's folders, **New folder…** registers another lab folder, and
 **Save this lab here** moves a lab to a folder, optionally with its saved files. See
 [Where this lab lives](GIT-PROGRESS.md#where-this-lab-lives).
@@ -281,7 +281,7 @@ Explicit sudo registration validates identity/login but does not configure them.
 It never runs Git as root. Retain custom `--remote`, `--prefix` and `--label`
 options when retrying a custom registration. For new registrations the wizard
 uses `origin` and the repository root; for existing ones it retains the selected
-settings. Once registration succeeds, reopen **More → Git repository**
+settings. Once registration succeeds, reopen the **Git repository** tab
 and select the checkout. These identity/registration repairs need no container rebuild.
 
 ## Fix a failed save

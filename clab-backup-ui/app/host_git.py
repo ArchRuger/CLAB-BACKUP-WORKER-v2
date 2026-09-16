@@ -611,11 +611,19 @@ class GitRepository:
             parts = line.split('\0', 2)
             if len(parts) == 3: commits.append({'commit': parts[0], 'time': int(parts[1]), 'message': parts[2][:500]})
         head = self.run('rev-parse', 'HEAD'); versions = []
-        paths = self.run('ls-tree', '-r', '--name-only', head, '--', self.scope('latest'), self.scope('baseline'), self.scope('checkpoints')).splitlines()
-        for path in paths:
-            if path.endswith('/manifest.json'):
-                folder = path.rsplit('/', 1)[0]
-                if self.allowed_version(folder): versions.append({'name': folder[len(self.prefix) + 1:] if self.prefix else folder, 'path': folder, 'commit': head})
+        # Every saved snapshot folder committed anywhere in this checkout, each identified by
+        # its full repository path, so a student can load base/final/broken/work states and see
+        # which one they are picking rather than an unlabelled "latest".
+        connected = {self.scope('latest'), self.scope('baseline')}
+        checkpoints = self.scope('checkpoints') + '/'
+        for path in self.run('ls-tree', '-r', '--name-only', head, limit=MAX_TOTAL).splitlines():
+            if not path.endswith('/manifest.json'): continue
+            folder = path.rsplit('/', 1)[0]
+            if not self.allowed_repo_version(folder): continue
+            here = folder in connected or (folder.startswith(checkpoints) and '/' not in folder[len(checkpoints):])
+            versions.append({'name': folder, 'path': folder, 'commit': head, 'connected': here})
+            if len(versions) >= 500: break
+        versions.sort(key=lambda version: (not version['connected'], version['path']))
         return {'commits': commits, 'versions': versions}
 
     def allowed_version(self, folder):
@@ -624,9 +632,20 @@ class GitRepository:
         prefix = self.scope('checkpoints') + '/'
         return folder.startswith(prefix) and '/' not in folder[len(prefix):] and bool(SLUG.fullmatch(folder[len(prefix):]))
 
+    def allowed_repo_version(self, folder):
+        """A snapshot folder anywhere in this checkout: any path ending in latest/baseline or
+        checkpoints/<name>. relpath() rejects traversal and .git; the manifest must still exist
+        and pass the integrity check. Lets a lab apply a saved state from a sibling folder without
+        first rebinding to it."""
+        relpath(folder)
+        parts = folder.split('/')
+        if parts[-1] in ('latest', 'baseline'):
+            return True
+        return len(parts) >= 2 and parts[-2] == 'checkpoints' and bool(SLUG.fullmatch(parts[-1]))
+
     def read_version(self, req):
         self.validate(); commit = req.get('commit'); folder = req.get('path')
-        if not isinstance(commit, str) or not HEX.fullmatch(commit) or not isinstance(folder, str) or not self.allowed_version(folder):
+        if not isinstance(commit, str) or not HEX.fullmatch(commit) or not isinstance(folder, str) or not self.allowed_repo_version(folder):
             raise ValueError('Select a listed snapshot path and exact commit.')
         code, _ = self.run('merge-base', '--is-ancestor', commit, 'HEAD', check=False)
         if code: raise ValueError('The selected commit is outside this repository branch history.')

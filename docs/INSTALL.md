@@ -266,7 +266,7 @@ The final terminal checks verify the local manager. On your workstation:
 3. Open **Grafana ↗** in the lab header: the manager starts Grafana on the VM (a few
    seconds) and shows the dashboards; confirm they and the lab map fill in.
    Right-click a node for **Capture packets** and confirm Wireshark opens.
-4. Take a backup, then in **More → Git repository** select the registered checkout.
+4. Take a backup, then in the **Git repository** tab select the registered checkout.
 5. Back in the VM terminal, run the [full installation report](HEALTH-CHECK.md):
 
    ```bash
