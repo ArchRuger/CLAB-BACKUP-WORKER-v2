@@ -106,6 +106,8 @@ def register_folder(manager, binding, prefix):
 def bind_to(manager, lab_id, prefix):
     status, result = api(manager, '/labs/%s/git/destination' % lab_id, 'POST', {'prefix': prefix, 'move_files': False})
     if status != 200:
+        if 'already saves to that folder' in (result.get('detail') or '').lower():
+            return  # the lab is already bound here; nothing to do
         die('could not point the lab at %s: %s' % (prefix, result.get('detail')))
     job = result.get('job')
     if job:

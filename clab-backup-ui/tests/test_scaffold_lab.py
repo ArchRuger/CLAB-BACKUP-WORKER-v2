@@ -61,6 +61,20 @@ class ScaffoldLabTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             scaffold.cmd_snapshot(args(slug='bgp-core', state='../etc'))
 
+    def test_init_tolerates_lab_already_bound_to_work(self):
+        def bound(manager, path, method='GET', body=None):
+            if path == '/state':
+                return 200, {'labs': [{'id': 'lab1', 'name': 'bgp-core'}]}
+            if path == '/labs/lab1/git':
+                return 200, {'binding': {'binding_id': 'bid'}}
+            if path.endswith('/folders'):
+                return 200, {'repository': {'prefix': (body or {}).get('prefix')}}
+            if path.endswith('/git/destination'):
+                return 409, {'detail': 'This lab already saves to that folder.'}
+            raise AssertionError(path)
+        patch.object(scaffold, 'api', bound).start()
+        scaffold.cmd_init(args(slug='bgp-core', states='start'))  # must not raise
+
     def test_init_is_re_runnable_when_folders_exist(self):
         def existing(manager, path, method='GET', body=None):
             if path == '/state':
