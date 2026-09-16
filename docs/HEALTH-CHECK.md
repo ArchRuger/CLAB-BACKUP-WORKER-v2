@@ -22,7 +22,7 @@ You can also select **5. Check running installation** in the installer menu.
 
 Before this final check, complete **VM connection → Save and test connection**,
 verify its saved host fingerprint, and connect the intended registered checkout
-under **More → Git repository**. You can run the report earlier for diagnostics;
+under the **Git repository** tab. You can run the report earlier for diagnostics;
 missing setup will be reported instead of assumed successful. The full install
 still performs its shorter container/version/HTTP check before browser setup.
 

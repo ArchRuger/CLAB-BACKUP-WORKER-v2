@@ -47,6 +47,10 @@ redeploy, and reach a nested Git save folder in one step. See
   can create `CCNP-SP/Labs/Week-04/BGP/Final-State` without clicking through each level.
   Every segment is validated the same way a single folder name is, on the browser, the
   manager and the VM helper.
+- **Git repository is a top-level tab.** The Git repository view moved out of the
+  *More* menu into the main workspace tab row (Topology, Nodes, **Git repository**,
+  Backup history), so saving progress and *Apply to running lab…* are one click from
+  the lab. *More* now holds Credentials and Action logs.
 - Live device restore uses the manager's direct node-SSH path and touches no host helper.
   The VM Git helper does gain schema-2 support so it can save and read the new restore
   artifact, so refresh it with `setup-git.sh --refresh` (the installer does this) and

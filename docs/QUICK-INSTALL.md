@@ -202,7 +202,7 @@ page as **Already running on the VM**; click **Import**.
 
 ## 12. Save to Git
 
-1. **More → Git repository** → select the registered checkout and the devices → save.
+1. Open the **Git repository** tab → select the registered checkout and the devices → save.
 2. **Save progress** → wait for **Pushed** → check the files on GitHub.
 
 ## 13. Check everything

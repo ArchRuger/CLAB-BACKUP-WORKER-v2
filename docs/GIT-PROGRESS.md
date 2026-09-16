@@ -57,7 +57,7 @@ No additional Linux account is needed on a standalone VM. Linux and GitHub
 usernames do not need to match. Existing working installations should upgrade
 with `start-manager.sh` or `setup-git.sh --refresh` and retain their current owner.
 
-In the lab, choose **More → Git repository**, select the registered checkout and
+In the lab, choose the **Git repository** tab, select the registered checkout and
 devices, review the destination and save the connection. **Save progress** then
 captures, commits and pushes automatically. A separate Commit button is not needed.
 
@@ -179,7 +179,7 @@ another lab's folder.
 
 ## Where this lab lives
 
-**More → Git repository** shows the connected repository as a file browser would: the
+The **Git repository** tab shows the connected repository as a file browser would: the
 folder path at the top, a folder outline on the left and the contents of the selected
 folder on the right. The listing is the repository's current commit as it is on the VM,
 so it matches what GitHub shows once the last save was pushed. The manager reads the
@@ -284,7 +284,7 @@ flowchart TD
 | Commit exists; push failed or review is required | Review the recorded commit and use **Push saved progress**. No new capture is needed. |
 | Remote advanced / push rejected | Inspect the repository as Ben. Resolve divergence outside the app; never force push merely to clear the status. |
 | Unexpected branch, URL, owner or repository identity | Restore the registered destination or deliberately register/reconnect the intended checkout after resolving pending work. |
-| The wrong repository is connected | Choose **Use a different repository** in **More → Git repository**: pick another registered checkout, or connect the right one by its HTTPS URL. Nothing is deleted from either repository; files already saved stay where they are. |
+| The wrong repository is connected | Choose **Use a different repository** in the **Git repository** tab: pick another registered checkout, or connect the right one by its HTTPS URL. Nothing is deleted from either repository; files already saved stay where they are. |
 | The lab saves to the wrong folder | Select the intended folder in **Where this lab lives** and choose **Save this lab here**, optionally moving the files already saved. |
 | Helper unavailable or older than the manager | Run `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh` from the source that matches the running manager and refresh repository status. |
 | Manager restarted during a save | Open the recorded job and retry. The coordinator reconciles the recorded operation with the VM journal rather than silently recapturing. |
@@ -317,7 +317,7 @@ A saved Junos configuration can be applied to the running lab in two ways, both 
 which converge the running node to exactly the saved configuration without a reboot or
 a containerlab redeploy:
 
-- **From the folder browser (simplest).** In **More → Git repository → Where this lab
+- **From the folder browser (simplest).** In the **Git repository** tab → **Where this lab
   lives**, select any folder that holds a saved Junos state (its `latest/` carries a
   restore-grade candidate) and click **Apply to running lab…**. The lab does **not** have
   to be connected to that folder — you can keep saving wherever you save and still apply
