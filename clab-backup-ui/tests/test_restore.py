@@ -183,6 +183,42 @@ class RestoreServiceTests(unittest.TestCase):
         # PTX1's saved artifact still says juniper; running platform now EOS -> platform mismatch
         self.assertTrue(row is None or not row['eligible'])
 
+    def _fake_git_folder(self):
+        import base64, hashlib
+        setraw = DESIRED_SET.encode(); hraw = DESIRED_HIER.encode()
+        snap = {'manifest': {'schema': 2, 'lab_id': 'lab1', 'lab_name': 'clabllm-dev', 'node_names': ['PTX1'],
+                             'files': [{'path': 'PTX1.set', 'size': len(setraw), 'sha256': hashlib.sha256(setraw).hexdigest(),
+                                        'node': 'PTX1', 'platform': 'juniper_cjunosevolved', 'format': 'junos-display-set',
+                                        'restore_artifact': 'PTX1.jcfg', 'restore_size': len(hraw),
+                                        'restore_sha256': hashlib.sha256(hraw).hexdigest(),
+                                        'restore_format': 'junos-hierarchical', 'restore_capable': True}]},
+                'files': {'PTX1.set': base64.b64encode(setraw).decode(), 'PTX1.jcfg': base64.b64encode(hraw).decode()}}
+
+        class FakeGit:
+            calls = []
+            def binding(self, lab_id):
+                return {'binding_id': 'b', 'revision': 'r', 'repository': {'prefix': 'labs/BGP-LAB/Base'}}
+            def invoke(self, request, binding=None):
+                FakeGit.calls.append(request)
+                return {'ready': True, 'head': 'a' * 40} if request['mode'] == 'status' else {'snapshot': snap}
+        return FakeGit()
+
+    def test_folder_source_applies_a_sibling_folder_without_rebinding(self):
+        self.svc.git = self._fake_git_folder()
+        desc, candidates = self.svc.resolve_source('lab1', {'type': 'folder', 'path': 'labs/BGP-LAB/Broken/latest'})
+        self.assertEqual(desc['type'], 'folder')
+        self.assertEqual(desc['folder'], 'labs/BGP-LAB/Broken')
+        self.assertEqual(desc['restore_capable_nodes'], 1)
+        self.assertIn('PTX1', candidates)
+        self.assertIn('host-name FINAL', candidates['PTX1']['candidate'])
+        # It read the folder's own path at HEAD (no rebinding).
+        reads = [c for c in self.svc.git.calls if c['mode'] == 'read-version']
+        self.assertEqual(reads[0]['path'], 'labs/BGP-LAB/Broken/latest')
+        # Preflight over the folder source finds the node eligible.
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            review = self.svc.preflight('lab1', {'type': 'folder', 'path': 'labs/BGP-LAB/Broken/latest'}, {'PTX1'})
+        self.assertTrue(any(r['name'] == 'PTX1' and r['eligible'] for r in review['targets']))
+
     def test_source_without_artifact_offers_no_targets(self):
         # A snapshot whose files have no restore_artifact (legacy) yields no candidates.
         legacy = copy.deepcopy(self.backup)

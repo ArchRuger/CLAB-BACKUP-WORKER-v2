@@ -90,7 +90,7 @@ function gitRenderRepository(id,context,catalog){
   if(!panel)return;
   if(!bindingId){panel.innerHTML='<p class="git-empty-folder">Choose a repository folder above to see what is in it.</p>';return;}
   const browsed=repositories.find(value=>value.id===bindingId),connected=!!binding&&!!browsed&&browsed.path===repo.path;
-  gitPlacesShow(panel,id,bindingId,{current:binding?.binding_id||'',connected,onUse:(path,model,tree)=>gitUseFolder(id,path,model,tree),onNew:(path,model,tree)=>gitNewFolder(id,path,model,tree)});
+  gitPlacesShow(panel,id,bindingId,{current:binding?.binding_id||'',connected,onUse:(path,model,tree)=>gitUseFolder(id,path,model,tree),onNew:(path,model,tree)=>gitNewFolder(id,path,model,tree),onApply:typeof restoreFromFolder==='function'?(path,model,tree)=>restoreFromFolder(id,path,tree):undefined});
  };
  if(form){
   const change=()=>{const selectedRepo=repositories.find(value=>value.id===$('git-binding-id').value);$('git-binding-destination').textContent=selectedRepo?gitRegisteredDestination(selectedRepo):'';const changed=gitBindingChanged(binding,selectedRepo);$('git-exposure-label').hidden=!changed;$('git-exposure').required=changed;$('git-exposure').checked=false;showPlaces(selectedRepo?.id||binding?.binding_id||'');};

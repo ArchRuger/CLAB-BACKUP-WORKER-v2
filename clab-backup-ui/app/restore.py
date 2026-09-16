@@ -183,8 +183,29 @@ class RestoreService:
             text = {name: base64.b64decode(raw).decode('utf-8') for name, raw in snap['files'].items()}
             desc = {'type': 'backup', 'backup_job_id': backup['id'],
                     'captured_at': manifest.get('captured_at', ''), 'lab_name': manifest.get('lab_name', '')}
+        elif stype == 'folder':
+            # Apply a saved state directly from any folder of the connected repository at its
+            # current commit, without first pointing the lab at that folder. `path` is the full
+            # repo-relative snapshot folder, e.g. labs/BGP-LAB/Broken/latest.
+            with self.store.lock:
+                binding = self.git.binding(lab_id)
+            path = (source.get('path') or '').strip('/')
+            if not path:
+                raise HTTPException(400, 'Choose a saved folder to apply.')
+            try:
+                status = self.git.invoke({'mode': 'status'}, binding)
+                if not status.get('ready'):
+                    raise ValueError(status.get('problem') or 'Repository needs attention before applying a saved state.')
+                result = self.git.invoke({'mode': 'read-version', 'commit': status.get('head', ''), 'path': path}, binding)
+                manifest, files = decoded_snapshot(result)
+            except ValueError as exc:
+                raise HTTPException(409, str(exc))
+            text = {name: raw.decode('utf-8') for name, raw in files.items()}
+            folder = path[:-len('/latest')] if path.endswith('/latest') else path
+            desc = {'type': 'folder', 'path': path, 'folder': folder,
+                    'captured_at': manifest.get('captured_at', ''), 'lab_name': manifest.get('lab_name', '')}
         else:
-            raise HTTPException(400, 'Choose a saved Git version or a saved capture as the restore source.')
+            raise HTTPException(400, 'Choose a saved Git version, a saved folder or a saved capture as the restore source.')
 
         candidates = {}
         for entry in manifest.get('files', []):

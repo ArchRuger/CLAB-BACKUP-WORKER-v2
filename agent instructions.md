@@ -47,8 +47,12 @@ changed) → per node `apply_candidate`+reconnect+`confirm` → post backup (`re
 `POST …/restore`, `GET /api/restore/jobs/{id}`; `/api/state` carries `restore_jobs`;
 `remove_lab` drops them. (5) UI: `app/static/restore.js` (`restoreReview` posts preflight and
 renders the *Replace running configuration* review; `restoreShowJob` polls; danger button);
-`git-progress.js` `gitViewVersion` shows **Apply to running lab…** when `restore_supported`;
-`git-places.js` `gitFolderPath`/`gitDestinationPreview` create a nested destination in one step
+`git-progress.js` `gitViewVersion` shows **Apply to running lab…** when `restore_supported`.
+Apply straight from the folder browser too: `resolve_source` accepts `{type:'folder',path:'<repo>/latest'}`
+and reads it at HEAD, so a lab applies a saved state from any folder **without rebinding**
+(`host_git.allowed_repo_version` lets `read_version` reach any snapshot folder of the checkout;
+`git_tree` model marks a folder `restorable` when its `latest/` has a `.jcfg`, and `gitPlacesShow`'s
+`onApply` runs `restoreFromFolder`). `git-places.js` `gitFolderPath`/`gitDestinationPreview` create a nested destination in one step
 with a live result preview; `restore.js?v=<release>` in index.html; every interpolation via
 `esc()`; new `.button.danger` + `.restore-*` CSS. (6) Tests: `tests/test_restore_junos.py`
 (scripted fake channel), `tests/test_restore.py` (fake connector+runner, backup source),

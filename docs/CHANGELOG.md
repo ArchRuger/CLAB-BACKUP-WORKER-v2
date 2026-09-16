@@ -11,8 +11,11 @@ redeploy, and reach a nested Git save folder in one step. See
 [GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node) and
 [LAB-OPERATIONS.md](LAB-OPERATIONS.md#apply-a-saved-configuration-to-a-running-node).
 
-- **Apply to running lab.** Open a saved Junos version in *View changes / History* and
-  choose **Apply to running lab…**. The manager shows a review screen (source, target
+- **Apply to running lab.** Select any folder in *Where this lab lives* that holds a
+  saved Junos state and choose **Apply to running lab…** — the lab does not have to be
+  connected to that folder, so a repository of named states (Base, working, Final,
+  Broken) is a pick-and-load library. The same action is also on a saved version in
+  *View changes / History*. The manager shows a review screen (source, target
   nodes, whether each already matches the saved state, the safety notes), backs up the
   current configuration of every target first, then loads the saved configuration onto
   the running node and activates it with a confirmed commit. This is a complete

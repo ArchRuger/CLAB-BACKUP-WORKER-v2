@@ -39,6 +39,17 @@ async function restoreFromVersion(labId, source, label) {
  await restoreReview(labId, source, label);
 }
 
+// Entry point from the folder browser ("Where this lab lives"): apply a folder's saved
+// state to the running lab directly, without pointing the lab at that folder first.
+async function restoreFromFolder(labId, folderPrefix, tree) {
+ const prefix = String(folderPrefix || '').replace(/\/+$/, '');
+ if (!prefix) { notify('Choose a saved folder to apply.'); return; }
+ const name = prefix.split('/').filter(Boolean).pop() || prefix;
+ const repoName = tree && tree.repository ? gitRepoName(tree.repository) : '';
+ await restoreReview(labId, { type: 'folder', path: prefix + '/latest' },
+  (repoName ? repoName + ' · ' : '') + name + ' (latest saved state)');
+}
+
 async function restoreReview(labId, source, label) {
  const dialog = opDialog('restore-review-dialog', 'Replace running configuration',
   '<p role="status">Checking the lab, the saved version and each running node…</p>');

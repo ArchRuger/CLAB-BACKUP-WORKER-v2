@@ -624,9 +624,20 @@ class GitRepository:
         prefix = self.scope('checkpoints') + '/'
         return folder.startswith(prefix) and '/' not in folder[len(prefix):] and bool(SLUG.fullmatch(folder[len(prefix):]))
 
+    def allowed_repo_version(self, folder):
+        """A snapshot folder anywhere in this checkout: any path ending in latest/baseline or
+        checkpoints/<name>. relpath() rejects traversal and .git; the manifest must still exist
+        and pass the integrity check. Lets a lab apply a saved state from a sibling folder without
+        first rebinding to it."""
+        relpath(folder)
+        parts = folder.split('/')
+        if parts[-1] in ('latest', 'baseline'):
+            return True
+        return len(parts) >= 2 and parts[-2] == 'checkpoints' and bool(SLUG.fullmatch(parts[-1]))
+
     def read_version(self, req):
         self.validate(); commit = req.get('commit'); folder = req.get('path')
-        if not isinstance(commit, str) or not HEX.fullmatch(commit) or not isinstance(folder, str) or not self.allowed_version(folder):
+        if not isinstance(commit, str) or not HEX.fullmatch(commit) or not isinstance(folder, str) or not self.allowed_repo_version(folder):
             raise ValueError('Select a listed snapshot path and exact commit.')
         code, _ = self.run('merge-base', '--is-ancestor', commit, 'HEAD', check=False)
         if code: raise ValueError('The selected commit is outside this repository branch history.')

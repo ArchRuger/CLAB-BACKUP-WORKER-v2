@@ -313,10 +313,18 @@ the current topology as the topology used for that historical capture.
 
 ## Apply a saved configuration to a running node
 
-A saved Junos version can be applied to the running lab from the same **View changes /
-History** view. Open a version and choose **Apply to running lab…**. This converges the
-running node to exactly the saved configuration without a reboot or a containerlab
-redeploy.
+A saved Junos configuration can be applied to the running lab in two ways, both of
+which converge the running node to exactly the saved configuration without a reboot or
+a containerlab redeploy:
+
+- **From the folder browser (simplest).** In **More → Git repository → Where this lab
+  lives**, select any folder that holds a saved Junos state (its `latest/` carries a
+  restore-grade candidate) and click **Apply to running lab…**. The lab does **not** have
+  to be connected to that folder — you can keep saving wherever you save and still apply
+  Base, working, Final or Broken straight from their folders. This makes a repository of
+  named states a pick-and-load library.
+- **From a saved version.** Open a version in **View changes / History** and choose
+  **Apply to running lab…** to apply that specific commit's snapshot.
 
 ```mermaid
 flowchart TD

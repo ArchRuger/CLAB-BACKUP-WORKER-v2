@@ -34,6 +34,9 @@ function gitTreeModel(files,folders){
  const finish=dir=>{dir.dirs.sort((a,b)=>a.name.localeCompare(b.name));dir.files.sort((a,b)=>a.name.localeCompare(b.name));dir.size=dir.files.reduce((sum,file)=>sum+file.size,0);dir.count=dir.files.length;for(const child of dir.dirs){finish(child);dir.size+=child.size;dir.count+=child.count;}};
  finish(root);
  for(const dir of nodes.values()){if(!dir.registration)continue;dir.pending=!dir.count;for(const child of dir.dirs){if(child.name==='latest'||child.name==='baseline'||child.name==='checkpoints'){child.managed=child.name;if(child.name==='checkpoints')for(const grandchild of child.dirs)grandchild.managed='checkpoint';}}}
+ // A folder holds an appliable saved state when its latest/ carries a Junos restore
+ // artifact (.jcfg), whether or not the folder is still registered to a lab.
+ for(const dir of nodes.values()){const latest=dir.dirs.find(child=>child.name==='latest');dir.restorable=!!(latest&&latest.files.some(file=>/\.jcfg$/i.test(file.name)));}
  return {root,nodes};
 }
 function gitOwningFolder(model,path){let best=null;for(const dir of model.nodes.values()){if(!dir.registration)continue;if(dir.path===path||dir.path===''||path.startsWith(dir.path+'/')){if(!best||dir.path.length>best.path.length)best=dir;}}return best;}
@@ -71,7 +74,9 @@ function gitPlacesMarkup(model,view){
   ...dir.files.map(file=>`<tr class="row"><td><span class="name"><i class="git-file-icon"></i>${esc(file.name)}</span></td><td class="desc">${esc(file.name==='manifest.json'?'Save details: devices, checksums, capture time':/\.(cfg|conf|txt|set)$/i.test(file.name)?'Device configuration':'File')}</td><td class="size">${esc(gitSize(file.size))}</td></tr>`)];
  const choice=gitFolderChoice(model,dir.path,view.current),creatable=gitCanCreateIn(model,dir.path,view.current);
  const saved=view.saved?.latest?'Last save '+utcDisplay(view.saved.latest*1000):view.current&&gitLabFolder(model,view.current)?'No save yet':'';
- const actions=view.canAct?`<button type="button" class="button secondary" data-git-places-action="new" ${creatable?'':'disabled'} title="${esc(creatable?'Create a folder here':'Folders cannot be created inside a lab folder')}">New folder…</button><button type="button" class="button primary" data-git-places-action="use" ${choice.allowed?'':'disabled'} title="${esc(choice.reason)}">${esc(view.connected?'Save this lab here':'Choose this folder')}</button>`:'';
+ const applyable=view.canApply&&dir.restorable;
+ const applyBtn=applyable?`<button type="button" class="button danger" data-git-places-action="apply" title="${esc('Load this saved configuration onto the running lab (no reboot)')}">Apply to running lab…</button>`:'';
+ const actions=view.canAct?`${applyBtn}<button type="button" class="button secondary" data-git-places-action="new" ${creatable?'':'disabled'} title="${esc(creatable?'Create a folder here':'Folders cannot be created inside a lab folder')}">New folder…</button><button type="button" class="button primary" data-git-places-action="use" ${choice.allowed?'':'disabled'} title="${esc(choice.reason)}">${esc(view.connected?'Save this lab here':'Choose this folder')}</button>`:applyBtn;
  return `<div class="git-places-head"><nav class="git-crumbs" aria-label="Repository folder">${chips}</nav><div class="actions">${actions}</div></div>
  <div class="git-places-body"><div class="git-outline" aria-label="Folders">${outline(model.root)}</div><div class="git-listing">${rows.length?`<table><thead><tr><th>Name</th><th>What it is</th><th>Size</th></tr></thead><tbody>${rows.join('')}</tbody></table>`:`<p class="git-empty-folder">${esc(dir.pending?'This folder appears in the repository after the first save.':'Nothing here yet.')}</p>`}</div></div>
  <div class="git-places-foot"><span>${esc(saved)}${view.head?(saved?' · ':'')+'as of commit '+esc(String(view.head).slice(0,10)):''}${view.truncated?' · list shortened to the first 4000 files':''}</span><span>${choice.allowed?esc(choice.reason):esc(choice.reason)}</span></div>`;
@@ -87,11 +92,12 @@ async function gitPlacesShow(container,labId,bindingId,options={}){
  if(gitPlacesState.bindingId!==bindingId||!model.nodes.has(gitPlacesState.selected))gitPlacesState.selected=gitLabFolder(model,options.current)?.path??'';
  Object.assign(gitPlacesState,{labId,bindingId,model,tree});
  const draw=()=>{
-  container.innerHTML=gitPlacesMarkup(model,{selected:gitPlacesState.selected,current:options.current,repoName:gitRepoName(tree.repository),head:tree.head,saved:tree.saved,truncated:tree.truncated,canAct:options.canAct!==false,connected:options.connected});
+  container.innerHTML=gitPlacesMarkup(model,{selected:gitPlacesState.selected,current:options.current,repoName:gitRepoName(tree.repository),head:tree.head,saved:tree.saved,truncated:tree.truncated,canAct:options.canAct!==false,connected:options.connected,canApply:!!options.onApply});
   for(const element of container.querySelectorAll('[data-git-place]'))element.onclick=event=>{event.preventDefault();gitPlacesState.selected=element.dataset.gitPlace;draw();};
-  const use=container.querySelector('[data-git-places-action="use"]'),create=container.querySelector('[data-git-places-action="new"]');
+  const use=container.querySelector('[data-git-places-action="use"]'),create=container.querySelector('[data-git-places-action="new"]'),apply=container.querySelector('[data-git-places-action="apply"]');
   if(use&&options.onUse)use.onclick=()=>opTask(null,()=>options.onUse(gitPlacesState.selected,model,tree));
   if(create&&options.onNew)create.onclick=()=>opTask(null,()=>options.onNew(gitPlacesState.selected,model,tree));
+  if(apply&&options.onApply)apply.onclick=()=>opTask(null,()=>options.onApply(gitPlacesState.selected,model,tree));
  };
  draw();return tree;
 }
