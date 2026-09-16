@@ -8,10 +8,30 @@ from unittest.mock import patch
 import uuid
 import zipfile
 
+from fastapi import HTTPException
+
 from app import __version__
-from app.git_progress import GitProgress, captured_snapshot, decoded_snapshot, pending_progress, PROTOCOL
+from app.git_progress import GitProgress, captured_snapshot, decoded_snapshot, pending_progress, PROTOCOL, version_label, resolve_version_path
 from app.store import Store
 import test_discovery as discovery_tests
+
+
+class VersionPathTests(unittest.TestCase):
+    """Labelling and path resolution for saved versions across folders."""
+    def test_version_label_names_the_folder_and_state(self):
+        self.assertEqual(version_label('reference/broken-01/latest'), 'reference/broken-01 · latest')
+        self.assertEqual(version_label('work/baseline'), 'work · baseline')
+        self.assertEqual(version_label('work/checkpoints/attempt-1'), 'work · checkpoint · attempt-1')
+        self.assertEqual(version_label('latest'), 'latest')
+
+    def test_resolve_version_path_handles_relative_and_full_paths(self):
+        binding = {'repository': {'prefix': 'labs/work'}}
+        self.assertEqual(resolve_version_path(binding, 'latest'), 'labs/work/latest')          # bare -> connected folder
+        self.assertEqual(resolve_version_path(binding, 'checkpoints/try1'), 'labs/work/checkpoints/try1')
+        self.assertEqual(resolve_version_path(binding, 'reference/broken/latest'), 'reference/broken/latest')  # full -> unchanged
+        for bad in ('reference/notasnapshot', '../etc/latest', 'reference/.git/latest', ''):
+            with self.assertRaises(HTTPException, msg=bad):
+                resolve_version_path(binding, bad)
 
 
 class GitProgressTests(unittest.TestCase):

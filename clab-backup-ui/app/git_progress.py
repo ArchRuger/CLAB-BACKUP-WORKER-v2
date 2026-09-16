@@ -57,6 +57,38 @@ def repo_path(binding, value):
     return (prefix + '/' if prefix else '') + value
 
 
+SNAP_PART = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}')
+
+
+def version_label(path):
+    """A human label for a saved-version folder: '<lab folder> · latest', or a checkpoint."""
+    parts = [p for p in str(path or '').split('/') if p]
+    if not parts: return str(path or '')
+    if parts[-1] in ('latest', 'baseline'):
+        folder, state = '/'.join(parts[:-1]), parts[-1]
+    elif len(parts) >= 2 and parts[-2] == 'checkpoints':
+        folder, state = '/'.join(parts[:-2]), 'checkpoint · ' + parts[-1]
+    else:
+        return '/'.join(parts)
+    return (folder + ' · ' + state) if folder else state
+
+
+def resolve_version_path(binding, value):
+    """Accept a bare snapshot name (relative to the connected folder) or a full repo-relative
+    snapshot folder, and return the path the helper reads (it re-validates with allowed_repo_version)."""
+    value = (value or '').strip('/')
+    parts = value.split('/') if value else []
+    if not parts:
+        raise HTTPException(400, 'Choose a saved version.')
+    if any(not SNAP_PART.fullmatch(part) or part in ('.', '..') or part.lower() == '.git' for part in parts):
+        raise HTTPException(400, 'Choose a safe saved version path.')
+    if not (parts[-1] in ('latest', 'baseline') or (len(parts) >= 2 and parts[-2] == 'checkpoints')):
+        raise HTTPException(400, 'Choose latest, baseline or a named checkpoint version.')
+    # A bare form saves into the connected folder; a full repo path passes through unchanged.
+    bare = value in ('latest', 'baseline') or (len(parts) == 2 and parts[0] == 'checkpoints')
+    return repo_path(binding, value) if bare else value
+
+
 def pending_progress(state, lab_id=None):
     return any((not lab_id or j.get('lab_id') == lab_id) and
                j.get('status') not in ('synced', 'dismissed', 'capture_incomplete', 'failed') and
@@ -727,15 +759,15 @@ class GitProgress:
         def history(lab_id: str):
             with self.store.lock: binding = self.binding(lab_id)
             result = call({'mode': 'history'}, binding)
-            prefix = binding['repository'].get('prefix', '').strip('/')
+            # Versions come back with their full repository path; label each so a student sees
+            # base/final/broken/work rather than an unlabelled "latest".
             for row in result.get('versions', []):
-                full = repo_path(binding, row['path'])
-                row['path'] = full[len(prefix) + 1:] if prefix else full
+                row['label'] = version_label(row.get('path', ''))
             return result
 
         def version_data(lab_id, data):
             with self.store.lock: binding = self.binding(lab_id)
-            result = call({'mode': 'read-version', 'commit': data.commit, 'path': repo_path(binding, data.path)}, binding)
+            result = call({'mode': 'read-version', 'commit': data.commit, 'path': resolve_version_path(binding, data.path)}, binding)
             try: return decoded_snapshot(result)
             except ValueError as exc: raise HTTPException(409, str(exc))
 

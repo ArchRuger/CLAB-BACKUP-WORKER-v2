@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import restore_junos as junos
 from .discovery import discovery_fresh, node_available
-from .git_progress import captured_snapshot, decoded_snapshot, digest, host_identity, repo_path
+from .git_progress import captured_snapshot, decoded_snapshot, digest, host_identity, repo_path, resolve_version_path
 from .inventory import PLATFORMS
 from .lab_operations import RESTORE_BUSY, operation_busy, scrub
 from .node_services import connect
@@ -161,7 +161,7 @@ class RestoreService:
                 binding = self.git.binding(lab_id)
             try:
                 result = self.git.invoke(
-                    {'mode': 'read-version', 'commit': source['commit'], 'path': repo_path(binding, source['path'])},
+                    {'mode': 'read-version', 'commit': source['commit'], 'path': resolve_version_path(binding, source['path'])},
                     binding)
                 manifest, files = decoded_snapshot(result)
             except ValueError as exc:

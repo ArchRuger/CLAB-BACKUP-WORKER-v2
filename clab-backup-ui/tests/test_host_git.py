@@ -439,6 +439,20 @@ class HostGitPlacesTests(HostGitTests):
             with self.assertRaises(ValueError, msg=bad):
                 self.worker.dispatch(self.request('read-version', commit=result['commit'], path=bad))
 
+    def test_history_lists_saved_folders_across_the_checkout_with_full_paths(self):
+        self.publish(push=False)  # connected folder (prefix '') -> latest/
+        other_binding, other = self.sibling('bgp')
+        req = {'mode': 'publish', 'binding_id': other_binding['id'], 'revision': other_binding['revision'],
+               'operation_id': uuid.uuid4().hex, 'expected_head': self.raw('rev-parse', 'HEAD'),
+               'target': 'latest', 'push': False, 'snapshot': self.capture('bgp state\n')}
+        other.dispatch(req)
+        hist = self.worker.dispatch(self.request('history'))
+        by_path = {v['path']: v for v in hist['versions']}
+        self.assertIn('latest', by_path)          # the connected folder's own latest
+        self.assertIn('bgp/latest', by_path)       # a sibling folder, by its full repository path
+        self.assertTrue(by_path['latest']['connected'])
+        self.assertFalse(by_path['bgp/latest']['connected'])
+
     def test_register_validates_the_checkout_like_the_wizard(self):
         binding = {'id': uuid.uuid4().hex, 'label': 'repo / bgp', 'owner': 'ben', 'path': str(self.repo), 'home': str(self.home),
                    'remote': 'origin', 'branch': '', 'push_url': '', 'prefix': 'bgp', 'revision': ''}

@@ -1,0 +1,20 @@
+# Template lab topology. Copy it to your labs directory as <lab-slug>.clab.yaml and edit.
+#
+# The `name:` and the node names below become the identity of every saved state the manager
+# records (each node is stored as clab-<name>-<node>). Keep them IDENTICAL on the build box and
+# on every student clone, and do not rename them once you have recorded states — renaming
+# orphans the saved states. See docs/NAMING.md.
+#
+# This example is a two-router eBGP lab: pe1 (AS 65001) peers with pe2 (AS 65002) over pe1:eth4
+# <-> pe2:eth4. Names are role-based and lowercase; the platform lives in `kind:`/`image:`.
+name: bgp-core
+topology:
+  nodes:
+    pe1:
+      kind: juniper_cjunosevolved
+      image: archtop/cjunosevolved:26.2R1.7-EVO
+    pe2:
+      kind: juniper_cjunosevolved
+      image: archtop/cjunosevolved:26.2R1.7-EVO
+  links:
+    - endpoints: ["pe1:eth4", "pe2:eth4"]

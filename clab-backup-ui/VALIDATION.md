@@ -83,6 +83,25 @@ straight from its folder succeeded and verified, the running node converged to t
 config (`peer-as 65002`, the export policy), the lab's binding was **unchanged** (no
 rebinding), and the container did not restart.
 
+## Load version labels every folder, and the lab scaffold
+
+Two follow-ups after the same feedback. **Load version / History** used to show a bare "latest";
+it now lists every saved folder in the checkout, each labelled by its path
+(`labs/BGP-LAB/Broken · latest`, the connected one tagged *this lab*), and the version and Apply
+actions read any of them by their full path (`host_git.allowed_repo_version` broadened
+`read-version`; `git_progress.resolve_version_path` accepts a full or connected-relative path).
+Live-verified on the dev VM: the history listed `labs/BGP-LAB/{Base, working, Final, Broken}` each
+as its own labelled version, and loading `labs/BGP-LAB/Final/latest` by path returned the Final
+config with `restore_supported`.
+
+`deploy/scaffold-lab.py` plus `deploy/lab-template/` and `docs/NAMING.md` standardise a course:
+`init <slug>` registers `<slug>/reference/{start,solution,broken-01}` and `<slug>/work` and binds
+saves to `work`; `snapshot <slug> <state>` captures the running config into
+`<slug>/reference/<state>` and rebinds to `work`. Live-run on the dev VM: `init demo-lab` created
+the structure and bound the lab to `demo-lab/work`, and `snapshot demo-lab start` captured and
+pushed the running config into `demo-lab/reference/start`; the demo folder was then removed. The
+scaffold's orchestration is unit-tested (`test_scaffold_lab.py`).
+
 ## The restore mechanism proven on both Junos platforms (direct, pre-product)
 
 The load-override + confirmed-commit sequence was proven end-to-end against **both**
