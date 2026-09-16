@@ -3,7 +3,14 @@ import json
 import re
 import yaml
 
-JUNOS_DRIVER = {'os': 'junipernetworks.junos.junos', 'command': 'show configuration | display set | no-more', 'suffix': 'set'}
+# Junos keeps two representations. `command`/`suffix` are the existing human- and
+# diff-friendly display-set backup. `restore`/`restore_format`/`restore_suffix` add a
+# whole-device candidate: the hierarchical (curly-brace) configuration that
+# `load override terminal` can apply as a complete replacement. Display-set output can
+# only be merged with `load set`, so it cannot remove statements a snapshot dropped and
+# is unsuitable for a desired-state restore. Live restore is Junos-only for now.
+JUNOS_DRIVER = {'os': 'junipernetworks.junos.junos', 'command': 'show configuration | display set | no-more', 'suffix': 'set',
+                'restore': 'show configuration | no-more', 'restore_format': 'junos-hierarchical', 'restore_suffix': 'jcfg'}
 JUNOS_SWITCHES = ('juniper_vqfx', 'juniper_vjunosswitch')
 JUNOS_PLATFORMS = ('juniper_cjunosevolved', *JUNOS_SWITCHES)
 GENERIC_JUNOS = ('junos', 'junipernetworks.junos.junos')

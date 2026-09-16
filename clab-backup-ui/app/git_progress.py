@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__
 from .discovery import PinnedHostKey, vm_password
-from .downloads import component, short_name, stored_path
+from .downloads import component, short_name, stored_path, stored_restore_path
 from .inventory import PLATFORMS
 from .lab_operations import operation_busy, scrub, GIT_BUSY
 from .runner import now
@@ -132,26 +132,49 @@ def captured_snapshot(store, backup, context=None):
             raise ValueError('Use nonempty configs up to 2 MiB each and 16 MiB per snapshot.')
         try: raw.decode('utf-8')
         except UnicodeError: raise ValueError('Captured configuration is not valid UTF-8 text.')
+        # Whole-device restore candidate captured beside the backup (Junos only for now).
+        restore_raw = None
+        rpath = stored_restore_path(store, backup, node)
+        if rpath is not None:
+            with rpath.open('rb') as stream: restore_raw = stream.read(MAX_FILE + 1)
+            total += len(restore_raw)
+            if not restore_raw or len(restore_raw) > MAX_FILE or total > MAX_TOTAL:
+                raise ValueError('Use nonempty configs up to 2 MiB each and 16 MiB per snapshot.')
+            try: restore_raw.decode('utf-8')
+            except UnicodeError: raise ValueError('Captured restore candidate is not valid UTF-8 text.')
         label = component(short_name(node, backup.get('lab_name', '')))
         suffix = PLATFORMS[platform]['suffix']
         name = f'{label}.{suffix}'
         names.setdefault(name.casefold(), []).append(node['name'])
-        rows.append((node, name, raw))
+        rows.append((node, name, raw, restore_raw))
     metadata = []
-    for node, name, raw in rows:
+    restore_capable = 0
+    for node, name, raw, restore_raw in rows:
         if len(names[name.casefold()]) > 1:
             base, suffix = name.rsplit('.', 1)
             name = f'{base}-{hashlib.sha256(node["name"].encode()).hexdigest()[:12]}.{suffix}'
         if name.casefold() == 'manifest.json' or name in files: raise ValueError('Capture filenames collide.')
         files[name] = base64.b64encode(raw).decode('ascii')
-        metadata.append(dict(path=name, size=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
-                             node=node['name'], short_name=node.get('short_name', ''),
-                             platform=node['platform'], format=FORMATS[node['platform']]))
-    manifest = dict(schema=1, lab_id=backup['lab_id'], lab_name=backup.get('lab_name', ''),
+        entry = dict(path=name, size=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
+                     node=node['name'], short_name=node.get('short_name', ''),
+                     platform=node['platform'], format=FORMATS[node['platform']])
+        if restore_raw is not None:
+            rsuffix = PLATFORMS[node['platform']].get('restore_suffix', 'restore')
+            rname = name.rsplit('.', 1)[0] + '.' + rsuffix
+            if rname.casefold() == 'manifest.json' or rname in files: raise ValueError('Capture filenames collide.')
+            files[rname] = base64.b64encode(restore_raw).decode('ascii')
+            entry.update(restore_artifact=rname, restore_size=len(restore_raw),
+                         restore_sha256=hashlib.sha256(restore_raw).hexdigest(),
+                         restore_format=PLATFORMS[node['platform']].get('restore_format', ''),
+                         restore_capable=True)
+            restore_capable += 1
+        metadata.append(entry)
+    manifest = dict(schema=2, lab_id=backup['lab_id'], lab_name=backup.get('lab_name', ''),
                     backup_job_id=backup['id'], captured_at=backup.get('finished', backup.get('created')),
                     topology_digest=context.get('topology_digest'),
                     topology_provenance='captured' if context.get('topology_digest') else 'unknown',
-                    node_names=sorted(n['name'] for n in nodes), excluded_nodes=context.get('excluded_nodes', []), files=metadata)
+                    node_names=sorted(n['name'] for n in nodes), excluded_nodes=context.get('excluded_nodes', []),
+                    restore_capable_nodes=restore_capable, files=metadata)
     return dict(manifest=manifest, files=files)
 
 
@@ -162,20 +185,26 @@ def decoded_snapshot(result):
     rows = snapshot['manifest'].get('files', [])
     if not isinstance(rows, list) or not rows or len(rows) > 500: raise ValueError('Invalid version manifest.')
     files = {}; total = 0
-    for item in rows:
-        if not isinstance(item, dict): raise ValueError('Invalid version manifest.')
-        name = item.get('path', '')
+
+    def take(name, size, sha):
         if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', name) or name.lower() == 'manifest.json':
             raise ValueError('Version contains an unsafe filename.')
         if name in files: raise ValueError('Version contains duplicate files.')
         try: raw = base64.b64decode(snapshot['files'][name], validate=True)
         except (KeyError, ValueError, TypeError): raise ValueError('Invalid version file encoding.')
-        total += len(raw)
-        if len(raw) > MAX_FILE or total > MAX_TOTAL or item.get('size') != len(raw) or item.get('sha256') != hashlib.sha256(raw).hexdigest():
+        nonlocal total; total += len(raw)
+        if len(raw) > MAX_FILE or total > MAX_TOTAL or size != len(raw) or sha != hashlib.sha256(raw).hexdigest():
             raise ValueError('Version integrity check failed.')
         try: raw.decode('utf-8')
         except UnicodeError: raise ValueError('Version configuration is not UTF-8 text.')
         files[name] = raw
+
+    for item in rows:
+        if not isinstance(item, dict): raise ValueError('Invalid version manifest.')
+        take(item.get('path', ''), item.get('size'), item.get('sha256'))
+        # Restore-grade candidate (schema 2+): validated the same way and kept in files.
+        if item.get('restore_artifact'):
+            take(item['restore_artifact'], item.get('restore_size'), item.get('restore_sha256'))
     if set(files) != set(snapshot['files']): raise ValueError('Version files do not match the manifest.')
     return snapshot['manifest'], files
 
@@ -713,7 +742,9 @@ class GitProgress:
         @app.post('/api/labs/{lab_id}/git/version')
         def version(lab_id: str, data: Version):
             manifest, files = version_data(lab_id, data)
-            return dict(manifest=manifest, files=[dict(name=n, text=v.decode('utf-8')) for n, v in files.items()], restore_supported=False)
+            restore_nodes = [f.get('node', '') for f in manifest.get('files', []) if f.get('restore_artifact')]
+            return dict(manifest=manifest, files=[dict(name=n, text=v.decode('utf-8')) for n, v in files.items()],
+                        restore_supported=bool(restore_nodes), restore_nodes=restore_nodes)
 
         @app.post('/api/labs/{lab_id}/git/version/download')
         def download(lab_id: str, data: Version):

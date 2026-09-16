@@ -151,3 +151,11 @@ dialog.node-details{position:fixed;inset:0 0 0 auto;margin:0;width:min(560px,94v
 .git-destination-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;margin:12px 0}.git-destination-line code{background:#edf3f5;padding:3px 7px;border-radius:4px;font-size:12px}.git-destination-line span[aria-hidden]{color:#9eacb3}
 .git-inline-action{display:inline;color:var(--slate);font-weight:600;text-decoration:underline}.git-blank-actions{justify-content:center;padding:6px 0 16px}
 @media(max-width:900px){.git-places-body{grid-template-columns:1fr}.git-outline{border-right:0;border-bottom:1px solid var(--line);max-height:220px}}
+/* Live configuration restore */
+.button.danger{background:#c24a37;border:1px solid #a73122;color:#fff}.button.danger:hover{background:#a73122}.button.danger:disabled{background:#e0b3aa;border-color:#e0b3aa;color:#fff}
+.restore-targets{border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin:14px 0}.restore-targets legend{font-size:11px;font-weight:700;letter-spacing:.04em;color:#687a84;padding:0 6px}
+.restore-target{align-items:flex-start;gap:9px;padding:6px 4px}.restore-target small{color:#687a84}.restore-target.disabled{opacity:.6}
+.restore-safety{margin:12px 0;padding-left:18px;font-size:12px;color:#4b5f6a;line-height:1.6}.restore-safety li{margin:2px 0}
+.restore-advanced{margin:8px 0;font-size:12px}.restore-advanced summary{cursor:pointer;font-weight:600;color:var(--slate)}.restore-advanced input{width:90px;margin:6px 0}
+.restore-targets-status{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.restore-target-row{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:#fbfcfc}.restore-target-row strong{margin-left:8px}.restore-target-row p{margin:6px 0 0;font-size:12px;color:#4b5f6a}

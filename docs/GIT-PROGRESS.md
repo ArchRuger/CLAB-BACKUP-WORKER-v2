@@ -171,6 +171,7 @@ another lab's folder.
 | **Push saved progress** | Publish the existing saved commit without recapturing devices. |
 | **Update from remote** | Update an eligible clean checkout using a fast-forward; no merge/rebase conflict resolution. |
 | **Load version…** | Inspect or download a baseline, checkpoint or historical version as a ZIP. |
+| **Apply to running lab…** | From a saved Junos version, replace the running configuration of the selected nodes with that version (no reboot); the current configuration is backed up first. |
 | **Git repository settings** | Choose a registered repository and explicit device selection; see the folders of the repository. |
 | **Save this lab here** | Move this lab to the selected folder of its repository, optionally with the files already saved. |
 | **New folder…** | Create a folder in the repository for this lab (or for a later lab). |
@@ -197,7 +198,10 @@ registration IDs and folder names.
   and pushed, and the move is recorded as a *Folder move* job with the same retry, review
   and push handling as a save. Earlier versions stay in Git history either way; a pending
   save has to finish or be dismissed first.
-- **New folder…** creates a folder beside the existing ones. With *Save this lab here*
+- **New folder…** creates a folder beside the existing ones. It accepts a whole nested
+  path such as `Week-04/BGP/Final-State`, so a deep destination like
+  `CCNP-SP/Labs/Week-04/BGP/Final-State` is created in one step; the dialog shows the
+  resulting `repository / folder` destination as you type. With *Save this lab here*
   ticked, the lab moves into it immediately; otherwise the folder is only registered and
   waits for a lab.
 - Folders of one repository never overlap: a folder cannot be created inside another
@@ -301,16 +305,64 @@ outside manager storage.
 ## Loading an earlier lab version
 
 **Load version** retrieves files. Select `baseline`, a checkpoint or a previous
-commit, review its manifest and download the configuration ZIP. It does not switch
-the repository branch, rewrite the original lab YAML, redeploy the lab or apply
-commands to running routers.
+commit, review its manifest and download the configuration ZIP. Downloading does not
+switch the repository branch, rewrite the original lab YAML or redeploy the lab.
+
+Older backup jobs can have unknown topology provenance; the UI does not represent
+the current topology as the topology used for that historical capture.
+
+## Apply a saved configuration to a running node
+
+A saved Junos version can be applied to the running lab from the same **View changes /
+History** view. Open a version and choose **Apply to running lab…**. This converges the
+running node to exactly the saved configuration without a reboot or a containerlab
+redeploy.
+
+```mermaid
+flowchart TD
+    A[Apply to running lab] --> B[Preflight: node running, reachable, platform, mapping]
+    B --> C[Back up the current configuration first]
+    C -->|backup failed| D[Do not change this node]
+    C -->|backup ok| E[Load the saved candidate: load override]
+    E --> F[commit check]
+    F --> G[commit confirmed with a rollback timer]
+    G --> H[Reconnect to prove management works]
+    H -->|reachable| I[commit to confirm]
+    H -->|unreachable| J[Node rolls back automatically]
+    I --> K[Capture again and compare to the saved state]
+```
+
+- **Complete replacement, not a merge.** Junos `show configuration | display set` output
+  can only be *added* with `load set`, so it cannot remove a statement a student added
+  that is not in the saved version. Every Junos backup therefore also captures a
+  hierarchical restore-grade candidate (`show configuration`) and records it in the
+  snapshot manifest. The restore loads that candidate with `load override terminal`, so a
+  stale statement is removed, a changed statement is reset and a deleted desired statement
+  is put back.
+- **Backed up first.** The manager captures a fresh backup of every target node before it
+  changes anything and references that backup's job id in the restore result. If the
+  pre-restore backup fails for a node, that node is not modified.
+- **Commit-confirmed safety.** The candidate is activated with `commit confirmed`. The
+  manager then reconnects over SSH to prove the node is still reachable and only then runs
+  a plain `commit` to make the change permanent. If management is lost, the node rolls
+  back to the pre-restore configuration on its own when the timer expires. The rollback
+  timer defaults to five minutes and is adjustable under *Safety options*.
+- **Root-authentication.** The `juniper_cjunosevolved` lab image boots without a
+  `root-authentication` statement and rejects any later commit that still lacks it. When
+  the saved configuration has no root-authentication, the restore synthesises one from the
+  saved configuration's own superuser login password so the node stays reachable and can
+  commit; this is the only statement the restore may add beyond the saved state.
+- **Verified.** After confirming, the manager captures the node again, normalises it the
+  same way a backup is normalised and compares it to the saved desired state, so the
+  result shows that the stale statements are gone and the desired statements are present.
+- **Supported platforms.** Live restore covers `juniper_cjunosevolved` and
+  `juniper_vjunosswitch`. IOS-XR and EOS versions remain view/download only.
+- **Legacy snapshots.** A version saved before release 1.28.0 has no restore-grade
+  artifact in its manifest; it is offered as view/download only and cannot be applied.
 
 Captures retain their real format: Junos display-set output and IOS-XR/EOS running
-configuration text are not universally interchangeable startup files. Device apply
-and one-click restore remain unavailable until each NOS adapter has been validated
-with recovery capture, management-access checks and partial-failure handling.
-Older backup jobs can have unknown topology provenance; the UI must not represent
-the current topology as the topology used for that historical capture.
+configuration text are not universally interchangeable startup files, and the display-set
+file stays the canonical human-readable and comparison form.
 
 ## Upgrade and validation
 

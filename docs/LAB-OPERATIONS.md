@@ -167,3 +167,19 @@ For capture, commit and push into an existing owner-scoped repository, follow
 [GIT-SETUP.md](GIT-SETUP.md). This is separate from Containerlab’s kind-dependent
 Save configurations command. Use the existing VM account, and retry the original
 manager save after authentication or export errors. No extra Linux user is required.
+
+## Apply a saved configuration to a running node
+
+A student who has saved a Junos configuration can put it back onto the running node
+without destroying the lab, editing startup files, redeploying containerlab or
+rebooting the router. In **More → Git repository → View changes / History**, open a
+saved version and choose **Apply to running lab…**. The review screen lists the source
+version, the target nodes, each node's NOS, and whether a node already matches the saved
+state. The manager backs up the current configuration of every target first, loads the
+saved configuration as a complete replacement (`load override`), checks it, and activates
+it with a commit that rolls back on its own if management is lost; it then captures the
+node again and compares it to the saved state. Live restore is supported for
+`juniper_cjunosevolved` and `juniper_vjunosswitch`; IOS-XR and EOS versions remain
+view/download only. This uses the manager's direct SSH path to the node and is separate
+from Containerlab's Save configurations command. See
+[GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node).

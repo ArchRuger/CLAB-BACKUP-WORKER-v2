@@ -1,3 +1,98 @@
+# Live Junos configuration restore and nested Git folders — 1.28.0
+
+Prepared on `claude/junos-live-restore-and-git-destinations` from main `c1d22f3` (1.27.0) on
+2026-09-16, after the user asked for a WebUI workflow that applies a saved Junos configuration to
+a running node without a reboot or a containerlab redeploy (a complete desired-state replacement,
+proven to remove stale statements), and for a more novice-friendly, flexible Git save location.
+
+## The restore mechanism, established on the live lab first
+
+Before writing product code, the whole-device replace was proven directly against the two Junos
+lab nodes on the dev VM. The findings shaped the design:
+
+- `show configuration | display set` is merge-only (`load set`) and cannot remove a statement a
+  student added; the hierarchical form loaded with `load override terminal` does. Every Junos
+  backup now also captures `show configuration` as a restore-grade artifact.
+- On `archtop/cjunosevolved:26.2R1.7-EVO` the running config has **no `root-authentication`**, and
+  any real commit — `load override` or `load update` — fails with *Missing mandatory statement:
+  'root-authentication'*. The empty-diff commits that first looked like success proved nothing.
+  The restore therefore ensures the candidate carries root-authentication, synthesising it from
+  the candidate's own superuser login password when absent. `n24l/vjunos-switch:23.2R1.14` already
+  has it and commits directly.
+- A fresh SSH session's plain `commit` confirms a pending `commit confirmed` (verified with
+  `show configuration | compare rollback 1`), so the manager can reconnect to prove management is
+  alive and only then confirm; otherwise the node rolls back on its own.
+- `junipernetworks.junos` 11.1.1 is a deprecation shim over `juniper.device`, and PyEZ / ncclient
+  / lxml are not in the image, so NETCONF / `junos_config` are unavailable. The CLI path is the
+  only option and is what shipped.
+
+## Local checks (Ubuntu 24.04 dev VM; Python 3.12 venv from requirements.txt + httpx; Node)
+
+| Check | Result |
+|---|---|
+| `test_restore_junos.py` — driver against a scripted fake channel (load override + Ctrl-D, root-auth present/synthesised/refused, load error, commit-check and commit-confirmed failure, no-op, confirm, capture) | 11 tests OK |
+| `test_restore.py` — service with a fake connector and Runner: source resolution, node mapping, preflight reachability/match, guards (busy/acknowledge/idempotent), mandatory pre-backup, apply/verify, verify mismatch, redaction, restart reconciliation, and a node that stops after submit not aborting the healthy node | 17 tests OK |
+| `test_git_progress.py` — new restore-artifact snapshot tests (schema 2 include + round-trip, legacy capture stays not-restore-capable, the version route reports restore capability) plus the existing suite | 29 tests OK |
+| `test_git_places_ui.js` (new nested-folder path + destination preview) and `test_restore_ui.js` (badge/source/request-id, escaping) | 14 + 4 tests OK |
+| Full Python suite `python -m unittest discover -s tests -t tests -p "test_*.py"` | 681 tests, 1 skip (the opt-in EOS SSH fixture), 0 failures |
+| Full Node UI suites (`node --test tests/*.js` CI list incl. the two new files) | 0 failures |
+| `node --check` on `restore.js`, `git-progress.js`, `git-places.js`; `git diff --check` | clean |
+| `python deploy/verify-release.py` | `Source release verified: 1.28.0`; documentation names only 1.28.0 |
+
+## Live validation on the dev VM (manager 1.28.0, VM Git helper 1.28.0, containerlab 0.79.0)
+
+The lab `clabllm-dev` was redeployed clean (`containerlab redeploy`) to two factory Junos nodes:
+`clab-clabllm-dev-PTX1` (`juniper_cjunosevolved`, 172.20.20.2) and `clab-clabllm-dev-SW1`
+(`juniper_vjunosswitch`, 172.20.20.3), login admin / admin@123. The image was rebuilt
+(`docker compose build backup-ui`) and recreated; `/api/state` reported 1.28.0. The Git helper was
+refreshed with `setup-git.sh --refresh` (it now accepts the schema-2 snapshot). The end-to-end run
+below used the manager's own API, driving the same routes the browser does; a mid-session
+adversarial review (a workflow of 22 agents) surfaced seven real defects that were fixed and
+re-tested before this run.
+
+The whole flow was validated on **PTX1 (cJunosEvolved)** — the harder platform, because it
+exercises the root-authentication synthesis path. SW1's vJunos-switch VM restarted itself during
+this session and would not hold an SSH session, so the manager-orchestrated run was completed on
+PTX1 only; the restore *mechanism* itself was proven on both platforms (see below).
+
+| Step | Result |
+|---|---|
+| `New folder…` with a nested path `CCNP-SP/Labs/Week-04/BGP/Final-State` | Registered in one step (`POST /git/repositories/{id}/folders`) and listed in the tree; no click-through per level |
+| Establish a final state and `Save progress` (latest) | Backup captured PTX1 and stored the restore-grade candidate (`restore.capture … clab-clabllm-dev-PTX1-…​.jcfg, 841 bytes`); committed and **pushed** to github.com/pruger-dev/CLAB-MNGR-DEV-LLM; `changed_files` included `labs/clabllm-dev/latest/PTX1.jcfg` |
+| Read the saved version (`POST /git/version`) | `restore_supported true`, `restore_nodes [PTX1]`, files `PTX1.set` + `PTX1.jcfg`, manifest `schema 2`, `restore_capable_nodes 1` |
+| Student breaks the running config (direct SSH): add `interfaces lo0 … 10.77.77.77/32`, change host-name to `PTX1-BROKEN-BY-STUDENT`, commit | Committed on the device |
+| `Apply to running lab…` review (`POST …/restore/preflight`) | PTX1 `eligible`, `reachable`, `matches_saved false`, `pending_changes 3`; source `restore_capable_nodes 1` |
+| `Replace configuration` (`POST …/restore`, confirm 3 min) | Job **succeeded**: *All 1 node(s) restored and verified against the saved state.* PTX1 → `verified`, `root_authentication synthesized`, `missing 0`, `extra 0`; `pre_backup_job_id` and `post_backup_job_id` recorded |
+| Device after restore (direct SSH) | **Stale `lo0 10.77.77.77` removed**, host-name back to `HOSTNAME`, `root-authentication` present (synthesised, so the node stays loginable), mgmt address `172.20.20.2/24` intact |
+| No reboot / no recreate | Container `StartedAt` identical before and after (`2026-09-16T11:45:37.183502085Z`); the restore never restarted, rebooted or redeployed the node |
+| Pre-restore backup | `source restore-pre`, `succeeded`, captured the broken state with its own restore artifact — the operator can inspect or roll back to it |
+| Failure path — a legacy backup with no restore artifact | Preflight `eligible_count 0`, `targets []`, `restore_capable_nodes 0`; `POST …/restore` → 400 *Select at least one saved node to restore.* The device was not touched |
+| Failure path — an out-of-history commit | Preflight → 409 *The selected commit is outside this repository branch history.* |
+
+## The restore mechanism proven on both Junos platforms (direct, pre-product)
+
+The load-override + confirmed-commit sequence was proven end-to-end against **both**
+`juniper_cjunosevolved` (PTX1) and `juniper_vjunosswitch` (SW1) before the product code existed:
+a distinctive final state was committed, a student then added a stale `lo0`, changed the host-name
+and deleted a desired `snmp contact`, and the final state was reloaded with `load override
+terminal` + `commit confirmed 2` + `commit`. On both nodes the `show | compare` showed the stale
+`lo0` removed, the deleted `snmp contact` re-added and the host-name reset; the check and confirmed
+commit succeeded; and the container `StartedAt` was unchanged (no reboot). cJunosEvolved additionally
+required the injected root-authentication (`configuration check succeeds` only with it).
+
+## Not verified
+
+- The **manager-orchestrated** restore on `juniper_vjunosswitch` (SW1) was not completed: SW1's
+  VM restarted itself mid-session and would not hold an SSH session. The restore mechanism is
+  proven on vJunos-switch directly (above); only the through-the-manager run is PTX1-only.
+- A **two-node** restore in one job was exercised by unit tests, not live (only PTX1 was reachable).
+- The **commit-confirmed automatic rollback** (losing management before confirm) was designed and
+  unit-tested (`rollback_expected`), and the reconnect-then-confirm was proven live, but a real
+  management-loss rollback was not forced on the live node.
+- **IOS-XR and EOS** live restore is not implemented; those versions stay view/download only.
+- Legacy (pre-1.28.0) snapshots were confirmed non-restorable live (the legacy-backup failure path
+  above); an in-repo pre-1.28.0 Git version was not separately exercised beyond the schema check.
+
 # Repository folder browser, folder moves and connect by URL — 1.27.0
 
 Prepared on `claude/git-folder-browser` from main `609fd4b` (1.26.0) on 2026-09-14, after the

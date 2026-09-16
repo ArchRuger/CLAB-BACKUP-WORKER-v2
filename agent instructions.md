@@ -1,3 +1,68 @@
+# Live Junos configuration restore and nested Git folders — 1.28.0
+
+Read docs/CHANGELOG.md "Changes in 1.28.0", docs/GIT-PROGRESS.md "Apply a saved configuration
+to a running node" and docs/LAB-OPERATIONS.md "Apply a saved configuration to a running node".
+Feature: apply a saved Junos config to a running node with no reboot/redeploy, and create a
+nested Git save folder in one step.
+
+(1) Restore mechanism — proven live, do not regress. Junos `show configuration | display set`
+is merge-only (`load set`) and cannot remove stale statements; the restore loads the
+**hierarchical** candidate (`show configuration`) with `load override terminal`, runs
+`commit check`, then `commit confirmed <minutes>`; the manager reconnects (proving management)
+and runs a plain `commit` to confirm, else the node auto-rolls-back. `juniper_cjunosevolved`
+(image 26.2R1.7-EVO) has **no `root-authentication`** and rejects every real commit with
+"missing mandatory statement" — `load override`/`load update` both fail — so the candidate
+must carry root-authentication; when absent the driver synthesises it from the candidate's own
+superuser login encrypted-password. `juniper_vjunosswitch` already has it. PyEZ/ncclient/lxml
+are NOT installed and `junipernetworks.junos` 11.1.1 is a deprecation shim over
+`juniper.device`, so NETCONF/`junos_config` are unavailable; the CLI path is the only option.
+Do not add those deps. (2) Capture: inventory.py Junos platforms gain `restore`
+(`show configuration | no-more`), `restore_format` (`junos-hierarchical`), `restore_suffix`
+(`jcfg`); `runner.make_inventory` sets `restore_command` for backup ops only; `ansible/backup.yml`
+has a second task *Fetch restore artifact* guarded by `restore_command is defined`;
+`runner._execute` routes `RESTORE_TASK` events to `restore_results` (never sets node status or
+fails the backup) and stores a companion `<base>-<hash>.jcfg`, recording `restore_file`/
+`restore_format` in the outcome. `git_progress.captured_snapshot` adds the artifact to snapshot
+`files` and per-file manifest fields `restore_artifact`/`restore_size`/`restore_sha256`/
+`restore_format`/`restore_capable` (manifest `schema=2`, `restore_capable_nodes`);
+`decoded_snapshot` validates artifacts too (`take()` helper); `downloads.stored_restore_path`;
+the `/git/version` route reports `restore_supported`/`restore_nodes`. Old snapshots have no
+artifact → view/download only; never silently claim they are restorable.
+(3) Driver `app/restore_junos.py`: `JunosShell` (ANSI-stripped prompt driver like
+telemetry_provision), `apply_shell` (configure exclusive→load override terminal + Ctrl-D→
+`_ensure_root_authentication`→`show | compare`→commit check→commit confirmed; discards on any
+failure), `confirm_shell` (fresh session `commit`), `capture_shell`, `SUPPORTED_KINDS`,
+`supports_restore`. (4) Service `app/restore.py` `RestoreService(store,runner,git_progress,connector)`:
+`restore_jobs`, single-worker pool, restart marks RESTORE_BUSY jobs `interrupted`;
+`lab_operations.operation_busy` gained `RESTORE_BUSY` (progress_id excludes the restore's own
+job so its pre/post backups run); `resolve_source` (git via helper `read-version`+`decoded_snapshot`,
+backup via `captured_snapshot`) maps saved node→running node by exact name + platform match;
+`preflight` live-probes SSH reachability and a current-state match; `submit` guards
+(idle+acknowledge+host identity+idempotent `request_id`); `execute` = preflight → **mandatory**
+pre-restore backup (`runner.submit` source `restore-pre`; a node whose backup fails is not
+changed) → per node `apply_candidate`+reconnect+`confirm` → post backup (`restore-post`) +
+`compare_states` (tolerates the synthesised root-authentication and volatile version lines) →
+`_finalize`. `compare_states`/`mask_line` redact; `public_job` never exposes `_candidates` or
+`host_identity`. Routes `GET /api/labs/{id}/restore/sources`, `POST …/restore/preflight`,
+`POST …/restore`, `GET /api/restore/jobs/{id}`; `/api/state` carries `restore_jobs`;
+`remove_lab` drops them. (5) UI: `app/static/restore.js` (`restoreReview` posts preflight and
+renders the *Replace running configuration* review; `restoreShowJob` polls; danger button);
+`git-progress.js` `gitViewVersion` shows **Apply to running lab…** when `restore_supported`;
+`git-places.js` `gitFolderPath`/`gitDestinationPreview` create a nested destination in one step
+with a live result preview; `restore.js?v=<release>` in index.html; every interpolation via
+`esc()`; new `.button.danger` + `.restore-*` CSS. (6) Tests: `tests/test_restore_junos.py`
+(scripted fake channel), `tests/test_restore.py` (fake connector+runner, backup source),
+restore-artifact tests in `tests/test_git_progress.py`, `tests/test_restore_ui.js`, nested-folder
+tests in `tests/test_git_places_ui.js`; release-check runs test_restore*.py and test_restore_ui.js.
+Preserve: display-set stays the canonical human/diff form; pre-backup is mandatory; do not fake
+commit-confirmed; restore uses the direct node-SSH path, never a host helper; Junos only until
+XR/EOS replace+verify is validated. `host_git.py` `snapshot`/`read_manifest`/`read_version` accept
+schema 1 and 2 and validate/return each file entry's `restore_artifact` (via small `take`/`check`/
+`read_one` helpers); refresh the helper with `setup-git.sh --refresh` and rebuild the manager image.
+Prepared on `claude/junos-live-restore-and-git-destinations` from main `c1d22f3` (1.27.0);
+live-validated on the dev VM (VALIDATION.md): the manager-orchestrated restore was proven on
+cJunosEvolved (root-auth synthesis path), and the mechanism directly on both Junos kinds.
+
 # Repository folder browser, folder moves and connect by URL — 1.27.0
 
 Read docs/CHANGELOG.md "Changes in 1.27.0", docs/GIT-PROGRESS.md "Where this lab lives" and

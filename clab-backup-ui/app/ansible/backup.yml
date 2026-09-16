@@ -7,3 +7,13 @@
       ansible.netcommon.cli_command:
         command: "{{ backup_command }}"
       changed_when: false
+    # Junos backups also capture a hierarchical whole-device candidate for restore.
+    # The task is optional: only backup jobs of a platform with a restore format set
+    # restore_command, so a login test or an unsupported platform never runs it.
+    - name: Fetch restore artifact
+      ansible.netcommon.cli_command:
+        command: "{{ restore_command }}"
+      changed_when: false
+      failed_when: false
+      ignore_errors: true
+      when: restore_command is defined and restore_command | length > 0

@@ -25,6 +25,7 @@ from .discovery import Discovery, lab_status, node_available
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
 from .lab_operations import LabOperations, operation_busy
 from .git_progress import GitProgress, public_job as public_git_job
+from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
 from .diagnostics import Diagnostics
 from .capture import Captures
@@ -43,6 +44,7 @@ def create_app(data_dir=None):
     discovery=Discovery(store)
     operations=LabOperations(store,discovery)
     git_progress=GitProgress(store,runner)
+    restore=RestoreService(store,runner,git_progress)
     telemetry=TelemetryManager(store,services)
     grafana=GrafanaControl(store,operations,telemetry)
     @asynccontextmanager
@@ -56,6 +58,7 @@ def create_app(data_dir=None):
         yield
         grafana.close()
         telemetry.close()
+        restore.close()
         git_progress.close()
         operations.close()
         discovery.close()
@@ -72,6 +75,8 @@ def create_app(data_dir=None):
     operations.install(app)
     app.state.git_progress=git_progress
     git_progress.install(app)
+    app.state.restore=restore
+    restore.install(app)
     app.state.node_services=services
     app.state.readiness=readiness_monitor
     services.install(app)
@@ -178,6 +183,7 @@ def create_app(data_dir=None):
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
                     'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
                     'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])[-200:]],
+                    'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])[-200:]],
                     'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])[-200:]]}
     class RemoveLab(BaseModel):
         model_config = ConfigDict(extra='forbid')
@@ -199,6 +205,7 @@ def create_app(data_dir=None):
             updated['labs'] = [l for l in updated['labs'] if l['id'] != lab_id]
             updated['jobs'] = [j for j in updated['jobs'] if j['lab_id'] != lab_id]
             updated['git_jobs'] = [j for j in updated.get('git_jobs', []) if j['lab_id'] != lab_id]
+            updated['restore_jobs'] = [j for j in updated.get('restore_jobs', []) if j['lab_id'] != lab_id]
             ignored = set(updated.get('ignored_labs', []))
             if data.prevent_reimport: ignored.add(name)
             else: ignored.discard(name)

@@ -64,6 +64,9 @@ def make_inventory(lab, nodes, work, operation):
                      'ansible_host_key_checking':False,'ansible_paramiko_look_for_keys':False,
                      'ansible_connect_timeout':30,'ansible_command_timeout':300,
                      'backup_command':'show version' if operation=='test' else platform['command']}
+        # Junos backups also fetch a hierarchical restore-grade candidate (see backup.yml).
+        if operation=='backup' and platform.get('restore'):
+            variables['restore_command']=platform['restore']
         if node['platform']=='arista_ceos':
             variables.update(ansible_become=True, ansible_become_method='enable')
             if creds.get('enable_password'):
@@ -86,6 +89,16 @@ def filename(node):
     base=re.sub(r'[^A-Za-z0-9_.-]','_',node['name'])[:100].strip('.') or 'node'
     digest=hashlib.sha256(node['name'].encode()).hexdigest()[:8]
     return f'{base}-{digest}.{PLATFORMS[node["platform"]]["suffix"]}'
+
+# The auxiliary Junos restore-artifact task in backup.yml is matched by its task name.
+RESTORE_TASK = 'Fetch restore artifact'
+
+def restore_filename(node):
+    """Companion file holding the whole-device restore candidate, beside the backup."""
+    base=re.sub(r'[^A-Za-z0-9_.-]','_',node['name'])[:100].strip('.') or 'node'
+    digest=hashlib.sha256(node['name'].encode()).hexdigest()[:8]
+    suffix=PLATFORMS[node['platform']].get('restore_suffix')
+    return f'{base}-{digest}.{suffix}' if suffix else ''
 
 # CLI answers that mean the command did not run: syntax errors, denied commands and
 # the not-ready replies a NOS gives while it is still booting.
@@ -131,9 +144,13 @@ class Runner:
         self.stopping.set()
         self.pool.shutdown(wait=False,cancel_futures=True)
     def submit(self, lab_id, operation='backup', source='manual', node_names=None, progress_id=None, progress_context=None):
-        from .lab_operations import operation_busy
+        from .lab_operations import operation_busy, RESTORE_BUSY
         with self.store.lock:
             if operation_busy(self.store.state,lab_id,progress_id=progress_id): raise ValueError('Wait for the lab operation to finish.')
+            # A restore's own pre/post backups pass their restore job id as progress_id and
+            # are allowed; any other backup waits for the restore (on any lab) to finish.
+            if any(j.get('status') in RESTORE_BUSY and j.get('id') != progress_id for j in self.store.state.get('restore_jobs',[])):
+                raise ValueError('A configuration restore is in progress. Wait for it to finish.')
             if self.store.reset_pending: raise ValueError('Finish the manager reset before starting a job.')
             if any(j['status'] in ('queued','running') for j in self.store.state['jobs']):
                 raise ValueError('A job is already running. Wait for it to finish.')
@@ -235,6 +252,7 @@ class Runner:
                 event=work/'events.jsonl'; event.touch(mode=0o600)
                 env=job_environment(work,event)
                 results={}
+                restore_results={}
                 offset=0
                 def consume():
                     nonlocal offset
@@ -251,6 +269,13 @@ class Runner:
                             if index>=len(nodes): continue
                             node=nodes[index]
                             status=item['status']
+                            # The restore artifact is an auxiliary capture: record it, but
+                            # never let it set the node's visible status or fail the backup.
+                            if item.get('task')==RESTORE_TASK:
+                                if status!='running':
+                                    item.setdefault('captured_at',now())
+                                    restore_results[alias]=item
+                                continue
                             if status!='running':
                                 item.setdefault('captured_at',now())
                                 results[alias]=item
@@ -306,6 +331,20 @@ class Runner:
                                                short_name=short_name(node,lab['name'],text),
                                                captured_at=result.get('captured_at',now()),
                                                capture_time_source='NOS command completed',download_metadata_version=1)
+                                # Store the hierarchical restore candidate beside the backup.
+                                # Best-effort: its absence only means "not restore-capable".
+                                rr=restore_results.get(f'node_{index}')
+                                rname=restore_filename(node)
+                                if rr and rr.get('status')=='ok' and rname:
+                                    try:
+                                        rtext=normalized(node['platform'],rr.get('stdout',''))
+                                        self.store.atomic(history/rname,rtext.encode())
+                                        self.store.atomic(latest/rname,rtext.encode())
+                                        outcome.update(restore_file=rname,
+                                                       restore_format=PLATFORMS[node['platform']].get('restore_format',''))
+                                        log('restore.capture',f'Stored restore-grade candidate: {rname} ({len(rtext.encode())} bytes)',node=node['name'])
+                                    except (ValueError,OSError) as exc:
+                                        log('restore.capture.skip',f'No restore candidate stored: {safe_error(exc)}','warning',node['name'])
                             outcome['status']='succeeded'
                             outcome['message']='Configuration saved' if operation=='backup' else 'NOS show version succeeded'
                             success+=1

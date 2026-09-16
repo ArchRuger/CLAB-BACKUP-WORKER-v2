@@ -97,3 +97,16 @@ test('choosing a folder in a repository the lab is not connected to prepares the
  await context.gitUseFolder('lab','free',model,{repository:{id:'repo',path:'/home/ben/labs/Course-Labs'}});
  assert.equal(calls.length,1,'an existing registration is reused without a request');assert.equal(shown,2);
 });
+test('nested folder helpers validate each segment and preview the full destination',()=>{
+ const {gitFolderPath,gitDestinationPreview,gitFolderName}=makeContext();
+ assert.equal(gitFolderPath('Week-04/BGP/Final-State'),'Week-04/BGP/Final-State');
+ assert.equal(gitFolderPath(' /Week-04//BGP/ '),'Week-04/BGP','trims and collapses stray slashes');
+ assert.throws(()=>gitFolderPath(''),/Enter a folder name/);
+ assert.throws(()=>gitFolderPath('ok/../escape'),/letters, numbers/);
+ assert.throws(()=>gitFolderPath('ok/.git/x'),/letters, numbers/);
+ assert.throws(()=>gitFolderName('a/b'),/without slashes/);
+ assert.equal(gitDestinationPreview('CCNP-SP','Week-04/BGP/Final-State'),'CCNP-SP/Week-04/BGP/Final-State');
+ assert.equal(gitDestinationPreview('','BGP-Lab'),'BGP-Lab');
+ assert.equal(gitDestinationPreview('CCNP-SP','  '),'','an empty or invalid entry previews nothing');
+ assert.equal(gitDestinationPreview('CCNP-SP','bad/..'),'');
+});
