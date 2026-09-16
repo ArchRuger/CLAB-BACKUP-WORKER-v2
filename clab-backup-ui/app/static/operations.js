@@ -4,13 +4,13 @@ const opLabels={deploy:'Deploy lab',redeploy:'Redeploy',destroy:'Destroy deploym
 let opCaps=null, opMenuLab='', opOutputTimer=null, opEditorContext=null;
 function opDialog(id,title,body){
  let dialog=$(id);if(!dialog){dialog=document.createElement('dialog');dialog.id=id;dialog.className='operations-dialog';document.body.append(dialog);}
- dialog.innerHTML=`<div class="dialog-head"><span class="eyebrow">NODE MANAGER</span><button class="icon-button" data-op-close aria-label="Close">×</button></div><h2>${esc(title)}</h2>${body}<p class="form-error" role="alert"></p>`;
+ dialog.innerHTML=`<div class="dialog-head"><h2>${esc(title)}</h2><button class="icon-button" data-op-close aria-label="Close">×</button></div>${body}<p class="form-error" role="alert"></p>`;
  dialog.querySelector('[data-op-close]').onclick=()=>dialog.close();if(!dialog.open)dialog.showModal();return dialog;
 }
 async function opTask(dialog,fn){
  const error=dialog?.querySelector('.form-error');if(error)error.textContent='';
  const buttons=dialog?[...dialog.querySelectorAll('button:not(:disabled)')]:[];buttons.forEach(b=>b.disabled=true);
- try{return await fn();}catch(e){if(error)error.textContent=e.message;else notify(e.message);}finally{buttons.forEach(b=>b.disabled=false);}
+ try{return await fn();}catch(e){if(error)error.textContent=e.message;else if(typeof showActionError==='function')showActionError(e.message);else notify(e.message);}finally{buttons.forEach(b=>b.disabled=false);}
 }
 function opPath(lab){return lab?.vm_project_path||lab?.vm_source?.files?.definition?.path||'';}
 function opName(lab){return lab?.deployment_name||lab?.name||'';}
@@ -252,10 +252,12 @@ function opMapPreview(drawing,name,positioned=false){
  const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing);svg.setAttribute('viewBox',measureTopology(svg).join(' '));return dialog;
 }
 async function opLayout(id){return editDiagram(id);}
+// reason / destroyReason say, in student words, why Start or Destroy is unavailable right now.
 function opQuickActions(lab,discovery,isBusy=false){
  const status=lab?.deployment?.status, known=['Not deployed','Running','Stopped','Partially running'].includes(status);
  const available=!!lab&&!!opPath(lab)&&!!discovery?.connected&&known&&!isBusy;
- return {startAction:status==='Not deployed'?'deploy':'start',canStart:available&&status!=='Running',canDestroy:available&&status!=='Not deployed'};
+ const blocked=!lab?'':!discovery?.connected?'Connect the VM first':isBusy?'Wait for the current operation to finish':!opPath(lab)?'This lab has no topology file on the VM (Advanced › Deployment details)':!known?'Lab status is unknown — refresh the lab list':'';
+ return {startAction:status==='Not deployed'?'deploy':'start',canStart:available&&status!=='Running',canDestroy:available&&status!=='Not deployed',available,reason:blocked||(status==='Running'?'The lab is already running':''),destroyReason:blocked||(status==='Not deployed'?'Nothing to destroy — the lab is not running':'')};
 }
 async function opQuickRun(kind){
  const lab=current(),actions=opQuickActions(lab,state.discovery,busy());
@@ -264,21 +266,42 @@ async function opQuickRun(kind){
  if(kind!=='start'){try{await opCapabilities();}catch{opCaps=null;}options=opDestroyOptions();}
  await opReview({lab_id:lab.id,action:kind==='start'?actions.startAction:'destroy',options});
 }
+// Menu items carry their label in a <span> and the reason they are disabled in a visible <small class="menu-reason">.
+function opMenuState(button,disabled,reason,label,hint=''){
+ if(!button)return;button.disabled=!!disabled;button.title=disabled?reason||'':hint;
+ if(typeof button.querySelector!=='function')return;
+ const text=button.querySelector('span');if(text&&label!==undefined)text.textContent=label;
+ const small=button.querySelector('.menu-reason');if(small){small.textContent=disabled?reason||'':'';small.hidden=!(disabled&&reason);}
+}
 function renderLabOperations(){
- const quick=opQuickActions(current(),state.discovery,busy());
- if($('lab-start')){$('lab-start').disabled=!quick.canStart;$('lab-start').title=quick.startAction==='deploy'?'Deploy this topology and start its devices':'Start stopped devices in this lab';}
- if($('lab-destroy'))$('lab-destroy').disabled=!quick.canDestroy;
+ const lab=current(),quick=opQuickActions(lab,state.discovery,busy()),status=lab?.deployment?.status,running=['Running','Partially running'].includes(status);
+ if($('lab-start'))opMenuState($('lab-start'),!quick.canStart,quick.reason,quick.startAction==='deploy'?'Start lab':'Start stopped devices',quick.startAction==='deploy'?'Deploy this topology and start its devices':'Start stopped devices in this lab');
+ if($('lab-destroy')){$('lab-destroy').disabled=!quick.canDestroy;$('lab-destroy').title=quick.canDestroy?'':quick.destroyReason;}
  if($('lab-actions'))$('lab-actions').hidden=!current();
- if($('operation-summary')){const running=(state.operations||[]).filter(j=>['queued','running'].includes(j.status));$('operation-summary').textContent=running.length?'Lab command running · view operation history':'';}
+ const menu=$('lab-actions-menu');
+ if(menu&&typeof menu.querySelectorAll==='function')for(const b of menu.querySelectorAll('[data-op-action]')){
+  if(b.dataset.opVariant==='cleanup')b.hidden=opCaps?.actions?.redeploy?.cleanup!==true;
+  const ok=quick.available&&(b.dataset.opAction==='redeploy'?status!=='Not deployed':running);
+  opMenuState(b,!ok,quick.available?'The lab is not running':quick.reason);
+ }
+ if($('vm-projects')){const connected=!!state.discovery?.connected;opMenuState($('vm-projects'),!connected,'Connect the VM to browse its lab topologies');}
  if(busy()){for(const id of ['remove-lab','sync-vm','update-definition','link-deployment'])if($(id))$(id).disabled=true;}
  else{for(const id of ['update-definition','link-deployment'])if($(id))$(id).disabled=false;}
 }
 if($('import-top')){
- $('import-top').insertAdjacentHTML('beforebegin','<button class="button secondary" id="lab-actions" hidden>Lab actions ▾</button>');
+ if(!$('lab-actions'))$('import-top').insertAdjacentHTML('beforebegin','<button class="button secondary" id="lab-actions" hidden>Lab actions ▾</button>');
 
  $('map-edit').onclick=()=>opTask(null,()=>opLayout(activeId));
  if($('deploy-empty'))$('deploy-empty').onclick=openDeploy;
- $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>location.assign('/static/workspace.html#mode=folder');$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opHistory();$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
+ if($('lab-operations-all'))$('lab-operations-all').onclick=()=>openLabOperations();
+ $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>openDeploy();$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opHistory();$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
+ // Lab actions ▾ lifecycle items go through the same preview/confirm flow as the operations dialog.
+ const menu=$('lab-actions-menu');
+ if(menu){
+  menu.addEventListener('click',e=>{const b=e.target.closest('[data-op-action]');if(!b||b.disabled)return;if(typeof closeMenus==='function')closeMenus();
+   opTask(null,async()=>{const lab=current();if(!lab)return;try{await opCapabilities();}catch{opCaps=null;}renderLabOperations();await opReview({lab_id:lab.id,action:b.dataset.opAction,options:JSON.parse(b.dataset.opOptions||'{}')});});});
+  menu.addEventListener('menuopen',()=>{if(opCaps)return;opCapabilities().then(()=>renderLabOperations()).catch(()=>{});});
+ }
  $('labs').addEventListener('contextmenu',e=>{const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}});
  $('labs').addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}}});
 }

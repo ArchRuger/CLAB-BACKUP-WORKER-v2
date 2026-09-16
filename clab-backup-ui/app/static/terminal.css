@@ -1,1 +1,93 @@
-*{box-sizing:border-box}body{margin:0;background:#152631;color:#e7eff2;font:13px "Segoe UI",Arial,sans-serif;display:flex;flex-direction:column;height:100vh;overflow:hidden}header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px;padding:20px 24px;border-bottom:2px solid #f15b40;background:#182c38}.terminal-identity{display:flex;align-items:center;gap:15px;min-width:0}.terminal-identity img{width:36px;height:36px}.terminal-identity strong{display:block;font-size:15px;margin:7px 0;overflow-wrap:anywhere}.brand-label{font-size:9px;letter-spacing:.15em;color:#aec9d7}#endpoint{font:11px Consolas,monospace;color:#79e8f6}.session-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}#status{font:11px Consolas,monospace;color:#79e8f6;margin-right:10px}button,input{padding:9px 12px;border:1px solid #587789;border-radius:4px;background:#223e4e;color:#e7eff2;font:12px "Segoe UI",Arial,sans-serif}button{cursor:pointer}button:hover{background:#345565}button:disabled{opacity:.45;cursor:default}button:focus-visible,input:focus-visible{outline:2px solid #79e8f6;outline-offset:3px}#disconnect{border-color:#f15b40;color:#ffaa99;background:transparent}.notice{padding:0 24px;color:#a4bbc7;font-size:11px;line-height:1.5}#terminal{flex:1;min-height:0;margin:12px 24px 20px;overflow:hidden}@media(max-width:700px){header{padding:16px}.session-controls{width:100%}.notice{padding:0 16px}#terminal{margin:10px 16px 16px}}
+/* ==========================================================================
+   Containerlab Node Manager — terminal page (terminal.html)
+   Loaded after vendor/xterm.css; style.css is NOT loaded here, so the tokens
+   are repeated. Dark chrome; same palette as style.css's --rail surfaces.
+
+   Contrast (J8 terminal tokens): rail-text #e7eff2 on rail #172431 13.52 / on button fill #223e4e 9.65
+             muted #b7c4cd on rail 8.84 (status, endpoint, notice, brand label)
+             danger-on-dark #f0a9a3 on rail 8.18 · focus ring #9ad4ea on rail 9.74
+             control border #74879a vs the header/rail 4.26 and vs its own fill #223e4e 3.04 (non-text ≥ 3:1)
+   ========================================================================== */
+:root {
+  --rail: #172431;
+  --rail-2: #223e4e;            /* button fill */
+  --rail-3: #2c4658;            /* button hover fill (rail-text on it 8.49) */
+  --rail-line: #2a4352;         /* decorative rule under the header */
+  --control-line: #74879a;      /* control boundaries on the dark chrome */
+  --rail-text: #e7eff2;
+  --rail-muted: #b7c4cd;
+  --danger-on-dark: #f0a9a3;
+  --focus-on-dark: #9ad4ea;
+  --radius: 6px;
+  --font: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  --mono: ui-monospace, Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--rail);
+  color: var(--rail-text);
+  font: 13px/1.5 var(--font);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--rail-line);
+  background: var(--rail);
+}
+
+.terminal-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.terminal-identity img { width: 32px; height: 32px; flex: none; }
+.terminal-identity strong { display: block; font-size: 15px; margin: 4px 0; overflow-wrap: anywhere; }
+.brand-label { font-size: 12px; letter-spacing: .08em; color: var(--rail-muted); }
+/* status and endpoint are plain muted text, not cyan mono emphasis */
+#endpoint { font: 12px var(--mono); color: var(--rail-muted); overflow-wrap: anywhere; }
+
+.session-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#status { font-size: 12px; color: var(--rail-muted); margin-right: 8px; }
+
+button, input {
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius);
+  background: var(--rail-2);
+  color: var(--rail-text);
+  font: 600 13px var(--font);
+}
+input { font-weight: 400; }
+button { cursor: pointer; transition: background-color .15s, border-color .15s; }
+button:hover:not(:disabled) { background: var(--rail-3); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+/* two-tone ring on the dark chrome: light ring outside a rail-coloured gap */
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--focus-on-dark); outline-offset: 2px; box-shadow: 0 0 0 2px var(--rail); }
+
+/* danger-outline: end the session */
+#disconnect { border-color: var(--danger-on-dark); color: var(--danger-on-dark); background: transparent; }
+#disconnect:hover:not(:disabled) { background: rgba(179, 38, 30, .28); }
+
+.notice { padding: 0 24px; color: var(--rail-muted); font-size: 12px; line-height: 1.5; }
+
+#terminal { flex: 1; min-height: 0; margin: 12px 24px 20px; overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+@media (max-width: 700px) {
+  header { padding: 12px 16px; }
+  .session-controls { width: 100%; }
+  .notice { padding: 0 16px; }
+  #terminal { margin: 10px 16px 16px; }
+}

@@ -1,3 +1,21 @@
+# Student-centred UI redesign — WORK IN PROGRESS on top of 1.28.0
+
+**Unreleased, unfinished, on branch `claude/wip-student-centered-ui-redesign`.** Before touching the
+frontend, read `docs/redesign/PICKUP.md` (pickup notes: what is done, what is verified, what is next), then
+`docs/redesign/DESIGN-SPEC.md` and `docs/redesign/DESIGN-SPEC-ADDENDUM.md` (the addendum is the binding
+contract; its §J9 is the migration order). The goal is a redesign of how the WebUI is presented and
+navigated for a networking student — Home → Lab workspace (Topology · Devices · Progress · Tools · Advanced)
+→ Device drawer — with **zero functional regression**: every capability in
+`docs/redesign/inventory/MERGED-INVENTORY.md` and `docs/redesign/parity/*.md` keeps working, the backend
+and helpers are untouched, and every existing test keeps its behavioural claim (labels pinned by old
+regexes are rewritten, never deleted). New frontend files so far: `app/static/status.js` (student status
+vocabulary, pure functions), `app/static/shell.js` (hash router, menu contract, browser storage — the only
+file allowed to touch `window`/`location`/`localStorage`), `app/static/home.js` (My labs page), rewritten
+`app/static/style.css`/`terminal.css`, and tests `tests/test_status_ui.js`, `tests/test_shell_ui.js`,
+`tests/test_home_ui.js`. `docs/redesign/` is exempt from the living-doc release check
+(`deploy/verify-release.py` `HISTORY_DIRS`). Do not cut a release from this branch until the plan in
+`PICKUP.md` §4 is complete and the browser + live-lab validation has been recorded in `VALIDATION.md`.
+
 # Live Junos configuration restore and nested Git folders — 1.28.0
 
 Read docs/CHANGELOG.md "Changes in 1.28.0", docs/GIT-PROGRESS.md "Apply a saved configuration
