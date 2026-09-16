@@ -76,6 +76,37 @@ class HostGitTests(unittest.TestCase):
         self.assertEqual(restarted.dispatch(req)['commit'], result['commit'])
         self.assertEqual(len(restarted.dispatch(self.request('history'))['versions']), 1)
 
+    def capture_schema2(self, text='router bgp 65001\n', restore='system {\n    host-name PE1;\n}\n'):
+        """A schema-2 snapshot: a config file plus its hierarchical restore artifact."""
+        raw = text.encode(); rr = restore.encode()
+        return {'manifest': {'schema': 2, 'lab_id': 'bgp', 'lab_name': 'BGP', 'backup_job_id': uuid.uuid4().hex,
+                             'captured_at': '2026-09-16T00:00:00Z', 'topology_digest': 'a' * 64, 'topology_provenance': 'captured',
+                             'node_names': ['PE1'], 'excluded_nodes': [], 'restore_capable_nodes': 1,
+                             'files': [dict(path='PE1.cfg', size=len(raw), sha256=hashlib.sha256(raw).hexdigest(),
+                                            node='PE1', platform='juniper_cjunosevolved', format='junos-display-set',
+                                            restore_artifact='PE1.jcfg', restore_size=len(rr), restore_sha256=hashlib.sha256(rr).hexdigest(),
+                                            restore_format='junos-hierarchical', restore_capable=True)]},
+                'files': {'PE1.cfg': base64.b64encode(raw).decode(), 'PE1.jcfg': base64.b64encode(rr).decode()}}
+
+    def test_schema2_restore_artifact_is_published_and_read_back(self):
+        req, result = self.publish(self.capture_schema2(), push=False)
+        self.assertEqual(result['status'], 'committed', result)
+        # Both the config and its restore artifact are committed in the checkout.
+        self.assertEqual((self.repo / 'latest/PE1.jcfg').read_text(), 'system {\n    host-name PE1;\n}\n')
+        self.assertIn('latest/PE1.jcfg', result['changed_files'])
+        # read-version returns both files and the helper's own validation passed.
+        version = self.worker.dispatch(self.request('read-version', commit=result['commit'], path='latest'))
+        self.assertEqual(set(version['snapshot']['files']), {'PE1.cfg', 'PE1.jcfg'})
+        self.assertEqual(version['snapshot']['manifest']['schema'], 2)
+
+    def test_schema2_rejects_a_missing_or_tampered_restore_artifact(self):
+        capture = self.capture_schema2()
+        capture['files'].pop('PE1.jcfg')  # manifest still references it
+        with self.assertRaises(ValueError): snapshot(capture)
+        capture = self.capture_schema2()
+        capture['manifest']['files'][0]['restore_sha256'] = '0' * 64
+        with self.assertRaises(ValueError): snapshot(capture)
+
     def test_baseline_does_not_rewind_latest_and_replace_is_conditional(self):
         self.publish(self.capture('latest\n'))
         _, base = self.publish(self.capture('baseline\n'), target='baseline')

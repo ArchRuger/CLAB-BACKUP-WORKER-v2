@@ -52,8 +52,8 @@ def short_name(node, lab_name='', config=''):
     return name
 
 
-def stored_path(store, job, node):
-    filename=node.get('file','')
+def stored_file(store, job, filename):
+    """Resolve one snapshot file of a job with the same safety checks as stored_path."""
     if not filename or Path(filename).name!=filename or '\\' in filename:
         return None
     folder=store.root/'backups'/job['lab_id']/'history'/job['id']
@@ -63,6 +63,15 @@ def stored_path(store, job, node):
     if any(parent.is_symlink() for parent in (folder,folder.parent,folder.parent.parent)):
         return None
     return path
+
+
+def stored_path(store, job, node):
+    return stored_file(store, job, node.get('file',''))
+
+
+def stored_restore_path(store, job, node):
+    """The companion whole-device restore candidate captured beside the backup."""
+    return stored_file(store, job, node.get('restore_file',''))
 
 
 def migrate_download_metadata(store):

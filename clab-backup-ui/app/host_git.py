@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.27.0'
+VERSION = '1.28.0'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -115,15 +115,18 @@ def snapshot(value):
     if not isinstance(value, dict) or set(value) != {'manifest', 'files'}:
         raise ValueError('A complete manifest and file map are required.')
     manifest, encoded = value['manifest'], value['files']
-    if not isinstance(manifest, dict) or manifest.get('schema') != 1 or not isinstance(encoded, dict):
+    # Schema 1 (config files only) and schema 2 (Junos backups also carry a hierarchical
+    # restore-grade artifact per node, referenced by a file entry's `restore_artifact`).
+    if not isinstance(manifest, dict) or manifest.get('schema') not in (1, 2) or not isinstance(encoded, dict):
         raise ValueError('Unsupported snapshot schema.')
     files = manifest.get('files')
     if not isinstance(files, list) or not 1 <= len(files) <= 500 or len(json.dumps(manifest)) > MAX_FILE:
         raise ValueError('The snapshot requires between 1 and 500 bounded files.')
     result = {}; total = 0
-    for item in files:
-        if not isinstance(item, dict): raise ValueError('Invalid snapshot file metadata.')
-        name = relpath(item.get('path'))
+
+    def take(name, size, sha):
+        nonlocal total
+        name = relpath(name)
         if '/' in name or name == 'manifest.json' or name in result: raise ValueError('Snapshot filenames must be unique plain filenames.')
         data = encoded.get(name)
         if not isinstance(data, str) or len(data) > (MAX_FILE + 2) // 3 * 4: raise ValueError('Missing or oversized snapshot file.')
@@ -131,9 +134,15 @@ def snapshot(value):
         except Exception: raise ValueError('Invalid snapshot file encoding.') from None
         total += len(raw)
         if not raw or len(raw) > MAX_FILE or total > MAX_TOTAL: raise ValueError('Snapshot exceeds the transfer limits.')
-        if type(item.get('size')) is not int or item['size'] != len(raw) or item.get('sha256') != hashlib.sha256(raw).hexdigest():
+        if type(size) is not int or size != len(raw) or sha != hashlib.sha256(raw).hexdigest():
             raise ValueError('Snapshot file length or checksum did not match its manifest.')
         result[name] = raw
+
+    for item in files:
+        if not isinstance(item, dict): raise ValueError('Invalid snapshot file metadata.')
+        take(item.get('path'), item.get('size'), item.get('sha256'))
+        if item.get('restore_artifact'):
+            take(item['restore_artifact'], item.get('restore_size'), item.get('restore_sha256'))
     if set(result) != set(encoded): raise ValueError('The file map must exactly match the manifest.')
     return manifest, result
 
@@ -305,19 +314,26 @@ class GitRepository:
         if path.stat().st_size > MAX_FILE: raise ValueError('Existing manifest is too large.')
         try: value = json.loads(path.read_text(encoding='utf8'))
         except Exception: raise ValueError('Existing snapshot manifest is invalid.') from None
-        if not isinstance(value, dict) or value.get('schema') != 1 or not isinstance(value.get('files'), list):
+        if not isinstance(value, dict) or value.get('schema') not in (1, 2) or not isinstance(value.get('files'), list):
             raise ValueError('Existing snapshot manifest is invalid.')
         total = 0; seen = set()
         if not 1 <= len(value['files']) <= 500: raise ValueError('Existing snapshot manifest has an invalid file count.')
-        for item in value['files']:
-            if not isinstance(item, dict): raise ValueError('Existing snapshot manifest contains invalid file metadata.')
-            name = relpath(item.get('path'))
+
+        def check(name, size, sha):
+            nonlocal total
+            name = relpath(name)
             if '/' in name or name == 'manifest.json' or name in seen: raise ValueError('Existing snapshot manifest has unsafe or duplicate filenames.')
             seen.add(name); item_path = self.file(folder + '/' + name)
             if not item_path.exists() or item_path.stat().st_size > MAX_FILE: raise ValueError('Existing snapshot files are missing or too large.')
             raw = item_path.read_bytes(); total += len(raw)
-            if total > MAX_TOTAL or len(raw) != item.get('size') or hashlib.sha256(raw).hexdigest() != item.get('sha256'):
+            if total > MAX_TOTAL or len(raw) != size or hashlib.sha256(raw).hexdigest() != sha:
                 raise ValueError('Existing snapshot files no longer match their saved manifest. Review the repository before exporting.')
+
+        for item in value['files']:
+            if not isinstance(item, dict): raise ValueError('Existing snapshot manifest contains invalid file metadata.')
+            check(item.get('path'), item.get('size'), item.get('sha256'))
+            if item.get('restore_artifact'):
+                check(item['restore_artifact'], item.get('restore_size'), item.get('restore_sha256'))
         return value
 
     def status(self):
@@ -619,13 +635,21 @@ class GitRepository:
         except Exception: raise ValueError('The saved version manifest is invalid.') from None
         files = {}; total = 0
         if not isinstance(manifest, dict) or not isinstance(manifest.get('files'), list) or len(manifest['files']) > 500: raise ValueError('Invalid saved snapshot manifest.')
-        for item in manifest['files']:
-            name = relpath(item.get('path'))
+
+        def read_one(name):
+            nonlocal total
+            name = relpath(name)
             if '/' in name or name == 'manifest.json': raise ValueError('Invalid saved snapshot filename.')
             code, content = self.run('show', commit + ':' + folder + '/' + name, check=False, limit=MAX_FILE)
             total += len(content)
             if code or total > MAX_TOTAL: raise ValueError('The saved snapshot is missing files or exceeds its limit.')
             files[name] = base64.b64encode(content).decode()
+
+        for item in manifest['files']:
+            read_one(item.get('path'))
+            # Schema 2: the Junos restore-grade artifact travels with the config file.
+            if item.get('restore_artifact'):
+                read_one(item['restore_artifact'])
         result = {'manifest': manifest, 'files': files}; snapshot(result)
         return {'snapshot': result}
 

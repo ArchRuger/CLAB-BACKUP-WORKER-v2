@@ -4,6 +4,51 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.28.0
+
+Apply a saved Junos configuration to a running node without a reboot or a containerlab
+redeploy, and reach a nested Git save folder in one step. See
+[GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node) and
+[LAB-OPERATIONS.md](LAB-OPERATIONS.md#apply-a-saved-configuration-to-a-running-node).
+
+- **Apply to running lab.** Open a saved Junos version in *View changes / History* and
+  choose **Apply to running lab…**. The manager shows a review screen (source, target
+  nodes, whether each already matches the saved state, the safety notes), backs up the
+  current configuration of every target first, then loads the saved configuration onto
+  the running node and activates it with a confirmed commit. This is a complete
+  desired-state replacement: a statement the student added that is not in the saved
+  version is removed, not merged. The node is never rebooted, restarted or redeployed.
+  The restore runs as a managed job (`app/restore.py`, `POST /api/labs/{id}/restore`)
+  with the same serialization, per-node results, secret redaction and persistent history
+  as a backup, over the manager's existing direct node-SSH path — no new host helper.
+- **Whole-device restore mechanism.** Junos `show configuration | display set` output
+  can only be merged (`load set`), so it cannot remove stale statements. Every Junos
+  backup now also captures a hierarchical restore-grade candidate (`show configuration`)
+  beside the display-set file; the restore loads it with `load override terminal`, runs
+  a configuration check, and commits with `commit confirmed`. After loading, the manager
+  reconnects to prove the node is still reachable and only then confirms the commit; if
+  it cannot reconnect, the node rolls back to the pre-restore state on its own. The saved
+  snapshot records the restore artifact in its manifest (schema 2); a snapshot saved
+  before this release has no artifact and is offered as view/download only.
+- **Supported platforms.** Live restore covers `juniper_cjunosevolved` and
+  `juniper_vjunosswitch`, validated on the dev VM. IOS-XR and EOS keep view/download
+  only until an equivalent replace-and-verify mechanism is validated for them.
+- **Safety and verification.** The pre-restore backup is mandatory: a node whose backup
+  fails is not changed. After the restore the manager captures the node again, normalises
+  it with the same logic as a backup and compares it to the saved desired state, so the
+  UI can show that the stale statement is gone and the desired statements are present.
+  The review, logs and job records carry counts and secret-masked sample lines, never a
+  full configuration dump.
+- **Nested Git folders in one step.** *New folder…* accepts a nested path such as
+  `Week-04/BGP/Final-State` and shows the resulting destination as you type, so a novice
+  can create `CCNP-SP/Labs/Week-04/BGP/Final-State` without clicking through each level.
+  Every segment is validated the same way a single folder name is, on the browser, the
+  manager and the VM helper.
+- Live device restore uses the manager's direct node-SSH path and touches no host helper.
+  The VM Git helper does gain schema-2 support so it can save and read the new restore
+  artifact, so refresh it with `setup-git.sh --refresh` (the installer does this) and
+  rebuild the manager image.
+
 ## Changes in 1.27.0
 
 Students can see where a lab keeps its files in the connected repository, move the lab

@@ -21,6 +21,9 @@ from .layout import decorations, annotations, revision
 
 BUSY = ('queued', 'running')
 GIT_BUSY = ('queued', 'capturing', 'exporting', 'pushing')
+# A live restore holds the lab the same way a Git save does. progress_id excludes the
+# restore job's own id so its pre/post backups are not blocked by itself.
+RESTORE_BUSY = ('queued', 'preflight', 'backing_up', 'applying', 'confirming', 'verifying')
 
 
 def operation_busy(state, lab_id=None, progress_id=None):
@@ -28,7 +31,10 @@ def operation_busy(state, lab_id=None, progress_id=None):
                 for j in state.get('operations', [])) or
             any(j['status'] in GIT_BUSY and j.get('id') != progress_id and
                 (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
-                for j in state.get('git_jobs', [])))
+                for j in state.get('git_jobs', [])) or
+            any(j['status'] in RESTORE_BUSY and j.get('id') != progress_id and
+                (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
+                for j in state.get('restore_jobs', [])))
 
 
 def operation_connection_error(status, stderr):

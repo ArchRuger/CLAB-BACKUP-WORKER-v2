@@ -87,6 +87,63 @@ class GitProgressTests(unittest.TestCase):
             self.progress.execute(job['id'])
         return self.client.get('/api/git/jobs/'+job['id']).json(), submit
 
+    def capture_with_restore(self, lab_id=None, **kwargs):
+        """A capture that also carries a hierarchical restore-grade artifact per node."""
+        lab_id = lab_id or self.lab['id']; lab = self.store.lab(lab_id)
+        job_id = uuid.uuid4().hex
+        folder = self.store.root/'backups'/lab_id/'history'/job_id
+        folder.mkdir(parents=True)
+        nodes = []
+        for index, node in enumerate(lab['nodes']):
+            if kwargs.get('node_names') and node['name'] not in kwargs['node_names']: continue
+            (folder/f'n{index}.set').write_text(f'set system host-name h{index}\n', encoding='utf-8')
+            (folder/f'n{index}.jcfg').write_text(f'system {{\n    host-name h{index};\n}}\n', encoding='utf-8')
+            # A restore artifact only exists for Junos; the snapshot derives the format
+            # from the platform, so pin a Junos platform for this fixture capture.
+            nodes.append(dict(name=node['name'], status='succeeded', file=f'n{index}.set',
+                              restore_file=f'n{index}.jcfg', restore_format='junos-hierarchical',
+                              platform='juniper_cjunosevolved', short_name='r'+str(index+1)))
+        job = dict(id=job_id, lab_id=lab_id, lab_name=lab['name'], operation='backup', status='succeeded',
+                   created='2026-09-11T10:00:00+00:00', finished='2026-09-11T10:01:00+00:00', nodes=nodes)
+        if kwargs.get('progress_context'): job['progress_context'] = copy.deepcopy(kwargs['progress_context'])
+        if kwargs.get('progress_id'): job['progress_id'] = kwargs['progress_id']
+        self.store.state['jobs'].insert(0, job); self.store.save()
+        return copy.deepcopy(job)
+
+    def test_restore_artifact_is_included_and_roundtrips(self):
+        backup = self.capture_with_restore()
+        snapshot = captured_snapshot(self.store, backup)
+        manifest = snapshot['manifest']
+        self.assertEqual(manifest['schema'], 2)
+        self.assertEqual(manifest['restore_capable_nodes'], len(backup['nodes']))
+        entry = manifest['files'][0]
+        self.assertIn('restore_artifact', entry)
+        self.assertTrue(entry['restore_capable'])
+        self.assertEqual(entry['restore_format'], 'junos-hierarchical')
+        self.assertIn(entry['restore_artifact'], snapshot['files'])
+        # A full validation round-trip keeps every artifact and matches the manifest keys.
+        _, files = decoded_snapshot({'snapshot': snapshot})
+        self.assertIn(entry['restore_artifact'], files)
+        self.assertIn('host-name', files[entry['restore_artifact']].decode('utf-8'))
+
+    def test_legacy_capture_without_artifact_is_not_restore_capable(self):
+        snapshot = captured_snapshot(self.store, self.capture())
+        self.assertEqual(snapshot['manifest']['restore_capable_nodes'], 0)
+        self.assertFalse(any(f.get('restore_capable') for f in snapshot['manifest']['files']))
+        # decode still succeeds (backward compatible) and exposes no restore files.
+        _, files = decoded_snapshot({'snapshot': snapshot})
+        self.assertFalse(any(name.endswith('.jcfg') for name in files))
+
+    def test_version_route_reports_restore_capability(self):
+        job, _ = self.save()
+        with patch.object(self.app.state.runner, 'submit', side_effect=self.capture_with_restore):
+            self.progress.execute(job['id'])
+        version = self.client.post(self.url+'/version', json=dict(commit='b'*40, path='latest'))
+        self.assertEqual(version.status_code, 200, version.text)
+        body = version.json()
+        self.assertTrue(body['restore_supported'])
+        self.assertTrue(body['restore_nodes'])
+
     def test_fresh_save_uses_complete_capture_and_persists_provenance(self):
         job, _ = self.save()
         outcome, submit = self.run_save(job)

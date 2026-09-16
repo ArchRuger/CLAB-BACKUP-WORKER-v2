@@ -10,6 +10,19 @@ function gitFolderName(value){
  if(!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}$/.test(value)||value.toLowerCase()==='.git'||value==='.'||value==='..')throw new Error('Use letters, numbers, dashes, dots or underscores for the folder name, without slashes.');
  return value;
 }
+// A whole nested destination typed in one go, e.g. "Week-04/BGP/Final-State". Each
+// segment obeys the single-folder rule; the manager and VM helper validate it again.
+function gitFolderPath(value){
+ const parts=String(value??'').trim().replace(/^\/+|\/+$/g,'').split('/').map(part=>part.trim()).filter(Boolean);
+ if(!parts.length)throw new Error('Enter a folder name.');
+ return parts.map(gitFolderName).join('/');
+}
+// The full repository-relative destination, joining an existing parent folder with new segments.
+function gitDestinationPreview(parent,typed){
+ let nested;try{nested=gitFolderPath(typed);}catch{nested='';}
+ if(!nested)return '';
+ return parent?parent+'/'+nested:nested;
+}
 function gitPathChips(path){const chips=[{name:'',path:''}];let current='';for(const part of String(path||'').split('/').filter(Boolean)){current=current?current+'/'+part:part;chips.push({name:part,path:current});}return chips;}
 function gitTreeModel(files,folders){
  const nodes=new Map();
