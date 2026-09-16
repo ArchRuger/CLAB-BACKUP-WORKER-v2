@@ -7,6 +7,7 @@ function appHarness(){
  const document={getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},querySelectorAll(){return [];},createElement:element,body:element()};
  const items=new Map();
  const context=vm.createContext({document,sessionStorage:{getItem:k=>items.get(k),setItem:(k,v)=>items.set(k,v)},setTimeout:()=>0,clearTimeout(){},setInterval(){},URL:{createObjectURL:()=>'blob:fixture',revokeObjectURL(){}},URLSearchParams,Blob,console});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),context);
  context.fetch=async()=>({ok:true,status:200,headers:{get:()=>''},json:async()=>({labs:[],jobs:[],platforms:{}})});
  return {context,document};
@@ -27,13 +28,14 @@ function managementHarness(state,activeId=''){
 test('SSH actions wait for the NOS to answer and explain why they are disabled',()=>{
  const h=appHarness();
  const booting=vm.runInContext(`nodeActions({name:'r1',ssh_ready:false,login_configured:true,readiness:'Ready',nos_login:{status:'booting'}},true)`,h.context);
- assert.match(booting,/data-terminal="r1" disabled title="NOS is still booting/);
- assert.match(booting,/data-check="r1" >Test login/,'a configured login can still be tested by hand');
+ assert.match(booting,/data-terminal="r1" disabled title="r1 is still starting/);
+ const bootingDrawer=vm.runInContext(`nodeDrawerActions({name:'r1',ssh_ready:false,login_configured:true,readiness:'Ready',nos_login:{status:'booting'}})`,h.context);
+ assert.match(bootingDrawer,/data-check="r1" >Test login/,'a configured login can still be tested by hand');
  const ready=vm.runInContext(`nodeActions({name:'r1',ssh_ready:true,login_configured:true,readiness:'Ready',nos_login:{status:'ready'}})`,h.context);
- assert.match(ready,/data-terminal="r1" >SSH/);
+ assert.match(ready,/data-terminal="r1" >Open CLI/);
  const failed=vm.runInContext(`nodeActions({name:'r1',ssh_ready:false,login_configured:true,nos_login:{status:'failed'}},true)`,h.context);
- assert.match(failed,/assign a credential profile/);
- const legacy=vm.runInContext(`nodeActions({name:'r1',ssh_ready:true},true)`,h.context);
+ assert.match(failed,/SSH login failed with the saved credentials/);
+ const legacy=vm.runInContext(`nodeDrawerActions({name:'r1',ssh_ready:true})`,h.context);
  assert.match(legacy,/data-check="r1" >Test login/,'older state without login_configured keeps the previous behaviour');
 });
 
@@ -65,11 +67,11 @@ test('the deployment bar reports NOS readiness in plain words',()=>{
  const lab={id:'lab',name:'demo',nodes:[],deployment:{status:'Running'},nos_readiness:{status:'booting',ready:1,total:2,booting:1,failed:0}};
  const h=managementHarness({discovery:{configured:true,connected:true,host:{enabled:true}},labs:[lab]},'lab');
  h.context.renderManagement();
- assert.match(h.element('deployment-nos').textContent,/NOS booting · 1\/2 nodes/);assert.equal(h.element('deployment-nos').className,'deployment-nos booting');
+ assert.match(h.element('deployment-nos').textContent,/NOS booting · 1\/2 devices/);assert.equal(h.element('deployment-nos').className,'deployment-nos booting');
  lab.nos_readiness={status:'ready',ready:2,total:2,booting:0,failed:0};h.context.renderManagement();
- assert.match(h.element('deployment-nos').textContent,/NOS ready · 2\/2 nodes accept SSH login/);
+ assert.match(h.element('deployment-nos').textContent,/NOS ready · 2\/2 devices accept SSH login/);
  lab.nos_readiness={status:'failed',ready:1,total:2,booting:0,failed:1};h.context.renderManagement();
- assert.match(h.element('deployment-nos').textContent,/NOS login failed on 1 of 2 nodes/);
+ assert.match(h.element('deployment-nos').textContent,/NOS login failed on 1 of 2 devices/);
  delete lab.nos_readiness;h.context.renderManagement();
  assert.equal(h.element('deployment-nos').textContent,'');
 });
@@ -80,12 +82,12 @@ test('the Grafana link goes through the start page with the lab map or overview 
  const link=document.getElementById('grafana-open');link.removeAttribute=function(name){delete this[name];};
  const lab={id:'lab',name:'bgp lab',nodes:[],telemetry:{grafana:{enabled:true,port:3000,map_uid:'clab-map-abc'}}};
  context.renderGrafanaLink(lab);
- assert.equal(link.hidden,false);assert.equal(link.textContent,'Lab map in Grafana ↗');
+ assert.equal(link.hidden,false);assert.equal(link.innerHTML,'Lab map in Grafana <span aria-hidden="true">↗</span>','the arrow is decoration, outside the accessible name');
  assert.equal(link.href,'/static/grafana.html#path=%2Fd%2Fclab-map-abc%3Fvar-lab%3Dbgp%2Blab%26refresh%3D10s&title=bgp+lab');
  assert.equal(new URLSearchParams(link.href.split('#')[1]).get('path'),'/d/clab-map-abc?var-lab=bgp+lab&refresh=10s','only the dashboard path travels; the page builds the origin');
  assert.match(link.title,/starts on the VM when it is not running/);
  lab.telemetry.grafana.map_uid='';context.renderGrafanaLink(lab);
- assert.equal(new URLSearchParams(link.href.split('#')[1]).get('path'),'/d/clab-lab-overview?var-lab=bgp+lab&refresh=10s');assert.equal(link.textContent,'Grafana ↗');
+ assert.equal(new URLSearchParams(link.href.split('#')[1]).get('path'),'/d/clab-lab-overview?var-lab=bgp+lab&refresh=10s');assert.equal(link.innerHTML,'Grafana <span aria-hidden="true">↗</span>');
  lab.telemetry.grafana.enabled=false;context.renderGrafanaLink(lab);
  assert.equal(link.hidden,true);assert.equal(link.href,undefined);
  context.renderGrafanaLink({id:'x',name:'unlinked',nodes:[],telemetry:{status:'unmonitored',total:0}});

@@ -57,7 +57,7 @@ function renderGitProgress(){
  if(gitWatch&&gitWatch.lab_id!==lab.id&&!$('git-job-dialog')?.open){clearTimeout(gitWatchTimer);gitWatch=null;}
  if(active&&!gitWatch)gitStartWatch(active);
 }
-function gitOpenRepository(){showTab('git');if($('extra-views'))$('extra-views').open=false;}
+function gitOpenRepository(){showTab('git');}
 async function gitShowRepository(force=false){
  const id=activeId,container=$('git-repository-content');if(!id||!container)return;
  if(gitViewLab===id&&!force)return;

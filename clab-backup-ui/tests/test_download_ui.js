@@ -10,6 +10,7 @@ function harness(){
  const document={getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},querySelectorAll(){return [];},createElement:element,body:element()};
  const items=new Map();
  const context=vm.createContext({document,sessionStorage:{getItem:k=>items.get(k),setItem:(k,v)=>items.set(k,v)},setTimeout:()=>0,clearTimeout(){},setInterval(){},URL:{createObjectURL:()=> 'blob:fixture',revokeObjectURL(){}},URLSearchParams,Blob,console});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),context);
  context.fetch=async(url)=>{requests.push(url);return {ok:true,status:200,headers:{get:()=>context.disposition},blob:async()=>new Blob(['config'])};};
  return {context,document,downloads,requests};

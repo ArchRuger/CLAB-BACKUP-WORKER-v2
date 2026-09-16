@@ -1,5 +1,7 @@
 'use strict';
 let vmSyncBusy=false;
+// Lists that re-render on the 4 s poll go through app.js's setMarkup so focus survives; the harness has no setMarkup.
+function mgmtMarkup(el,html){if(!el)return;if(typeof setMarkup==='function')setMarkup(el,html);else el.innerHTML=html;}
 // All host output is rendered as text or escaped; credentials never enter state responses.
 document.body.insertAdjacentHTML('beforeend', `
 <dialog id="auto-import-dialog"><form id="auto-import-form">
@@ -61,10 +63,10 @@ document.querySelectorAll('[data-dismiss]').forEach(button=>button.onclick=()=>b
 function renderManagement(){
  const discovery=state.discovery||{}, lab=current();
  $('vm-summary').textContent=!discovery.configured?'VM discovery is not configured.':!discovery.host.enabled?'VM discovery is paused.':discovery.helper_update_required?'VM connected · helper update required. On the VM, run sudo bash deploy/start-manager.sh from the current source.':discovery.connected?'VM connected · checks every 30s':(discovery.error||'VM status unknown; refresh discovery.');
- $('discovered-labs').innerHTML=(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Discovered':'Last seen'} · ${l.running}/${l.nodes} running · ${esc(discovery.file_errors?.[l.name]||(discovery.pending_imports?.[l.name]?'Ready to import · confirmation required':'Try importing VM files'))}</small></button>`).join('');
+ mgmtMarkup($('discovered-labs'),(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Running on the VM':'Last seen on the VM'} · ${l.running} of ${l.nodes} devices running · ${esc(discovery.file_errors?.[l.name]||(discovery.pending_imports?.[l.name]?'Ready to import — confirm to add it to My labs':'Add to My labs'))}</small></button>`).join(''));
  const reports=discovery.file_reports||{};
- $('discovery-file-list').innerHTML=Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file results yet. Refresh discovery. If using an older helper, update it on the VM.</p>';
- $('excluded-labs').innerHTML=(discovery.ignored_labs||[]).length?'<p class="side-hint">Excluded from automatic import</p>'+(discovery.ignored_labs||[]).map(name=>`<button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again · Right-click to clear exclusion</small></button>`).join(''):'';
+ mgmtMarkup($('discovery-file-list'),Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file checks yet. Use Manager › Refresh lab list. If it stays empty the VM helper may need an update (Manager › Diagnostics).</p>');
+ mgmtMarkup($('excluded-labs'),(discovery.ignored_labs||[]).length?'<p class="side-hint">Removed from this manager earlier</p>'+(discovery.ignored_labs||[]).map(name=>`<div class="empty-lab"><button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again · or stop hiding it so it appears automatically</small></button><button type="button" class="button secondary small" data-clear-exclusion="${esc(name)}">Stop hiding</button></div>`).join(''):'');
  maybePromptVmConnection();
  renderLanding(discovery,lab);
  if(!lab)return;
@@ -75,7 +77,7 @@ function renderManagement(){
  $('vm-files-status').textContent=!lab.deployment_name?'':!discovery.connected?'VM file sync is unavailable until discovery reconnects.':!discovery.file_import_supported?'Update the installed VM helper to enable file transfer, or use direct inspection + SFTP. Manual uploads remain available.':source?('VM files: '+source.status+(source.synced_at?' · Last synced '+new Date(source.synced_at).toLocaleString():'')+(source.message?' · '+source.message:'')):(discovery.file_errors?.[lab.deployment_name]||'No deployed source files found. Saved workspace retained.');
  $('deployment-status').textContent=lab.deployment?.status||'Unlinked';
  $('deployment-message').textContent=lab.deployment?.message||'Link this workspace to a deployed lab.';
- $('deployment-checked').textContent=lab.deployment?.last_success?'Last successful inspection: '+new Date(lab.deployment.last_success).toLocaleString():'';
+ $('deployment-checked').textContent=lab.deployment?.last_success?new Date(lab.deployment.last_success).toLocaleString():'';
  renderNosReadiness(lab);
 }
 // Container state alone never proves a NOS is usable; the readiness monitor's verdict
@@ -83,7 +85,7 @@ function renderManagement(){
 function renderNosReadiness(lab){
  const nos=lab.nos_readiness||{status:'idle'};
  $('deployment-nos').className='deployment-nos '+nos.status;
- $('deployment-nos').textContent=nos.status==='ready'?`NOS ready · ${nos.ready}/${nos.total} nodes accept SSH login`:nos.status==='booting'?`NOS booting · ${nos.ready}/${nos.total} nodes accept SSH login so far. SSH and the login test open automatically when they answer.`:nos.status==='failed'?`NOS login failed on ${nos.failed} of ${nos.total} nodes · assign credentials, then Test login`:'';
+ $('deployment-nos').textContent=nos.status==='ready'?`NOS ready · ${nos.ready}/${nos.total} devices accept SSH login`:nos.status==='booting'?`NOS booting · ${nos.ready}/${nos.total} devices accept SSH login so far. SSH and the login test open automatically when they answer.`:nos.status==='failed'?`NOS login failed on ${nos.failed} of ${nos.total} devices · assign credentials, then Test login`:'';
 }
 // Deploy-first landing page: connect the VM, then deploy or pick up a running lab.
 function renderLanding(discovery,lab){
@@ -91,11 +93,15 @@ function renderLanding(discovery,lab){
  const configured=!!discovery.configured,connected=!!discovery.connected;
  $('vm-connect-empty').hidden=configured;
  $('deploy-empty').disabled=!connected;
- $('deploy-empty').title=connected?'':'Connect the VM to browse its topologies';
+ $('deploy-empty').title=connected?'':'Connect the lab VM to browse its topology files.';
+ if($('home-deploy')){$('home-deploy').disabled=!connected;$('home-deploy').title=$('deploy-empty').title;}
+ if($('home-deploy-reason')){$('home-deploy-reason').textContent=$('deploy-empty').title;$('home-deploy-reason').hidden=connected;}
+ // Home keeps a VM prompt even when labs exist: cards read "Status unknown" without one.
+ if($('home-vm-banner')){const note=!configured?'Connect this manager to your lab VM first. Starting labs, finding running labs and opening device CLIs all use that connection.':!connected?(discovery.error||'Waiting for the lab VM to answer. Deploy becomes available as soon as it does.'):'';$('home-vm-banner').hidden=!note;if($('home-vm-banner-text'))$('home-vm-banner-text').textContent=note;if($('home-vm-connect'))$('home-vm-connect').textContent=configured?'VM connection…':'Connect the VM';}
  $('empty-vm-note').textContent=!configured?'Connect this manager to your containerlab VM first. Deployment, discovery and node logins all run over that connection.':!connected?(discovery.error||'Waiting for the VM connection. Deployment opens as soon as discovery answers.'):'';
  const running=(discovery.discovered||[]).filter(l=>!l.imported);
  $('empty-discovered').hidden=!running.length;
- $('empty-discovered-list').innerHTML=running.map(l=>`<div class="empty-lab"><div><strong>${esc(l.name)}</strong><small>${l.running}/${l.nodes} containers running${l.excluded?' · removed from this manager earlier':''}</small></div><button type="button" class="button secondary" data-setup-name="${esc(l.name)}">Import</button></div>`).join('');
+ mgmtMarkup($('empty-discovered-list'),running.map(l=>`<div class="empty-lab"><div><strong>${esc(l.name)}</strong><small>${l.running}/${l.nodes} containers running${l.excluded?' · removed from this manager earlier':''}</small></div><button type="button" class="button secondary" data-setup-name="${esc(l.name)}">Import</button></div>`).join(''));
 }
 function openSetup(replace=false, deployedName=''){
  const lab=replace?current():null;$('setup-form').reset();$('setup-form').querySelector('.form-error').textContent='';
@@ -107,6 +113,7 @@ function openSetup(replace=false, deployedName=''){
 $('new-lab').onclick=$('import-empty').onclick=()=>openSetup();
 $('import-inventory-empty').onclick=()=>openImport();
 $('vm-connect-empty').onclick=()=>openVmDialog();
+if($('home-vm-connect'))$('home-vm-connect').onclick=()=>openVmDialog();
 $('empty-discovered-list').onclick=e=>{const b=e.target.closest('[data-setup-name]');if(b)importDiscovered(b.dataset.setupName);};
 $('import-top').onclick=()=>current()?openImport(true):openDeploy();
 $('update-definition').onclick=()=>openSetup(true);
@@ -114,7 +121,7 @@ $('legacy-import').onclick=()=>{$('setup-dialog').close();openImport(!!$('setup-
 $('discovered-labs').onclick=e=>{const b=e.target.closest('[data-setup-name]');if(b)importDiscovered(b.dataset.setupName);};
 $('setup-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  const result=await(await api('/lab-definitions',{method:'POST',body:new FormData(e.target)})).json();
- activeId=result.id;sessionStorage.setItem('activeLab',activeId);tab='inventory';$('setup-dialog').close();$('setup-form').reset();await refresh();notify('Lab saved. Discovery updates automatic addresses when the lab is running.');
+ $('setup-dialog').close();$('setup-form').reset();await refresh();if(typeof selectLab==='function')selectLab(result.id);else{activeId=result.id;sessionStorage.setItem('activeLab',activeId);}notify('Lab added. Device addresses fill in automatically while the lab is running.');
 });};
 function openVmDialog(){
  const h=state.discovery?.host||{};$('vm-form').reset();$('vm-form').querySelector('.form-error').textContent='';
@@ -143,17 +150,17 @@ $('vm-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  if((result.error||result.helper_update_required)&&!result.checking){$('vm-form').querySelector('.form-error').textContent=result.error||'Connected, but the installed VM helper is outdated. On the VM, run sudo bash deploy/start-manager.sh from the current source, then retry.';return;}
  $('vm-dialog').close();notify(result.connected?'VM connected. Lab discovery is active.':'VM settings saved. Check the discovery status for the connection result.');
 });};
-$('vm-refresh').onclick=async()=>{const b=$('vm-refresh');b.disabled=true;b.textContent='Checking VM…';try{const result=await json('/discovery/refresh','POST',{});await refresh();notify(result.error||(!result.configured?'Configure the VM connection first.':result.connected?'Discovery updated.':'Discovery is paused or still checking.'));}catch(e){notify(e.message);}finally{b.disabled=false;b.textContent='Refresh discovery';}};
+$('vm-refresh').onclick=async()=>{const b=$('vm-refresh'),label=(b.dataset&&b.dataset.label)||b.textContent;b.disabled=true;b.textContent='Checking the lab VM…';try{const result=await json('/discovery/refresh','POST',{});await refresh();notify(result.error||(!result.configured?'Connect the lab VM first (Manager › VM connection…).':result.connected?'Lab list refreshed.':'Automatic checks are paused or still running.'));}catch(e){notify(e.message);}finally{b.disabled=false;b.textContent=label;}};
 $('link-deployment').onclick=()=>{const lab=current();$('binding-form').querySelector('.form-error').textContent='';$('binding-name').value=lab.deployment_name||lab.name;$('binding-prefix').value=lab.container_prefix??'clab';$('deployment-names').innerHTML=(state.discovery?.discovered||[]).map(l=>`<option value="${esc(l.name)}"></option>`).join('');$('binding-dialog').showModal();};
 $('binding-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/deployment','PUT',{deployed_name:$('binding-name').value.trim(),prefix:$('binding-prefix').value.trim()});$('binding-dialog').close();await refresh();notify('Deployment link saved.');});};
 
 $('sync-vm').onclick=async()=>{
  const lab=current();if(!lab||vmSyncBusy)return;
  vmSyncBusy=true;
- const button=$('sync-vm');button.disabled=true;button.textContent='Syncing…';
- try{await json('/labs/'+lab.id+'/sync','POST',{});await refresh();notify('VM files synced. Saved connections, credentials and backup history retained.');}
+ const button=$('sync-vm'),label=(button.dataset&&button.dataset.label)||button.textContent;button.disabled=true;button.textContent='Syncing…';
+ try{await json('/labs/'+lab.id+'/sync','POST',{});await refresh();notify('Topology updated from the VM. Device logins, saved progress and backups are kept.');}
  catch(error){notify(error.message);}
- finally{vmSyncBusy=false;button.textContent='Sync from VM';renderManagement();}
+ finally{vmSyncBusy=false;button.textContent=label;renderManagement();}
 };
 
 $('remove-lab').onclick=()=>{
@@ -166,11 +173,12 @@ $('remove-lab-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,as
  const id=$('remove-lab-id').value, exclude=$('remove-lab-exclude').checked;
  await json('/labs/'+encodeURIComponent(id),'DELETE',{name:$('remove-lab-confirm-name').value,prevent_reimport:exclude});
  $('remove-lab-dialog').close();
- if(activeId===id){activeId='';sessionStorage.removeItem('activeLab');tab='inventory';if($('details-dialog').open)$('details-dialog').close();}
+ if(activeId===id){if(typeof goHome==='function')goHome();else{activeId='';sessionStorage.removeItem('activeLab');if($('details-dialog').open)$('details-dialog').close();}}
  await refresh();
- notify(exclude?'Saved lab removed. Use Import again to rediscover it.':'Saved lab removed. Discovery can offer it for import again; confirmation is required.');
+ notify(exclude?'Lab removed. You can add it back from Home › Also running on the VM.':'Lab removed. It can be offered for import again after confirmation.');
 });};
 $('excluded-labs').onclick=e=>{
+ const clear=e.target.closest('[data-clear-exclusion]');if(clear){openExclusionMenu(clear.dataset.clearExclusion);return;}
  const button=e.target.closest('[data-allow-import]');if(button)importDiscovered(button.dataset.allowImport);
 };
 
@@ -201,8 +209,7 @@ async function importDiscovered(name){
 $('auto-import-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  const preview=importPreview;if(!preview)throw new Error('Preview the lab again before importing.');
  const lab=await json('/discovery/import','POST',{name:preview.name,token:preview.token});
- activeId=lab.id;sessionStorage.setItem('activeLab',activeId);tab='inventory';
- $('auto-import-dialog').close();await refresh();notify('Lab imported from VM files and saved.');
+ $('auto-import-dialog').close();await refresh();if(typeof selectLab==='function')selectLab(lab.id);else{activeId=lab.id;sessionStorage.setItem('activeLab',activeId);}notify('Lab added from the VM files.');
 });};
 $('setup-auto-import').onclick=()=>importDiscovered($('setup-deployed-name').value);
 
@@ -212,7 +219,7 @@ $('manager-settings').onclick=()=>{
  $('manager-reset-cancel').onclick=()=>dialog.close();$('manager-reset-confirm').oninput=()=>{$('manager-reset').disabled=$('manager-reset-confirm').value!=='RESET';};
  $('manager-reset').onclick=()=>opTask(dialog,async()=>{
   await json('/manager/reset','POST',{confirmation:$('manager-reset-confirm').value});
-  activeId='';sessionStorage.removeItem('activeLab');tab='inventory';importPreview=null;opCaps=null;
+  if(typeof goHome==='function')goHome();else{activeId='';sessionStorage.removeItem('activeLab');}importPreview=null;opCaps=null;
   document.querySelectorAll('dialog[open]').forEach(d=>d.close());
   await refresh();notify('Manager data cleared. VM connection retained; deployed labs can be imported again.');
  });
