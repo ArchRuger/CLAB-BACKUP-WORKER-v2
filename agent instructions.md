@@ -25,7 +25,11 @@ Browser validation runs without a VM: `docs/redesign/tools/fixture_manager.py` (
 scratch data directory, VM answers scripted in-process: readiness, discovery, jobs, Git helper,
 restore probe, operations helper) and `docs/redesign/tools/verify_after.py` (three viewports, zero
 console/page errors; Chromium's "Failed to load resource" for a handled non-2xx is reported apart).
-`docs/redesign/` is exempt from the living-doc release check. **Still to do before a release**:
+`docs/redesign/` is exempt from the living-doc release check. The release-validation pass of 2026-09-17 (`claude/1.29-release-validation`) added
+`tests/test_topology_menu_ui.js` to the workflow's browser step (CI green) and re-ran every
+automated and fixture gate, but ran on `clab-llm-dev2`, which is not the dev VM (no Docker,
+containerlab, data directory or route to the VM; use `clab-backup-ui/.venv`), so the decision was
+BLOCKED and nothing was bumped. **Still to do before a release**:
 the live-lab pass on the dev VM (rebuild the manager, `clabllm-dev`/`bgp-core`: redeploy, Open
 CLI, Save progress, checkpoint, apply from the folder browser, capture, telemetry link, destroy
 cancelled), then `python3 deploy/set-release.py 1.29.0`, turn the "Unreleased" sections of

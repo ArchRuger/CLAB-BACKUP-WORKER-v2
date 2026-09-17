@@ -39,17 +39,82 @@ is to be run after the live-lab pass below has happened.
   while off screen, device row id collisions, the deploy flow bypassing the router, capture
   and Diagnostics copy details) were fixed in the same branch. Intentionally removed: none.
 
-## Not done here
+## Release-validation pass of 2026-09-17 — decision: BLOCKED, not released
 
-- **Live-lab validation** on the dev VM (`clabllm-dev`, `bgp-core`): this session ran on a
-  host without Docker, containerlab or the manager data directory, so no container was
-  rebuilt and no lab was deployed, saved, applied, captured or destroyed through the new UI.
-  Required before the release: rebuild the manager from this tree, open both labs, redeploy
-  `bgp-core` and watch Starting → Running, Open CLI, Save progress, a checkpoint, view /
-  compare / apply a saved state from the folder browser, the capture entry point, the
-  telemetry link, a destroy confirmation cancelled.
-- The release bump, the `?v=` asset markers and the three history sections that
-  `verify-release.py` ties to the number.
+Run on `claude/1.29-release-validation` (from `main` `66864c8`, the merge of PR #35) on the
+host `clab-llm-dev2`. The pass was meant to be the live-lab acceptance run; the host turned
+out not to be the dev VM, so only the automated and fixture gates could be exercised.
+
+**Release housekeeping done.** `.github/workflows/release-check.yml` now names
+`tests/test_topology_menu_ui.js` in the *Check browser regressions* step (the one-line change
+that was held back while the push token had no workflow scope); every one of the 17 browser
+suites is in that list. The GitHub Actions run for the branch (`Release consistency`, run
+35207663245) is green: verify-release at 1.28.0, the stdlib deploy-script suites, installer
+shell syntax, Junos kinds, operations, telemetry, the browser step (133 pass, 0 fail, the new
+file included), the capture provider suites, both Compose validations, the real Grafana stack
+against a fixture manager and the loopback Wireshark capture.
+
+| Check (on `clab-llm-dev2`, `clab-backup-ui/.venv`, Node 18.19, Python 3.12) | Result |
+|---|---|
+| `node --test tests/*.js` | 133 tests, 0 failures |
+| Python `unittest discover -s tests -t tests` | 691 tests OK, 1 skipped (the opt-in EOS SSH fixture) |
+| `node --check` on every `app/static/*.js` (18 files) | clean |
+| `bash -n` on every tracked shell script (15, a superset of the 14 CI names) | clean |
+| `git diff --check` | clean |
+| `python3 deploy/verify-release.py` | `Source release verified: 1.28.0`; documentation names only 1.28.0 |
+| Every `app/static/*.js` referenced with `?v=` in a page | yes, 18 of 18 |
+| Fixture browser suite `docs/redesign/tools/verify_after.py` against `fixture_manager.py` (Playwright 1.63, Chromium 1243) | 93/93 checks at 1920×1080, 1440×900 and 1366×768; 0 console errors, 0 page errors; one handled HTTP 409 per viewport (the optional `.annotations.json` read) |
+| Security-boundary sanity (static) | Docker socket only in `deploy/compose.capture.yml` (the session service, by design); CSP `default-src 'self'; script-src 'self'` unchanged in `app/main.py`; no inline `<script>`, no `on*=` attributes, no `style=` attributes outside the two xterm pages |
+
+Note for the runner: Chromium's headless shell needs `libatk-1.0`, `libatk-bridge-2.0`,
+`libXdamage`, `libasound` and `libatspi`, which this host lacks; the run used the Ubuntu
+packages extracted with `dpkg-deb -x` under `LD_LIBRARY_PATH` (no root needed).
+
+## Live-lab gates — not run (release blocked on them)
+
+`clab-llm-dev2` (192.168.132.132) has no `docker`, no `containerlab`, no
+`/srv/containerlab-node-manager/data`, no `/etc/clab-manager`, no `/home/clabllm/clab-venv`,
+no passwordless sudo, no `newuidmap` for a rootless engine, no SSH route or known host for
+the dev VM, and no other host on its subnet answers on 22, 8081 or 3000. The Junos images,
+the labs `clabllm-dev` and `bgp-core`, the persisted 1.28.0 manager state, the Git checkout
+`~/labs/CLAB-MNGR-DEV-LLM` and the capture and telemetry stacks exist only on the real dev
+VM. Nothing below was exercised, and nothing below is claimed.
+
+| Test | Result |
+|---|---|
+| manager rebuild against existing persistent state | not run — no Docker, no data directory |
+| Home / existing labs | not run |
+| bgp-core redeploy Starting → Running | not run — no containerlab |
+| topology state updates | not run |
+| Open CLI | not run — no devices |
+| Save Progress | not run |
+| Git push | not run — no VM Git helper or checkout |
+| checkpoint | not run |
+| Saved versions | not run |
+| compare | not run |
+| Apply to running lab | not run — no Junos node |
+| pre/post restore backups | not run |
+| stale config removed | not run |
+| no node reboot/recreate | not run |
+| packet capture | not run — no capture stack |
+| browser Wireshark | not run |
+| telemetry/Grafana | not run — no telemetry stack (CI ran the Grafana stack against a fixture manager only) |
+| Lab Actions reviews | fixture only (verify_after: menu reasons, destroy review, stop confirm → banner) |
+| destroy review cancelled | fixture only |
+| polling stability | fixture only (device panel and a menu open across two polls, focus kept) |
+| 1366×768 live check | fixture only (map fits the viewport, dialogs and menus fit) |
+| Diagnostics | fixture only (the VM probe fails by design on the fixture) |
+
+Required before the release, on the dev VM: rebuild the manager from this tree
+(`docker compose -f clab-backup-ui/compose.yml up -d --build`), confirm the existing labs,
+credentials, backups, Git bindings and layouts load, redeploy `bgp-core` and watch Starting →
+Running, Open CLI on a Junos node, Save progress with a Git commit and push, a checkpoint,
+view / compare / apply a saved state from the folder browser with a deliberate stale statement
+removed and the container `StartedAt` unchanged, backup history and downloads, packet capture
+and browser Wireshark on a real link, the network dashboard, the Lab actions reviews with the
+destroy cancelled, polling stability and the three viewports on the live manager, Diagnostics.
+Only then: `python3 deploy/set-release.py 1.29.0`, the `?v=` markers, and the three history
+sections that `verify-release.py` ties to the number.
 
 # Live Junos configuration restore and nested Git folders — 1.28.0
 
