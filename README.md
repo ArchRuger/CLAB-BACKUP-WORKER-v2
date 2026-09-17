@@ -42,11 +42,11 @@ vJunos-switch and vQFX, Cisco XRv9k. Any node that speaks SSH gets a terminal.
 
 ## A quick look
 
-![Lab workspace: the topology map with every device's state, the header with 10 of 13 devices ready and Save progress, and the device rail with Open CLI](docs/images/ui/10-topology.png)
+![Lab workspace: the topology map with every device's state, the header with 2 of 2 devices ready and Save progress, and the device rail with Open CLI](docs/images/lab-workspace.png)
 
 | | |
 |---|---|
-| ![Progress tab: saved versions with Latest, checkpoints and the instructor's reference states](docs/images/ui/30-progress.png) | ![Review before a saved state replaces the running configuration](docs/images/ui/36-restore-review.png) |
+| ![Progress tab: saved versions with Latest, checkpoints and the instructor's reference states](docs/images/progress-saved-versions.png) | ![Review before a saved state replaces the running configuration](docs/images/restore-review.png) |
 | *Save progress to Git, keep checkpoints, and apply the instructor's reference states to the running lab.* | *Every operation is reviewed first: each device's outcome, the safety rules, and an acknowledgement before anything changes.* |
 | ![Wireshark in the browser](docs/images/wireshark-in-browser.png) | ![SSH terminal](docs/images/ssh-terminal.png) |
 | *Wireshark runs on the VM and streams to the browser: a ping crossing the captured link.* | *SSH to any node in a browser tab with the credentials the manager already holds.* |
