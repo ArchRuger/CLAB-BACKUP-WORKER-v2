@@ -42,7 +42,9 @@ vJunos-switch and vQFX, Cisco XRv9k. Any node that speaks SSH gets a terminal.
 
 ## A quick look
 
-![Lab workspace: the topology map with every device's state, the header with 2 of 2 devices ready and Save progress, and the device rail with Open CLI](docs/images/lab-workspace.png)
+![Lab workspace: the topology map of the 13-device example course lab with every device's state, the header with 10 of 13 devices ready and Save progress, and the device rail with Open CLI](docs/images/ui/10-topology.png)
+
+*The manager showing the project's example course lab `BGP_TheoryToPractice` (13 devices), rendered from its topology and map files; the device states in this picture are simulated for the documentation. The other pictures are from a running lab.*
 
 | | |
 |---|---|
