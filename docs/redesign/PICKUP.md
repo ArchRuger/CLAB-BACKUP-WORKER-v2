@@ -120,6 +120,23 @@ every dialog, screenshot at 1920×1080 / 1440×900 / 1366×768, and assert
 
 _(newest entry first)_
 
+### 2026-09-17 — stage 3(a) devices / drawer / map done (continuation branch `claude/continue-student-centered-ui-redesign`)
+
+**Done and verified:** `topology-render.js` emits `state-*` classes, a `device-state-dot` and a glyph group per
+device, `fill` only for imported colours (`.topology-bg`, `.topology-grid-dot`, `.device-body`,
+`.device-label-bg` default from CSS); `topology.js` has `renderMapState()` (class swaps from `deviceState`, aria
+labels and titles, `working` during a lab operation), the student context menu (state pill in the header,
+inline reasons, Open CLI first), the loading / empty (`#map-empty`) / caption states, `data-label` on
+`#map-expand`, Escape order; `app.js` calls `renderMapState()` from `render()`, leads the action row with Open
+CLI, drops the address from the simple device rows and shows "Checking <device> again…" after a connection or
+credential edit from the drawer; import/export dialog copy (GAP K/L), diagram-editor copy (GAP N);
+`tests/test_topology_menu_ui.js` (7 tests, in CI). **This host is not the dev VM** (no Docker, no labs):
+browser validation runs against `docs/redesign/tools/fixture_manager.py` (the real app on a scratch data
+directory with seeded labs and scripted VM hooks) with `docs/redesign/tools/verify_after.py`
+(1920×1080 / 1440×900 / 1366×768: 41/41 checks, 0 console errors, 0 page errors). Live-lab validation is
+still pending and must happen on a VM with containerlab.
+
+
 ### 2026-09-16 — stages 1 and 2 of the plan done; stages 3–6 not started
 
 **Done and verified (commit on `claude/wip-student-centered-ui-redesign`):**

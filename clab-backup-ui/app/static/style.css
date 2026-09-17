@@ -756,6 +756,8 @@ footer {
 .node-context-menu button small { flex-basis: 100%; font-size: 12px; color: var(--muted); }
 .node-context-menu button span { width: 18px; color: var(--accent-strong); font-size: 16px; }
 .node-context-menu button .pill { margin-left: auto; }
+.node-context-menu button .external { width: auto; font-size: inherit; color: inherit; }
+.context-node-name .pill { margin-left: auto; font-weight: 600; }
 
 /* --------------------------------------------------------------------------
    8. Pills, badges, tags
@@ -1354,7 +1356,9 @@ tr:last-child td { border-bottom: 0; }
 
 .device-rail { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .device-rail h2, .device-rail h3, .device-rail .card-title { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
-.device-rail .device-row { grid-template-columns: minmax(0, 1fr) auto; padding: 10px 12px; gap: 8px 12px; }
+.device-rail .device-row { grid-template-columns: minmax(96px, 1fr) minmax(0, 1.4fr); padding: 10px 12px; gap: 8px 12px; }
+.device-rail .device-row .node-name { overflow-wrap: anywhere; word-break: normal; }
+.device-rail .device-row .node-actions { grid-column: 1 / -1; justify-content: flex-start; min-width: 0; }
 .device-rail .empty-state { padding: 24px 16px; }
 .device-rail .caption { margin-top: 8px; }
 
@@ -1581,6 +1585,24 @@ dialog.drawer, dialog.node-details {
   border-radius: 0;
   background: var(--surface);
 }
+/* first fetch of a lab's map: a skeleton block with a visually plain status line */
+.topology-stage .map-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--surface);
+}
+.map-skeleton { width: min(60%, 520px); height: 40%; min-height: 120px; border-radius: var(--radius-lg); }
+/* caption notes (wiring caveat, skipped links, schema warnings) live under the hint, behind Details */
+.map-notes { margin: 6px 0 0; }
+.map-notes summary { cursor: pointer; }
+.map-notes p { margin: 4px 0 0; }
+/* the editor and the deploy preview draw layout, not live state */
+.op-layout-map .device-state-dot, .op-layout-map .device-state-glyph { display: none; }
 /* Note: the absolutely positioned toolbar is a stacking context inside an overflow:hidden stage,
    so its More ▾ .menu-list is clipped by the stage edge; fine for three items — render a longer
    menu outside the stage (section heading) instead of growing this one. */
@@ -2325,7 +2347,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* ≤1280: the device rail stacks under the map */
 @media (max-width: 1280px) {
   .topology-layout, .topology-body { grid-template-columns: minmax(0, 1fr); }
-  .device-rail .device-row { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; }
+  .device-rail .device-row { grid-template-columns: minmax(96px, 1.4fr) minmax(0, 1fr) auto; }
+  .device-rail .device-row .node-actions { grid-column: auto; justify-content: flex-end; }
   .device-rail { gap: 8px; }
 }
 

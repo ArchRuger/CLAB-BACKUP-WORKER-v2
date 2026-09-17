@@ -104,7 +104,7 @@ function render(){
  renderGrafanaLink(lab);renderTelemetryLine(lab);
  const sshReady=lab.nodes.some(n=>n.ssh_ready);
  $('map-ssh-all').disabled=!sshReady;
- $('map-ssh-all').title=sshReady?'':lab.nodes.some(n=>n.nos_login?.status==='booting')?'Devices are still starting — CLIs open automatically once they answer.':'No device is ready for a CLI yet.';
+ $('map-ssh-all').title=sshReady?'':lab.nodes.some(n=>n.nos_login?.status==='booting')?'Waiting for devices to finish starting — this becomes available automatically':'No device is ready for a CLI session yet';
  menuReason($('map-ssh-all'),$('map-ssh-all').title);
  $('map-backup-all').disabled=busy()||!lab.nodes.some(n=>n.readiness==='Ready');
  $('map-backup-all').title=$('map-backup-all').disabled?(busy()?'Wait for the current job to finish':'No device can be backed up yet'):'';
@@ -115,7 +115,7 @@ function render(){
  $('test').disabled=$('backup').disabled=busy()||!enabled.length||ready.length!==enabled.length;
  $('test').title=$('backup').title=ready.length!==enabled.length?'Add credentials for every device included in backups first':'';
  $('inventory-caption').textContent='Source: '+lab.source+' · '+enabled.length+' of '+lab.nodes.length+' included in backups';
- renderNodes();renderDeviceList();renderProfiles();renderJobs();showTab(tab);refreshHealth();renderLabBanner();syncProxies();syncRoute();
+ renderNodes();renderDeviceList();if(typeof renderMapState==='function')renderMapState();renderProfiles();renderJobs();showTab(tab);refreshHealth();renderLabBanner();syncProxies();syncRoute();
  if(document.activeElement!==$('interval'))$('interval').value=lab.interval;
 }
 // One control per id: a mirror (button[data-proxy="<id>"]) copies the owner's disabled/title/hidden state
@@ -183,7 +183,7 @@ function renderLabBanner(){
 function renderNodes(){const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();const nodes=lab.nodes.filter(n=>(n.name+' '+n.address+' '+platformLabel(n.platform)).toLowerCase().includes(term));
  const markup=nodes.map(n=>{const h=nodeHealth(n.name);return `<tr><td><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''} aria-label="Include ${esc(n.name)} in backups"></td><td><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="endpoint">${esc(n.address)}:${n.port}</span></td><td><span class="badge platform">${esc(platformLabel(n.platform))}</span><span class="secondary-text">${esc(profileName(lab,n))}</span></td><td>${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<span class="timestamp">${h?.ssh?.at?esc(utcDisplay(h.ssh.at)):'No check yet'}</span></td><td>${h?.backup?badge(h.backup.status):'<span class="status-neutral">No backup yet</span>'}<span class="timestamp">${h?.backup?.at?esc(utcDisplay(h.backup.at)):''}</span></td><td><div class="node-actions">${nodeActions(n)}</div></td></tr>`;}).join('')||'<tr><td colspan="6" class="table-empty">No devices match. Try another name, address or platform.</td></tr>';setMarkup($('nodes'),markup);
 }
-function nodeActions(n,details=false){const hint=sshHint(n);return `<button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}`;}
+function nodeActions(n,details=false){const hint=sshHint(n);return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button><button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}`;}
 // The drawer's Advanced section: check the saved login now, or change the connection settings.
 function nodeDrawerActions(n){return `<button data-check="${esc(n.name)}" ${!(n.login_configured??n.ssh_ready)?'disabled title="Add credentials first"':''}>Test login</button><button data-edit="${esc(n.name)}">Edit connection…</button>`;}
 function deviceSlug(name){return String(name).replace(/[^A-Za-z0-9_-]+/g,'-');}
@@ -193,7 +193,7 @@ function deviceRow(n,rail){
  const ds=typeof deviceState==='function'?deviceState(n):{key:n.ssh_ready?'ready':'unknown',label:n.ssh_ready?'Ready':'Not ready',detail:n.ssh_ready?'':sshHint(n),cli:!!n.ssh_ready,pill:n.ssh_ready?'ok':'neutral'};
  const why=(rail?'why-rail-':'why-')+deviceSlug(n.name),reason=!ds.cli&&ds.detail?`<small class="row-reason" id="${esc(why)}">${esc(ds.detail)}</small>`:'';
  const open=$('details-dialog').open&&detailName===n.name;
- return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span>${rail?'':`<span class="device-meta">${esc(n.address)}:${esc(n.port)}</span>`}</div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}</div></li>`;
+ return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span></div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}</div></li>`;
 }
 function renderDeviceList(){
  const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();
@@ -264,7 +264,7 @@ for(const b of document.querySelectorAll('#progress-view [data-git-action], #git
 async function handleNodeAction(e){const b=e.target.closest('button');if(!b||b.disabled)return;
  if(b.dataset.capture)openCapture(b.dataset.capture);
  if(b.dataset.edit){$('details-dialog').close();openNode(b.dataset.edit);}
- if(b.dataset.profile!==undefined){$('details-dialog').close();openProfile();}
+ if(b.dataset.profile!==undefined){profileFromDrawer=detailName;$('details-dialog').close();openProfile();}
  if(b.dataset.details)openDetails(b.dataset.details);
  if(b.dataset.terminal){const url='/static/terminal.html#'+new URLSearchParams({lab:activeId,node:b.dataset.terminal,label:current().name});window.open(url,'_blank');}
  if(b.dataset.backup){$('details-dialog').close();startJob('backup',[b.dataset.backup]);}
@@ -275,8 +275,8 @@ async function handleEnableChange(e){const name=e.target.dataset?.enable;if(!nam
 $('nodes').addEventListener('change',handleEnableChange);$('details-dialog').addEventListener('change',handleEnableChange);
 $('import-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{const data=new FormData(e.currentTarget);const result=await(await api('/inventory',{method:'POST',body:data})).json();$('import-dialog').close();$('import-form').reset();await refresh();selectLab(result.id,'devices');notify('Lab imported. Check the devices and their login credentials.');});});
 $('add-profile').onclick=openProfile;$('auth-type').onchange=toggleAuth;$('profile-platform').onchange=toggleEnable;
-$('profile-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{const data=new FormData(e.currentTarget);data.set('make_default',$('make-default').checked?'true':'false');await api('/labs/'+activeId+'/profiles',{method:'POST',body:data});$('profile-dialog').close();$('profile-form').reset();await refresh();notify('Credentials saved.');});});
-$('node-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/node','PUT',{name:$('node-name').value,short_name:$('node-short-name').value,address:$('node-address').value,port:Number($('node-port').value),endpoint_mode:$('node-endpoint-mode').value,platform:$('node-platform').value,profile_id:$('node-profile').value,enabled:$('node-enabled').checked});$('node-dialog').close();await refresh();notify('Connection updated.');});});
+$('profile-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{const data=new FormData(e.currentTarget);data.set('make_default',$('make-default').checked?'true':'false');await api('/labs/'+activeId+'/profiles',{method:'POST',body:data});$('profile-dialog').close();$('profile-form').reset();noteRecheck(profileFromDrawer);profileFromDrawer='';await refresh();notify('Credentials saved.');});});
+$('node-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/node','PUT',{name:$('node-name').value,short_name:$('node-short-name').value,address:$('node-address').value,port:Number($('node-port').value),endpoint_mode:$('node-endpoint-mode').value,platform:$('node-platform').value,profile_id:$('node-profile').value,enabled:$('node-enabled').checked});$('node-dialog').close();noteRecheck($('node-name').value);await refresh();notify('Connection updated.');});});
 $('schedule-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/schedule','PUT',{interval:Number($('interval').value)});await refresh();notify('Backup schedule saved.');});});
 async function startJob(operation,node_names){try{await json('/labs/'+activeId+'/jobs','POST',{operation,...(node_names?{node_names}:{})});if(operation==='backup')setTab('backups');await refresh();notify(operation==='test'?'Checking device logins… Results appear under Tools › Configuration backups.':'Backing up configurations…');}catch(e){notify(e.message);}}
 $('test').onclick=()=>startJob('test');$('backup').onclick=()=>startJob('backup');
@@ -317,7 +317,12 @@ async function refreshHealth(){
 function openDetails(name){if(!current()?.nodes.some(n=>n.name===name))return;detailName=name;renderDetails();const dialog=$('details-dialog');if(!dialog.open&&typeof dialog.showModal==='function')dialog.showModal();if(typeof writeRoute==='function'&&typeof currentRoute==='function')writeRoute(currentRoute());renderDeviceList();}
 function stepDetails(direction){const lab=current();if(!lab||lab.nodes.length<2)return;const names=lab.nodes.map(n=>n.name),i=names.indexOf(detailName);if(i<0)return;openDetails(names[(i+direction+names.length)%names.length]);}
 function readinessWord(value){return value==='Needs credentials'?'needs credentials':value==='Choose NOS'?'choose a network OS':value==='Lab unavailable'?'the lab is not running':String(value||'');}
-function statusActions(n,ds){if(!ds)return '';if(ds.key==='attention')return `<button data-edit="${esc(n.name)}">Check credentials</button><button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='credentials')return ds.next==='Edit connection'?`<button data-edit="${esc(n.name)}">Edit connection…</button>`:`<button data-profile="">Add credentials</button>`;return '';}
+// After the student edits a connection or adds credentials from the drawer, the readiness monitor
+// re-checks the device within a minute; the drawer says so instead of repeating the old failure.
+let detailsRecheck={name:'',at:0},profileFromDrawer='';
+function noteRecheck(name){if(name)detailsRecheck={name,at:Date.now()};}
+function recheckPending(n){return !!n&&detailsRecheck.name===n.name&&Date.now()-detailsRecheck.at<60000&&!n.ssh_ready;}
+function statusActions(n,ds){if(!ds)return '';if(recheckPending(n))return `<button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='attention')return `<button data-edit="${esc(n.name)}">Check credentials</button><button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='credentials')return ds.next==='Edit connection'?`<button data-edit="${esc(n.name)}">Edit connection…</button>`:`<button data-profile="">Add credentials</button>`;return '';}
 function renderDetails(){
  const lab=current(),n=lab?.nodes.find(n=>n.name===detailName);if(!n){if($('details-dialog').open)$('details-dialog').close();return;}
  const h=nodeHealth(n.name),ds=typeof deviceState==='function'?deviceState(n):null;
@@ -328,7 +333,7 @@ function renderDetails(){
  for(const id of ['details-prev','details-next'])if($(id))$(id).disabled=lab.nodes.length<2;
  setMarkup($('details-actions'),nodeActions(n,true));
  setMarkup($('details-advanced-actions'),nodeDrawerActions(n));
- if($('details-status-text'))$('details-status-text').textContent=ds?ds.detail:(h?.ssh?.message||'');
+ if($('details-status-text'))$('details-status-text').textContent=recheckPending(n)?`Checking ${n.short_name||n.name} again… (automatic within a minute — or Test login now)`:ds?ds.detail:(h?.ssh?.message||'');
  setMarkup($('details-status-actions'),statusActions(n,ds));
  setMarkup($('details-status-raw-body'),`<div class="connection-result">${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<p>${esc(h?.ssh?.message||'No login check yet.')}</p>${h?.ssh?.at?`<time>${esc(utcDisplay(h.ssh.at))}${h.ssh.source==='automatic'?' · automatic check':''}</time>`:''}</div><p class="form-help">Running devices are checked automatically until they accept a login. Test login (under Advanced) checks the saved credentials now.</p>`);
  setMarkup($('details-info'),`<section class="drawer-section"><h3>Connection</h3><dl class="health-grid"><dt>Name in lab files</dt><dd class="mono">${esc(n.name)}</dd><dt>Network OS</dt><dd>${esc(platformLabel(n.platform))}</dd><dt>Login credentials</dt><dd>${esc(profileName(lab,n))}</dd><dt>Address</dt><dd class="mono">${esc(n.address)}:${esc(n.port)}</dd></dl></section>`);
