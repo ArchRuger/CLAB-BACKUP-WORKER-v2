@@ -98,12 +98,15 @@ preserved. YAML is preferred when it contains custom NOS aliases that cannot be
 reconstructed from an export. Schema 3 records the corrected drawing metadata; a
 map imported by an older importer shows a reminder to reimport the original files.
 
-Right-click a matched node for **Capture packets**, **SSH**, **Back up
-configuration** and **Node details**; click a link to capture either endpoint.
-Keyboard users can focus a node and press Shift+F10, navigate with arrow keys, and
-press Escape to close the menu. Actions have the same credential/readiness
-requirements as the node list. Links show the imported wiring, never live
-connectivity: live link state is on the Grafana lab map.
+Right-click a matched device for **Open CLI ↗**, **Capture traffic…**, **Back up
+configuration** and **Device details**; click a link to capture either end. The menu
+header shows the device's state, and an action that is not available says why under
+its label. Keyboard users can focus a device and press Shift+F10, navigate with arrow
+keys, and press Escape to close the menu. Actions have the same credential/readiness
+requirements as the Devices tab. Each device carries a state dot (ready, starting,
+needs attention, unavailable) taken from the same readiness check as the Devices tab.
+Links show the imported wiring, never live connectivity: live link state is on the
+Grafana lab map (Tools › Open lab map ↗).
 
 This is an operational map, not a complete VS Code topology editor: custom icons,
 HTML/Markdown text styling, geographic layouts, nested relative geometry, traffic

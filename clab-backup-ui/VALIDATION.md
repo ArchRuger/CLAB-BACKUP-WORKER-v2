@@ -1,3 +1,56 @@
+# Student-centred UI redesign (unreleased) — validated on the fixture manager, prepared on 1.28.0
+
+Prepared on `claude/continue-student-centered-ui-redesign` (continuing PR #33's WIP) on
+2026-09-17. **Not released**: the release number is still 1.28.0; `deploy/set-release.py 1.29.0`
+is to be run after the live-lab pass below has happened.
+
+## What was run
+
+- `node --test tests/*.js`: 133 tests, all pass (the four redesign suites plus every existing
+  browser suite with its pinned labels rewritten, behavioural claims kept).
+- Python `unittest discover -s tests -t tests`: OK (one skipped: the opt-in SSH fixture). No
+  backend file changed in the redesign; the run proves the helpers, routes and services
+  are untouched.
+- `node --check` on every `app/static/*.js`; `git diff --check` clean;
+  `python3 deploy/verify-release.py` passes (1.28.0, documentation names only 1.28.0).
+- Id audit: every element id the scripts look up exists in the page markup or in the
+  dialogs the scripts inject; the remaining names are query-string keys.
+- Browser validation with Playwright Chromium against `docs/redesign/tools/fixture_manager.py`
+  (the real application on a scratch data directory; seeded labs; the readiness probe, the
+  discovery refresh, backup jobs, the Git helper, the restore probe and the lab-operations
+  helper answered in-process) with `docs/redesign/tools/verify_after.py` at 1920×1080,
+  1440×900 and 1366×768: Home, every tab, the topology map (fits the viewport at 1366×768),
+  the context menu, the device panel, the Progress flows (saved versions, compare, apply
+  review, first save, checkpoint name, save location browser), Tools (capture dialog,
+  telemetry settings), the lab-operation reviews and the banner-first confirm, All lab
+  operations, Running labs on the VM, operation history and output, Advanced, Remove lab,
+  polling stability with the device panel and a menu open across two polls, the CLI
+  launcher, the deploy page with the topology browser and editor, Diagnostics, the network
+  dashboard page, the terminal page and the guides. Zero console errors and zero page
+  errors; the one non-2xx response Chromium logs is the optional `.annotations.json` read
+  beside a topology, which the page expects to fail. Screenshots: `docs/redesign/shots/`.
+- Functional-parity review: four independent read-only reviews of the code against
+  `docs/redesign/inventory/*.md` and `docs/redesign/parity/*.md` (shell + topology,
+  Git progress + restore, operations + management, capture + pages). Every inventory row
+  is present; the findings (destroy copy when cleanup is unavailable, the clone review
+  title, busy-disabled controls without a reason, the dropped *Lab:* line of the restore
+  review, a fetch failure reading as "not saved yet", lab-scoped operation history, the VM
+  file details of imported labs, unexplained disabled buttons on Advanced, logs refreshed
+  while off screen, device row id collisions, the deploy flow bypassing the router, capture
+  and Diagnostics copy details) were fixed in the same branch. Intentionally removed: none.
+
+## Not done here
+
+- **Live-lab validation** on the dev VM (`clabllm-dev`, `bgp-core`): this session ran on a
+  host without Docker, containerlab or the manager data directory, so no container was
+  rebuilt and no lab was deployed, saved, applied, captured or destroyed through the new UI.
+  Required before the release: rebuild the manager from this tree, open both labs, redeploy
+  `bgp-core` and watch Starting → Running, Open CLI, Save progress, a checkpoint, view /
+  compare / apply a saved state from the folder browser, the capture entry point, the
+  telemetry link, a destroy confirmation cancelled.
+- The release bump, the `?v=` asset markers and the three history sections that
+  `verify-release.py` ties to the number.
+
 # Live Junos configuration restore and nested Git folders — 1.28.0
 
 Prepared on `claude/junos-live-restore-and-git-destinations` from main `c1d22f3` (1.27.0) on

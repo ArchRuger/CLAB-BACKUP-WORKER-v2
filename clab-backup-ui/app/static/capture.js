@@ -13,7 +13,9 @@ function captureActionAttrs(){return captureEnabled===false?'disabled title="Pac
 // The Tools card caption when the service is missing; Capture traffic itself stays clickable so the
 // dialog can explain the state and link to the setup page.
 function captureStatusLine(){return captureEnabled===false?'Packet capture is not set up on this VM. Ask your instructor or administrator.':'';}
-function renderCaptureCaption(){const el=$('capture-caption');if(!el)return;const text=captureStatusLine();el.textContent=text;el.hidden=!text;}
+function renderCaptureCaption(){const el=$('capture-caption');if(!el)return;const text=captureStatusLine();el.innerHTML=text?esc(text)+' <a href="/static/capture-setup.html" target="_blank" rel="noopener">Setup guide <span aria-hidden="true">↗</span></a>':'';el.hidden=!text;}
+// The service's own hints predate the dialog's labels.
+function captureMessage(text){return String(text||'').replace(/All host targets/g,'"Everything on the VM" under Advanced');}
 (async()=>{try{captureEnabled=!!(await(await api('/capture/status')).json()).enabled;}catch{captureEnabled=null;}renderCaptureCaption();})();
 // The device picker unfolds by itself when no device is selected and reads as an advanced option otherwise.
 function captureAdvancedLabel(){const el=$('capture-advanced-label');if(el)el.textContent=captureSelected()?'Advanced: capture somewhere else':'Choose a device';}
@@ -89,7 +91,7 @@ async function refreshCaptureTargets(){
   const data=await(await api('/capture/targets?'+params)).json();
   if(request!==captureRequest||!captureDialog.open)return;
   captureTargets=data.targets;$('capture-search').disabled=false;
-  $('capture-status').textContent=data.targets.length?data.message:'No running device matched. If it is still starting, wait and click Refresh interfaces; otherwise open Advanced and choose "Everything on the VM".';
+  $('capture-status').textContent=data.targets.length?captureMessage(data.message):'No running device matched. If it is still starting, wait and click Refresh interfaces; otherwise open Advanced and choose "Everything on the VM".';
   filterCaptureTargets();
   // The node you clicked is the target; the selector only unfolds when that could not be resolved.
   $('capture-advanced').open=!captureSelected();captureAdvancedLabel();
@@ -141,7 +143,8 @@ async function refreshCaptureSessions(){
   }).join('')||'<li>No capture sessions yet.</li>';
  }catch{$('capture-sessions').textContent='Could not list capture sessions — packet capture may not be set up on this VM. See Setup and troubleshooting.';}
 }
-$('capture-sessions-refresh').onclick=refreshCaptureSessions;
+// While the service is reported missing, Refresh list asks the manager again instead of repeating the local note.
+$('capture-sessions-refresh').onclick=()=>captureEnabled===false?refreshCaptureTargets():refreshCaptureSessions();
 $('capture-sessions').onclick=async event=>{
  const button=event.target.closest('[data-end-capture]');if(!button)return;
  if(!confirm('End this Wireshark session and delete its capture files? Download saved files first.'))return;

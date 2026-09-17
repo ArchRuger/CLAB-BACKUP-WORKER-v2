@@ -68,9 +68,9 @@ flowchart TD
     E --> F[Upload lab files and load device images]
     F --> G[Connect manager to VM and deploy lab]
     G --> H[Import lab and verify device backup]
-    H --> I[Connect Git repository]
+    H --> I[Choose a save location for the lab]
     I --> J[Run check-install.sh and resolve report]
-    J --> K[Save progress and confirm Pushed]
+    J --> K[Save progress and confirm Saved to Git]
     K --> L[Record recovery locations]
 ```
 
@@ -656,10 +656,11 @@ connection password are separate settings.
 
 ## 11. Deploy, import and verify a backup
 
-In the manager, click **Deploy a new lab**, expand `/etc/containerlab/practice-lab`,
+In the manager, click **Deploy a new lab**, open `/etc/containerlab/practice-lab`,
 click the `.clab.yaml` and choose **Deploy lab**; the reviewed containerlab command
-runs with live output, the lab is saved at once, and the deployment bar reports
-*NOS booting* and then *NOS ready* as the devices answer. To deploy from the VM
+runs with live output (**View output** in the lab banner), the lab is saved at once,
+and the lab header reports *Starting* and then *n of n devices ready* as the devices
+answer. To deploy from the VM
 terminal instead:
 
 ```bash
@@ -670,21 +671,22 @@ sudo containerlab inspect --all --format json
 Fresh Containerlab installation through this project uses sudo, so the Docker and
 `clab_admins` groups are not prerequisites for this workflow. If you applied the
 [VS Code fix](#vscode-access) in step 7, `containerlab` also runs without sudo for
-your own account. A lab deployed from the terminal appears on the landing page as
-**Already running on the VM**; click **Import** and confirm the preview.
+your own account. A lab deployed from the terminal appears on **My labs** under
+**Also running on the VM**; click **Add to My labs** and confirm the preview.
 
 A Docker container marked Running does not prove that its NOS SSH service is
-ready; the manager says *NOS ready* when it is. Then:
+ready; the device's pill says *Ready* when it is. Then:
 
-1. Inspect the topology and node addresses. Nodes with containerlab's default login
-   need no credentials; otherwise add device profiles under **More → Credentials**.
+1. Inspect the topology and device addresses (**Devices › Technical details**). Devices
+   with containerlab's default login need no credentials; otherwise add login
+   credentials under **Advanced › Credentials**.
    Do not use the VM password for a device unless that device was deliberately
    configured with it.
 2. Test a device login, then take one backup and inspect/download the result.
 3. Once that succeeds, capture the full intended node set.
-4. Click **Grafana ↗** in the lab header and confirm the lab map and the Interfaces
-   dashboard show the nodes; right-click a node for **Capture packets** and confirm
-   Wireshark opens in a browser tab.
+4. Click **Open lab map ↗** under **Tools › Telemetry** and confirm the lab map and the
+   Interfaces dashboard show the devices; right-click a device for **Capture traffic…**
+   and confirm Wireshark opens in a browser tab.
 
 For the Juniper kinds added in 1.18.0, use these names in your topology and
 select the matching NOS when adding a credential profile:
@@ -695,8 +697,9 @@ select the matching NOS when adding a credential profile:
 | Juniper vJunos-switch | `juniper_vjunosswitch` | `vr-vjunosswitch`, `vjunosswitch` |
 
 Enter the actual device username/password; the manager does not fill in default
-passwords. If upgrading a saved lab, **Sync from VM** can map unknown nodes to
-these kinds, or choose the NOS under **Node details → Edit connection**. Review
+passwords. If upgrading a saved lab, **Lab actions ▾ › Sync topology from VM** can map
+unknown devices to these kinds, or choose the network OS under **Edit connection** in
+the device panel (**Advanced**). Review
 **Include in backups** because existing selections are preserved. The same
 Junos SSH driver used for cJunosEvolved captures
 `show configuration | display set | no-more`; saved files use `.set`, Git
@@ -717,8 +720,8 @@ discovery smoke test does not validate EOS/Junos/IOS-XR backup.
 
 After the Git wizard reported **Registered** and **Ready**:
 
-1. Open the lab's **Git repository** tab settings.
-2. Select the registered checkout and the devices to include; review the
+1. Click **Save progress** in the lab header (or open **Progress › Save location**).
+2. Select the registered checkout, the folder and the devices to include; review the
    destination and save the connection.
 
 Now return to the **Ubuntu terminal** for the separate installation report:
@@ -746,7 +749,7 @@ transfer, device backup and Git push remain separate evidence. Installer menu
 checked restricted helper execution and local container/version/HTTP readiness
 before browser setup; the saved SSH connection is checked here afterwards.
 
-If **Deploy New Lab → Lab Topologies** reports **Operations helper is unavailable**,
+If **Deploy a new lab → Lab topologies on the VM** reports **Operations helper is unavailable**,
 update both the image and helper from this matching source checkout and retest the
 actual failed folder:
 
@@ -763,19 +766,20 @@ for diagnosis, larger folder trees, JSON output and all options.
 
 After those checks, finish the real Git workflow in the browser:
 
-1. Choose **Save progress** for the `latest` target with push enabled.
-2. Wait for **Pushed** and check GitHub for the files under `latest/` and its
+1. Choose **Save progress** in the lab header.
+2. Wait for **Saved to Git** and check GitHub for the files under `latest/` and its
    `manifest.json`.
 
 Save progress captures, exports, commits and pushes. There is no separate Commit
 button, and setup itself did not already push these configs. You may then save a
 baseline or named checkpoint as appropriate for your lab.
 
-If a push fails, open the **original save** and use its Retry/Push action after
+If a push fails, open the **original save** under **Recent saves** and use its
+**Retry save and upload** or **Upload now** action after
 fixing the reported problem. Do not keep making captures or manually commit the
 manager's staged files as the normal repair. [Git recovery guide](GIT-SETUP.md#fix-a-failed-save)
 
-**Checkpoint:** the manager reports **Pushed**, and GitHub shows the intended
+**Checkpoint:** the manager reports **Saved to Git**, and GitHub shows the intended
 configuration files. A clean `git status`, working GitHub login or running
 container alone would not establish this end-to-end result.
 

@@ -1,0 +1,1820 @@
+[
+ {
+  "viewport": "1920x1080",
+  "asserts": [
+   {
+    "name": "home: lab cards render",
+    "ok": true,
+    "detail": "[{'name': 'BGP_TheoryToPractice', 'pill': 'Starting', 'continued': False}, {'name': 'ospf-basics', 'pill': 'Needs attention', 'continued': False}, {'name': 'switching-basics', 'pill': 'Not matched to a running lab', 'continued': False}, {'name': 'vlan-lab', 'pill': 'Some devices stopped', 'continued"
+   },
+   {
+    "name": "home: skeleton hidden after load",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: no VM banner when the VM is connected",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: other labs on the VM listed",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: no raw deployment words in pills",
+    "ok": true,
+    "detail": "[{'name': 'BGP_TheoryToPractice', 'pill': 'Starting', 'continued': False}, {'name': 'ospf-basics', 'pill': 'Needs attention', 'continued': False}, {'name': 'switching-basics', 'pill': 'Not matched to a running lab', 'continued': False}, {'name': 'vlan-lab', 'pill': 'Some devices stopped', 'continued"
+   },
+   {
+    "name": "home: Manager menu survives a poll",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: Escape closes the Manager menu and returns focus",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: map fits the viewport",
+    "ok": true,
+    "detail": "bottom 1040.890625 inner 1080 banner hidden=False"
+   },
+   {
+    "name": "topology: every drawn device has one state dot and glyph group",
+    "ok": true,
+    "detail": "{'bottom': 1040.890625, 'inner': 1080, 'states': {'state-ready': 10, 'state-starting': 1, 'state-attention': 1, 'state-credentials': 1}, 'dots': 13, 'glyphs': 13, 'bgFill': '#fdf6e3', 'status': '13 devices \u00b7 16 links', 'notes': False, 'hint': 'Click a device to open it. Click a link to capture its t"
+   },
+   {
+    "name": "topology: ready, starting and attention states are all shown",
+    "ok": true,
+    "detail": "{'state-ready': 10, 'state-starting': 1, 'state-attention': 1, 'state-credentials': 1}"
+   },
+   {
+    "name": "topology: imported background colour is kept",
+    "ok": true,
+    "detail": "#fdf6e3"
+   },
+   {
+    "name": "topology: caption in student words",
+    "ok": true,
+    "detail": "13 devices \u00b7 16 links"
+   },
+   {
+    "name": "topology: notes expander shown",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: aria-labels carry the state when not ready",
+    "ok": true,
+    "detail": "['RTR8', 'PE1 \u00b7 Starting', 'GTW-1', 'UP-1', 'IXP-L2-Switch', 'PE2', 'GTW-2 \u00b7 Needs attention', 'UP-2', 'RTR5', 'RTR6', 'Internet', 'Backup-Worker \u00b7 Needs credentials', 'RTR7']"
+   },
+   {
+    "name": "topology: header pill uses the student vocabulary",
+    "ok": true,
+    "detail": "Starting"
+   },
+   {
+    "name": "menu: order CLI, capture, backup, details",
+    "ok": true,
+    "detail": "{'items': [{'text': 'Open CLI \u2197PE1 is still starting. SSH opens automatically when it answers.', 'disabled': True, 'reason': 'PE1 is still starting. SSH opens automatically when it answers.'}, {'text': 'Capture traffic\u2026Packet capture isn\u2019t set up on this VM yet \u2014 see Tools \u203a Packet ', 'disabled': Tr"
+   },
+   {
+    "name": "menu: a starting device explains why the CLI is unavailable",
+    "ok": true,
+    "detail": "{'text': 'Open CLI \u2197PE1 is still starting. SSH opens automatically when it answers.', 'disabled': True, 'reason': 'PE1 is still starting. SSH opens automatically when it answers.'}"
+   },
+   {
+    "name": "menu: header shows the state, not the address",
+    "ok": true,
+    "detail": "PE1Starting"
+   },
+   {
+    "name": "menu: focus moves into the menu",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "menu: the context menu survives a poll",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "menu: Escape closes it and focus returns to the device",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "menu: Shift+F10 opens it from the keyboard",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: Expand toggles the label",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: Escape closes the expanded map",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "drawer: attention state with Check credentials and Test login now",
+    "ok": true,
+    "detail": "{'title': 'GTW-2', 'pill': 'Needs attention', 'status': 'GTW-2 is running, but SSH login failed with the saved credentials.', 'actions': ['Check credentials', 'Test login now'], 'primary': [{'text': 'Open CLI \u2197', 'disabled': True}, {'text': 'Capture traffic\u2026', 'disabled': True}, {'text': 'Back up co"
+   },
+   {
+    "name": "drawer: Open CLI is the first action",
+    "ok": true,
+    "detail": "[{'text': 'Open CLI \u2197', 'disabled': True}, {'text': 'Capture traffic\u2026', 'disabled': True}, {'text': 'Back up configuration', 'disabled': False}]"
+   },
+   {
+    "name": "drawer: route carries the device",
+    "ok": true,
+    "detail": "#lab=8ad6a153ee244e5cb935d35c2ee0f3c2&view=topology&device=clab-BGP_TheoryToPractice-GTW-2"
+   },
+   {
+    "name": "drawer: stays open across a poll",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "drawer: Next device moves on",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "drawer: Escape closes it and clears the route",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "devices: every row has a pill and disabled CLIs carry a reason",
+    "ok": true,
+    "detail": "[{'pill': 'Needs credentials', 'reason': 'Add login credentials to open the CLI of Backup-Worker.', 'cli': True}, {'pill': 'Ready', 'reason': None, 'cli': False}, {'pill': 'Starting', 'reason': 'PE1 is still starting. SSH opens automatically when it answers.', 'cli': True}, {'pill': 'Ready', 'reason"
+   },
+   {
+    "name": "devices: no address in the simple rows",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "devices: technical view shows the table",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "editor: titled Edit lab map with student copy",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "editor: no state dots on the editing canvas",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "editor: closes without changes",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "import map dialog: student copy",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "empty map: state shown, SVG hidden, tools disabled",
+    "ok": true,
+    "detail": "{'empty': True, 'svg': True, 'tools': [True, True, True, True, True], 'menuEdit': True, 'status': '', 'banner': 'Starting lab did not finish.', 'bannerHidden': False, 'pill': 'Needs attention'}"
+   },
+   {
+    "name": "empty map: failed operation reads as Needs attention in the banner",
+    "ok": true,
+    "detail": "{'empty': True, 'svg': True, 'tools': [True, True, True, True, True], 'menuEdit': True, 'status': '', 'banner': 'Starting lab did not finish.', 'bannerHidden': False, 'pill': 'Needs attention'}"
+   },
+   {
+    "name": "empty map: Import map\u2026 opens the import dialog",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "banner: Dismiss hides the failed operation",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "progress: destination in words",
+    "ok": true,
+    "detail": "Saving to Course-Labs \u203a labs/BGP/work"
+   },
+   {
+    "name": "progress: status is the student sentence",
+    "ok": true,
+    "detail": "Saved to Git 2 minutes ago"
+   },
+   {
+    "name": "progress: Save progress enabled on both buttons",
+    "ok": true,
+    "detail": "{'destination': 'Saving to Course-Labs \u203a labs/BGP/work', 'status': 'Saved to Git 2 minutes ago', 'save': {'text': 'Save progress', 'disabled': False}, 'progressSave': {'text': 'Save progress', 'disabled': False, 'reasonHidden': True}, 'groups': ['Latest', 'Checkpoints', 'Baseline', 'Instructor and r"
+   },
+   {
+    "name": "progress: versions grouped for the student",
+    "ok": true,
+    "detail": "['Latest', 'Checkpoints', 'Baseline', 'Instructor and reference versions', 'Other labs in this repository (1)']"
+   },
+   {
+    "name": "progress: other labs stay collapsed",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "progress: apply offered only where a restore artifact exists",
+    "ok": true,
+    "detail": "2"
+   },
+   {
+    "name": "progress: compare with my latest save on the other rows",
+    "ok": true,
+    "detail": "5"
+   },
+   {
+    "name": "progress: recent saves in student words",
+    "ok": true,
+    "detail": "['Latest Progress saved to Git \u00b7 2 minutes ago', 'Latest Progress saved to Git \u00b7 4 minutes ago', 'Latest Progress saved to Git \u00b7 4 minutes ago', 'Latest Progress saved to Git \u00b7 6 minutes ago', 'Latest Progress saved to Git \u00b7 7 minutes ago', 'Latest Progress saved to Git \u00b7 7 minutes ago', 'Latest Pro"
+   },
+   {
+    "name": "progress: save location collapsed for a connected lab",
+    "ok": true,
+    "detail": "{'destination': 'Saving to Course-Labs \u203a labs/BGP/work', 'status': 'Saved to Git 2 minutes ago', 'save': {'text': 'Save progress', 'disabled': False}, 'progressSave': {'text': 'Save progress', 'disabled': False, 'reasonHidden': True}, 'groups': ['Latest', 'Checkpoints', 'Baseline', 'Instructor and r"
+   },
+   {
+    "name": "progress: advanced details filled",
+    "ok": true,
+    "detail": "Verified push destination: https://github.com/example/Course-Labs.git"
+   },
+   {
+    "name": "progress: last configuration change is one click away",
+    "ok": true,
+    "detail": "Last configuration change: Configuration replaced on some devices \u00b7 1 hour ago"
+   },
+   {
+    "name": "progress: header line agrees",
+    "ok": true,
+    "detail": "Saved to Git 2 minutes ago"
+   },
+   {
+    "name": "version dialog: Saved version with Apply, Compare and Download",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "compare dialog: named after the latest save, never the running devices",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "restore review: title, Devices legend, three safety bullets, acknowledgement and undo minutes",
+    "ok": true,
+    "detail": "{'title': 'Replace running configuration', 'legend': 'Devices', 'rows': ['GTW-2 1 differences from the running configuration', 'PE2 Skipped \u2014 The device did not answer over SSH.', 'UP-2 Already matches \u2014 nothing to change'], 'bullets': 3, 'ack': True, 'minutes': True, 'run': 'Replace configurations'"
+   },
+   {
+    "name": "restore review: skipped devices explain why in student words",
+    "ok": true,
+    "detail": "['GTW-2 1 differences from the running configuration', 'PE2 Skipped \u2014 The device did not answer over SSH.', 'UP-2 Already matches \u2014 nothing to change']"
+   },
+   {
+    "name": "restore review: matching and differing devices are described",
+    "ok": true,
+    "detail": "['GTW-2 1 differences from the running configuration', 'PE2 Skipped \u2014 The device did not answer over SSH.', 'UP-2 Already matches \u2014 nothing to change']"
+   },
+   {
+    "name": "restore review: no router wording",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "restore job: result sentence and per-device outcomes",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save window: student title and Details with the raw status",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "checkpoint dialog: name sanitised live",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save location: folder browser with Save this lab here and the heading",
+    "ok": true,
+    "detail": "{'use': 'Save this lab here', 'crumbs': ['Course-Labs', 'labs', 'BGP', 'work'], 'select': 'reg-work', 'heading': 'Folders in this repository'}"
+   },
+   {
+    "name": "save: header button reads Saving\u2026",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save: no job window for a plain save",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save: finished and the status card agrees",
+    "ok": true,
+    "detail": "Saved to Git just now"
+   },
+   {
+    "name": "unbound lab: Connect a save location\u2026 enabled, browser open, empty states",
+    "ok": true,
+    "detail": "{'button': 'Connect a save location\u2026', 'disabled': False, 'destination': 'Not connected \u2014 choose where this lab\u2019s progress is saved', 'head': 'Choose a save location', 'folderOpen': True, 'versions': 'Choose a save location first. Save progress then creates versions you can return to.', 'menuHidden'"
+   },
+   {
+    "name": "first save: dialog asks where to save with repository, folder, devices and consent",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "tools: dashboard link label, telemetry line, Capture traffic\u2026, capture caption when disabled",
+    "ok": true,
+    "detail": "{'grafana': '', 'caption': 'Live link and interface state, in Grafana. The dashboard starts on the VM when needed.', 'tele': 'Telemetry is not installed on this VM.', 'capture': 'Capture traffic\u2026', 'cap_caption': 'Packet capture is not set up on this VM. Ask your instructor or administrator. Setup g"
+   },
+   {
+    "name": "capture dialog: lab context, device picker unfolded first, Start capture, sessions explained",
+    "ok": true,
+    "detail": "{'ctx': 'Lab BGP_TheoryToPractice \u2014 choose a device below', 'adv': 'Choose a device', 'open': True, 'legend': 'Connected interfaces', 'start': 'Start capture', 'order': ['div', 'capture-context', 'capture-endpoints', 'p', 'capture-advanced', 'fieldset', 'capture-more', 'capture-status', 'div', 'h3',"
+   },
+   {
+    "name": "telemetry settings: student sentences with a Dashboard: line",
+    "ok": true,
+    "detail": "Telemetry settings\u00d7Telemetry is not installed on this VM.DetailsTelemetry is disabled by TELEMETRY_COLLECTOR=disabled in the manager environment.Dashboard: not "
+   },
+   {
+    "name": "lab actions menu: every disabled item carries a visible reason",
+    "ok": true,
+    "detail": "[{'t': 'Start stopped devices', 'd': True, 'r': 'The lab is already running'}, {'t': 'Stop devices', 'd': False, 'r': ''}, {'t': 'Restart devices', 'd': False, 'r': ''}, {'t': 'Sync topology from VM', 'd': True, 'r': \"This lab's files cannot be synced \u2014 see Advanced \u203a Deployment details\"}, {'t': 'Im"
+   },
+   {
+    "name": "destroy review: student title, unsaved-work and last-save lines, danger confirm, Save progress first",
+    "ok": true,
+    "detail": "Destroy BGP_TheoryToPractice?"
+   },
+   {
+    "name": "destroy review: the raw command only under Technical details",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "stop review: title and confirm label",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "confirm: no output window pops up; the banner names the operation with View output",
+    "ok": true,
+    "detail": "{'text': 'Stopping devices\u2026', 'output': True, 'out': False, 'pill': 'Stopping devices'}"
+   },
+   {
+    "name": "operation output: student heading and banner",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "all lab operations: Deployment / Lab tools / Danger with student labels",
+    "ok": true,
+    "detail": "{'sections': ['Deployment', 'Lab tools', 'Danger'], 'buttons': ['Deploy lab', 'Redeploy lab', 'Start devices', 'Stop devices', 'Restart devices', 'Apply topology changes', 'Show running devices', 'Save device configurations', 'Destroy lab\u2026', 'Deploy lab and clear the lab folder\u2026', 'Redeploy lab and "
+   },
+   {
+    "name": "running labs review: read-only wording and Show running labs",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "running labs: inspection table with student columns",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "operation history: student action names in every row",
+    "ok": true,
+    "detail": "{'title': 'Operation history', 'rows': ['manager \u00b7 Running labs on the VM', 'BGP_TheoryToPractice \u00b7 Stop devices', 'BGP_TheoryToPractice \u00b7 Stop devices', 'BGP_TheoryToPractice \u00b7 Stop devices', 'BGP_TheoryToPractice \u00b7 Stop devices', 'BGP_TheoryToPractice \u00b7 Stop devices', 'ospf-basics \u00b7 Start lab']}"
+   },
+   {
+    "name": "advanced: VM status sentence; a disabled Start explains itself in the banner details",
+    "ok": true,
+    "detail": "{'files': 'No topology files found on the VM for this lab. Your workspace is kept.', 'vm': 'Lab VM: connected', 'start': 'Start lab', 'disabled': True, 'detail': 'This lab has no topology file on the VM (Advanced \u203a Deployment details)', 'hidden': False}"
+   },
+   {
+    "name": "remove lab dialog: named title and danger submit",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "polling: the device panel stays open with the same device and focus across two polls",
+    "ok": true,
+    "detail": "{'before': {'title': 'Backup-Worker', 'actions': 611, 'focus': 'BUTTON'}, 'after': {'open': True, 'title': 'Backup-Worker', 'actions': 611, 'focus': 'BUTTON'}}"
+   },
+   {
+    "name": "polling: an open menu keeps its item focus across two polls",
+    "ok": true,
+    "detail": "{'focused': 'menu-import-map', 'still': {'open': True, 'focus': 'menu-import-map'}}"
+   },
+   {
+    "name": "CLI launcher: Open CLIs title, devices-ready sentence, pills, Open CLI links, history link row",
+    "ok": true,
+    "detail": "{'title': 'Open CLIs \u00b7 BGP_TheoryToPractice', 'doc': 'Open CLIs \u00b7 BGP_TheoryToPractice \u00b7 Containerlab Node Manager', 'msg': '10 of 13 devices ready. Each CLI opens in its own browser tab \u2014 allow pop-ups for Open all, or use the links below. Up to 32 CLIs can be open at once.', 'rows': 13, 'links': 1"
+   },
+   {
+    "name": "topology browser: title, toolbar labels, folder tree",
+    "ok": true,
+    "detail": "{'title': 'Deploy a new lab', 'buttons': ['All lab folders', 'Up one folder', 'Write a new topology\u2026', 'Download a lab from GitHub\u2026', 'Browse popular labs\u2026'], 'tree': ['/etc/containerlab', '/srv/containerlab-node-manager/projects']}"
+   },
+   {
+    "name": "topology file dialog: Preview topology / Add to My labs / Deploy lab",
+    "ok": true,
+    "detail": "['Preview topology', 'Add to My labs without starting', 'Deploy lab']"
+   },
+   {
+    "name": "diagnostics: page name, card titles and the manager card order",
+    "ok": true,
+    "detail": "{'h1': 'Diagnostics', 'cards': ['This manager', 'VM connection', 'Saved in this manager'], 'first': ['Version', 'Python', 'Running for', 'Activity log']}"
+   },
+   {
+    "name": "diagnostics: probe rows use student names and an uppercase status",
+    "ok": true,
+    "detail": "['Folder listing \u2014 FAILED \u00b7 8009 ms \u2014 The VM helper is not installed or is out of date \u2014 re-run the VM setup. (raw: Check VM connection settings, then run bash deploy/check-install.sh on the VM.)', 'VM commands \u2014 FAILED \u00b7 8009 ms \u2014 The VM helper is not installed or is out of date \u2014 re-run the VM set"
+   },
+   {
+    "name": "network dashboard page: title, headline sentence and the raw reason as details",
+    "ok": true,
+    "detail": "{'title': 'Network dashboard \u00b7 BGP_TheoryToPractice', 'headline': 'Telemetry is not installed on this VM.', 'status': 'The Grafana stack is not installed on this manager.'}"
+   },
+   {
+    "name": "terminal: device-first title, back link, Reconnect, notice with the saved credentials",
+    "ok": true,
+    "detail": "{'title': 'clab-BGP_TheoryToPractice-IXP-L2-Switch \u00b7 BGP_TheoryToPractice', 'back': '\u2190 BGP_TheoryToPractice', 'status': 'Connecting to clab-BGP_TheoryToPractice-IXP-L2-Switch\u2026', 'notice': 'Logged in with the credentials saved for clab-BGP_TheoryToPractice-IXP-L2-Switch. The session closes after 15 m"
+   },
+   {
+    "name": "vm guide: Diagnostics link",
+    "ok": true,
+    "detail": ""
+   }
+  ],
+  "console": [],
+  "handled_http": [
+   {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+   }
+  ],
+  "pageerrors": [],
+  "notes": [
+   {
+    "topology": {
+     "bottom": 1040.890625,
+     "inner": 1080,
+     "states": {
+      "state-ready": 10,
+      "state-starting": 1,
+      "state-attention": 1,
+      "state-credentials": 1
+     },
+     "dots": 13,
+     "glyphs": 13,
+     "bgFill": "#fdf6e3",
+     "status": "13 devices \u00b7 16 links",
+     "notes": false,
+     "hint": "Click a device to open it. Click a link to capture its traffic. Right-click for more actions.",
+     "banner": false,
+     "labels": [
+      "RTR8",
+      "PE1 \u00b7 Starting",
+      "GTW-1",
+      "UP-1",
+      "IXP-L2-Switch",
+      "PE2",
+      "GTW-2 \u00b7 Needs attention",
+      "UP-2",
+      "RTR5",
+      "RTR6",
+      "Internet",
+      "Backup-Worker \u00b7 Needs credentials",
+      "RTR7"
+     ],
+     "title": "BGP_TheoryToPractice",
+     "pill": "Starting",
+     "ready": "10 of 13 devices ready"
+    }
+   },
+   {
+    "progress": {
+     "destination": "Saving to Course-Labs \u203a labs/BGP/work",
+     "status": "Saved to Git 2 minutes ago",
+     "save": {
+      "text": "Save progress",
+      "disabled": false
+     },
+     "progressSave": {
+      "text": "Save progress",
+      "disabled": false,
+      "reasonHidden": true
+     },
+     "groups": [
+      "Latest",
+      "Checkpoints",
+      "Baseline",
+      "Instructor and reference versions",
+      "Other labs in this repository (1)"
+     ],
+     "apply": 2,
+     "compare": 5,
+     "saves": [
+      "Latest Progress saved to Git \u00b7 2 minutes ago",
+      "Latest Progress saved to Git \u00b7 4 minutes ago",
+      "Latest Progress saved to Git \u00b7 4 minutes ago",
+      "Latest Progress saved to Git \u00b7 6 minutes ago",
+      "Latest Progress saved to Git \u00b7 7 minutes ago",
+      "Latest Progress saved to Git \u00b7 7 minutes ago",
+      "Latest Progress saved to Git \u00b7 10 minutes ago",
+      "Repository update Repository updated \u00b7 30 minutes ago",
+      "Latest Progress saved to Git \u00b7 39 minutes ago",
+      "Checkpoint 'ospf-done' Checkpoint 'ospf-done' saved \u00b7 2 hours ago"
+     ],
+     "locationHead": "Save location",
+     "folderOpen": false,
+     "advancedHidden": false,
+     "pushUrl": "Verified push destination: https://github.com/example/Course-Labs.git",
+     "lastChange": "Last configuration change: Configuration replaced on some devices \u00b7 1 hour ago",
+     "problemHidden": true,
+     "header": "Saved to Git 2 minutes ago"
+    }
+   }
+  ],
+  "shots": [
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-01-home-manager-menu.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-00-home.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-10-topology.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-11-topology-context-menu.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-12-topology-expanded.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-13-device-drawer-attention.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-20-devices.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-21-devices-technical.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-14-map-editor.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-15-import-map-dialog.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-16-topology-empty-map.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-30-progress.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-34-saved-version.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-35-compare.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-36-restore-review.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-37-restore-job.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-38-checkpoint.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-31-save-location.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-39-progress-unbound.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-32-first-save.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-40-tools.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-41-capture-dialog.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-42-telemetry-settings.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-43-lab-actions-menu.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-44-destroy-review.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-45-operation-banner.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-46-operation-output.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-47-all-lab-operations.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-48-running-labs-review.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-49-running-labs-table.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-50-operation-history.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-51-advanced.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-52-remove-lab.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-53-drawer-after-polls.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-54-menu-after-polls.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-55-cli-launcher.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-56-deploy-page.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-57-topology-browser.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-58-topology-preview.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-59-diagnostics.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-60-network-dashboard.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-61-terminal.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1920x1080-62-capture-setup.png"
+  ]
+ },
+ {
+  "viewport": "1440x900",
+  "asserts": [
+   {
+    "name": "home: lab cards render",
+    "ok": true,
+    "detail": "[{'name': 'BGP_TheoryToPractice', 'pill': 'Starting', 'continued': False}, {'name': 'ospf-basics', 'pill': 'Needs attention', 'continued': False}, {'name': 'switching-basics', 'pill': 'Not matched to a running lab', 'continued': False}, {'name': 'vlan-lab', 'pill': 'Some devices stopped', 'continued"
+   },
+   {
+    "name": "home: skeleton hidden after load",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: no VM banner when the VM is connected",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: other labs on the VM listed",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: no raw deployment words in pills",
+    "ok": true,
+    "detail": "[{'name': 'BGP_TheoryToPractice', 'pill': 'Starting', 'continued': False}, {'name': 'ospf-basics', 'pill': 'Needs attention', 'continued': False}, {'name': 'switching-basics', 'pill': 'Not matched to a running lab', 'continued': False}, {'name': 'vlan-lab', 'pill': 'Some devices stopped', 'continued"
+   },
+   {
+    "name": "home: Manager menu survives a poll",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: Escape closes the Manager menu and returns focus",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: map fits the viewport",
+    "ok": true,
+    "detail": "bottom 860.890625 inner 900 banner hidden=False"
+   },
+   {
+    "name": "topology: every drawn device has one state dot and glyph group",
+    "ok": true,
+    "detail": "{'bottom': 860.890625, 'inner': 900, 'states': {'state-ready': 10, 'state-starting': 1, 'state-attention': 1, 'state-credentials': 1}, 'dots': 13, 'glyphs': 13, 'bgFill': '#fdf6e3', 'status': '13 devices \u00b7 16 links', 'notes': False, 'hint': 'Click a device to open it. Click a link to capture its tra"
+   },
+   {
+    "name": "topology: ready, starting and attention states are all shown",
+    "ok": true,
+    "detail": "{'state-ready': 10, 'state-starting': 1, 'state-attention': 1, 'state-credentials': 1}"
+   },
+   {
+    "name": "topology: imported background colour is kept",
+    "ok": true,
+    "detail": "#fdf6e3"
+   },
+   {
+    "name": "topology: caption in student words",
+    "ok": true,
+    "detail": "13 devices \u00b7 16 links"
+   },
+   {
+    "name": "topology: notes expander shown",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: aria-labels carry the state when not ready",
+    "ok": true,
+    "detail": "['RTR8', 'PE1 \u00b7 Starting', 'GTW-1', 'UP-1', 'IXP-L2-Switch', 'PE2', 'GTW-2 \u00b7 Needs attention', 'UP-2', 'RTR5', 'RTR6', 'Internet', 'Backup-Worker \u00b7 Needs credentials', 'RTR7']"
+   },
+   {
+    "name": "topology: header pill uses the student vocabulary",
+    "ok": true,
+    "detail": "Starting"
+   },
+   {
+    "name": "menu: order CLI, capture, backup, details",
+    "ok": true,
+    "detail": "{'items': [{'text': 'Open CLI \u2197PE1 is still starting. SSH opens automatically when it answers.', 'disabled': True, 'reason': 'PE1 is still starting. SSH opens automatically when it answers.'}, {'text': 'Capture traffic\u2026Packet capture isn\u2019t set up on this VM yet \u2014 see Tools \u203a Packet ', 'disabled': Tr"
+   },
+   {
+    "name": "menu: a starting device explains why the CLI is unavailable",
+    "ok": true,
+    "detail": "{'text': 'Open CLI \u2197PE1 is still starting. SSH opens automatically when it answers.', 'disabled': True, 'reason': 'PE1 is still starting. SSH opens automatically when it answers.'}"
+   },
+   {
+    "name": "menu: header shows the state, not the address",
+    "ok": true,
+    "detail": "PE1Starting"
+   },
+   {
+    "name": "menu: focus moves into the menu",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "menu: the context menu survives a poll",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "menu: Escape closes it and focus returns to the device",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "menu: Shift+F10 opens it from the keyboard",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: Expand toggles the label",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: Escape closes the expanded map",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "drawer: attention state with Check credentials and Test login now",
+    "ok": true,
+    "detail": "{'title': 'GTW-2', 'pill': 'Needs attention', 'status': 'GTW-2 is running, but SSH login failed with the saved credentials.', 'actions': ['Check credentials', 'Test login now'], 'primary': [{'text': 'Open CLI \u2197', 'disabled': True}, {'text': 'Capture traffic\u2026', 'disabled': True}, {'text': 'Back up co"
+   },
+   {
+    "name": "drawer: Open CLI is the first action",
+    "ok": true,
+    "detail": "[{'text': 'Open CLI \u2197', 'disabled': True}, {'text': 'Capture traffic\u2026', 'disabled': True}, {'text': 'Back up configuration', 'disabled': False}]"
+   },
+   {
+    "name": "drawer: route carries the device",
+    "ok": true,
+    "detail": "#lab=8ad6a153ee244e5cb935d35c2ee0f3c2&view=topology&device=clab-BGP_TheoryToPractice-GTW-2"
+   },
+   {
+    "name": "drawer: stays open across a poll",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "drawer: Next device moves on",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "drawer: Escape closes it and clears the route",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "devices: every row has a pill and disabled CLIs carry a reason",
+    "ok": true,
+    "detail": "[{'pill': 'Needs credentials', 'reason': 'Add login credentials to open the CLI of Backup-Worker.', 'cli': True}, {'pill': 'Ready', 'reason': None, 'cli': False}, {'pill': 'Starting', 'reason': 'PE1 is still starting. SSH opens automatically when it answers.', 'cli': True}, {'pill': 'Ready', 'reason"
+   },
+   {
+    "name": "devices: no address in the simple rows",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "devices: technical view shows the table",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "editor: titled Edit lab map with student copy",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "editor: no state dots on the editing canvas",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "editor: closes without changes",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "import map dialog: student copy",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "empty map: state shown, SVG hidden, tools disabled",
+    "ok": true,
+    "detail": "{'empty': True, 'svg': True, 'tools': [True, True, True, True, True], 'menuEdit': True, 'status': '', 'banner': 'Starting lab did not finish.', 'bannerHidden': False, 'pill': 'Needs attention'}"
+   },
+   {
+    "name": "empty map: failed operation reads as Needs attention in the banner",
+    "ok": true,
+    "detail": "{'empty': True, 'svg': True, 'tools': [True, True, True, True, True], 'menuEdit': True, 'status': '', 'banner': 'Starting lab did not finish.', 'bannerHidden': False, 'pill': 'Needs attention'}"
+   },
+   {
+    "name": "empty map: Import map\u2026 opens the import dialog",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "banner: Dismiss hides the failed operation",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "progress: destination in words",
+    "ok": true,
+    "detail": "Saving to Course-Labs \u203a labs/BGP/work"
+   },
+   {
+    "name": "progress: status is the student sentence",
+    "ok": true,
+    "detail": "Saved to Git 1 minute ago"
+   },
+   {
+    "name": "progress: Save progress enabled on both buttons",
+    "ok": true,
+    "detail": "{'destination': 'Saving to Course-Labs \u203a labs/BGP/work', 'status': 'Saved to Git 1 minute ago', 'save': {'text': 'Save progress', 'disabled': False}, 'progressSave': {'text': 'Save progress', 'disabled': False, 'reasonHidden': True}, 'groups': ['Latest', 'Checkpoints', 'Baseline', 'Instructor and re"
+   },
+   {
+    "name": "progress: versions grouped for the student",
+    "ok": true,
+    "detail": "['Latest', 'Checkpoints', 'Baseline', 'Instructor and reference versions', 'Other labs in this repository (1)']"
+   },
+   {
+    "name": "progress: other labs stay collapsed",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "progress: apply offered only where a restore artifact exists",
+    "ok": true,
+    "detail": "2"
+   },
+   {
+    "name": "progress: compare with my latest save on the other rows",
+    "ok": true,
+    "detail": "5"
+   },
+   {
+    "name": "progress: recent saves in student words",
+    "ok": true,
+    "detail": "['Latest Progress saved to Git \u00b7 1 minute ago', 'Latest Progress saved to Git \u00b7 3 minutes ago', 'Latest Progress saved to Git \u00b7 5 minutes ago', 'Latest Progress saved to Git \u00b7 5 minutes ago', 'Latest Progress saved to Git \u00b7 7 minutes ago', 'Latest Progress saved to Git \u00b7 8 minutes ago', 'Latest Prog"
+   },
+   {
+    "name": "progress: save location collapsed for a connected lab",
+    "ok": true,
+    "detail": "{'destination': 'Saving to Course-Labs \u203a labs/BGP/work', 'status': 'Saved to Git 1 minute ago', 'save': {'text': 'Save progress', 'disabled': False}, 'progressSave': {'text': 'Save progress', 'disabled': False, 'reasonHidden': True}, 'groups': ['Latest', 'Checkpoints', 'Baseline', 'Instructor and re"
+   },
+   {
+    "name": "progress: advanced details filled",
+    "ok": true,
+    "detail": "Verified push destination: https://github.com/example/Course-Labs.git"
+   },
+   {
+    "name": "progress: last configuration change is one click away",
+    "ok": true,
+    "detail": "Last configuration change: Configuration replaced on some devices \u00b7 1 hour ago"
+   },
+   {
+    "name": "progress: header line agrees",
+    "ok": true,
+    "detail": "Saved to Git 1 minute ago"
+   },
+   {
+    "name": "version dialog: Saved version with Apply, Compare and Download",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "compare dialog: named after the latest save, never the running devices",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "restore review: title, Devices legend, three safety bullets, acknowledgement and undo minutes",
+    "ok": true,
+    "detail": "{'title': 'Replace running configuration', 'legend': 'Devices', 'rows': ['GTW-2 1 differences from the running configuration', 'PE2 Skipped \u2014 The device did not answer over SSH.', 'UP-2 Already matches \u2014 nothing to change'], 'bullets': 3, 'ack': True, 'minutes': True, 'run': 'Replace configurations'"
+   },
+   {
+    "name": "restore review: skipped devices explain why in student words",
+    "ok": true,
+    "detail": "['GTW-2 1 differences from the running configuration', 'PE2 Skipped \u2014 The device did not answer over SSH.', 'UP-2 Already matches \u2014 nothing to change']"
+   },
+   {
+    "name": "restore review: matching and differing devices are described",
+    "ok": true,
+    "detail": "['GTW-2 1 differences from the running configuration', 'PE2 Skipped \u2014 The device did not answer over SSH.', 'UP-2 Already matches \u2014 nothing to change']"
+   },
+   {
+    "name": "restore review: no router wording",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "restore job: result sentence and per-device outcomes",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save window: student title and Details with the raw status",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "checkpoint dialog: name sanitised live",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save location: folder browser with Save this lab here and the heading",
+    "ok": true,
+    "detail": "{'use': 'Save this lab here', 'crumbs': ['Course-Labs', 'labs', 'BGP', 'work'], 'select': 'reg-work', 'heading': 'Folders in this repository'}"
+   },
+   {
+    "name": "save: header button reads Saving\u2026",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save: no job window for a plain save",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save: finished and the status card agrees",
+    "ok": true,
+    "detail": "Saved to Git just now"
+   },
+   {
+    "name": "unbound lab: Connect a save location\u2026 enabled, browser open, empty states",
+    "ok": true,
+    "detail": "{'button': 'Connect a save location\u2026', 'disabled': False, 'destination': 'Not connected \u2014 choose where this lab\u2019s progress is saved', 'head': 'Choose a save location', 'folderOpen': True, 'versions': 'Choose a save location first. Save progress then creates versions you can return to.', 'menuHidden'"
+   },
+   {
+    "name": "first save: dialog asks where to save with repository, folder, devices and consent",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "tools: dashboard link label, telemetry line, Capture traffic\u2026, capture caption when disabled",
+    "ok": true,
+    "detail": "{'grafana': '', 'caption': 'Live link and interface state, in Grafana. The dashboard starts on the VM when needed.', 'tele': 'Telemetry is not installed on this VM.', 'capture': 'Capture traffic\u2026', 'cap_caption': 'Packet capture is not set up on this VM. Ask your instructor or administrator. Setup g"
+   },
+   {
+    "name": "capture dialog: lab context, device picker unfolded first, Start capture, sessions explained",
+    "ok": true,
+    "detail": "{'ctx': 'Lab BGP_TheoryToPractice \u2014 choose a device below', 'adv': 'Choose a device', 'open': True, 'legend': 'Connected interfaces', 'start': 'Start capture', 'order': ['div', 'capture-context', 'capture-endpoints', 'p', 'capture-advanced', 'fieldset', 'capture-more', 'capture-status', 'div', 'h3',"
+   },
+   {
+    "name": "telemetry settings: student sentences with a Dashboard: line",
+    "ok": true,
+    "detail": "Telemetry settings\u00d7Telemetry is not installed on this VM.DetailsTelemetry is disabled by TELEMETRY_COLLECTOR=disabled in the manager environment.Dashboard: not "
+   },
+   {
+    "name": "lab actions menu: every disabled item carries a visible reason",
+    "ok": true,
+    "detail": "[{'t': 'Start stopped devices', 'd': True, 'r': 'The lab is already running'}, {'t': 'Stop devices', 'd': False, 'r': ''}, {'t': 'Restart devices', 'd': False, 'r': ''}, {'t': 'Sync topology from VM', 'd': True, 'r': \"This lab's files cannot be synced \u2014 see Advanced \u203a Deployment details\"}, {'t': 'Im"
+   },
+   {
+    "name": "destroy review: student title, unsaved-work and last-save lines, danger confirm, Save progress first",
+    "ok": true,
+    "detail": "Destroy BGP_TheoryToPractice?"
+   },
+   {
+    "name": "destroy review: the raw command only under Technical details",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "stop review: title and confirm label",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "confirm: no output window pops up; the banner names the operation with View output",
+    "ok": true,
+    "detail": "{'text': 'Stopping devices\u2026', 'output': True, 'out': False, 'pill': 'Stopping devices'}"
+   },
+   {
+    "name": "operation output: student heading and banner",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "all lab operations: Deployment / Lab tools / Danger with student labels",
+    "ok": true,
+    "detail": "{'sections': ['Deployment', 'Lab tools', 'Danger'], 'buttons': ['Deploy lab', 'Redeploy lab', 'Start devices', 'Stop devices', 'Restart devices', 'Apply topology changes', 'Show running devices', 'Save device configurations', 'Destroy lab\u2026', 'Deploy lab and clear the lab folder\u2026', 'Redeploy lab and "
+   },
+   {
+    "name": "running labs review: read-only wording and Show running labs",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "running labs: inspection table with student columns",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "operation history: student action names in every row",
+    "ok": true,
+    "detail": "{'title': 'Operation history', 'rows': ['manager \u00b7 Running labs on the VM', 'BGP_TheoryToPractice \u00b7 Stop devices', 'manager \u00b7 Running labs on the VM', 'BGP_TheoryToPractice \u00b7 Stop devices', 'BGP_TheoryToPractice \u00b7 Stop devices', 'BGP_TheoryToPractice \u00b7 Stop devices', 'BGP_TheoryToPractice \u00b7 Stop dev"
+   },
+   {
+    "name": "advanced: VM status sentence; a disabled Start explains itself in the banner details",
+    "ok": true,
+    "detail": "{'files': 'No topology files found on the VM for this lab. Your workspace is kept.', 'vm': 'Lab VM: connected', 'start': 'Start lab', 'disabled': True, 'detail': 'This lab has no topology file on the VM (Advanced \u203a Deployment details)', 'hidden': False}"
+   },
+   {
+    "name": "remove lab dialog: named title and danger submit",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "polling: the device panel stays open with the same device and focus across two polls",
+    "ok": true,
+    "detail": "{'before': {'title': 'Backup-Worker', 'actions': 611, 'focus': 'BUTTON'}, 'after': {'open': True, 'title': 'Backup-Worker', 'actions': 611, 'focus': 'BUTTON'}}"
+   },
+   {
+    "name": "polling: an open menu keeps its item focus across two polls",
+    "ok": true,
+    "detail": "{'focused': 'menu-import-map', 'still': {'open': True, 'focus': 'menu-import-map'}}"
+   },
+   {
+    "name": "CLI launcher: Open CLIs title, devices-ready sentence, pills, Open CLI links, history link row",
+    "ok": true,
+    "detail": "{'title': 'Open CLIs \u00b7 BGP_TheoryToPractice', 'doc': 'Open CLIs \u00b7 BGP_TheoryToPractice \u00b7 Containerlab Node Manager', 'msg': '10 of 13 devices ready. Each CLI opens in its own browser tab \u2014 allow pop-ups for Open all, or use the links below. Up to 32 CLIs can be open at once.', 'rows': 13, 'links': 1"
+   },
+   {
+    "name": "topology browser: title, toolbar labels, folder tree",
+    "ok": true,
+    "detail": "{'title': 'Deploy a new lab', 'buttons': ['All lab folders', 'Up one folder', 'Write a new topology\u2026', 'Download a lab from GitHub\u2026', 'Browse popular labs\u2026'], 'tree': ['/etc/containerlab', '/srv/containerlab-node-manager/projects']}"
+   },
+   {
+    "name": "topology file dialog: Preview topology / Add to My labs / Deploy lab",
+    "ok": true,
+    "detail": "['Preview topology', 'Add to My labs without starting', 'Deploy lab']"
+   },
+   {
+    "name": "diagnostics: page name, card titles and the manager card order",
+    "ok": true,
+    "detail": "{'h1': 'Diagnostics', 'cards': ['This manager', 'VM connection', 'Saved in this manager'], 'first': ['Version', 'Python', 'Running for', 'Activity log']}"
+   },
+   {
+    "name": "diagnostics: probe rows use student names and an uppercase status",
+    "ok": true,
+    "detail": "['Folder listing \u2014 FAILED \u00b7 8008 ms \u2014 The VM helper is not installed or is out of date \u2014 re-run the VM setup. (raw: Check VM connection settings, then run bash deploy/check-install.sh on the VM.)', 'VM commands \u2014 FAILED \u00b7 8009 ms \u2014 The VM helper is not installed or is out of date \u2014 re-run the VM set"
+   },
+   {
+    "name": "network dashboard page: title, headline sentence and the raw reason as details",
+    "ok": true,
+    "detail": "{'title': 'Network dashboard \u00b7 BGP_TheoryToPractice', 'headline': 'Telemetry is not installed on this VM.', 'status': 'The Grafana stack is not installed on this manager.'}"
+   },
+   {
+    "name": "terminal: device-first title, back link, Reconnect, notice with the saved credentials",
+    "ok": true,
+    "detail": "{'title': 'clab-BGP_TheoryToPractice-IXP-L2-Switch \u00b7 BGP_TheoryToPractice', 'back': '\u2190 BGP_TheoryToPractice', 'status': 'Connecting to clab-BGP_TheoryToPractice-IXP-L2-Switch\u2026', 'notice': 'Logged in with the credentials saved for clab-BGP_TheoryToPractice-IXP-L2-Switch. The session closes after 15 m"
+   },
+   {
+    "name": "vm guide: Diagnostics link",
+    "ok": true,
+    "detail": ""
+   }
+  ],
+  "console": [],
+  "handled_http": [
+   {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+   }
+  ],
+  "pageerrors": [],
+  "notes": [
+   {
+    "topology": {
+     "bottom": 860.890625,
+     "inner": 900,
+     "states": {
+      "state-ready": 10,
+      "state-starting": 1,
+      "state-attention": 1,
+      "state-credentials": 1
+     },
+     "dots": 13,
+     "glyphs": 13,
+     "bgFill": "#fdf6e3",
+     "status": "13 devices \u00b7 16 links",
+     "notes": false,
+     "hint": "Click a device to open it. Click a link to capture its traffic. Right-click for more actions.",
+     "banner": false,
+     "labels": [
+      "RTR8",
+      "PE1 \u00b7 Starting",
+      "GTW-1",
+      "UP-1",
+      "IXP-L2-Switch",
+      "PE2",
+      "GTW-2 \u00b7 Needs attention",
+      "UP-2",
+      "RTR5",
+      "RTR6",
+      "Internet",
+      "Backup-Worker \u00b7 Needs credentials",
+      "RTR7"
+     ],
+     "title": "BGP_TheoryToPractice",
+     "pill": "Starting",
+     "ready": "10 of 13 devices ready"
+    }
+   },
+   {
+    "progress": {
+     "destination": "Saving to Course-Labs \u203a labs/BGP/work",
+     "status": "Saved to Git 1 minute ago",
+     "save": {
+      "text": "Save progress",
+      "disabled": false
+     },
+     "progressSave": {
+      "text": "Save progress",
+      "disabled": false,
+      "reasonHidden": true
+     },
+     "groups": [
+      "Latest",
+      "Checkpoints",
+      "Baseline",
+      "Instructor and reference versions",
+      "Other labs in this repository (1)"
+     ],
+     "apply": 2,
+     "compare": 5,
+     "saves": [
+      "Latest Progress saved to Git \u00b7 1 minute ago",
+      "Latest Progress saved to Git \u00b7 3 minutes ago",
+      "Latest Progress saved to Git \u00b7 5 minutes ago",
+      "Latest Progress saved to Git \u00b7 5 minutes ago",
+      "Latest Progress saved to Git \u00b7 7 minutes ago",
+      "Latest Progress saved to Git \u00b7 8 minutes ago",
+      "Latest Progress saved to Git \u00b7 9 minutes ago",
+      "Latest Progress saved to Git \u00b7 11 minutes ago",
+      "Repository update Repository updated \u00b7 31 minutes ago",
+      "Latest Progress saved to Git \u00b7 41 minutes ago",
+      "Checkpoint 'ospf-done' Checkpoint 'ospf-done' saved \u00b7 2 hours ago"
+     ],
+     "locationHead": "Save location",
+     "folderOpen": false,
+     "advancedHidden": false,
+     "pushUrl": "Verified push destination: https://github.com/example/Course-Labs.git",
+     "lastChange": "Last configuration change: Configuration replaced on some devices \u00b7 1 hour ago",
+     "problemHidden": true,
+     "header": "Saved to Git 1 minute ago"
+    }
+   }
+  ],
+  "shots": [
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-01-home-manager-menu.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-00-home.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-10-topology.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-11-topology-context-menu.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-12-topology-expanded.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-13-device-drawer-attention.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-20-devices.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-21-devices-technical.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-14-map-editor.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-15-import-map-dialog.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-16-topology-empty-map.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-30-progress.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-34-saved-version.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-35-compare.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-36-restore-review.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-37-restore-job.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-38-checkpoint.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-31-save-location.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-39-progress-unbound.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-32-first-save.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-40-tools.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-41-capture-dialog.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-42-telemetry-settings.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-43-lab-actions-menu.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-44-destroy-review.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-45-operation-banner.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-46-operation-output.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-47-all-lab-operations.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-48-running-labs-review.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-49-running-labs-table.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-50-operation-history.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-51-advanced.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-52-remove-lab.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-53-drawer-after-polls.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-54-menu-after-polls.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-55-cli-launcher.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-56-deploy-page.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-57-topology-browser.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-58-topology-preview.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-59-diagnostics.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-60-network-dashboard.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-61-terminal.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1440x900-62-capture-setup.png"
+  ]
+ },
+ {
+  "viewport": "1366x768",
+  "asserts": [
+   {
+    "name": "home: lab cards render",
+    "ok": true,
+    "detail": "[{'name': 'BGP_TheoryToPractice', 'pill': 'Starting', 'continued': False}, {'name': 'ospf-basics', 'pill': 'Needs attention', 'continued': False}, {'name': 'switching-basics', 'pill': 'Not matched to a running lab', 'continued': False}, {'name': 'vlan-lab', 'pill': 'Some devices stopped', 'continued"
+   },
+   {
+    "name": "home: skeleton hidden after load",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: no VM banner when the VM is connected",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: other labs on the VM listed",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: no raw deployment words in pills",
+    "ok": true,
+    "detail": "[{'name': 'BGP_TheoryToPractice', 'pill': 'Starting', 'continued': False}, {'name': 'ospf-basics', 'pill': 'Needs attention', 'continued': False}, {'name': 'switching-basics', 'pill': 'Not matched to a running lab', 'continued': False}, {'name': 'vlan-lab', 'pill': 'Some devices stopped', 'continued"
+   },
+   {
+    "name": "home: Manager menu survives a poll",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "home: Escape closes the Manager menu and returns focus",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: map fits the viewport",
+    "ok": true,
+    "detail": "bottom 728.890625 inner 768 banner hidden=False"
+   },
+   {
+    "name": "topology: every drawn device has one state dot and glyph group",
+    "ok": true,
+    "detail": "{'bottom': 728.890625, 'inner': 768, 'states': {'state-ready': 10, 'state-starting': 1, 'state-attention': 1, 'state-credentials': 1}, 'dots': 13, 'glyphs': 13, 'bgFill': '#fdf6e3', 'status': '13 devices \u00b7 16 links', 'notes': False, 'hint': 'Click a device to open it. Click a link to capture its tra"
+   },
+   {
+    "name": "topology: ready, starting and attention states are all shown",
+    "ok": true,
+    "detail": "{'state-ready': 10, 'state-starting': 1, 'state-attention': 1, 'state-credentials': 1}"
+   },
+   {
+    "name": "topology: imported background colour is kept",
+    "ok": true,
+    "detail": "#fdf6e3"
+   },
+   {
+    "name": "topology: caption in student words",
+    "ok": true,
+    "detail": "13 devices \u00b7 16 links"
+   },
+   {
+    "name": "topology: notes expander shown",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: aria-labels carry the state when not ready",
+    "ok": true,
+    "detail": "['RTR8', 'PE1 \u00b7 Starting', 'GTW-1', 'UP-1', 'IXP-L2-Switch', 'PE2', 'GTW-2 \u00b7 Needs attention', 'UP-2', 'RTR5', 'RTR6', 'Internet', 'Backup-Worker \u00b7 Needs credentials', 'RTR7']"
+   },
+   {
+    "name": "topology: header pill uses the student vocabulary",
+    "ok": true,
+    "detail": "Starting"
+   },
+   {
+    "name": "menu: order CLI, capture, backup, details",
+    "ok": true,
+    "detail": "{'items': [{'text': 'Open CLI \u2197PE1 is still starting. SSH opens automatically when it answers.', 'disabled': True, 'reason': 'PE1 is still starting. SSH opens automatically when it answers.'}, {'text': 'Capture traffic\u2026Packet capture isn\u2019t set up on this VM yet \u2014 see Tools \u203a Packet ', 'disabled': Tr"
+   },
+   {
+    "name": "menu: a starting device explains why the CLI is unavailable",
+    "ok": true,
+    "detail": "{'text': 'Open CLI \u2197PE1 is still starting. SSH opens automatically when it answers.', 'disabled': True, 'reason': 'PE1 is still starting. SSH opens automatically when it answers.'}"
+   },
+   {
+    "name": "menu: header shows the state, not the address",
+    "ok": true,
+    "detail": "PE1Starting"
+   },
+   {
+    "name": "menu: focus moves into the menu",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "menu: the context menu survives a poll",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "menu: Escape closes it and focus returns to the device",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "menu: Shift+F10 opens it from the keyboard",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: Expand toggles the label",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "topology: Escape closes the expanded map",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "drawer: attention state with Check credentials and Test login now",
+    "ok": true,
+    "detail": "{'title': 'GTW-2', 'pill': 'Needs attention', 'status': 'GTW-2 is running, but SSH login failed with the saved credentials.', 'actions': ['Check credentials', 'Test login now'], 'primary': [{'text': 'Open CLI \u2197', 'disabled': True}, {'text': 'Capture traffic\u2026', 'disabled': True}, {'text': 'Back up co"
+   },
+   {
+    "name": "drawer: Open CLI is the first action",
+    "ok": true,
+    "detail": "[{'text': 'Open CLI \u2197', 'disabled': True}, {'text': 'Capture traffic\u2026', 'disabled': True}, {'text': 'Back up configuration', 'disabled': False}]"
+   },
+   {
+    "name": "drawer: route carries the device",
+    "ok": true,
+    "detail": "#lab=8ad6a153ee244e5cb935d35c2ee0f3c2&view=topology&device=clab-BGP_TheoryToPractice-GTW-2"
+   },
+   {
+    "name": "drawer: stays open across a poll",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "drawer: Next device moves on",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "drawer: Escape closes it and clears the route",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "devices: every row has a pill and disabled CLIs carry a reason",
+    "ok": true,
+    "detail": "[{'pill': 'Needs credentials', 'reason': 'Add login credentials to open the CLI of Backup-Worker.', 'cli': True}, {'pill': 'Ready', 'reason': None, 'cli': False}, {'pill': 'Starting', 'reason': 'PE1 is still starting. SSH opens automatically when it answers.', 'cli': True}, {'pill': 'Ready', 'reason"
+   },
+   {
+    "name": "devices: no address in the simple rows",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "devices: technical view shows the table",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "editor: titled Edit lab map with student copy",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "editor: no state dots on the editing canvas",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "editor: closes without changes",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "import map dialog: student copy",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "empty map: state shown, SVG hidden, tools disabled",
+    "ok": true,
+    "detail": "{'empty': True, 'svg': True, 'tools': [True, True, True, True, True], 'menuEdit': True, 'status': '', 'banner': 'Starting lab did not finish.', 'bannerHidden': False, 'pill': 'Needs attention'}"
+   },
+   {
+    "name": "empty map: failed operation reads as Needs attention in the banner",
+    "ok": true,
+    "detail": "{'empty': True, 'svg': True, 'tools': [True, True, True, True, True], 'menuEdit': True, 'status': '', 'banner': 'Starting lab did not finish.', 'bannerHidden': False, 'pill': 'Needs attention'}"
+   },
+   {
+    "name": "empty map: Import map\u2026 opens the import dialog",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "banner: Dismiss hides the failed operation",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "progress: destination in words",
+    "ok": true,
+    "detail": "Saving to Course-Labs \u203a labs/BGP/work"
+   },
+   {
+    "name": "progress: status is the student sentence",
+    "ok": true,
+    "detail": "Saved to Git 1 minute ago"
+   },
+   {
+    "name": "progress: Save progress enabled on both buttons",
+    "ok": true,
+    "detail": "{'destination': 'Saving to Course-Labs \u203a labs/BGP/work', 'status': 'Saved to Git 1 minute ago', 'save': {'text': 'Save progress', 'disabled': False}, 'progressSave': {'text': 'Save progress', 'disabled': False, 'reasonHidden': True}, 'groups': ['Latest', 'Checkpoints', 'Baseline', 'Instructor and re"
+   },
+   {
+    "name": "progress: versions grouped for the student",
+    "ok": true,
+    "detail": "['Latest', 'Checkpoints', 'Baseline', 'Instructor and reference versions', 'Other labs in this repository (1)']"
+   },
+   {
+    "name": "progress: other labs stay collapsed",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "progress: apply offered only where a restore artifact exists",
+    "ok": true,
+    "detail": "2"
+   },
+   {
+    "name": "progress: compare with my latest save on the other rows",
+    "ok": true,
+    "detail": "5"
+   },
+   {
+    "name": "progress: recent saves in student words",
+    "ok": true,
+    "detail": "['Latest Progress saved to Git \u00b7 1 minute ago', 'Latest Progress saved to Git \u00b7 2 minutes ago', 'Latest Progress saved to Git \u00b7 4 minutes ago', 'Latest Progress saved to Git \u00b7 6 minutes ago', 'Latest Progress saved to Git \u00b7 7 minutes ago', 'Latest Progress saved to Git \u00b7 8 minutes ago', 'Latest Prog"
+   },
+   {
+    "name": "progress: save location collapsed for a connected lab",
+    "ok": true,
+    "detail": "{'destination': 'Saving to Course-Labs \u203a labs/BGP/work', 'status': 'Saved to Git 1 minute ago', 'save': {'text': 'Save progress', 'disabled': False}, 'progressSave': {'text': 'Save progress', 'disabled': False, 'reasonHidden': True}, 'groups': ['Latest', 'Checkpoints', 'Baseline', 'Instructor and re"
+   },
+   {
+    "name": "progress: advanced details filled",
+    "ok": true,
+    "detail": "Verified push destination: https://github.com/example/Course-Labs.git"
+   },
+   {
+    "name": "progress: last configuration change is one click away",
+    "ok": true,
+    "detail": "Last configuration change: Configuration replaced on some devices \u00b7 1 hour ago"
+   },
+   {
+    "name": "progress: header line agrees",
+    "ok": true,
+    "detail": "Saved to Git 1 minute ago"
+   },
+   {
+    "name": "version dialog: Saved version with Apply, Compare and Download",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "compare dialog: named after the latest save, never the running devices",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "restore review: title, Devices legend, three safety bullets, acknowledgement and undo minutes",
+    "ok": true,
+    "detail": "{'title': 'Replace running configuration', 'legend': 'Devices', 'rows': ['GTW-2 1 differences from the running configuration', 'PE2 Skipped \u2014 The device did not answer over SSH.', 'UP-2 Already matches \u2014 nothing to change'], 'bullets': 3, 'ack': True, 'minutes': True, 'run': 'Replace configurations'"
+   },
+   {
+    "name": "restore review: skipped devices explain why in student words",
+    "ok": true,
+    "detail": "['GTW-2 1 differences from the running configuration', 'PE2 Skipped \u2014 The device did not answer over SSH.', 'UP-2 Already matches \u2014 nothing to change']"
+   },
+   {
+    "name": "restore review: matching and differing devices are described",
+    "ok": true,
+    "detail": "['GTW-2 1 differences from the running configuration', 'PE2 Skipped \u2014 The device did not answer over SSH.', 'UP-2 Already matches \u2014 nothing to change']"
+   },
+   {
+    "name": "restore review: no router wording",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "restore job: result sentence and per-device outcomes",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save window: student title and Details with the raw status",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "checkpoint dialog: name sanitised live",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save location: folder browser with Save this lab here and the heading",
+    "ok": true,
+    "detail": "{'use': 'Save this lab here', 'crumbs': ['Course-Labs', 'labs', 'BGP', 'work'], 'select': 'reg-work', 'heading': 'Folders in this repository'}"
+   },
+   {
+    "name": "save: header button reads Saving\u2026",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save: no job window for a plain save",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "save: finished and the status card agrees",
+    "ok": true,
+    "detail": "Saved to Git just now"
+   },
+   {
+    "name": "unbound lab: Connect a save location\u2026 enabled, browser open, empty states",
+    "ok": true,
+    "detail": "{'button': 'Connect a save location\u2026', 'disabled': False, 'destination': 'Not connected \u2014 choose where this lab\u2019s progress is saved', 'head': 'Choose a save location', 'folderOpen': True, 'versions': 'Choose a save location first. Save progress then creates versions you can return to.', 'menuHidden'"
+   },
+   {
+    "name": "first save: dialog asks where to save with repository, folder, devices and consent",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "tools: dashboard link label, telemetry line, Capture traffic\u2026, capture caption when disabled",
+    "ok": true,
+    "detail": "{'grafana': '', 'caption': 'Live link and interface state, in Grafana. The dashboard starts on the VM when needed.', 'tele': 'Telemetry is not installed on this VM.', 'capture': 'Capture traffic\u2026', 'cap_caption': 'Packet capture is not set up on this VM. Ask your instructor or administrator. Setup g"
+   },
+   {
+    "name": "capture dialog: lab context, device picker unfolded first, Start capture, sessions explained",
+    "ok": true,
+    "detail": "{'ctx': 'Lab BGP_TheoryToPractice \u2014 choose a device below', 'adv': 'Choose a device', 'open': True, 'legend': 'Connected interfaces', 'start': 'Start capture', 'order': ['div', 'capture-context', 'capture-endpoints', 'p', 'capture-advanced', 'fieldset', 'capture-more', 'capture-status', 'div', 'h3',"
+   },
+   {
+    "name": "telemetry settings: student sentences with a Dashboard: line",
+    "ok": true,
+    "detail": "Telemetry settings\u00d7Telemetry is not installed on this VM.DetailsTelemetry is disabled by TELEMETRY_COLLECTOR=disabled in the manager environment.Dashboard: not "
+   },
+   {
+    "name": "lab actions menu: every disabled item carries a visible reason",
+    "ok": true,
+    "detail": "[{'t': 'Start stopped devices', 'd': True, 'r': 'The lab is already running'}, {'t': 'Stop devices', 'd': False, 'r': ''}, {'t': 'Restart devices', 'd': False, 'r': ''}, {'t': 'Sync topology from VM', 'd': True, 'r': \"This lab's files cannot be synced \u2014 see Advanced \u203a Deployment details\"}, {'t': 'Im"
+   },
+   {
+    "name": "destroy review: student title, unsaved-work and last-save lines, danger confirm, Save progress first",
+    "ok": true,
+    "detail": "Destroy BGP_TheoryToPractice?"
+   },
+   {
+    "name": "destroy review: the raw command only under Technical details",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "stop review: title and confirm label",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "confirm: no output window pops up; the banner names the operation with View output",
+    "ok": true,
+    "detail": "{'text': 'Stopping devices\u2026', 'output': True, 'out': False, 'pill': 'Stopping devices'}"
+   },
+   {
+    "name": "operation output: student heading and banner",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "all lab operations: Deployment / Lab tools / Danger with student labels",
+    "ok": true,
+    "detail": "{'sections': ['Deployment', 'Lab tools', 'Danger'], 'buttons': ['Deploy lab', 'Redeploy lab', 'Start devices', 'Stop devices', 'Restart devices', 'Apply topology changes', 'Show running devices', 'Save device configurations', 'Destroy lab\u2026', 'Deploy lab and clear the lab folder\u2026', 'Redeploy lab and "
+   },
+   {
+    "name": "running labs review: read-only wording and Show running labs",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "running labs: inspection table with student columns",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "operation history: student action names in every row",
+    "ok": true,
+    "detail": "{'title': 'Operation history', 'rows': ['manager \u00b7 Running labs on the VM', 'BGP_TheoryToPractice \u00b7 Stop devices', 'manager \u00b7 Running labs on the VM', 'BGP_TheoryToPractice \u00b7 Stop devices', 'manager \u00b7 Running labs on the VM', 'BGP_TheoryToPractice \u00b7 Stop devices', 'BGP_TheoryToPractice \u00b7 Stop device"
+   },
+   {
+    "name": "advanced: VM status sentence; a disabled Start explains itself in the banner details",
+    "ok": true,
+    "detail": "{'files': 'No topology files found on the VM for this lab. Your workspace is kept.', 'vm': 'Lab VM: connected', 'start': 'Start lab', 'disabled': True, 'detail': 'This lab has no topology file on the VM (Advanced \u203a Deployment details)', 'hidden': False}"
+   },
+   {
+    "name": "remove lab dialog: named title and danger submit",
+    "ok": true,
+    "detail": ""
+   },
+   {
+    "name": "polling: the device panel stays open with the same device and focus across two polls",
+    "ok": true,
+    "detail": "{'before': {'title': 'Backup-Worker', 'actions': 611, 'focus': 'BUTTON'}, 'after': {'open': True, 'title': 'Backup-Worker', 'actions': 611, 'focus': 'BUTTON'}}"
+   },
+   {
+    "name": "polling: an open menu keeps its item focus across two polls",
+    "ok": true,
+    "detail": "{'focused': 'menu-import-map', 'still': {'open': True, 'focus': 'menu-import-map'}}"
+   },
+   {
+    "name": "CLI launcher: Open CLIs title, devices-ready sentence, pills, Open CLI links, history link row",
+    "ok": true,
+    "detail": "{'title': 'Open CLIs \u00b7 BGP_TheoryToPractice', 'doc': 'Open CLIs \u00b7 BGP_TheoryToPractice \u00b7 Containerlab Node Manager', 'msg': '10 of 13 devices ready. Each CLI opens in its own browser tab \u2014 allow pop-ups for Open all, or use the links below. Up to 32 CLIs can be open at once.', 'rows': 13, 'links': 1"
+   },
+   {
+    "name": "topology browser: title, toolbar labels, folder tree",
+    "ok": true,
+    "detail": "{'title': 'Deploy a new lab', 'buttons': ['All lab folders', 'Up one folder', 'Write a new topology\u2026', 'Download a lab from GitHub\u2026', 'Browse popular labs\u2026'], 'tree': ['/etc/containerlab', '/srv/containerlab-node-manager/projects']}"
+   },
+   {
+    "name": "topology file dialog: Preview topology / Add to My labs / Deploy lab",
+    "ok": true,
+    "detail": "['Preview topology', 'Add to My labs without starting', 'Deploy lab']"
+   },
+   {
+    "name": "diagnostics: page name, card titles and the manager card order",
+    "ok": true,
+    "detail": "{'h1': 'Diagnostics', 'cards': ['This manager', 'VM connection', 'Saved in this manager'], 'first': ['Version', 'Python', 'Running for', 'Activity log']}"
+   },
+   {
+    "name": "diagnostics: probe rows use student names and an uppercase status",
+    "ok": true,
+    "detail": "['Folder listing \u2014 FAILED \u00b7 8008 ms \u2014 The VM helper is not installed or is out of date \u2014 re-run the VM setup. (raw: Check VM connection settings, then run bash deploy/check-install.sh on the VM.)', 'VM commands \u2014 FAILED \u00b7 8008 ms \u2014 The VM helper is not installed or is out of date \u2014 re-run the VM set"
+   },
+   {
+    "name": "network dashboard page: title, headline sentence and the raw reason as details",
+    "ok": true,
+    "detail": "{'title': 'Network dashboard \u00b7 BGP_TheoryToPractice', 'headline': 'Telemetry is not installed on this VM.', 'status': 'The Grafana stack is not installed on this manager.'}"
+   },
+   {
+    "name": "terminal: device-first title, back link, Reconnect, notice with the saved credentials",
+    "ok": true,
+    "detail": "{'title': 'clab-BGP_TheoryToPractice-IXP-L2-Switch \u00b7 BGP_TheoryToPractice', 'back': '\u2190 BGP_TheoryToPractice', 'status': 'Connecting to clab-BGP_TheoryToPractice-IXP-L2-Switch\u2026', 'notice': 'Logged in with the credentials saved for clab-BGP_TheoryToPractice-IXP-L2-Switch. The session closes after 15 m"
+   },
+   {
+    "name": "vm guide: Diagnostics link",
+    "ok": true,
+    "detail": ""
+   }
+  ],
+  "console": [],
+  "handled_http": [
+   {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+   }
+  ],
+  "pageerrors": [],
+  "notes": [
+   {
+    "topology": {
+     "bottom": 728.890625,
+     "inner": 768,
+     "states": {
+      "state-ready": 10,
+      "state-starting": 1,
+      "state-attention": 1,
+      "state-credentials": 1
+     },
+     "dots": 13,
+     "glyphs": 13,
+     "bgFill": "#fdf6e3",
+     "status": "13 devices \u00b7 16 links",
+     "notes": false,
+     "hint": "Click a device to open it. Click a link to capture its traffic. Right-click for more actions.",
+     "banner": false,
+     "labels": [
+      "RTR8",
+      "PE1 \u00b7 Starting",
+      "GTW-1",
+      "UP-1",
+      "IXP-L2-Switch",
+      "PE2",
+      "GTW-2 \u00b7 Needs attention",
+      "UP-2",
+      "RTR5",
+      "RTR6",
+      "Internet",
+      "Backup-Worker \u00b7 Needs credentials",
+      "RTR7"
+     ],
+     "title": "BGP_TheoryToPractice",
+     "pill": "Starting",
+     "ready": "10 of 13 devices ready"
+    }
+   },
+   {
+    "progress": {
+     "destination": "Saving to Course-Labs \u203a labs/BGP/work",
+     "status": "Saved to Git 1 minute ago",
+     "save": {
+      "text": "Save progress",
+      "disabled": false
+     },
+     "progressSave": {
+      "text": "Save progress",
+      "disabled": false,
+      "reasonHidden": true
+     },
+     "groups": [
+      "Latest",
+      "Checkpoints",
+      "Baseline",
+      "Instructor and reference versions",
+      "Other labs in this repository (1)"
+     ],
+     "apply": 2,
+     "compare": 5,
+     "saves": [
+      "Latest Progress saved to Git \u00b7 1 minute ago",
+      "Latest Progress saved to Git \u00b7 2 minutes ago",
+      "Latest Progress saved to Git \u00b7 4 minutes ago",
+      "Latest Progress saved to Git \u00b7 6 minutes ago",
+      "Latest Progress saved to Git \u00b7 7 minutes ago",
+      "Latest Progress saved to Git \u00b7 8 minutes ago",
+      "Latest Progress saved to Git \u00b7 9 minutes ago",
+      "Latest Progress saved to Git \u00b7 10 minutes ago",
+      "Latest Progress saved to Git \u00b7 12 minutes ago",
+      "Repository update Repository updated \u00b7 32 minutes ago",
+      "Latest Progress saved to Git \u00b7 42 minutes ago",
+      "Checkpoint 'ospf-done' Checkpoint 'ospf-done' saved \u00b7 2 hours ago"
+     ],
+     "locationHead": "Save location",
+     "folderOpen": false,
+     "advancedHidden": false,
+     "pushUrl": "Verified push destination: https://github.com/example/Course-Labs.git",
+     "lastChange": "Last configuration change: Configuration replaced on some devices \u00b7 1 hour ago",
+     "problemHidden": true,
+     "header": "Saved to Git 1 minute ago"
+    }
+   }
+  ],
+  "shots": [
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-01-home-manager-menu.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-00-home.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-10-topology.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-11-topology-context-menu.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-12-topology-expanded.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-13-device-drawer-attention.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-20-devices.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-21-devices-technical.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-14-map-editor.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-15-import-map-dialog.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-16-topology-empty-map.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-30-progress.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-34-saved-version.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-35-compare.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-36-restore-review.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-37-restore-job.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-38-checkpoint.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-31-save-location.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-39-progress-unbound.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-32-first-save.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-40-tools.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-41-capture-dialog.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-42-telemetry-settings.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-43-lab-actions-menu.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-44-destroy-review.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-45-operation-banner.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-46-operation-output.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-47-all-lab-operations.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-48-running-labs-review.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-49-running-labs-table.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-50-operation-history.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-51-advanced.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-52-remove-lab.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-53-drawer-after-polls.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-54-menu-after-polls.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-55-cli-launcher.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-56-deploy-page.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-57-topology-browser.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-58-topology-preview.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-59-diagnostics.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-60-network-dashboard.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-61-terminal.png",
+   "/tmp/claude-1000/-home-clabllm-projects-clab-manager/1091edac-9ddb-4b0c-a33c-fc03097e5fb4/scratchpad/shots-final/1366x768-62-capture-setup.png"
+  ]
+ }
+]

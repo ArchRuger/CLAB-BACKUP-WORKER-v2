@@ -61,10 +61,12 @@ So separate the states you give the student from the folder they save into:
 ```
 
 - **Bind the lab to `<lab-slug>/work`.** The student's *Save progress* writes `work/latest`, and
-  their own milestones go to `work/checkpoints/<name>` via *Save checkpoint*.
-- **The student applies `reference/*`** from *Where this lab lives* (each folder shows an *Apply
-  to running lab…* button) or from *View changes / History*, which now labels every version by
-  its folder (`reference/broken-01 · latest`) instead of a bare "latest".
+  their own milestones go to `work/checkpoints/<name>` via *Create checkpoint…*.
+- **The student applies `reference/*`** from the **Progress** tab: *Saved versions* lists them
+  under *Instructor and reference versions* with an *Apply to running lab…* button, the folder
+  browser under *Save location › Change folder…* shows the same button on each folder, and
+  *Full history…* labels every version by its folder (`reference/broken-01 · latest`) instead
+  of a bare "latest".
 - **Never save into `reference/*`.** They are the given states; leave the lab bound to `work`.
 - Keep the state vocabulary small and identical across every lab: `start`, `solution`,
   `broken-NN`, plus the student's own checkpoints. A predictable set makes the UI predictable

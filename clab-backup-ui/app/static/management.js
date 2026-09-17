@@ -84,7 +84,10 @@ function renderManagement(){
  mgmtMarkup($('vm-summary'),vmSummaryMarkup(discovery));
  mgmtMarkup($('discovered-labs'),(discovery.discovered||[]).filter(l=>!l.imported&&!l.excluded).map(l=>`<button class="side-button" data-setup-name="${esc(l.name)}">${esc(l.name)}<small>${discovery.connected?'Running on the VM':'Last seen on the VM'} · ${l.running} of ${l.nodes} devices running · ${esc(discovery.file_errors?.[l.name]||(discovery.pending_imports?.[l.name]?'Ready to import — confirm to add it to My labs':'Add to My labs'))}</small></button>`).join(''));
  const reports=discovery.file_reports||{};
- mgmtMarkup($('discovery-file-list'),Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file checks yet. Use Manager ▾ › Refresh lab list. If it stays empty the VM helper may need an update (Manager ▾ › Diagnostics).</p>');
+ const fileMarkup=Object.entries(reports).map(([name,files])=>`<p><strong>${esc(name)}</strong></p>${Object.entries(files).map(([kind,file])=>`<p>${esc(kind)}: ${esc(file.message)}<small>${(file.paths||[]).map(esc).join('<br>')}</small></p>`).join('')}`).join('')||'<p>No file checks yet. Use Manager ▾ › Refresh lab list. If it stays empty the VM helper may need an update (Manager ▾ › Diagnostics).</p>';
+ mgmtMarkup($('discovery-file-list'),fileMarkup);
+ // The same reports (every lab on the VM, imported ones included) stay reachable under Advanced › Deployment details.
+ mgmtMarkup($('advanced-file-list'),fileMarkup);
  mgmtMarkup($('excluded-labs'),(discovery.ignored_labs||[]).length?'<p class="side-hint">Removed from this manager earlier</p>'+(discovery.ignored_labs||[]).map(name=>`<div class="empty-lab"><button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again · or stop hiding it so it appears automatically</small></button><button type="button" class="button secondary small" data-clear-exclusion="${esc(name)}">Stop hiding</button></div>`).join(''):'');
  maybePromptVmConnection();
  renderLanding(discovery,lab);

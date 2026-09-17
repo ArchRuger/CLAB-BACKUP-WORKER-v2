@@ -113,8 +113,9 @@ function gitOpenRepository(){
  const focus=$('git-binding-id')||(target&&typeof target.querySelector==='function'?target.querySelector('[data-git-repo-action="connect"]'):null);
  if(focus&&typeof focus.focus==='function')focus.focus();
 }
-async function gitFetchHistory(id){try{return await(await api('/labs/'+encodeURIComponent(id)+'/git/history')).json();}catch{return null;}}
-async function gitFetchTree(bindingId){try{return await(await api('/git/repositories/'+encodeURIComponent(bindingId)+'/tree')).json();}catch{return null;}}
+// null = not requested, false = the VM did not answer (the versions list then shows Try again, never "not saved yet").
+async function gitFetchHistory(id){try{return await(await api('/labs/'+encodeURIComponent(id)+'/git/history')).json();}catch{return false;}}
+async function gitFetchTree(bindingId){try{return await(await api('/git/repositories/'+encodeURIComponent(bindingId)+'/tree')).json();}catch{return false;}}
 async function gitShowRepository(force=false){
  const id=activeId,container=$('git-repository-content');if(!id||!container)return;
  if(gitViewLab===id&&!force)return;
@@ -159,7 +160,7 @@ function gitRenderRepository(id,context,catalog,extras={}){
   ?`<section class="card git-save-location" id="git-save-location" aria-labelledby="git-save-location-title"><h2 id="git-save-location-title">Save location</h2><p class="git-destination-line"><span>${esc(labName)} saves to</span><code>${esc(repoName)}</code>${repo.prefix?`<span aria-hidden="true">›</span><code>${esc(repo.prefix)}</code>`:''}<span aria-hidden="true">›</span><code>latest/</code></p><p class="form-help">Each save includes ${selected.size} ${selected.size===1?'device':'devices'}.</p><div class="actions"><button type="button" class="button secondary" data-git-repo-action="switch">Use a different repository…</button><button type="button" class="button secondary" data-git-repo-action="connect">Connect by URL…</button></div><p class="form-help">Connected the wrong repository? Choose <strong>Use a different repository</strong>. Nothing is deleted, and files already saved stay where they are. To stop saving here, <button type="button" class="text-button git-inline-action" data-git-repo-action="unlink">disconnect this lab</button>.</p>${technical}${form}</section>`
   :repositories.length
   ?`<section class="card git-save-location" id="git-save-location" aria-labelledby="git-save-location-title"><h2 id="git-save-location-title">Choose a save location</h2><p>Your progress is saved as versions in a Git repository on the lab VM. Pick the repository and folder for this lab, then choose the devices to include.</p>${form}</section>`
-  :`<section class="card git-save-location" id="git-save-location" aria-label="Save location"><div class="blank-state"><h3>Choose where to save your progress</h3><p>Connect a GitHub repository by pasting its HTTPS URL. The VM's Git login is used — you won't be asked for a password.</p><div class="actions git-blank-actions"><button type="button" class="button primary" data-git-repo-action="connect">Connect a repository by URL</button></div><details><summary>Administrator setup (terminal)</summary><p>On the VM, run this as your normal account (no sudo). It sets up the checkout and Git login. Choose Refresh under Advanced repository details afterwards.</p><pre class="git-setup-command">bash deploy/setup-git.sh</pre></details></div></section>`;
+  :`<section class="card git-save-location" id="git-save-location" aria-label="Save location"><div class="blank-state"><h3>Choose where to save your progress</h3><p>Connect a GitHub repository by pasting its HTTPS URL. The VM's Git login is used — you won't be asked for a password.</p><div class="actions git-blank-actions"><button type="button" class="button primary" data-git-repo-action="connect">Connect a repository by URL</button><button type="button" class="button secondary" data-git-repo-action="refresh">Check again</button></div><details><summary>Administrator setup (terminal)</summary><p>On the VM, run this as your normal account (no sudo). It sets up the checkout and Git login. Then click Check again.</p><pre class="git-setup-command">bash deploy/setup-git.sh</pre></details></div></section>`;
  gitVersionTree=tree;gitRenderVersions(id,context,model,tree,extras.history||null);gitRenderSaves(id,context);gitRenderAdvanced(context);
  const form_=$('git-binding-form'),panel=$('git-places-panel');
  const showPlaces=bindingId=>{
@@ -196,7 +197,7 @@ function gitVersionGroups(id,context,model,tree,history){
   const dir=model.nodes.get(prefix),latest=dir?.dirs.find(d=>d.name==='latest');
   if(latest&&latest.count)groups.latest.push({name:'Latest',caption:`${repoName} › ${prefix||'(whole repository)'} › latest`,when:epoch(tree?.saved?.latest)||whenFor('latest'),note:noteFor('latest'),count:latest.count,view:{commit:head,path:'latest'},compare:false,apply:dir.restorable?(prefix?{folder:prefix}:{version:{type:'git',commit:head,path:'latest'}}):null});
   const checkpoints=dir?.dirs.find(d=>d.name==='checkpoints');
-  for(const cp of checkpoints?.dirs||[])if(cp.count)groups.checkpoints.push({name:cp.name,caption:'',when:whenFor('checkpoint',cp.name)||epoch(tree?.saved?.checkpoints),note:noteFor('checkpoint',cp.name),count:cp.count,view:{commit:head,path:'checkpoints/'+cp.name},compare:true,apply:null});
+  for(const cp of checkpoints?.dirs||[])if(cp.count)groups.checkpoints.push({name:cp.name,caption:'',when:whenFor('checkpoint',cp.name)||0,note:noteFor('checkpoint',cp.name),count:cp.count,view:{commit:head,path:'checkpoints/'+cp.name},compare:true,apply:null});
   const baseline=dir?.dirs.find(d=>d.name==='baseline');
   if(baseline&&baseline.count)groups.baseline.push({name:'Baseline',caption:'',when:epoch(tree?.saved?.baseline)||whenFor('baseline'),count:baseline.count,view:{commit:head,path:'baseline'},compare:true,apply:null});
   const parentPath=prefix.includes('/')?prefix.slice(0,prefix.lastIndexOf('/')):'',parent=model.nodes.get(parentPath);
@@ -239,7 +240,7 @@ function gitRenderVersions(id,context,model,tree,history){
   const body=`${intro&&items?`<p class="caption">${esc(intro)}</p>`:''}${items?`<ul class="git-version-list">${items}</ul>`:`<p class="caption">${esc(empty)}</p>`}`;
   return collapsed?`<details class="git-version-group"><summary>${esc(title)} (${rows.length})</summary>${body}</details>`:`<section class="git-version-group"><h3>${esc(title)}</h3>${body}</section>`;
  };
- const html=`<div class="git-versions-head"><button type="button" class="button secondary small" data-git-repo-action="history">Full history…</button></div>`
+ const html=`<div class="git-versions-head"><button type="button" class="button secondary small" data-git-repo-action="browse">Browse the repository…</button><button type="button" class="button secondary small" data-git-repo-action="history">Full history…</button></div>`
   +section('Latest',groups.latest,'',"You haven't saved this lab yet. Save progress creates a configuration snapshot you can return to later.")
   +section('Checkpoints',groups.checkpoints,'','No checkpoints yet. Create a checkpoint when you reach an important milestone.')
   +section('Baseline',groups.baseline,'The reference version set for this lab.','')
@@ -538,6 +539,8 @@ function gitRunAction(action,id=activeId){
   if(action==='settings'){gitOpenRepository();return;}
   if(action==='refresh'){await gitShowRepository(true);return;}
   if(action==='load'){if(typeof showTab==='function')showTab('progress');const list=$('git-saved-versions');if(list&&typeof list.scrollIntoView==='function')list.scrollIntoView({block:'start',behavior:'smooth'});return;}
+  // Every folder of the repository, with its own Apply, without changing where this lab saves.
+  if(action==='browse'){const folder=$('git-change-folder');if(folder){folder.open=true;if(typeof folder.scrollIntoView==='function')folder.scrollIntoView({block:'start',behavior:'smooth'});}return;}
   if(action==='history'){await gitHistory(id);return;}
   if(action==='push'){await gitPushPending(id);return;}
   if(action==='update'){await gitUpdateRemote(id);return;}

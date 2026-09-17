@@ -120,6 +120,58 @@ every dialog, screenshot at 1920×1080 / 1440×900 / 1366×768, and assert
 
 _(newest entry first)_
 
+### 2026-09-17 — stages 4, 5 and the documentation of 6 done; live-lab pass and the release remain
+
+**Stage 4 (style/accessibility audit, focused):** no inline `style=` anywhere (SVG presentation
+attributes only), no coral outside the danger tokens, every disabled control now carries a visible
+reason (menu `.menu-reason`, `data-proxy-reason` captions under the Advanced buttons and the Danger
+zone, the banner's Details line for a disabled Start, the device panel's note for a disabled Capture
+traffic), device row ids collision-free (`deviceSlug` + hash), Action logs refreshed on the poll only
+while the section is on screen, one extra `render()` on `DOMContentLoaded` (`shell.js`).
+
+**Stage 5 (integration):** `node --test tests/*.js` 133/133; Python `unittest` OK (1 skipped); `node
+--check` clean; `git diff --check` clean; `deploy/verify-release.py` passes (1.28.0); id audit clean.
+`docs/redesign/tools/verify_after.py` now covers Home, Topology (map fits at 1366×768, context menu,
+expanded map, editor, import dialog, empty map), Devices, Progress (versions, compare, apply review,
+first save, save window, checkpoint name, save location browser, unbound lab), Tools (capture dialog,
+telemetry settings), operations (menu reasons, destroy review, stop confirm → banner, output window,
+All lab operations, Running labs on the VM + table, history), Advanced (+ Remove lab), polling
+stability (device panel and a menu across two polls, focus kept) and the standalone pages (CLI
+launcher, deploy page → browser → editor → preview, Diagnostics + checks, network dashboard page,
+terminal, guides): **93/93 checks at 1920×1080, 1440×900 and 1366×768, 0 console errors, 0 page
+errors**, one handled HTTP 409 per viewport (the optional `.annotations.json` read). Screenshots:
+`shots/after/` (1366×768 set) and `docs/images/ui/` (the tour, 1440×900). The fixture manager
+answers `lab_operations.remote` in-process (capabilities, browse, read, preview, run) and gives two
+labs a `vm_project_path`.
+
+**Functional-parity review:** four independent read-only code reviews against `inventory/*.md` and
+`parity/*.md` (shell + topology; git-progress + git-places + restore; operations + management;
+capture + pages). Every inventory row present. Findings fixed here: destroy copy conditioned on the
+cleanup option; clone review titled after the project (not "manager"); busy-disabled Advanced
+controls carry a reason; the restore review shows the lab again (`Lab:` line); a failed history/tree
+fetch reads as "Try again", never "not saved yet"; the blank Progress state has *Check again*;
+*Browse the repository…* opens the folder browser from Saved versions; checkpoint rows no longer
+borrow another checkpoint's time; lab-scoped operation history from Lab actions ▾ and Advanced
+(Manager ▾ keeps every lab); *Lab files…* opens files bound to the lab (link, not duplicate);
+per-lab VM file details of every lab under Advanced › Deployment details; capture's service hint
+relabelled, *Refresh list* re-asks the manager while the service is missing, the Tools caption links
+the setup guide; the terminal clears its raw title on close; Diagnostics reports "The manager
+answered HTTP n: …"; `opSaveWorkspace` routes through `selectLab`. **Intentionally removed: none.**
+
+**Stage 6 (documentation):** `docs/TOUR.md` rewritten around the student UI with the after
+screenshots; `docs/LAB-OPERATIONS.md`, `docs/DEBUG-PANEL.md` (Diagnostics), `README.md`,
+`docs/README.md`, `docs/ARCHITECTURE.md`, `clab-backup-ui/NODE-FEATURES.md`, `docs/GIT-PROGRESS.md`
+and the label sweep across `docs/WIKI-MASTER-GUIDE.md`, `TELEMETRY.md`, `CAPTURE.md`,
+`GIT-SETUP.md`, `NAMING.md`, `INSTALL.md`, `QUICK-INSTALL.md`, `FRESH-VM-GUIDE-V2.md`,
+`HEALTH-CHECK.md`, `STANDALONE-SETUP.md`; "Unreleased" sections at the top of `docs/CHANGELOG.md`
+and `VALIDATION.md` (the release check keys on "Changes in x.y.z" / a heading ending in the
+current release, so both pass at 1.28.0); the handoff section of `agent instructions.md`.
+
+**Not done — external blockers:** the live-lab pass (this host has no Docker, containerlab, lab VM
+or manager data directory; see §2) and therefore the release: run the §4 step 5 live list on the
+dev VM first, then `python3 deploy/set-release.py 1.29.0`, rename the two "Unreleased" sections and
+record the live results in `VALIDATION.md`.
+
 ### 2026-09-17 — stages 3(b) Progress tab and 3(c) operations / management / capture / pages done
 
 **3(b) done and verified:** `git-progress.js` rewritten around the student vocabulary (`gitSaveSentences`,

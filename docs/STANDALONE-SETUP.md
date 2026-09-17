@@ -154,12 +154,14 @@ Host credentials and NOS credentials are separate.
 
 ## 5. Register and use persistent labs
 
-Use **Remove lab** to remove only a saved manager workspace, credentials, schedule
-and history entries. Backup files and audit logs stay on disk. No running container
-or VM lab file is modified. The default exclusion prevents automatic reimport;
-use **Import again** in the sidebar later, or uncheck the exclusion when removing
-if you want to test immediate rediscovery. Both paths require confirmation before
-a new workspace is saved; cancelling Import again retains its exclusion. Other labs and the VM connection remain.
+Use **Remove from this manager…** (**Lab actions ▾** or **Advanced › Danger zone**) to
+remove only a saved manager workspace, credentials, schedule and history entries.
+Backup files and audit logs stay on disk. No running container or VM lab file is
+modified. The default exclusion prevents automatic reimport; use **Stop hiding**
+under **Also running on the VM** on Home later, or uncheck the exclusion when
+removing if you want to test immediate rediscovery. Both paths require confirmation
+before a new workspace is saved; cancelling the import retains its exclusion. Other
+labs and the VM connection remain.
 
 
 The installed helper reads deployed lab files automatically. New labs wait for
@@ -188,7 +190,7 @@ See the [master guide](WIKI-MASTER-GUIDE.md) for file locations, limits,
 Docker-run-to-Compose upgrades and troubleshooting. Manual import remains available:
 
 
-Choose **Import a lab** and upload the original `.clab.yaml`. Optionally include
+Choose **Manager ▾ › Import lab files…** and upload the original `.clab.yaml`. Optionally include
 its `.annotations.json`. The YAML supplies the lab name, node identities/kinds,
 prefix and links; annotations supply layout and styling. The importer handles
 literal node/default/kind settings and both normal and empty container prefixes.
@@ -203,7 +205,7 @@ Reimporting that definition updates its workspace instead of making a duplicate.
 A unique unlinked legacy workspace with the same lab name is reused; ambiguous
 matches require opening the intended workspace and using Update lab YAML.
 
-The manager polls every 30 seconds and also offers **Refresh discovery**:
+The manager polls every 30 seconds and also offers **Manager ▾ › Refresh lab list**:
 
 | State | Meaning |
 |---|---|

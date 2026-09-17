@@ -33,7 +33,7 @@ async function connect(){
   ws.onopen=()=>{ws.send(JSON.stringify({ticket:data.ticket}));terminal.reset();terminal.focus();};
   ws.onmessage=event=>{if(request!==generation)return;if(event.data instanceof ArrayBuffer)terminal.write(new Uint8Array(event.data));else{const message=JSON.parse(event.data);setStatus(message.message);if(message.message==='Connected')resize();}};
   // On close the reason (if any) is kept after "Disconnected" instead of being appended to whatever was shown.
-  ws.onclose=()=>{if(request!==generation)return;socket=null;setConnectEnabled(true);const shown=get('status').textContent;const reason=/^(Connected|Connecting|Disconnected)/.test(shown)?'':shown;get('status').textContent=reason?'Disconnected — '+reason:'Disconnected';};
+  ws.onclose=()=>{if(request!==generation)return;socket=null;setConnectEnabled(true);const shown=get('status').textContent;const reason=/^(Connected|Connecting|Disconnected)/.test(shown)?'':shown;get('status').textContent=reason?'Disconnected — '+reason:'Disconnected';get('status').removeAttribute('title');};
   ws.onerror=()=>{if(request===generation)setStatus('Connection failed');};
  }catch(error){if(request===generation){setStatus(error.message);setConnectEnabled(true);}}
 }

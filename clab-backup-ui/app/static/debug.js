@@ -8,7 +8,7 @@ async function debugFetch(path,options={}){
  const response=await fetch('/api/debug'+path,options);
  if(!response.ok){
   let detail='';try{const body=await response.json();if(typeof body?.detail==='string')detail=body.detail;}catch{detail='';}
-  throw new Error('The manager did not answer (HTTP '+response.status+'). Refresh to try again.'+(detail?' '+detail:''));
+  throw new Error(detail?'The manager answered HTTP '+response.status+': '+detail:'The manager did not answer (HTTP '+response.status+'). Refresh to try again.');
  }
  return response.json();
 }

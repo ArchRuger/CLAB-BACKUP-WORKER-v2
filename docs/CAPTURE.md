@@ -1,12 +1,14 @@
 # Browser Wireshark
 
-Select **Capture packets**, a node's **Capture** action, or either endpoint of a
-topology link. The dialog lists the interfaces the topology wires to that node first
-(a single one is already ticked; a link opens on its first endpoint). *All live Linux
-interfaces* holds the rest of that namespace, and *Advanced* holds the scope, search
-and capture-target selector for bridges, host NICs, other namespaces or a node that
-discovery did not match; it unfolds by itself only when no target could be resolved.
-Click **Start browser capture**, then **Open Wireshark in browser**. Wireshark runs on
+Select **Capture traffic…** (the **Packet capture** card on the lab's **Tools** tab, a
+device's right-click menu or device panel, or **Lab actions ▾ › Packet capture…**), or
+click either endpoint of a topology link. The dialog lists the interfaces the topology
+wires to that device first (a single one is already ticked; a link opens on its first
+endpoint). *Other interfaces on this device* holds the rest of that namespace, and
+*Advanced: capture somewhere else* holds the scope, search and capture-target selector
+for bridges, host NICs, other namespaces or a device that discovery did not match; it
+unfolds by itself (as *Choose a device*) only when no target could be resolved. Click
+**Start capture**, then **Open Wireshark ↗**. Wireshark runs on
 the Containerlab VM; the workstation only needs a browser that can reach the manager.
 
 ## The capture stack
@@ -30,8 +32,9 @@ new one), so discovery pauses for a few seconds and running browser sessions are
 removed: download saved captures before upgrading.
 
 To take the stack down deliberately, add `--remove`: it stops the services and
-writes `CAPTURE_PROVIDER=disabled` (the token is kept), the node and link Capture
-actions grey out, and later upgrades leave the stack alone. Rerun without `--remove`
+writes `CAPTURE_PROVIDER=disabled` (the token is kept), the device and link
+**Capture traffic…** actions report that packet capture is not set up on this VM, and
+later upgrades leave the stack alone. Rerun without `--remove`
 to bring it back. The health check reports a missing stack as a WARN with that
 command.
 

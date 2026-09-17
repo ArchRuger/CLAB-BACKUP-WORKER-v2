@@ -25,7 +25,8 @@ async function json(path,method,data){return (await api(path,{method,headers:{'C
 function setMarkup(el,html){if(!el)return false;if(el._markup===html)return false;el.innerHTML=html;el._markup=html;return true;}
 // Disabled menu items and tool rows show why as visible text (a title on a disabled button is unreachable).
 function menuReason(el,text){if(!el||typeof el.querySelector!=='function')return;const small=el.querySelector('.menu-reason');if(!small)return;small.textContent=text||'';small.hidden=!text;}
-function logsVisible(){return tab==='advanced';}
+// Action logs live on the Advanced tab; the 4 s poll refreshes them only while that section is on screen.
+function logsVisible(){if(tab!=='advanced')return false;const view=$('logs-view');if(!view||typeof view.getBoundingClientRect!=='function'||typeof innerHeight==='undefined')return true;const box=view.getBoundingClientRect();return box.bottom>0&&box.top<innerHeight;}
 async function refresh(){const response=await api('/state');state=await response.json();state.loaded=true;if(activeId&&!current())activeId='';if(!routeApplied){routeApplied=true;if(typeof applyRoute==='function')applyRoute();}render();if(logsVisible())await refreshLogs();}
 function setTab(value){const legacy=TAB_ALIAS[value];if(legacy){if(value==='inventory')devicesTechnical=true;else scrollTarget=SUBVIEW[value]||'';subview=value;value=legacy;}else subview='';tab=PANELS.includes(value)?value:'topology';}
 function syncRoute(push=false){if(!routeApplied||typeof writeRoute!=='function'||typeof currentRoute!=='function')return;writeRoute(currentRoute(),{push});}
@@ -188,7 +189,8 @@ function renderNodes(){const lab=current();if(!lab)return;const term=$('search')
 function nodeActions(n,details=false){const hint=sshHint(n);return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button><button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}`;}
 // The drawer's Advanced section: check the saved login now, or change the connection settings.
 function nodeDrawerActions(n){return `<button data-check="${esc(n.name)}" ${!(n.login_configured??n.ssh_ready)?'disabled title="Add credentials first"':''}>Test login</button><button data-edit="${esc(n.name)}">Edit connection…</button>`;}
-function deviceSlug(name){return String(name).replace(/[^A-Za-z0-9_-]+/g,'-');}
+// A readable id per device name; the hash keeps names that differ only in punctuation apart.
+function deviceSlug(name){let hash=0;for(const c of String(name))hash=(hash*31+c.charCodeAt(0))>>>0;return String(name).replace(/[^A-Za-z0-9_-]+/g,'-')+'-'+hash.toString(36);}
 // One row per device for the Devices tab and the topology rail: name, platform, state pill and the
 // reason the CLI is unavailable as visible text the Open CLI button points at.
 function deviceRow(n,rail){
@@ -334,6 +336,7 @@ function renderDetails(){
  if($('details-state')){$('details-state').textContent=ds?ds.label:'';$('details-state').className='pill '+(ds?ds.pill||'neutral':'neutral');}
  for(const id of ['details-prev','details-next'])if($(id))$(id).disabled=lab.nodes.length<2;
  setMarkup($('details-actions'),nodeActions(n,true));
+ if($('details-actions-note')){const note=typeof captureStatusLine==='function'?captureStatusLine():'';$('details-actions-note').textContent=note;$('details-actions-note').hidden=!note;}
  setMarkup($('details-advanced-actions'),nodeDrawerActions(n));
  if($('details-status-text'))$('details-status-text').textContent=recheckPending(n)?`Checking ${n.short_name||n.name} again… (automatic within a minute — or Test login now)`:ds?ds.detail:(h?.ssh?.message||'');
  setMarkup($('details-status-actions'),statusActions(n,ds));

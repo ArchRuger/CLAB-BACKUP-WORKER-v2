@@ -41,7 +41,7 @@ async function openLabOperations(id=activeId){
  opDialog(dialog.id,lab.name,`<p class="op-path">${path?'Topology file on the VM: '+esc(path):"This lab has no topology file on the VM yet. Import the lab's files (Advanced › Deployment details) to enable these actions."}</p>${problem?`<p class="op-notice">Couldn't check the VM's commands, so every action is shown; some may fail. Details: ${esc(problem)}</p>`:''}
  <div class="op-sections"><section><h3>Deployment</h3><div class="op-grid">${opCommand('deploy','Deploy lab')}${['redeploy','start','stop','restart','apply','inspect','save'].map(a=>opCommand(a)).join('')}</div><p class="form-help">Deploy creates and starts the devices; Start, Stop and Restart act on the running devices. "Save device configurations" uses containerlab's own save (supported device types only); your Save progress snapshots are separate.</p></section>
  <section><h3>Lab tools</h3><div class="op-grid"><button class="button secondary" data-local="ssh">Open all CLIs <span aria-hidden="true">↗</span></button><button class="button secondary" data-local="interactive">Edit map</button><button class="button secondary" data-local="telemetry">Telemetry settings…</button><button class="button secondary" data-local="history">Operation history…</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove from favourites':'Add to favourites'}</button></div></section>
- <section class="op-danger"><h3>Danger</h3><div class="op-grid">${opCommand('destroy','Destroy lab…',opDestroyOptions())}${cleanup}${opCommand('delete','Delete the topology file from the VM…')}</div><p class="form-help">Destroy removes the running devices and the lab's generated folder on the VM. Redeploy keeps that folder unless you choose the "clear the lab folder" variant.</p></section></div>`);
+ <section class="op-danger"><h3>Danger</h3><div class="op-grid">${opCommand('destroy','Destroy lab…',opDestroyOptions())}${cleanup}${opCommand('delete','Delete the topology file from the VM…')}</div><p class="form-help">Destroy removes the running devices and, when the installed containerlab supports cleanup, the lab's generated folder on the VM. Redeploy keeps that folder unless you choose the "clear the lab folder" variant.</p></section></div>`);
  dialog.querySelectorAll('[data-op-action]').forEach(b=>b.onclick=()=>{
   const action=b.dataset.opAction,options=JSON.parse(b.dataset.opOptions);
   opTask(dialog,()=>opReview({lab_id:id,action,options}));
@@ -92,17 +92,17 @@ async function openTelemetrySettings(id=activeId){
 const opReviewCopy={
  deploy:{title:n=>`Start ${n}?`,body:'Creates and starts the devices in this topology. Nothing is deleted; device logins open as the devices boot.',confirm:'Start lab'},
  start:{title:n=>`Start ${n}'s stopped devices?`,body:'Stopped devices start again with their existing configuration.',confirm:'Start devices'},
- stop:{title:()=>'Stop devices?',body:'Devices stop but keep their startup configuration; unsaved running-config changes may be lost on some platforms.',confirm:'Stop devices'},
- restart:{title:()=>'Restart devices?',body:'Devices restart from their startup configuration; unsaved running-config changes may be lost on some platforms. Open CLI sessions disconnect.',confirm:'Restart devices',danger:true},
+ stop:{title:()=>'Stop devices?',body:'Devices stop but keep their startup configuration.',confirm:'Stop devices'},
+ restart:{title:()=>'Restart devices?',body:'Devices restart from their startup configuration. Open CLI sessions disconnect.',confirm:'Restart devices',danger:true},
  redeploy:{title:n=>`Redeploy ${n}?`,body:'Devices are destroyed and started again from the topology; unsaved device changes are lost. Save progress first if you need them.',confirm:'Redeploy lab',danger:true,cleanup:" The lab's generated folder on the VM is cleared as well."},
- destroy:{title:n=>`Destroy ${n}?`,body:"The running devices are removed from the VM and the lab's generated folder is deleted. Configuration changes you have not saved are lost. Your saved progress, checkpoints and backups remain.",confirm:'Destroy lab',danger:true},
+ destroy:{title:n=>`Destroy ${n}?`,body:v=>`The running devices are removed from the VM${v.options?.cleanup?" and the lab's generated folder is deleted":''}. Configuration changes you have not saved are lost. Your saved progress, checkpoints and backups remain.`,confirm:'Destroy lab',danger:true},
  apply:{title:n=>`Apply topology changes to ${n}?`,body:'The running lab is updated to match the topology file. Devices removed from the file are destroyed; connectivity may be interrupted.',confirm:'Apply changes',danger:true},
  save:{title:()=>'Save device configurations on the VM?',body:'Each supported device writes its running configuration to its startup configuration on the VM (containerlab save). This is separate from Save progress.',confirm:'Save configurations'},
  inspect:{title:n=>`Refresh the device list for ${n}`,body:"Reads the current state of this lab's devices from the VM. Nothing is changed.",confirm:'Show devices',readonly:true},
  'inspect-all':{title:()=>'Refresh the list of running labs on the VM',body:'Reads which labs are running on the VM. Nothing is changed.',confirm:'Show running labs',readonly:true,hideName:true},
  delete:{title:n=>`Delete ${n}'s topology file from the VM?`,body:v=>`${v.path||'The topology file'} is deleted after a recovery copy is kept. The lab stays in My labs and your saved progress is untouched. Only possible while the lab is not running.`,confirm:'Delete file',danger:true},
  create:{title:()=>'Create this topology file on the VM?',body:v=>`Writes ${v.path||'the file'} on the VM. No devices are started until you deploy it.`,confirm:'Create file'},
- clone:{title:n=>`Download ${n}?`,body:"Downloads the repository into the VM's lab folder. Existing folders are never overwritten.",confirm:'Download'},
+ clone:{title:(n,v)=>`Download ${v?.options?.project||'this lab'}?`,body:v=>`Downloads ${v.options?.url||'the repository'} into the VM's lab folder as ${v.options?.project||'a new folder'}. Existing folders are never overwritten.`,confirm:'Download',hideName:true},
 };
 // The last-save line of a disruptive confirmation: when the student last saved progress, in red when
 // never or when a lab operation ran after the last save.
@@ -122,7 +122,7 @@ async function opReview(request){
  const label=opLabels[value.action]||value.action,copy=opReviewCopy[value.action]||{title:()=>label+'?',body:'',confirm:label};
  const lab=typeof current==='function'&&labId&&labId===activeId?current():null;
  const cleanup=!!request.options?.cleanup;
- const title=typeof copy.title==='function'?copy.title(value.name||opName(lab)||'this lab'):copy.title;
+ const title=typeof copy.title==='function'?copy.title(value.name||opName(lab)||'this lab',value):copy.title;
  const body=(typeof copy.body==='function'?copy.body(value):copy.body)+(cleanup&&copy.cleanup?copy.cleanup:'');
  const technicalWarnings=value.warnings.filter(w=>/cleanup/i.test(w)),warnings=value.warnings.filter(w=>!technicalWarnings.includes(w));
  const disruptive=opDisruptive.includes(value.action);
@@ -233,6 +233,8 @@ async function opSaveWorkspace(path,source,parsed,labId=''){
  if(!id)id=(await(await api('/lab-definitions',{method:'POST',body:opWorkspaceForm(path,source,parsed)})).json()).id;
  await json('/labs/'+id+'/operations-settings','PUT',{path});
  activeId=id;sessionStorage.setItem('activeLab',id);
+ // On the main page the lab becomes the open lab through the router (history entry, Continue card).
+ if(typeof selectLab==='function'&&typeof render==='function')selectLab(id);
  return id;
 }
 function openDeploy(){return opTask(null,()=>opBrowse());}
@@ -253,7 +255,7 @@ async function opBrowse(path='',labId=''){
     summary.textContent=entry.name;children.className='op-tree-children';folder.append(summary,children);container.append(folder);
     let loaded=false,loading=false;
     folder.ontoggle=async()=>{if(!folder.open||loaded||loading)return;loading=true;children.textContent='Loading…';try{const listing=await json('/operations/browse','POST',{path:entry.path});children.replaceChildren();addEntries(children,listing.entries);loaded=true;}catch(e){children.textContent=e.message+' Close and reopen this folder to retry.';}finally{loading=false;}};
-   }else{const button=document.createElement('button');button.className='op-tree-file';button.textContent='◇ '+entry.name;button.onclick=()=>opTask(dialog,()=>opEdit(entry.path));container.append(button);}
+   }else{const button=document.createElement('button');button.className='op-tree-file';button.textContent='◇ '+entry.name;button.onclick=()=>opTask(dialog,()=>opEdit(entry.path,lab?lab.id:''));container.append(button);}
   }
  };
  addEntries($('op-file-tree'),result.entries);
@@ -346,8 +348,9 @@ function renderLabOperations(){
   opMenuState(b,!ok,unavailable?'Not available on this VM — see Diagnostics':quick.available?'The lab is not running':quick.reason);
  }
  if($('vm-projects')){const connected=!!state.discovery?.connected;opMenuState($('vm-projects'),!connected,'Connect the VM to browse its lab topologies');}
- if(busy()){for(const id of ['remove-lab','sync-vm','update-definition','link-deployment'])if($(id))$(id).disabled=true;}
- else{for(const id of ['update-definition','link-deployment'])if($(id))$(id).disabled=false;}
+ // Busy controls carry their reason: the menu proxies and the Advanced buttons read it from the title.
+ if(busy()){for(const id of ['remove-lab','sync-vm','update-definition','link-deployment'])if($(id)){$(id).disabled=true;$(id).title='Wait for the current operation to finish';}}
+ else{for(const id of ['update-definition','link-deployment'])if($(id)){$(id).disabled=false;$(id).title='';}}
 }
 if($('import-top')){
  if(!$('lab-actions'))$('import-top').insertAdjacentHTML('beforebegin','<button class="button secondary" id="lab-actions" hidden>All lab operations…</button>');
@@ -355,7 +358,9 @@ if($('import-top')){
  $('map-edit').onclick=()=>opTask(null,()=>opLayout(activeId));
  if($('deploy-empty'))$('deploy-empty').onclick=openDeploy;
  if($('lab-operations-all'))$('lab-operations-all').onclick=()=>openLabOperations();
- $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>openDeploy();$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opHistory();$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
+ // Operation history for THIS lab from its menu and its Advanced tab; Manager ▾ keeps the history of every lab.
+ for(const id of ['menu-operation-history','advanced-operation-history'])if($(id))$(id).onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTask(null,()=>opHistory(activeId));};
+ $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>openDeploy();$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opTask(null,()=>opHistory());$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
  // Lab actions ▾ lifecycle items go through the same preview/confirm flow as the operations dialog.
  const menu=$('lab-actions-menu');
  if(menu){
