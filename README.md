@@ -42,13 +42,13 @@ vJunos-switch and vQFX, Cisco XRv9k. Any node that speaks SSH gets a terminal.
 
 ## A quick look
 
-![Lab overview: deployment bar with NOS ready, metrics, Save progress and the topology map](docs/images/00-hero.png)
+![Lab workspace: the topology map with every device's state, the header with 10 of 13 devices ready and Save progress, and the device rail with Open CLI](docs/images/ui/10-topology.png)
 
 | | |
 |---|---|
-| ![Deploy lab succeeded](docs/images/15-deploy-succeeded.png) | ![NOS booting](docs/images/16-nos-booting.png) |
-| *Every host command is reviewed, then runs with live output and a clear verdict.* | *A running container is not a usable device; the manager says when the NOS answers.* |
-| ![Wireshark in the browser](docs/images/07-wireshark-in-browser.png) | ![SSH terminal](docs/images/05-ssh-terminal.png) |
+| ![Progress tab: saved versions with Latest, checkpoints and the instructor's reference states](docs/images/ui/30-progress.png) | ![Review before a saved state replaces the running configuration](docs/images/ui/36-restore-review.png) |
+| *Save progress to Git, keep checkpoints, and apply the instructor's reference states to the running lab.* | *Every operation is reviewed first: each device's outcome, the safety rules, and an acknowledgement before anything changes.* |
+| ![Wireshark in the browser](docs/images/wireshark-in-browser.png) | ![SSH terminal](docs/images/ssh-terminal.png) |
 | *Wireshark runs on the VM and streams to the browser: a ping crossing the captured link.* | *SSH to any node in a browser tab with the credentials the manager already holds.* |
 
 More in the [tour](docs/TOUR.md).
