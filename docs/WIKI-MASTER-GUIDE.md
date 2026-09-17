@@ -89,8 +89,8 @@ The manager keeps running when a lab is stopped or destroyed. Deployed labs rema
 | [10](#part-10) | Launch Containerlab Node Manager |
 | [11](#part-11) | Connect the UI to the VM |
 | [12](#part-12) | Deploy, discover and import labs |
-| [13](#part-13) | Node inventory, maps, SSH and backups |
-| [14](#part-14) | Lab commands, VM projects and diagram editing |
+| [13](#part-13) | Devices, maps, CLIs and backups |
+| [14](#part-14) | Lab actions, VM topologies and map editing |
 | [15](#part-15) | Everyday container management |
 | [16](#part-16) | Upgrade without losing data |
 | [17](#part-17) | Backups, recovery and manager-only removal |
@@ -744,7 +744,8 @@ the default source-build Compose file.
 # Part 11 — Connect the UI to the VM {#part-11}
 
 On your workstation, open **`http://VM_IP:8081`**. There is no access-token login.
-Choose **VM connection** and enter:
+The **VM connection** dialog opens by itself while no connection exists; later, open
+**Manager ▾ › VM connection…**. Enter:
 
 | Field | Value for this deployment |
 |---|---|
@@ -753,12 +754,13 @@ Choose **VM connection** and enter:
 | VM username | `clab-discovery` |
 | VM password | The password you created for `clab-discovery` in Part 8 |
 | Inspection method | Installed discovery and file helper |
-| Enable automatic discovery | Checked |
+| Check the VM automatically for running labs | Checked |
 
 The password input is masked. On first setup or key migration, enter the password; on later edits, leaving it blank retains the saved password.
 
 Click **Save and test connection**. The first successful connection records the
-VM's SSH host fingerprint. The sidebar should report **VM connected**.
+VM's SSH host fingerprint. The status line under **Manager ▾** should read
+**Lab VM: connected**.
 Later host-key changes need explicit verification and acceptance in the UI.
 
 ## Why there is no Docker port mapping
@@ -811,19 +813,24 @@ sudo containerlab inspect --all
 ```
 
 The command deploys the training devices; the manager stays running independently.
-Alternatively, use **Deploy New Lab** to browse an undeployed project and review its
-deployment through the UI once the VM connection works.
+Alternatively, use **Deploy a new lab** (on Home or under **Manager ▾**) to browse an
+undeployed topology on the VM and review its deployment through the UI once the VM
+connection works.
 
 In the manager:
 
-1. Click **Refresh discovery**, or wait for the next 30-second check.
-2. Click the discovered lab labelled **Ready to import**.
-3. Review its name, node counts, files and warnings, then click **Import lab**.
-4. Confirm the lab appears in the sidebar and its nodes have management addresses.
-5. Review device credentials. Use the imported inventory accounts or add a NOS
-   credential profile. Test one device after it finishes booting.
-6. Open its SSH tab and run a configuration backup. Confirm the result appears
-   in **Backup history**, then download a configuration to verify the workflow.
+1. Choose **Manager ▾ › Refresh lab list**, or wait for the next 30-second check.
+2. On Home, under **Also running on the VM**, choose **Add to My labs** on the lab
+   labelled **Ready to import**.
+3. Review its name, device counts, files and warnings, then click **Add lab**.
+4. Confirm the lab appears on **My labs** and that its devices have management
+   addresses (**Devices › Technical details**).
+5. Review login credentials. Use the imported inventory accounts or add login
+   credentials for the network OS under **Advanced › Credentials**. Open a device
+   and choose **Test login now** after it finishes booting.
+6. Open **Tools › Configuration backups** and choose **Back up now**. Confirm the
+   result appears under **Backups on this VM**, then download a configuration to
+   verify the workflow.
 
 Discovery starts with the original YAML path returned by Containerlab inspect.
 It also reads the adjacent annotations and the generated lab directory's
@@ -852,23 +859,23 @@ The original YAML path is the **Topology** column in `clab inspect --all`. The h
 | Generated `ansible-inventory.yml` | Device endpoints and available inventory credentials |
 | Generated `topology-data.json` | Deployed identities, short names and topology metadata |
 
-Automatic import is preferred. Review the preview before saving; cancelling leaves the new lab unsaved. For existing saved labs, review **Sync from VM** when imported files change. Saved connection settings and history are retained, but a topology reimport can replace a manager-edited layout.
+Automatic import is preferred. Review the preview before saving; cancelling leaves the new lab unsaved. For existing saved labs, review **Lab actions ▾ › Sync topology from VM** when imported files change. Saved connection settings and history are retained, but a topology reimport can replace a manager-edited layout.
 
 ## Manual fallback
 
-If automatic file reading fails, check **Discovery file details** for attempted paths and errors. Choose **Manual discovery** in the sidebar, then upload the original YAML, inventory and topology/annotations files through the relevant import forms. Annotations alone describe a drawing; supply YAML or topology data for wiring. Missing files, symlinks, oversized files and unusual unresolved definitions can require correction or manual import.
+If automatic file reading fails, check **File check details** under **Also running on the VM** on Home for attempted paths and errors. Choose **Manager ▾ › Import lab files…** (or **Import an Ansible inventory…**), then upload the original YAML, inventory and topology/annotations files through the relevant import forms. Annotations alone describe a drawing; supply YAML or topology data for wiring. Missing files, symlinks, oversized files and unusual unresolved definitions can require correction or manual import.
 
 The helper accepts regular files without symlink components, with limits of 1 MiB per file, 8 MiB of file content per inspection and 100 labs. A root-owned generated inventory should work with the installed helper; do not make the lab tree world-writable to fix it.
 
 ---
 
-# Part 13 — Node inventory, maps, SSH and backups {#part-13}
+# Part 13 — Devices, maps, CLIs and backups {#part-13}
 
-## Node inventory
+## Devices
 
-Selecting a saved lab opens **Topology**. The main tabs are **Topology**, **Nodes**, and **Backup history**, in that order. Open **More** for **Credentials**, **Action logs** or **Git repository**. Select **Nodes** to see the inventory. Open **Node details** for the endpoint, credential/profile settings, latest SSH check and saved configuration history. Test a node after its NOS completes booting. Configure the correct backup driver for supported devices; generic SSH access does not imply configuration-backup support.
+Opening a lab from **My labs** shows its workspace on the **Topology** tab. The tabs are **Topology**, **Devices**, **Progress**, **Tools** and **Advanced**, in that order; **Credentials** and **Action logs** are sections of **Advanced**. The lab header shows the lab's state pill, *n of m devices ready*, the last-save sentence, **Save progress** and **Lab actions ▾**. Select **Devices** for one row per device with its state pill (Ready · Starting · Needs credentials · Needs attention · Unavailable), the reason sentence, **Open CLI ↗** and **Details**; the **Technical details** toggle shows the classic table (backup checkbox, address:port, network OS, credentials, last SSH check, last backup). **Details** opens the device panel with the state, **Open CLI ↗** / **Capture traffic…** / **Back up configuration**, the latest login check (**Test login now**, **Check credentials**), the backups of this device and, under **Advanced**, **Edit connection** for the endpoint, network OS, credentials and download device name. Test a device after its network OS completes booting. Choose the correct network OS for supported devices; generic SSH access does not imply configuration-backup support.
 
-The list remains available even when a topology map is imported. The current MVP has no host CPU/memory utilization collector to configure.
+The device list remains available even when a map is imported. The current MVP has no host CPU/memory utilization collector to configure.
 
 ## Juniper vQFX and vJunos-switch support
 
@@ -880,25 +887,29 @@ and VM sync. Use the canonical Containerlab kind in new topology YAML:
 | Juniper vQFX | `juniper_vqfx` | `vr-vqfx`, `vqfx` |
 | Juniper vJunos-switch | `juniper_vjunosswitch` | `vr-vjunosswitch`, `vjunosswitch` |
 
-Both use the existing Junos SSH driver, as cJunosEvolved does. **Test NOS login**
-checks `show version`; a configuration backup captures
+Both use the existing Junos SSH driver, as cJunosEvolved does. **Test login now**
+(device panel) and the automatic login check run `show version`; a configuration
+backup captures
 `show configuration | display set | no-more`. Internal saved configurations use
 `.set`; Git manifests identify them as `junos-display-set`. Individual backup
 downloads use the device prefix `vQFX_*.cfg` or `vJunos-switch_*.cfg`; the `.cfg`
 download extension does not convert display-set content into hierarchical Junos
 configuration.
 
-In **More → Credentials**, choose the matching NOS and enter the device's actual
-login. Each kind has its own default-profile selection. Inventory credentials
-remain available, and an assigned node profile takes precedence. The manager
-does not supply a default password. Use **Node details → Edit connection** to
-correct an individual node's NOS, profile or SSH endpoint.
+In **Advanced › Credentials**, choose the matching network OS and enter the device's
+actual login. Each kind has its own default-profile selection. Inventory credentials
+remain available, and credentials assigned to a device take precedence. The manager
+does not supply a default password. Use **Edit connection** under **Advanced** in
+the device panel to correct an individual device's network OS, credentials or SSH
+endpoint.
 
-For existing saved labs with unknown nodes, update the matching manager image
-and host helpers using [Part 16](#part-16), refresh the browser, then use **Sync
-from VM** or select the new NOS manually. Sync retains enabled/disabled choices
-and saved credential settings. Review **Include in backups** for every intended
-node before taking a lab-wide backup or saving progress to Git.
+For existing saved labs with unknown devices, update the matching manager image
+and host helpers using [Part 16](#part-16), refresh the browser, then use **Lab
+actions ▾ › Sync topology from VM** or select the new network OS manually. Sync
+retains enabled/disabled choices and saved credential settings. Review **Include in
+backups** (**Devices › Technical details**) for every intended device before taking a
+lab-wide backup; the devices included in every Save progress are chosen separately
+under **Progress › Save settings**.
 
 Wait for the NOS to finish booting, then verify login and one configuration
 capture. Manager support does not prove an image can boot on the chosen host;
@@ -906,106 +917,110 @@ the vJunos-switch VM limitation is explained in [Part 2](#part-2). Consult the
 [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
 [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) kind guides
 for image and runtime requirements. Live SSH/backup of these images has not
-been verified here. Version retrieval remains download-only; applying a saved
-configuration to a live NOS is unavailable.
+been verified here. Loading a saved version downloads files; **Apply to running
+lab…** (Progress tab) is offered for cJunosEvolved and vJunos-switch only, not for
+vQFX.
 
 ## Map and right-click actions
 
-Open **Topology** and import the corresponding annotations and topology if automatic import did not already supply them. Pan by dragging the background; use **Fit map**, zoom and expanded view.
+Open **Topology**; if automatic import did not supply the annotations and topology, choose **More ▾ › Import map…** on the map. Pan by dragging the background; use **Fit**, zoom and **Expand**. Each device carries a state dot that matches its pill on the Devices tab.
 
-Right-click a matched node for **SSH**, **Back up configuration** and **Node details**. Keyboard users can focus a node and press <kbd>Shift</kbd>+<kbd>F10</kbd>. Use <kbd>Esc</kbd> to dismiss the menu.
+Right-click a matched device for **Open CLI ↗**, **Capture traffic…**, **Back up configuration** and **Device details**; click a link to capture traffic at either end. Keyboard users can focus a device and press <kbd>Shift</kbd>+<kbd>F10</kbd>. Use <kbd>Esc</kbd> to dismiss the menu.
 
-Map actions use the same node connection as the inventory. Unknown or ambiguous node names cannot receive live actions; correct the short-name mapping or reimport the matching topology data. Links show imported wiring, not measured live connectivity. Custom artwork and unsupported annotation types may differ from VS Code.
+Map actions use the same device connection as the Devices tab. Unknown or ambiguous device names cannot receive live actions; correct the short-name mapping or reimport the matching topology data. Links show imported wiring, not measured live connectivity. Custom artwork and unsupported annotation types may differ from VS Code.
 
 For older stored maps, reimport the original files to recover metadata that earlier importers did not retain. Refresh the browser after an image upgrade before diagnosing a stale right-click menu.
 
-## Browser SSH
+## Device CLI in the browser
 
-**SSH** opens a terminal in a new browser tab. **SSH all nodes** opens a launcher with individual links and an option to open ready sessions. Allow browser popups; the manager permits at most 32 concurrent terminals/checks. Closing the terminal or restarting the manager disconnects the session.
+**Open CLI ↗** (device row, device panel or right-click menu) opens an SSH terminal in a new browser tab. **Open all CLIs ↗** (**Tools › More tools**, or **More ▾** on the map) opens a launcher page with one row per device and **Open all ready CLIs ↗**. Allow browser popups; the manager permits at most 32 concurrent terminals/checks. Closing the terminal or restarting the manager disconnects the session.
 
-Browser SSH runs from the manager to the device. Test the saved management address, port and credentials from that network perspective. Action logs record session events, not a full transcript of typed commands and terminal output.
+The browser CLI is an SSH session from the manager to the device. Test the saved management address, port and credentials from that network perspective. **Advanced › Action logs** records session events, not a full transcript of typed commands and terminal output.
 
 ## Configuration backups
 
 | Action | Scope |
 |---|---|
-| Per-node backup | The named node, regardless of its scheduled-selection checkbox |
-| Regular lab backup / schedule | Nodes selected for the normal backup workflow |
-| Back up all configs | Reviews all ready nodes, including unchecked ones; lists skipped nodes |
-| Backup history download | Saved configuration snapshot from the selected job |
-| Containerlab Save configurations | Separate host operation; behavior depends on the device kind |
+| **Back up configuration** (device panel or right-click menu) | The named device, regardless of its **Include in backups** checkbox |
+| **Back up now** / automatic interval (**Tools › Configuration backups**) | Devices ticked **Include in backups** |
+| **Back up all configurations…** (**More ▾** on the map) | Reviews all ready devices, including unticked ones; lists skipped devices |
+| Download under **Backups on this VM** (Tools) or **Backups of this device** (device panel) | Saved configuration snapshot from the selected job |
+| **Save device configurations** (**Lab actions ▾ › All lab operations…**) | Separate containerlab host operation; behavior depends on the device kind |
 
-Review readiness, choose a backup, then inspect its outcome in **Backup history** and download a configuration. Configure a schedule only after a manual backup works. Linked discovery pauses automatic work when its lab is unavailable; a running container alone is not proof of SSH readiness.
+Review readiness, choose a backup, then inspect its outcome under **Tools › Configuration backups › Backups on this VM** and download a configuration. Set the automatic interval only after a manual backup works. Linked discovery pauses automatic work when its lab is unavailable; a running container alone is not proof of SSH readiness.
 
-## Live telemetry in Grafana
+## Live telemetry (network dashboard)
 
 With automatic telemetry on (the default for labs created since 1.23.0), the manager
-configures gNMI on supported nodes once they answer `show version` and streams
-interface rates, link state and BGP neighbours; **Grafana ↗** in the lab header opens
-the lab's dashboards and generated map on TCP 3000 of the VM. Settings, node states
-and the acceptance procedure are in [TELEMETRY.md](TELEMETRY.md) and
-[GRAFANA-MAP.md](GRAFANA-MAP.md).
+configures gNMI on supported devices once they answer `show version` and streams
+interface rates, link state and BGP neighbours; **Open lab map ↗** (or **Open network
+dashboard ↗** for a lab without a map) under **Tools › Telemetry** opens the lab's
+Grafana dashboards and generated map on TCP 3000 of the VM, starting Grafana on the
+VM when needed. Settings, device states and the acceptance procedure are in
+[TELEMETRY.md](TELEMETRY.md) and [GRAFANA-MAP.md](GRAFANA-MAP.md).
 
 ## Wireshark in the browser
 
-Right-click a node or click a link on the map and choose **Capture packets**;
-Wireshark runs in an isolated container on the VM and opens in a browser tab. See
-[CAPTURE.md](CAPTURE.md).
+Right-click a device and choose **Capture traffic…**, click a link on the map, or
+open **Tools › Packet capture › Capture traffic…**; Wireshark runs in an isolated
+container on the VM and opens in a browser tab. See [CAPTURE.md](CAPTURE.md).
 
 ## Save progress to Git
 
-**Save progress** captures the selected devices, exports the completed snapshot
-into the engineer's registered VM repository, commits changed configuration files
-and pushes. Set this up once using [Part 21](#part-21). An ordinary backup or
+**Save progress** (lab header or **Progress** tab) captures the selected devices,
+exports the completed snapshot into the engineer's registered VM repository, commits
+changed configuration files and pushes. Set this up once using [Part 21](#part-21). An ordinary backup or
 schedule does not publish to that repository automatically.
 
 ## SuperPuTTY session export
 
-Choose **Export sessions** in the lab toolbar. The file is named `<lab-name>.xml` and organizes sessions as **Lab name → node short name**. Import it through SuperPuTTY's session import feature.
+Choose **Export SuperPuTTY sessions…** under **Advanced › Lab operations**. The file is named `<lab-name>.xml` and organizes sessions as **Lab name → device short name**. Import it through SuperPuTTY's session import feature.
 
-Saved profile/inventory usernames take priority. Known-kind fallbacks include `clab` for IOS-XR and `admin` for cJunosEvolved/cEOS. Check custom usernames before exporting. All inventory nodes are included, even when excluded from scheduled backups.
+Saved profile/inventory usernames take priority. Known-kind fallbacks include `clab` for IOS-XR and `admin` for cJunosEvolved/cEOS. Check custom usernames before exporting. All devices are included, even when excluded from backups.
 
-Passwords are omitted by default. **Include saved passwords as plain text** optionally adds available saved login passwords through PuTTY `-pw` arguments; it does not invent passwords or export private keys, passphrases or enable passwords. If the receiving SuperPuTTY/PuTTY setup does not accept the argument, enter the password interactively.
+Passwords are omitted by default. **Include saved passwords in the file (stored as plain text)** optionally adds available saved login passwords through PuTTY `-pw` arguments; it does not invent passwords or export private keys, passphrases or enable passwords. If the receiving SuperPuTTY/PuTTY setup does not accept the argument, enter the password interactively.
 
-Exported sessions connect from the **workstation** to device addresses. Browser SSH working does not guarantee direct workstation routing to those addresses.
+Exported sessions connect from the **workstation** to device addresses. A working browser CLI does not guarantee direct workstation routing to those addresses.
 
 ---
 
-# Part 14 — Lab commands, VM projects and diagram editing {#part-14}
+# Part 14 — Lab actions, VM topologies and map editing {#part-14}
 
-Open **Lab actions** or right-click a saved lab (keyboard: Shift+F10).
+Open **Lab actions ▾** in the lab header for the everyday actions, **Lab actions ▾ ›
+All lab operations…** for the complete list, or right-click a lab card on Home
+(keyboard: Shift+F10).
 
 | Action | Behavior |
 |---|---|
-| Deploy / redeploy / destroy | Operates on the original VM topology. Destroy always runs `containerlab destroy --cleanup`, so the containers and the generated lab folder (`clab-<name>`) go together; the review names the folder. Redeploy keeps that folder unless you choose its cleanup variant, and falls back to destroy then deploy when necessary. |
-| Apply | Applies the original VM YAML when supported by installed Containerlab. |
-| Start / stop / restart | Applies to every node in the selected lab. Stop retains containers; destroy removes them. |
-| Inspect lab / View running lab details | Readable table of topology, lab, node, kind/image, state/health and IPv4/IPv6. Failed or incomplete output remains visible for diagnosis. |
-| Save configurations | Containerlab's kind-dependent save command. Manager backups are separate. |
-| SSH all nodes | Opens a launcher tab with individual links and Open all ready sessions. Allow browser popups; at most 32 concurrent terminals/checks. |
-| Favorite | Sorts this saved lab above other labs. |
-| Edit topology diagram | Move nodes and annotations; add text, boxes, circles and lines; edit styling; save or export JSON/draw.io. |
-| Delete undeployed VM YAML | Separate source deletion; refused while its deployment exists. Keeps a VM recovery copy. |
-| Deploy New Lab | Global sidebar browser in a new tab; one expandable vertical folder tree. Existing files are read-only. |
-| New topology | Creates a new VM YAML after structure preview and confirmation; never replaces an existing file. |
-| Add project / deploy project | Read an existing file, add a saved manager workspace, or separately review deployment. |
-| Clone repository / popular labs | Optional HTTPS project acquisition, followed by review of files and separate deployment. |
+| Start lab / Redeploy lab… / Destroy lab… | Operates on the original VM topology. Destroy always runs `containerlab destroy --cleanup`, so the containers and the generated lab folder (`clab-<name>`) go together; the review names the folder. Redeploy keeps that folder unless you choose **Redeploy and clear the lab folder…**, and falls back to destroy then deploy when necessary. |
+| Apply topology changes | Applies the original VM YAML when supported by installed Containerlab. |
+| Start stopped devices / Stop devices / Restart devices | Applies to every device in the open lab. Stop retains containers; destroy removes them. |
+| Show running devices / Running labs on the VM… | Readable table of topology, lab, device, kind/image, state/health and IPv4/IPv6. Failed or incomplete output remains visible for diagnosis. |
+| Save device configurations | Containerlab's kind-dependent save command. Manager backups are separate. |
+| Open all CLIs ↗ | Opens a launcher tab with one row per device and **Open all ready CLIs ↗**. Allow browser popups; at most 32 concurrent terminals/checks. |
+| Favourite star (lab card) | Sorts this lab above other labs on My labs. |
+| Edit map | Move devices and annotations; add text, boxes, circles and lines; edit styling; save or export the map file / draw.io. |
+| Delete topology file | Separate source deletion; refused while its deployment exists. Keeps a VM recovery copy. |
+| Deploy a new lab | On Home and under **Manager ▾**: the topology browser **Lab topologies on the VM** (**All lab folders**, **Up one folder**). Existing files are read-only. |
+| Write a new topology… | Creates a new VM YAML after structure preview and confirmation; never replaces an existing file. |
+| Preview topology / Add to My labs without starting / Deploy lab | Read an existing file, add it to My labs without starting it, or separately review deployment. |
+| Download a lab from GitHub… / Browse popular labs… | Optional HTTPS project acquisition, followed by review of files and separate deployment. |
 
-## Edit the diagram and export
+## Edit the map and export
 
-Choose **Edit diagram** in the topology toolbar, or **Edit topology diagram**
-from Lab actions. Select a node or annotation on the canvas or from the item
+Choose **Edit map** on the Topology tab, under **Lab actions ▾** or on the
+**Tools › Map** card. Select a device or annotation on the canvas or from the item
 list. Drag it to move it, or enter coordinates. Add text, boxes, circles or lines;
 edit text, size, colors, opacity and border style in the properties panel.
-**Undo** reverses edits and **Fit diagram** fits the current content.
+**Undo** reverses edits and **Fit** fits the current content.
 
-**Save diagram** persists positions and annotations in the manager's data.
+**Save map** persists positions and annotations in the manager's data.
 Closing with unsaved edits offers **Keep editing** or **Discard changes**. If
 another session changed the saved map, saving is rejected; reopen the editor
 to load that version before editing again.
 
-**Download annotations JSON** exports the `.clab.yaml.annotations.json` format
-for use alongside the VM topology in VS Code. **Export draw.io** exports editable
+**Download map file (.annotations.json)** exports the `.clab.yaml.annotations.json`
+format for use alongside the VM topology in VS Code. **Export to draw.io** exports editable
 XML with nodes, connections, interface labels, notes, groups and shapes. Both
 exports include current unsaved edits without saving them to the manager.
 Open `.drawio` files in diagrams.net or its desktop application.
@@ -1014,41 +1029,50 @@ This is a basic visual editor. Structural lab changes still belong in the
 original VM YAML. Saving or exporting does not rewrite VM files. To reuse the
 JSON on the VM, retain a copy of its original annotations file, then transfer
 the downloaded JSON alongside the matching YAML using your normal VM account.
-A later topology import or Sync from VM can replace the manager's edited map.
+A later **Import map…** or **Sync topology from VM** can replace the manager's edited map.
 
 Contained nodes are grouped with their surrounding annotation in draw.io.
 Router, switch and server symbols use native editable elements; unsupported
 custom artwork uses a generic network symbol. Exports run locally without an
-external diagram service. SSH and backup actions remain in Node Manager.
+external diagram service. CLI and backup actions remain in the manager.
 
-The topology toolbar also provides **SSH all nodes** and **Back up all configs**,
-including expanded view. Backup all reviews ready nodes and lists skipped nodes.
-Per-node right-click SSH, backup and details remain available.
+The map's **More ▾** menu also provides **Open all CLIs ↗** and **Back up all
+configurations…**, including in the expanded view. Back up all reviews ready devices
+and lists skipped devices. Per-device right-click **Open CLI ↗**, **Capture traffic…**,
+**Back up configuration** and **Device details** remain available.
 
-## Sidebar and running lab details
+## The Manager menu and running lab details
 
-Sidebar actions appear in this order: **Deploy New Lab**, **View running lab
-details**, **VM connection**, **Refresh discovery**, **Operation history**, and
-**Manual discovery**. Deploy New Lab opens the VM project browser with the
-description “Choose a lab topology from your VM to launch”.
+There is no sidebar. The top bar carries the product name, a breadcrumb **My labs /
+<lab>** that switches between labs, and the **Manager ▾** menu with **VM
+connection…**, **Refresh lab list**, **Deploy a new lab…**, **Import lab files…**,
+**Import an Ansible inventory…**, **Running labs on the VM…**, **Operation
+history…**, **Manager settings…** and **Diagnostics**. Deploy a new lab opens the
+topology browser **Lab topologies on the VM**.
 
-View running lab details shows the inspection output in a wider dialog. Long
-topology paths wrap; the other columns retain room for readable values. Narrow
-screens can scroll the table. The supported-device caption displays the active
-application release.
+**Running labs on the VM…** shows the inspection output as a readable table in a
+wider dialog. Long topology paths wrap; the other columns retain room for readable
+values. Narrow screens can scroll the table. The footer of the **Manager ▾** menu
+displays the active application release and the supported network OSes.
 
 ## Review commands before execution
 
-Every submitted host command requires a preview and confirmation. Review tokens
-expire after five minutes and bind the VM connection, original file digest and
-relevant deployment state. A change requires another preview. Output and outcome
-persist in operation history; interrupted jobs require inspection before retrying.
-Lifecycle commands can interrupt node sessions. Manager backups/import changes
-are blocked during an active lab operation.
+Every lab operation is reviewed before it runs. The review names the action in
+plain words (*Destroy <lab>?*, *Stop devices?*), states what happens, warns
+*Configuration changes you have not saved are lost.* for disruptive actions, shows
+when the lab was last saved with a **Save progress first** button when the lab has
+a save location, and shows the exact containerlab command under **Technical
+details**. Review tokens expire after five minutes and bind the VM connection,
+original file digest and relevant deployment state. A change requires another
+preview. Lifecycle actions on the open lab report in the lab banner (**View
+output**); output and outcome persist in **Operation history…**; interrupted jobs
+require inspection before retrying. Lifecycle commands can interrupt device CLI
+sessions. Manager backups/import changes are blocked during an active lab operation.
 
-Discovery matches imported lab names to the original VM topology path. Browse
-VM projects to add an undeployed project. Sync from VM refreshes imported data
-without overwriting saved connection settings. Saving a manager layout never
+Discovery matches imported lab names to the original VM topology path. Use
+**Deploy a new lab › Add to My labs without starting** to add an undeployed
+topology. **Sync topology from VM** refreshes imported data without overwriting
+saved connection settings. Saving a manager layout never
 rewrites the original annotations file; a later topology import can replace it.
 
 ## Project roots and optional downloads
@@ -1080,7 +1104,7 @@ Offline users can copy complete lab projects into a trusted root and browse them
 
 ## Recovery after deleting an undeployed YAML
 
-The operation result records a recovery copy under `.clab-manager-history` beside the source. Restore that file manually on the VM if needed. This is different from **Remove lab**, which affects manager storage only.
+The operation result records a recovery copy under `.clab-manager-history` beside the source. Restore that file manually on the VM if needed. This is different from **Remove from this manager…**, which affects manager storage only.
 
 ---
 
@@ -1183,8 +1207,9 @@ and extract the saved archive under `/srv/containerlab-node-manager` so it resto
 together, verify UID/GID 10001 and directory mode 700, then start the matching
 manager image. A replacement VM also needs the helper/account/password installation.
 
-**Remove lab** removes one saved workspace. **Start fresh** deletes all manager
-workspaces and backup files after confirmation while retaining VM connection
+**Remove from this manager…** (**Lab actions ▾** or **Advanced › Danger zone**)
+removes one saved lab. **Start fresh** (**Manager ▾ › Manager settings…**) deletes all
+manager workspaces and backup files after confirmation while retaining VM connection
 settings. Neither is required for an image upgrade. Neither destroys live labs.
 
 ## Choose the correct removal action
@@ -1192,14 +1217,14 @@ settings. Neither is required for an image upgrade. Neither destroys live labs.
 | Action | Manager data | VM lab/source files |
 |---|---|---|
 | Stop/recreate manager container | Retained in the bind mount | Unchanged |
-| Remove lab | Removes one saved workspace/history entries; backup files and audit logs remain | Unchanged |
-| Clear exclusion | Allows discovery to offer that lab again; does not import it | Unchanged |
+| Remove from this manager… | Removes one saved workspace/history entries; backup files and audit logs remain | Unchanged |
+| Stop hiding (Home › Also running on the VM) | Allows discovery to offer that lab again; does not import it | Unchanged |
 | Start fresh, type `RESET` | Clears workspaces, device credentials, schedules, backups, jobs/logs and exclusions; retains VM connection and `state.key` | Unchanged |
-| Lab Stop | Workspace retained | Stops the selected lab's nodes; containers remain |
-| Lab Destroy | Workspace retained | Removes the selected deployment's containers and its generated lab folder (`containerlab destroy --cleanup`); the review names the folder |
-| Delete undeployed VM YAML | Separate operation | Removes original source only when undeployed; saves a recovery copy |
+| Stop devices | Workspace retained | Stops the open lab's devices; containers remain |
+| Destroy lab… | Workspace retained | Removes the selected deployment's containers and its generated lab folder (`containerlab destroy --cleanup`); the review names the folder |
+| Delete topology file | Separate operation | Removes original source only when undeployed; saves a recovery copy |
 
-After **Remove lab**, the default exclusion prevents immediate reappearance. Right-click the excluded lab and choose **Clear exclusion** to test discovery again. The next import still needs confirmation.
+After **Remove from this manager…**, the default exclusion keeps the lab hidden. On Home under **Also running on the VM**, choose **Stop hiding** on the hidden lab to offer it again. The next import still needs confirmation.
 
 Close active terminals and wait for jobs before **Start fresh**. Resolve pending
 Git saves, or explicitly choose **Keep snapshot only** to dismiss their export
@@ -1358,8 +1383,8 @@ VM's Linux account database; account recovery is a separate step above.
 | Shell denied during manual SSH testing | Expected for the restricted account. Use the manager's connection test. |
 | Lab detected but files will not import | Run helper verifiers; ensure image/helpers match and original/generated lab files exist. |
 | Discovery works but lab commands fail | Install setup-operations.sh, use helper mode and add the actual project root. |
-| No discovered labs | Deploy a lab on this VM, check inspect --all, refresh discovery and clear any matching exclusion. |
-| Nodes discovered but SSH/backup fails | Wait for NOS boot, verify credentials/driver and management address/port. |
+| No discovered labs | Deploy a lab on this VM, check inspect --all, choose Refresh lab list and Stop hiding on any hidden lab. |
+| Devices discovered but CLI/backup fails | Wait for the network OS to boot, verify credentials/network OS and management address/port. |
 
 For fingerprint changes, password recovery, key migration and helper repair, use [VM connection repair](#part-18).
 
@@ -1372,13 +1397,13 @@ For fingerprint changes, password recovery, key migration and helper repair, use
 | Authentication failed | Use username clab-discovery and the password created during host setup. Reset it with setup-discovery.sh --reset-password if needed, then update VM connection. |
 | An interactive SSH test refuses a shell | Expected for the helper account. It only accepts fixed discovery/operation requests; use Save and test connection. |
 | Fingerprint mismatch | Verify the VM's host key independently. If the VM was rebuilt and the new key is expected, check Trust a replacement SSH host key in VM connection, then save and test. Resetting the password does not resolve a fingerprint mismatch. |
-| Lab discovered but automatic import asks for helper update | Repair both helpers using Part 18; a Hub image installation does not need a source rebuild. Refresh discovery and retry the lab. |
+| Lab discovered but automatic import asks for helper update | Repair both helpers using Part 18; a Hub image installation does not need a source rebuild. Choose Refresh lab list and retry the lab. |
 | Read/import permission error | Use Installed discovery and file helper; it can read root-owned lab artifacts. Direct mode uses the selected account's ordinary SFTP permissions and cannot read files that account cannot access. |
 | Commands unavailable or operations helper error | Enable/repair setup-operations and include the lab's trusted root. The helper tests the installed Containerlab command support. Older Containerlab versions may lack some commands. |
 | Path outside trusted roots | Run setup-operations with `--lab-root /actual/project/root`. Use the parent directory containing your lab projects, not filesystem root. |
 | Cannot browse a symlink path | Use a real directory path. Helpers deliberately refuse symlink components. |
 | Save fails / Start fresh cannot finish | Check free disk space and data ownership. Repair permissions, then retry Start fresh or restart; its journal resumes the reset. |
-| Deployed lab missing | Run `sudo containerlab inspect --all --format json` on the same VM and check VM connection is enabled. Refresh discovery; clear any matching exclusion. |
+| Deployed lab missing | Run `sudo containerlab inspect --all --format json` on the same VM and check VM connection is enabled. Choose Refresh lab list; choose Stop hiding on any hidden lab. |
 
 
 
@@ -1523,9 +1548,9 @@ the VM password in the manager. Do not run the source-build launcher offline.
 This guide follows the current release; the release history is in the
 [changelog](CHANGELOG.md). The Proxmox, storage, administrator-access and VS Code
 build notes are retained from the original build log. Manager procedures reflect password-only VM authentication,
-persistent storage, the revised sidebar/tabs, diagram editing and registered Git
-repository saves. Version retrieval downloads files; it does not restore live NOS
-configurations. Git-owner execution is not browser-user authentication.
+persistent storage, the student-centred Home / lab workspace layout, map editing and
+registered Git repository saves. Loading a saved version downloads files; applying one
+to running devices is offered for Junos only. Git-owner execution is not browser-user authentication.
 The source includes automated checks for release consistency, helper preflight,
 the installer, Git onboarding/registrations and APT source handling, plus the
 separate VM installation report described in [HEALTH-CHECK.md](HEALTH-CHECK.md). Earlier
@@ -1602,7 +1627,7 @@ any directory. Guided setup selects your current Linux owner automatically.
 For explicit sudo registration, omit `--owner` to use the account invoking sudo;
 do not copy `--owner patrick` if your actual VM account is `archtop`.
 
-**Complete registration before using Connect Git repository.** A clean checkout
+**Complete registration before choosing a save location in the manager.** A clean checkout
 and successful GitHub login do not supply Git commit author name/email. Guided
 setup prompts for them, stores new values in this checkout only, and checks both
 author and committer identities. Wait for **Registered** and **Ready** before
@@ -1724,14 +1749,19 @@ flowchart LR
 
 ## Step 21.3 — Connect the lab and save
 
-In the **Manager UI**, open the lab and choose **Connect Git repository** or
-the **Git repository** tab. After connection, **Git repository settings** is also
-available from the save action menu. Select
-the registered checkout, review the included devices, review the branch/destination
-and acknowledge that device configurations will be committed there. The device
-selection is independent of regular backup schedule checkboxes. An optional review
-preference pauses before pushing. Save the settings, then run the final installation
-report from the **ordinary Ubuntu account** before your first save:
+In the **manager**, open the lab and choose **Save progress** in the lab header: the
+first save asks where the lab's progress should be saved (repository, folder and
+devices). The same settings live on the **Progress** tab under **Save location**:
+**Change folder…** opens the folder browser **Folders in this repository** (with
+**New folder…**, **Save this lab here**, **Use a different repository…** and
+**Connect by URL…**), and **Save settings** holds the devices included in every save
+and **Let me review changes before they are uploaded**; **Save location settings…**
+in the **Save progress ▾** menu opens the same place. Select the registered checkout,
+review the included devices, review the branch/destination and acknowledge that
+device configurations will be committed there. The device selection is independent
+of the **Include in backups** checkboxes. The review option pauses before uploading.
+Save the settings, then run the final installation report from the **ordinary
+Ubuntu account** before your first save:
 
 ```bash
 bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-git
@@ -1756,8 +1786,9 @@ features and limits. The report always separates manual workstation WinSCP,
 real NOS backup and Git push verification. An optional `--git-remote` read
 does not prove write permission. See [all report options and recovery](HEALTH-CHECK.md).
 
-Then choose **Save progress** and confirm **Pushed** plus the expected files on
-the remote. Keep this deliberate workflow test even when the automated report
+Then choose **Save progress** and confirm **Saved to Git** (the status card on the
+Progress tab and the last-save sentence in the lab header) plus the expected files
+on the remote. Keep this deliberate workflow test even when the automated report
 passes.
 
 ```mermaid
@@ -1772,11 +1803,11 @@ flowchart TD
     G -- No --> L[Keep existing commit]
     K --> R{Review before push enabled?}
     L --> R
-    R -- Yes --> S[Review changes; choose Push saved progress]
+    R -- Yes --> S[Review changes; choose Upload now]
     R -- No --> H[Push selected branch]
     S --> H
     H -- Verified --> I[Saved to Git]
-    H -- Offline or rejected --> J[Saved locally; Push saved progress]
+    H -- Offline or rejected --> J[Saved on this VM; Upload now]
 ```
 
 Only the recorded configurations and manifest enter the commit. Existing YAML,
@@ -1815,28 +1846,32 @@ saves, so a separate timestamp folder is unnecessary for each Save progress.
 
 | Action | Meaning |
 |---|---|
-| Save progress | Capture, export latest, commit changes and push; honor the review preference. |
-| Save locally | Capture and commit without pushing. |
-| Save checkpoint | Update latest and preserve the same capture under a new descriptive checkpoint name. |
-| Set baseline | Select a complete capture to change baseline only; review explicit replacement if a baseline already exists. |
-| View changes / History | Browse versions and configuration differences. |
-| Push saved progress | Retry the recorded local commit without recapturing routers. |
-| Update from remote | Fast-forward an eligible clean checkout; resolve diverged history outside the app. |
-| Load version | View or download a saved version as a configuration ZIP. |
+| Save progress (lab header, Progress tab) | Capture, export latest, commit changes and push; honor the review preference. |
+| Save on this VM only (Save progress ▾, Progress › More ▾) | Capture and commit without pushing. |
+| Create checkpoint… | Update latest and preserve the same capture under a new descriptive checkpoint name. |
+| Set baseline… (Progress › More ▾) | Select a complete capture to change baseline only; review explicit replacement if a baseline already exists. |
+| Saved versions / Full history… (Progress tab) | Browse versions (**Latest**, **Checkpoints**, **Baseline**, **Instructor and reference versions**, **Other labs in this repository**) with **View** and **Compare with my latest save**. |
+| Upload now (Recent saves) | Retry the recorded local commit without recapturing devices. |
+| Update from the repository (Progress › More ▾) | Fast-forward an eligible clean checkout; resolve diverged history outside the app. |
+| Load a saved version… / View | View or download a saved version as a configuration ZIP. |
+| Apply to running lab… | Junos only: replaces the running configuration of the saved devices from any compatible folder, without changing the save location; the current configuration is backed up first. |
 
-**Load version downloads files.** It does not apply commands to running devices,
-change the repository branch, rewrite the original topology or redeploy the lab.
-Live restore remains unavailable until NOS-specific adapters are validated. Older
-captures can have unknown topology provenance; match the intended devices and
-configuration format before using downloaded files outside the tool.
+**Load a saved version… downloads files.** It does not apply commands to running
+devices, change the repository branch, rewrite the original topology or redeploy the
+lab. **Apply to running lab…** is the only action that changes running devices; it is
+offered for Junos devices only and shows a *Replace running configuration* review
+before it runs. Older captures can have unknown topology provenance; match the
+intended devices and configuration format before using downloaded files outside the
+tool.
 
 ## Recovery, ownership and backups
 
 Capture, commit and push have separate results. A successful snapshot remains
 available even if the repository is busy or remote authentication fails. **Retry
-export** reuses its captured files. **Push saved progress** reuses its recorded
+save and upload** reuses its captured files. **Upload now** reuses its recorded
 commit. A restart reconciles the job with the VM journal instead of issuing a new
-capture silently. Inspect the job's status before assuming it reached the remote.
+capture silently. Inspect the save under **Recent saves** before assuming it reached
+the remote.
 
 Keep the checkout clean. Unexpected staged work, changed branch/remote, unsafe
 paths and conflicting history require attention. The manager does not force push,
@@ -1844,7 +1879,7 @@ automatically stash, merge/rebase conflicts or destructively reset a checkout.
 Resolve these issues in Ben's VM session, then retry the saved job.
 
 Pending saves block forgetting or redirecting their context, including removing
-the workspace, Start fresh, replacing its repository or changing VM identity.
+the lab from this manager, Start fresh, replacing its repository or changing VM identity.
 Password repair for the same VM/account remains possible. **Keep snapshot only**
 explicitly dismisses a pending export and retains its backup and any existing Git
 commit. It does not undo a remote push. A later Start fresh still deletes the

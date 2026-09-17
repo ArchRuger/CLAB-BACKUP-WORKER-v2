@@ -178,32 +178,35 @@ Click **Save and test connection**.
 
 In the **browser**:
 
-1. **Deploy a new lab** → expand `/etc/containerlab` → `LAB_NAME` → click the
-   `.clab.yaml` → **Deploy lab** → confirm the reviewed command.
-2. Wait for the green banner, then for **NOS ready** in the deployment bar. The
-   login test runs by itself and appears in **Backup history**.
-3. Devices with their own logins: **More → Credentials → Add credential** for each
-   device type, then open a node → **Test login**. Nodes with containerlab's default
-   login need nothing.
-4. **Back up all configs** in the topology header.
+1. **Deploy a new lab** → open `/etc/containerlab` → `LAB_NAME` → click the
+   `.clab.yaml` → **Deploy lab** → confirm the review (the containerlab command is
+   under **Technical details**).
+2. Wait for the lab banner to finish, then for the lab header to report every device
+   ready (*n of n devices ready*). The login check runs by itself and appears under
+   **Tools › Configuration backups**.
+3. Devices with their own logins: **Advanced › Credentials → Add credentials** for each
+   network OS, then open a device (**Devices → Details**) → **Test login now**. Devices
+   with containerlab's default login need nothing.
+4. **Back up all configurations…** from **More ▾** on the map.
 
 Deployed from the VM terminal instead (`sudo containerlab deploy -t
-/etc/containerlab/LAB_NAME/LAB_NAME.clab.yaml`)? The lab appears on the landing
-page as **Already running on the VM**; click **Import**.
+/etc/containerlab/LAB_NAME/LAB_NAME.clab.yaml`)? The lab appears on **My labs** under
+**Also running on the VM**; click **Add to My labs**.
 
 ## 11. Watch it and capture
 
-1. **Grafana ↗** in the lab header starts Grafana on the VM when it is stopped (a few
-   seconds) and opens the lab map. Links colour as traffic flows; the Interfaces
-   dashboard shows rates. Grafana stops itself after 15 minutes without an open
-   dashboard; the button brings it back.
-2. Right-click a node on the map → **Capture packets** → tick a port → **Start
-   browser capture** → **Open Wireshark in browser**.
+1. **Open lab map ↗** under **Tools › Telemetry** starts Grafana on the VM when it is
+   stopped (a few seconds) and opens the lab map. Links colour as traffic flows; the
+   Interfaces dashboard shows rates. Grafana stops itself after 15 minutes without an
+   open dashboard; the button brings it back.
+2. Right-click a device on the map → **Capture traffic…** → tick a port → **Start
+   capture** → **Open Wireshark ↗**.
 
 ## 12. Save to Git
 
-1. Open the **Git repository** tab → select the registered checkout and the devices → save.
-2. **Save progress** → wait for **Pushed** → check the files on GitHub.
+1. **Save progress** in the lab header → choose the registered checkout, a folder and
+   the devices → **Save progress**.
+2. Wait for **Saved to Git** → check the files on GitHub.
 
 ## 13. Check everything
 

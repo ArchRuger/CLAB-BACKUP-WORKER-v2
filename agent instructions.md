@@ -1,20 +1,35 @@
 # Student-centred UI redesign — WORK IN PROGRESS on top of 1.28.0
 
-**Unreleased, unfinished, on branch `claude/wip-student-centered-ui-redesign`.** Before touching the
-frontend, read `docs/redesign/PICKUP.md` (pickup notes: what is done, what is verified, what is next), then
-`docs/redesign/DESIGN-SPEC.md` and `docs/redesign/DESIGN-SPEC-ADDENDUM.md` (the addendum is the binding
-contract; its §J9 is the migration order). The goal is a redesign of how the WebUI is presented and
-navigated for a networking student — Home → Lab workspace (Topology · Devices · Progress · Tools · Advanced)
-→ Device drawer — with **zero functional regression**: every capability in
-`docs/redesign/inventory/MERGED-INVENTORY.md` and `docs/redesign/parity/*.md` keeps working, the backend
-and helpers are untouched, and every existing test keeps its behavioural claim (labels pinned by old
-regexes are rewritten, never deleted). New frontend files so far: `app/static/status.js` (student status
-vocabulary, pure functions), `app/static/shell.js` (hash router, menu contract, browser storage — the only
-file allowed to touch `window`/`location`/`localStorage`), `app/static/home.js` (My labs page), rewritten
-`app/static/style.css`/`terminal.css`, and tests `tests/test_status_ui.js`, `tests/test_shell_ui.js`,
-`tests/test_home_ui.js`. `docs/redesign/` is exempt from the living-doc release check
-(`deploy/verify-release.py` `HISTORY_DIRS`). Do not cut a release from this branch until the plan in
-`PICKUP.md` §4 is complete and the browser + live-lab validation has been recorded in `VALIDATION.md`.
+**Unreleased, on branch `claude/continue-student-centered-ui-redesign` (continues PR #33's WIP;
+`PICKUP.md` §7 is the log).** Before touching the frontend read `docs/redesign/PICKUP.md`, then
+`docs/redesign/DESIGN-SPEC.md` and `docs/redesign/DESIGN-SPEC-ADDENDUM.md` (the addendum is the
+binding contract; §J9 is the migration order). Plan steps 1–5 are done: `status.js` (student
+vocabulary, pure), `shell.js` (hash router, menus, storage — the only file allowed to touch
+`window`/`location`/`localStorage`/document listeners), `home.js`, the new `index.html` (Home →
+Lab workspace with Topology · Devices · Progress · Tools · Advanced → device panel), map states
+and the student context menu (`topology.js`, `topology-render.js`), the Progress tab
+(`git-progress.js`, `git-places.js`, `restore.js`), the operations / management / capture copy
+and dialogs, the standalone pages (CLI launcher, terminal, network dashboard, Diagnostics), the
+design system (`style.css`, `terminal.css`), the tests (`tests/test_status_ui.js`,
+`test_shell_ui.js`, `test_home_ui.js`, `test_topology_menu_ui.js`; every pinned label of the
+older suites rewritten with its claim kept), and the functional-parity review (four modules,
+every inventory row present, "Intentionally removed: none"). **Zero functional regression is the
+rule**: every capability in `docs/redesign/inventory/*.md` and `docs/redesign/parity/*.md` keeps
+working, the backend and helpers are untouched. Facts to preserve: the Junos apply-from-any-folder
+workflow (`restoreFromFolder`, no rebinding, `{type:'folder',path}` sources); "Compare with my
+latest save" never "running configuration"; backend `readiness === 'Ready'` is backup
+eligibility, `deviceState()` is SSH readiness; `data-proxy` mirrors instead of duplicate ids;
+`setMarkup()` diffing on the 4 s poll; legacy tab names via `TAB_ALIAS`; `shell.js` renders once
+more on `DOMContentLoaded` because a fast first `/api/state` can beat the later deferred scripts.
+Browser validation runs without a VM: `docs/redesign/tools/fixture_manager.py` (the real app on a
+scratch data directory, VM answers scripted in-process: readiness, discovery, jobs, Git helper,
+restore probe, operations helper) and `docs/redesign/tools/verify_after.py` (three viewports, zero
+console/page errors; Chromium's "Failed to load resource" for a handled non-2xx is reported apart).
+`docs/redesign/` is exempt from the living-doc release check. **Still to do before a release**:
+the live-lab pass on the dev VM (rebuild the manager, `clabllm-dev`/`bgp-core`: redeploy, Open
+CLI, Save progress, checkpoint, apply from the folder browser, capture, telemetry link, destroy
+cancelled), then `python3 deploy/set-release.py 1.29.0`, turn the "Unreleased" sections of
+`docs/CHANGELOG.md` and `VALIDATION.md` into the 1.29.0 sections, and record the live results.
 
 # Live Junos configuration restore and nested Git folders — 1.28.0
 

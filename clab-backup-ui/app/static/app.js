@@ -25,7 +25,8 @@ async function json(path,method,data){return (await api(path,{method,headers:{'C
 function setMarkup(el,html){if(!el)return false;if(el._markup===html)return false;el.innerHTML=html;el._markup=html;return true;}
 // Disabled menu items and tool rows show why as visible text (a title on a disabled button is unreachable).
 function menuReason(el,text){if(!el||typeof el.querySelector!=='function')return;const small=el.querySelector('.menu-reason');if(!small)return;small.textContent=text||'';small.hidden=!text;}
-function logsVisible(){return tab==='advanced';}
+// Action logs live on the Advanced tab; the 4 s poll refreshes them only while that section is on screen.
+function logsVisible(){if(tab!=='advanced')return false;const view=$('logs-view');if(!view||typeof view.getBoundingClientRect!=='function'||typeof innerHeight==='undefined')return true;const box=view.getBoundingClientRect();return box.bottom>0&&box.top<innerHeight;}
 async function refresh(){const response=await api('/state');state=await response.json();state.loaded=true;if(activeId&&!current())activeId='';if(!routeApplied){routeApplied=true;if(typeof applyRoute==='function')applyRoute();}render();if(logsVisible())await refreshLogs();}
 function setTab(value){const legacy=TAB_ALIAS[value];if(legacy){if(value==='inventory')devicesTechnical=true;else scrollTarget=SUBVIEW[value]||'';subview=value;value=legacy;}else subview='';tab=PANELS.includes(value)?value:'topology';}
 function syncRoute(push=false){if(!routeApplied||typeof writeRoute!=='function'||typeof currentRoute!=='function')return;writeRoute(currentRoute(),{push});}
@@ -50,8 +51,8 @@ function grafanaLaunch(lab){const path=grafanaPath(lab);return path?'/static/gra
 function renderGrafanaLink(lab){
  const link=$('grafana-open');if(!link)return;const url=grafanaLaunch(lab);link.hidden=!url;
  if(!url){link.removeAttribute('href');return;}
- link.href=url;setMarkup(link,(lab.telemetry.grafana.map_uid?'Lab map in Grafana':'Grafana')+' <span aria-hidden="true">↗</span>');
- link.title=(lab.telemetry.grafana.map_uid?'Live weathermap of this lab in Grafana: link rates, port and node state.':'Live dashboards for this lab in Grafana: interface rates, link state, BGP neighbours.')+' Grafana starts on the VM when it is not running.';
+ link.href=url;setMarkup(link,(lab.telemetry.grafana.map_uid?'Open lab map':'Open network dashboard')+' <span aria-hidden="true">↗</span>');
+ link.title=(lab.telemetry.grafana.map_uid?'Live map of this lab: link rates, port and device state, in Grafana.':'Live interface rates, link state and BGP neighbours of this lab, in Grafana.')+' The dashboard starts on the VM when needed.';
 }
 function renderTelemetryLine(lab){const el=$('telemetry-line');if(!el)return;const t=lab.telemetry||{};el.textContent=t.grafana&&t.grafana.enabled===false?'Telemetry is not installed on this VM.':typeof telemetryLine==='function'?telemetryLine(t.status,t):'';}
 // Vocabulary helpers shared by the header, the lab switcher and home.js. labContext adds the dismissed
@@ -76,8 +77,6 @@ function renderLabHeader(lab){
  if(pill){pill.textContent=ls.label;pill.className='pill '+(ls.pill||'neutral');}
  if($('lab-ready'))$('lab-ready').textContent=readyLine(lab,ls);
  if($('lab-progress'))$('lab-progress').textContent=typeof progressSummary==='function'?progressSummary(lab,state.git_jobs,undefined,gitProblem(lab)):'';
- const ps=typeof progressState==='function'?progressState(lab,state.git_jobs,undefined,gitProblem(lab)):null,unsaved=!ps||['unconnected','none'].includes(ps.key);
- if($('git-saved-versions-empty'))$('git-saved-versions-empty').hidden=!unsaved;if($('git-saved-versions-saved'))$('git-saved-versions-saved').hidden=unsaved;
 }
 function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=value||'—';};set('tech-lab-id',lab.id);set('tech-source',lab.source);set('tech-path',lab.vm_project_path||lab.vm_source?.files?.definition?.path);set('tech-prefix',lab.container_prefix??'clab');set('tech-deployment',lab.deployment_name);set('tech-binding',lab.git_binding?[lab.git_binding.binding_id,lab.git_binding.revision].filter(Boolean).join(' · '):'');}
 function render(){
@@ -104,7 +103,7 @@ function render(){
  renderGrafanaLink(lab);renderTelemetryLine(lab);
  const sshReady=lab.nodes.some(n=>n.ssh_ready);
  $('map-ssh-all').disabled=!sshReady;
- $('map-ssh-all').title=sshReady?'':lab.nodes.some(n=>n.nos_login?.status==='booting')?'Devices are still starting — CLIs open automatically once they answer.':'No device is ready for a CLI yet.';
+ $('map-ssh-all').title=sshReady?'':lab.nodes.some(n=>n.nos_login?.status==='booting')?'Waiting for devices to finish starting — this becomes available automatically':'No device is ready for a CLI session yet';
  menuReason($('map-ssh-all'),$('map-ssh-all').title);
  $('map-backup-all').disabled=busy()||!lab.nodes.some(n=>n.readiness==='Ready');
  $('map-backup-all').title=$('map-backup-all').disabled?(busy()?'Wait for the current job to finish':'No device can be backed up yet'):'';
@@ -115,7 +114,7 @@ function render(){
  $('test').disabled=$('backup').disabled=busy()||!enabled.length||ready.length!==enabled.length;
  $('test').title=$('backup').title=ready.length!==enabled.length?'Add credentials for every device included in backups first':'';
  $('inventory-caption').textContent='Source: '+lab.source+' · '+enabled.length+' of '+lab.nodes.length+' included in backups';
- renderNodes();renderDeviceList();renderProfiles();renderJobs();showTab(tab);refreshHealth();renderLabBanner();syncProxies();syncRoute();
+ renderNodes();renderDeviceList();if(typeof renderMapState==='function')renderMapState();renderProfiles();renderJobs();showTab(tab);refreshHealth();renderLabBanner();syncProxies();syncRoute();
  if(document.activeElement!==$('interval'))$('interval').value=lab.interval;
 }
 // One control per id: a mirror (button[data-proxy="<id>"]) copies the owner's disabled/title/hidden state
@@ -136,7 +135,9 @@ function setBanner(id,spec={}){
  if(typeof banner.setAttribute==='function'){banner.setAttribute('role',spec.tone==='danger'?'alert':'status');banner.setAttribute('aria-live',spec.tone==='danger'?'assertive':'polite');}
  const glyph=$(id+'-glyph');if(glyph&&typeof glyph.setAttribute==='function')glyph.setAttribute('href','#i-'+(spec.icon||'info'));
  if($(id+'-text'))$(id+'-text').textContent=spec.text;
- const details=$(id+'-detail');if(details){details.hidden=!spec.detail;if($(id+'-detail-text'))$(id+'-detail-text').textContent=spec.detail||'';}
+ // A disabled Start in the banner explains itself: its reason becomes the Details line when nothing else is.
+ const disabledStart=spec.actions?.['banner-start']?.disabled?spec.actions['banner-start'].title:'',detailText=spec.detail||disabledStart||'';
+ const details=$(id+'-detail');if(details){details.hidden=!detailText;if($(id+'-detail-text'))$(id+'-detail-text').textContent=detailText;}
  for(const key of BANNER_BUTTONS[id]||[]){const b=$(key);if(!b)continue;const action=spec.actions?.[key];b.hidden=!action;if(action){b.textContent=action.label;b.disabled=!!action.disabled;b.title=action.title||'';b.onclick=action.run;}}
 }
 function startLab(){const b=$('lab-start');if(b&&!b.disabled&&typeof b.onclick==='function')b.onclick();}
@@ -154,7 +155,9 @@ function renderLabBanner(){
  const runningOp=ops.find(j=>['queued','running'].includes(j.status)),runningRestore=restores.find(j=>APP_RESTORE_BUSY.includes(j.status));
  const ps=typeof progressState==='function'?progressState(lab,state.git_jobs,undefined,gitProblem(lab)):null;
  const credentials=typeof credentialsNeeded==='function'?credentialsNeeded(lab):0;
- const start=()=>({'banner-start':{label:$('lab-start')?.textContent?.trim()||'Start lab',run:startLab,disabled:!!$('lab-start')?.disabled,title:$('lab-start')?.title||''}});
+ // The menu item carries its label in a <span> and its disabled reason in a <small>; the banner button takes the label only.
+ const startLabel=()=>{const b=$('lab-start');const span=b&&typeof b.querySelector==='function'?b.querySelector('span'):null;return (span?span.textContent:b?.textContent)?.trim()||'Start lab';};
+ const start=()=>({'banner-start':{label:startLabel(),run:startLab,disabled:!!$('lab-start')?.disabled,title:$('lab-start')?.title||''}});
  let spec={};
  if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
  else if(runningOp)spec={tone:'info',icon:'clock',text:(typeof operationLabel==='function'?operationLabel(runningOp.action):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
@@ -183,17 +186,18 @@ function renderLabBanner(){
 function renderNodes(){const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();const nodes=lab.nodes.filter(n=>(n.name+' '+n.address+' '+platformLabel(n.platform)).toLowerCase().includes(term));
  const markup=nodes.map(n=>{const h=nodeHealth(n.name);return `<tr><td><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''} aria-label="Include ${esc(n.name)} in backups"></td><td><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="endpoint">${esc(n.address)}:${n.port}</span></td><td><span class="badge platform">${esc(platformLabel(n.platform))}</span><span class="secondary-text">${esc(profileName(lab,n))}</span></td><td>${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<span class="timestamp">${h?.ssh?.at?esc(utcDisplay(h.ssh.at)):'No check yet'}</span></td><td>${h?.backup?badge(h.backup.status):'<span class="status-neutral">No backup yet</span>'}<span class="timestamp">${h?.backup?.at?esc(utcDisplay(h.backup.at)):''}</span></td><td><div class="node-actions">${nodeActions(n)}</div></td></tr>`;}).join('')||'<tr><td colspan="6" class="table-empty">No devices match. Try another name, address or platform.</td></tr>';setMarkup($('nodes'),markup);
 }
-function nodeActions(n,details=false){const hint=sshHint(n);return `<button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}`;}
+function nodeActions(n,details=false){const hint=sshHint(n);return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button><button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}`;}
 // The drawer's Advanced section: check the saved login now, or change the connection settings.
 function nodeDrawerActions(n){return `<button data-check="${esc(n.name)}" ${!(n.login_configured??n.ssh_ready)?'disabled title="Add credentials first"':''}>Test login</button><button data-edit="${esc(n.name)}">Edit connection…</button>`;}
-function deviceSlug(name){return String(name).replace(/[^A-Za-z0-9_-]+/g,'-');}
+// A readable id per device name; the hash keeps names that differ only in punctuation apart.
+function deviceSlug(name){let hash=0;for(const c of String(name))hash=(hash*31+c.charCodeAt(0))>>>0;return String(name).replace(/[^A-Za-z0-9_-]+/g,'-')+'-'+hash.toString(36);}
 // One row per device for the Devices tab and the topology rail: name, platform, state pill and the
 // reason the CLI is unavailable as visible text the Open CLI button points at.
 function deviceRow(n,rail){
  const ds=typeof deviceState==='function'?deviceState(n):{key:n.ssh_ready?'ready':'unknown',label:n.ssh_ready?'Ready':'Not ready',detail:n.ssh_ready?'':sshHint(n),cli:!!n.ssh_ready,pill:n.ssh_ready?'ok':'neutral'};
  const why=(rail?'why-rail-':'why-')+deviceSlug(n.name),reason=!ds.cli&&ds.detail?`<small class="row-reason" id="${esc(why)}">${esc(ds.detail)}</small>`:'';
  const open=$('details-dialog').open&&detailName===n.name;
- return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span>${rail?'':`<span class="device-meta">${esc(n.address)}:${esc(n.port)}</span>`}</div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}</div></li>`;
+ return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span></div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}</div></li>`;
 }
 function renderDeviceList(){
  const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();
@@ -264,7 +268,7 @@ for(const b of document.querySelectorAll('#progress-view [data-git-action], #git
 async function handleNodeAction(e){const b=e.target.closest('button');if(!b||b.disabled)return;
  if(b.dataset.capture)openCapture(b.dataset.capture);
  if(b.dataset.edit){$('details-dialog').close();openNode(b.dataset.edit);}
- if(b.dataset.profile!==undefined){$('details-dialog').close();openProfile();}
+ if(b.dataset.profile!==undefined){profileFromDrawer=detailName;$('details-dialog').close();openProfile();}
  if(b.dataset.details)openDetails(b.dataset.details);
  if(b.dataset.terminal){const url='/static/terminal.html#'+new URLSearchParams({lab:activeId,node:b.dataset.terminal,label:current().name});window.open(url,'_blank');}
  if(b.dataset.backup){$('details-dialog').close();startJob('backup',[b.dataset.backup]);}
@@ -275,8 +279,8 @@ async function handleEnableChange(e){const name=e.target.dataset?.enable;if(!nam
 $('nodes').addEventListener('change',handleEnableChange);$('details-dialog').addEventListener('change',handleEnableChange);
 $('import-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{const data=new FormData(e.currentTarget);const result=await(await api('/inventory',{method:'POST',body:data})).json();$('import-dialog').close();$('import-form').reset();await refresh();selectLab(result.id,'devices');notify('Lab imported. Check the devices and their login credentials.');});});
 $('add-profile').onclick=openProfile;$('auth-type').onchange=toggleAuth;$('profile-platform').onchange=toggleEnable;
-$('profile-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{const data=new FormData(e.currentTarget);data.set('make_default',$('make-default').checked?'true':'false');await api('/labs/'+activeId+'/profiles',{method:'POST',body:data});$('profile-dialog').close();$('profile-form').reset();await refresh();notify('Credentials saved.');});});
-$('node-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/node','PUT',{name:$('node-name').value,short_name:$('node-short-name').value,address:$('node-address').value,port:Number($('node-port').value),endpoint_mode:$('node-endpoint-mode').value,platform:$('node-platform').value,profile_id:$('node-profile').value,enabled:$('node-enabled').checked});$('node-dialog').close();await refresh();notify('Connection updated.');});});
+$('profile-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{const data=new FormData(e.currentTarget);data.set('make_default',$('make-default').checked?'true':'false');await api('/labs/'+activeId+'/profiles',{method:'POST',body:data});$('profile-dialog').close();$('profile-form').reset();noteRecheck(profileFromDrawer);profileFromDrawer='';await refresh();notify('Credentials saved.');});});
+$('node-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/node','PUT',{name:$('node-name').value,short_name:$('node-short-name').value,address:$('node-address').value,port:Number($('node-port').value),endpoint_mode:$('node-endpoint-mode').value,platform:$('node-platform').value,profile_id:$('node-profile').value,enabled:$('node-enabled').checked});$('node-dialog').close();noteRecheck($('node-name').value);await refresh();notify('Connection updated.');});});
 $('schedule-form').addEventListener('submit',e=>{e.preventDefault();withForm(e.currentTarget,async()=>{await json('/labs/'+activeId+'/schedule','PUT',{interval:Number($('interval').value)});await refresh();notify('Backup schedule saved.');});});
 async function startJob(operation,node_names){try{await json('/labs/'+activeId+'/jobs','POST',{operation,...(node_names?{node_names}:{})});if(operation==='backup')setTab('backups');await refresh();notify(operation==='test'?'Checking device logins… Results appear under Tools › Configuration backups.':'Backing up configurations…');}catch(e){notify(e.message);}}
 $('test').onclick=()=>startJob('test');$('backup').onclick=()=>startJob('backup');
@@ -317,7 +321,12 @@ async function refreshHealth(){
 function openDetails(name){if(!current()?.nodes.some(n=>n.name===name))return;detailName=name;renderDetails();const dialog=$('details-dialog');if(!dialog.open&&typeof dialog.showModal==='function')dialog.showModal();if(typeof writeRoute==='function'&&typeof currentRoute==='function')writeRoute(currentRoute());renderDeviceList();}
 function stepDetails(direction){const lab=current();if(!lab||lab.nodes.length<2)return;const names=lab.nodes.map(n=>n.name),i=names.indexOf(detailName);if(i<0)return;openDetails(names[(i+direction+names.length)%names.length]);}
 function readinessWord(value){return value==='Needs credentials'?'needs credentials':value==='Choose NOS'?'choose a network OS':value==='Lab unavailable'?'the lab is not running':String(value||'');}
-function statusActions(n,ds){if(!ds)return '';if(ds.key==='attention')return `<button data-edit="${esc(n.name)}">Check credentials</button><button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='credentials')return ds.next==='Edit connection'?`<button data-edit="${esc(n.name)}">Edit connection…</button>`:`<button data-profile="">Add credentials</button>`;return '';}
+// After the student edits a connection or adds credentials from the drawer, the readiness monitor
+// re-checks the device within a minute; the drawer says so instead of repeating the old failure.
+let detailsRecheck={name:'',at:0},profileFromDrawer='';
+function noteRecheck(name){if(name)detailsRecheck={name,at:Date.now()};}
+function recheckPending(n){return !!n&&detailsRecheck.name===n.name&&Date.now()-detailsRecheck.at<60000&&!n.ssh_ready;}
+function statusActions(n,ds){if(!ds)return '';if(recheckPending(n))return `<button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='attention')return `<button data-edit="${esc(n.name)}">Check credentials</button><button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='credentials')return ds.next==='Edit connection'?`<button data-edit="${esc(n.name)}">Edit connection…</button>`:`<button data-profile="">Add credentials</button>`;return '';}
 function renderDetails(){
  const lab=current(),n=lab?.nodes.find(n=>n.name===detailName);if(!n){if($('details-dialog').open)$('details-dialog').close();return;}
  const h=nodeHealth(n.name),ds=typeof deviceState==='function'?deviceState(n):null;
@@ -327,8 +336,9 @@ function renderDetails(){
  if($('details-state')){$('details-state').textContent=ds?ds.label:'';$('details-state').className='pill '+(ds?ds.pill||'neutral':'neutral');}
  for(const id of ['details-prev','details-next'])if($(id))$(id).disabled=lab.nodes.length<2;
  setMarkup($('details-actions'),nodeActions(n,true));
+ if($('details-actions-note')){const note=typeof captureStatusLine==='function'?captureStatusLine():'';$('details-actions-note').textContent=note;$('details-actions-note').hidden=!note;}
  setMarkup($('details-advanced-actions'),nodeDrawerActions(n));
- if($('details-status-text'))$('details-status-text').textContent=ds?ds.detail:(h?.ssh?.message||'');
+ if($('details-status-text'))$('details-status-text').textContent=recheckPending(n)?`Checking ${n.short_name||n.name} again… (automatic within a minute — or Test login now)`:ds?ds.detail:(h?.ssh?.message||'');
  setMarkup($('details-status-actions'),statusActions(n,ds));
  setMarkup($('details-status-raw-body'),`<div class="connection-result">${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<p>${esc(h?.ssh?.message||'No login check yet.')}</p>${h?.ssh?.at?`<time>${esc(utcDisplay(h.ssh.at))}${h.ssh.source==='automatic'?' · automatic check':''}</time>`:''}</div><p class="form-help">Running devices are checked automatically until they accept a login. Test login (under Advanced) checks the saved credentials now.</p>`);
  setMarkup($('details-info'),`<section class="drawer-section"><h3>Connection</h3><dl class="health-grid"><dt>Name in lab files</dt><dd class="mono">${esc(n.name)}</dd><dt>Network OS</dt><dd>${esc(platformLabel(n.platform))}</dd><dt>Login credentials</dt><dd>${esc(profileName(lab,n))}</dd><dt>Address</dt><dd class="mono">${esc(n.address)}:${esc(n.port)}</dd></dl></section>`);

@@ -120,6 +120,122 @@ every dialog, screenshot at 1920×1080 / 1440×900 / 1366×768, and assert
 
 _(newest entry first)_
 
+### 2026-09-17 — stages 4, 5 and the documentation of 6 done; live-lab pass and the release remain
+
+**Stage 4 (style/accessibility audit, focused):** no inline `style=` anywhere (SVG presentation
+attributes only), no coral outside the danger tokens, every disabled control now carries a visible
+reason (menu `.menu-reason`, `data-proxy-reason` captions under the Advanced buttons and the Danger
+zone, the banner's Details line for a disabled Start, the device panel's note for a disabled Capture
+traffic), device row ids collision-free (`deviceSlug` + hash), Action logs refreshed on the poll only
+while the section is on screen, one extra `render()` on `DOMContentLoaded` (`shell.js`).
+
+**Stage 5 (integration):** `node --test tests/*.js` 133/133; Python `unittest` OK (1 skipped); `node
+--check` clean; `git diff --check` clean; `deploy/verify-release.py` passes (1.28.0); id audit clean.
+`docs/redesign/tools/verify_after.py` now covers Home, Topology (map fits at 1366×768, context menu,
+expanded map, editor, import dialog, empty map), Devices, Progress (versions, compare, apply review,
+first save, save window, checkpoint name, save location browser, unbound lab), Tools (capture dialog,
+telemetry settings), operations (menu reasons, destroy review, stop confirm → banner, output window,
+All lab operations, Running labs on the VM + table, history), Advanced (+ Remove lab), polling
+stability (device panel and a menu across two polls, focus kept) and the standalone pages (CLI
+launcher, deploy page → browser → editor → preview, Diagnostics + checks, network dashboard page,
+terminal, guides): **93/93 checks at 1920×1080, 1440×900 and 1366×768, 0 console errors, 0 page
+errors**, one handled HTTP 409 per viewport (the optional `.annotations.json` read). Screenshots:
+`shots/after/` (1366×768 set) and `docs/images/ui/` (the tour, 1440×900). The fixture manager
+answers `lab_operations.remote` in-process (capabilities, browse, read, preview, run) and gives two
+labs a `vm_project_path`.
+
+**Functional-parity review:** four independent read-only code reviews against `inventory/*.md` and
+`parity/*.md` (shell + topology; git-progress + git-places + restore; operations + management;
+capture + pages). Every inventory row present. Findings fixed here: destroy copy conditioned on the
+cleanup option; clone review titled after the project (not "manager"); busy-disabled Advanced
+controls carry a reason; the restore review shows the lab again (`Lab:` line); a failed history/tree
+fetch reads as "Try again", never "not saved yet"; the blank Progress state has *Check again*;
+*Browse the repository…* opens the folder browser from Saved versions; checkpoint rows no longer
+borrow another checkpoint's time; lab-scoped operation history from Lab actions ▾ and Advanced
+(Manager ▾ keeps every lab); *Lab files…* opens files bound to the lab (link, not duplicate);
+per-lab VM file details of every lab under Advanced › Deployment details; capture's service hint
+relabelled, *Refresh list* re-asks the manager while the service is missing, the Tools caption links
+the setup guide; the terminal clears its raw title on close; Diagnostics reports "The manager
+answered HTTP n: …"; `opSaveWorkspace` routes through `selectLab`. **Intentionally removed: none.**
+
+**Stage 6 (documentation):** `docs/TOUR.md` rewritten around the student UI with the after
+screenshots; `docs/LAB-OPERATIONS.md`, `docs/DEBUG-PANEL.md` (Diagnostics), `README.md`,
+`docs/README.md`, `docs/ARCHITECTURE.md`, `clab-backup-ui/NODE-FEATURES.md`, `docs/GIT-PROGRESS.md`
+and the label sweep across `docs/WIKI-MASTER-GUIDE.md`, `TELEMETRY.md`, `CAPTURE.md`,
+`GIT-SETUP.md`, `NAMING.md`, `INSTALL.md`, `QUICK-INSTALL.md`, `FRESH-VM-GUIDE-V2.md`,
+`HEALTH-CHECK.md`, `STANDALONE-SETUP.md`; "Unreleased" sections at the top of `docs/CHANGELOG.md`
+and `VALIDATION.md` (the release check keys on "Changes in x.y.z" / a heading ending in the
+current release, so both pass at 1.28.0); the handoff section of `agent instructions.md`.
+
+**Not done — external blockers:** the live-lab pass (this host has no Docker, containerlab, lab VM
+or manager data directory; see §2) and therefore the release: run the §4 step 5 live list on the
+dev VM first, then `python3 deploy/set-release.py 1.29.0`, rename the two "Unreleased" sections and
+record the live results in `VALIDATION.md`.
+
+### 2026-09-17 — stages 3(b) Progress tab and 3(c) operations / management / capture / pages done
+
+**3(b) done and verified:** `git-progress.js` rewritten around the student vocabulary (`gitSaveSentences`,
+`gitJobTitle`, `progressSummary` for the status card, `gitVersionGroups` → Latest / Checkpoints / Baseline /
+Instructor and reference versions / Other labs in this repository, `gitRenderSaves` rows with Open / Upload
+now / Keep snapshot only, `gitFirstSave` "Where should <lab>'s progress be saved?", quiet saves that only open
+the job window for attention states, `gitCheckpointName` live "Saved as:" preview, Save location card with the
+folder browser inside the form, blank state without a catalog); `git-places.js` student folder copy and the
+`options.tree` reuse; `restore.js` rewritten (`restoreJobLabels`/`restoreTargetLabels`, reasons in student
+words with the raw reason under Details, review with Devices legend, three safety bullets, Advanced options,
+acknowledgement, per-device outcomes); `index.html` Progress panel (status card, Saved versions, Recent saves,
+`#git-problem`, `#git-last-restore`); apply-from-any-folder (`restoreFromFolder`) kept and exercised.
+`verify_after.py` `progress` step: 68/68 checks at 1920×1080, 1440×900 and 1366×768, 0 console and 0 page
+errors (screenshots 30–39). `fixture_manager.py` binds a second lab (`vlan-lab`) and fakes the restore probe
+(`app.state.restore._capture`) so the review shows matching, differing and unreachable devices.
+
+**3(c) done and verified:** `operations.js` (`opLabels` student table, `opReviewCopy` per-action title / effect /
+confirm with `.button.danger` for the disruptive ones, the "Configuration changes you have not saved are lost."
+line, the last-save line from `progressState` (red when never saved or older than the last operation) and
+[Save progress first], raw argv and cleanup warning under Technical details, banner-first confirm for
+lifecycle actions on the open lab, `opJobBanner` with the exit code as a separate detail, All lab operations
+dialog in Deployment / Lab tools / Danger sections, telemetry settings copy with `Dashboard:` lines, history,
+browser, editor, clone, preview copy, `opBrowse(path, labId)`); `management.js` (dialog copy without eyebrows,
+`vmSummaryMarkup`, `vmFilesStatus`, sync/remove reasons, `.button.danger` on Remove lab and Start fresh,
+Back up all review); `capture.js` + the dialog markup (device picker first with a switching summary, M1–M27
+strings, `(kind)` only in VM scope, sessions asked for only when the service exists, Tools card caption when
+disabled); `capture-session.*` V1–V11; `capture-setup.html` for administrators; `workspace.html/js` (loads
+`status.js`; "Deploy a new lab"; CLI launcher "Open CLIs · <lab>" with `deviceState` pills and reasons, history
+as a link row); `terminal.html/js/css` (device-first title, "← <lab>" link to `/#lab=&device=`, student status
+map with the raw text in `title`, replace-not-append on close, Reconnect/Disconnect, notice + Details);
+`grafana.html/js` ("Network dashboard · <lab>", `#grafana-headline` + raw Details); `debug.html/js`
+("Diagnostics", card/probe/table copy, `code` → sentence map, `detail` surfaced); `vm-connection.html` link;
+`app.js` Tools link "Open lab map ↗" / "Open network dashboard ↗", banner Start label from the menu `<span>`
+and a disabled Start's reason as the banner Details; `shell.js` re-renders once on `DOMContentLoaded` (a fast
+first `/api/state` could render before the later deferred scripts defined their renderers). Tests: the pinned
+labels in `test_capture_ui.js`, `test_operations_ui.js`, `test_grafana_ui.js`, `test_readiness_ui.js` were
+rewritten, every behavioural claim kept; `node --test tests/*.js` 133/133. Browser: `tools/smoke_3c.py`
+against the fixture (whose `lab_operations.remote` is now answered in-process: capabilities, browse, read,
+preview, run) — 23/23 checks, 0 console / 0 page errors, one handled HTTP 409 (the optional
+`.annotations.json` read beside a topology, which the page expects to fail); screenshots 40–57. The Python
+suite was not rerun for 3(c) (no backend file changed); stage 5 runs it. Live-lab validation still pending.
+
+**Known, deliberate:** Chromium logs every non-2xx fetch as a console error ("Failed to load resource"); the
+scripts report those the page handles (a missing optional file, a disabled service) apart from real errors.
+The Diagnostics probe on the fixture fails by design (`diagnostics.py` binds `remote` at import time, the
+fixture only patches `lab_operations.remote`), which is what exercises the failure rows.
+
+### 2026-09-17 — stage 3(a) devices / drawer / map done (continuation branch `claude/continue-student-centered-ui-redesign`)
+
+**Done and verified:** `topology-render.js` emits `state-*` classes, a `device-state-dot` and a glyph group per
+device, `fill` only for imported colours (`.topology-bg`, `.topology-grid-dot`, `.device-body`,
+`.device-label-bg` default from CSS); `topology.js` has `renderMapState()` (class swaps from `deviceState`, aria
+labels and titles, `working` during a lab operation), the student context menu (state pill in the header,
+inline reasons, Open CLI first), the loading / empty (`#map-empty`) / caption states, `data-label` on
+`#map-expand`, Escape order; `app.js` calls `renderMapState()` from `render()`, leads the action row with Open
+CLI, drops the address from the simple device rows and shows "Checking <device> again…" after a connection or
+credential edit from the drawer; import/export dialog copy (GAP K/L), diagram-editor copy (GAP N);
+`tests/test_topology_menu_ui.js` (7 tests, in CI). **This host is not the dev VM** (no Docker, no labs):
+browser validation runs against `docs/redesign/tools/fixture_manager.py` (the real app on a scratch data
+directory with seeded labs and scripted VM hooks) with `docs/redesign/tools/verify_after.py`
+(1920×1080 / 1440×900 / 1366×768: 41/41 checks, 0 console errors, 0 page errors). Live-lab validation is
+still pending and must happen on a VM with containerlab.
+
+
 ### 2026-09-16 — stages 1 and 2 of the plan done; stages 3–6 not started
 
 **Done and verified (commit on `claude/wip-student-centered-ui-redesign`):**

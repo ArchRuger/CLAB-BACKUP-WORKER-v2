@@ -136,3 +136,7 @@ document.addEventListener('keydown',shellEscape,true);
 document.addEventListener('pointerdown',shellPointerDown,true);
 window.addEventListener('hashchange',()=>{if(!shellApplying)applyRoute();});
 setTimeout(()=>{const skeleton=shellEl('home-skeleton');if(skeleton&&!(typeof state!=='undefined'&&state&&state.loaded))skeleton.hidden=false;},200);
+// Deferred scripts run in order, and a fast first /api/state answer can render before the later scripts
+// (operations, Git, capture) have defined their renderers; those parts would then wait for the next poll.
+// One more render once every script is in keeps the menus and cards right from the first paint.
+if(typeof document!=='undefined'&&typeof document.addEventListener==='function')document.addEventListener('DOMContentLoaded',()=>{if(typeof state!=='undefined'&&state&&state.loaded&&typeof render==='function')render();});

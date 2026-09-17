@@ -15,20 +15,23 @@ async function grafanaRequest(method,url){
  if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail:'The manager could not reach Grafana.');
  return data;
 }
+function headline(text){const el=$('grafana-headline');if(!el)return;el.textContent=text;el.hidden=!text;}
 async function launchGrafana(){
  const params=new URLSearchParams(location.hash.slice(1)),title=params.get('title')||'';
- if(title)$('grafana-title').textContent='Grafana · '+title;
- $('grafana-retry').hidden=true;$('grafana-open').hidden=true;
+ if(title)$('grafana-title').textContent='Network dashboard · '+title;
+ $('grafana-retry').hidden=true;$('grafana-open').hidden=true;headline('');
  try{
   const status=await grafanaRequest('GET','/api/telemetry/grafana');
-  if(!status.enabled)throw new Error(status.message||'The Grafana stack is not installed on this manager.');
-  $('grafana-status').textContent=status.running?'Grafana is running; opening the dashboard…':'Starting Grafana on the VM; this takes a few seconds…';
+  if(!status.enabled){headline('Telemetry is not installed on this VM.');throw new Error(status.message||'The Grafana stack is not installed on this manager.');}
+  $('grafana-status').textContent=status.running?'Opening the dashboard…':'Starting the dashboard on the VM — this takes a few seconds…';
   const result=status.running?status:await grafanaRequest('POST','/api/telemetry/grafana/start');
   const url=grafanaTarget(params,location,result.port);
   $('grafana-open').href=url;$('grafana-open').hidden=false;
-  $('grafana-status').textContent='Grafana is ready.';
+  $('grafana-status').textContent='The dashboard is ready.';
   location.replace(url);
  }catch(error){
+  // The headline is the student sentence; the raw manager detail stays in #grafana-status as the Details line.
+  if(!$('grafana-headline')?.textContent)headline('The network dashboard could not be opened.');
   $('grafana-status').textContent=error.message;$('grafana-retry').hidden=false;
  }
 }

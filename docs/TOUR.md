@@ -1,109 +1,99 @@
 # Tour
 
-Screenshots taken on the development VM: Ubuntu 24.04, containerlab 0.79, two
-Arista cEOS nodes wired `eth1` to `eth1`. Every image is the real UI as a browser on
-a workstation sees it, captured with a scripted headless browser; nothing is mocked.
-The lab header has since gained a **Grafana ↗** button that opens the lab's live
-dashboards and map ([TELEMETRY.md](TELEMETRY.md)); the rest is as shown.
+The manager is built around what a networking student does with a lab: open it, see
+which devices are ready, get into a CLI, save progress, put a saved state back, look
+at packets and traffic. The screenshots below are the real UI at 1440×900, captured with
+a scripted headless browser against a manager whose lab VM answers are scripted (the
+fixture manager under `docs/redesign/tools/`), so the labs, devices and saved versions
+are examples rather than a live containerlab deployment. The layout, copy and controls
+are exactly what a live manager shows.
 
-![Lab overview](images/00-hero.png)
+## My labs
 
-## From a topology file to a working lab
+**Home is the list of your labs.** Each card carries the lab's state — *Running*,
+*Starting*, *Stopped*, *Needs attention* — how many devices are ready and when progress
+was last saved; the lab you worked on last is the *Continue* card. Labs that run on the
+VM but are not in the manager yet appear under *Also running on the VM* with one-click
+Import. The **Manager ▾** menu holds everything that is not about one lab: the VM
+connection, importing lab files, deploying a new lab, the labs running on the VM,
+operation history, manager settings and Diagnostics.
 
-**Nothing to import by hand.** With no lab saved, the workspace asks for the VM
-connection once and then leads with deployment. Labs already running on the VM
-appear here with a one-click Import.
+![My labs](images/ui/00-home.png)
 
-![Landing page](images/10-landing.png)
+## The lab workspace
 
-**Pick a topology on the VM.** The browser lists the trusted lab folders; expand
-one and choose a `.clab.yaml`.
+**One header, one situation.** The lab name, its state, *n of m devices ready*, the
+last save, **Save progress** and **Lab actions ▾**. When something needs you — a device
+that refuses its login, an operation that failed, a save that needs attention — a
+banner under the header says so in one sentence with the button that fixes it. Five
+tabs: **Topology · Devices · Progress · Tools · Advanced**.
 
-![Topology browser](images/11-topology-browser.png)
+**Topology.** Every device on the map carries its state; right-click one (or press
+Shift+F10) for *Open CLI ↗*, *Capture traffic…*, *Back up configuration* and *Device
+details*, with the reason underneath when an action is not available yet. Click a link
+to capture either end.
 
-**Read it, then deploy it.** The file is shown read-only. *Deploy lab* saves the
-workspace first, so the lab is in the sidebar before containerlab starts.
+![Topology](images/ui/10-topology.png)
 
-![Topology editor](images/12-topology-editor.png)
+![Device menu on the map](images/ui/11-topology-context-menu.png)
 
-**Every host command is reviewed before it runs.** The exact containerlab command,
-the affected containers and the warnings are shown; nothing runs until you confirm.
+**Devices.** One row per device with its state and what to do about it; *Technical
+details* unfolds the classic table with addresses, network OS, credentials and the last
+checks. The device panel shows the same state, the actions, the backups of that device
+and, under *Advanced*, the connection and credential settings.
 
-![Deploy review](images/13-deploy-review.png)
+![Devices](images/ui/20-devices.png)
 
-**Watch it run, see it succeed.** Output streams in; the banner turns green with the
-exit code when containerlab is done.
+![Device panel](images/ui/13-device-drawer-attention.png)
 
-![Deploy running](images/14-deploy-running.png)
+**Progress.** Where the lab saves (*Saving to Course-Labs › labs/BGP/work*), when it
+last saved, and the saved versions you can return to: *Latest*, your *Checkpoints*,
+the *Baseline*, and the *Instructor and reference versions* kept in other folders of
+the same repository. Every version can be viewed, compared with your latest save or —
+for Junos labs — applied to the running devices without changing where the lab saves.
 
-![Deploy succeeded](images/15-deploy-succeeded.png)
+![Progress](images/ui/30-progress.png)
 
-**A running container is not a usable device.** cEOS, Junos and XRv9k keep booting
-for a minute or more after the container starts. The manager logs in to each node
-and asks for `show version` until the network OS answers, and says so in the
-deployment bar.
+![A saved version](images/ui/34-saved-version.png)
 
-![NOS booting](images/16-nos-booting.png)
+**Replacing the running configuration is reviewed first.** The review lists the source,
+every device with what would change (or why it is skipped), the three safety rules —
+a backup first, no reboot, automatic undo when a device cannot be reached — and asks
+you to acknowledge before *Replace configurations*.
 
-**Ready means ready.** When every node answers, SSH opens on each one and the login
-test runs by itself. No credential profile was created for this lab: the nodes use
-containerlab's documented default login until you assign one. The whole sequence,
-from clicking *Deploy lab* to *NOS ready*, took 65 seconds here.
+![Apply a saved state](images/ui/36-restore-review.png)
 
-![NOS ready](images/17-nos-ready.png)
+**Tools.** Packet capture, telemetry (the live lab map and dashboards in Grafana, started
+on the VM when needed) and the manager's own configuration backups, with *Open all
+CLIs* and the map exports under *More tools*.
 
-![Nodes after deployment](images/18-nodes-after-deploy.png)
+![Tools](images/ui/40-tools.png)
 
-![Automatic login test](images/19-automatic-login-test.png)
+![Capture traffic](images/ui/41-capture-dialog.png)
 
-## Working on the lab
+**Advanced.** Deployment details, the lab's source, credentials, action logs, the full
+list of lab operations and the danger zone.
 
-**One map, every action.** Right-click a node for packet capture, an SSH terminal,
-a configuration backup or its details. Click a link to capture either end.
+![Advanced](images/ui/51-advanced.png)
 
-![Node menu](images/02-node-menu.png)
+## Every lab operation is reviewed before it runs
 
-**SSH in a browser tab**, with the node's own CLI and the credentials the manager
-already holds.
+**Lab actions ▾** starts, stops, restarts, redeploys and destroys the lab. The review
+names the action, says what happens to the devices, warns that unsaved configuration
+changes are lost, shows when progress was last saved (in red when it never was) and
+offers *Save progress first*; the exact containerlab command sits under *Technical
+details*. Confirming closes the review; the banner reports the running operation with
+*View output*.
 
-![SSH terminal](images/05-ssh-terminal.png)
+![Destroy review](images/ui/44-destroy-review.png)
 
-**Configurations that outlive the lab.** Back up on demand or on a schedule; every
-device configuration is kept with history, downloadable one by one or as an
-archive.
+![An operation running](images/ui/45-operation-banner.png)
 
-![Backup history](images/04-backup-history.png)
+## CLIs in the browser
 
-**Save progress to Git.** With a repository registered on the VM, one button
-captures the configurations, commits and pushes with your own login; the bar shows
-where the lab is saved.
+**Open CLI** opens the device's own CLI in a new tab with the credentials the manager
+holds; **Open all CLIs** opens a launcher with one row per device.
 
-![Lab overview with a registered repository](images/01-lab-overview.png)
+![CLI launcher](images/ui/55-cli-launcher.png)
 
-**Every node at a glance.** Address, platform, which login is in use, the last SSH
-check and the last backup, with the actions next to each row.
-
-![Nodes](images/03-nodes.png)
-
-## Packets from the browser
-
-**Only the ports that matter.** Opening capture from a node lists the interfaces the
-topology wires to it; the other Linux interfaces and the advanced target selector
-stay folded away.
-
-![Capture dialog](images/06-capture-dialog.png)
-
-**Wireshark on the VM, in your browser.** The session runs in an isolated container
-next to the lab and streams to the tab; nothing is installed on the workstation.
-Here a ping between the two nodes crosses the captured link.
-
-![Wireshark in the browser](images/07-wireshark-in-browser.png)
-
-## Picking up a lab that already runs
-
-**Deployed outside the manager?** Discovery sees it within 30 seconds; the landing
-page offers it, and Import reads the lab files from the VM after you confirm.
-
-![Landing page with a running lab](images/08-landing-running-lab.png)
-
-![Import from VM](images/09-import-from-vm.png)
+![SSH terminal](images/ui/61-terminal.png)

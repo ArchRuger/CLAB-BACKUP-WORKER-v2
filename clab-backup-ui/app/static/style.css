@@ -756,6 +756,8 @@ footer {
 .node-context-menu button small { flex-basis: 100%; font-size: 12px; color: var(--muted); }
 .node-context-menu button span { width: 18px; color: var(--accent-strong); font-size: 16px; }
 .node-context-menu button .pill { margin-left: auto; }
+.node-context-menu button .external { width: auto; font-size: inherit; color: inherit; }
+.context-node-name .pill { margin-left: auto; font-weight: 600; }
 
 /* --------------------------------------------------------------------------
    8. Pills, badges, tags
@@ -1354,7 +1356,9 @@ tr:last-child td { border-bottom: 0; }
 
 .device-rail { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .device-rail h2, .device-rail h3, .device-rail .card-title { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
-.device-rail .device-row { grid-template-columns: minmax(0, 1fr) auto; padding: 10px 12px; gap: 8px 12px; }
+.device-rail .device-row { grid-template-columns: minmax(96px, 1fr) minmax(0, 1.4fr); padding: 10px 12px; gap: 8px 12px; }
+.device-rail .device-row .node-name { overflow-wrap: anywhere; word-break: normal; }
+.device-rail .device-row .node-actions { grid-column: 1 / -1; justify-content: flex-start; min-width: 0; }
 .device-rail .empty-state { padding: 24px 16px; }
 .device-rail .caption { margin-top: 8px; }
 
@@ -1581,6 +1585,24 @@ dialog.drawer, dialog.node-details {
   border-radius: 0;
   background: var(--surface);
 }
+/* first fetch of a lab's map: a skeleton block with a visually plain status line */
+.topology-stage .map-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--surface);
+}
+.map-skeleton { width: min(60%, 520px); height: 40%; min-height: 120px; border-radius: var(--radius-lg); }
+/* caption notes (wiring caveat, skipped links, schema warnings) live under the hint, behind Details */
+.map-notes { margin: 6px 0 0; }
+.map-notes summary { cursor: pointer; }
+.map-notes p { margin: 4px 0 0; }
+/* the editor and the deploy preview draw layout, not live state */
+.op-layout-map .device-state-dot, .op-layout-map .device-state-glyph { display: none; }
 /* Note: the absolutely positioned toolbar is a stacking context inside an overflow:hidden stage,
    so its More ▾ .menu-list is clipped by the stage edge; fine for three items — render a longer
    menu outside the stage (section heading) instead of growing this one. */
@@ -2325,7 +2347,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* ≤1280: the device rail stacks under the map */
 @media (max-width: 1280px) {
   .topology-layout, .topology-body { grid-template-columns: minmax(0, 1fr); }
-  .device-rail .device-row { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; }
+  .device-rail .device-row { grid-template-columns: minmax(96px, 1.4fr) minmax(0, 1fr) auto; }
+  .device-rail .device-row .node-actions { grid-column: auto; justify-content: flex-end; }
   .device-rail { gap: 8px; }
 }
 
@@ -2434,3 +2457,51 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .sidebar .lab-item { width: auto; min-width: 170px; max-width: 260px; margin: 0; }
   .side-button { margin: 10px 0 0; width: 100%; }
 }
+
+/* --------------------------------------------------------------------------
+   Progress tab (stage 3b): saved versions, recent saves, save location
+   -------------------------------------------------------------------------- */
+.git-versions-head { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.git-version-group { margin: 12px 0 0; }
+.git-version-group h3, .git-version-group > summary { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+.git-version-group > summary { cursor: pointer; }
+.git-version-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.git-version-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.git-version-row .git-version-name { min-width: 0; overflow-wrap: anywhere; }
+.git-version-row .git-version-name small { display: block; margin-top: 2px; }
+.git-version-row .actions { justify-content: flex-end; flex-wrap: wrap; }
+.git-versions-empty { margin: 0; color: var(--muted); }
+.git-saved-job { border: 1px solid var(--line); border-radius: var(--radius); padding: 0 12px; margin: 0 0 8px; background: var(--surface); }
+.git-saved-job > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; cursor: pointer; }
+.git-saved-job dl.kv { margin: 8px 0; }
+.git-saved-job .actions { padding: 0 0 10px; }
+.git-progress-bar .banner { flex-basis: 100%; width: 100%; grid-column: 1 / -1; margin: 12px 0 0; }
+.git-change-folder > summary { font-weight: 600; cursor: pointer; padding: 8px 0; }
+.git-first-folder { display: flex; gap: 8px; align-items: center; }
+.git-first-folder input { flex: 1; min-width: 0; }
+.git-places-caption { margin: 4px 0 8px; }
+.git-location-tech { margin: 8px 0; }
+.git-places-foot details { display: inline-block; margin-left: 8px; }
+.git-places-foot details p { margin: 4px 0 0; }
+@media (max-width: 900px) {
+  .git-version-row { grid-template-columns: 1fr; }
+  .git-version-row .actions { justify-content: flex-start; }
+}
+
+/* ---- stage 3C: All lab operations dialog sections, review confirmations, CLI launcher rows, pages ---- */
+.op-sections { display: grid; gap: 18px; }
+.op-sections section h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.op-sections .form-help { margin: 8px 0 0; }
+.op-danger { border-top: 1px solid var(--line); padding-top: 14px; }
+.op-danger h3 { color: var(--danger-strong); }
+.op-save-line { margin: 4px 0; font-weight: 600; color: var(--ink); }
+.op-save-line.danger { color: var(--danger-strong); }
+.op-banner small { display: block; font-size: 12px; opacity: .85; }
+.op-banner small.op-exit-bad { font-weight: 600; }
+.op-session-row .pill { margin-right: 4px; }
+.op-session-row .caption { flex: 1 1 260px; }
+.workspace-links { margin: 24px 0 0; color: var(--muted); font-size: 13px; }
+#grafana-headline { font-size: 17px; font-weight: 600; color: var(--ink); margin: 0 0 4px; }
+.debug-page details summary { cursor: pointer; }
+.git-version-when { color: var(--muted); font-size: 12px; }
+.restore-job-details { margin-top: 6px; }

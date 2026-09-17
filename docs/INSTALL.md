@@ -260,13 +260,16 @@ The final terminal checks verify the local manager. On your workstation:
 1. Open `http://VM_ADDRESS:8081` (or the configured port). The VM connection
    dialog opens on its own when no connection exists: use `clab-discovery` and the
    password created during setup. After the first successful connection saves its
-   fingerprint, reopen **VM connection** and compare it with the VM console host key.
-2. Click **Deploy a new lab**, pick a topology on the VM and deploy it, or import a
-   lab that already runs. Wait for *NOS ready*.
-3. Open **Grafana ↗** in the lab header: the manager starts Grafana on the VM (a few
-   seconds) and shows the dashboards; confirm they and the lab map fill in.
-   Right-click a node for **Capture packets** and confirm Wireshark opens.
-4. Take a backup, then in the **Git repository** tab select the registered checkout.
+   fingerprint, reopen **Manager ▾ › VM connection…** and compare it with the VM
+   console host key.
+2. Click **Deploy a new lab**, pick a topology on the VM and deploy it, or add a lab
+   that already runs from **Also running on the VM**. Wait until the lab header
+   reports every device ready (*n of n devices ready*).
+3. Click **Open lab map ↗** under **Tools › Telemetry**: the manager starts Grafana on
+   the VM (a few seconds) and shows the network dashboard; confirm it and the lab map
+   fill in. Right-click a device for **Capture traffic…** and confirm Wireshark opens.
+4. Take a backup (**Tools › Configuration backups › Back up now**), then click **Save
+   progress** and choose the registered checkout as the save location.
 5. Back in the VM terminal, run the [full installation report](HEALTH-CHECK.md):
 
    ```bash
@@ -280,7 +283,7 @@ The final terminal checks verify the local manager. On your workstation:
    ```
 
 6. Resolve any **FAIL**, **WARN** or **SKIP** items using their displayed next
-   steps. Then choose **Save progress** and check that it reports **Pushed** and
+   steps. Then choose **Save progress** and check that it reports **Saved to Git** and
    that the intended files appear on GitHub.
 
 Host trust, lab selection and device credentials still require your choices in

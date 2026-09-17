@@ -32,14 +32,14 @@ Three conventions hold across every guide:
 
 | Guide | Use it when |
 |---|---|
-| [Lab operations](LAB-OPERATIONS.md) | You deploy, destroy or inspect labs, browse VM topologies, edit the diagram, or want to know how NOS readiness is judged. |
+| [Lab operations](LAB-OPERATIONS.md) | You start, stop, redeploy or destroy labs, browse the VM's topologies, edit the map, or want to know how device readiness is judged. |
 | [Git setup](GIT-SETUP.md) | You register a VM checkout so *Save progress* can commit and push with the owner's login. |
-| [Save lab progress](GIT-PROGRESS.md) | You use saves, checkpoints, baselines, history and loads. |
+| [Save progress](GIT-PROGRESS.md) | You use the Progress tab: saves, checkpoints, baselines, saved versions, compare, apply to the running lab and the save location. |
 | [Browser Wireshark](CAPTURE.md) | You start capture sessions, download captures, repair or remove the capture stack, or need the security boundary of the capture services. |
 | [Network telemetry](TELEMETRY.md) | You want to know what the manager collects from a deployed lab and how, what the Grafana dashboards show, the per-lab setting, per-NOS support, bounds, security notes and the live acceptance procedure. |
 | [Grafana lab map](GRAFANA-MAP.md) | You want the srl-telemetry-lab style weathermap in Grafana: how the manager generates one per lab, what a new lab needs, what you still craft, and how to build a hand-tuned variant from the generated SVG and configuration. |
 | [Health check](HEALTH-CHECK.md) | You read `deploy/check-install.sh` output and fix FAIL or WARN lines. |
-| [Debug panel](DEBUG-PANEL.md) | You use the development diagnostics page to probe VM helpers and file browsing. |
+| [Diagnostics](DEBUG-PANEL.md) | You use the Diagnostics page (Manager ▾) to check the VM connection and find out why a folder does not open. |
 
 ## Reference
 

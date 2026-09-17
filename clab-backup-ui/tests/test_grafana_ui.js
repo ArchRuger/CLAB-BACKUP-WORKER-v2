@@ -17,7 +17,7 @@ test('a running Grafana is opened at once on the manager host without a start re
  await h.settle();
  assert.deepEqual(h.fetches.map(f=>f[1]),['GET']);
  assert.deepEqual(h.replaced,['http://10.0.0.5:3000/d/clab-map-abc?var-lab=bgp+lab&refresh=10s']);
- assert.equal(h.el('grafana-title').textContent,'Grafana · bgp lab');assert.equal(h.el('grafana-status').textContent,'Grafana is ready.');
+ assert.equal(h.el('grafana-title').textContent,'Network dashboard · bgp lab');assert.equal(h.el('grafana-status').textContent,'The dashboard is ready.');assert.equal(h.el('grafana-headline').hidden,true);
  assert.equal(h.el('grafana-open').href,h.replaced[0]);assert.equal(h.el('grafana-open').hidden,false);assert.equal(h.el('grafana-retry').hidden,true);
 });
 test('a stopped Grafana is started through the manager, then the port the manager announces is used',async()=>{
@@ -30,14 +30,14 @@ test('a failed start stays on the page with the manager\'s reason and a retry',a
  const responses={'/api/telemetry/grafana GET':{body:{enabled:true,running:false,port:3000}},'/api/telemetry/grafana/start POST':{ok:false,body:{detail:'The VM operations helper predates on-demand Grafana.'}}};
  const h=harness(hash,responses);
  await h.settle();
- assert.deepEqual(h.replaced,[]);assert.equal(h.el('grafana-status').textContent,'The VM operations helper predates on-demand Grafana.');
+ assert.deepEqual(h.replaced,[]);assert.equal(h.el('grafana-status').textContent,'The VM operations helper predates on-demand Grafana.','the manager reason stays verbatim as the Details line');assert.equal(h.el('grafana-headline').textContent,'The network dashboard could not be opened.');
  assert.equal(h.el('grafana-retry').hidden,false);assert.equal(h.el('grafana-open').hidden,true);
  responses['/api/telemetry/grafana/start POST']={body:{enabled:true,running:true,port:3000}};
  await h.el('grafana-retry').onclick();
  assert.equal(h.replaced.length,1);assert.equal(h.el('grafana-retry').hidden,true);
  const missing=harness(hash,{'/api/telemetry/grafana GET':{body:{enabled:false,message:'The Grafana stack is not installed on this manager.'}}});
  await missing.settle();
- assert.equal(missing.fetches.length,1);assert.equal(missing.el('grafana-status').textContent,'The Grafana stack is not installed on this manager.');
+ assert.equal(missing.fetches.length,1);assert.equal(missing.el('grafana-status').textContent,'The Grafana stack is not installed on this manager.');assert.equal(missing.el('grafana-headline').textContent,'Telemetry is not installed on this VM.');
  const down=harness(hash,{'/api/telemetry/grafana GET':new Error('Failed to fetch')});
  await down.settle();
  assert.equal(down.el('grafana-status').textContent,'Failed to fetch');assert.equal(down.el('grafana-retry').hidden,false);

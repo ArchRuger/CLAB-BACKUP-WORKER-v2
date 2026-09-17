@@ -4,6 +4,57 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Unreleased — student-centred UI redesign (prepared on 1.28.0, to become 1.29.0)
+
+The browser UI was redesigned around what a networking student does with a lab. The
+backend, the VM helpers and every API route are unchanged; every capability of the
+previous UI is still reachable (the functional-parity review in
+`docs/redesign/PICKUP.md` lists each one with its new place).
+
+- **Home ("My labs")** replaces the sidebar: lab cards with a state pill, *n of m devices
+  ready* and the last save, a *Continue* card, *Also running on the VM* with Import, and a
+  **Manager ▾** menu (VM connection…, Import lab files…, Deploy a new lab…, Refresh lab
+  list, Running labs on the VM…, Operation history…, Manager settings…, Diagnostics).
+- **Lab workspace**: header with the state, readiness count, last save, **Save progress**
+  (with checkpoint and baseline) and **Lab actions ▾**; a situational banner (running
+  operation with *View output*, needs attention, credentials needed, starting); tabs
+  **Topology · Devices · Progress · Tools · Advanced**. Deep links `#lab=<id>&view=<tab>&device=<name>`,
+  the Back button and the legacy tab names keep working.
+- **Topology**: device state dots and glyphs, a context menu with inline reasons (*Open CLI ↗*,
+  *Capture traffic…*, *Back up configuration*, *Device details*), loading/empty map states,
+  map notes; the renderer emits colours only for imported styles.
+- **Devices** and the **device panel**: one state vocabulary (*Ready*, *Starting*, *Needs
+  credentials*, *Needs attention*, *Unavailable*) with the sentence that says what to do;
+  *Technical details* keeps the classic table; the panel offers *Test login now* / *Check
+  credentials* and re-checks a device after a connection or credential edit.
+- **Progress**: status card, **Saved versions** grouped as Latest / Checkpoints / Baseline /
+  Instructor and reference versions / Other labs in this repository (View, *Compare with my
+  latest save*, *Apply to running lab…* for Junos states from any compatible folder without
+  changing the save location), **Recent saves** rows, the first-save dialog, quiet saves,
+  the **Save location** card with the folder browser inside it, student copy for every Git
+  and restore dialog; the restore review lists each device's outcome and the safety rules.
+- **Tools**: Packet capture (the device picker first in the dialog, student copy), Telemetry
+  (*Open lab map ↗* / *Open network dashboard ↗*, Telemetry settings…), Configuration
+  backups, Open all CLIs, map exports. **Advanced**: deployment details with visible reasons
+  and the VM file details of every lab, lab source, credentials, action logs, all lab
+  operations, technical details, danger zone.
+- **Lab operations**: student action names, a per-action review (effect, *Configuration
+  changes you have not saved are lost.*, the last-save line, *Save progress first*, the raw
+  command under *Technical details*), banner-first confirms, a sectioned *All lab
+  operations…* dialog, lab-scoped operation history, *Running labs on the VM…*.
+- **Standalone pages**: the CLI launcher (*Open CLIs · <lab>* with device state pills), the
+  deploy page, the SSH terminal (device-first title, plain-words status, Reconnect), the
+  network dashboard launcher (headline + details), **Diagnostics** (formerly Debug panel).
+- **Design system**: tokens, focus ring, menu pattern, tablist, skeleton, glyph sprite;
+  `terminal.css` re-tokenised; no inline styles, no CDN, self-only CSP kept.
+- New scripts `status.js`, `shell.js`, `home.js`; new tests `test_status_ui.js`,
+  `test_shell_ui.js`, `test_home_ui.js`, `test_topology_menu_ui.js` (in CI); every pinned
+  label in the existing tests rewritten with its behavioural claim kept.
+- Validation so far is browser validation against the fixture manager (three viewports,
+  zero console and page errors) and the full unit suites; the live-lab pass on the dev VM
+  and the release itself (`set-release.py 1.29.0`) are still to do — see
+  `docs/redesign/PICKUP.md` and `VALIDATION.md`.
+
 ## Changes in 1.28.0
 
 Apply a saved Junos configuration to a running node without a reboot or a containerlab

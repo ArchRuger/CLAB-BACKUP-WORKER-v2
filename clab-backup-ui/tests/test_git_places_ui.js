@@ -30,7 +30,7 @@ test('folder rules: own, other lab, inside, managed, unused, root versus subfold
  const {gitTreeModel,gitFolderChoice,gitCanCreateIn}=makeContext(),model=gitTreeModel(files,folders);
  assert.equal(gitFolderChoice(model,'bgp','bgp').allowed,false);assert.match(gitFolderChoice(model,'bgp','bgp').reason,/already saves here/);
  assert.match(gitFolderChoice(model,'eth','bgp').reason,/Ethernet lab already saves here/);
- assert.match(gitFolderChoice(model,'bgp/latest','bgp').reason,/fills latest folders itself/);
+ assert.match(gitFolderChoice(model,'bgp/latest','bgp').reason,/latest folder/);
  assert.match(gitFolderChoice(model,'bgp/checkpoints/peering','other').reason,/saved milestone/);
  assert.match(gitFolderChoice(model,'bgp/docs','other').reason,/inside BGP lab's lab folder/);
  assert.equal(gitFolderChoice(model,'bgp/docs','bgp').allowed,true,'a lab may move deeper inside its own folder; the old registration is retired');
@@ -64,7 +64,7 @@ test('the browser markup escapes names and labels and explains each folder',()=>
  const mine=context.gitTreeModel(files,folders),own=context.gitPlacesMarkup(mine,{selected:'bgp',current:'bgp',repoName:'repo',head:'a',saved:{latest:1},canAct:true,connected:true});
  assert.match(own,/data-git-places-action="use" disabled/);assert.match(own,/This lab already saves here/);assert.match(own,/Named milestones/);
  const latest=context.gitPlacesMarkup(mine,{selected:'bgp/latest',current:'bgp',repoName:'repo',head:'a',saved:{latest:1},canAct:true,connected:true});
- assert.match(latest,/Save details: devices, checksums, capture time/);assert.match(latest,/Device configuration/);
+ assert.match(latest,/Save details/);assert.match(latest,/Device configuration/);
  const fresh=context.gitPlacesMarkup(mine,{selected:'notes',current:'bgp',repoName:'repo',head:'a',saved:{},canAct:true,connected:false});
  assert.match(fresh,/data-git-places-action="use"  title="">Choose this folder/);
  assert.doesNotMatch(context.gitPlacesMarkup(mine,{selected:'',current:'',repoName:'repo',canAct:false}),/data-git-places-action/);
@@ -130,4 +130,47 @@ test('a folder whose latest carries a restore artifact is appliable from the bro
  // Hidden for a non-restorable folder or when applying is not offered.
  assert.doesNotMatch(gitPlacesMarkup(model,{selected:'labs/BGP-LAB/working',canApply:true,canAct:true}),/data-git-places-action="apply"/);
  assert.doesNotMatch(gitPlacesMarkup(model,{selected:'labs/BGP-LAB/Broken',canApply:false,canAct:true}),/data-git-places-action="apply"/);
+});
+test('saved versions come from the repository tree: this lab first, instructor folders beside it, apply only where a restore artifact exists',()=>{
+ const context=makeContext();
+ const versionFiles=[
+  {path:'labs/BGP/work/latest/PE1.cfg',size:10},{path:'labs/BGP/work/latest/PE1.jcfg',size:20},{path:'labs/BGP/work/latest/manifest.json',size:5},
+  {path:'labs/BGP/work/checkpoints/ospf-done/PE1.cfg',size:10},{path:'labs/BGP/work/checkpoints/ospf-done/manifest.json',size:5},
+  {path:'labs/BGP/work/baseline/PE1.cfg',size:10},{path:'labs/BGP/work/baseline/manifest.json',size:5},
+  {path:'labs/BGP/solution/latest/PE1.cfg',size:10},{path:'labs/BGP/solution/latest/PE1.jcfg',size:20},{path:'labs/BGP/solution/latest/manifest.json',size:5},
+  {path:'labs/BGP/start/latest/PE1.cfg',size:10},{path:'labs/BGP/start/latest/manifest.json',size:5},
+  {path:'labs/OTHER/latest/R1.cfg',size:10},{path:'labs/OTHER/latest/R1.jcfg',size:20},{path:'labs/OTHER/latest/manifest.json',size:5}];
+ const versionFolders=[{id:'work',label:'repo / work',prefix:'labs/BGP/work',lab:{id:'lab',name:'BGP lab'}},{id:'other',label:'repo / other',prefix:'labs/OTHER',lab:{id:'o',name:'Other lab'}}];
+ const tree={head:'a'.repeat(40),files:versionFiles,folders:versionFolders,saved:{latest:1789128000,baseline:1789100000,checkpoints:null},repository:{path:'/home/ben/labs/Course-Labs'}};
+ const model=context.gitTreeModel(tree.files,tree.folders);
+ const binding={binding_id:'work',repository:{path:'/home/ben/labs/Course-Labs',prefix:'labs/BGP/work',branch:'main'}};
+ context.state.git_jobs=[{id:'cp',lab_id:'lab',target:'checkpoint',checkpoint:'ospf-done',status:'synced',note:'adjacencies up',created:'2026-09-11T12:00:00Z',finished:'2026-09-11T12:01:00Z'}];
+ const groups=context.gitVersionGroups('lab',{binding},model,tree,null);
+ assert.equal(groups.latest.length,1);assert.equal(groups.latest[0].name,'Latest');same(groups.latest[0].apply,{folder:'labs/BGP/work'});assert.equal(groups.latest[0].compare,false);same(groups.latest[0].view,{commit:tree.head,path:'latest'});
+ assert.equal(groups.checkpoints[0].name,'ospf-done');assert.equal(groups.checkpoints[0].note,'adjacencies up');assert.equal(groups.checkpoints[0].apply,null);same(groups.checkpoints[0].view,{commit:tree.head,path:'checkpoints/ospf-done'});
+ assert.equal(groups.baseline[0].name,'Baseline');same(groups.baseline[0].view,{commit:tree.head,path:'baseline'});
+ same(groups.reference.map(r=>[r.caption,!!r.apply]),[['labs/BGP/solution',true],['labs/BGP/start',false]],'sibling folders with a latest save; apply only with a .jcfg');
+ same(groups.reference.map(r=>r.view.path),['labs/BGP/solution/latest','labs/BGP/start/latest']);
+ same(groups.others.map(r=>[r.name,r.caption,!!r.apply]),[['Other lab','labs/OTHER',true]],'other labs are listed under their own name');
+ const rooted=context.gitTreeModel([{path:'latest/PE1.cfg',size:1},{path:'latest/PE1.jcfg',size:1},{path:'latest/manifest.json',size:1}],[{id:'root',label:'repo',prefix:'',lab:{id:'lab',name:'Root lab'}}]);
+ const rootGroups=context.gitVersionGroups('lab',{binding:{binding_id:'root',repository:{path:'/p',prefix:''}}},rooted,{head:'b'.repeat(40),files:[],folders:[],saved:{}},null);
+ same(rootGroups.latest[0].apply,{version:{type:'git',commit:'b'.repeat(40),path:'latest'}},'a lab saving at the top level applies its latest through the version path');
+ const fromHistory=context.gitVersionGroups('lab',{binding},null,null,{versions:[{path:'labs/BGP/work/latest',commit:'c',connected:true,label:'x'},{path:'labs/BGP/solution/latest',commit:'c',connected:false,label:'solution · latest'}]});
+ assert.equal(fromHistory.latest[0].name,'Latest');assert.equal(fromHistory.reference[0].caption,'labs/BGP/solution/latest');
+ const el={innerHTML:'',querySelectorAll:()=>[]};context.$=id=>id==='git-saved-versions'?el:null;
+ context.gitRenderVersions('lab',{binding},model,tree,null);
+ assert.match(el.innerHTML,/<h3>Latest<\/h3>/);assert.match(el.innerHTML,/data-git-version-action="apply"/);assert.match(el.innerHTML,/Compare with my latest save/);assert.match(el.innerHTML,/Full history…/);assert.match(el.innerHTML,/Instructor and reference versions/);assert.match(el.innerHTML,/<summary>Other labs in this repository \(1\)<\/summary>/);
+ assert.match(el.innerHTML,/No checkpoints yet/.test(el.innerHTML)?/No checkpoints yet/:/ospf-done/);
+ context.gitRenderVersions('lab',{binding:null},null,null,null);assert.match(el.innerHTML,/Choose a save location first/);
+});
+test('recent saves rows explain each save and offer upload or keep-snapshot-only while one is pending',()=>{
+ const context=makeContext();const list={innerHTML:'',querySelectorAll:()=>[]};context.$=id=>id==='git-saves-list'?list:null;
+ const attack='<img src=x onerror=alert(1)>';
+ const jobs=[{id:'p1',lab_id:'lab',status:'push_pending',target:'latest',commit:'abcdef1234567890',message:attack,created:'2026-09-11T12:00:00Z'},{id:'u1',lab_id:'lab',status:'dismissed',target:'update',created:'2026-09-11T11:00:00Z'},{id:'c1',lab_id:'lab',status:'synced',target:'checkpoint',checkpoint:'ospf-done',pushed:true,created:'2026-09-11T10:00:00Z'}];
+ context.gitRenderSaves('lab',{binding:{binding_id:'b',repository:{path:'/home/ben/labs/Course-Labs',prefix:'bgp'}},jobs});
+ assert.doesNotMatch(list.innerHTML,/<img/);assert.match(list.innerHTML,/&lt;img src=x/);
+ assert.match(list.innerHTML,/data-git-job="p1"/);assert.match(list.innerHTML,/Saved on this VM — upload needs attention/);assert.match(list.innerHTML,/data-git-job-upload="p1">Upload now/);assert.match(list.innerHTML,/data-git-job-keep="p1">Keep snapshot only/);
+ assert.match(list.innerHTML,/Repository updated/);assert.match(list.innerHTML,/Checkpoint &#39;ospf-done&#39; saved/,'the checkpoint name is escaped like every interpolation');assert.doesNotMatch(list.innerHTML,/data-git-job-upload="c1"/,'an uploaded save has nothing to upload');
+ assert.match(list.innerHTML,/Course-Labs › bgp/);
+ context.gitRenderSaves('lab',{binding:null,jobs:[]});assert.match(list.innerHTML,/Saves appear here once this lab has a save location/);
 });

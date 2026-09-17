@@ -83,7 +83,7 @@ sequenceDiagram
     M->>M: Save the workspace: nodes, map, VM source path
     M->>H: preview, then confirm the containerlab command
     H-->>M: streamed output, exit code
-    M-->>U: Operation output with the green banner
+    M-->>U: The lab banner reports the operation (View output opens the window)
     loop discovery, every 30 s
         M->>H: clab-manager-inspect
         H-->>M: containers, states, management addresses
@@ -92,9 +92,9 @@ sequenceDiagram
         M->>N: SSH login (profile, inventory or containerlab default) + show version
         N-->>M: answer, refusal or no answer yet
     end
-    M-->>U: NOS ready · SSH opens per node
+    M-->>U: n of m devices ready · Open CLI enables per device
     M->>N: Test NOS login (Ansible show version), once per boot
-    N-->>M: results in Backup history
+    N-->>M: results under Tools › Configuration backups › Login checks
 ```
 
 A node that stops or is redeployed goes back to *booting* and has to answer
@@ -112,7 +112,7 @@ flowchart LR
     S[("Session store<br/>memory only · 15 min rings<br/>rates from counter deltas")]
     X["/api/telemetry/metrics<br/>Prometheus text: names, states, rates"]
     A["/api/labs/{id}/telemetry<br/>settings · retry · remove-config"]
-    U["Lab actions → Telemetry settings<br/>Grafana ↗ button in the lab header"]
+    U["Lab actions ▾ › Telemetry settings…<br/>Tools › Open lab map ↗ / Open network dashboard ↗"]
     MP["Map publisher<br/>one provisioned dashboard per lab<br/>data/telemetry/dashboards"]
     G["Prometheus scrapes every 10 s, keeps 15 min<br/>Grafana on demand (started from the lab, stopped when idle):<br/>Lab overview · Interfaces · BGP · Lab maps"]
     N[("NOS gNMI<br/>6030 · 57400 · 32767")]

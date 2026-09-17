@@ -18,14 +18,14 @@ test('node scope uses captured lab identity and live interfaces',async()=>{
 });
 test('all host scope removes lab filtering and missing aliases are never guessed',async()=>{
  const {c,$,calls}=harness();vm.runInContext("captureLab='lab';captureNode='r1';captureHint='Gi0/0/0/1'",c);$('capture-scope').value='host';
- await c.refreshCaptureTargets();assert.ok(calls.includes('/capture/targets?'));assert.doesNotMatch($('capture-interfaces').innerHTML,/checked/);assert.match($('capture-status').textContent,/Select its Linux interface explicitly/);
+ await c.refreshCaptureTargets();assert.ok(calls.includes('/capture/targets?'));assert.doesNotMatch($('capture-interfaces').innerHTML,/checked/);assert.match($('capture-status').textContent,/Tick the matching interface below/);
 });
 test('capture requires selection and creates a same-origin browser session',async()=>{
  const {c,$,calls,timers}=harness();await c.refreshCaptureTargets();
  await $('capture-form').onsubmit({preventDefault(){}});assert.match($('capture-status').textContent,/at least one/);
  $('capture-interfaces').checked=[{value:'eth2'}];await $('capture-form').onsubmit({preventDefault(){}});
  assert.equal(calls.find(c=>c?.url==='/capture/launch').data.interfaces[0],'eth2');assert.equal($('capture-launch').hidden,false);assert.match($('capture-launch').href,/^\/static\/capture-session\.html#/);
- $('capture-launch').onclick();assert.match($('capture-status').textContent,/Browser viewer opened/);
+ $('capture-launch').onclick();assert.match($('capture-status').textContent,/Wireshark opened in a new tab/);
  assert.equal(timers.length,0);
 });
 test('changing selection clears a prepared link and releases the prepare button',async()=>{
@@ -39,18 +39,19 @@ test('prepare stays disabled until an interface is ticked and a target-less dial
  $('capture-interfaces').checked=[];$('capture-interfaces').onchange();assert.equal($('capture-prepare').disabled,true);
  $('capture-interfaces').checked=[{value:'eth2'}];$('capture-interfaces').onchange();assert.equal($('capture-prepare').disabled,false);
  $('capture-target').value='';c.renderCaptureInterfaces();
- assert.match($('capture-interfaces').innerHTML,/Choose a capture target under Advanced/);assert.equal($('capture-prepare').disabled,true);
+ assert.match($('capture-interfaces').innerHTML,/Choose a device above/);assert.equal($('capture-prepare').disabled,true);
 });
-test('shared namespaces and loopback-only targets are labelled and aliases are searchable',()=>{
+test('shared namespaces and loopback-only targets are labelled, the kind shows only for the whole VM, and aliases are searchable',()=>{
  const {c,$}=harness();
  vm.runInContext(`captureTargets=[{id:'h',name:'systemd(1)',kind:'proc',prefix:'',interfaces:['ens33','lo'],aliases:['containerlab-node-manager-backup-ui-1']},{id:'s',name:'sandbox',kind:'proc',prefix:'',interfaces:['lo'],aliases:[]}];`,c);
  c.filterCaptureTargets();
- assert.match($('capture-target').innerHTML,/shares namespace with containerlab-node-manager-backup-ui-1/);assert.match($('capture-target').innerHTML,/sandbox \(proc\) · 1 interfaces · loopback only/);
+ assert.match($('capture-target').innerHTML,/also: containerlab-node-manager-backup-ui-1/);assert.match($('capture-target').innerHTML,/sandbox · 1 interfaces · loopback only/);assert.doesNotMatch($('capture-target').innerHTML,/\(proc\)/,'inside a lab every row is a device');
+ $('capture-scope').value='host';c.filterCaptureTargets();assert.match($('capture-target').innerHTML,/sandbox \(proc\) · 1 interfaces · loopback only/);$('capture-scope').value='';
  $('capture-search').value='backup-ui';c.filterCaptureTargets();
  assert.equal($('capture-target').value,'h');assert.doesNotMatch($('capture-target').innerHTML,/sandbox/);
  vm.runInContext(`captureTargets=[{id:'n',name:'clab-demo-r1',kind:'docker',prefix:'',interfaces:['eth0'],aliases:['CliShell(1)','CliShell(2)','CliShell(3)','CliShell(4)']}];`,c);
  $('capture-search').value='';c.filterCaptureTargets();
- assert.match($('capture-target').innerHTML,/shares namespace with CliShell\(1\), CliShell\(2\) \+2 more/);
+ assert.match($('capture-target').innerHTML,/also: CliShell\(1\), CliShell\(2\) \+2 more/);
  $('capture-search').value='clishell(4)';c.filterCaptureTargets();assert.equal($('capture-target').value,'n');
 });
 test('node and menu capture actions are disabled only once the manager reports capture disabled',async()=>{
@@ -91,8 +92,8 @@ test('a node lists its wired ports first and keeps the rest behind a toggle',asy
  assert.match(first,/value="eth1"/);assert.match(first,/value="eth2"/);assert.doesNotMatch(first,/value="fabric"|value="eth0"|value="lo"/);
  assert.doesNotMatch(first,/checked/);
  assert.match(rest,/value="eth0"/);assert.match(rest,/value="fabric"/);assert.doesNotMatch(rest,/value="eth1"/);
- assert.equal(h.$('capture-more').hidden,false);assert.equal(h.$('capture-more-label').textContent,'All live Linux interfaces (3)');
- assert.equal(h.$('capture-primary-legend').textContent,'Topology interfaces');
+ assert.equal(h.$('capture-more').hidden,false);assert.equal(h.$('capture-more-label').textContent,'Other interfaces on this device (3)');
+ assert.equal(h.$('capture-primary-legend').textContent,'Connected interfaces');assert.equal(h.$('capture-advanced-label').textContent,'Advanced: capture somewhere else');
  assert.equal(h.$('capture-advanced').open,false);assert.match(h.$('capture-status').textContent,/Tick the interfaces/);
 });
 test('a node with a single wired port starts ticked and ready to capture',async()=>{
@@ -100,18 +101,18 @@ test('a node with a single wired port starts ticked and ready to capture',async(
  vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint=''",h.c);
  await h.c.refreshCaptureTargets();
  assert.match(h.$('capture-interfaces').innerHTML,/value="eth1" checked/);assert.equal(h.$('capture-prepare').disabled,false);
- assert.match(h.$('capture-status').textContent,/Selected live interface eth1/);
- assert.equal(h.$('capture-more-label').textContent,'All live Linux interfaces (2)');
+ assert.match(h.$('capture-status').textContent,/eth1 is selected/);
+ assert.equal(h.$('capture-more-label').textContent,'Other interfaces on this device (2)');
 });
 test('without a map the live list is shown and an unresolved target unfolds the advanced selector',async()=>{
  const h=mapHarness(['eth0','eth1'],[]);
  vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint=''",h.c);
  await h.c.refreshCaptureTargets();
- assert.equal(h.$('capture-primary-legend').textContent,'Live Linux interfaces');assert.match(h.$('capture-interfaces').innerHTML,/value="eth0"/);
+ assert.equal(h.$('capture-primary-legend').textContent,'Interfaces');assert.match(h.$('capture-interfaces').innerHTML,/value="eth0"/);
  assert.equal(h.$('capture-more').hidden,true);assert.equal(h.$('capture-advanced').open,false);
  h.c.api=async url=>({json:async()=>url.includes('/status')?{enabled:true}:url.includes('/topology')?{nodes:[],links:[]}:{targets:[{id:'x',name:'a',kind:'docker',prefix:'',interfaces:['eth0']},{id:'y',name:'b',kind:'docker',prefix:'',interfaces:['eth0']}],message:'live'}});
  vm.runInContext("captureNode=''",h.c);await h.c.refreshCaptureTargets();
- assert.equal(h.$('capture-advanced').open,true);assert.match(h.$('capture-interfaces').innerHTML,/Choose a capture target under Advanced/);
+ assert.equal(h.$('capture-advanced').open,true);assert.equal(h.$('capture-advanced-label').textContent,'Choose a device');assert.match(h.$('capture-interfaces').innerHTML,/Choose a device above/);
 });
 test('ticked interfaces from both lists are captured together',async()=>{
  const h=mapHarness(['eth0','eth1'],[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}]]);

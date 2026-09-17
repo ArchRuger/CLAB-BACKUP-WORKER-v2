@@ -81,14 +81,15 @@ elsewhere.
    `clab-discovery` password and click **Save and test connection**.
 
 4. Click **Deploy a new lab**, expand `/etc/containerlab`, pick a `.clab.yaml` and
-   choose **Deploy lab**. The lab appears in the sidebar at once; the deployment bar
-   shows *NOS booting* and then *NOS ready*, SSH opens on each node as it answers,
-   and the login test runs by itself.
+   choose **Deploy lab**. The lab appears under My labs at once; its header reads
+   *Starting* and counts the devices that are ready, **Open CLI** enables on each
+   device as it answers, and the login check runs by itself.
 
-5. Click **Grafana ↗** in the lab header: the manager starts Grafana on the VM when it
-   is stopped and opens it on TCP 3000. Watch the interface rates, link state and the
-   lab map fill in as the nodes report. Right-click a node or click a link on the map
-   for **Capture packets**: Wireshark opens in a browser tab.
+5. On the lab's **Tools** tab click **Open lab map ↗**: the manager starts Grafana on
+   the VM when it is stopped and opens the lab's live map on TCP 3000. Watch the
+   interface rates and link state fill in as the devices report. Right-click a device
+   or click a link on the map for **Capture traffic…**: Wireshark opens in a browser
+   tab.
 
 6. Check the installation at any time:
 
@@ -147,17 +148,17 @@ where data lives) and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTU
 
 | Read this | When you want to |
 |---|---|
-| [Tour](docs/TOUR.md) | See the UI and the deploy-to-ready flow in screenshots |
+| [Tour](docs/TOUR.md) | See the student UI — My labs, the lab workspace, Progress and Tools — in screenshots |
 | [Quick install](docs/QUICK-INSTALL.md) | Follow the shortest route: paste, type, click |
 | [Fresh VM guide](docs/FRESH-VM-GUIDE-V2.md) | Build a VM from Proxmox settings to the first Git save, with recovery steps |
 | [Guided installation](docs/INSTALL.md) | Understand the installer's menu and phases, upgrades and the two stacks |
 | [VM connection](docs/VM-CONNECTION.md) | Set up or repair the `clab-discovery` account and password |
-| [Lab operations](docs/LAB-OPERATIONS.md) | Deploy, destroy, inspect, edit diagrams, read NOS readiness |
-| [Git setup](docs/GIT-SETUP.md) and [Save lab progress](docs/GIT-PROGRESS.md) | Register a checkout and save, checkpoint, load and push |
+| [Lab operations](docs/LAB-OPERATIONS.md) | Start, stop, redeploy and destroy labs, edit the map, read device readiness |
+| [Git setup](docs/GIT-SETUP.md) and [Save progress](docs/GIT-PROGRESS.md) | Register a checkout, then save, checkpoint, compare, apply and push from the Progress tab |
 | [Browser Wireshark](docs/CAPTURE.md) | Run capture sessions, download captures, repair or remove the capture stack |
 | [Network telemetry](docs/TELEMETRY.md) | Understand what the manager collects, the Grafana dashboards, per-NOS support and the live acceptance procedure |
 | [Grafana lab map](docs/GRAFANA-MAP.md) | The generated weathermap per lab: what a new lab gets by itself, what you still craft, how to make your own variant |
-| [Health check](docs/HEALTH-CHECK.md) and [Debug panel](docs/DEBUG-PANEL.md) | Read `check-install.sh` results and diagnose helpers |
+| [Health check](docs/HEALTH-CHECK.md) and [Diagnostics](docs/DEBUG-PANEL.md) | Read `check-install.sh` results and diagnose the VM connection from the browser |
 | [Architecture](docs/ARCHITECTURE.md) | See how the pieces connect and which module does what |
 | [Changelog](docs/CHANGELOG.md) | Read what changed in each release |
 

@@ -2,9 +2,9 @@
 
 Live interface rates, link state and BGP neighbour state from the nodes of a
 deployed lab, collected by the manager and shown in Grafana. No collector to install
-by hand, no target files, no dashboards to build per lab: deploy the lab, click
-**Grafana ↗**, and watch the dashboards and the lab map follow what you do on the
-routers.
+by hand, no target files, no dashboards to build per lab: deploy the lab, open the
+**network dashboard** (Grafana) from the lab's **Tools** tab, and watch the dashboards
+and the lab map follow what you do on the devices.
 
 ## What you get
 
@@ -18,21 +18,24 @@ routers.
   node dots by state; see [GRAFANA-MAP.md](GRAFANA-MAP.md). Anyone who reaches the
   port is a read-only Viewer; editing needs the `admin` login whose password is in
   `clab-backup-ui/.env` (`TELEMETRY_GRAFANA_ADMIN_PASSWORD`).
-- **One button in the manager.** The lab header shows **Lab map in Grafana ↗** when
-  the lab has a drawing, else **Grafana ↗** for the lab overview, both filtered to the
-  lab and opened in a new tab on the manager's own host name. The manager's own map
+- **One button in the manager.** The **Telemetry** card on the lab's **Tools** tab shows
+  **Open lab map ↗** when the lab has a map, else **Open network dashboard ↗** for the
+  lab overview, both filtered to the lab and opened in a new tab on the manager's own
+  host name. The manager's own map
   shows the imported wiring; live state is Grafana's job.
 - **Grafana runs only while someone reads it.** It idles at a few hundred MiB, so the
   stack leaves it stopped. The button opens a small manager page that starts Grafana on
   the VM (a `docker start` through the reviewed VM helper, a few seconds on a fresh
   data volume) and moves on to the dashboard; the manager then watches Grafana's own
   request counters and stops it again after 15 minutes without an open dashboard (a
-  dashboard tab refreshes every 10 seconds, so it keeps Grafana alive). **Lab actions →
-  Telemetry settings…** shows the state and has **Stop Grafana now**. The idle time is
+  dashboard tab refreshes every 10 seconds, so it keeps Grafana alive). **Telemetry
+  settings…** (**Tools › Telemetry** or **Lab actions ▾**) shows the state and has
+  **Stop Grafana now**. The idle time is
   `TELEMETRY_GRAFANA_IDLE_MINUTES` in `clab-backup-ui/.env` (0 keeps Grafana running once
   started; reload the manager after a change with `recreate-manager.sh`). Prometheus keeps
   running: it is small and must scrape while a lab streams.
-- **Telemetry settings** under **Lab actions**: automatic telemetry on or off for the
+- **Telemetry settings…** on the **Tools** tab (also under **Lab actions ▾**): automatic
+  telemetry on or off for the
   lab, the gNMI login profile, removal of the configuration lines the manager added,
   the reason a node is not streaming, and a retry for failed nodes.
 - **Nothing persistent in the manager, fifteen minutes of history everywhere.** Samples
@@ -67,7 +70,7 @@ sequenceDiagram
 ```
 
 1. **Readiness first.** A node is touched only after the readiness monitor has
-   recorded a real `show version` answer over SSH (the *NOS ready* state). A running
+   recorded a real `show version` answer over SSH (the device shows *Ready*). A running
    container is not a ready NOS.
 2. **Provisioning over SSH**, with the node's saved login (profile, inventory or
    the containerlab default), reads the current service configuration and adds
@@ -118,7 +121,7 @@ commit alone leaves the node in *Configuring* or *Connecting*.
 
 ## Node states
 
-The state of every node is shown in **Lab actions → Telemetry settings…** (with the
+The state of every node is shown in **Tools › Telemetry › Telemetry settings…** (with the
 reason for failed and stale nodes), in the Lab overview dashboard as the node state
 code, and by the health check.
 
@@ -141,7 +144,7 @@ when a neighbour appears. Unsupported metrics are absent, never zero.
 
 ## Settings
 
-Open **Lab actions → Telemetry settings…**:
+Open **Tools › Telemetry › Telemetry settings…**:
 
 - **Automatic telemetry**: on by default for labs created since 1.23.0 (deploy,
   import, YAML registration or inventory upload). Labs saved earlier show *This lab
@@ -258,7 +261,7 @@ To take the stack down, add `--remove`: it stops both services, deletes their tm
 data and the plugin folder and writes `TELEMETRY_STACK=disabled`, so later upgrades
 leave it alone; the admin password is kept for a later reinstall. Rerun without
 `--remove` to bring it back. The manager's own behaviour never depends on the
-stack: the collector runs either way, and the button in the lab header simply hides.
+stack: the collector runs either way, and the dashboard button on the Tools tab simply hides.
 
 A state timeline with nothing to show yet (*Session established* on a lab without
 BGP, *Operational state* for a filter that matches no interface) says *Data does not
@@ -288,14 +291,15 @@ Flow panel is loaded. Every `Next:` line is a command that works from any direct
 Run this on a lab VM with one node of each kind, after installing with
 `bash "$HOME/projects/clab-manager/deploy/install.sh"`:
 
-1. Deploy a lab from the manager. Wait for *NOS ready* in the deployment bar.
-2. Open **Lab actions → Telemetry settings…**. Each supported node should pass
+1. Deploy a lab from the manager. Wait until the lab header reports every device ready
+   (*n of n devices ready*).
+2. Open **Tools › Telemetry › Telemetry settings…**. Each supported node should pass
    Waiting → Configuring → Connecting → Streaming without a click. Check the action
    log for `telemetry.configure` lines (expected on cJunosEvolved; usually none on
    cEOS and XRv9k, whose containerlab defaults already enable gNMI).
 3. On each node, confirm the service by hand: `show management api gnmi` (EOS),
    `show grpc status` (XR), `show system connections | match 32767` (Junos).
-4. Click **Grafana ↗**. Generate traffic across a wired link (`ping` with a size and
+4. Click **Open lab map ↗** (Tools › Telemetry). Generate traffic across a wired link (`ping` with a size and
    count, or an `iperf` container) and confirm the Interfaces dashboard of both ends
    and the lab map's link colour and rate labels follow it within about 20 s.
 5. Shut the interface on one end; the map link must turn red within a minute and the

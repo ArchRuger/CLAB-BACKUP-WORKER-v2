@@ -3,7 +3,7 @@
 `deploy/check-install.sh` inspects a VM after installation and browser setup and
 prints a **PASS / FAIL / WARN / SKIP / INFO** report with the next action for each
 problem. It checks the current installation and does not repair it. For a running
-manager, the [Debug panel](DEBUG-PANEL.md) also checks folder browsing and helper
+manager, the [Diagnostics page](DEBUG-PANEL.md) also checks folder browsing and helper
 versions and exports API request metadata; use this terminal report when the manager
 is unavailable or host setup needs checking.
 
@@ -20,9 +20,9 @@ the checker detects the ordinary account used for WinSCP. A leading `sudo` is
 also supported: the checker uses `SUDO_USER`, or an explicit `--owner archtop`.
 You can also select **5. Check running installation** in the installer menu.
 
-Before this final check, complete **VM connection → Save and test connection**,
-verify its saved host fingerprint, and connect the intended registered checkout
-under the **Git repository** tab. You can run the report earlier for diagnostics;
+Before this final check, complete **Manager ▾ › VM connection… → Save and test
+connection**, verify its saved host fingerprint, and connect the intended registered
+checkout under the lab's **Progress › Save location**. You can run the report earlier for diagnostics;
 missing setup will be reported instead of assumed successful. The full install
 still performs its shorter container/version/HTTP check before browser setup.
 
@@ -157,8 +157,8 @@ sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh" --enable-operati
 
 This reinstalls the gateway, operations helper and sudoers, verifies them through
 the restricted account, refreshes the capture and Grafana stacks and recreates the
-manager container so the running image matches. Then reconnect in **VM connection**
-and reopen the folder. The Debug panel labels this a gateway/enablement problem
+manager container so the running image matches. Then reconnect in **Manager ▾ › VM
+connection…** and reopen the folder. The Diagnostics page labels this a gateway/enablement problem
 (`did not run the operations gateway`) rather than an authentication failure, and
 the report gives the same gateway-specific next step. If the local "Operations
 helper through restricted account" check itself fails, refresh only the operations
@@ -236,9 +236,10 @@ Even when automated checks pass, verify these actions yourself:
    destination. Configuration checks do not prove a real password login.
 3. Test an intended device login and capture/download its configuration. A
    running Docker container or `/dev/kvm` device does not prove NOS readiness.
-4. Open **Grafana ↗** from a deployed lab and confirm the dashboards and the lab map
-   follow traffic; start a browser capture and confirm packets arrive in Wireshark.
-5. Use **Save progress** deliberately, wait for **Pushed**, and inspect the
+4. Open the network dashboard (**Tools › Telemetry › Open lab map ↗**) from a deployed
+   lab and confirm the dashboards and the lab map follow traffic; start a capture
+   (**Capture traffic…**) and confirm packets arrive in Wireshark.
+5. Use **Save progress** deliberately, wait for **Saved to Git**, and inspect the
    expected remote files. A public remote can be readable anonymously;
    `ls-remote` does not prove GitHub write permission or branch-rule acceptance.
 
