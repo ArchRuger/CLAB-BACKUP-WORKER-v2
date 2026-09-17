@@ -937,6 +937,7 @@ footer {
 }
 .blank-state h2 { font-size: 18px; margin-bottom: 6px; }
 .blank-state p { font-size: 13px; margin: 0; }
+.blank-state .actions { justify-content: center; padding: 14px 0 0; }
 
 /* legacy landing panel (section#empty) */
 .empty-panel { position: relative; overflow: hidden; padding: 56px 24px; }
@@ -1127,7 +1128,7 @@ footer {
 .card > p:first-of-type, .panel > p:first-of-type { margin-top: 0; }
 .card .caption, .panel .caption { margin-top: 4px; }
 
-.tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+.tool-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; align-items: start; }
 .tool-card {
   display: flex;
   flex-direction: column;
@@ -1185,6 +1186,7 @@ dl.kv, .kv {
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
 .kv .mono, .kv code { font-size: 12px; }
+.panel > .kv { margin-top: 12px; }
 
 .health-grid {
   display: grid;
@@ -1268,7 +1270,8 @@ fieldset { min-width: 0; }
 
 .schedule-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .schedule-form input { width: 80px; }
-.schedule-form small { font-size: 12px; color: var(--muted); }
+.schedule-form label { flex-basis: 100%; }
+.schedule-form small { flex-basis: 100%; font-size: 12px; color: var(--muted); }
 
 .log-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin: 12px 0; }
 .log-filters label { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ink); }
@@ -1356,9 +1359,15 @@ tr:last-child td { border-bottom: 0; }
 
 .device-rail { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .device-rail h2, .device-rail h3, .device-rail .card-title { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
-.device-rail .device-row { grid-template-columns: minmax(96px, 1fr) minmax(0, 1.4fr); padding: 10px 12px; gap: 8px 12px; }
-.device-rail .device-row .node-name { overflow-wrap: anywhere; word-break: normal; }
-.device-rail .device-row .node-actions { grid-column: 1 / -1; justify-content: flex-start; min-width: 0; }
+/* rail cards are narrow: the name and the state pill share the first line and the network OS badge gets a
+   line of its own, so a long platform label (Junos (vJunos-switch)) never runs under the pill */
+.device-rail .device-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name state" "platform platform" "reason reason" "actions actions"; padding: 10px 12px; gap: 0 10px; }
+.device-rail .device-row > div:not(.node-actions) { display: contents; }
+.device-rail .device-row .node-name { grid-area: name; justify-self: start; overflow-wrap: anywhere; word-break: normal; }
+.device-rail .device-row .pill { grid-area: state; justify-self: end; margin: 0; }
+.device-rail .device-row .platform { grid-area: platform; justify-self: start; margin: 4px 0 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.device-rail .device-row .row-reason { grid-area: reason; margin: 4px 0 0; }
+.device-rail .device-row .node-actions { grid-area: actions; justify-content: flex-start; min-width: 0; margin-top: 10px; }
 .device-rail .empty-state { padding: 24px 16px; }
 .device-rail .caption { margin-top: 8px; }
 
@@ -1408,6 +1417,8 @@ tr:last-child td { border-bottom: 0; }
 .job-title { flex: 1; min-width: 0; }
 .job-title strong { font-size: 13px; display: block; color: var(--ink); }
 .job-title small { display: block; font: 12px var(--mono); color: var(--muted); margin-top: 4px; }
+/* the date and the device count never break inside; a narrow card wraps at the separator */
+.job-title small > span { white-space: nowrap; }
 .job-body { border-top: 1px solid var(--line); padding: 16px 18px; }
 .job-body > p { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
 .job-result {
@@ -1650,7 +1661,7 @@ dialog.drawer, dialog.node-details {
 
 .map-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .map-tools span { font-size: 12px; color: var(--muted); }
-.map-tools button, .map-tools .button, .map-tools .menu > summary {
+.map-tools button:not(.menu-list *), .map-tools .button:not(.menu-list *), .map-tools .menu > summary {
   min-height: 30px;
   padding: 4px 10px;
   border: 1px solid var(--line-strong);
@@ -1662,7 +1673,7 @@ dialog.drawer, dialog.node-details {
   white-space: nowrap;
   box-shadow: 0 1px 2px rgba(23, 36, 48, .06);
 }
-.map-tools button:hover:not(:disabled), .map-tools .button:hover:not(:disabled), .map-tools .menu > summary:hover { background: var(--surface-2); }
+.map-tools button:not(.menu-list *):hover:not(:disabled), .map-tools .button:not(.menu-list *):hover:not(:disabled), .map-tools .menu > summary:hover { background: var(--surface-2); }
 .map-tools .button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .map-tools .button.primary:hover:not(:disabled) { background: var(--accent-strong); }
 .map-tools #map-edit { margin-left: auto; }
@@ -1740,9 +1751,11 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
   box-shadow: 0 0 0 100vmax var(--backdrop), var(--shadow-dialog);
   overflow: hidden;
 }
-.map-expanded .topology-layout, .map-expanded .topology-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* the layout grid and its map column become flex columns; align-items must stretch (the grid rule says
+   start) or the stage shrinks to the width of its toolbar */
+.map-expanded .topology-layout, .map-expanded .topology-layout > div:first-child { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; align-items: stretch; }
 .map-expanded .topology-stage { flex: 1; height: auto; min-height: 0; }
-.map-expanded #topology-map { flex: 1; min-height: 100px; height: auto; }
+.map-expanded #topology-map { min-height: 100px; height: 100%; }
 .map-expanded .device-rail { display: none; }
 .map-expanded .section-heading { margin-bottom: 8px; }
 
@@ -2162,6 +2175,7 @@ details.git-saved-job > :last-child { padding-bottom: 12px; }
 .capture-controls { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; }
 .capture-controls label { flex: 1; margin: 0; }
 .capture-interfaces { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 8px; max-height: 240px; overflow: auto; }
+.capture-interfaces > p { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--muted); }
 .capture-interface { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; margin: 0; min-height: 34px; font-size: 13px; font-weight: 400; }
 .capture-interface input { width: auto; }
 .capture-more, .capture-advanced { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 10px 14px; }

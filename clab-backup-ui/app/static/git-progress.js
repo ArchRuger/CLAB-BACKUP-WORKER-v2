@@ -128,7 +128,9 @@ async function gitShowRepository(force=false){
   gitRenderRepository(id,context,catalog,{history,tree});renderGitProgress();
  }catch(error){
   if(request!==gitViewRequest)return;
-  container.innerHTML=`<div class="blank-state"><h3>Saved progress could not be loaded.</h3><p class="form-help">Check the VM connection (Manager ▾ › VM connection…), then try again.</p><div class="actions"><button type="button" class="button secondary" data-git-repo-action="refresh">Try again</button></div><details><summary>Details</summary><p class="form-error" role="alert">${esc(error.message)}</p></details></div>`;
+  // api() rejects with the manager's sentence (a 409 says what to do); a network failure is a TypeError
+  const reason=error instanceof TypeError?'':(error&&error.message||'');
+  container.innerHTML=`<div class="blank-state"><h3>Saved progress could not be loaded.</h3><p class="form-help">${esc(reason||'Check the VM connection (Manager ▾ › VM connection…), then try again.')}</p><div class="actions"><button type="button" class="button secondary" data-git-repo-action="refresh">Try again</button></div>${reason?'':`<details><summary>Details</summary><p class="form-error" role="alert">${esc(error&&error.message||'')}</p></details>`}</div>`;
   for(const button of container.querySelectorAll('[data-git-repo-action]'))button.onclick=()=>gitRunAction(button.dataset.gitRepoAction,id);
  }
 }

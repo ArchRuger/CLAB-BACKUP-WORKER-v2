@@ -1,3 +1,30 @@
+# Student UI screenshot pass and layout fixes — 1.29.1
+
+**Released as 1.29.1** directly on `main` (the user asked for a patch push, no feature branch).
+Eight layout defects found by screenshotting every student page on the live dev VM
+`clab-llm-dev2` (`docs/redesign/PICKUP.md` §7 lists them with their root causes,
+`clab-backup-ui/VALIDATION.md` has the evidence); frontend only (`style.css`, `app.js`
+`jobMarkup`, `operations.js` *Open all CLIs*, `git-progress.js` error state), backend and
+helpers untouched apart from the lockstep version. Facts to preserve: `.map-expanded` needs
+`align-items: stretch` on `.topology-layout` and on its first child (the map column has no class
+of its own and the grid rule says `start`); the rail `.device-row` is a named-area grid
+(`name state / platform platform / reason reason / actions actions`) with its wrapper divs at
+`display: contents`, so a new child of `deviceRow()` needs a grid area; the `.map-tools` button
+rule keeps `:not(.menu-list *)`; `.tool-grid` is `auto-fit` (an empty track collapses); the backup
+summary's `<small>` wraps its date and its count in spans so a narrow card breaks at the
+separator only; the Progress error card leads with `error.message` unless the error is a
+`TypeError` (network). Tooling for a repeat pass: the sweep script lives outside the repository
+(`~/ui-review/student_shots.py` on the VM: Playwright over the live manager, one screenshot per
+student state at several viewports, a probe for right-edge overflow and clipped text,
+console/page errors collected); `verify_after.py` against the fixture manager stays the
+regression gate (93 checks × 3 viewports, 0 console / 0 page errors) and its 1440×900 shots are
+the tour images (timestamps differ per run, so replace only the images whose layout changed).
+Known non-defects: the capture setup page's `pre` scrolls (headless hides the bar); a full-page
+screenshot draws the sticky top bar mid-page; the `sr-only` label is reported as clipped.
+Upgrading an installed VM needs the helper refresh (`start-manager.sh`, or `setup-git.sh
+--refresh` for the Git helper alone), otherwise `/api/git/repositories` answers 409 and the
+Progress tab shows its error state.
+
 # Student-centred UI redesign, live-validated, plus the Git helper and Saved versions fixes — 1.29.0
 
 **Released as 1.29.0** from `claude/1.29-release-validation` (the redesign merged as PR #35, then the

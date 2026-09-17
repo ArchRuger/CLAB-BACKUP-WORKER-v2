@@ -4,6 +4,35 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.29.1
+
+A patch release of the student UI after a screenshot pass over every student page on a live
+lab at 1440×900, 1280×720, 1920×1080 and in an 800 px window. Frontend only: the backend, the
+VM helpers and every API route are unchanged apart from the lockstep version. Upgrading an
+installed VM: run the launcher as usual; a container rebuild alone leaves the helpers at the
+previous version and the manager answers 409 until they are refreshed (`setup-git.sh --refresh`
+for the Git helper alone).
+
+- **Fixed (Topology):** in the device rail a long network OS badge (*Junos (vJunos-switch)*)
+  ran under the state pill. A rail card shows the name and the pill on the first line, the
+  badge on its own line, then the reason and *Open CLI*.
+- **Fixed (Topology):** *Expand* opened an overlay in which the map filled only the top-left
+  corner. The map fills the overlay.
+- **Fixed (Topology):** the map toolbar's *More ▾* items were drawn as boxed toolbar buttons;
+  they are plain menu entries again.
+- **Fixed (Tools):** the three cards share the row instead of leaving an empty fourth column,
+  the backup schedule's label and hint sit on their own lines, and a backup's date and device
+  count no longer break in the middle of a phrase in a narrow card.
+- **Fixed (Capture traffic):** the "Choose a device above…" sentence sat in one narrow cell of
+  the interface grid; it spans the whole box.
+- **Fixed (All lab operations):** *Open all CLIs ↗* kept its arrow on a second line.
+- **Fixed (Progress):** when saved progress cannot be loaded, *Try again* is centred with its
+  text and the manager's own explanation leads (for example the helper-version sentence of a
+  409) instead of always saying to check the VM connection.
+- **Advanced:** key/value lists keep a gap from the heading or caption above them.
+- The tour images in `docs/images/ui/` that show the rail, the Tools cards, the capture dialog
+  and the Advanced lists were regenerated from the fixture manager.
+
 ## Changes in 1.29.0
 
 The browser UI was redesigned around what a networking student does with a lab. The

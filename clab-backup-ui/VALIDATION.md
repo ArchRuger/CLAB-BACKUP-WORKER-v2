@@ -1,3 +1,87 @@
+# Student UI screenshot pass and layout fixes — 1.29.1
+
+Prepared on `main` from `8c9f306` (1.29.0) on 2026-09-17 on the dev VM `clab-llm-dev2` (the
+1.29.0 installation; lab `clab-llm-dev2` running with PTX1 cJunosEvolved and SW1 vJunos-switch
+both ready). Frontend-only patch: the backend, the helpers and the routes are unchanged apart from
+the lockstep version. Release decision: **PASS — 1.29.1**.
+
+## What was run
+
+- Screenshot sweep of every student page and dialog against the live manager
+  (`http://127.0.0.1:8081`, Playwright Chromium, a script kept outside the repository): My labs
+  and the Manager menu; Topology with the context menu, the expanded map, the More menu and the
+  device panel (opened from the map and from the list, with Advanced unfolded); Devices and
+  Technical view; Progress with the saved version, compare, restore review, restore job, save
+  window, checkpoint, Save progress menu and save-location browser; Tools with the capture and
+  telemetry dialogs; Advanced; Lab actions, the destroy review, All lab operations and Operation
+  history; the CLI launcher, the deploy page with the topology browser, the terminal (a live SSH
+  session to PTX1), Diagnostics, the capture setup and VM connection guides. 42 screenshots per
+  viewport at 1440×900, 1280×720 and 1920×1080 before and after the fixes, Topology and Tools
+  again at 1366×768; every run **0 console errors, 0 page errors**. A layout probe before each
+  screenshot listed elements past the right edge of the viewport and text boxes clipped without an
+  ellipsis; after the fixes only the `sr-only` "Include in backups" label and the scrollable `pre`
+  of the capture setup page remain, both by design. The desktop app's browser pane confirmed the
+  expanded-map defect and its fix at 800 px.
+- `node --test tests/*.js`: 134 tests, all pass after every change; `node --check` on the changed
+  scripts; `git diff --check` clean; `python3 deploy/verify-release.py` passes (1.29.1,
+  documentation names only 1.29.1).
+- Browser validation with `docs/redesign/tools/verify_after.py` against
+  `docs/redesign/tools/fixture_manager.py` at 1920×1080, 1440×900 and 1366×768 with the final
+  files: **93/93 checks at each viewport, 0 console errors, 0 page errors**; the one handled
+  non-2xx is the optional `.annotations.json` read. The eight tour images that show the rail, the
+  Tools cards, the capture dialog and the Advanced lists were replaced with this run's 1440×900
+  screenshots.
+- On the dev VM with the 1.29.1 tree: `python3 deploy/verify-release.py` (1.29.1), `bash -n` on
+  every `deploy/*.sh`, `node --check` on every `app/static/*.js`, `node --test tests/*.js`
+  134/134, Python `unittest discover -s tests -t tests` 693 tests OK (one skipped: the opt-in SSH
+  fixture). The documented upgrade path, `sudo bash deploy/start-manager.sh --enable-operations
+  --lab-root /etc/containerlab` on the existing 1.29.0 installation, built `clab-backup:1.29.1`,
+  recreated the manager and the capture session service at 1.29.1 and refreshed the helpers;
+  afterwards `/api/state` reports 1.29.1, the Git helper answers 1.29.1 and
+  `/api/git/repositories` 200, with the persisted labs, bindings and saves intact. The screenshot
+  sweep ran once more against the upgraded manager: 42 states at 1440×900, 0 console errors,
+  0 page errors, only the two by-design layout notes, `?v=1.29.1` on the served assets.
+  `bash deploy/check-install.sh --require-git`: 67 PASS, 0 FAIL, 4 WARN (1.2 GiB free on the
+  36 GB VM disk once the superseded 1.28.0 images were removed, folder coverage stopped at the
+  default 20 folders, and PTX1's telemetry subscription rejected by this cJunosEvolved image;
+  telemetry is not gated).
+
+## Defects found and fixed
+
+1. **Topology rail:** the rail row's grid gave the name column `minmax(96px, 1fr)` and the
+   network OS badge is `white-space: nowrap`, so *Junos (vJunos-switch)* overflowed under the
+   *Ready* pill. The rail row is a named-area grid (name and pill, badge, reason, actions) with the
+   wrapper divs at `display: contents`.
+2. **Expanded map:** `.map-expanded` turned `.topology-layout` into a flex column but the grid
+   rule's `align-items: start` stayed, and the sizing rules targeted a `.topology-body` element the
+   markup no longer has, so the map column shrank to the width of its toolbar (about 520 px) at
+   every viewport, in headless Chromium and in the desktop browser pane alike. The layout and its
+   first child stretch, the stage flexes and the SVG takes the stage height.
+3. **Map More menu:** `.map-tools button` matched the items of the `.menu-list` it contains, which
+   drew them as boxed toolbar buttons. The rule excludes menu items.
+4. **Tools:** `repeat(auto-fill, minmax(320px, 1fr))` kept an empty fourth track at 1440 px, so the
+   cards were 320 px wide, the schedule form wrapped mid-sentence and every backup title wrapped.
+   `auto-fit` with a 400 px minimum, the schedule label and hint on their own lines, and the backup
+   summary's date and count in `nowrap` spans (`jobMarkup`) so a narrow card breaks at the
+   separator only.
+5. **Capture dialog:** the "Choose a device above…" paragraph was a child of the 145 px interface
+   grid and took one cell; it spans every column.
+6. **All lab operations:** the grid buttons are column flexboxes, so the `↗` span of *Open all CLIs*
+   became a second row; the label and the arrow share one span (`operations.js`).
+7. **Progress error card:** `.blank-state .actions` was left-aligned under centred text, and the
+   copy always said to check the VM connection while the manager's answer (a 409 asking for the
+   helper refresh) said what to do. The button is centred and the manager's sentence leads unless
+   the failure is a network `TypeError` (`git-progress.js`).
+8. **Advanced:** `dl.kv` followed its heading or caption with no gap; `.panel > .kv` gets 12 px.
+
+Observed, not changed: the capture setup page's long commands sit in a `pre` with
+`overflow: auto` (the screenshot probe reports the `code` past the viewport because headless
+Chromium hides the scrollbar); a full-page screenshot draws the sticky top bar at the scroll
+position, which is a capture artifact. Environment note: after the VM checkout moved from the
+release branch to `main`, `/api/git/repositories` answered 409 ("Update the VM Git helper…") until
+`sudo bash deploy/setup-git.sh --refresh` ran; the Progress tab showed its error state meanwhile,
+which is how defect 7 was found.
+
 # Student-centred UI redesign, live-lab release validation and two fixes — 1.29.0
 
 Prepared on `claude/1.29-release-validation` from `main` `66864c8` (PR #35, the merged redesign) on

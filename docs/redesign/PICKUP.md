@@ -120,6 +120,52 @@ every dialog, screenshot at 1920×1080 / 1440×900 / 1366×768, and assert
 
 _(newest entry first)_
 
+### 2026-09-17 (later still) — student-page screenshot pass on the live dev VM; eight layout fixes, released as 1.29.1
+
+Systematic screenshot sweep of every student page and dialog (My labs and the Manager menu; Topology
+with the context menu, the expanded map, the More menu and the device panel; Devices and Technical
+view; Progress with every dialog; Tools with the capture and telemetry dialogs; Advanced; Lab
+actions, the destroy review, All lab operations and Operation history; the CLI launcher, deploy page,
+terminal, Diagnostics and both guides) against the live manager on `clab-llm-dev2` at 1440×900,
+1280×720 and 1920×1080 (`~/ui-review/student_shots.py` on the VM: Playwright, one screenshot per
+state, a layout probe for right-edge overflow and clipped text, console and page errors collected),
+plus the desktop app's browser pane at 800 px. Fixed, in `style.css` unless noted:
+
+- Topology device rail: a long network OS badge (`Junos (vJunos-switch)`) ran under the state pill.
+  The rail row is a named grid now — name and pill on the first line, the badge on its own line, the
+  reason and the actions below.
+- Expanded map filled only the top-left corner of its overlay: the grid rule's `align-items: start`
+  carried into the flex column and the rule targeted a `.topology-body` element the markup no longer
+  has. The map column stretches and the SVG takes the stage height.
+- The map toolbar's More ▾ items were drawn as boxed toolbar buttons (`.map-tools button` leaked into
+  `.menu-list`); the rule excludes menu items.
+- Tools: the cards use `auto-fit` with a 400 px minimum, so three cards share the row instead of
+  leaving an empty fourth column; the schedule label and its hint have their own lines; the backup
+  summary's date and device count no longer break mid-phrase (`app.js` `jobMarkup` wraps each in a
+  span).
+- Capture dialog: the "Choose a device above…" sentence spans the interface grid instead of one
+  145 px cell.
+- All lab operations: "Open all CLIs ↗" keeps the arrow on the label's line (`operations.js`; the
+  grid buttons are column flexboxes).
+- Progress error state ("Saved progress could not be loaded"): the Try again button is centred with
+  its text, and the manager's own sentence leads (`git-progress.js`; a 409 helper-version answer said
+  what to do while the copy told the student to check the VM connection).
+- Advanced: key/value lists keep a 12 px gap from the heading or caption above them.
+
+Not a defect: the capture setup page's long commands sit in a scrollable `pre` (headless Chromium
+hides the scrollbar in screenshots). Environment finding: after the checkout moved to `main` the VM
+Git helper had to be refreshed (`sudo bash deploy/setup-git.sh --refresh`); until then
+`/api/git/repositories` answered 409 and the Progress tab showed its error state.
+
+Validation: `node --test tests/*.js` 134/134; `node --check` on the changed scripts; live sweep of
+42 screenshots per viewport with 0 console errors, 0 page errors and no layout flags beyond the
+`sr-only` label and the scrollable `pre`; `verify_after.py` against the fixture manager 93/93 at
+1920×1080, 1440×900 and 1366×768 with 0 console / 0 page errors. The tour images in
+`docs/images/ui/` that show the rail, the Tools cards, the capture dialog and the Advanced lists were
+regenerated from that fixture run. No backend, helper or route changed. Released as 1.29.1 directly
+on `main`: `set-release.py`, the three history sections, `verify-release.py`, the Python suite and
+`bash -n` on the VM, a container rebuild at 1.29.1 with the helpers refreshed.
+
 ### 2026-09-17 (later) — live-lab pass done on `clab-llm-dev2`, two fixes, released as 1.29.0
 
 The host became the dev VM (quick-install: Docker 29.8.1, containerlab 0.79.0, both stacks, Git

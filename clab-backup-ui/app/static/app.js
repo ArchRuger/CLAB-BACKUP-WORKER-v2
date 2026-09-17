@@ -82,7 +82,7 @@ function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.29.0';$('app-version').textContent='v'+version;
+ const version=state.version||'1.29.1';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
@@ -210,7 +210,7 @@ function jobMarkup(j,opened){
  const finished=!['queued','running'].includes(j.status);
  const available=j.operation==='backup'&&finished&&j.nodes.some(n=>n.status==='succeeded'&&n.download_name);
  return `<details class="job" data-job="${esc(j.id)}" ${opened.has(j.id)?'open':''}>
- <summary><div class="job-title"><strong>${j.operation==='test'?'Login check'+(j.source==='automatic'?' (automatic)':''):'Configuration backup'}</strong><small>${esc(utcDisplay(j.started||j.created))} · ${j.nodes.length} devices</small></div>${badge(j.status)}</summary>
+ <summary><div class="job-title"><strong>${j.operation==='test'?'Login check'+(j.source==='automatic'?' (automatic)':''):'Configuration backup'}</strong><small><span>${esc(utcDisplay(j.started||j.created))}</span> <span>· ${j.nodes.length} devices</span></small></div>${badge(j.status)}</summary>
  <div class="job-body"><p>${esc(j.message)}</p><button class="button secondary" data-logs="${esc(j.id)}">View action logs</button>
  ${j.nodes.map((n,index)=>`<div class="job-result"><strong>${esc(n.short_name||n.name)}</strong>${badge(n.status)}
  ${n.message?`<p>${esc(n.message)}</p>`:''}
