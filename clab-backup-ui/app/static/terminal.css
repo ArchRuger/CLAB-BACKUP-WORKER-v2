@@ -53,6 +53,8 @@ header {
 .brand-label { font-size: 12px; letter-spacing: .08em; color: var(--rail-muted); }
 /* status and endpoint are plain muted text, not cyan mono emphasis */
 #endpoint { font: 12px var(--mono); color: var(--rail-muted); overflow-wrap: anywhere; }
+.terminal-back { display: block; margin-top: 2px; font-size: 12px; color: var(--rail-muted); text-decoration: none; }
+.terminal-back:hover { color: var(--rail-text); text-decoration: underline; }
 
 .session-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 #status { font-size: 12px; color: var(--rail-muted); margin-right: 8px; }
@@ -78,6 +80,9 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
 #disconnect:hover:not(:disabled) { background: rgba(179, 38, 30, .28); }
 
 .notice { padding: 0 24px; color: var(--rail-muted); font-size: 12px; line-height: 1.5; }
+.terminal-details { display: inline; }
+.terminal-details summary { display: inline; cursor: pointer; color: var(--rail-text); text-decoration: underline; }
+.terminal-details[open] summary { margin-right: 4px; }
 
 #terminal { flex: 1; min-height: 0; margin: 12px 24px 20px; overflow: hidden; }
 

@@ -2457,3 +2457,49 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .sidebar .lab-item { width: auto; min-width: 170px; max-width: 260px; margin: 0; }
   .side-button { margin: 10px 0 0; width: 100%; }
 }
+
+/* --------------------------------------------------------------------------
+   Progress tab (stage 3b): saved versions, recent saves, save location
+   -------------------------------------------------------------------------- */
+.git-versions-head { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.git-version-group { margin: 12px 0 0; }
+.git-version-group h3, .git-version-group > summary { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+.git-version-group > summary { cursor: pointer; }
+.git-version-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.git-version-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.git-version-row .git-version-name { min-width: 0; overflow-wrap: anywhere; }
+.git-version-row .git-version-name small { display: block; margin-top: 2px; }
+.git-version-row .actions { justify-content: flex-end; flex-wrap: wrap; }
+.git-versions-empty { margin: 0; color: var(--muted); }
+.git-saved-job { border: 1px solid var(--line); border-radius: var(--radius); padding: 0 12px; margin: 0 0 8px; background: var(--surface); }
+.git-saved-job > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; cursor: pointer; }
+.git-saved-job dl.kv { margin: 8px 0; }
+.git-saved-job .actions { padding: 0 0 10px; }
+.git-progress-bar .banner { flex-basis: 100%; width: 100%; grid-column: 1 / -1; margin: 12px 0 0; }
+.git-change-folder > summary { font-weight: 600; cursor: pointer; padding: 8px 0; }
+.git-first-folder { display: flex; gap: 8px; align-items: center; }
+.git-first-folder input { flex: 1; min-width: 0; }
+.git-places-caption { margin: 4px 0 8px; }
+.git-location-tech { margin: 8px 0; }
+.git-places-foot details { display: inline-block; margin-left: 8px; }
+.git-places-foot details p { margin: 4px 0 0; }
+@media (max-width: 900px) {
+  .git-version-row { grid-template-columns: 1fr; }
+  .git-version-row .actions { justify-content: flex-start; }
+}
+
+/* ---- stage 3C: All lab operations dialog sections, review confirmations, CLI launcher rows, pages ---- */
+.op-sections { display: grid; gap: 18px; }
+.op-sections section h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.op-sections .form-help { margin: 8px 0 0; }
+.op-danger { border-top: 1px solid var(--line); padding-top: 14px; }
+.op-danger h3 { color: var(--danger-strong); }
+.op-save-line { margin: 4px 0; font-weight: 600; color: var(--ink); }
+.op-save-line.danger { color: var(--danger-strong); }
+.op-banner small { display: block; font-size: 12px; opacity: .85; }
+.op-banner small.op-exit-bad { font-weight: 600; }
+.op-session-row .pill { margin-right: 4px; }
+.op-session-row .caption { flex: 1 1 260px; }
+.workspace-links { margin: 24px 0 0; color: var(--muted); font-size: 13px; }
+#grafana-headline { font-size: 17px; font-weight: 600; color: var(--ink); margin: 0 0 4px; }
+.debug-page details summary { cursor: pointer; }

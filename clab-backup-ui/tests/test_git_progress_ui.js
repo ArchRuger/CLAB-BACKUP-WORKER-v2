@@ -7,7 +7,7 @@ function makeContext(){
   utcDisplay:value=>new Date(value).toISOString(),
   crypto:{getRandomValues:bytes=>bytes.fill(++sequence)},
   sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
-  refresh:async()=>{},clearTimeout:()=>{},setTimeout:()=>0});
+  refresh:async()=>{},notify(){},clearTimeout:()=>{},setTimeout:()=>0});
  vm.runInContext(source,context);return context;
 }
 test('Git progress scope is exact, complete and independent of scheduled backup selection',()=>{
@@ -81,7 +81,7 @@ test('one-click save captures fresh configurations and delegates review preferen
  context.gitLoadContext=async()=>({binding:{node_names:['r1'],review_before_push:true}});
  context.gitSubmitSave=async(id,request)=>calls.push({id,request});
  await context.gitSaveProgress();assert.equal(calls.length,1);assert.equal(calls[0].id,'lab');assert.equal(calls[0].request.target,'latest');assert.equal(calls[0].request.push,true);assert.equal(calls[0].request.node_names,undefined);
- let opened=0;context.gitLoadContext=async()=>({binding:null});context.gitOpenRepository=()=>opened++;await context.gitSaveProgress();assert.equal(opened,1);assert.equal(calls.length,1);
+ let opened=0;context.gitLoadContext=async()=>({binding:null});context.gitFirstSave=async()=>{opened++;};await context.gitSaveProgress();assert.equal(opened,1,'an unbound lab goes to the first-save flow');assert.equal(calls.length,1,'and nothing is saved yet');
 });
 test('an uncertain save response retries with the same persistent request ID',async()=>{
  const context=makeContext(),calls=[];let fail=true;
@@ -119,9 +119,30 @@ test('save options close their own modal and one job poll continues after the ou
  context.json=async()=>job;
  context.api=async endpoint=>{assert.equal(endpoint,'/git/jobs/save-job');polls++;return {json:async()=>({...job,status:stage})};};
  await context.gitSaveOptions('local','lab');await elements.get('git-save-confirm').onclick();
- assert.equal(dialogs.get('git-save-options').open,false);assert.equal(dialogs.get('git-job-dialog').open,true);assert.equal(timers.size,1);
+ assert.equal(dialogs.get('git-save-options').open,false);assert.equal(dialogs.get('git-job-dialog'),undefined,'a plain save is quiet: no job window opens');assert.equal(timers.size,1,'the save is watched in the background');
+ await context.gitShowJob('save-job',job);assert.equal(dialogs.get('git-job-dialog').open,true);assert.equal(timers.size,1,'opening the window reuses the running watch');
  const tick=async()=>{const [id,fn]=timers.entries().next().value;timers.delete(id);await fn();};
  await tick();assert.equal(polls,1);assert.equal(timers.size,1);
  dialogs.get('git-job-dialog').close();stage='synced';await tick();
  assert.equal(polls,2);assert.equal(timers.size,0);assert.equal(dialogs.get('git-job-dialog').open,false);
+});
+test('save rows read as student sentences and the job window keeps the raw status under Details',()=>{
+ const context=makeContext();
+ assert.equal(context.gitSaveSentence({status:'synced',target:'latest'}),'Progress saved to Git');
+ assert.equal(context.gitSaveSentence({status:'committed',target:'checkpoint',checkpoint:'ospf-done'}),"Checkpoint 'ospf-done' saved");
+ assert.equal(context.gitSaveSentence({status:'push_pending',target:'latest'}),'Saved on this VM — upload needs attention');
+ assert.equal(context.gitSaveSentence({status:'dismissed',target:'update'}),'Repository updated');
+ assert.equal(context.gitSaveSentence({status:'exporting',target:'move',snapshot_path:'labs/x/latest'}),'Moving saved files…');
+ assert.equal(context.gitSaveSentence({status:'synced',target:'move',snapshot_path:'labs/x/latest'}),'Moved to folder labs/x');
+ assert.equal(context.gitSavedAs({target:'baseline'}),'Baseline');assert.equal(context.gitSavePill({status:'capturing'}),'busy');assert.equal(context.gitSavePill({status:'failed'}),'danger');
+ const markup=context.gitJobMarkup({id:'j',status:'push_pending',message:'push failed',target:'latest',commit:'abc',created:'2026-09-11T12:00:00Z'});
+ assert.match(markup,/Saved on this VM — upload needs attention/);assert.match(markup,/<details><summary>Details<\/summary>/);assert.match(markup,/push pending/);
+ assert.match(context.gitJobMarkup(null),/No saves yet/);
+});
+test('the disabled reason of Save progress is visible text and an unbound lab keeps the button enabled',()=>{
+ const context=makeContext();
+ assert.equal(context.gitSaveReason(null,null),'');
+ assert.equal(context.gitSaveReason({binding_id:'b'},{id:'active'}),'Saving… wait for the current save to finish');
+ context.busy=()=>true;assert.match(context.gitSaveReason({binding_id:'b'},null),/backup or lab operation is running/);
+ context.busy=()=>false;assert.equal(context.gitSaveReason({binding_id:'b'},null),'');
 });

@@ -202,11 +202,120 @@ def empty_map(r):
     r.check('banner: Dismiss hides the failed operation', r.js('() => document.getElementById("lab-state").textContent') == 'Stopped')
 
 
+def progress(r):
+    p = r.page
+    p.click('#crumb-home')
+    p.wait_for_selector('#home:not([hidden])')
+    r.open_lab(SHOWCASE)
+    r.tab('progress')
+    p.wait_for_selector('#git-save-location', timeout=15000)
+    p.wait_for_function('() => document.querySelectorAll("#git-saved-versions .git-version-row").length > 0', timeout=15000)
+    info = r.js('''() => ({destination: document.getElementById('git-destination').textContent, status: document.getElementById('git-progress-status').textContent,
+      save: {text: document.getElementById('git-save-progress').textContent, disabled: document.getElementById('git-save-progress').disabled},
+      progressSave: {text: document.getElementById('progress-save').textContent, disabled: document.getElementById('progress-save').disabled, reasonHidden: document.getElementById('progress-save-reason').hidden},
+      groups: [...document.querySelectorAll('#git-saved-versions h3, #git-saved-versions summary')].map(h => h.textContent),
+      apply: document.querySelectorAll('#git-saved-versions [data-git-version-action="apply"]').length,
+      compare: document.querySelectorAll('#git-saved-versions [data-git-version-action="compare"]').length,
+      saves: [...document.querySelectorAll('#git-saves-list .git-saved-job > summary')].map(s => s.textContent.trim()),
+      locationHead: document.querySelector('#git-save-location h2')?.textContent, folderOpen: document.getElementById('git-change-folder')?.open,
+      advancedHidden: document.getElementById('git-repository-advanced').hidden, pushUrl: document.getElementById('git-advanced-push-url').textContent,
+      lastChange: document.getElementById('git-last-restore').hidden ? '' : document.getElementById('git-last-restore-text').textContent,
+      problemHidden: document.getElementById('git-problem').hidden, header: document.getElementById('lab-progress').textContent})''')
+    r.notes.append({'progress': info})
+    r.check('progress: destination in words', info['destination'].startswith('Saving to '), info['destination'])
+    r.check('progress: status is the student sentence', info['status'].startswith('Saved to Git'), info['status'])
+    r.check('progress: Save progress enabled on both buttons', info['save']['text'] == 'Save progress' and not info['save']['disabled'] and info['progressSave']['text'] == 'Save progress' and info['progressSave']['reasonHidden'], info)
+    r.check('progress: versions grouped for the student', all(any(g.startswith(k) for g in info['groups']) for k in ('Latest', 'Checkpoints', 'Baseline', 'Instructor and reference versions', 'Other labs in this repository')), info['groups'])
+    r.check('progress: other labs stay collapsed', r.js('() => { const d = [...document.querySelectorAll("#git-saved-versions details.git-version-group")]; return d.length === 1 && !d[0].open; }'))
+    r.check('progress: apply offered only where a restore artifact exists', info['apply'] >= 2, info['apply'])
+    r.check('progress: compare with my latest save on the other rows', info['compare'] >= 2, info['compare'])
+    r.check('progress: recent saves in student words', len(info['saves']) >= 2 and any('Progress saved to Git' in s for s in info['saves']), info['saves'])
+    r.check('progress: save location collapsed for a connected lab', info['locationHead'] == 'Save location' and info['folderOpen'] is False, info)
+    r.check('progress: advanced details filled', (not info['advancedHidden']) and 'Verified push destination' in info['pushUrl'], info['pushUrl'])
+    r.check('progress: last configuration change is one click away', info['lastChange'].startswith('Last configuration change'), info['lastChange'])
+    r.check('progress: header line agrees', info['header'].startswith('Saved to Git'), info['header'])
+    r.shot('30-progress', full=True)
+    # Saved version dialogs: View (Apply available), Compare, and the restore review
+    p.locator('#git-saved-versions [data-git-version-action="view"]').first.click()
+    p.wait_for_selector('#git-version-dialog[open]')
+    r.check('version dialog: Saved version with Apply, Compare and Download', r.js('() => document.querySelector("#git-version-dialog h2").textContent === "Saved version" && !!document.getElementById("git-version-restore") && document.getElementById("git-version-compare").textContent === "Compare with my latest save" && document.getElementById("git-version-download").textContent === "Download (ZIP)"'))
+    r.shot('34-saved-version')
+    p.click('#git-version-dialog [data-op-close]')
+    p.locator('#git-saved-versions [data-git-version-action="compare"]').first.click()
+    p.wait_for_selector('#git-diff-dialog[open]')
+    r.check('compare dialog: named after the latest save, never the running devices', r.js('() => document.querySelector("#git-diff-dialog h2").textContent === "Compared with your latest save" && !/running configuration|compare with current/i.test(document.querySelector("#git-diff-dialog h2").textContent)'))
+    r.shot('35-compare')
+    p.click('#git-diff-dialog [data-op-close]')
+    p.locator('#git-saved-versions .git-version-group:has(h3:text-is("Instructor and reference versions")) [data-git-version-action="apply"]').first.click()
+    p.wait_for_selector('#restore-review-dialog[open]')
+    p.wait_for_function('() => !!document.getElementById("restore-run") || !!document.querySelector("#restore-review-dialog .form-error")?.textContent', timeout=30000)
+    review = r.js(r'''() => ({title: document.querySelector('#restore-review-dialog h2')?.textContent, legend: document.querySelector('#restore-review-dialog legend')?.textContent,
+       rows: [...document.querySelectorAll('#restore-review-dialog .restore-target')].map(l => l.textContent.trim().replace(/\s+/g, ' ').slice(0, 120)),
+       bullets: document.querySelectorAll('#restore-review-dialog .restore-safety li').length, ack: !!document.getElementById('restore-ack'), minutes: !!document.getElementById('restore-confirm-minutes'),
+       run: document.getElementById('restore-run')?.textContent, advanced: document.querySelector('#restore-review-dialog .restore-advanced summary')?.textContent, text: document.getElementById('restore-review-dialog').textContent})''')
+    r.check('restore review: title, Devices legend, three safety bullets, acknowledgement and undo minutes', review['title'] == 'Replace running configuration' and review['legend'] == 'Devices' and review['bullets'] == 3 and review['ack'] and review['minutes'] and review['run'] == 'Replace configurations' and review['advanced'] == 'Advanced options', review)
+    r.check('restore review: skipped devices explain why in student words', any('Skipped — The device did not answer over SSH.' in row for row in review['rows']), review['rows'][:3])
+    r.check('restore review: matching and differing devices are described', any('Already matches' in row for row in review['rows']) and any('differences from the running configuration' in row for row in review['rows']), review['rows'][:3])
+    r.check('restore review: no router wording', 'router' not in review['text'].lower(), '')
+    r.shot('36-restore-review')
+    p.click('#restore-review-dialog [data-op-close]')
+    # Last configuration change → the finished restore job
+    p.click('#git-last-restore-open')
+    p.wait_for_selector('#restore-job-dialog[open]')
+    r.check('restore job: result sentence and per-device outcomes', r.js('() => /Configuration replaced on \\d+ device/.test(document.getElementById("restore-job-detail").textContent) && document.querySelectorAll("#restore-job-dialog .restore-target-row").length >= 2'))
+    r.shot('37-restore-job')
+    p.click('#restore-job-dialog [data-op-close]')
+    # Recent saves row → Open → job window
+    p.locator('#git-saves-list .git-saved-job > summary').first.click()
+    p.locator('#git-saves-list [data-git-job-open]').first.click()
+    p.wait_for_selector('#git-job-dialog[open]')
+    try:
+        p.wait_for_function('() => ["Progress saved", "Save needs attention", "Repository update", "Save failed"].includes(document.querySelector("#git-job-dialog h2").textContent) && !!document.querySelector("#git-job-detail details")', timeout=15000)
+        r.check('save window: student title and Details with the raw status', True)
+    except Exception as exc:
+        r.check('save window: student title and Details with the raw status', False, repr(exc))
+    p.click('#git-job-dialog [data-op-close]')
+    # Create checkpoint dialog: sanitised name with live preview
+    p.click('#progress-view [data-git-action="checkpoint"]')
+    p.wait_for_selector('#git-save-options[open]')
+    p.fill('#git-checkpoint-name', 'ospf done!')
+    r.check('checkpoint dialog: name sanitised live', r.js('() => document.getElementById("git-checkpoint-name").value === "ospf-done" && document.getElementById("git-checkpoint-preview").textContent === "Saved as: ospf-done"'))
+    r.shot('38-checkpoint')
+    p.click('#git-save-cancel')
+    # Change folder… opens the browser inside the form
+    p.click('#git-change-folder > summary')
+    p.wait_for_selector('#git-places-panel .git-places-head', timeout=15000)
+    places = r.js('() => ({use: document.querySelector("[data-git-places-action=use]")?.textContent, crumbs: [...document.querySelectorAll(".git-crumbs button")].map(b => b.textContent), select: document.getElementById("git-binding-id")?.value, heading: document.querySelector("#git-change-folder h3")?.textContent})')
+    r.check('save location: folder browser with Save this lab here and the heading', places['use'] == 'Save this lab here' and places['heading'] == 'Folders in this repository', places)
+    r.shot('31-save-location', full=True)
+    # Save progress (quiet): the header carries the phases
+    p.click('#git-save-progress')
+    p.wait_for_function('() => document.getElementById("git-save-progress").textContent === "Saving…"', timeout=10000)
+    r.check('save: header button reads Saving…', True)
+    r.check('save: no job window for a plain save', r.js('() => !document.getElementById("git-job-dialog")?.open'))
+    p.wait_for_function('() => document.getElementById("git-save-progress").textContent === "Save progress"', timeout=60000)
+    r.check('save: finished and the status card agrees', r.js('() => document.getElementById("git-progress-status").textContent.startsWith("Saved to Git")'), r.js('() => document.getElementById("git-progress-status").textContent'))
+    # An unbound lab: the header button leads to the first-save dialog
+    p.click('#crumb-home')
+    p.wait_for_selector('#home:not([hidden])')
+    r.open_lab(EMPTY_MAP_LAB)
+    r.tab('progress')
+    p.wait_for_selector('#git-save-location', timeout=15000)
+    first = r.js('() => ({button: document.getElementById("git-save-progress").textContent, disabled: document.getElementById("git-save-progress").disabled, destination: document.getElementById("git-destination").textContent, head: document.querySelector("#git-save-location h2")?.textContent, folderOpen: document.getElementById("git-change-folder")?.open, versions: document.getElementById("git-saved-versions").textContent, menuHidden: document.getElementById("git-save-menu").hidden})')
+    r.check('unbound lab: Connect a save location… enabled, browser open, empty states', first['button'] == 'Connect a save location…' and not first['disabled'] and first['head'] == 'Choose a save location' and first['folderOpen'] is True and 'Choose a save location first' in first['versions'] and first['menuHidden'], first)
+    r.shot('39-progress-unbound', full=True)
+    p.click('#git-save-progress')
+    p.wait_for_selector('#git-first-save-dialog[open]', timeout=15000)
+    r.check('first save: dialog asks where to save with repository, folder, devices and consent', r.js('() => document.querySelector("#git-first-save-dialog h2").textContent.startsWith("Where should") && !!document.getElementById("git-first-repo") && !!document.getElementById("git-first-folder") && !!document.getElementById("git-first-ack") && document.getElementById("git-first-confirm").textContent === "Save progress"'))
+    r.shot('32-first-save')
+    p.click('#git-first-cancel')
+
+
 def run_viewport(browser, vw, vh):
     ctx = browser.new_context(viewport={'width': vw, 'height': vh}, device_scale_factor=1)
     page = ctx.new_page()
     r = Run(page, f'{vw}x{vh}')
-    for step in (home, topology, empty_map):
+    for step in (home, topology, empty_map, progress):
         try:
             step(r)
         except Exception as exc:  # keep going: the report shows every failure

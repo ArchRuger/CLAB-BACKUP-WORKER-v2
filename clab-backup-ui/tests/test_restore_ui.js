@@ -14,8 +14,9 @@ test('restore request id is 32 hex characters',()=>{
 });
 test('source labels describe git and backup origins',()=>{
  const c=ctx();
- assert.match(c.restoreSourceLabel({type:'git',commit:'abcdef0123456789',path:'latest'}),/Git version · abcdef0123/);
- assert.match(c.restoreSourceLabel({type:'backup',backup_job_id:'0123456789abcdef'}),/Saved capture · 0123456789/);
+ assert.match(c.restoreSourceLabel({type:'git',commit:'abcdef0123456789',path:'latest'}),/Saved version · abcdef0123/);
+ assert.match(c.restoreSourceLabel({type:'backup',backup_job_id:'0123456789abcdef'}),/Backup · 0123456789/);
+ assert.equal(c.restoreSourceLabel({type:'folder',path:'labs/BGP/solution/latest'}),'Saved version · labs/BGP/solution');
  assert.equal(c.restoreSourceLabel(null),'Saved configuration');
 });
 test('badge classes reflect status and escape the label text',()=>{
@@ -25,4 +26,17 @@ test('badge classes reflect status and escape the label text',()=>{
  assert.match(c.restoreBadge('rollback_expected',labels),/badge bad/);
  assert.match(c.restoreBadge('verify_mismatch',labels),/badge warn/);
  assert.match(c.restoreBadge('<x>',{}),/&lt;x&gt;/,'an unknown status label is escaped');
+});
+test('restore words: preflight reasons, result sentence and titles are the student\'s, the backend text stays available',()=>{
+ const c=ctx();
+ assert.equal(c.restoreReasonLabel('SSH probe failed: TimeoutError'),'The device did not answer over SSH.');
+ assert.equal(c.restoreReasonLabel('Assign NOS credentials to this node first.'),'Add login credentials for this device first (Advanced › Credentials).');
+ assert.equal(c.restoreReasonLabel('Something new'),'Something new');
+ assert.equal(c.restoreResultSentence({status:'partial',targets:[{status:'verified'},{status:'verify_mismatch'},{status:'rollback_expected'},{status:'ineligible'}]}),'Configuration replaced on 2 devices. 1 device needs attention. 2 devices were not changed.');
+ assert.equal(c.restoreResultSentence({status:'applying',targets:[{status:'applying'}]}),'');
+ assert.equal(c.restoreJobTitle({status:'applying'}),'Applying saved configuration');assert.equal(c.restoreJobTitle({status:'succeeded'}),'Configuration replaced');assert.equal(c.restoreJobTitle({status:'preflight_failed'}),'Configuration not replaced');
+ const tables=vm.runInContext('({job:restoreJobLabels,target:restoreTargetLabels})',c);
+ for(const key of ['pending','backing_up','applying','confirming','applied','verified','applied_unverified','verify_mismatch','rollback_expected','failed','ineligible','interrupted'])assert.ok(tables.target[key],key+' has a label');
+ assert.equal(new Set(Object.values(tables.target)).size,12,'all twelve target states stay distinct');
+ assert.doesNotMatch(Object.values(tables.job).join(' ')+Object.values(tables.target).join(' '),/router|✓|✔/,'devices, and no text glyphs');
 });

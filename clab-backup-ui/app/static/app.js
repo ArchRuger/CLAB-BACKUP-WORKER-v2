@@ -50,8 +50,8 @@ function grafanaLaunch(lab){const path=grafanaPath(lab);return path?'/static/gra
 function renderGrafanaLink(lab){
  const link=$('grafana-open');if(!link)return;const url=grafanaLaunch(lab);link.hidden=!url;
  if(!url){link.removeAttribute('href');return;}
- link.href=url;setMarkup(link,(lab.telemetry.grafana.map_uid?'Lab map in Grafana':'Grafana')+' <span aria-hidden="true">↗</span>');
- link.title=(lab.telemetry.grafana.map_uid?'Live weathermap of this lab in Grafana: link rates, port and node state.':'Live dashboards for this lab in Grafana: interface rates, link state, BGP neighbours.')+' Grafana starts on the VM when it is not running.';
+ link.href=url;setMarkup(link,(lab.telemetry.grafana.map_uid?'Open lab map':'Open network dashboard')+' <span aria-hidden="true">↗</span>');
+ link.title=(lab.telemetry.grafana.map_uid?'Live map of this lab: link rates, port and device state, in Grafana.':'Live interface rates, link state and BGP neighbours of this lab, in Grafana.')+' The dashboard starts on the VM when needed.';
 }
 function renderTelemetryLine(lab){const el=$('telemetry-line');if(!el)return;const t=lab.telemetry||{};el.textContent=t.grafana&&t.grafana.enabled===false?'Telemetry is not installed on this VM.':typeof telemetryLine==='function'?telemetryLine(t.status,t):'';}
 // Vocabulary helpers shared by the header, the lab switcher and home.js. labContext adds the dismissed
@@ -76,8 +76,6 @@ function renderLabHeader(lab){
  if(pill){pill.textContent=ls.label;pill.className='pill '+(ls.pill||'neutral');}
  if($('lab-ready'))$('lab-ready').textContent=readyLine(lab,ls);
  if($('lab-progress'))$('lab-progress').textContent=typeof progressSummary==='function'?progressSummary(lab,state.git_jobs,undefined,gitProblem(lab)):'';
- const ps=typeof progressState==='function'?progressState(lab,state.git_jobs,undefined,gitProblem(lab)):null,unsaved=!ps||['unconnected','none'].includes(ps.key);
- if($('git-saved-versions-empty'))$('git-saved-versions-empty').hidden=!unsaved;if($('git-saved-versions-saved'))$('git-saved-versions-saved').hidden=unsaved;
 }
 function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=value||'—';};set('tech-lab-id',lab.id);set('tech-source',lab.source);set('tech-path',lab.vm_project_path||lab.vm_source?.files?.definition?.path);set('tech-prefix',lab.container_prefix??'clab');set('tech-deployment',lab.deployment_name);set('tech-binding',lab.git_binding?[lab.git_binding.binding_id,lab.git_binding.revision].filter(Boolean).join(' · '):'');}
 function render(){
@@ -136,7 +134,9 @@ function setBanner(id,spec={}){
  if(typeof banner.setAttribute==='function'){banner.setAttribute('role',spec.tone==='danger'?'alert':'status');banner.setAttribute('aria-live',spec.tone==='danger'?'assertive':'polite');}
  const glyph=$(id+'-glyph');if(glyph&&typeof glyph.setAttribute==='function')glyph.setAttribute('href','#i-'+(spec.icon||'info'));
  if($(id+'-text'))$(id+'-text').textContent=spec.text;
- const details=$(id+'-detail');if(details){details.hidden=!spec.detail;if($(id+'-detail-text'))$(id+'-detail-text').textContent=spec.detail||'';}
+ // A disabled Start in the banner explains itself: its reason becomes the Details line when nothing else is.
+ const disabledStart=spec.actions?.['banner-start']?.disabled?spec.actions['banner-start'].title:'',detailText=spec.detail||disabledStart||'';
+ const details=$(id+'-detail');if(details){details.hidden=!detailText;if($(id+'-detail-text'))$(id+'-detail-text').textContent=detailText;}
  for(const key of BANNER_BUTTONS[id]||[]){const b=$(key);if(!b)continue;const action=spec.actions?.[key];b.hidden=!action;if(action){b.textContent=action.label;b.disabled=!!action.disabled;b.title=action.title||'';b.onclick=action.run;}}
 }
 function startLab(){const b=$('lab-start');if(b&&!b.disabled&&typeof b.onclick==='function')b.onclick();}
@@ -154,7 +154,9 @@ function renderLabBanner(){
  const runningOp=ops.find(j=>['queued','running'].includes(j.status)),runningRestore=restores.find(j=>APP_RESTORE_BUSY.includes(j.status));
  const ps=typeof progressState==='function'?progressState(lab,state.git_jobs,undefined,gitProblem(lab)):null;
  const credentials=typeof credentialsNeeded==='function'?credentialsNeeded(lab):0;
- const start=()=>({'banner-start':{label:$('lab-start')?.textContent?.trim()||'Start lab',run:startLab,disabled:!!$('lab-start')?.disabled,title:$('lab-start')?.title||''}});
+ // The menu item carries its label in a <span> and its disabled reason in a <small>; the banner button takes the label only.
+ const startLabel=()=>{const b=$('lab-start');const span=b&&typeof b.querySelector==='function'?b.querySelector('span'):null;return (span?span.textContent:b?.textContent)?.trim()||'Start lab';};
+ const start=()=>({'banner-start':{label:startLabel(),run:startLab,disabled:!!$('lab-start')?.disabled,title:$('lab-start')?.title||''}});
  let spec={};
  if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
  else if(runningOp)spec={tone:'info',icon:'clock',text:(typeof operationLabel==='function'?operationLabel(runningOp.action):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};

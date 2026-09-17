@@ -40,11 +40,11 @@ test('quick start deploys absent labs, starts stopped labs and guards unknown or
 
 test('operation output leads with a green success banner and a red failure banner',()=>{
  const good=context.opJobBanner({action:'deploy',name:'ceos-pair',status:'succeeded',exit_code:0,message:'Operation completed'});
- assert.equal(JSON.stringify(good),JSON.stringify({tone:'good',title:'✔ Deploy lab succeeded',detail:'ceos-pair · Exit 0 · Operation completed'}));
+ assert.equal(JSON.stringify(good),JSON.stringify({tone:'good',title:'✔ Start lab succeeded',detail:'ceos-pair · Operation completed',exit:'Exit code 0'}),'the exit code is a separate detail, never part of the headline');
  const bad=context.opJobBanner({action:'destroy',name:'ceos-pair',status:'failed',exit_code:1,message:'Host command returned an error'});
- assert.equal(bad.tone,'bad');assert.equal(bad.title,'✖ Destroy deployment failed');assert.match(bad.detail,/Exit 1 · Host command/);
+ assert.equal(bad.tone,'bad');assert.equal(bad.title,'✖ Destroy lab failed');assert.match(bad.detail,/Host command/);assert.equal(bad.exit,'Exit code 1');
  const running=context.opJobBanner({action:'inspect',name:'ceos-pair',status:'running',exit_code:null,message:'Executing on the VM'});
- assert.equal(running.tone,'running');assert.equal(running.title,'Inspect lab running…');assert.equal(running.detail,'ceos-pair · Executing on the VM');
+ assert.equal(running.tone,'running');assert.equal(running.title,'Show running devices running…');assert.equal(running.detail,'ceos-pair · Executing on the VM');assert.equal(running.exit,'');
  assert.equal(context.opJobBanner({action:'clone',name:'x',status:'interrupted',exit_code:null,message:'Manager restarted'}).tone,'bad');
 });
 test('deploy lab saves the workspace first and reuses one that already tracks the deployment',async()=>{
@@ -72,7 +72,7 @@ test('deployment landing page opens topology browser only on an explicit click',
   fetch:async()=>({ok:true,json:async()=>({labs:[],jobs:[],operations:[]})}),opBrowse:async()=>browses++});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/workspace.js'),'utf8'),page);
  await page.launchWorkspace();
- assert.equal(browses,0);assert.equal(element('workspace-title').textContent,'Deploy New Lab');
+ assert.equal(browses,0);assert.equal(element('workspace-title').textContent,'Deploy a new lab');
 });
 
 test('browse renders before capabilities settle, survives failure and retries folders',async()=>{
@@ -117,31 +117,31 @@ test('telemetry settings dialog reads the lab view, saves the setting and retrie
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
  const dialog=await c.openTelemetrySettings('lab');
  assert.equal(calls[0],'/labs/lab/telemetry');assert.equal(calls[1],'/telemetry/grafana');
- assert.match(dialog.innerHTML,/Automatic telemetry is on: 2 supported nodes · 1 streaming · 1 failed\. Read the data in Grafana\./);
+ assert.match(dialog.innerHTML,/Telemetry is on: 2 supported devices · 1 streaming · 1 failed\. Open the network dashboard to see the data\./);
  assert.match(dialog.innerHTML,/<strong>r2<\/strong> \(failed\): gNMI login refused/);assert.doesNotMatch(dialog.innerHTML,/<strong>r1<\/strong>/);
  assert.match(dialog.innerHTML,/<option value="p" selected>Ops · arista_ceos<\/option>/);assert.match(dialog.innerHTML,/id="tele-retry"/);
  assert.match(dialog.innerHTML,/id="tele-remove" disabled/,'removal needs automatic telemetry off first');
- assert.match(dialog.innerHTML,/Grafana: running on TCP 3000; stops after 15 minutes without an open dashboard\./);assert.match(dialog.innerHTML,/id="tele-grafana-stop"/);
+ assert.match(dialog.innerHTML,/Dashboard: running \(port 3000\); stops automatically after 15 minutes without a viewer\./);assert.match(dialog.innerHTML,/id="tele-grafana-stop"/);
  await el('tele-grafana-stop').onclick();
  assert.equal(JSON.stringify(calls[2]),JSON.stringify(['/telemetry/grafana/stop','POST',{}]));
- assert.equal(el('tele-grafana').textContent,'Grafana: stopped; it starts when you open it from the lab header.');
+ assert.equal(el('tele-grafana').textContent,'Dashboard: stopped; it starts when you open it from Tools › Telemetry.');
  el('tele-auto').checked=false;el('tele-profile').value='';
  await el('tele-save').onclick();
  assert.equal(JSON.stringify(calls[3]),JSON.stringify(['/labs/lab/telemetry/settings','PUT',{auto:false,profile_id:''}]));assert.equal(calls[4],'refresh');assert.equal(dialog.open,false);
  await el('tele-retry').onclick();
  assert.equal(JSON.stringify(calls[5]),JSON.stringify(['/labs/lab/telemetry/retry','POST',{}]));
  grafana={enabled:true,port:3000,running:false,idle_minutes:0};
- assert.match((await c.openTelemetrySettings('lab')).innerHTML,/Grafana: stopped; it starts when you open it from the lab header\./);
+ assert.match((await c.openTelemetrySettings('lab')).innerHTML,/Dashboard: stopped; it starts when you open it from Tools › Telemetry\./);
  assert.doesNotMatch((await c.openTelemetrySettings('lab')).innerHTML,/tele-grafana-stop/);
  grafana=new Error('manager restarting');
- assert.match((await c.openTelemetrySettings('lab')).innerHTML,/Grafana: state unavailable\./,'the dialog still opens when the Grafana state cannot be read');
- assert.equal(c.telemetryGrafanaText({enabled:true,port:3000,running:true,idle_minutes:0}),'Grafana: running on TCP 3000; the automatic stop is off.');
- assert.equal(c.telemetryGrafanaText({enabled:false}),'Grafana: not installed on this manager.');
- assert.equal(c.telemetryGrafanaText({enabled:true,running:null}),'Grafana: not checked yet.');
+ assert.match((await c.openTelemetrySettings('lab')).innerHTML,/Dashboard: status unavailable\./,'the dialog still opens when the Grafana state cannot be read');
+ assert.equal(c.telemetryGrafanaText({enabled:true,port:3000,running:true,idle_minutes:0}),'Dashboard: running (port 3000); automatic stop is off.');
+ assert.equal(c.telemetryGrafanaText({enabled:false}),'Dashboard: not installed on this VM.');
+ assert.equal(c.telemetryGrafanaText({enabled:true,running:null}),'Dashboard: not checked yet.');
  grafana={enabled:true,port:3000,running:true,idle_minutes:15};
  view.settings={auto:false,decided:false};view.summary={total:0};view.nodes=[];
  const undecided=await c.openTelemetrySettings('lab');
- assert.match(undecided.innerHTML,/saved before automatic telemetry existed/);assert.doesNotMatch(undecided.innerHTML,/tele-retry/);
+ assert.match(undecided.innerHTML,/hasn’t been set up for this lab/);assert.doesNotMatch(undecided.innerHTML,/tele-retry/);
  view.enabled=false;view.unavailable='pygnmi is not installed in this image.';
  assert.match((await c.openTelemetrySettings('lab')).innerHTML,/pygnmi is not installed/);
  assert.match((await c.openTelemetrySettings('lab')).innerHTML,/id="tele-save" disabled/);

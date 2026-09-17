@@ -120,6 +120,53 @@ every dialog, screenshot at 1920×1080 / 1440×900 / 1366×768, and assert
 
 _(newest entry first)_
 
+### 2026-09-17 — stages 3(b) Progress tab and 3(c) operations / management / capture / pages done
+
+**3(b) done and verified:** `git-progress.js` rewritten around the student vocabulary (`gitSaveSentences`,
+`gitJobTitle`, `progressSummary` for the status card, `gitVersionGroups` → Latest / Checkpoints / Baseline /
+Instructor and reference versions / Other labs in this repository, `gitRenderSaves` rows with Open / Upload
+now / Keep snapshot only, `gitFirstSave` "Where should <lab>'s progress be saved?", quiet saves that only open
+the job window for attention states, `gitCheckpointName` live "Saved as:" preview, Save location card with the
+folder browser inside the form, blank state without a catalog); `git-places.js` student folder copy and the
+`options.tree` reuse; `restore.js` rewritten (`restoreJobLabels`/`restoreTargetLabels`, reasons in student
+words with the raw reason under Details, review with Devices legend, three safety bullets, Advanced options,
+acknowledgement, per-device outcomes); `index.html` Progress panel (status card, Saved versions, Recent saves,
+`#git-problem`, `#git-last-restore`); apply-from-any-folder (`restoreFromFolder`) kept and exercised.
+`verify_after.py` `progress` step: 68/68 checks at 1920×1080, 1440×900 and 1366×768, 0 console and 0 page
+errors (screenshots 30–39). `fixture_manager.py` binds a second lab (`vlan-lab`) and fakes the restore probe
+(`app.state.restore._capture`) so the review shows matching, differing and unreachable devices.
+
+**3(c) done and verified:** `operations.js` (`opLabels` student table, `opReviewCopy` per-action title / effect /
+confirm with `.button.danger` for the disruptive ones, the "Configuration changes you have not saved are lost."
+line, the last-save line from `progressState` (red when never saved or older than the last operation) and
+[Save progress first], raw argv and cleanup warning under Technical details, banner-first confirm for
+lifecycle actions on the open lab, `opJobBanner` with the exit code as a separate detail, All lab operations
+dialog in Deployment / Lab tools / Danger sections, telemetry settings copy with `Dashboard:` lines, history,
+browser, editor, clone, preview copy, `opBrowse(path, labId)`); `management.js` (dialog copy without eyebrows,
+`vmSummaryMarkup`, `vmFilesStatus`, sync/remove reasons, `.button.danger` on Remove lab and Start fresh,
+Back up all review); `capture.js` + the dialog markup (device picker first with a switching summary, M1–M27
+strings, `(kind)` only in VM scope, sessions asked for only when the service exists, Tools card caption when
+disabled); `capture-session.*` V1–V11; `capture-setup.html` for administrators; `workspace.html/js` (loads
+`status.js`; "Deploy a new lab"; CLI launcher "Open CLIs · <lab>" with `deviceState` pills and reasons, history
+as a link row); `terminal.html/js/css` (device-first title, "← <lab>" link to `/#lab=&device=`, student status
+map with the raw text in `title`, replace-not-append on close, Reconnect/Disconnect, notice + Details);
+`grafana.html/js` ("Network dashboard · <lab>", `#grafana-headline` + raw Details); `debug.html/js`
+("Diagnostics", card/probe/table copy, `code` → sentence map, `detail` surfaced); `vm-connection.html` link;
+`app.js` Tools link "Open lab map ↗" / "Open network dashboard ↗", banner Start label from the menu `<span>`
+and a disabled Start's reason as the banner Details; `shell.js` re-renders once on `DOMContentLoaded` (a fast
+first `/api/state` could render before the later deferred scripts defined their renderers). Tests: the pinned
+labels in `test_capture_ui.js`, `test_operations_ui.js`, `test_grafana_ui.js`, `test_readiness_ui.js` were
+rewritten, every behavioural claim kept; `node --test tests/*.js` 133/133. Browser: `tools/smoke_3c.py`
+against the fixture (whose `lab_operations.remote` is now answered in-process: capabilities, browse, read,
+preview, run) — 23/23 checks, 0 console / 0 page errors, one handled HTTP 409 (the optional
+`.annotations.json` read beside a topology, which the page expects to fail); screenshots 40–57. The Python
+suite was not rerun for 3(c) (no backend file changed); stage 5 runs it. Live-lab validation still pending.
+
+**Known, deliberate:** Chromium logs every non-2xx fetch as a console error ("Failed to load resource"); the
+scripts report those the page handles (a missing optional file, a disabled service) apart from real errors.
+The Diagnostics probe on the fixture fails by design (`diagnostics.py` binds `remote` at import time, the
+fixture only patches `lab_operations.remote`), which is what exercises the failure rows.
+
 ### 2026-09-17 — stage 3(a) devices / drawer / map done (continuation branch `claude/continue-student-centered-ui-redesign`)
 
 **Done and verified:** `topology-render.js` emits `state-*` classes, a `device-state-dot` and a glyph group per
