@@ -51,9 +51,11 @@ previous UI is still reachable (the functional-parity review in
   `test_shell_ui.js`, `test_home_ui.js`, `test_topology_menu_ui.js` (in CI); every pinned
   label in the existing tests rewritten with its behavioural claim kept.
 - Validation so far is browser validation against the fixture manager (three viewports,
-  zero console and page errors) and the full unit suites; the live-lab pass on the dev VM
-  and the release itself (`set-release.py 1.29.0`) are still to do — see
-  `docs/redesign/PICKUP.md` and `VALIDATION.md`.
+  zero console and page errors), the full unit suites, and a green GitHub Actions run with
+  `tests/test_topology_menu_ui.js` added to the workflow's browser step. The release-validation
+  pass of 2026-09-17 ran on a host that is not the dev VM, so the live-lab pass and the release
+  itself (`set-release.py 1.29.0`) are still to do — see `docs/redesign/PICKUP.md` and
+  `VALIDATION.md`.
 
 ## Changes in 1.28.0
 

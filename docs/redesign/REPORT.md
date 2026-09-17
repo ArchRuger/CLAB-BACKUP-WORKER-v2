@@ -1,8 +1,10 @@
 # Student-centred UI redesign — engineering report
 
-Branch `claude/continue-student-centered-ui-redesign` (continues the WIP merged from PR #33),
-prepared on release 1.28.0. **Not released**: the live-lab pass and `set-release.py 1.29.0`
-are still to do (see *Live lab validation* and *Remaining limitations*).
+Branch `claude/continue-student-centered-ui-redesign` (continues the WIP merged from PR #33,
+merged to `main` as PR #35), prepared on release 1.28.0. **Not released**: the release-validation
+pass of 2026-09-17 (branch `claude/1.29-release-validation`) re-ran every automated gate and
+fixed the CI test list, but ran on a host without the lab VM, so the live-lab pass and
+`set-release.py 1.29.0` are still to do (see *Live lab validation* and *Remaining limitations*).
 
 ## 1. UX audit — what was wrong for a student
 
@@ -57,8 +59,9 @@ Frontend: `clab-backup-ui/app/static/` — `index.html`, `app.js`, `shell.js` (n
 `test_topology_menu_ui.js` (new) and every existing browser suite whose pinned labels
 changed. Tools: `docs/redesign/tools/fixture_manager.py`, `verify_after.py`. Docs: the
 tour, the guides listed in `PICKUP.md` §7, `CHANGELOG.md`, `VALIDATION.md`, the agent
-instructions. **Backend, helpers (`host_*.py`), routes, schemas and CI workflow: unchanged**
-(the CI node list already names the four new test files).
+instructions. **Backend, helpers (`host_*.py`), routes, schemas: unchanged.** CI workflow: the
+`node --test` list gained `tests/test_topology_menu_ui.js` on `claude/1.29-release-validation`
+(the other three new suites were already named); the branch's GitHub Actions run is green.
 
 ## 6. Automated testing
 
@@ -87,11 +90,14 @@ terminal page and the guides. Screenshots: `docs/redesign/shots/after/` and
 
 ## 8. Live lab validation
 
-**Not performed.** This session ran on a host without Docker, containerlab, the lab VM or
-the manager data directory, so the manager container was not rebuilt and the dev labs
-(`clabllm-dev`, `bgp-core`) were not opened, deployed, saved, applied, captured or
-destroyed through the new UI. The list to run on the dev VM before the release is in
-`PICKUP.md` §4 step 5 and `VALIDATION.md`.
+**Not performed — twice blocked by the host.** The redesign session and the release-validation
+pass of 2026-09-17 both ran on hosts without Docker, containerlab, the lab VM or the manager
+data directory (`clab-llm-dev2` in the second case: no engine, no data, no sudo, no route to
+the dev VM), so the manager container was not rebuilt and the dev labs (`clabllm-dev`,
+`bgp-core`) were not opened, deployed, saved, applied, captured or destroyed through the new
+UI. The release decision of that pass is **BLOCKED** on this gate alone: every automated and
+fixture gate passed again (`VALIDATION.md` has the table). The list to run on the dev VM is
+in `PICKUP.md` §4 step 5 and `VALIDATION.md`.
 
 ## 9. Screenshots
 

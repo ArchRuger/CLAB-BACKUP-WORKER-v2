@@ -120,6 +120,22 @@ every dialog, screenshot at 1920×1080 / 1440×900 / 1366×768, and assert
 
 _(newest entry first)_
 
+### 2026-09-17 — release-validation pass on `claude/1.29-release-validation`: BLOCKED on the live-lab gate
+
+Branch from `main` `66864c8` (PR #35 merged). Done: `.github/workflows/release-check.yml`
+names `tests/test_topology_menu_ui.js` in *Check browser regressions* (all 17 browser suites
+listed); GitHub Actions run 35207663245 green end to end. Re-baselined on `clab-llm-dev2`:
+`node --test` 133/133, Python 691 OK (1 skipped), `node --check` 18 files, `bash -n` 15
+scripts, `git diff --check`, `verify-release.py` 1.28.0, `verify_after.py` 93/93 at the three
+viewports with 0 console / 0 page errors (Chromium needed five Ubuntu libraries extracted with
+`dpkg-deb -x` under `LD_LIBRARY_PATH`), static security sanity (socket only in the capture
+compose, CSP intact, no inline script/style). **Not done: the live-lab pass** — `clab-llm-dev2`
+is not the dev VM (no Docker, containerlab, data directory, sudo, or route to the VM; §2's
+`/home/clabllm/clab-venv` does not exist there, use `clab-backup-ui/.venv`). No version bump,
+no "Unreleased" rename. Next agent, on the dev VM: run §4 step 5 in full (see the gate table in
+`VALIDATION.md`), then `set-release.py 1.29.0`, the history sections, `verify-release.py`,
+rebuild, PR.
+
 ### 2026-09-17 — stages 4, 5 and the documentation of 6 done; live-lab pass and the release remain
 
 **Stage 4 (style/accessibility audit, focused):** no inline `style=` anywhere (SVG presentation
