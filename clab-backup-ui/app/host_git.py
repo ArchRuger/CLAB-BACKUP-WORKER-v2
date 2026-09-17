@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.28.0'
+VERSION = '1.29.0'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -561,22 +561,29 @@ class GitRepository:
             expected = {}; changed = []; before_hashes = {}
             for folder in folders:
                 old = self.read_manifest(folder)
-                old_names = set()
+                # Every file the existing manifest owns: each device file and, for a schema-2 snapshot,
+                # the restore-grade artifact it references. Only the device files count as devices.
+                old_names = set(); old_devices = set()
                 if old:
                     for item in old['files']:
                         name = relpath(item.get('path'))
                         if '/' in name or name == 'manifest.json': raise ValueError('Existing manifest contains an invalid file path.')
-                        old_names.add(name)
+                        old_names.add(name); old_devices.add(name)
+                        if item.get('restore_artifact'):
+                            artifact = relpath(item['restore_artifact'])
+                            if '/' in artifact or artifact == 'manifest.json': raise ValueError('Existing manifest contains an invalid file path.')
+                            old_names.add(artifact)
                 directory = no_links(self.root / folder, False)
                 if directory.exists():
                     existing = {p.name for p in directory.iterdir()}
                     if existing - (old_names | {'manifest.json'}): raise ValueError('The destination contains files outside its manager manifest; preserve or move them first.')
                     if not old and existing: raise ValueError('The destination is not an empty manager snapshot folder.')
-                removed = old_names - set(files)
+                removed = old_devices - set(files)
                 if removed and not req.get('allow_removed'): raise ValueError('This capture removes previously saved devices. Review the new device scope before allowing removal.')
                 if old and content_digest(old) == content_digest(manifest): continue
                 for name, raw in files.items(): expected[folder + '/' + name] = raw
-                for name in removed: expected[folder + '/' + name] = None
+                # Removed devices and artifacts the new manifest no longer references leave the folder.
+                for name in old_names - set(files): expected[folder + '/' + name] = None
                 expected[folder + '/manifest.json'] = (json.dumps(manifest, sort_keys=True, indent=2, ensure_ascii=False) + '\n').encode()
             for name, raw in expected.items():
                 path = self.file(name)

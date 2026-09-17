@@ -377,7 +377,13 @@ flowchart TD
   result shows that the stale statements are gone and the desired statements are present.
 - **Supported platforms.** Live restore covers `juniper_cjunosevolved` and
   `juniper_vjunosswitch`. IOS-XR and EOS versions remain view/download only.
-- **Legacy snapshots.** A version saved before release 1.28.0 has no restore-grade
+- **Management addresses travel with the saved state.** The candidate is the node's whole
+  configuration, including its management interface address. When containerlab assigns
+  management addresses dynamically, a redeploy can hand a node a different address; applying a
+  state saved before that redeploy then moves the node off its address, the manager cannot
+  reconnect, and the node rolls back on its own (the *Rolled back — unchanged* outcome). Pin
+  `mgmt-ipv4` on the nodes of any topology whose saved states will be applied after a redeploy.
+- **Legacy snapshots.** A version saved before 1.28.0 has no restore-grade
   artifact in its manifest; it is offered as view/download only and cannot be applied.
 
 Captures retain their real format: Junos display-set output and IOS-XR/EOS running

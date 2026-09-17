@@ -203,8 +203,18 @@ function gitVersionGroups(id,context,model,tree,history){
   const parentPath=prefix.includes('/')?prefix.slice(0,prefix.lastIndexOf('/')):'',parent=model.nodes.get(parentPath);
   const seen=new Set([prefix]);
   const rowFor=child=>{const latestDir=child.dirs.find(d=>d.name==='latest');return {name:typeof savedVersionName==='function'?savedVersionName(child.path):child.name,caption:child.path,when:'',count:latestDir?latestDir.count:0,view:{commit:head,path:child.path+'/latest'},compare:true,apply:child.restorable?{folder:child.path}:null};};
+  // Siblings of the lab folder are instructor/reference versions; a sibling without its own latest/
+  // (the course layout's `reference/` holder: reference/start, reference/solution, …) contributes the
+  // saved folders one level below it.
+  const hasLatest=node=>node.dirs.some(d=>d.name==='latest'&&d.count);
+  const candidates=[];
   for(const child of parent?.dirs||[]){
-   if(seen.has(child.path)||!child.dirs.some(d=>d.name==='latest'&&d.count))continue;seen.add(child.path);
+   if(seen.has(child.path))continue;
+   if(hasLatest(child))candidates.push(child);
+   else for(const grand of child.dirs)if(!seen.has(grand.path)&&hasLatest(grand))candidates.push(grand);
+  }
+  for(const child of candidates){
+   seen.add(child.path);
    const row=rowFor(child),other=child.registration?.lab;
    if(other&&other.id!==id){row.name=other.name;groups.others.push(row);}else groups.reference.push(row);
   }

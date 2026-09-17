@@ -1,7 +1,15 @@
-# Student-centred UI redesign — WORK IN PROGRESS on top of 1.28.0
+# Student-centred UI redesign, live-validated, plus the Git helper and Saved versions fixes — 1.29.0
 
-**Unreleased, on branch `claude/continue-student-centered-ui-redesign` (continues PR #33's WIP;
-`PICKUP.md` §7 is the log).** Before touching the frontend read `docs/redesign/PICKUP.md`, then
+**Released as 1.29.0** from `claude/1.29-release-validation` (the redesign merged as PR #35, then the
+live-lab pass on the dev VM `clab-llm-dev2`; `docs/redesign/PICKUP.md` §7 is the log). Two fixes
+shipped with it: `app/host_git.py` counts a folder's `.jcfg` restore artifacts (schema-2
+`restore_artifact`) as manifest-owned files, so repeat saves and checkpoints into a Junos folder
+work (blocker found live; refresh the helper); `git-progress.js` `gitVersionGroups` lists the saved
+folders one level below a sibling without its own `latest/` (the scaffold's `reference/<state>`).
+Live facts to keep: a saved candidate carries the node's management address, so apply after a
+redeploy only works with pinned `mgmt-ipv4` (otherwise the commit-confirmed rollback fires, proven
+live); this cJunosEvolved image's data ports start at `eth4` (use the `et-0/0/0` aliases);
+`Sync topology from VM` keeps the drawing when the VM has no annotations file. Before touching the frontend read `docs/redesign/PICKUP.md`, then
 `docs/redesign/DESIGN-SPEC.md` and `docs/redesign/DESIGN-SPEC-ADDENDUM.md` (the addendum is the
 binding contract; §J9 is the migration order). Plan steps 1–5 are done: `status.js` (student
 vocabulary, pure), `shell.js` (hash router, menus, storage — the only file allowed to touch
@@ -25,15 +33,11 @@ Browser validation runs without a VM: `docs/redesign/tools/fixture_manager.py` (
 scratch data directory, VM answers scripted in-process: readiness, discovery, jobs, Git helper,
 restore probe, operations helper) and `docs/redesign/tools/verify_after.py` (three viewports, zero
 console/page errors; Chromium's "Failed to load resource" for a handled non-2xx is reported apart).
-`docs/redesign/` is exempt from the living-doc release check. The release-validation pass of 2026-09-17 (`claude/1.29-release-validation`) added
-`tests/test_topology_menu_ui.js` to the workflow's browser step (CI green) and re-ran every
-automated and fixture gate, but ran on `clab-llm-dev2`, which is not the dev VM (no Docker,
-containerlab, data directory or route to the VM; use `clab-backup-ui/.venv`), so the decision was
-BLOCKED and nothing was bumped. **Still to do before a release**:
-the live-lab pass on the dev VM (rebuild the manager, `clabllm-dev`/`bgp-core`: redeploy, Open
-CLI, Save progress, checkpoint, apply from the folder browser, capture, telemetry link, destroy
-cancelled), then `python3 deploy/set-release.py 1.29.0`, turn the "Unreleased" sections of
-`docs/CHANGELOG.md` and `VALIDATION.md` into the 1.29.0 sections, and record the live results.
+`docs/redesign/` is exempt from the living-doc release check. The release-validation pass of 2026-09-17 first ran on `clab-llm-dev2` before it was a dev VM
+(decision BLOCKED), then the host was installed with `docs/QUICK-INSTALL.md`, the lab
+`clab-llm-dev2` (PTX1 cJunosEvolved, SW1 vJunos-switch) was deployed through the UI and every
+gate was exercised live (VALIDATION.md); `tests/test_topology_menu_ui.js` is in the workflow's
+browser step. Telemetry was observed but not gated (the maintainer is deprecating it).
 
 # Live Junos configuration restore and nested Git folders — 1.28.0
 

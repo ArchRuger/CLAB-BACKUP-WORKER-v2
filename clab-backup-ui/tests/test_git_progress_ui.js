@@ -146,3 +146,24 @@ test('the disabled reason of Save progress is visible text and an unbound lab ke
  context.busy=()=>true;assert.match(context.gitSaveReason({binding_id:'b'},null),/backup or lab operation is running/);
  context.busy=()=>false;assert.equal(context.gitSaveReason({binding_id:'b'},null),'');
 });
+
+test('saved versions list the course layout reference states one level below the lab folder',()=>{
+ // Live finding (release 1.29 validation): scaffold-lab.py creates <slug>/reference/{start,solution}/latest beside
+ // <slug>/work; only direct siblings with a latest/ were shown, so the reference states never appeared.
+ const context=makeContext();
+ const node=(path,dirs=[],extra={})=>({path,name:path.split('/').pop(),dirs,count:0,restorable:false,registration:null,...extra});
+ const latest=count=>({path:'latest',name:'latest',dirs:[],count});
+ const work=node('bgp/work',[latest(5),{path:'bgp/work/checkpoints',name:'checkpoints',dirs:[node('bgp/work/checkpoints/day-1',[latest(2)],{count:2})]}],{restorable:true,registration:{id:'b1',lab:{id:'lab',name:'BGP'}}});
+ const start=node('bgp/reference/start',[latest(5)],{restorable:true}),solution=node('bgp/reference/solution',[latest(5)],{restorable:true});
+ const reference=node('bgp/reference',[start,solution]);
+ const flat=node('bgp/final-state',[latest(5)],{restorable:true});
+ const otherLab=node('bgp/reference/other',[latest(3)],{registration:{id:'b2',lab:{id:'other-lab',name:'OSPF'}}});reference.dirs.push(otherLab);
+ const bgp=node('bgp',[work,reference,flat]);
+ const model={nodes:new Map([bgp,work,reference,start,solution,otherLab,flat].map(n=>[n.path,n]))};
+ const context2=context;context2.gitRepository=()=>({prefix:'bgp/work',label:'Course'});context2.gitRepoName=()=>'Course';context2.gitLabJobs=()=>[];
+ const groups=context2.gitVersionGroups('lab',{binding:{}},model,{head:'abc'},null);
+ assert.deepEqual(Array.from(groups.reference,r=>r.caption),['bgp/reference/start','bgp/reference/solution','bgp/final-state']);
+ assert.ok(groups.reference.every(r=>r.apply&&r.apply.folder===r.caption),'reference rows apply straight from their folder');
+ assert.deepEqual(Array.from(groups.others,r=>r.name+' '+r.caption),['OSPF bgp/reference/other']);
+ assert.equal(groups.latest.length,1);assert.deepEqual(Array.from(groups.checkpoints,r=>r.name),['day-1']);
+});

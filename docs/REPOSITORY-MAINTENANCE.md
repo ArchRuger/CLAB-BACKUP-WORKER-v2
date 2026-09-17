@@ -43,7 +43,7 @@ refuses. The rules, enforced by `verify_docs()` in `deploy/verify-release.py`:
 - **Living guides** (`README.md`, `docs/*.md`, `deploy/*.md`, the app README,
   `NODE-FEATURES.md`, the VM connection and capture setup pages) may name the
   manager's release only where they mean the current one, for example the
-  installer's closing line `Manager 1.28.0: running`. Those mentions are moved by
+  installer's closing line `Manager 1.29.0: running`. Those mentions are moved by
   the bump tool.
 - **Release history** is written with a relational phrase, which is allowed
   anywhere: `since 1.23.0`, `before 1.21.1`, `introduced in 1.19.4`, `as of 1.22.0`,

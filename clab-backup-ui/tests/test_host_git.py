@@ -99,6 +99,28 @@ class HostGitTests(unittest.TestCase):
         self.assertEqual(set(version['snapshot']['files']), {'PE1.cfg', 'PE1.jcfg'})
         self.assertEqual(version['snapshot']['manifest']['schema'], 2)
 
+    def test_schema2_second_save_and_checkpoint_accept_the_folder_s_own_restore_artifacts(self):
+        """Regression (found live on 1.28.0): the destination check listed only each manifest entry's `path`,
+        so the `.jcfg` restore artifacts of the previous save looked like foreign files and every second
+        save or checkpoint into a Junos folder was refused as "files outside its manager manifest"."""
+        _, first = self.publish(self.capture_schema2(), push=False)
+        self.assertEqual(first['status'], 'committed', first)
+        _, second = self.publish(self.capture_schema2('router bgp 65002\n', 'system {\n    host-name PE1-v2;\n}\n'), push=False)
+        self.assertEqual(second['status'], 'committed', second)
+        self.assertEqual(sorted(second['changed_files']), ['latest/PE1.cfg', 'latest/PE1.jcfg', 'latest/manifest.json'])
+        self.assertEqual((self.repo / 'latest/PE1.jcfg').read_text(), 'system {\n    host-name PE1-v2;\n}\n')
+        _, checkpoint = self.publish(self.capture_schema2('router bgp 65002\n', 'system {\n    host-name PE1-v2;\n}\n'), target='checkpoint', checkpoint='after-fix', push=False)
+        self.assertEqual(checkpoint['status'], 'committed', checkpoint)
+        self.assertTrue((self.repo / 'checkpoints/after-fix/PE1.jcfg').exists())
+        # A later capture without the artifact (schema 1) is not "removing a device": the stale artifact
+        # leaves the folder with the manifest that no longer references it.
+        _, downgraded = self.publish(self.capture('router bgp 65003\n'), push=False)
+        self.assertEqual(downgraded['status'], 'committed', downgraded)
+        self.assertFalse((self.repo / 'latest/PE1.jcfg').exists())
+        self.assertIn('latest/PE1.jcfg', downgraded['changed_files'])
+        _, again = self.publish(self.capture('router bgp 65004\n'), push=False)
+        self.assertEqual(again['status'], 'committed', again)
+
     def test_schema2_rejects_a_missing_or_tampered_restore_artifact(self):
         capture = self.capture_schema2()
         capture['files'].pop('PE1.jcfg')  # manifest still references it
