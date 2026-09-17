@@ -4,7 +4,7 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
-## Unreleased — student-centred UI redesign (prepared on 1.28.0, to become 1.29.0)
+## Changes in 1.29.0
 
 The browser UI was redesigned around what a networking student does with a lab. The
 backend, the VM helpers and every API route are unchanged; every capability of the
@@ -50,12 +50,18 @@ previous UI is still reachable (the functional-parity review in
 - New scripts `status.js`, `shell.js`, `home.js`; new tests `test_status_ui.js`,
   `test_shell_ui.js`, `test_home_ui.js`, `test_topology_menu_ui.js` (in CI); every pinned
   label in the existing tests rewritten with its behavioural claim kept.
-- Validation so far is browser validation against the fixture manager (three viewports,
-  zero console and page errors), the full unit suites, and a green GitHub Actions run with
-  `tests/test_topology_menu_ui.js` added to the workflow's browser step. The release-validation
-  pass of 2026-09-17 ran on a host that is not the dev VM, so the live-lab pass and the release
-  itself (`set-release.py 1.29.0`) are still to do — see `docs/redesign/PICKUP.md` and
-  `VALIDATION.md`.
+- **Fixed (VM Git helper):** the second *Save progress* or a checkpoint into a Junos folder
+  saved since 1.28.0 was refused with "The destination contains files outside its manager
+  manifest" because the helper did not count the folder's own `.jcfg` restore artifacts as
+  manifest files. Refresh the helper (`setup-git.sh --refresh`, done by the installer).
+- **Fixed (Progress tab):** *Instructor and reference versions* now lists the saved states one
+  level below a sibling folder, so the course layout made by `deploy/scaffold-lab.py`
+  (`<slug>/reference/{start,solution,broken-01}`) shows with *Apply to running lab…*.
+- Validated live on a fresh dev VM installed with the quick-install guide (cJunosEvolved +
+  vJunos-switch, real Git commits and pushes, a two-node live restore with pre/post backups, a
+  management-loss rollback, browser Wireshark, the lab lifecycle through the UI); the record is
+  in `clab-backup-ui/VALIDATION.md`. Pin `mgmt-ipv4` in topologies whose saved states will be
+  applied after a redeploy (see [GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node)).
 
 ## Changes in 1.28.0
 

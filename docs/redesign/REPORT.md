@@ -1,10 +1,10 @@
 # Student-centred UI redesign — engineering report
 
 Branch `claude/continue-student-centered-ui-redesign` (continues the WIP merged from PR #33,
-merged to `main` as PR #35), prepared on release 1.28.0. **Not released**: the release-validation
-pass of 2026-09-17 (branch `claude/1.29-release-validation`) re-ran every automated gate and
-fixed the CI test list, but ran on a host without the lab VM, so the live-lab pass and
-`set-release.py 1.29.0` are still to do (see *Live lab validation* and *Remaining limitations*).
+merged to `main` as PR #35), prepared on release 1.28.0 and **released as 1.29.0** on
+2026-09-17 after the live-lab pass on the dev VM `clab-llm-dev2` (branch
+`claude/1.29-release-validation`, PR #37), which also fixed a Git helper blocker and the
+Saved-versions grouping (see *Live lab validation*).
 
 ## 1. UX audit — what was wrong for a student
 
@@ -90,14 +90,18 @@ terminal page and the guides. Screenshots: `docs/redesign/shots/after/` and
 
 ## 8. Live lab validation
 
-**Not performed — twice blocked by the host.** The redesign session and the release-validation
-pass of 2026-09-17 both ran on hosts without Docker, containerlab, the lab VM or the manager
-data directory (`clab-llm-dev2` in the second case: no engine, no data, no sudo, no route to
-the dev VM), so the manager container was not rebuilt and the dev labs (`clabllm-dev`,
-`bgp-core`) were not opened, deployed, saved, applied, captured or destroyed through the new
-UI. The release decision of that pass is **BLOCKED** on this gate alone: every automated and
-fixture gate passed again (`VALIDATION.md` has the table). The list to run on the dev VM is
-in `PICKUP.md` §4 step 5 and `VALIDATION.md`.
+**Performed on 2026-09-17** on `clab-llm-dev2`, installed as a dev VM with the quick-install
+guide during the pass: the lab `clab-llm-dev2` (cJunosEvolved PTX1, vJunos-switch SW1) was
+deployed and redeployed through the new UI with the Starting → Running transition observed per
+device, Open CLI ran real Junos commands, Save progress committed and pushed to
+`pruger-dev/CLAB-MNGR-DEV-LLM`, a checkpoint and nested folders were created, the folder move ran
+both ways, a saved reference state was applied to both running nodes (pre/post backups, the
+stale statement removed, no container recreated) and a management-loss rollback was observed
+for real, browser Wireshark captured a link, the Lab actions reviews (destroy cancelled),
+Advanced, Diagnostics, polling stability, the three viewports and the failure paths were
+checked. The pass found and fixed two defects (a Git helper blocker on repeat saves into
+schema-2 folders, and nested reference states missing from Saved versions). The full table and
+evidence are in `clab-backup-ui/VALIDATION.md`.
 
 ## 9. Screenshots
 
@@ -106,8 +110,8 @@ in `PICKUP.md` §4 step 5 and `VALIDATION.md`.
 
 ## 10. Remaining limitations
 
-- Live-lab validation and the release itself (1.29.0) are pending; the history sections
-  are written as "Unreleased".
+- Telemetry was observed but not gated on the live pass (the cJunosEvolved image rejects the
+  gNMI subscription; vJunos-switch has no adapter; the maintainer is deprecating the feature).
 - The tour screenshots come from the fixture manager, not from a live containerlab
   deployment; the layout and copy are the real UI.
 - Chromium logs every non-2xx fetch as a console error; the validation reports the ones

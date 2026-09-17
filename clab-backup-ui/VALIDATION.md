@@ -1,8 +1,9 @@
-# Student-centred UI redesign (unreleased) — validated on the fixture manager, prepared on 1.28.0
+# Student-centred UI redesign, live-lab release validation and two fixes — 1.29.0
 
-Prepared on `claude/continue-student-centered-ui-redesign` (continuing PR #33's WIP) on
-2026-09-17. **Not released**: the release number is still 1.28.0; `deploy/set-release.py 1.29.0`
-is to be run after the live-lab pass below has happened.
+Prepared on `claude/1.29-release-validation` from `main` `66864c8` (PR #35, the merged redesign) on
+2026-09-17. The redesign itself was validated on the fixture manager (below, "What was run"); this
+release adds the live-lab acceptance pass on a real containerlab VM, the two defects it found and
+their fixes, and the release bookkeeping. Release decision: **PASS — 1.29.0**.
 
 ## What was run
 
@@ -39,82 +40,117 @@ is to be run after the live-lab pass below has happened.
   while off screen, device row id collisions, the deploy flow bypassing the router, capture
   and Diagnostics copy details) were fixed in the same branch. Intentionally removed: none.
 
-## Release-validation pass of 2026-09-17 — decision: BLOCKED, not released
+## Live-lab validation on the dev VM `clab-llm-dev2` (2026-09-17)
 
-Run on `claude/1.29-release-validation` (from `main` `66864c8`, the merge of PR #35) on the
-host `clab-llm-dev2`. The pass was meant to be the live-lab acceptance run; the host turned
-out not to be the dev VM, so only the automated and fixture gates could be exercised.
-
-**Release housekeeping done.** `.github/workflows/release-check.yml` now names
-`tests/test_topology_menu_ui.js` in the *Check browser regressions* step (the one-line change
-that was held back while the push token had no workflow scope); every one of the 17 browser
-suites is in that list. The GitHub Actions run for the branch (`Release consistency`, run
-35207663245) is green: verify-release at 1.28.0, the stdlib deploy-script suites, installer
-shell syntax, Junos kinds, operations, telemetry, the browser step (133 pass, 0 fail, the new
-file included), the capture provider suites, both Compose validations, the real Grafana stack
-against a fixture manager and the loopback Wireshark capture.
-
-| Check (on `clab-llm-dev2`, `clab-backup-ui/.venv`, Node 18.19, Python 3.12) | Result |
-|---|---|
-| `node --test tests/*.js` | 133 tests, 0 failures |
-| Python `unittest discover -s tests -t tests` | 691 tests OK, 1 skipped (the opt-in EOS SSH fixture) |
-| `node --check` on every `app/static/*.js` (18 files) | clean |
-| `bash -n` on every tracked shell script (15, a superset of the 14 CI names) | clean |
-| `git diff --check` | clean |
-| `python3 deploy/verify-release.py` | `Source release verified: 1.28.0`; documentation names only 1.28.0 |
-| Every `app/static/*.js` referenced with `?v=` in a page | yes, 18 of 18 |
-| Fixture browser suite `docs/redesign/tools/verify_after.py` against `fixture_manager.py` (Playwright 1.63, Chromium 1243) | 93/93 checks at 1920×1080, 1440×900 and 1366×768; 0 console errors, 0 page errors; one handled HTTP 409 per viewport (the optional `.annotations.json` read) |
-| Security-boundary sanity (static) | Docker socket only in `deploy/compose.capture.yml` (the session service, by design); CSP `default-src 'self'; script-src 'self'` unchanged in `app/main.py`; no inline `<script>`, no `on*=` attributes, no `style=` attributes outside the two xterm pages |
-
-Note for the runner: Chromium's headless shell needs `libatk-1.0`, `libatk-bridge-2.0`,
-`libXdamage`, `libasound` and `libatspi`, which this host lacks; the run used the Ubuntu
-packages extracted with `dpkg-deb -x` under `LD_LIBRARY_PATH` (no root needed).
-
-## Live-lab gates — not run (release blocked on them)
-
-`clab-llm-dev2` (192.168.132.132) has no `docker`, no `containerlab`, no
-`/srv/containerlab-node-manager/data`, no `/etc/clab-manager`, no `/home/clabllm/clab-venv`,
-no passwordless sudo, no `newuidmap` for a rootless engine, no SSH route or known host for
-the dev VM, and no other host on its subnet answers on 22, 8081 or 3000. The Junos images,
-the labs `clabllm-dev` and `bgp-core`, the persisted 1.28.0 manager state, the Git checkout
-`~/labs/CLAB-MNGR-DEV-LLM` and the capture and telemetry stacks exist only on the real dev
-VM. Nothing below was exercised, and nothing below is claimed.
+The host was installed with `docs/QUICK-INSTALL.md` during this pass (Ubuntu 24.04.4, Docker
+29.8.1, Docker Compose 5.5.1, containerlab 0.79.0, manager container
+`containerlab-node-manager-backup-ui-1`, the browser Wireshark and Grafana stacks, the discovery
+password and helpers, the Git helper). Lab `clab-llm-dev2` (`/etc/containerlab/clab-llm-dev2/`):
+PTX1 `n24l/cjunosevolved:26.2R1.7-EVO` (`juniper_cjunosevolved`, 172.20.20.2) and SW1
+`n24l/vjunos-switch:23.2R1.14` (`juniper_vjunosswitch`, 172.20.20.3), containerlab default login,
+two links `PTX1:et-0/0/0—SW1:eth1`, `PTX1:et-0/0/1—SW1:eth2`. Git: checkout
+`~/labs/CLAB-MNGR-DEV-LLM` of `github.com/pruger-dev/CLAB-MNGR-DEV-LLM` (owner `clabllm`, `gh`
+login `pruger-dev`), lab folder `clab-llm-dev2/work`, reference states
+`clab-llm-dev2/reference/{start,solution,broken-01}` made with `deploy/scaffold-lab.py`, a nested
+folder `Week-01/BGP/Final-State` created from the UI. Every gate below was driven through the
+real UI with Playwright Chromium against `http://127.0.0.1:8081` (screenshots and JSON reports
+kept in the session scratchpad; console and page errors were collected for every run: **0 console
+errors, 0 page errors** in all of them, one handled HTTP non-2xx per run where noted).
 
 | Test | Result |
 |---|---|
-| manager rebuild against existing persistent state | not run — no Docker, no data directory |
-| Home / existing labs | not run |
-| bgp-core redeploy Starting → Running | not run — no containerlab |
-| topology state updates | not run |
-| Open CLI | not run — no devices |
-| Save Progress | not run |
-| Git push | not run — no VM Git helper or checkout |
-| checkpoint | not run |
-| Saved versions | not run |
-| compare | not run |
-| Apply to running lab | not run — no Junos node |
-| pre/post restore backups | not run |
-| stale config removed | not run |
-| no node reboot/recreate | not run |
-| packet capture | not run — no capture stack |
-| browser Wireshark | not run |
-| telemetry/Grafana | not run — no telemetry stack (CI ran the Grafana stack against a fixture manager only) |
-| Lab Actions reviews | fixture only (verify_after: menu reasons, destroy review, stop confirm → banner) |
-| destroy review cancelled | fixture only |
-| polling stability | fixture only (device panel and a menu open across two polls, focus kept) |
-| 1366×768 live check | fixture only (map fits the viewport, dialogs and menus fit) |
-| Diagnostics | fixture only (the VM probe fails by design on the fixture) |
+| manager rebuild against existing persistent state | `docker compose -f clab-backup-ui/compose.yml up -d --build` twice mid-session (after the helper fix and after the UI fix) and once more at 1.29.0: the lab, its Git binding, backups, credentials and layout loaded; no traceback |
+| Home / existing labs | lab card with the *Running* pill, *2 of 2 devices ready*, last save; Manager ▾ with VM connection, Deploy, Running labs, Operation history, Diagnostics and the VM status / version footer; menu survives a poll, Escape returns focus |
+| deploy / redeploy Starting → Running | Deploy through *Deploy a new lab* → topology browser → *Deploy lab* → review "Start clab-llm-dev2?" (command under Technical details) → confirm at 10:22:21 UTC; UI went Stopped → *Starting — 0 of 2* (10:22:38) → *1 of 2* (10:33:08, PTX1's Open CLI enabled alone) → *Running, 2 of 2* (10:43:53), banner cleared, no reload. Redeploy through Lab actions ▾ at 11:08:16: *Redeploying lab…* banner with View output → Starting 0 of 2 → 1 of 2 (+510 s) → Running 2 of 2 (+1321 s); rows and map dots changed per device; containers recreated (StartedAt changed) |
+| topology state updates | both devices drawn with state dots, `state-starting` → `state-ready` per device during boot; header pill/readiness agree; map fits at 1440×900, 1920×1080 and 1366×768; context menu (Open CLI first, Capture, Back up, Details; state in the header; survives a poll; Escape/Shift+F10); Expand/Escape; Edit lab map; Import map dialog; a map link activated from the keyboard opens *Capture traffic* on that endpoint |
+| Open CLI | device panel of PTX1 (Ready, Open CLI first) → terminal page "clab-clab-llm-dev2-PTX1 · clab-llm-dev2", *Connected*; `show version`, `show interfaces terse`, `show configuration \| display set` typed and answered by Junos; resize changed the columns; Disconnect → *Disconnected*; Reconnect → *Connected*; the panel stayed open afterwards |
+| Save Progress | unbound lab: *Connect a save location…* → first-save dialog; the suggested folder `clab-llm-dev2` was refused ("Lab folders in one repository cannot overlap: clab-llm-dev2/work is already a lab folder") → `clab-llm-dev2/work` → *Saving…* → *Saved to Git just now*; recent save row *Progress saved to Git*; checkout clean, nothing staged; commit `babef21` with `latest/{PTX1,SW1}.{set,jcfg}` + `manifest.json` |
+| Git push | after every save `git rev-list origin/main..main` = 0 and GitHub's `main` SHA equalled the local HEAD (checked over the API) |
+| checkpoint | *Create checkpoint…* with `release-1.29-live-validation` → live preview *Saved as: release-129-live-validation* → **failed on the 1.28.0 helper** (defect 1 below) → after the fix, *Retry save and upload* from the save window completed it; listed under Saved versions with its own time; `work/checkpoints/release-129-live-validation/` holds manifest, `.set` and `.jcfg`; pushed |
+| Saved versions | Latest (View, Apply), Checkpoints, *Instructor and reference versions* (after defect 2's fix: `reference/start`, `reference/solution` with Apply; *Final state (instructor)* naming), Full history dialog; View → files + *Download (ZIP)* (real download: `.set`, `.jcfg`, `manifest.json`) |
+| compare | *Compare with my latest save* on the checkpoint → "Compared with your latest save", diff rendered, no HTML interpreted, no "running configuration" wording |
+| Apply to running lab | see the Junos restore evidence below: job `cd592c1c…` succeeded on **both** nodes from `clab-llm-dev2/reference/solution` (Saved versions → Apply, and the same from Browse the repository…), review with Lab / Source / Devices / three safety bullets / acknowledgement (running without it is refused with a sentence) |
+| pre/post restore backups | `restore-pre` `4bdaefb0…` and `restore-post` `8d14040e…`, both succeeded for PTX1 and SW1, both in the backup history |
+| stale config removed | PTX1 had `lo0 10.77.77.77/32`, host-name `PTX1-BROKEN-BY-STUDENT` and a deleted description committed by "the student"; after the restore the address is gone, the host-name is `PTX1`, the description is back, root-authentication present |
+| no node reboot/recreate | PTX1 `StartedAt` `2026-09-17T11:08:16.395411838Z` before and after |
+| packet capture | Tools → *Capture traffic…* (device picker first when no device is chosen); from PTX1's panel: device context, wired interfaces first, *Other interfaces on this device (12)*; *Start capture* → "Wireshark session started on the VM", session row *clab-clab-llm-dev2-PTX1 · eth1* with End session |
+| browser Wireshark | *Open Wireshark ↗* → viewer page "Wireshark · Containerlab Node Manager", *Connected to Wireshark on the VM.*, remote screen drawn; a labelled container `clab-capture-clab-manager-capture-v1-…` existed for the session; ICMP generated on the link (5/5 answered). *End session* asks with `window.confirm`, which the headless run auto-dismissed, so the session was left to the 15-minute idle cleanup |
+| telemetry/Grafana | *Telemetry settings…* in student sentences with a *Dashboard:* line; *Open lab map ↗* started Grafana on demand and opened the generated lab-map dashboard (`/d/clab-map-…/lab-map-…-clab-llm-dev2`); Grafana healthy, no plugin/dashboard errors in its log; Prometheus target `up`. No interface samples: this cJunosEvolved image rejects the gNMI subscription ("path or encoding not supported by this image") and vJunos-switch has no adapter. **Not a release gate — the maintainer is deprecating telemetry.** |
+| Lab Actions reviews | Start disabled on the running lab with a reason; Stop / Restart / Redeploy reviews with the unsaved-work line, last save, *Save progress first*, command under Technical details, all cancelled; *All lab operations…* (Deployment / Lab tools / Danger); *Save device configurations* run from its review → banner with View output → output window; *Running labs on the VM…* → table with both devices; operation history (deploy, redeploy, save, inspect) and output |
+| destroy review cancelled | "Destroy clab-llm-dev2?" with *Configuration changes you have not saved are lost*, the last-save line, *Save progress first*, danger confirm, `containerlab destroy … --cleanup` under Technical details → **Cancel**; lab still running |
+| polling stability | device panel open with the same device and focus across three live polls; Lab actions menu keeps its focused item across three polls; focus on a row's Open CLI kept across two polls; the CLI session did not close the panel |
+| 1366×768 live check | map bottom 668.9 < 768, no horizontal scroll, tabs and the header's Save progress within the viewport, destroy review confirm button not clipped (same at 1920×1080 and 1440×900) |
+| Diagnostics | *This manager* / *VM connection* / *Saved in this manager* cards; probes against the real VM pass (*Folder listing*, *VM commands*); neither the discovery password nor the device password appears in the page |
+| Advanced / operator | deployment details, VM file details of the lab, *Sync topology from VM* (no error), Add credentials dialog (platform / user / masked password), action logs (521 rows once the section is scrolled into view — it loads only while on screen, by design), Git technical details (branch, verified push destination), *Remove lab* dialog (danger submit, cancelled), the *Open CLIs* launcher page with two Ready rows |
+| repository browser / nested folders | *Change folder…* shows the checkout with crumbs and *This lab*; `latest/` cannot be chosen (reason shown); `Week-01/BGP/Final-State` created in one step and registered on the VM (`setup-git.sh --list`); *New folder…* refuses `../etc` and `clab-llm-dev2/work` with a sentence; a non-Junos folder (`ARISTA-LAB-TEST`) offers no Apply |
+| destination moves | *New folder… › Save this lab here* moved the lab from `clab-llm-dev2/work` to `clab-llm-dev2` (commit `3ee3f1b` "Move clab-llm-dev2 progress to clab-llm-dev2/", 10 files moved, pushed) and back into `work` with latest and the checkpoint travelling in one commit; the move dialog names the file count and consequences |
+| failure paths | device not ready: Open CLI disabled with "still starting" in the context menu and the panel; save while devices boot: "Save failed · A device could not be read, so nothing was saved" in the status card, the row and the banner, `latest/` unchanged; busy: Stop / Restart / Redeploy / Destroy disabled with *Wait for the current operation to finish* while a save runs; the restore refuses to run without the acknowledgement; management-loss rollback observed for real (below) |
+| security-boundary sanity | manager container: only `/srv/containerlab-node-manager/data` mounted, no Docker socket, user `worker`, not privileged; sudoers exactly the three helpers with empty argument lists; gateway accepts only the three commands; CSP unchanged; no secrets in Diagnostics or job records; restore job records carry no candidate |
 
-Required before the release, on the dev VM: rebuild the manager from this tree
-(`docker compose -f clab-backup-ui/compose.yml up -d --build`), confirm the existing labs,
-credentials, backups, Git bindings and layouts load, redeploy `bgp-core` and watch Starting →
-Running, Open CLI on a Junos node, Save progress with a Git commit and push, a checkpoint,
-view / compare / apply a saved state from the folder browser with a deliberate stale statement
-removed and the container `StartedAt` unchanged, backup history and downloads, packet capture
-and browser Wireshark on a real link, the network dashboard, the Lab actions reviews with the
-destroy cancelled, polling stability and the three viewports on the live manager, Diagnostics.
-Only then: `python3 deploy/set-release.py 1.29.0`, the `?v=` markers, and the three history
-sections that `verify-release.py` ties to the number.
+### Junos restore evidence
+
+Source `clab-llm-dev2/reference/solution/latest` (captured at 12:33:52 UTC from the running nodes,
+schema 2, `restore_capable_nodes 2`). Deliberate stale state on PTX1 (direct SSH, committed with
+the root-authentication the image requires): `lo0 10.77.77.77/32`, host-name `PTX1-BROKEN-BY-STUDENT`,
+`et-0/0/0` description deleted. Job `cd592c1c48364704a5b94422e9114ce5`, 12:34:50 → 12:36:17 UTC:
+`succeeded`, "All 2 node(s) restored and verified against the saved state."; PTX1 `verified`
+(replaced, root-authentication present), SW1 `verified` (`no_op`: it already matched);
+pre-backup `4bdaefb061b14a51b48be82ad78e7407` (`restore-pre`), post-backup
+`8d14040e58304d74a6a990ffbbdbdfa0` (`restore-post`); the stale address and host-name gone from
+`show configuration | display set`; PTX1 container `StartedAt` unchanged; the lab still saves to
+`clab-llm-dev2/work`; *Last configuration change* on the Progress tab points at the job. This is
+the first manager-orchestrated two-node restore and the first manager-orchestrated vJunos-switch
+restore (both were "not verified" in 1.28.0).
+
+A first attempt at 11:43 UTC, made with a solution state captured **before** the redeploy, showed
+the safety net for real: containerlab had handed PTX1 a different management address after the
+redeploy (172.20.20.3 → 172.20.20.2), the saved candidate carried the old one, the confirmed commit
+moved PTX1 off its address, the manager could not reconnect (`NoValidConnectionsError`) and PTX1
+rolled back by itself at 11:48:13 (`show system commit`: "commit confirmed, rollback in 5mins" then
+the automatic rollback); the job ended `rollback_expected` / *Rolled back — unchanged* and SW1 was
+left untouched (its session had landed on the node that briefly held its address). Nothing was
+lost. The topology now pins `mgmt-ipv4` for both nodes, and `docs/GIT-PROGRESS.md` says so.
+
+### Defects found during the live pass
+
+1. **Release blocker, fixed.** `app/host_git.py` (the VM Git helper): the destination check of a
+   save listed only each manifest entry's `path`, so the `.jcfg` restore artifacts written by the
+   previous save of a Junos folder (schema 2, `restore_artifact`) looked like foreign files and every
+   second *Save progress* or checkpoint into that folder was refused with "The destination contains
+   files outside its manager manifest; preserve or move them first." (job `9b7ffb32…`,
+   `export_pending`). Fix: the artifacts count as manifest-owned files, the "removes previously saved
+   devices" guard looks at device files only, and an artifact the new manifest no longer references
+   leaves the folder. Regression test
+   `test_schema2_second_save_and_checkpoint_accept_the_folder_s_own_restore_artifacts` (fails on the
+   old helper, passes on the fixed one). Retested live: the stuck checkpoint completed through *Retry
+   save and upload*, a second latest save and repeated `scaffold-lab.py snapshot` saves into an existing
+   reference folder succeeded. Refresh the helper with `setup-git.sh --refresh`.
+2. **Medium, fixed.** Saved versions listed only the lab folder's direct siblings that hold a
+   `latest/`, so the course layout the project's own scaffold creates (`<slug>/reference/<state>/latest`)
+   never appeared under *Instructor and reference versions* (it stayed reachable through *Browse the
+   repository…* and *Full history…*). `gitVersionGroups` now also lists the saved folders one level
+   below a sibling that has no `latest/` of its own; test *saved versions list the course layout
+   reference states one level below the lab folder*. Retested live: *Final state (instructor)* with
+   Apply.
+
+Observed and documented, not changed: a saved state captured before a redeploy that changed a
+containerlab-assigned management address rolls back on apply (above; pin `mgmt-ipv4`); *Sync topology
+from VM* keeps the manager's drawing (positions and links) when the VM has no annotations file, so a
+link renamed in the YAML shows its old name on the map until the map is re-imported; *End session* in
+the capture dialog uses a browser `confirm()`; the action logs fill only while the section is on
+screen; Playwright cannot click a thin SVG link with the pointer (keyboard activation works). This
+cJunosEvolved image names its data ports from `eth4` (the topology uses `et-0/0/0` aliases).
+
+### Automated suites after the fixes
+
+`node --test tests/*.js` 134/134; Python `unittest discover -s tests -t tests` 693 OK, 1 skipped
+(the opt-in EOS SSH fixture); `node --check` on every static script; `bash -n` on every deploy
+script; `git diff --check`; `deploy/verify-release.py` → `Source release verified: 1.29.0`;
+`docs/redesign/tools/verify_after.py` against the fixture manager at 1920×1080, 1440×900 and
+1366×768 rerun after the Saved-versions change: 93/93 checks at each viewport, 0 console errors, 0 page
+errors, one handled HTTP 409 per viewport; GitHub Actions
+*Release consistency* green on the branch and on PR #37, with `tests/test_topology_menu_ui.js` in
+the browser step.
 
 # Live Junos configuration restore and nested Git folders — 1.28.0
 

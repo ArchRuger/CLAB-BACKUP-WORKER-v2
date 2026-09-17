@@ -1,7 +1,7 @@
 # Student-centred UI redesign — pickup notes for the next agent
 
-**Status: WORK IN PROGRESS, unreleased.** The running tree is still labelled 1.28.0; the target release is
-1.29.0. Read this file first, then `DESIGN-SPEC.md` and `DESIGN-SPEC-ADDENDUM.md` (the addendum overrides
+**Status: RELEASED as 1.29.0 on 2026-09-17** after the live-lab pass (see §7's newest entry and
+`clab-backup-ui/VALIDATION.md`). The notes below are the history of the redesign. Read this file first, then `DESIGN-SPEC.md` and `DESIGN-SPEC-ADDENDUM.md` (the addendum overrides
 the spec wherever they disagree). The brief that started this work is the user's prompt file
 `~/UltraCode Prompt — Student-Centered Full UI-UX Redesign.md` on the dev VM (not in the repository); its
 requirements are restated in the spec's §0 non-negotiables: zero functional regression, backend untouched,
@@ -120,7 +120,18 @@ every dialog, screenshot at 1920×1080 / 1440×900 / 1366×768, and assert
 
 _(newest entry first)_
 
-### 2026-09-17 — release-validation pass on `claude/1.29-release-validation`: BLOCKED on the live-lab gate
+### 2026-09-17 (later) — live-lab pass done on `clab-llm-dev2`, two fixes, released as 1.29.0
+
+The host became the dev VM (quick-install: Docker 29.8.1, containerlab 0.79.0, both stacks, Git
+helper). Lab `clab-llm-dev2` (PTX1 `n24l/cjunosevolved:26.2R1.7-EVO`, SW1
+`n24l/vjunos-switch:23.2R1.14`, links on the `et-0/0/0` aliases, pinned `mgmt-ipv4`) deployed and
+redeployed through the UI; Git `pruger-dev/CLAB-MNGR-DEV-LLM` at `clab-llm-dev2/work` with the
+scaffold's `reference/{start,solution,broken-01}`. Every gate in the brief was exercised live
+(table in VALIDATION.md). Found and fixed: the helper refusing repeat saves into schema-2 folders
+(blocker) and Saved versions missing nested reference states (medium). Then
+`set-release.py 1.29.0`, the history sections, `verify-release.py`, rebuild, PR #37, CI green.
+
+### 2026-09-17 — release-validation pass on `claude/1.29-release-validation`: BLOCKED on the live-lab gate (superseded the same day)
 
 Branch from `main` `66864c8` (PR #35 merged). Done: `.github/workflows/release-check.yml`
 names `tests/test_topology_menu_ui.js` in *Check browser regressions* (all 17 browser suites
