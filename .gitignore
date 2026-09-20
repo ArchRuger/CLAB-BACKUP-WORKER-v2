@@ -18,3 +18,6 @@ state.enc
 *.tar
 *.tgz
 *.tar.gz
+
+# Build-time dependencies of clab-backup-ui/lab-builder (its output is committed under app/static/lab-builder)
+node_modules/

@@ -1,0 +1,1 @@
+import{N as p,O as s,Q as n,x as t}from"/static/lab-builder/assets/c-J7QBU4CT.js";function d(o){let{elementType:l,externalSlotProps:f,ownerState:e,skipResolvingSlotProps:m=!1,...i}=o,r=m?{}:s(f,e),{props:a,internalRef:P}=n({...i,externalSlotProps:r}),c=t(P,r?.ref,o.additionalProps?.ref);return p(l,{...a,ref:c},e)}var u=d;export{u as a};

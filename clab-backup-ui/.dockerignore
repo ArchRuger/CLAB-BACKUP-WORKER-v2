@@ -14,3 +14,5 @@ htmlcov
 *.patch
 *.tar
 *.tgz
+# build-time project of the lab builder page; only its committed output under app/static ships
+lab-builder

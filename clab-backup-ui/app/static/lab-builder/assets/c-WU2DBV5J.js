@@ -1,0 +1,1 @@
+import{i as h}from"/static/lab-builder/assets/c-J7QBU4CT.js";import{b as v}from"/static/lab-builder/assets/c-5V5QO733.js";import{d as t}from"/static/lab-builder/assets/c-65TME3XB.js";var e=t(v(),1),r=h((0,e.jsx)("path",{d:"M22 11V3h-7v3H9V3H2v8h7V8h2v10h4v3h7v-8h-7v3h-2V8h2v3z"}),"AccountTree");export{r as a};

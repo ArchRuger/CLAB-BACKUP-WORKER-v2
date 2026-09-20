@@ -329,13 +329,11 @@ class OperationAPITests(unittest.TestCase):
             # A layout the manager's map cannot read is saved for the editor, and the review says so.
             warned=post(action='publish',options={'root':'/srv/labs','text':built,'annotations':'{"nodeAnnotations":[{"id":"r1"},{"id":"r1"}]}'}).json()
             self.assertIn('default grid',warned['warnings'][0])
+            # The name of a lab already in My labs with another topology file cannot be taken over.
+            taken=post(action='publish',options={'root':'/srv/labs','text':YAML.decode()});self.assertEqual(taken.status_code,409,taken.text);self.assertIn('already in My labs',taken.json()['detail'])
             job=self.confirm(ok.json()['token']).json();self.assertEqual((job['action'],job['path']),('publish','/srv/labs/built/built.clab.yml'))
             self.assertNotIn('kind: linux',json.dumps(self.store.state['operations']));submit.assert_called_once()
             self.assertEqual(submit.call_args.args[3]['options']['annotations'],layout)
-        # The name of a lab already in My labs with another topology file cannot be taken over.
-        with self.fixture() as remote:
-            remote.side_effect=(lambda inner:lambda host,req,*a:{**inner(host,req,*a),'path':'/srv/labs/training/training.clab.yml'} if req['mode']=='preview' else inner(host,req,*a))(remote.side_effect)
-            taken=post(action='publish',options={'root':'/srv/labs','text':YAML.decode()});self.assertEqual(taken.status_code,409,taken.text);self.assertIn('already in My labs',taken.json()['detail'])
 
     def test_builder_revision_keeps_the_lab_name_and_shows_what_changes(self):
         with self.fixture():
