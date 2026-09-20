@@ -60,9 +60,9 @@ All eight requirements are delivered. What is left is optional or needs the main
    reading `lineStartArrow` / `lineEndArrow` / `lineArrowSize` / `roundedBackground`, `topology-render.js`
    and `app/telemetry_map.py` / `drawio_export.py` following. Ask before starting: it widens the
    manager's drawing schema.
-2. **Live pass at the newest release**: the development manager runs 1.30.14. Rebuild it
-   (`sudo bash deploy/start-manager.sh --manager-only`) and repeat `check_ui003.py`-style steps on the QA lab
-   `qa-nos-105458` through `http://192.168.132.132:8081`; never edit the maintainer's course maps without asking.
+2. **Live pass**: done at 1.30.17 on the QA lab `qa-nos-105458` through `http://192.168.132.132:8081`
+   (undo/redo, device look, link labels, save; see VALIDATION). The development manager runs 1.30.17.
+   Never edit the maintainer's course maps without asking.
 3. **A second pull request** for 1.30.10 onwards (the maintainer merged up to 1.30.9 as #41).
 4. Not exercised anywhere yet, by decision: a real review-and-upload to the Git host, a real upload
    + `create`, a real folder move.
@@ -72,7 +72,7 @@ All eight requirements are delivered. What is left is optional or needs the main
 - Every release of this branch was validated against the fixture manager; 1.30.11 also had a read-only live pass. CI was green for 1.30.2 to 1.30.12 when this was written (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
-  --manager-only` (helpers must match the release); last done at **1.30.14 (`723d5e8`) on 2026-09-20**,
+  --manager-only` (helpers must match the release); last done at **1.30.17 (`e7be534`) on 2026-09-20**,
   followed by a live check of the map editor through `http://192.168.132.132:8081` on the QA lab
   `qa-nos-105458` only (see VALIDATION, 1.30.14; the read-only pass of 1.30.11 is under 1.30.12).
 - `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home.

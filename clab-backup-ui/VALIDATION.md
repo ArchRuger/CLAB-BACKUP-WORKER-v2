@@ -25,6 +25,18 @@ pushed, CI green). Row 10 and step E.1 of `docs/ui-review-001/MAP-PARITY.md`. **
   nothing is unsaved; the manager's drawing has the shapes, the group, the label mode and the link's
   distance of 48. Screenshots inspected: `~/ui-review/review-001/chunk17/` on the VM.
 
+## Live, after the push: the development manager on the VM at 1.30.17
+
+`sudo bash deploy/start-manager.sh --manager-only` from `e7be534` (CI green). Through the LAN address
+`http://192.168.132.132:8081` (plain HTTP, fresh browser cache) and **only on the QA lab `qa-nos-105458`**:
+a dragged device, *Undo* (back in place, nothing to save) and *Redo*; *Device look…* applying an icon and
+a label position to a device; *Link labels…* giving a link its own distance, *Undo* taking it back and
+*Redo* restoring it; **Save map** storing exactly the editor's document with the topology text identical
+and `PUT …/map-document` as the only write; the manager's drawing carrying the look; 0 console / page
+errors. The QA map was then put back byte for byte. A first attempt of this pass aborted in the script
+(the test drag had dropped one device onto another) before anything was saved. The maintainer's course
+labs were not opened in the editor. Screenshot: `~/ui-review/review-001/live-1.30.17/`.
+
 ## Not driven one by one
 
 The remaining fields of the editor's text, shape and group panels (font family, italic, underline,
