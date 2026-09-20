@@ -36,13 +36,20 @@ link; resume only from states that write order can produce; recovery is a fresh 
 
 ## Progress
 
-- [x] helper: `publish`, `revise`, capabilities (code written)
-- [ ] helper tests
-- [ ] manager routes (`lab_operations.py` preview for publish/revise, size cap, name collision, diff)
-- [ ] `main.py` CSP + caching exception, tests
-- [ ] `lab-builder/` TypeScript project, committed assets, licences/notices
-- [ ] `static/lab-builder.html`, `lab-builder-page.js`, `lab-builder.css`, entry points in `operations.js`
-- [ ] fixture manager support + Playwright student workflow
-- [ ] `parse_definition` groups fix (separate commit)
-- [ ] docs, CHANGELOG, VALIDATION, agent instructions, CI list, release
-- [ ] live validation on the dev VM
+- [x] helper: `publish`, `revise`, capabilities; helper and API tests
+- [x] manager routes: preview checks (parse, name pin, size cap, name collision, layout warning, diff), `known-images`
+- [x] `main.py` inline-style exception for the page, caching exception for its assets; tests
+- [x] `clab-backup-ui/lab-builder/` build project (exact pins, lockfile), committed assets + manifest,
+      `--check` rebuild comparison, generated third-party notices, Monaco chunk stubbed
+- [x] `static/lab-builder.html`, `lab-builder-page.js`, `lab-builder.css`; entry points and review copy in `operations.js`
+- [x] fixture manager support; `docs/lab-builder/tools/student_workflow.py` (38 checks) passes
+- [x] `parse_definition` groups fix (own commit)
+- [x] release markers moved with `set-release.py`
+- [ ] live validation on the dev VM (helper refresh, rebuild, real publish / deploy / destroy / revise)
+- [ ] docs (guide, LAB-OPERATIONS, ARCHITECTURE module map, README licence paragraph, notices), CHANGELOG,
+      VALIDATION, agent instructions; CI list (new test files, asset rebuild check)
+- [ ] push branch, open PR (see the PR workflow memory)
+
+How to rebuild the editor assets: `cd clab-backup-ui/lab-builder && npm ci && node build.mjs` with Node 24
+(a portable one is in `~/research/lab-builder/tooling/`). `node build.mjs --check` compares a fresh build
+with the committed manifest.
