@@ -4,6 +4,19 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.25
+
+**Maintenance audit follow-up 3: unused code removed from the Git helper and the restore service.** No
+execution path changes. `app/host_git.py` loses `allowed_version()`, which nothing called since
+`allowed_repo_version()` took over when a saved state became applicable from any folder; what
+`read-version`, `compare` and `history` may reach is unchanged. `app/restore.py` loses four unused imports,
+the `DONE` tuple, a set that `map_targets` built and never read, and `_candidates()` (the job's candidates
+are read directly, and `public_job` still leaves them out). In `app/restore_junos.py` the unused
+`COMMIT_ERROR` pattern and `pending_rollback_shell()` stay, now with a note: a commit is judged by the
+presence of the success line, and the probe is what an interrupted restore would need, which is a feature
+decision. **Refresh the Git helper on an installed VM as with any release** (`start-manager.sh`, or
+`setup-git.sh --refresh`).
+
 ## Changes in 1.30.24
 
 **Maintenance audit follow-up 2: the last trace of Home's Continue block.** Frontend only, no visible change.

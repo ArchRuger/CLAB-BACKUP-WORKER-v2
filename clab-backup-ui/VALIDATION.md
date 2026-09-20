@@ -1,3 +1,20 @@
+# Maintenance audit follow-up 3: unused code in the Git helper and the restore service — 1.30.25
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.24 (`08eac01`, pushed, CI green).
+**Static and unit evidence; no helper was installed and no device was touched.**
+
+- Before the edit: a search for every removed name over the application, the tests, `deploy/`, the fixture
+  manager and the other tools; no caller, no patch target, no import.
+- `test_host_git.py` (real Git), `test_git_progress.py`, `test_git_transport.py`, `test_check_git.py`,
+  `test_git_registrations.py`, `test_restore.py`, `test_restore_junos.py`: all pass. Full suites: 716 Python
+  tests with 1 skipped, 189 browser tests. `verify-release.py`, `check_links.py`, `git diff --check`.
+- An independent read-only risk review looked for dispatch by string, `getattr`, wrappers of the removed
+  method and patch targets, confirmed that `read-version`, `compare` and `history` already go through
+  `allowed_repo_version()`, that the helper still compiles with the system Python and imports the standard
+  library only, and that `public_job` still hides the restore candidates. It found nothing to fix.
+- Not run: the helper was not refreshed on the VM and no save or restore was performed with it; the claim
+  is that no executed line changed, and the evidence for that is the search, the tests and the review.
+
 # Maintenance audit follow-up 2: `lastOpened()` removed — 1.30.24
 
 Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.23 (`1807eee`, pushed). Frontend only.

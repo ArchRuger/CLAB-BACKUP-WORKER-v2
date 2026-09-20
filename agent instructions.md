@@ -1,4 +1,4 @@
-# Maintenance audit and its follow-ups — 1.30.24
+# Maintenance audit and its follow-ups — 1.30.25
 
 A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release
 per chunk. **Read `docs/maintenance-audit/PICKUP.md` first**, then `docs/maintenance-audit/AUDIT.md`
@@ -38,6 +38,9 @@ fake hid this defect. The two manager compose files must pass the same settings 
 `deploy/image.env` is git-ignored because it can hold the capture token.
 (10) Follow-up 2: `shell.js` has no `lastOpened()` and writes no `clab.lastLab`; `rememberOpened()` /
 `openedAt()` (per-lab open time, shown on the cards) stay.
+(11) Follow-up 3: `host_git.py` has no `allowed_version()` (the rule is `allowed_repo_version()`);
+`restore_junos.py` keeps the unused `pending_rollback_shell()` on purpose (the probe an interrupted restore
+would need; wiring it is a feature decision) and `COMMIT_ERROR` (a commit is judged by `COMMIT_OK`).
 
 # UI review 001 — 1.30.17
 

@@ -18,7 +18,6 @@ import base64
 import copy
 import re
 import threading
-import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -28,16 +27,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import restore_junos as junos
 from .discovery import discovery_fresh, node_available
-from .git_progress import captured_snapshot, decoded_snapshot, digest, host_identity, repo_path, resolve_version_path
-from .inventory import PLATFORMS
+from .git_progress import captured_snapshot, decoded_snapshot, host_identity, resolve_version_path
 from .lab_operations import RESTORE_BUSY, operation_busy, scrub
 from .node_services import connect
 from .runner import effective_credentials, now
 
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'message', 'source',
               'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets')
-# Statuses that let a lab be touched again once the restore has settled.
-DONE = ('succeeded', 'partial', 'failed', 'needs_attention', 'preflight_failed', 'interrupted', 'dismissed')
 
 ROOTAUTH = re.compile(r'^\s*set system root-authentication\b')
 VOLATILE = re.compile(r'^\s*set (?:version|system time|.*last-changed)\b')
@@ -224,7 +220,6 @@ class RestoreService:
 
     def map_targets(self, lab, candidates, requested):
         """Match saved node names to running lab nodes and decide per-node eligibility."""
-        running_names = {n['name'] for n in lab['nodes']}
         rows = []
         for name in sorted(candidates):
             cand = candidates[name]
@@ -352,11 +347,6 @@ class RestoreService:
                 return backup
             if self.stopping.wait(0.2):
                 return None
-
-    def _candidates(self, job_id):
-        with self.store.lock:
-            job = self.get_job(job_id)
-            return copy.deepcopy(job.get('_candidates', {}))
 
     def execute(self, job_id):
         lab_id = ''

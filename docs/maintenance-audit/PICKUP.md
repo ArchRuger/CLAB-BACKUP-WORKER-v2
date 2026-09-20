@@ -42,8 +42,8 @@ again. The maintainer chose six of the record's open items, in this order:
 | Follow-up | Content | State |
 |---|---|---|
 | 1 | Scaffold tool and the mandatory review; image compose line and parity test; prepared-image stack instructions; `deploy/image.env` ignored | pushed, `1807eee` |
-| 2 | `shell.js` `lastOpened()` and the `clab.lastLab` write removed, the test's claim rewritten | complete when this commit is on the remote |
-| 3 | Pure deletions in `host_git.py`, `restore.py`, `restore_junos.py` after a risk review (`pending_rollback_shell` and `COMMIT_ERROR` stay until the maintainer decides whether to wire the probe) | not started |
+| 2 | `shell.js` `lastOpened()` and the `clab.lastLab` write removed, the test's claim rewritten | pushed, `08eac01` |
+| 3 | Pure deletions in `host_git.py`, `restore.py`, `restore_junos.py` after a risk review (`pending_rollback_shell` and `COMMIT_ERROR` stay until the maintainer decides whether to wire the probe) | complete when this commit is on the remote; risk-reviewed before the commit |
 | 4 | Manager-side `unchanged` save status (`finish()` in `git_progress.py`), risk-reviewed; the careful part is a HEAD that was never uploaded | not started |
 
 ## Next
