@@ -93,13 +93,12 @@ On your build box, once per lab:
    `python3 deploy/scaffold-lab.py snapshot <lab-slug> start` — captures the running config and
    saves it (and its restore-grade candidate) into `reference/start`, then rebinds to `work`.
 4. Repeat for `solution` and `broken-01` (configure, then `snapshot <lab-slug> <state>`).
-5. Upload the states: the manager uploads a save only after its review (**Review and upload…**
-   under Progress › Recent saves), and the script cannot state that review. `snapshot` was written
-   when an upload could follow a save directly and has not been updated: the save ends *Waiting for
-   your review*, the script's rebind to `work` is then refused (a pending save blocks a folder
-   change), and the lab is left saving to `reference/<state>`. Upload the save with **Review and
-   upload…**, then point the lab back at `work` (Progress › Save location, or
-   `scaffold-lab.py init <lab-slug>`) before the student saves.
+5. Each `snapshot` lists the files it saved and asks before it uploads, because the manager uploads a
+   save only after a review; `--yes` states that review for scripted use. Answering no keeps the state
+   on the lab VM only (it goes up with the next upload of the repository). Either way the lab is
+   pointed back at `work`. If an upload fails, the tool stops and says that the lab still saves to
+   `reference/<state>`: finish that save under Progress › Recent saves, then run
+   `scaffold-lab.py init <lab-slug>` again before the student saves.
 
 The student then applies `reference/start` to begin, works in `work`, applies `reference/solution`
 to check, and applies `reference/broken-01` to practise recovery — all without a reboot and

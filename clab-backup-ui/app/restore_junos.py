@@ -35,7 +35,7 @@ CONF = re.compile(r'^[\w.\-]+@[\w.\-]+#\s*$', re.M)          # configuration pro
 ANY_PROMPT = re.compile(r'(^[\w.\-]+@[\w.\-]+[>#]\s*$)|([%$]\s*$)', re.M)
 SHELL = re.compile(r'[%$]\s*$')                              # root shell before `cli`
 LOAD_ERROR = re.compile(r'(?im)^\s*(?:error:|syntax error|load: |unknown command|missing\b)')
-COMMIT_ERROR = re.compile(r'(?im)^\s*(?:error:|.*\bfailed\b)')
+COMMIT_ERROR = re.compile(r'(?im)^\s*(?:error:|.*\bfailed\b)')   # not used: a commit is judged by COMMIT_OK being present
 CHECK_OK = 'configuration check succeeds'
 COMMIT_OK = 'commit complete'
 SECRET_HASH = re.compile(r'encrypted-password "([^"]+)"')
@@ -215,7 +215,11 @@ def confirm_shell(shell):
 
 
 def pending_rollback_shell(shell):
-    """True when a confirmed commit is still awaiting confirmation on the node."""
+    """True when a confirmed commit is still awaiting confirmation on the node.
+
+    Not called yet: kept as the probe an interrupted restore would need (a manager restart between
+    `commit confirmed` and the confirming `commit`). Wiring it is a feature decision, not cleanup.
+    """
     reach_cli(shell)
     out = shell.run('show system commit | no-more', PROMPT_TIMEOUT)
     return 'rollback' in out.lower() and 'confirmed' in out.lower()

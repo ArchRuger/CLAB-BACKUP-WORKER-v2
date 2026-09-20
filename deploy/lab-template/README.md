@@ -27,7 +27,8 @@ python3 deploy/scaffold-lab.py snapshot bgp-core broken-01
 
 `init` registers `reference/{start,solution,broken-01}` and `work` and points the lab at `work`.
 `snapshot <slug> <state>` captures whatever the node is running right now, saves it (and its
-restore-grade candidate) to `<slug>/reference/<state>`, pushes, and rebinds the lab to `work`.
+restore-grade candidate) to `<slug>/reference/<state>`, lists what it saved and asks before it uploads
+(`--yes` answers for a script; no keeps the state on the lab VM), and rebinds the lab to `work`.
 
 Prerequisites: the lab is deployed and reachable, and the lab is already connected to the target
 Git repository in the manager (the **Git repository** tab → Connect by URL). The scaffold needs one

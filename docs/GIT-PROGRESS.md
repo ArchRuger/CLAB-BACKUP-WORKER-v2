@@ -174,7 +174,7 @@ repeats them on its status card, whose **More ▾** adds the rest.
 
 | Action | Result |
 |---|---|
-| **Save progress** | Capture the configured device selection, export `latest`, commit changes on the VM, then open **Review before uploading**: what the save changed, with **Upload these changes** and **Not now — keep it on the VM**. Nothing is pushed without that choice (the manager refuses an upload that does not state the review, whatever an older save location setting said), and declining leaves the save on the VM as *Waiting for your review*. The save window opens on its own when something else needs you. |
+| **Save progress** | Capture the configured device selection, export `latest`, commit changes on the VM, then open **Review before uploading**: what the save changed, with **Upload these changes** and **Not now — keep it on the VM**. Nothing is pushed without that choice (the manager refuses an upload that does not state the review, whatever an older save location setting said), and declining leaves the save on the VM as *Waiting for your review*. The save window opens on its own when something else needs you. A save that finds nothing new since a save that was already uploaded ends as *Saved to Git* with *Nothing changed since your last save*: there is nothing to review or upload, and it does not hold up a folder change. While the last save is still waiting for its review, a save with nothing new waits with it. |
 | **Save on this VM only** | Capture and commit without pushing. |
 | **Create checkpoint…** | Capture a named milestone in `checkpoints/<name>`. |
 | **Set baseline…** | Select a complete recorded capture for `baseline`; replacing one is reviewed explicitly. |

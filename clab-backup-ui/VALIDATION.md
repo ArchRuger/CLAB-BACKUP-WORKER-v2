@@ -1,3 +1,86 @@
+# Maintenance audit follow-up 4: a save with nothing new — 1.30.26
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.25 (`2dd62a5`, pushed). Manager only.
+**Unit evidence; not exercised in a browser, against a real Git helper or a Git host.**
+
+- `tests/test_git_progress.py`, 37 tests. The fake helper can now answer `unchanged` like
+  `host_git.py` does (it never could, which is why this went unnoticed). New: after an uploaded save, a
+  save with nothing new ends `unchanged` and uploaded, sends no push, is not a pending save, and a retry
+  returns it without queueing work (this test fails on the previous manager: `review_pending`); while the
+  commit was never uploaded it keeps waiting for the review, stays pending, and an upload without the
+  stated review is still refused with 409; a commit uploaded under another binding digest does not count.
+  The last two pass on the previous manager too: they guard the conservative side of the rule.
+- `tests/test_git_progress_ui.js`: one added test pins what the page already did with such a job (no review
+  needed, *Uploaded*, the *nothing had changed* toast). It is a pin, not a test of this change: no page
+  file changed.
+- Full suites: 719 Python tests with 1 skipped, 190 browser tests. `verify-release.py`, `check_links.py`,
+  `git diff --check`.
+- An independent read-only risk review attacked the rule (a commit marked uploaded that is not on the
+  remote, an upload without review, other readers of the job status, ordering inside `finish()`, the
+  message still passing through `scrub`) and found nothing to fix. Its caveat is recorded here: "was
+  uploaded" is the manager's memory of a verified push, not a fresh look at the remote, so it is wrong only
+  after an out-of-band change to the remote (a force-push, a recreated repository, a changed remote URL in
+  the checkout); no upload is lost in that case, because the next save with changes is reviewed and its
+  push carries the branch.
+- Not covered: the fixture manager's scripted helper always commits and never answers `unchanged`, so
+  `verify_after.py` and the `check_ui*.py` tools cannot show this path; `check_ui007c.py` asserts that a
+  local save is not uploaded, which would need revisiting if the fixture ever answered `unchanged`.
+
+# Maintenance audit follow-up 3: unused code in the Git helper and the restore service — 1.30.25
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.24 (`08eac01`, pushed, CI green).
+**Static and unit evidence; no helper was installed and no device was touched.**
+
+- Before the edit: a search for every removed name over the application, the tests, `deploy/`, the fixture
+  manager and the other tools; no caller, no patch target, no import.
+- `test_host_git.py` (real Git), `test_git_progress.py`, `test_git_transport.py`, `test_check_git.py`,
+  `test_git_registrations.py`, `test_restore.py`, `test_restore_junos.py`: all pass. Full suites: 716 Python
+  tests with 1 skipped, 189 browser tests. `verify-release.py`, `check_links.py`, `git diff --check`.
+- An independent read-only risk review looked for dispatch by string, `getattr`, wrappers of the removed
+  method and patch targets, confirmed that `read-version`, `compare` and `history` already go through
+  `allowed_repo_version()`, that the helper still compiles with the system Python and imports the standard
+  library only, and that `public_job` still hides the restore candidates. It found nothing to fix.
+- Not run: the helper was not refreshed on the VM and no save or restore was performed with it; the claim
+  is that no executed line changed, and the evidence for that is the search, the tests and the review.
+
+# Maintenance audit follow-up 2: `lastOpened()` removed — 1.30.24
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.23 (`1807eee`, pushed). Frontend only.
+**Static and unit evidence.**
+
+- Consumers searched before the removal: every static script and page, the tests and the Playwright tools.
+  `lastOpened` had no reader outside `tests/test_shell_ui.js` and a fake in `tests/test_home_ui.js`;
+  `openedAt` is read by `home.js` and stays.
+- `node --test tests/*.js`: 189 of 189, with the rewritten storage test. `node --check app/static/shell.js`,
+  `verify-release.py`, `check_links.py`, `git diff --check`, the Python suite (716 tests, 1 skipped).
+- Not run: no browser pass; the change removes one storage write and no markup or style.
+
+# Maintenance audit follow-up 1: scaffold tool, prepared-image settings — 1.30.23
+
+Prepared on `claude/maintenance-audit` on 2026-09-20, fast-forwarded to `main` `fc6da24` (pull request #45
+merged by the maintainer). **Unit and static evidence; nothing live.**
+
+## What was run
+
+- `tests/test_scaffold_lab.py`: 9 tests. The fake manager was first made to behave like
+  `app/git_progress.py` (a save ends `review_pending`, the `destination` route answers 409 while a save
+  waits, a retry without `reviewed` answers 409, dismiss needs the acknowledgement). Against that fake the
+  **old** tool fails five tests, among them the original snapshot test; the new tool passes all nine: the
+  review is stated and the upload happens before the rebind, a "no" sets the save aside and still rebinds,
+  no terminal and no `--yes` changes nothing, a failed upload reports that the lab still saves to the
+  reference folder and attempts no rebind.
+- `tests/test_release_consistency.py`: the new parity test passes, and fails with the compose line removed.
+  `docker compose -f deploy/compose.image.yml config` shows the variable as 15 by default and as the given
+  value when set.
+- Both full suites (716 Python tests with 1 skipped, 189 browser tests), `verify-release.py`,
+  `check_links.py`, `git diff --check`.
+
+## Not run
+
+`scaffold-lab.py` was not run against a real manager, lab or Git host: the statement that a set-aside save
+goes up with the next upload follows from the helper's push (it sends the branch) and was not exercised. The
+prepared-image instructions were written from the scripts and not executed on a VM.
+
 # Maintenance audit, chunk 5: verification fixes, telemetry keys, agent routes — 1.30.22
 
 Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.21 (`a59378a`, pushed, **CI green including

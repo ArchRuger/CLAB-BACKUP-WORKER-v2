@@ -85,6 +85,18 @@ class ReleaseConsistencyTests(unittest.TestCase):
         path.write_bytes(path.read_bytes().strip() + b'\r\n')
         self.assertEqual(release.verify(self.root), release.verify(ROOT))
 
+    def test_the_prepared_image_compose_file_passes_the_same_settings_as_the_source_build(self):
+        import re
+
+        def settings(path):
+            text = (ROOT / path).read_text(encoding='utf-8')
+            block = text.split('    environment:\n', 1)[1]
+            return set(re.findall(r'^      ([A-Z][A-Z_]+):', block.split('    volumes:', 1)[0], re.M))
+
+        built, image = settings('clab-backup-ui/compose.yml'), settings('deploy/compose.image.yml')
+        self.assertIn('TELEMETRY_GRAFANA_IDLE_MINUTES', built)
+        self.assertEqual(built, image)
+
     def test_source_check_precedes_host_setup(self):
         launcher = (ROOT / 'deploy/start-manager.sh').read_text()
         self.assertLess(launcher.index('verify-release.py'), launcher.index('bash "$script_dir/setup-discovery.sh"'))

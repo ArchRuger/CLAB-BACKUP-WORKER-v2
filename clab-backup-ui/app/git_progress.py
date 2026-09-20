@@ -416,13 +416,24 @@ class GitProgress:
         commit = result.get('commit', '')
         if commit and not re.fullmatch(r'[0-9a-f]{40,64}', commit): raise ValueError('Git helper returned an invalid commit identifier.')
         pushed = result.get('pushed') is True
+        # A save with nothing new reuses HEAD. It has nothing to review and nothing to upload when the
+        # manager already knows that exact commit was uploaded through this same binding; only then is it
+        # 'unchanged'. A HEAD that was never uploaded keeps the ordinary path: there is still a save to
+        # review, and it must keep blocking folder changes.
+        uploaded = False
+        if result.get('status') == 'unchanged' and commit and not pushed and job.get('target') != 'move':
+            with self.store.lock:
+                uploaded = any(other.get('id') != job['id'] and other.get('commit') == commit and other.get('pushed') is True
+                               and other.get('binding_digest') == job.get('binding_digest') for other in self.store.state['git_jobs'])
         if pushed: status = 'synced'
         elif result.get('status') == 'needs_attention': status = 'push_pending' if commit else 'export_pending'
+        elif uploaded: status = 'unchanged'
         elif job.get('review_before_push') and not job.get('retry_push'): status = 'review_pending'
         else: status = 'committed'
         message = result.get('message') or ('Saved to Git.' if pushed else 'Saved on VM; not pushed.')
+        if uploaded: message = 'Nothing changed since the last save, which was uploaded.'
         with self.store.lock: message = scrub(str(message), self.store.state)
-        self.update(job['id'], status=status, commit=commit, pushed=pushed, message=message[:600],
+        self.update(job['id'], status=status, commit=commit, pushed=pushed or uploaded, message=message[:600],
                     changed_files=result.get('changed_files', []), snapshot_path=result.get('snapshot_path', ''), finished=now())
         if pushed:
             with self.store.lock:
@@ -774,7 +785,7 @@ class GitProgress:
             with self.store.lock:
                 self.idle(); job = self.get_job(job_id)
                 if job['status'] in ('dismissed', 'capture_incomplete', 'failed'): raise HTTPException(409, 'Start a new save for this capture outcome.')
-                if job['status'] == 'synced': return public_job(job)
+                if job['status'] == 'synced' or (job['status'] == 'unchanged' and job.get('pushed')): return public_job(job)
                 if digest(self.binding(job['lab_id'])) != job['binding_digest']: raise HTTPException(409, 'Repository settings changed. Reconnect the original destination.')
                 # Uploading a save needs its review: stated with this request, or recorded by an earlier
                 # one (an upload that failed after the review). A save without a commit has nothing to

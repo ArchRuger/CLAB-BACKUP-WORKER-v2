@@ -4,6 +4,69 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.26
+
+**Maintenance audit follow-up 4: a save with nothing new no longer asks for a review of nothing.** Manager
+only (`app/git_progress.py`); the helpers changed by their lockstep version alone.
+
+- The VM helper has always answered `unchanged` when a save finds no changed file, but the manager ignored
+  it: the save ended *Waiting for your review*, the page opened **Review before uploading** with an empty
+  list, and that waiting save then blocked **Change folder…**, **Use a different repository…** and
+  **Connect by URL…** until the student uploaded or set aside nothing.
+- Now such a save ends *Saved to Git — nothing had changed since your last save*, but only when the manager
+  already knows that the very commit it reuses was uploaded through the same save location (another save of
+  it is recorded as uploaded, with the same binding). It is then not a pending save, and asking to upload
+  it again simply returns it.
+- Everything else keeps the previous path on purpose. When the commit was never uploaded, or was uploaded
+  under different save settings, the save still waits for the review and still blocks a folder change,
+  because there really is something on the VM that is not online. The review before an upload stays
+  mandatory: no route uploads without it, and none was added.
+- [Save progress](GIT-PROGRESS.md) describes both cases.
+
+## Changes in 1.30.25
+
+**Maintenance audit follow-up 3: unused code removed from the Git helper and the restore service.** No
+execution path changes. `app/host_git.py` loses `allowed_version()`, which nothing called since
+`allowed_repo_version()` took over when a saved state became applicable from any folder; what
+`read-version`, `compare` and `history` may reach is unchanged. `app/restore.py` loses four unused imports,
+the `DONE` tuple, a set that `map_targets` built and never read, and `_candidates()` (the job's candidates
+are read directly, and `public_job` still leaves them out). In `app/restore_junos.py` the unused
+`COMMIT_ERROR` pattern and `pending_rollback_shell()` stay, now with a note: a commit is judged by the
+presence of the success line, and the probe is what an interrupted restore would need, which is a feature
+decision. **Refresh the Git helper on an installed VM as with any release** (`start-manager.sh`, or
+`setup-git.sh --refresh`).
+
+## Changes in 1.30.24
+
+**Maintenance audit follow-up 2: the last trace of Home's Continue block.** Frontend only, no visible change.
+`shell.js` no longer has `lastOpened()` and no longer writes `clab.lastLab` each time a lab is opened: the
+block that read it left Home when *Recent labs* arrived. `rememberOpened()` still records when each lab was
+opened, which the lab cards show. The test that pinned the old pair now claims what is still true (the time
+is recorded per lab, storage that throws is survived) and that no reader is left; the Home test harness lost
+its unused fake. A `clab.lastLab` value left in a browser is never read again.
+
+## Changes in 1.30.23
+
+**Maintenance audit follow-up 1: the course scaffold tool works with the mandatory upload review, and
+prepared-image installations get the Grafana idle time and a way to set up both stacks.** No change to the
+manager or the helpers beyond the lockstep version.
+
+- `deploy/scaffold-lab.py snapshot` could not finish since an upload needs a review: the save ended *Waiting
+  for your review*, the tool's rebind to `work` was refused (a waiting save blocks a folder change) and the
+  lab was left saving into `reference/<state>`. It now lists the files it saved and asks before it uploads,
+  stating the review through the same retry route the page uses; `--yes` answers for a script, and without
+  a terminal the tool refuses before it changes anything. Answering no sets the save aside (*Keep snapshot
+  only*), so the state stays on the lab VM and the lab is still pointed back at `work`. When an upload
+  fails it says plainly that the lab still saves to the reference folder and how to recover. Its test
+  manager now behaves like the real one (review, refusal of the folder change, refusal of an unreviewed
+  upload); the old tool fails those tests.
+- `deploy/compose.image.yml` passes `TELEMETRY_GRAFANA_IDLE_MINUTES` like the source-build file (default 15,
+  so nothing changes for an installation that never set it). A test keeps the two files' settings equal.
+- The Wiki guide's prepared-image part explains how to set up browser Wireshark and the dashboards there:
+  both setup scripts with `--no-recreate`, their settings copied into `deploy/image.env`, the manager
+  recreated with the image Compose file, and `UI_PORT` in `clab-backup-ui/.env` when it is not 8081.
+  `deploy/image.env` is now git-ignored, because it then holds the capture session token.
+
 ## Changes in 1.30.22
 
 **Maintenance audit, chunk 5: what the independent verification found, the telemetry settings table, and

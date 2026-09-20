@@ -11,11 +11,13 @@ configuration into a named reference folder:
 `init` registers ``<slug>/reference/{start,solution,broken-01}`` and ``<slug>/work`` and
 points the lab's saves at ``<slug>/work``. `snapshot <slug> <state>` captures whatever the
 node is running now, saves it (and its restore-grade candidate) into
-``<slug>/reference/<state>``, pushes, and rebinds the lab to ``<slug>/work``.
+``<slug>/reference/<state>``, shows what changed and asks before it uploads (the manager
+uploads a save only after a review; ``--yes`` states that review for scripted use), and
+rebinds the lab to ``<slug>/work``. Answering no keeps the state on the lab VM only.
 
 Prerequisites: the lab is deployed and reachable, and it is already connected to the target
-repository in the manager (More -> Git repository -> Connect by URL). See docs/NAMING.md and
-deploy/lab-template/README.md.
+repository in the manager (Progress -> Save location -> Connect by URL). See docs/NAMING.md
+and deploy/lab-template/README.md.
 """
 import argparse
 import json
@@ -30,6 +32,7 @@ DEFAULT_MANAGER = 'http://127.0.0.1:8081'
 DEFAULT_STATES = 'start,solution,broken-01'
 NAME = re.compile(r'[a-z0-9][a-z0-9-]{0,62}')          # lab slug and state names
 GIT_ACTIVE = {'queued', 'capturing', 'exporting', 'pushing'}
+GIT_REVIEWABLE = {'review_pending', 'committed', 'unchanged'}   # saved on the VM, upload not done yet
 
 
 def api(manager, path, method='GET', body=None):
@@ -79,7 +82,7 @@ def binding_id(manager, lab_id):
     status, git = api(manager, '/labs/%s/git' % lab_id)
     binding = (git or {}).get('binding')
     if not binding:
-        die('the lab is not connected to a Git repository yet. Connect one in More -> Git repository.')
+        die('the lab is not connected to a Git repository yet. Connect one under Progress -> Save location.')
     return binding['binding_id']
 
 
@@ -122,6 +125,36 @@ def save_progress(manager, lab_id):
     return poll_git(manager, job['id'])
 
 
+def upload_reviewed(manager, job_id):
+    """Upload a save whose changes the person running this tool has just been shown."""
+    status, job = api(manager, '/git/jobs/%s/retry' % job_id, 'POST', {'push': True, 'reviewed': True})
+    if status != 200:
+        return {'status': 'refused', 'message': job.get('detail') or 'HTTP %s' % status}
+    return poll_git(manager, job_id)
+
+
+def keep_on_vm(manager, job_id):
+    """Stop tracking a save that stays on the lab VM, so it no longer blocks a folder change."""
+    status, job = api(manager, '/git/jobs/%s/dismiss' % job_id, 'POST', {'acknowledge': True})
+    if status != 200:
+        die('could not set the save aside: %s' % (job.get('detail') or 'HTTP %s' % status))
+
+
+def confirmed(job, reference, assume_yes):
+    files = job.get('changed_files') or []
+    print('Saved into %s on the lab VM (%s).' % (reference, (job.get('commit') or '')[:12] or 'no new commit'))
+    for name in files[:40]:
+        print('  ' + str(name))
+    if len(files) > 40:
+        print('  ... and %d more' % (len(files) - 40))
+    if not files:
+        print('  nothing changed since the previous save of this folder')
+    print('Configuration files may contain passwords or keys.')
+    if assume_yes:
+        return True
+    return input('Upload this state to the online repository now? [y/N] ').strip().lower() in ('y', 'yes')
+
+
 def cmd_init(args):
     valid(args.slug, 'lab slug')
     states = [s.strip() for s in args.states.split(',') if s.strip()]
@@ -145,14 +178,31 @@ def cmd_snapshot(args):
     lab = find_lab(args.manager, args.lab)
     reference = '%s/reference/%s' % (args.slug, args.state)
     work = '%s/work' % args.slug
+    assume_yes = bool(getattr(args, 'yes', False))
+    if not assume_yes and not sys.stdin.isatty():
+        die('an upload needs your review. Run this in a terminal, or pass --yes to state that you reviewed it.')
     bind_to(args.manager, lab['id'], reference)          # register + connect the reference folder
     final = save_progress(args.manager, lab['id'])       # capture the running config into it
+    status, where = final.get('status'), ''
+    # The manager never uploads a save by itself: it waits for a review, and a waiting save blocks the
+    # folder change back to work. So the upload (or setting the save aside) comes before the rebind.
+    if status in GIT_REVIEWABLE and not final.get('pushed'):
+        if confirmed(final, reference, assume_yes):
+            final = upload_reviewed(args.manager, final['id'])
+            status = final.get('status')
+        else:
+            keep_on_vm(args.manager, final['id'])
+            status, where = 'kept', 'kept on the lab VM only (it goes up with the next upload of this repository)'
+    if status == 'synced' or (status == 'unchanged' and final.get('pushed')):
+        where = 'uploaded'
+    if not where and status not in ('failed', 'capture_incomplete'):
+        die('the snapshot into %s is not finished: %s (%s). The lab STILL SAVES TO %s. Finish or set aside that '
+            'save under Progress > Recent saves, then run: scaffold-lab.py init %s'
+            % (reference, status, final.get('message', ''), reference, args.slug))
     bind_to(args.manager, lab['id'], work)               # rebind so the student keeps saving in work
-    status = final.get('status')
-    if status not in ('synced', 'committed'):
+    if not where:
         die('the snapshot into %s did not finish cleanly: %s (%s). The lab is rebound to %s.'
             % (reference, status, final.get('message', ''), work))
-    where = 'pushed' if status == 'synced' else 'saved locally (not pushed)'
     print('Captured the running configuration into %s and %s. Lab rebound to %s.' % (reference, where, work))
 
 
@@ -168,6 +218,7 @@ def main(argv=None):
     p_snap = sub.add_parser('snapshot', help='capture the running config into <slug>/reference/<state>')
     p_snap.add_argument('slug')
     p_snap.add_argument('state')
+    p_snap.add_argument('--yes', action='store_true', help='upload without asking: states that you reviewed what this state contains')
     p_snap.set_defaults(func=cmd_snapshot)
     args = parser.parse_args(argv)
     args.func(args)

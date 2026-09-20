@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.30.22'
+VERSION = '1.30.26'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -632,12 +632,6 @@ class GitRepository:
             if len(versions) >= 500: break
         versions.sort(key=lambda version: (not version['connected'], version['path']))
         return {'commits': commits, 'versions': versions}
-
-    def allowed_version(self, folder):
-        relpath(folder)
-        if folder in (self.scope('latest'), self.scope('baseline')): return True
-        prefix = self.scope('checkpoints') + '/'
-        return folder.startswith(prefix) and '/' not in folder[len(prefix):] and bool(SLUG.fullmatch(folder[len(prefix):]))
 
     def allowed_repo_version(self, folder):
         """A snapshot folder anywhere in this checkout: any path ending in latest/baseline or

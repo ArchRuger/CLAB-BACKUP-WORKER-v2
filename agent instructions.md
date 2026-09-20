@@ -1,4 +1,4 @@
-# Maintenance audit — 1.30.22
+# Maintenance audit and its follow-ups — 1.30.26
 
 A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release
 per chunk. **Read `docs/maintenance-audit/PICKUP.md` first**, then `docs/maintenance-audit/AUDIT.md`
@@ -30,6 +30,22 @@ Eight more test files run in CI; a new test file still has to be added to the wo
 actually ran on, because user settings can force one model for all. The audit's open decisions (the scaffold
 tool's `snapshot`, the empty review after an unchanged save, the image compose file, unused names in the
 sensitive modules) are in `docs/maintenance-audit/AUDIT.md` §5; none of them was changed.
+(9) Follow-up 1: `deploy/scaffold-lab.py snapshot` states the review itself (`upload_reviewed` sends
+`{push: true, reviewed: true}` only after `confirmed()` showed the files, or with `--yes`) and must keep
+uploading or setting the save aside **before** it rebinds, because a waiting save refuses the folder
+change. Keep `tests/test_scaffold_lab.py`'s fake manager faithful to `git_progress.py`; an always-`synced`
+fake hid this defect. The two manager compose files must pass the same settings (tested);
+`deploy/image.env` is git-ignored because it can hold the capture token.
+(10) Follow-up 2: `shell.js` has no `lastOpened()` and writes no `clab.lastLab`; `rememberOpened()` /
+`openedAt()` (per-lab open time, shown on the cards) stay.
+(11) Follow-up 3: `host_git.py` has no `allowed_version()` (the rule is `allowed_repo_version()`);
+`restore_junos.py` keeps the unused `pending_rollback_shell()` on purpose (the probe an interrupted restore
+would need; wiring it is a feature decision) and `COMMIT_ERROR` (a commit is judged by `COMMIT_OK`).
+(12) Follow-up 4: `finish()` in `git_progress.py` ends a save `unchanged` + `pushed` **only** when the helper
+answered `unchanged` and another job with the same commit is `pushed is True` under the same
+`binding_digest`; every other case keeps `review_pending` / `committed` so an un-uploaded commit still
+blocks folder changes. Do not loosen those three conditions and do not ask the helper to push from a save:
+the review stays the only way to upload. The fixture manager's helper never answers `unchanged`.
 
 # UI review 001 — 1.30.17
 
