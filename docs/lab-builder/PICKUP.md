@@ -45,10 +45,18 @@ link; resume only from states that write order can produce; recovery is a fresh 
 - [x] fixture manager support; `docs/lab-builder/tools/student_workflow.py` (38 checks) passes
 - [x] `parse_definition` groups fix (own commit)
 - [x] release markers moved with `set-release.py`
-- [ ] live validation on the dev VM (helper refresh, rebuild, real publish / deploy / destroy / revise)
-- [ ] docs (guide, LAB-OPERATIONS, ARCHITECTURE module map, README licence paragraph, notices), CHANGELOG,
-      VALIDATION, agent instructions; CI list (new test files, asset rebuild check)
-- [ ] push branch, open PR (see the PR workflow memory)
+- [x] live validation on the dev VM: 38 of 38 workflow checks through the real gateway and helper, Linux hosts,
+      real deploy and destroy; delete / name reuse / refusals through the API (see VALIDATION)
+- [x] docs, CHANGELOG, VALIDATION, agent instructions; CI list and asset rebuild check
+- [x] branch pushed, pull request opened
+
+## Open after this release
+
+- Deploy a builder-made lab with router images (cEOS, cJunosEvolved, vJunos-switch, XRv9k) and check the
+  interface patterns against the running devices.
+- Watch upstream for a published `lifecycleActionsAvailable` prop and a switch for Geo layout; both would
+  retire a `data-testid` rule in `lab-builder.css`.
+- Not in this version by decision: startup-config files, Git destinations, image management, editable YAML.
 
 How to rebuild the editor assets: `cd clab-backup-ui/lab-builder && npm ci && node build.mjs` with Node 24
 (a portable one is in `~/research/lab-builder/tooling/`). `node build.mjs --check` compares a fresh build

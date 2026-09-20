@@ -1,3 +1,55 @@
+# Lab builder — 1.30.0
+
+Prepared on `claude/visual-lab-builder` from `398d726` (1.29.1) on 2026-09-20 on the dev VM
+`clab-llm-dev2`. Release decision: **PASS for the scope below**; what was not exercised is listed.
+
+## What was run
+
+- **Suites** (this checkout): 705 Python tests (1 skipped opt-in fixture), 145 browser tests
+  (`node --test tests/*.js`), `node --check app/static/operations.js`, `git diff --check`,
+  `deploy/verify-release.py`. New: helper tests for `publish`, `revise` and `delete` on a real
+  temporary filesystem (derived paths, write order, modes, no overwrite, idempotent repeat, resume
+  only from the states the write order can leave, rollback of own files only, deployed and stale
+  refusals, recovery copies, name reuse after delete); API tests (manager-side checks, no file text
+  in job records, name collision, diff); header tests for the page policy and asset caching;
+  `tests/test_lab_builder_ui.js` (names, interface patterns, starters, templates, second-tab
+  protection, draft import/export, save requests, hidden controls still present in the bundle,
+  no code generation in the bundle, committed assets equal their manifest).
+- **Asset build**: `npm ci && node build.mjs` with Node 24.21.0; `node build.mjs --check`
+  reproduces the committed manifest (132 files, 7.2 MB, 77 packages).
+- **Mock student workflow** (`docs/lab-builder/tools/student_workflow.py`, Playwright Chromium,
+  fixture manager with the VM answered in-process): 38 of 38 checks. Home → Deploy dialog → builder,
+  refused names, triangle starter, hidden controls, palette drag, link with allocated interfaces,
+  rename, delete, undo, View YAML, draft download, second-tab conflict and reload, reviewed save
+  with the YAML shown, *Deploy or add this lab…* into the normal Topology file dialog, deploy, My
+  labs entry with the builder's layout in the manager's map, refusal while deployed, revision review
+  with the difference after destroy, My labs following the revision, *Edit visually…* on the saved
+  file; zero console errors, page errors and policy violations.
+- **Live, on `clab-llm-dev2`** (containerlab 0.79, launcher run from this branch: helpers reinstalled,
+  image rebuilt, eleven existing labs, roots and registrations preserved): the same 38 checks against
+  the real manager through the SSH gateway and the root helper, with Linux hosts
+  (`ghcr.io/srl-labs/network-multitool`) and a real `containerlab deploy` and `destroy --cleanup`.
+  On disk: lab folder `drwxrwsr-x root:clab_admins` (setgid inherited from the trusted root), both
+  files `0664`, recovery copies `0600` in a `0700` history folder, no temporaries left. Through the
+  API against the real helper: delete with both recovery copies, the same name published again,
+  identical content reported as already saved, different content refused, a root outside the
+  trusted folders refused, YAML anchors refused by the manager, a stale revision refused. The test
+  lab was removed from My labs and from the VM afterwards.
+- **Feasibility prototype and independent review** (before the build, outside the repository):
+  the published editor under the manager's exact headers, every navbar control swept, a fidelity
+  fixture (custom images, ports, startup-delay, defaults/kinds/groups, extended links, unknown keys)
+  edited through the UI and parsed by `parse_definition` and `parse_drawing`.
+
+## Not exercised
+
+- Router images in a builder-made lab (cEOS, cJunosEvolved, vJunos-switch, XRv9k) were not deployed;
+  the live deploy used Linux hosts. Interface patterns for those kinds are covered by unit tests only.
+- Browsers other than Chromium; large topologies; the editor's annotation tools, network nodes and
+  template dialogs beyond set-default; a power loss during a save (the ordering and fsyncs are
+  covered by code and unit tests, not by pulling power).
+- A fresh installation and an upgrade on a second VM; CI on GitHub (the workflow edits are untested
+  until the branch is pushed).
+
 # Student UI screenshot pass and layout fixes — 1.29.1
 
 Prepared on `main` from `8c9f306` (1.29.0) on 2026-09-17 on the dev VM `clab-llm-dev2` (the
