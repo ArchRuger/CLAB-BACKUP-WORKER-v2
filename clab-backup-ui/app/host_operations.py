@@ -207,14 +207,15 @@ class HostOperations:
         finally: os.close(fd)
 
     def publish_state(self, folder, wanted):
-        """new, resume or published. A folder is only ours to continue when everything in it is what
+        """new, reuse, resume or published. A folder is only ours to continue when everything in it is what
         this request would have written, in the order it writes: the annotations first, the YAML last."""
         if not folder.exists(): return 'new'
         if folder.is_symlink() or not folder.is_dir(): raise ValueError('The lab folder name is taken by something that is not a folder.')
         present = {}
         with os.scandir(folder) as listing: entries = list(listing)
         for entry in entries:
-            if entry.name.startswith('.clab-manager-') and entry.is_file(follow_symlinks=False) and entry.stat(follow_symlinks=False).st_uid == os.geteuid(): continue
+            # Left by this helper: temporaries of an interrupted run, and the recovery copies of a deleted lab.
+            if entry.name.startswith('.clab-manager-') and not entry.is_symlink() and entry.stat(follow_symlinks=False).st_uid == os.geteuid() and (entry.is_file(follow_symlinks=False) or entry.name == '.clab-manager-history'): continue
             if entry.name not in wanted: raise ValueError('A lab folder with this name already exists on the VM: ' + str(folder) + '. Choose another lab name.')
             try: present[entry.name] = self.owned_bytes(entry.path)
             except OSError: present[entry.name] = None
@@ -223,7 +224,7 @@ class HostOperations:
         if yaml_name in present: 
             if len(present) != len(wanted): raise ValueError('A lab folder with this name already exists on the VM: ' + str(folder) + '. Choose another lab name.')
             return 'published'
-        return 'resume'
+        return 'resume' if present else 'reuse'  # reuse: only this helper's recovery copies are left in it
 
     def plan(self, req):
         action = req.get('action')
@@ -265,7 +266,7 @@ class HostOperations:
             state = self.publish_state(folder, wanted)
             source_hash = 'new'
             extra = {'folder': str(folder), 'files': sorted(wanted), 'folder_mode': 0o2775 if Path(root).stat().st_mode & stat.S_ISGID else 0o755}
-            if state != 'new': warnings.append('This lab is already saved on the VM with the same content; nothing will be written.' if state == 'published' else 'An earlier save of this lab stopped half way; this run completes it.')
+            if state in ('published', 'resume'): warnings.append('This lab is already saved on the VM with the same content; nothing will be written.' if state == 'published' else 'An earlier save of this lab stopped half way; this run completes it.')
         elif action == 'inspect-all':
             argv = [self.clab, 'inspect', '--all', '--format', 'json']
         else:
@@ -280,6 +281,9 @@ class HostOperations:
                     raise ValueError('The deployed lab name belongs to a different topology path.')
             if action in ('delete',):
                 if action == 'delete' and rows: raise ValueError('Destroy the deployment before deleting its source YAML.')
+                side = Path(str(path) + ANNOTATIONS_SUFFIX)
+                if side.is_file() and not side.is_symlink():
+                    extra = {'layout': str(side)}; warnings.append('The map layout file beside it is deleted as well. A recovery copy of both is kept.')
             elif action == 'revise':
                 # Saving again is only for a lab that is not running: the running lab was built from the
                 # file on disk, and the request must come from exactly the versions it names.
@@ -368,7 +372,7 @@ class HostOperations:
                     try: os.fsync(root_fd)
                     finally: os.close(root_fd)
                 existing = set(os.listdir(folder))
-                for name in [n for n in existing if n.startswith('.clab-manager-')]:  # temporaries of an interrupted run
+                for name in [n for n in existing if n.startswith('.clab-manager-') and n != '.clab-manager-history']:  # temporaries of an interrupted run
                     os.unlink(name, dir_fd=folder_fd)
                 for name in sorted(wanted, key=lambda n: not n.endswith(ANNOTATIONS_SUFFIX)):
                     if name in existing: continue
@@ -435,6 +439,13 @@ class HostOperations:
                 with open(backup, 'xb') as stream_file:
                     os.chmod(backup, 0o600); stream_file.write(path.read_bytes())
                 result['recovery_path'] = str(backup)
+            if action == 'delete' and plan.get('layout'):
+                side = Path(plan['layout'])
+                if side.is_file() and not side.is_symlink() and side.stat().st_size <= LIMIT:
+                    kept = history / (side.name + '.' + uuid.uuid4().hex)
+                    with open(kept, 'xb') as stream_file:
+                        os.chmod(kept, 0o600); stream_file.write(side.read_bytes())
+                    side.unlink(); result['layout_recovery_path'] = str(kept)
             if action == 'delete': path.unlink()
             else:
                 temp = path.with_name('.clab-manager-' + uuid.uuid4().hex)

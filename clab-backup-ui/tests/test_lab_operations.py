@@ -250,6 +250,22 @@ class HostOperationTests(unittest.TestCase):
         self.host.execute({**keep, 'digest': self.host.plan(keep)['digest']}, lambda _: None)
         self.assertEqual(side.read_text(), '{"nodeAnnotations":[]}')
 
+    def test_deleting_a_built_lab_takes_its_layout_along_and_frees_the_name(self):
+        req, plan = self.publish(); self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        path = Path(plan['path']); delete = dict(action='delete', name='built', path=str(path)); review = self.host.plan(delete)
+        self.assertIn('map layout file', review['warnings'][0])
+        result = self.host.execute({**delete, 'digest': review['digest']}, lambda _: None)
+        self.assertEqual(Path(result['recovery_path']).read_bytes(), self.BUILT); self.assertEqual(Path(result['layout_recovery_path']).read_text(), self.LAYOUT)
+        self.assertEqual([p.name for p in path.parent.iterdir()], ['.clab-manager-history'])
+        # The recovery copies stay; the name can be used for a new lab in the same folder.
+        req, plan = self.publish(text=self.BUILT.decode() + '# second attempt\n'); self.assertEqual(plan['warnings'], [])
+        self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        self.assertEqual(sorted(p.name for p in path.parent.iterdir()), ['.clab-manager-history', 'built.clab.yml', 'built.clab.yml.annotations.json'])
+        self.assertEqual(len(list((path.parent/'.clab-manager-history').iterdir())), 2)
+        # A topology without a layout file is deleted as before.
+        lone = dict(action='delete', name='training', path=str(self.path)); self.rows.clear()
+        self.assertEqual(self.host.plan(lone)['warnings'], [])
+
     def test_capabilities_advertise_the_builder_actions(self):
         actions = self.host.capabilities()['actions']
         self.assertTrue(actions['publish']['available']); self.assertTrue(actions['revise']['available'])

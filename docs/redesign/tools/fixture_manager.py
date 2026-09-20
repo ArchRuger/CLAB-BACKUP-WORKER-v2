@@ -569,7 +569,7 @@ def build(data_dir, port):
             output(('Lab folder saved on the VM: ' + plan['folder'] if action == 'publish' else 'Topology saved on the VM. The previous version was kept.') + '\n')
             return {'exit_code': 0, 'published_path': target, **({'recovery_path': target.rsplit('/', 1)[0] + '/.clab-manager-history/' + target.rsplit('/', 1)[1] + '.fixture'} if action == 'revise' else {})}
         if action == 'delete':
-            vm_files.pop(req['path'], None)
+            vm_files.pop(req['path'], None); vm_files.pop(req['path'] + '.annotations.json', None)
             output('INFO removed ' + req['path'] + '\n')
             return {'exit_code': 0, 'recovery_path': '/srv/containerlab-node-manager/recovery/' + name + '.clab.yaml'}
         if action in ('inspect', 'inspect-all'):

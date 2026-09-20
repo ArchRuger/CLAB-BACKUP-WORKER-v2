@@ -11,8 +11,11 @@ step is a check; console errors, page errors and Content-Security-Policy violati
 import argparse, json, sys, time
 from playwright.sync_api import sync_playwright
 
-ap = argparse.ArgumentParser(); ap.add_argument('--base', default='http://127.0.0.1:8090'); ap.add_argument('--out', default='.'); ap.add_argument('--name', default='')
-args = ap.parse_args(); LAB = args.name or 'student-' + time.strftime('%H%M%S'); checks = []; noise = []; state = {}
+ap = argparse.ArgumentParser(); ap.add_argument('--base', default='http://127.0.0.1:8090'); ap.add_argument('--out', default='.'); ap.add_argument('--name', default=''); ap.add_argument('--template', default='Arista cEOS', help='device template for the starter, e.g. "Linux host" for a fast real deploy'); ap.add_argument('--job-timeout', type=int, default=40000)
+args = ap.parse_args()
+BASE = 'host' if args.template == 'Linux host' else {'Arista cEOS': 'ceos', 'Juniper cJunosEvolved': 'ptx', 'Juniper vJunos-switch': 'sw', 'Cisco XRv9k': 'xr'}[args.template]
+N1, N2, N3, ADDED = BASE + '1', BASE + '2', BASE + '3', 'host4' if BASE == 'host' else 'host1'
+LAB = args.name or 'student-' + time.strftime('%H%M%S'); checks = []; noise = []; state = {}
 
 def check(name, ok, detail=''):
     checks.append((name, bool(ok), detail)); print(('PASS  ' if ok else 'FAIL  ') + name + (('  · ' + str(detail)) if detail and not ok else ''), flush=True)
@@ -31,7 +34,7 @@ def run(p):
     draft = lambda: json.loads(pg.evaluate(f"localStorage.getItem('clab-builder:draft:new:{LAB}')") or 'null')
     def menu(target, item):
         x, y = center(target); pg.mouse.click(x, y, button='right'); pg.wait_for_timeout(350); pg.get_by_role('menuitem', name=item).click(); pg.wait_for_timeout(500)
-    def wait_job(word='succeeded', timeout=40000): pg.wait_for_function(f"document.querySelector('#op-job-banner')?.textContent.includes('{word}')", timeout=timeout)
+    def wait_job(word='succeeded', timeout=args.job_timeout): pg.wait_for_function(f"document.querySelector('#op-job-banner')?.textContent.includes('{word}')", timeout=timeout)
 
     # 1. From the manager's Home page into the builder
     pg.goto(args.base + '/'); pg.wait_for_selector('#home-deploy', timeout=15000); pg.click('#home-deploy'); pg.wait_for_selector('#op-build', timeout=15000)
@@ -44,7 +47,8 @@ def run(p):
     if taken:
         pg.fill('#builder-new-name', taken); pg.click('#builder-new-create'); pg.wait_for_timeout(400)
         check('the name of a lab already in My labs is refused', 'already in My labs' in pg.inner_text('#builder-new .form-error'))
-    pg.fill('#builder-new-name', LAB); pg.select_option('#builder-new-starter', 'triangle'); pg.click('#builder-new-create')
+    pg.fill('#builder-new-name', LAB); pg.select_option('#builder-new-starter', 'triangle')
+    pg.select_option('#builder-new-template', str(pg.evaluate(f"[...document.querySelectorAll('#builder-new-template option')].findIndex(o => o.textContent.startsWith('{args.template}'))"))); pg.click('#builder-new-create')
     pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1500)
     check('triangle starter: three devices, three links', nodes() == 3 and edges() == 3, f'{nodes()} nodes, {edges()} edges')
     check('links are visible (not collapsed by the manager stylesheet)', pg.evaluate("getComputedStyle(document.querySelector('.react-flow__edge').closest('svg')).width") != '0px')
@@ -57,15 +61,15 @@ def run(p):
 
     # 2. Build: add a device, link it, edit it, delete and undo
     bx = pg.get_by_text('Linux host', exact=True).bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(640, 520, steps=12); pg.mouse.up(); pg.wait_for_timeout(900)
-    check('a device dragged from the palette is added', nodes() == 4 and 'host1' in draft()['yaml'])
-    menu(node('host1'), 'Create Link'); x, y = center(node('ceos1')); pg.mouse.click(x, y); pg.wait_for_timeout(900)
-    check('a link is drawn with allocated interfaces', edges() == 4 and '"host1:eth1", "ceos1:eth3"' in draft()['yaml'], draft()['yaml'][-200:])
-    menu(node('host1'), 'Edit Node'); pg.get_by_label('Node Name').fill('pc1'); pg.get_by_role('button', name='Apply', exact=True).first.click(); pg.wait_for_timeout(900)
-    check('renaming a device updates its links', 'pc1:eth1' in draft()['yaml'] and 'host1' not in draft()['yaml'])
-    before = draft()['yaml']; menu(node('ceos3'), 'Delete Node'); pg.wait_for_timeout(700)
-    check('deleting a device removes it and its links', nodes() == 3 and 'ceos3' not in draft()['yaml'])
+    check('a device dragged from the palette is added', nodes() == 4 and ADDED in draft()['yaml'])
+    menu(node(ADDED), 'Create Link'); x, y = center(node(N1)); pg.mouse.click(x, y); pg.wait_for_timeout(900)
+    check('a link is drawn with allocated interfaces', edges() == 4 and f'"{ADDED}:eth1", "{N1}:' in draft()['yaml'], draft()['yaml'][-200:])
+    menu(node(ADDED), 'Edit Node'); pg.get_by_label('Node Name').fill('pc1'); pg.get_by_role('button', name='Apply', exact=True).first.click(); pg.wait_for_timeout(900)
+    check('renaming a device updates its links', 'pc1:eth1' in draft()['yaml'] and (ADDED + ':') not in draft()['yaml'])
+    before = draft()['yaml']; menu(node(N3), 'Delete Node'); pg.wait_for_timeout(700)
+    check('deleting a device removes it and its links', nodes() == 3 and N3 not in draft()['yaml'])
     pg.click('[data-testid="navbar-undo"]'); pg.wait_for_timeout(900)
-    check('undo restores the device and its links', nodes() == 4 and draft()['yaml'].count('ceos3') == before.count('ceos3'))
+    check('undo restores the device and its links', nodes() == 4 and draft()['yaml'].count(N3) == before.count(N3))
     pg.click('#builder-yaml'); pg.wait_for_selector('#builder-yaml-text'); check('View YAML shows the topology read-only', f'name: {LAB}' in pg.inner_text('#builder-yaml-text')); shot('04-view-yaml'); pg.click('#builder-yaml-dialog [data-op-close]')
     with pg.expect_download() as dl: pg.click('#builder-download')
     exported = json.load(open(dl.value.path())); check('Download draft gives a portable draft file', exported['format'] == 'clab-manager-lab-draft' and exported['name'] == LAB)
@@ -73,7 +77,7 @@ def run(p):
     # 3. A second tab editing the same draft is detected instead of silently overwriting
     other = watch(ctx.new_page()); other.goto(pg.url); other.wait_for_selector('.react-flow__node', timeout=20000); other.wait_for_timeout(1000)
     ox, oy = center(other.locator('.react-flow__node').filter(has_text='pc1').first); other.mouse.click(ox, oy, button='right'); other.wait_for_timeout(350); other.get_by_role('menuitem', name='Delete Node').click(); other.wait_for_timeout(900); other.close()
-    menu(node('ceos2'), 'Delete Node'); pg.wait_for_timeout(900)
+    menu(node(N2), 'Delete Node'); pg.wait_for_timeout(900)
     check('an edit over a newer version from another tab is stopped', pg.locator('#builder-problem').is_visible() and 'another tab' in pg.inner_text('#builder-problem-text')); shot('05-other-tab')
     pg.click('#builder-problem-reload'); pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1000)
     check('after reloading the newer version is shown', nodes() == 3 and 'pc1' not in draft()['yaml'])
@@ -82,7 +86,7 @@ def run(p):
     pg.click('#builder-save'); pg.wait_for_selector('#op-confirm', timeout=15000)
     review = pg.inner_text('#operation-review')
     check('the save review names the lab folder and shows the YAML', f'/srv/containerlab-node-manager/projects/{LAB}' in review and f'name: {LAB}' in pg.inner_text('#op-review-yaml')); shot('06-save-review')
-    pg.click('#op-confirm'); pg.wait_for_selector('#op-open-published', timeout=40000)
+    pg.click('#op-confirm'); pg.wait_for_selector('#op-open-published', timeout=args.job_timeout)
     check('the save succeeds and offers to deploy or add the lab', 'succeeded' in pg.inner_text('#op-job-banner')); shot('07-saved')
     check('status says the lab is saved on the VM', 'Saved on the VM' in pg.inner_text('#builder-status'))
     pg.click('#op-open-published'); pg.wait_for_selector('#op-deploy-project', timeout=15000)
@@ -111,11 +115,11 @@ def run(p):
         if pg.locator('#op-confirm').is_visible(): break
         try: pg.click('#builder-save', timeout=3000); pg.wait_for_selector('#op-confirm', timeout=10000)
         except Exception: pg.wait_for_timeout(2000)
-    check('after destroy the save review shows what changes', pg.locator('#op-confirm').is_visible() and '+' in pg.inner_text('#operation-review') and 'host1' in pg.inner_text('#operation-review')); shot('12-revise-review')
+    check('after destroy the save review shows what changes', pg.locator('#op-confirm').is_visible() and '+' in pg.inner_text('#operation-review') and 'kind: linux' in pg.inner_text('#operation-review')); shot('12-revise-review')
     for attempt in range(6):  # 'Wait for the current lab operation' while discovery is still refreshing
         pg.click('#op-confirm'); pg.wait_for_timeout(2500)
         if not pg.locator('#operation-review').evaluate('d => d.open'): break
-    pg.wait_for_selector('#op-open-published', timeout=40000)
+    pg.wait_for_selector('#op-open-published', timeout=args.job_timeout)
     check('the revision is saved and a recovery copy is reported', 'succeeded' in pg.inner_text('#op-job-banner') and 'Saved on the VM' in pg.inner_text('#builder-status'))
     pg.click('#operation-output [data-op-close]')
 
