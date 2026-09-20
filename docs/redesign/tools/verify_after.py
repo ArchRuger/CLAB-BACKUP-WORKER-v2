@@ -47,9 +47,6 @@ class Run:
 
     def open_lab(self, name):
         card = self.page.locator(f'article.lab-card:has(h3:text-is("{name}")) button[data-lab]').first
-        if card.count() == 0:
-            # A single lab shows only the Continue card
-            card = self.page.locator('#home-continue button[data-lab]').first
         card.click()
         self.page.wait_for_selector('#lab-content:not([hidden])', timeout=10000)
         self.page.wait_for_function('() => document.getElementById("title").textContent.trim().length > 0')
@@ -67,6 +64,7 @@ def home(r):
     r.check('home: lab cards render', len(cards) >= 1, cards)
     r.check('home: skeleton hidden after load', r.js('() => document.getElementById("home-skeleton").hidden'))
     r.check('home: no VM banner when the VM is connected', r.js('() => document.getElementById("home-vm-banner").hidden'))
+    r.check('home: Deploy and Build lead the page and the list opens on Recent labs', r.js('() => !document.getElementById("home-start").hidden && document.getElementById("home-tab-recent").getAttribute("aria-selected") === "true" && !document.getElementById("home-continue")'))
     r.check('home: no discovered section on the main page', r.js('() => !document.getElementById("home-discovered")'))
     r.check('home: no raw deployment words in pills', not any(c['pill'] in ('Unlinked', 'Not deployed', 'Partially running') for c in cards), cards)
     # Labs the VM has that are not in My labs live under the Manager menu

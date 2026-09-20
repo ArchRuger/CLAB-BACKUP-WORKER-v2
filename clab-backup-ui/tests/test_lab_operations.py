@@ -390,6 +390,25 @@ class OperationAPITests(unittest.TestCase):
             self.assertEqual(response.status_code,409)
             with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
 
+    def test_last_deployed_is_the_real_time_of_a_succeeded_deploy_and_never_invented(self):
+        from app.lab_operations import last_deployed
+        public=lambda:next(l for l in self.client.get('/api/state',headers=self.auth).json()['labs'] if l['id']==self.lab_id)
+        def run(action,exit_code=0):
+            with self.fixture() as remote,patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit') as submit:
+                remote.side_effect=(lambda inner:lambda host,req,*a:dict(exit_code=exit_code) if req['mode']=='run' else inner(host,req,*a))(remote.side_effect)
+                job=self.confirm(self.preview(action)['token']).json();args=submit.call_args.args;args[0](*args[1:])
+            return next(j for j in self.store.state['operations'] if j['id']==job['id'])
+        self.fixture();self.assertEqual(public()['last_deployed'],'','a lab this manager never deployed has no deployment time')
+        self.assertEqual(run('deploy',exit_code=1)['status'],'failed');self.assertEqual(public()['last_deployed'],'','a failed deploy is not a deployment')
+        first=run('deploy');self.assertEqual(first['status'],'succeeded');self.assertEqual(public()['last_deployed'],first['finished'])
+        self.assertEqual(Store(self.tmp.name).lab(self.lab_id)['last_deployed'],first['finished'],'kept on the lab: the operation history is capped')
+        stopped=run('stop');self.assertEqual(stopped['status'],'succeeded');self.assertEqual(public()['last_deployed'],first['finished'],'stopping, saving or inspecting is unrelated activity')
+        again=run('redeploy');self.assertEqual(public()['last_deployed'],again['finished']);self.assertGreaterEqual(again['finished'],first['finished'])
+        # A lab deployed before the record existed: the newest succeeded deploy of the history, nothing else
+        lab=self.store.lab(self.lab_id);del lab['last_deployed']
+        self.assertEqual(last_deployed(self.store.state,lab),again['finished'])
+        self.assertEqual(last_deployed({'operations':[dict(lab_id=self.lab_id,action='deploy',status='failed',finished='2026-01-01T00:00:00Z'),dict(lab_id='other',action='deploy',status='succeeded',finished='2026-01-02T00:00:00Z'),dict(lab_id=self.lab_id,action='start',status='succeeded',finished='2026-01-03T00:00:00Z')]},lab),'')
+
     def test_output_redaction_persistence_and_restart(self):
         with self.fixture(),patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit') as submit:
             job=self.confirm(self.preview()['token']).json();args=submit.call_args.args

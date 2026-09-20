@@ -4,6 +4,29 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.11
+
+**UI review 001, step 10: Recent labs, ordered by real deployments (UI-002, part 2).** Manager and
+frontend; the VM helpers are unchanged apart from the lockstep version. This completes UI-002.
+
+- **Recent labs.** Below *Deploy* and *Build* the lab list has two tabs. **Recent labs** (the first
+  and default tab) lists every lab by its most recent deployment, newest first. **All labs** keeps the
+  order Home always had: favourites first, then by name. A line under the tabs says which order is
+  shown. The separate *Continue where you left off* block is gone, so nothing outranks the two starting
+  choices; every card still says when the lab was last opened.
+- **Real deployment times only.** The manager records `last_deployed` on a lab when a *deploy* or
+  *redeploy* it ran succeeds (a failed one, a start, a stop or a save is not a deployment), and the
+  lab view in `/api/state` carries it. For a lab deployed before this release the newest succeeded
+  deployment of the kept operation history is used. A lab the manager never deployed (imported from a
+  running VM, deployed from a terminal, or with its history gone) has no time: its card reads *No
+  deployment recorded by this manager* and it comes after all dated labs, by name, so it is never
+  presented as recently deployed. Nothing is estimated from discovery, saves or visits.
+- **The order and the tab stay put.** Opening a lab, saving, a favourite and background polling do not
+  reorder *Recent labs*; the chosen tab is kept for the browser session across polls, a lab visit and
+  a reload, and the arrow keys move between the tabs. Unchanged cards are not redrawn.
+- Lab names on the cards no longer break in the middle of a word: the card's tool buttons had been
+  taking half of the card's width.
+
 ## Changes in 1.30.10
 
 **UI review 001, step 9: Home leads with Deploy and Build (UI-002, part 1).** Frontend only. Part 2

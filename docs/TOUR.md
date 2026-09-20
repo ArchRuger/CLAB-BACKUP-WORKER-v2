@@ -12,7 +12,7 @@ are exactly what a live manager shows.
 
 **Home is the list of your labs.** Each card carries the lab's state — *Running*,
 *Starting*, *Stopped*, *Needs attention* — how many devices are ready and when progress
-was last saved; the lab you worked on last is the *Continue* card. Labs that run on the
+was last saved; the list opens on *Recent labs* (most recently deployed first; *All labs* lists favourites first), under the two starting choices *Deploy* and *Build*. Labs that run on the
 VM but are not in the manager yet are listed under *Manager ▾ › Labs found on the VM…*,
 where one click adds them. The **Manager ▾** menu holds everything that is not about one lab: the VM
 connection, importing lab files, deploying a new lab, the labs running on the VM,

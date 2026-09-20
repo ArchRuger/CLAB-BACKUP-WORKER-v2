@@ -108,6 +108,20 @@ def remote(host, request, output=None, stopping=None, timeout=None):
     finally: client.close()
 
 
+DEPLOY_ACTIONS = ('deploy', 'redeploy')
+
+
+def last_deployed(state, lab):
+    """When this manager last deployed the lab, or ''. The lab's own record first; for a lab deployed before
+    that record existed, the newest succeeded deploy in the (capped) operation history. A lab that was
+    deployed from a terminal, or whose history is gone, has none: the page must not invent one."""
+    known = lab.get('last_deployed') or ''
+    if known: return known
+    stamps = [j.get('finished') or '' for j in state.get('operations', [])
+              if j.get('lab_id') == lab.get('id') and j.get('action') in DEPLOY_ACTIONS and j.get('status') == 'succeeded']
+    return max(stamps, default='')
+
+
 def scrub(text, state):
     secrets = []
     host = state.get('host', {})
@@ -412,6 +426,14 @@ class LabOperations:
                 content = drawio(lab)
             return Response(content, media_type='application/xml', headers={'Content-Disposition': "attachment; filename=topology.drawio; filename*=UTF-8''" + quote(lab['name']+'.drawio', safe='')})
 
+    def record_deployment(self, ident, finished):
+        """A deploy or redeploy that succeeded is when the lab was last deployed: kept on the lab, because
+        the operation history is capped. Written with the job's own save; nothing else sets this field."""
+        with self.store.lock:
+            job = next((j for j in self.store.state['operations'] if j['id'] == ident), None)
+            lab = self.store.lab(job['lab_id']) if job and job.get('action') in DEPLOY_ACTIONS and job.get('lab_id') else None
+            if lab: lab['last_deployed'] = finished
+
     def execute(self, ident, host, req):
         with self.store.lock: self.active.add(ident)
         raw_output = ''; last_save = 0
@@ -430,8 +452,10 @@ class LabOperations:
             update(status='running', started=stamp(), message='Executing on the VM')
             result = remote(host, req, output, self.stopping)
             with self.store.lock: clean = scrub(raw_output, self.store.state)
+            finished = stamp()
+            if result.get('exit_code') == 0: self.record_deployment(ident, finished)
             update(status='succeeded' if result.get('exit_code') == 0 else 'failed', exit_code=result.get('exit_code'),
-                   finished=stamp(), output=clean, result=result, message='Operation completed' if result.get('exit_code') == 0 else 'Host command returned an error')
+                   finished=finished, output=clean, result=result, message='Operation completed' if result.get('exit_code') == 0 else 'Host command returned an error')
         except Exception as exc:
             message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
             with self.store.lock: clean = scrub(raw_output, self.store.state); message = scrub(message, self.store.state)

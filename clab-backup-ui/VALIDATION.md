@@ -1,3 +1,34 @@
+# UI review 001, step 10: Recent labs by real deployments — 1.30.11
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.10 (`9204c11`,
+pushed, CI green). Requirement UI-002 (lab list) of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no
+live VM, lab or device was involved** (deployments were the fixture's scripted operations), and the
+development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `python -m unittest discover -s tests -t tests`: 709 tests, 1 skipped, OK. New in
+  `test_lab_operations.py`: no time for a lab never deployed, none after a failed deploy, the job's own
+  finish time after a succeeded deploy (in `/api/state` and on disk), unchanged by a succeeded stop,
+  moved by a redeploy, and the backfill from history that ignores failed deploys, other labs and other
+  actions.
+- `node --test tests/*.js`: 182 of 182. `test_home_ui.js`: the two orders (newest first, equal times
+  and undated labs by name, favourites only under *All labs*), the state never reordered, opening and
+  saving not moving anything, the card's *Deployed … · Last opened …* and *No deployment recorded by this
+  manager*, no Continue block, the tab kept across polls and visits with unchanged markup not
+  reassigned, an unknown stored tab falling back, the arrow keys; `test_shell_ui.js`: the tab store,
+  also with storage blocked. The older Start-button and escaping tests now read the list.
+- `python3 deploy/verify-release.py`, `node --check` on the changed scripts, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 98 of 98 at three viewports, 0 console
+  errors, 0 page errors (one check added: the start cards lead and the list opens on *Recent labs*).
+  `docs/ui-review-001/tools/check_ui002b.py` 20 of 20: with no recorded deployment the labs are listed
+  by name and none shows a time; no Continue block; after a reviewed redeploy of `vlan-lab` it leads
+  the list with *Deployed just now*, the undated labs follow by name; after a second redeploy the newer
+  one leads; opening another lab, a favourite and two polls change nothing but that lab's *Last opened*
+  note; *All labs* puts the favourite first; the tab survives polls, a lab visit and a reload; the
+  arrow keys move tab and focus; card actions are present; a long lab name fits on one line with the
+  tools at the card's right edge. Screenshots inspected: `~/ui-review/review-001/chunk10/` on the VM.
+
 # UI review 001, step 9: Home leads with Deploy and Build — 1.30.10
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.9 (`fad6698`,

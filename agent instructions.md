@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.10
+# UI review 001 (in progress) — 1.30.11
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -76,6 +76,15 @@ to the builder). `#deploy-empty`, `#build-empty` and `#home-actions` are gone; `
 existing parent), then `opEdit('', '', path, {text, file})`, whose only action is the reviewed `create`.
 Never write an uploaded file any other way. `opPublishedPath(job)` lets a finished `create` offer
 *Deploy or add this lab…* from the job's own `path`.
+(10) **1.30.11, UI-002 part 2 — Recent labs.** `lab['last_deployed']` is written only by
+`LabOperations.record_deployment()` when a `deploy`/`redeploy` job ends with exit code 0;
+`last_deployed(state, lab)` (same module) falls back to the newest succeeded deploy of the capped
+history and is what `public_lab` reports. **Never derive a deployment time from anything else**
+(discovery's `last_success`, saves, visits). `home.js`: `homeOrder(labs, tab)` (`recent`: time
+descending, undated labs last by name; `all`: favourites, then name), `HOME_TABS`, the tab stored by
+`homeTab()` / `rememberHomeTab()` in `shell.js` (sessionStorage), `homeDeployedLine()`. `#home-continue`
+and the `continued` card variant are gone; do not bring back a block above the list.
+`.lab-card-head > div:not(.lab-card-tools)` is what lets a lab name use the card's width.
 
 # Lab builder quality pass — 1.30.1
 

@@ -43,25 +43,32 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.8 | UI-008 part 2 | Tree expansion owned by the student (`gitPlacesState.expanded`, `.git-twist`), `current` vs `selected`, focus and scroll kept | `check_ui008b.py` 21/21, `verify_after.py` 97/97 ×3, node 176, `~/ui-review/review-001/chunk07/` |
 | 1.30.9 | UI-006 | Devices tab: list indent removed, one list grid with subgrid rows, aligned heading controls (CSS only) | `check_ui006.py` 89/89 at five sizes, `verify_after.py` 97/97 ×3, before/after in `~/ui-review/review-001/chunk08/` |
 | 1.30.10 | UI-002 part 1 | Home `#home-start` cards (Deploy: VM file / upload; Build), `opUpload()` through the reviewed `create`, `opPublishedPath()` | `check_ui002a.py` 25/25, `verify_after.py` 97/97 ×3, node 180, `~/ui-review/review-001/chunk09/` |
+| 1.30.11 | UI-002 part 2 | *Recent labs* / *All labs* tabs, `last_deployed` recorded by the manager, no Continue block, card title width | `check_ui002b.py` 20/20, `verify_after.py` 98/98 ×3, python 709, node 182, `~/ui-review/review-001/chunk10/` |
 
 ## Next
 
-Chunk 10 = **UI-002 part 2**: the lab list under a *Recent labs* tab ordered by the most recent
-deployment, newest first. First find what the manager really records: operation jobs
-(`GET /api/operations`, `state.operations` in the store: `action` in deploy/redeploy with `finished` and
-`status`), `lab['deployment']` (status, `last_success` = last time discovery saw it, NOT a deployment
-time), `lab.created`. Decide whether `/api/state` needs a per-lab `last_deployed` (a manager change in
-`main.py`'s public lab view, derived from operations history; never invented) and document the fallback
-for labs without one (suggested: after the dated ones, by name; never labelled as recently deployed).
-Tabs: *Recent labs* plus *All labs* (favourites first, by name, as today)? Keep the tab in
-`sessionStorage` via `shell.js` helpers so polling and navigation do not reset it; `setMarkup` diffing
-keeps focus. Make *Continue where you left off* no more prominent than the start cards (fold it into
-the list, e.g. a "Last opened" caption on the card). Fix card titles breaking inside a word. Then
-UI-003 (map parity): start with the capability matrix `docs/ui-review-001/MAP-PARITY.md`.
+Only **UI-003** (Edit map gets the visual builder's map-editing capabilities) is open. It is the
+largest item and must be delivered in increments; partial parity is not completion.
+
+1. **Chunk 11 = the capability matrix**, `docs/ui-review-001/MAP-PARITY.md`: inventory the map-relevant
+   tools of the *installed* builder (pinned `@containerlab/clab-ui` in
+   `clab-backup-ui/lab-builder/package.json`; adapter `lab-builder/src/main.tsx`; hidden controls in
+   `lab-builder.css`; what it writes: `<topology>.annotations.json` — node positions, free text, free
+   shapes, groups, styles) against **Edit map** (`app/static/diagram-editor.js`, the drawing schema in
+   `app/topology.py` `parse_drawing`, `PUT /api/labs/{id}/layout`, the annotations import/download and
+   the draw.io export). Do it from the code and a real browser session, not from screenshots.
+2. Decide the approach from the matrix. The handoff notes say the editor is *embedded, not forked*, works
+   on a two-document store (topology + annotations) and has no switch for "map only": reusing it for
+   Edit map means a map-only mode in the adapter (topology read-only, only the annotations document
+   saved through the existing layout route, deploy/save-to-VM controls hidden). Check that the editor
+   can be prevented from changing the topology document before choosing this.
+3. Keep the existing Edit map usable until the replacement is ready; keep annotation import/download
+   and the draw.io export; never drop annotation data the manager does not understand; a map edit must
+   not deploy, touch the running lab or rewrite the topology.
 
 ## Known limits and open points
 
-- 1.30.2 to 1.30.10 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.9 (`gh run list --branch claude/ui-review-001`).
+- 1.30.2 to 1.30.11 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.10 (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
   --manager-only` (helpers must match the release); record here when that was last done: **not yet for

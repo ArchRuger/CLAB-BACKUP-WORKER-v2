@@ -228,3 +228,8 @@ test('style.css: the device lists carry no list indent and the Devices tab is on
  assert.match(css,/\.device-row, #device-list, #device-list \.device-row \{ grid-template-columns: 1fr; \}/,'one column below 760px');
  assert.match(css,/\.device-rail \.device-row \{ grid-template-columns: minmax\(0, 1fr\) auto; grid-template-areas: "name state" "platform platform" "reason reason" "actions actions";/,'the Topology rail keeps its own named-area grid');
 });
+
+test('the Home list tab is kept for the browser session and never throws when storage is blocked',()=>{
+ const h=harness();assert.equal(h.context.homeTab(),'recent');assert.equal(h.context.rememberHomeTab('all'),true);assert.equal(h.context.homeTab(),'all');
+ const blocked=harness({throwStorage:true});assert.equal(blocked.context.homeTab(),'recent');assert.equal(blocked.context.rememberHomeTab('all'),false);
+});

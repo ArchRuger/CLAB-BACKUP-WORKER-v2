@@ -23,7 +23,7 @@ from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
 from .discovery import Discovery, lab_status, node_available
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
-from .lab_operations import LabOperations, operation_busy
+from .lab_operations import LabOperations, last_deployed, operation_busy
 from .git_progress import GitProgress, public_job as public_git_job
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
@@ -152,6 +152,7 @@ def create_app(data_dir=None):
             row['telemetry']=telemetry.node_status(lab,n)
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)
+        result['last_deployed']=last_deployed(store.state,lab)
         result['nos_readiness']=summarize([row['nos_login'] for row in result['nodes']])
         result['telemetry']=telemetry.lab_summary(lab)
         return result
