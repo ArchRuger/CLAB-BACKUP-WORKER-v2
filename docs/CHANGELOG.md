@@ -4,6 +4,23 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.12
+
+**UI review 001, step 11: the map-editing capability matrix (UI-003, step A).** Documentation only; no
+behaviour changed. UI-003 (Edit map gets the visual builder's map-editing capabilities) is **not**
+complete: this release records what parity means and how it will be reached.
+
+- [docs/ui-review-001/MAP-PARITY.md](ui-review-001/MAP-PARITY.md) compares, from the code, the
+  map-editing tools of the installed editor (`@containerlab/clab-ui` 0.3.2) with today's *Edit map*,
+  row by row with a status, and lists what stays out because it is topology editing.
+- Finding: the manager keeps only its own normalised drawing, not the annotations document, and drops
+  what it does not draw (group membership and nesting, line arrows, geo coordinates, unknown keys).
+  Parity and "never drop unsupported data" therefore need the full document to be stored.
+- Decision: reuse the embedded editor in a *map mode* (its `view` mode, plus an adapter that refuses
+  every command that is not annotation-only and a save that refuses a changed topology text), over a
+  full annotations document kept per lab from which the drawing is derived. The old dialog stays until
+  that path is validated; import, the annotations download and the draw.io export stay.
+
 ## Changes in 1.30.11
 
 **UI review 001, step 10: Recent labs, ordered by real deployments (UI-002, part 2).** Manager and

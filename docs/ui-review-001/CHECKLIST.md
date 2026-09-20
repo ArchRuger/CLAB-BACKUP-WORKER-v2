@@ -33,9 +33,9 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - ☑ Polling, visits, saves and favourites do not reorder *Recent labs*; the tab is kept for the session. 1.30.11
 - ☑ Lab card titles no longer break inside a word. 1.30.11
 
-## UI-003 — Edit map gets the visual builder's map-editing capabilities ☐
+## UI-003 — Edit map gets the visual builder's map-editing capabilities ◐ (matrix in 1.30.12; implementation open)
 
-- ☐ Capability matrix: installed builder versus Edit map (`docs/ui-review-001/MAP-PARITY.md`).
+- ☑ Capability matrix: installed builder versus Edit map, and the approach (`docs/ui-review-001/MAP-PARITY.md`). 1.30.12
 - ☐ Every map-editing capability of the matrix implemented and tested, or listed as incomplete.
 - ☐ Positions, text, shapes, annotations and style survive save, close, reopen and further edits.
 - ☐ The manager's topology view draws the saved map correctly; unsupported data is never dropped.
@@ -106,5 +106,5 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 
 1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 (1.30.4, done) → 4. UI-007 A+B (1.30.5, done) → 5. UI-007 C (1.30.6, done) → 6. UI-008 root
 cause and fix (1.30.7, done) → 6b. UI-008 tree expansion and highlight (1.30.8, done) → 7. UI-006 (1.30.9, done) → 8. UI-002 Home actions (1.30.10, done) → 9. UI-002 Recent labs tab and order (1.30.11, done) →
-10+. UI-003 matrix, then parity in increments. One patch release, one commit and one verified push
+10. UI-003 matrix (1.30.12, done) → 11+. UI-003 steps B to E of `MAP-PARITY.md`. One patch release, one commit and one verified push
 per chunk.

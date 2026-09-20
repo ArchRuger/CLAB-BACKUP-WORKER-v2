@@ -44,35 +44,37 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.9 | UI-006 | Devices tab: list indent removed, one list grid with subgrid rows, aligned heading controls (CSS only) | `check_ui006.py` 89/89 at five sizes, `verify_after.py` 97/97 ×3, before/after in `~/ui-review/review-001/chunk08/` |
 | 1.30.10 | UI-002 part 1 | Home `#home-start` cards (Deploy: VM file / upload; Build), `opUpload()` through the reviewed `create`, `opPublishedPath()` | `check_ui002a.py` 25/25, `verify_after.py` 97/97 ×3, node 180, `~/ui-review/review-001/chunk09/` |
 | 1.30.11 | UI-002 part 2 | *Recent labs* / *All labs* tabs, `last_deployed` recorded by the manager, no Continue block, card title width | `check_ui002b.py` 20/20, `verify_after.py` 98/98 ×3, python 709, node 182, `~/ui-review/review-001/chunk10/` |
+| 1.30.12 | UI-003 step A | `MAP-PARITY.md`: capability matrix from the code, approach chosen; live read-only check of 1.30.11 on the dev VM | `~/ui-review/review-001/live-1.30.11/` |
 
 ## Next
 
-Only **UI-003** (Edit map gets the visual builder's map-editing capabilities) is open. It is the
-largest item and must be delivered in increments; partial parity is not completion.
-
-1. **Chunk 11 = the capability matrix**, `docs/ui-review-001/MAP-PARITY.md`: inventory the map-relevant
-   tools of the *installed* builder (pinned `@containerlab/clab-ui` in
-   `clab-backup-ui/lab-builder/package.json`; adapter `lab-builder/src/main.tsx`; hidden controls in
-   `lab-builder.css`; what it writes: `<topology>.annotations.json` — node positions, free text, free
-   shapes, groups, styles) against **Edit map** (`app/static/diagram-editor.js`, the drawing schema in
-   `app/topology.py` `parse_drawing`, `PUT /api/labs/{id}/layout`, the annotations import/download and
-   the draw.io export). Do it from the code and a real browser session, not from screenshots.
-2. Decide the approach from the matrix. The handoff notes say the editor is *embedded, not forked*, works
-   on a two-document store (topology + annotations) and has no switch for "map only": reusing it for
-   Edit map means a map-only mode in the adapter (topology read-only, only the annotations document
-   saved through the existing layout route, deploy/save-to-VM controls hidden). Check that the editor
-   can be prevented from changing the topology document before choosing this.
-3. Keep the existing Edit map usable until the replacement is ready; keep annotation import/download
-   and the draw.io export; never drop annotation data the manager does not understand; a map edit must
-   not deploy, touch the running lab or rewrite the topology.
+**UI-003 step B** (see `MAP-PARITY.md` §3 and §4): the manager stores the full annotations document.
+- `lab['annotations']` (text, private: add it to the keys `public_lab` leaves out in `main.py`).
+  Fill it wherever a drawing is made from an annotations text: `POST /api/labs/{id}/topology` (upload),
+  `/api/lab-definitions` and the VM import/sync (`vm_files.prepare_lab`, `discovery.update_sources`),
+  the builder's `opJobDone` re-registration. Where there is none, derive it on demand with
+  `layout.annotations(drawing)`.
+- New routes in `app/topology.py`: `GET /api/labs/{id}/map-document` → `{yaml, annotations, revision}`
+  (needs `definition_yaml`; 409 with a plain sentence otherwise) and `PUT` with `{annotations,
+  revision}`: size ≤ 1 MiB, JSON object, `parse_drawing(annotations, definition_yaml)` must succeed,
+  `operation_busy` guard, conflict on a stale revision, then store the text untouched and the derived
+  drawing with `placed=True`. `PUT /layout` (the old dialog) must keep working and must not leave a
+  stale document behind: either update the stored document from the drawing or drop it.
+- Tests: unknown keys, `groupId`/`parentId`, arrows and `trafficRateAnnotations` survive a save; the
+  drawing follows; stale revision; busy lab; nothing in `/api/state`.
+**Step C**: `lab-builder/src/main.tsx` map mode (hash `#map=<lab id>`): `mode: "view"`, unlock, command
+whitelist in `dispatchCommand`, no publish/revise/lifecycle, persist through the new route instead of
+the draft store; rebuild with `npm run build` in `clab-backup-ui/lab-builder` (Node 24, the manifest is
+compared in CI) — a changed bundle only reaches browsers with a new release number.
+**Step D/E** as listed in `MAP-PARITY.md`.
 
 ## Known limits and open points
 
 - 1.30.2 to 1.30.11 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.10 (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
-  --manager-only` (helpers must match the release); record here when that was last done: **not yet for
-  this branch**.
+  --manager-only` (helpers must match the release); last done at **1.30.11 (`ae73300`) on 2026-09-20**,
+  followed by a read-only live check through `http://192.168.132.132:8081` (see VALIDATION, 1.30.12).
 - `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home.
 - The successful import confirmation was not exercised in a browser (the fixture VM refuses the preview).
 

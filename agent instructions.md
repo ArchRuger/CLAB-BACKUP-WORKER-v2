@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.11
+# UI review 001 (in progress) — 1.30.12
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -85,6 +85,10 @@ descending, undated labs last by name; `all`: favourites, then name), `HOME_TABS
 `homeTab()` / `rememberHomeTab()` in `shell.js` (sessionStorage), `homeDeployedLine()`. `#home-continue`
 and the `continued` card variant are gone; do not bring back a block above the list.
 `.lab-card-head > div:not(.lab-card-tools)` is what lets a lab name use the card's width.
+(11) **1.30.12, UI-003 step A**: `docs/ui-review-001/MAP-PARITY.md` is the capability matrix and the
+chosen approach (the embedded editor in its `view` mode behind a command whitelist, over a full
+annotations document stored per lab; the drawing is derived from it). UI-003 is open until every row of
+that matrix is done or listed as incomplete. Do not grow `diagram-editor.js` into a second editor.
 
 # Lab builder quality pass — 1.30.1
 

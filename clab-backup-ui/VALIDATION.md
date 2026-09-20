@@ -1,3 +1,31 @@
+# UI review 001, step 11: capability matrix, and a live read-only check of 1.30.11 — 1.30.12
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.11 (`ae73300`,
+pushed). Documentation only, so the suites are those of 1.30.11 plus the release checks.
+
+## What was run
+
+- `python3 deploy/verify-release.py`, `git diff --check`, `test_release*.py`, `node --test tests/*.js`
+  (182 of 182).
+- The matrix was made by reading the installed package (`node_modules/@containerlab/clab-ui` 0.3.2:
+  types, host contracts, the UI chunk's mode gates), `lab-builder/src/main.tsx`, `diagram-editor.js`,
+  `app/topology.py`, `app/layout.py` and `app/lab_operations.py`. **No row was exercised in a browser.**
+
+## Live, read-only: the development manager on the VM at 1.30.11
+
+`sudo bash deploy/start-manager.sh --manager-only` from this branch at `ae73300` (the capture service was
+left alone): manager `clab-backup:1.30.11`, helpers refreshed by the launcher, `/api/git/repositories`
+200. A Playwright pass through the LAN address `http://192.168.132.132:8081` (a plain-HTTP origin) over the
+maintainer's real data, **sending no write request** (asserted) and with 0 console / page errors: Home
+shows the Deploy and Build cards, *Recent labs* selected with real times backfilled from the operation
+history (*Deployed 4 hours ago* … *3 days ago*), no discovered section; *Manager ▾ › Labs found on the
+VM…* opens; *Lab actions* has *Advanced options*; the Devices list is flush with its heading; on
+*JunOS-TEST-2* Save location opens with *Change folder…* unfolded on the real repository tree, the
+destination `JunOS-TEST-2/Base` marked current, *Git repo details*, no review checkbox; the Save menu
+explains *Save on this VM only*. Screenshots: `~/ui-review/review-001/live-1.30.11/`. Not done live: any
+save, review-and-upload, folder creation, move, upload or deployment (they change the maintainer's
+repository or labs).
+
 # UI review 001, step 10: Recent labs by real deployments — 1.30.11
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.10 (`9204c11`,
