@@ -6,8 +6,8 @@ operations as everything else, so nothing about the manager's security boundary 
 
 ## Build a lab
 
-1. **Manager ▾ › Deploy a new lab** (or *Deploy a new lab* on Home), then **Build a lab visually…**.
-   While My labs is still empty, *Build a lab visually…* is on the first page as well.
+1. On Home, **Build › Open the lab builder** (or **Manager ▾ › Deploy a new lab…**, then
+   **Build a lab visually…**).
 2. Give the lab a name. The name becomes the lab folder on the VM and part of every device's
    container name, so it is limited to letters, digits, dot, dash and underscore. Choose a starter
    (blank, two devices with a link, three devices in a triangle), the device type for it and the lab

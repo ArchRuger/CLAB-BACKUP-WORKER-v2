@@ -46,7 +46,7 @@ test('with exactly one lab only the Continue card is shown; the last opened lab 
  assert.equal(two.element('lab-cards').hidden,false);
  const gone=harness({labs:[running,stopped]},{lastLab:'removed'});gone.context.renderHome();assert.equal(gone.element('home-continue').hidden,true);
  const none=harness({labs:[]});none.context.renderHome();
- assert.equal(none.element('home-continue').hidden,true);assert.equal(none.element('lab-cards').hidden,true);assert.equal(none.element('home-actions').hidden,true);
+ assert.equal(none.element('home-continue').hidden,true);assert.equal(none.element('lab-cards').hidden,true);assert.equal(none.element('home-start').hidden,false,'Deploy and Build lead the page without any lab too');
  const later=harness({labs:[running,stopped]});later.context.renderHome();const before=later.element('lab-cards').innerHTML;later.context.renderHome();
  assert.equal(later.element('lab-cards')._markup,before,'unchanged markup is not reassigned on the next poll');
 });
@@ -98,4 +98,18 @@ test('card actions are delegated: Open lab selects, Start selects then starts, t
  await click({target:target({labFavorite:'stop'})});assert.equal(JSON.stringify(h.calls.json[0]),JSON.stringify(['/labs/stop/operations-settings','PUT',{favorite:false}]));
  h.element('home').listeners.contextmenu({target:{closest:()=>({dataset:{labId:'run'}})},preventDefault(){}});assert.deepEqual(h.calls.openLabOperations,['stop','run']);
  h.element('home-deploy').onclick();assert.equal(h.calls.deploy,1);
+ let uploads=0;h.context.opUpload=()=>{uploads++;};h.element('home-upload').onclick();assert.equal(uploads,1,'Upload a file from this computer opens the upload, not the VM browser');assert.equal(h.calls.deploy,1);
+});
+
+test('Home leads with two equal starting choices: Deploy (a file on the lab VM, or one from this computer) and Build',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8'),home=html.slice(html.indexOf('<section id="home"'),html.indexOf('<div id="lab-content"'));
+ const start=home.indexOf('id="home-start"'),cards=home.indexOf('id="lab-cards"'),cont=home.indexOf('id="home-continue"');
+ assert.ok(start>0&&start<cont&&start<cards,'the two choices come before Continue and the lab list');
+ assert.equal((home.match(/<article class="start-card"/g)||[]).length,2);
+ assert.match(home,/<h2 id="home-start-deploy">Deploy<\/h2>[^]*?id="home-deploy">Choose a file on the lab VM…<\/button><button type="button" class="button secondary" id="home-upload">Upload a file from this computer…<\/button>/);
+ assert.match(home,/<h2 id="home-start-build">Build<\/h2>[^]*?<a class="button primary" id="home-build" href="\/static\/lab-builder\.html">Open the lab builder<\/a>/,'Build opens the builder itself, not a deployment dialog');
+ assert.match(home,/On the lab VM: browse the lab folders that are already there\. From this computer: the file is shown to you, then copied to the lab VM when you confirm\./);
+ assert.doesNotMatch(home,/id="deploy-empty"|id="build-empty"|id="home-actions"/,'the empty page has no second set of the same buttons');
+ const loading=harness({labs:[],loaded:false});loading.context.renderHome();assert.equal(loading.element('home-start').hidden,true,'nothing is offered before the state is known');
+ const many=harness({labs:[running,stopped]});many.context.renderHome();assert.equal(many.element('home-start').hidden,false);
 });

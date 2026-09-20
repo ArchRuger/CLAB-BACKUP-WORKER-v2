@@ -186,3 +186,41 @@ test('the annotations file beside a topology places the preview and the saved wo
  await page.opSaveWorkspace('/etc/containerlab/demo/demo.clab.yaml',source,placed);
  assert.equal(registered[0].options.body.parts.length,2,'Deploy lab registers the annotations with the YAML');
 });
+
+test('an uploaded lab file is checked in plain words, gets a location inside a trusted lab folder, and goes through the same reviewed create as a typed one',async()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8');
+ const elements=new Map(),dialogs=[],calls=[],el=()=>({value:'',files:[],onclick:null,addEventListener(){},querySelector:()=>({textContent:''}),hidden:false});
+ const context=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[]},activeId:'',console,document:{body:{insertAdjacentHTML(){}},querySelectorAll:()=>[],getElementById:()=>null,createElement:()=>el()},
+  location:{pathname:'/'},sessionStorage:{getItem:()=>null,setItem(){}},setTimeout:()=>0,clearTimeout(){},notify(){},refresh:async()=>{},current:()=>null,busy:()=>false,
+  json:async(endpoint,method,payload)=>{calls.push({endpoint,payload});if(endpoint==='/operations/parse-yaml'){if(/broken/.test(payload.options.text))throw new Error('Line 2: mapping values are not allowed here.');return {name:'Week 04: BGP/final',drawing:{nodes:[]},annotations_used:false};}return {};},
+  api:async()=>({json:async()=>({roots:['/etc/containerlab','/srv/containerlab-node-manager/projects'],actions:{}})})});
+ vm.runInContext(source,context);
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],el());const d={id,title,html,open:true,close(){this.open=false;},querySelector:()=>({textContent:''})};dialogs.push(d);return d;};
+ context.opTask=async(dialog,fn)=>fn();
+ assert.equal(context.opUploadProblem(null),'Choose a file first.');assert.match(context.opUploadProblem({name:'lab.zip',size:10}),/Its name ends in \.clab\.yaml/);
+ assert.equal(context.opUploadProblem({name:'lab.clab.yaml',size:0}),'This file is empty.');assert.match(context.opUploadProblem({name:'big.yml',size:1024*1024+1}),/larger than 1 MiB/);assert.equal(context.opUploadProblem({name:'ok.clab.yml',size:1024*1024}),'');
+ assert.equal(context.opUploadPath('/srv/containerlab-node-manager/projects/','Week 04: BGP/final'),'/srv/containerlab-node-manager/projects/Week-04-BGP-final.clab.yaml','no path separators or spaces from a lab name reach the path');
+ assert.equal(context.opUploadPath('','../../etc'),'/srv/containerlab-node-manager/projects/etc.clab.yaml');assert.equal(context.opUploadPath('/r','***'),'/r/uploaded-lab.clab.yaml');
+ context.opUpload();const upload=dialogs[0];assert.match(upload.html,/on <strong>this computer<\/strong>[^]*copied to the <strong>lab VM<\/strong> only after you confirm/);
+ const next=elements.get('op-upload-next').onclick;
+ await assert.rejects(next(),/Choose a file first/);
+ elements.get('op-upload-file').files=[{name:'notes.txt',size:5,text:async()=>'x'}];await assert.rejects(next(),/Its name ends in/);
+ elements.get('op-upload-file').files=[{name:'lab.clab.yaml',size:9,text:async()=>'name: x\nbroken: : :'}];await assert.rejects(next(),/not a containerlab topology the manager can read: Line 2/);
+ elements.get('op-upload-file').files=[{name:'lab.clab.yaml',size:4,text:async()=>'a\u0000b'}];await assert.rejects(next(),/does not look like a text file/);
+ assert.equal(dialogs.length,1,'a refused file opens nothing further');assert.ok(!calls.some(c=>/create|operations$/.test(c.endpoint)),'and nothing is sent to the VM');
+ const text='name: bgp\ntopology:\n  nodes: {}\n';elements.get('op-upload-file').files=[{name:'bgp.clab.yaml',size:text.length,text:async()=>text}];await next();
+ assert.equal(upload.open,false);const editor=dialogs[1];assert.equal(editor.title,'Uploaded lab file');assert.match(editor.html,/Read from <strong>bgp\.clab\.yaml<\/strong> on this computer\. Nothing is on the lab VM yet/);
+ assert.equal(elements.get('op-edit-text').value,text);assert.equal(elements.get('op-edit-path').value,'/srv/containerlab-node-manager/projects/Week-04-BGP-final.clab.yaml');
+ assert.match(editor.html,/id="op-save-yaml">Create file on the VM…/,'the only way on is the reviewed create');assert.doesNotMatch(editor.html,/id="op-deploy-project"/,'nothing can be deployed before the file is on the VM');
+ assert.ok(!calls.some(c=>c.endpoint==='/operations/read'),'an upload reads nothing from the VM');
+});
+
+test('a finished create or builder save names the file to continue with; nothing else and no failure does',()=>{
+ const context=vm.createContext({$:()=>null,esc:s=>String(s),state:{labs:[]},console,document:{body:{insertAdjacentHTML(){}},querySelectorAll:()=>[],getElementById:()=>null},location:{pathname:'/'},sessionStorage:{getItem:()=>null,setItem(){}},setTimeout:()=>0,clearTimeout(){}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),context);
+ const p=context.opPublishedPath;
+ assert.equal(p({status:'succeeded',action:'create',path:'/srv/p/bgp.clab.yaml',result:{exit_code:0}}),'/srv/p/bgp.clab.yaml');
+ assert.equal(p({status:'succeeded',action:'publish',path:'',result:{published_path:'/srv/p/x/x.clab.yml'}}),'/srv/p/x/x.clab.yml');
+ assert.equal(p({status:'failed',action:'create',path:'/srv/p/bgp.clab.yaml'}),'');assert.equal(p({status:'running',action:'create',path:'/srv/p/bgp.clab.yaml'}),'');
+ assert.equal(p({status:'succeeded',action:'deploy',path:'/srv/p/bgp.clab.yaml'}),'','a deployed lab is running: nothing to deploy or add');assert.equal(p({status:'succeeded',action:'delete',path:'/srv/p/bgp.clab.yaml'}),'');assert.equal(p(null),'');
+});

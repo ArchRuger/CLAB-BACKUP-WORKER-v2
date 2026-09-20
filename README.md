@@ -9,7 +9,7 @@ Wireshark from the browser, watch the network live in Grafana, back up device
 configurations and save lab progress to Git. Nothing is installed on your workstation;
 you only need a browser.
 
-Current release: **1.30.9** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
+Current release: **1.30.10** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
 
 ## What it does
 
@@ -77,12 +77,12 @@ elsewhere.
    defaults; say `y` to the plan, enter your sudo password, and create a password for
    `clab-discovery` when asked (write it down). Choose `2` at *Next step* to set up
    Git later. The image build and the two stacks take a few minutes; the installer
-   ends with `Manager 1.30.9: running; HTTP and version checks passed.`
+   ends with `Manager 1.30.10: running; HTTP and version checks passed.`
 
 3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.
 
-4. Click **Deploy a new lab**, expand `/etc/containerlab`, pick a `.clab.yaml` and
+4. On Home, under **Deploy › Choose a file on the lab VM…**, expand `/etc/containerlab`, pick a `.clab.yaml` and
    choose **Deploy lab**. The lab appears under My labs at once; its header reads
    *Starting* and counts the devices that are ready, **Open CLI** enables on each
    device as it answers, and the login check runs by itself.

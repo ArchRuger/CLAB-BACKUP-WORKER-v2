@@ -656,7 +656,7 @@ connection password are separate settings.
 
 ## 11. Deploy, import and verify a backup
 
-In the manager, click **Deploy a new lab**, open `/etc/containerlab/practice-lab`,
+In the manager, choose **Deploy › Choose a file on the lab VM…** on Home, open `/etc/containerlab/practice-lab`,
 click the `.clab.yaml` and choose **Deploy lab**; the reviewed containerlab command
 runs with live output (**View output** in the lab banner), the lab is saved at once,
 and the lab header reports *Starting* and then *n of n devices ready* as the devices

@@ -250,7 +250,7 @@ test('the builder opens in the folder being browsed, else in the project folder'
  assert.equal(c.opLabels.publish,'Save lab to the VM');assert.match(c.opReviewCopy.revise.body(),/previous version is kept/);
 });
 test('a student with no labs finds the builder from the first page, and the builder page can preview a saved map',()=>{
- assert.match(read('index.html'),/<section id="empty"[^]*?<a class="button secondary" id="build-empty" href="\/static\/lab-builder\.html">Build a lab visually…<\/a>/);
+ assert.match(read('index.html'),/<section class="home-start" id="home-start"[^]*?<a class="button primary" id="home-build" href="\/static\/lab-builder\.html">Open the lab builder<\/a>[^]*?<section id="empty"/);
  // "Deploy or add this lab…" opens the Topology file dialog on the builder page; its Preview topology needs the map renderer
  const html=read('lab-builder.html');assert.match(html,/topology-render\.js\?v=/);assert.ok(html.indexOf('lab-builder-page.js')<html.indexOf('operations.js'));
  for(const id of ['builder-note','builder-note-text','builder-note-retry','builder-hint','builder-problem-download','builder-problem-retry','builder-problem-reload','builder-templates-file'])assert.ok(html.includes('id="'+id+'"'),id);

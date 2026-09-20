@@ -4,6 +4,31 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.10
+
+**UI review 001, step 9: Home leads with Deploy and Build (UI-002, part 1).** Frontend only. Part 2
+(the lab list under a *Recent labs* tab, ordered by the most recent deployment) follows.
+
+- **Two starting choices.** Every Home, with or without labs, begins with two equal cards. **Deploy**:
+  *Choose a file on the lab VM…* (the topology browser) and *Upload a file from this computer…*.
+  **Build**: *Open the lab builder*, a direct link to the visual lab builder, not another deployment
+  dialog. The wording says where the files are: on the lab VM, or on this computer and copied to the VM
+  when the student confirms. The old secondary *Deploy a new lab* button in the page header and the
+  second set of the same buttons on the empty page are gone; **Manager ▾ › Deploy a new lab…** stays.
+- **Upload without a bypass.** The browser reads the chosen file; a wrong file type, an empty file, one
+  above 1 MiB, a binary file or a topology the manager cannot read is refused in plain words (with the
+  manager's own reason for the last). A good file opens the existing topology editor as *Uploaded lab
+  file* with its text and its destination inside a trusted lab folder
+  (`<folder>/<lab name>.clab.yaml`), and the only way on is the reviewed **Create file on the VM…**
+  operation. Nothing can be deployed before that.
+- **After a created file: Deploy or add this lab….** A finished `create` now offers the same next step as
+  a builder save (*Saved as … It is not running yet.*), for an uploaded and for a typed topology, so the
+  student no longer has to find the new file in the browser again. The helper is unchanged; the page
+  uses the job's own path.
+- While the lab VM is not connected both Deploy buttons are off and a visible sentence says why and
+  that building works meanwhile. The topology browser says that its files are on the lab VM and links
+  to the upload.
+
 ## Changes in 1.30.9
 
 **UI review 001, step 8: the Devices tab lines up (UI-006).** Stylesheet only; no markup, script,

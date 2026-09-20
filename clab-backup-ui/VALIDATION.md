@@ -1,3 +1,38 @@
+# UI review 001, step 9: Home leads with Deploy and Build — 1.30.10
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.9 (`fad6698`,
+pushed, CI green, merged to `main` by the maintainer as pull request #41; the branch was fast-forwarded
+to that merge). Requirement UI-002 (starting actions) of `docs/ui-review-001/CHECKLIST.md`. **Fixture
+only: no live VM, lab or device was involved**, and the development manager on the VM was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 180 of 180. New: Home's two cards, their order before *Continue* and the
+  list, the wording about where files are, Build as a direct builder link, no duplicate buttons on the
+  empty page, the cards hidden until the state is known (`test_home_ui.js`); both Deploy buttons off
+  with the reason in words when the VM is unconfigured or away (`test_readiness_ui.js`, the former
+  `deploy-empty` assertions); the upload's refusals, the path built from a lab name with separators and
+  dots, no VM request for a refused file, the editor opened as *Uploaded lab file* with only the
+  reviewed create available, and `opPublishedPath()` for create, publish, failures and other actions
+  (`test_operations_ui.js`).
+- `python -m unittest discover -s tests -t tests`: 708 tests, 1 skipped, OK.
+  `python3 deploy/verify-release.py`, `node --check` on the changed scripts, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 97 of 97 at three viewports, 0 console
+  errors, 0 page errors. `docs/ui-review-001/tools/check_ui002a.py` 25 of 25: at 1366×768 and a 1280×720
+  laptop at 150 % and 200 % zoom the two cards are equal, precede the labs, and no button is clipped;
+  *Choose a file on the lab VM…* opens the VM folders, which say so and link to the upload; Build links
+  to the builder; the upload refuses no file, a `.txt` and a broken topology in words; a good file is
+  shown with its destination and cannot be deployed yet; *Create file on the VM…* opens the operation
+  review; after confirming, *Deploy or add this lab…* appears, then *Deploy lab* opens its own review;
+  with the VM reported as away both Deploy buttons are off with the sentence and Build stays; with no
+  labs the two cards stand above *No labs yet*. Screenshots inspected:
+  `~/ui-review/review-001/chunk09/` on the VM.
+
+## Not covered
+
+The reviewed `create` was confirmed against the fixture's scripted operations helper only; the real
+helper's `create` is unchanged and was not run in this step.
+
 # UI review 001, step 8: the Devices tab lines up — 1.30.9
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.8 (`473a9bd`,

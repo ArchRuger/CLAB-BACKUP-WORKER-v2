@@ -18,16 +18,18 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - Decision: the first-run empty page (no labs at all) keeps its short *Already running on the VM*
   list until UI-002 rebuilds Home; it is the onboarding path the install guides use.
 
-## UI-002 — Deploy and Build are the two primary Home actions ☐
+## UI-002 — Deploy and Build are the two primary Home actions ◐ (part 1 in 1.30.10)
 
-- ☐ Two prominent choices: DEPLOY (browse files on the VM, or upload from this computer) and BUILD
-  (opens the visual lab builder directly).
-- ☐ Wording says where the files are (VM versus own computer); errors are understandable.
+- ☑ Two prominent, equal choices on every Home: DEPLOY (*Choose a file on the lab VM…*, *Upload a file
+  from this computer…*) and BUILD (*Open the lab builder*, a direct link). 1.30.10
+- ☑ Wording says where the files are; upload errors are plain sentences; the upload reuses the
+  reviewed `create` and the existing *Deploy or add this lab…* / *Deploy lab* reviews, no bypass. 1.30.10
 - ☐ Lab list below, under a *Recent labs* tab, newest deployment first, from real deployment
   information; a documented stable fallback for labs without it.
 - ☐ Favourites, card actions and lab access kept; *Continue where you left off* no longer outranks
   the two actions or overrides the order.
 - ☐ Polling and navigation do not reset the active tab or reorder by unrelated activity.
+- Also open: lab card titles break inside a word at three columns ("BGP_TheoryToPractic / e").
 
 ## UI-003 — Edit map gets the visual builder's map-editing capabilities ☐
 
@@ -101,6 +103,6 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 ## Planned chunk order
 
 1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 (1.30.4, done) → 4. UI-007 A+B (1.30.5, done) → 5. UI-007 C (1.30.6, done) → 6. UI-008 root
-cause and fix (1.30.7, done) → 6b. UI-008 tree expansion and highlight (1.30.8, done) → 7. UI-006 (1.30.9, done) → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
+cause and fix (1.30.7, done) → 6b. UI-008 tree expansion and highlight (1.30.8, done) → 7. UI-006 (1.30.9, done) → 8. UI-002 Home actions (1.30.10, done) → 9. UI-002 Recent labs tab and order →
 10+. UI-003 matrix, then parity in increments. One patch release, one commit and one verified push
 per chunk.

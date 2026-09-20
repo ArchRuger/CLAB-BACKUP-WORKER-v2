@@ -5,7 +5,7 @@ anything: Git and the remote are the authority for what was committed and pushed
 
 ## How the work is delivered
 
-- Branch `claude/ui-review-001`, cut from `main` `21823c6` (release 1.30.1). Remote `origin` =
+- Branch `claude/ui-review-001`, cut from `main` `21823c6` (release 1.30.1). The maintainer merged it up to 1.30.9 as pull request #41 on 2026-09-20 (`main` `d588c9a`); the branch was fast-forwarded to that merge and the work continues on it, to be offered as a second pull request. Remote `origin` =
   `https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git`. Push with the `ArchRuger` gh account
   (`gh auth switch -u ArchRuger`), then switch back to `pruger-dev` so lab saves keep working.
 - One chunk = implement → tests → browser check → `python3 deploy/set-release.py X.Y.(Z+1)` → the three
@@ -42,28 +42,26 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.7 | UI-008 part 1 | Planned folders kept by the manager (`git_folders`, tree `planned`, `plan: true`, `DELETE …/folders`); fixture helper made faithful | `check_ui008a.py` 17/17, `verify_after.py` 97/97 ×3, python 708, node 174, `~/ui-review/review-001/chunk06/` |
 | 1.30.8 | UI-008 part 2 | Tree expansion owned by the student (`gitPlacesState.expanded`, `.git-twist`), `current` vs `selected`, focus and scroll kept | `check_ui008b.py` 21/21, `verify_after.py` 97/97 ×3, node 176, `~/ui-review/review-001/chunk07/` |
 | 1.30.9 | UI-006 | Devices tab: list indent removed, one list grid with subgrid rows, aligned heading controls (CSS only) | `check_ui006.py` 89/89 at five sizes, `verify_after.py` 97/97 ×3, before/after in `~/ui-review/review-001/chunk08/` |
+| 1.30.10 | UI-002 part 1 | Home `#home-start` cards (Deploy: VM file / upload; Build), `opUpload()` through the reviewed `create`, `opPublishedPath()` | `check_ui002a.py` 25/25, `verify_after.py` 97/97 ×3, node 180, `~/ui-review/review-001/chunk09/` |
 
 ## Next
 
-Chunk 9 = **UI-002 part 1** (Home: Deploy and Build as the two primary actions). Today: `#home` in
-`index.html` has a hero with a secondary *Deploy a new lab* button (`#home-deploy` → `openDeploy()` in
-`operations.js`, the VM file browser), the empty state has *Deploy a new lab*, *Build a lab visually…*
-(a link to `/static/lab-builder.html`) and *Import lab files…* (`openSetup()` in `management.js`, the
-upload dialog). Plan: two equal cards above the lab list on every Home (with and without labs): DEPLOY
-with *Choose a lab file on the VM…* (`openDeploy`) and *Upload lab files from this computer…*
-(`openSetup`), BUILD opening the builder directly; wording that says where the files are; disabled
-reasons as visible text when the VM is not connected (upload and Build do not need the VM — check).
-Chunk 10 = **UI-002 part 2**: lab list under a *Recent labs* tab ordered by the most recent deployment.
-First find what the manager really records (`lab['deployment']`, operations history in
-`state.operations` with `action` deploy/redeploy and `finished`, `lab.created`); never invent a time;
-labs without one go last in a stable order (name), and say so in this file. Keep favourites, card
-actions and *Continue where you left off* no more prominent than the two actions; the tab and the order
-must not change on the 4 s poll. Then UI-003 (map parity): start with the capability matrix
-`docs/ui-review-001/MAP-PARITY.md` from the bundled editor and `diagram-editor.js`.
+Chunk 10 = **UI-002 part 2**: the lab list under a *Recent labs* tab ordered by the most recent
+deployment, newest first. First find what the manager really records: operation jobs
+(`GET /api/operations`, `state.operations` in the store: `action` in deploy/redeploy with `finished` and
+`status`), `lab['deployment']` (status, `last_success` = last time discovery saw it, NOT a deployment
+time), `lab.created`. Decide whether `/api/state` needs a per-lab `last_deployed` (a manager change in
+`main.py`'s public lab view, derived from operations history; never invented) and document the fallback
+for labs without one (suggested: after the dated ones, by name; never labelled as recently deployed).
+Tabs: *Recent labs* plus *All labs* (favourites first, by name, as today)? Keep the tab in
+`sessionStorage` via `shell.js` helpers so polling and navigation do not reset it; `setMarkup` diffing
+keeps focus. Make *Continue where you left off* no more prominent than the start cards (fold it into
+the list, e.g. a "Last opened" caption on the card). Fix card titles breaking inside a word. Then
+UI-003 (map parity): start with the capability matrix `docs/ui-review-001/MAP-PARITY.md`.
 
 ## Known limits and open points
 
-- 1.30.2 to 1.30.9 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.8 (`gh run list --branch claude/ui-review-001`).
+- 1.30.2 to 1.30.10 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.9 (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
   --manager-only` (helpers must match the release); record here when that was last done: **not yet for

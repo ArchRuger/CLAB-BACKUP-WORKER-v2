@@ -46,7 +46,8 @@ function renderHome(){
  const continueEl=$('home-continue');if(continueEl){homeMarkup(continueEl,continued?homeCard(continued,true):'');continueEl.hidden=!continued;}
  const sorted=[...labs].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)||String(a.name).localeCompare(String(b.name)));
  const cards=$('lab-cards');if(cards){homeMarkup(cards,single?'':sorted.map(l=>homeCard(l,false)).join(''));cards.hidden=single||!labs.length;}
- if($('home-actions'))$('home-actions').hidden=!loaded||!labs.length;
+ // The two ways to start a lab lead every Home, with or without labs, as soon as the state is known.
+ if($('home-start'))$('home-start').hidden=!loaded;
 }
 if($('home')){
  $('home').addEventListener('click',async e=>{
@@ -60,4 +61,5 @@ if($('home')){
  $('home').addEventListener('contextmenu',cardMenu);
  $('home').addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10'))cardMenu(e);});
  if($('home-deploy'))$('home-deploy').onclick=()=>{if(typeof openDeploy==='function')openDeploy();};
+ if($('home-upload'))$('home-upload').onclick=()=>{if(typeof opUpload==='function')opUpload();};
 }

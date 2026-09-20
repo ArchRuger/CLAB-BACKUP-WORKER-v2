@@ -67,17 +67,18 @@ test('Manager › Labs found on the VM lists what Home used to: labs to add, hid
 test('the landing page leads with deployment and lists labs already running on the VM',()=>{
  const h=managementHarness({discovery:{configured:true,connected:true,host:{enabled:true},discovered:[{name:'ceos-pair',nodes:2,running:2,imported:false},{name:'old',nodes:1,running:1,imported:true},{name:'gone',nodes:1,running:0,imported:false,excluded:true}]}});
  h.context.renderManagement();
- assert.equal(h.element('vm-connect-empty').hidden,true);assert.equal(h.element('deploy-empty').disabled,false);
+ assert.equal(h.element('vm-connect-empty').hidden,true);assert.equal(h.element('home-deploy').disabled,false);assert.equal(h.element('home-upload').disabled,false);assert.equal(h.element('home-deploy-reason').hidden,true);
  const list=h.element('empty-discovered-list').innerHTML;
  assert.match(list,/ceos-pair/);assert.doesNotMatch(list,/>old</);assert.match(list,/removed from this manager earlier/);
  assert.match(list,/data-setup-name="ceos-pair">Import/);
  assert.equal(h.element('empty-discovered').hidden,false);assert.equal(h.element('empty-vm-note').textContent,'');
  const unconfigured=managementHarness({discovery:{configured:false}});unconfigured.context.renderManagement();
- assert.equal(unconfigured.element('vm-connect-empty').hidden,false);assert.equal(unconfigured.element('deploy-empty').disabled,true);
+ assert.equal(unconfigured.element('vm-connect-empty').hidden,false);assert.equal(unconfigured.element('home-deploy').disabled,true);assert.equal(unconfigured.element('home-upload').disabled,true,'an upload ends on the lab VM too');
+ assert.match(unconfigured.element('home-deploy-reason').textContent,/^Connect the lab VM first: deploying needs it\. Building a lab works without it\.$/);assert.equal(unconfigured.element('home-deploy-reason').hidden,false);
  assert.match(unconfigured.element('empty-vm-note').textContent,/Connect this manager/);
  assert.equal(unconfigured.element('empty-discovered').hidden,true);
  const offline=managementHarness({discovery:{configured:true,connected:false,host:{enabled:true},error:'Cannot reach the VM SSH service.'}});offline.context.renderManagement();
- assert.equal(offline.element('deploy-empty').disabled,true);assert.match(offline.element('empty-vm-note').textContent,/Cannot reach the VM/);
+ assert.equal(offline.element('home-deploy').disabled,true);assert.match(offline.element('home-deploy-reason').textContent,/^Waiting for the lab VM to answer/);assert.match(offline.element('empty-vm-note').textContent,/Cannot reach the VM/);
 });
 
 test('the deployment bar reports NOS readiness in plain words',()=>{

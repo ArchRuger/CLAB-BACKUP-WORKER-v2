@@ -392,6 +392,14 @@ footer {
 
 /* Home — My labs */
 .home { display: grid; gap: 24px; align-content: start; }
+/* The two ways to start a lab: equal cards, side by side while there is room. */
+.home-start { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.start-card { display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: var(--radius-lg); }
+.start-card h2 { font-size: 20px; margin: 0; }
+.start-card p { margin: 0; font-size: 14px; color: var(--text); }
+.start-card p.caption { font-size: 12px; color: var(--muted); }
+.start-card .actions { padding: 0; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.start-card .start-reason { color: var(--warn-strong); font-weight: 600; }
 .home-hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; }
 .home-hero p { margin: 4px 0 0; color: var(--muted); }
 .home-hero .actions, .home-actions { padding: 0; flex-wrap: wrap; }

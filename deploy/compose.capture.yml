@@ -10,7 +10,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/capture/Dockerfile
-    image: clab-capture-service:1.30.9
+    image: clab-capture-service:1.30.10
     restart: unless-stopped
     read_only: true
     environment:

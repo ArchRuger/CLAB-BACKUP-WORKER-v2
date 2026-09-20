@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.9
+# UI review 001 (in progress) — 1.30.10
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -66,6 +66,16 @@ and the outline's scroll position after each redraw. Children of a closed branch
 is 32px high (`.node-name` inline-flex, the state cell's first grid row, `.node-actions`), so a new
 child of `deviceRow()` must fit one of the three cells. The rail keeps the 1.29.1 named-area grid. The
 single-column rule at 760px must keep resetting `#device-list` too.
+(9) **1.30.10, UI-002 part 1 — Home starts with `#home-start`**: two `.start-card`s, Deploy
+(`#home-deploy` → `openDeploy()`, `#home-upload` → `opUpload()`) and Build (`#home-build`, a plain link
+to the builder). `#deploy-empty`, `#build-empty` and `#home-actions` are gone; `renderLanding()` keys on
+`#home-deploy` and disables both Deploy buttons with a visible reason while the VM is away.
+`opUpload()` (`operations.js`) must stay a front door to the existing review: file checks
+(`opUploadProblem`, 1 MiB), `/operations/parse-yaml` with an empty path (reads nothing from the VM),
+`opUploadPath()` = `<trusted root>/<sanitised lab name>.clab.yaml` (the helper's `create` needs an
+existing parent), then `opEdit('', '', path, {text, file})`, whose only action is the reviewed `create`.
+Never write an uploaded file any other way. `opPublishedPath(job)` lets a finished `create` offer
+*Deploy or add this lab…* from the job's own `path`.
 
 # Lab builder quality pass — 1.30.1
 

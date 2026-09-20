@@ -72,7 +72,7 @@ date -u
 | `Next step` | `1` if your GitHub repository already exists, otherwise `2` and skip step 5 |
 
 The browser Wireshark and Grafana phases run without questions. Wait for
-`Manager 1.30.9: running; HTTP and version checks passed.` The image build and the
+`Manager 1.30.10: running; HTTP and version checks passed.` The image build and the
 two stacks take several minutes. If a step fails, read the error, fix it in a second
 terminal, then type `1` to retry. A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.
@@ -178,7 +178,7 @@ Click **Save and test connection**.
 
 In the **browser**:
 
-1. **Deploy a new lab** → open `/etc/containerlab` → `LAB_NAME` → click the
+1. On Home, **Deploy › Choose a file on the lab VM…** → open `/etc/containerlab` → `LAB_NAME` → click the
    `.clab.yaml` → **Deploy lab** → confirm the review (the containerlab command is
    under **Technical details**).
 2. Wait for the lab banner to finish, then for the lab header to report every device
