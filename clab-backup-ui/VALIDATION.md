@@ -1,3 +1,26 @@
+# UI review 001, step 15: the device look in Edit map — 1.30.16
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.15 (`f7927c1`,
+pushed). Row 9 of `docs/ui-review-001/MAP-PARITY.md`, approved by the maintainer. **Fixture only.**
+
+## What was run
+
+- `node --test tests/*.js`: 188 of 188. New in `test_map_editor_ui.js`: the devices and their current look
+  read from the document; applying a look changes the six look keys of one entry and nothing else (its
+  position, group and unknown keys, other devices, groups and unknown top-level keys compared);
+  *default* removes keys; an unknown icon, a colour that is not one, a radius outside 0–20 or not
+  whole, an unknown label position or direction and a CSS value as background are refused; a device
+  that is not on the map is refused; every offered icon exists in the bundled editor.
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. `verify-release.py`, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 98 of 98 at three viewports, 0 console
+  errors, 0 page errors. `docs/ui-review-001/tools/check_ui003.py` 34 of 34 (five new): the dialog opens
+  on the device selected on the canvas; icon, colour, corner radius and label position arrive in the
+  document; a radius of 99 is refused in words and changes nothing; the look is one undo step; after
+  **Save map** the manager's drawing carries the icon, the colour and the label position. The canvas was
+  inspected in a screenshot (a red, rounded server icon with its label above). The bar was measured at
+  1440, 1366 and 1024 px wide: no clipped button, the lab name not cut, no sideways scrolling.
+  Evidence: `~/ui-review/review-001/chunk16/` on the VM.
+
 # UI review 001, step 14: Undo and Redo in Edit map — 1.30.15
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.14 (`723d5e8` and

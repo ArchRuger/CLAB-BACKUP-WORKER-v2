@@ -4,6 +4,23 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.16
+
+**UI review 001, step 15: the device look is editable in Edit map (UI-003, row 9).** Frontend only (the
+editor bundle is unchanged). UI-003 still has its per-row browser pass open.
+
+- **Device look…** in the map editor's bar opens on the device selected on the canvas (or any device of
+  the map) and sets how it is drawn: icon (the editor's 14 types, or the default by kind), icon colour,
+  icon corner radius, label position, label text direction and label background (a colour, transparent
+  or the default). *Apply to this device* changes exactly those six keys of that device's entry in the
+  map document; *default* removes a key instead of storing an empty value. The device itself, its kind,
+  its links and everything else in the document are untouched, and the editor's own topology form is
+  still not reachable.
+- The look is an ordinary edit: the canvas redraws at once, it is one Undo step, **Save map** keeps it,
+  and the lab's Topology tab draws the icon, colours and label position. Values the editor does not
+  accept are refused in words.
+- The map editor's bar wraps onto a second line instead of clipping **Save map** and the lab's name.
+
 ## Changes in 1.30.15
 
 **UI review 001, step 14: Undo and Redo in Edit map (UI-003, row 8).** Frontend and the editor adapter.

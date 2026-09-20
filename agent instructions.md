@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.15
+# UI review 001 (in progress) — 1.30.16
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -118,6 +118,12 @@ adapter hands the page `attach({applyAnnotations(text)})` (map mode only): insid
 `{type: "topology-host:snapshot", protocolVersion: 1, snapshot, reason: "external-change"}` to the window,
 which is how the editor redraws without a remount. Never whitelist or call the engine's `undo` / `redo`.
 The same handle is the way to change anything else in the document from the page (the device look).
+(15) **1.30.16, UI-003 row 9 — Device look.** `#map-look-dialog` in `map-editor.html`; pure
+`mapLookDevices`, `mapLookClean`, `mapApplyLook` in `map-editor-page.js` edit the six `MAP_LOOK_KEYS` of one
+`nodeAnnotations` entry (a default removes the key) and `mapLookApply()` sends the document through
+`mapEditor.applyAnnotations` **without** `mapApplying`, so `persist()` records it as one undo step.
+`MAP_ICONS` must stay a subset of the editor's `NODE_TYPE_SET` (a test checks the bundle). The form is
+`novalidate` so refusals are the page's sentences. `.map-editor .builder-bar` wraps.
 
 # Lab builder quality pass — 1.30.1
 

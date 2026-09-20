@@ -43,6 +43,35 @@ function mapHistoryPush(history,text,now){
  return {entries,index:entries.length-1,at:now};
 }
 function mapHistoryStep(history,delta){const index=history.index+delta;return index<0||index>=history.entries.length?null:{...history,index,at:0,merged:false};}
+// The device look: how a device is drawn, which the editor keeps in the device's nodeAnnotations entry. The
+// editor's own form for it belongs to its topology editing (not offered in Edit map), so the page has one.
+// Values are the editor's (its NODE_TYPE_SET, NODE_LABEL_POSITION_OPTIONS, NODE_DIRECTION_OPTIONS).
+const MAP_ICONS=[['pe','Router'],['dcgw','Gateway router'],['leaf','Leaf switch'],['spine','Spine switch'],['super-spine','Super-spine switch'],['switch','Switch'],['bridge','Bridge'],['server','Server'],['client','Client'],['controller','Controller'],['cloud','Cloud'],['pon','PON'],['rgw','Residential gateway'],['ue','User equipment']];
+const MAP_LABEL_POSITIONS=[['bottom','Below the icon'],['top','Above the icon'],['left','Left of the icon'],['right','Right of the icon']];
+const MAP_LABEL_DIRECTIONS=[['right','Horizontal'],['down','Rotated 90°'],['left','Rotated 180°'],['up','Rotated 270°']];
+const MAP_LOOK_KEYS=['icon','iconColor','iconCornerRadius','labelPosition','direction','labelBackgroundColor'];
+function mapLookDevices(text){let data;try{data=JSON.parse(text);}catch{return [];}return (Array.isArray(data&&data.nodeAnnotations)?data.nodeAnnotations:[]).filter(n=>n&&typeof n.id==='string'&&n.id).map(n=>({id:n.id,label:typeof n.label==='string'&&n.label?n.label:n.id,look:Object.fromEntries(MAP_LOOK_KEYS.filter(k=>n[k]!==undefined&&n[k]!=='').map(k=>[k,n[k]]))}));}
+// A look as the form gives it, checked against what the editor accepts; '' or undefined means "the default".
+function mapLookClean(look){
+ const out={},color=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
+ if(look.icon){if(!MAP_ICONS.some(([id])=>id===look.icon))throw new Error('Choose one of the listed icons.');out.icon=look.icon;}
+ if(look.iconColor){if(!color(look.iconColor))throw new Error('The icon colour is not a colour.');out.iconColor=look.iconColor.toLowerCase();}
+ if(look.iconCornerRadius!==''&&look.iconCornerRadius!==undefined&&look.iconCornerRadius!==null){const r=Number(look.iconCornerRadius);if(!Number.isInteger(r)||r<0||r>20)throw new Error('The corner radius is a whole number from 0 to 20.');out.iconCornerRadius=r;}
+ if(look.labelPosition){if(!MAP_LABEL_POSITIONS.some(([id])=>id===look.labelPosition))throw new Error('Choose one of the listed label positions.');out.labelPosition=look.labelPosition;}
+ if(look.direction){if(!MAP_LABEL_DIRECTIONS.some(([id])=>id===look.direction))throw new Error('Choose one of the listed text directions.');out.direction=look.direction;}
+ if(look.labelBackgroundColor){if(look.labelBackgroundColor!=='transparent'&&!color(look.labelBackgroundColor))throw new Error('The label background is not a colour.');out.labelBackgroundColor=look.labelBackgroundColor.toLowerCase();}
+ return out;
+}
+// The document with one device's look replaced. Only that entry's six look keys change: its id, position,
+// group and every other key, every other entry and every other part of the document stay as they are.
+function mapApplyLook(text,id,look){
+ const data=JSON.parse(text),clean=mapLookClean(look);
+ if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('The map document is not readable.');
+ const entry=(Array.isArray(data.nodeAnnotations)?data.nodeAnnotations:[]).find(n=>n&&n.id===id);
+ if(!entry)throw new Error('This device is not on the map.');
+ for(const key of MAP_LOOK_KEYS){if(clean[key]===undefined)delete entry[key];else entry[key]=clean[key];}
+ return JSON.stringify(data,null,2);
+}
 function mapDirty(){return mapIsDirty(mapBaseline,mapCurrent);}
 async function mapTravel(delta){
  const next=mapHistoryStep(mapHistory,delta);if(!next||!mapEditor||mapApplying||mapSaving||mapPaused)return false;
@@ -57,6 +86,7 @@ function mapRenderBar(){
  $('map-save').disabled=!ready||mapSaving||!mapDirty();$('map-save').title=!ready?'':mapDirty()?'':'There is nothing to save.';
  $('map-download').disabled=!mapDoc;$('map-import').disabled=!ready||mapSaving;
  const steady=ready&&!mapSaving&&!mapApplying&&!!mapEditor;
+ $('map-look').disabled=!steady;
  $('map-undo').disabled=!steady||mapHistory.index<=0;$('map-redo').disabled=!steady||mapHistory.index>=mapHistory.entries.length-1;
  $('map-drawio').disabled=!ready;$('map-drawio').title=mapDirty()?'The export is made from the saved map: save first.':'';
 }
@@ -81,6 +111,33 @@ async function mapImport(){
  try{await api('/labs/'+encodeURIComponent(mapLab)+'/map-document',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({annotations:text,revision:mapDoc.revision})});}
  catch(e){error.textContent='The map was not replaced: '+e.message;return;}
  mapBaseline=mapCurrent;location.reload();
+}
+function mapLookFill(){
+ const devices=mapLookDevices(mapCurrent),chosen=$('map-look-device').value,device=devices.find(d=>d.id===chosen)||devices[0];if(!device)return;
+ const look=device.look,bg=look.labelBackgroundColor||'';
+ $('map-look-device').value=device.id;$('map-look-icon').value=look.icon||'';$('map-look-radius').value=look.iconCornerRadius??'';
+ $('map-look-color').value=look.iconColor||'#0066ff';$('map-look-color-default').checked=!look.iconColor;$('map-look-color').disabled=!look.iconColor;
+ $('map-look-bg-transparent').checked=bg==='transparent';$('map-look-bg-default').checked=!bg;$('map-look-bg').value=bg&&bg!=='transparent'?bg:'#454545';$('map-look-bg').disabled=!bg||bg==='transparent';
+ $('map-look-position').value=look.labelPosition||'';$('map-look-direction').value=look.direction||'';$('map-look-error').textContent='';
+}
+function mapLookOpen(){
+ const devices=mapLookDevices(mapCurrent);if(!devices.length){notify('This map has no devices to style.');return;}
+ const options=(list,blank)=>(blank?'<option value="">'+blank+'</option>':'')+list.map(([id,label])=>'<option value="'+id+'">'+label+'</option>').join('');
+ $('map-look-icon').innerHTML=options(MAP_ICONS,'Default (by the kind of device)');$('map-look-position').innerHTML=options(MAP_LABEL_POSITIONS,'Default (below the icon)');$('map-look-direction').innerHTML=options(MAP_LABEL_DIRECTIONS,'Default (horizontal)');
+ const select=$('map-look-device');select.replaceChildren(...devices.map(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=d.label===d.id?d.id:d.label+' ('+d.id+')';return o;}));
+ // The device selected on the canvas, when there is one
+ const picked=document.querySelector('.react-flow__node-topology-node.selected'),id=picked&&(picked.getAttribute('data-id')||String(picked.getAttribute('data-testid')||'').replace(/^rf__node-/,''));
+ if(id&&devices.some(d=>d.id===id))select.value=id;
+ mapLookFill();$('map-look-dialog').showModal();
+}
+async function mapLookApply(){
+ const error=$('map-look-error');error.textContent='';
+ const bg=$('map-look-bg-transparent').checked?'transparent':$('map-look-bg-default').checked?'':$('map-look-bg').value;
+ const look={icon:$('map-look-icon').value,iconColor:$('map-look-color-default').checked?'':$('map-look-color').value,iconCornerRadius:$('map-look-radius').value,labelPosition:$('map-look-position').value,direction:$('map-look-direction').value,labelBackgroundColor:bg};
+ let next;try{next=mapApplyLook(mapCurrent,$('map-look-device').value,look);}catch(e){error.textContent=e.message;return;}
+ if(next===mapCurrent||JSON.stringify(JSON.parse(next))===JSON.stringify(JSON.parse(mapCurrent))){notify('Nothing changed for this device.');return;}
+ // An ordinary edit: the editor takes the document, persist() records the step, Undo takes it back.
+ try{await mapEditor.applyAnnotations(next);notify('Look applied to '+$('map-look-device').value+'. Save map keeps it.');}catch(e){error.textContent='The look was not applied: '+e.message;}
 }
 const labBuilderPage={
  // Called by the adapter after every settled edit, before the editor hears the answer. The first call is the
@@ -123,6 +180,10 @@ if(typeof document!=='undefined'&&$('map-save')){
  $('map-leave-save').onclick=async()=>{$('map-leave').close();if(await mapSave())location.assign(mapBackUrl(mapLab));};
  $('map-import').onclick=()=>{$('map-import-error').textContent='';$('map-import-file').value='';$('map-import-dialog').showModal();};
  $('map-import-cancel').onclick=()=>$('map-import-dialog').close();$('map-import-confirm').onclick=()=>mapImport();
+ $('map-look').onclick=mapLookOpen;$('map-look-close').onclick=()=>$('map-look-dialog').close();$('map-look-device').onchange=mapLookFill;
+ $('map-look-form').onsubmit=e=>{e.preventDefault();mapLookApply();};
+ $('map-look-color-default').onchange=()=>{$('map-look-color').disabled=$('map-look-color-default').checked;};
+ $('map-look-bg-default').onchange=$('map-look-bg-transparent').onchange=e=>{if(e.target.checked)(e.target.id==='map-look-bg-default'?$('map-look-bg-transparent'):$('map-look-bg-default')).checked=false;$('map-look-bg').disabled=$('map-look-bg-default').checked||$('map-look-bg-transparent').checked;};
  $('map-undo').onclick=()=>mapTravel(-1);$('map-redo').onclick=()=>mapTravel(1);
  // Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y, except while typing in a field (the field's own undo applies there).
  window.addEventListener('keydown',e=>{

@@ -46,3 +46,8 @@ body.lab-builder{display:flex;flex-direction:column}
 .map-editor [data-testid="context-menu-item-ssh-node"],.map-editor [data-testid="context-menu-item-shell-node"],.map-editor [data-testid="context-menu-item-logs-node"],
 .map-editor [data-testid="context-menu-item-add-traffic-rate"],.map-editor [data-testid="context-menu-item-open-node-palette"],
 .map-editor [data-testid="panel-tab-nodes"]{display:none !important}
+/* The map editor's bar holds more actions than the builder's: it wraps onto a second line instead of
+   clipping Save map or the lab's name, and its buttons are compact. */
+.map-editor .builder-bar{height:auto;min-height:52px;flex-wrap:wrap;row-gap:6px;padding-top:8px;padding-bottom:8px}
+.map-editor .builder-bar .button{padding:7px 12px}
+.map-editor .builder-bar .builder-name{max-width:32ch}

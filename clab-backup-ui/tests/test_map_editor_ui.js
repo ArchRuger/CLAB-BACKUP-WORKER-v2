@@ -88,3 +88,18 @@ test('undo and redo are the page\'s own history of the map document: steps, merg
  c.labBuilderPage.attach({applyAnnotations:async()=>{throw new Error('stale');}});await h.el('map-undo').onclick();assert.match(h.el('toast').textContent,/^Undo did not work: stale/);assert.equal(vm.runInContext('mapHistory.index',c),1,'a failed step leaves the history where it was');
  c.Date=real;
 });
+
+test('the device look changes six keys of one device\'s entry and nothing else, with the editor\'s own values only',()=>{
+ const {context:c}=harness(),text=JSON.stringify({nodeAnnotations:[{id:'r1',label:'Core',position:{x:1,y:2},groupId:'g',icon:'pe',vendorKey:{a:1}},{id:'r2',position:{x:3,y:4}}],groupStyleAnnotations:[{id:'g'}],somethingNew:[1]});
+ const plain=v=>JSON.parse(JSON.stringify(v));
+ assert.deepEqual(plain(c.mapLookDevices(text)),[{id:'r1',label:'Core',look:{icon:'pe'}},{id:'r2',label:'r2',look:{}}]);assert.deepEqual(plain(c.mapLookDevices('{oops')),[]);
+ const next=JSON.parse(c.mapApplyLook(text,'r1',{icon:'server',iconColor:'#CC2200',iconCornerRadius:'12',labelPosition:'top',direction:'down',labelBackgroundColor:'transparent'}));
+ assert.deepEqual(next.nodeAnnotations[0],{id:'r1',label:'Core',position:{x:1,y:2},groupId:'g',icon:'server',vendorKey:{a:1},iconColor:'#cc2200',iconCornerRadius:12,labelPosition:'top',direction:'down',labelBackgroundColor:'transparent'});
+ assert.deepEqual(next.nodeAnnotations[1],{id:'r2',position:{x:3,y:4}},'other devices are untouched');assert.deepEqual(next.groupStyleAnnotations,[{id:'g'}]);assert.deepEqual(next.somethingNew,[1]);
+ const cleared=JSON.parse(c.mapApplyLook(JSON.stringify(next),'r1',{icon:'',iconColor:'',iconCornerRadius:'',labelPosition:'',direction:'',labelBackgroundColor:''}));
+ assert.deepEqual(cleared.nodeAnnotations[0],{id:'r1',label:'Core',position:{x:1,y:2},groupId:'g',vendorKey:{a:1}},'"default" removes the key instead of storing an empty value');
+ for(const [bad,reason] of [[{icon:'<img>'},/listed icons/],[{iconColor:'red'},/not a colour/],[{iconCornerRadius:'21'},/0 to 20/],[{iconCornerRadius:'1.5'},/0 to 20/],[{labelPosition:'inside'},/label positions/],[{direction:'sideways'},/text directions/],[{labelBackgroundColor:'url(x)'},/not a colour/]])assert.throws(()=>c.mapApplyLook(text,'r1',bad),reason);
+ assert.throws(()=>c.mapApplyLook(text,'ghost',{icon:'pe'}),/not on the map/);
+ const code=fs.readdirSync(path.join(__dirname,'../app/static/lab-builder/assets')).filter(f=>f.endsWith('.js')).map(f=>fs.readFileSync(path.join(__dirname,'../app/static/lab-builder/assets',f),'utf8')).join('\n');
+ for(const [icon] of vm.runInContext('MAP_ICONS',c))assert.ok(code.includes('"'+icon+'"'),'the bundled editor no longer knows the icon '+icon);
+});

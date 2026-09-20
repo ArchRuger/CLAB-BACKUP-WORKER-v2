@@ -48,6 +48,7 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.13 | UI-003 step B | Manager keeps the full annotations document (`lab['annotations']`, `keep_document`, `map_document`), `GET`/`PUT …/map-document` | python 711 (unit/API only, no browser) |
 | 1.30.14 | UI-003 steps C + D | Adapter map mode (`mapOnly`, `MAP_COMMANDS`), `map-editor.html` / `map-editor-page.js`, Edit map wired by `map_editor`, exports and import kept | `check_ui003.py` 27/27, `verify_after.py` 98/98 ×3, node 186, python 711, bundle `--check` OK, `~/ui-review/review-001/chunk13`, `chunk14` |
 | 1.30.15 | UI-003 row 8 | Page-level Undo / Redo (`mapHistory*`, `mapTravel`, adapter `attach` → `applyAnnotations`) | `check_ui003.py` 29/29, node 187, bundle `--check` OK |
+| 1.30.16 | UI-003 row 9 | *Device look…* dialog (`mapApplyLook` over `nodeAnnotations`, one undo step), bar wraps | `check_ui003.py` 34/34, `verify_after.py` 98/98 ×3, node 188, `~/ui-review/review-001/chunk16/` |
 
 ## Next
 
@@ -58,9 +59,7 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
    layout, link label offset, link label mode, grid appearance, SVG export), each followed by save →
    reopen → compare the stored document, then flip the row to ☑.
 2. **Row 8, undo / redo**: done in 1.30.15 as a page-level history (the maintainer's choice).
-3. **Row 9, device look** (icon, colours, label position): approved by the maintainer. Upstream edits it
-   with `editNode`, which view mode does not offer; do it as a page dialog that edits the device's entry
-   in `nodeAnnotations` and applies the document through `mapEditor.applyAnnotations` (one undo step).
+3. **Row 9, device look**: done in 1.30.16 (a page dialog over `nodeAnnotations`).
 4. **The Topology view draws less than the editor stores** (rotation, line arrows, rounded text
    background, nested levels): extend `parse_drawing` / `topology-render.js` where cheap, document the rest.
 5. **Live pass**: done for open / drag / save at 1.30.14 on the QA lab `qa-nos-105458`; repeat it for the
