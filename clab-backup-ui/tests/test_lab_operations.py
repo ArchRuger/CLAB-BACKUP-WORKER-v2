@@ -335,6 +335,12 @@ class OperationAPITests(unittest.TestCase):
             self.assertNotIn('kind: linux',json.dumps(self.store.state['operations']));submit.assert_called_once()
             self.assertEqual(submit.call_args.args[3]['options']['annotations'],layout)
 
+    def test_known_images_come_from_the_labs_already_registered(self):
+        with self.fixture():
+            self.store.lab(self.lab_id)['definition_yaml']='name: t\ntopology:\n  defaults:\n    kind: arista_ceos\n  kinds:\n    arista_ceos:\n      image: site/ceos:1\n  nodes:\n    a: {}\n    b:\n      image: site/ceos:2\n    c:\n      kind: linux\n      image: "{{ templated }}"\n    d:\n      kind: linux\n      image: alpine:3\n    e: {}\n'
+            found=self.client.get('/api/operations/known-images',headers=self.auth).json()['images']
+        self.assertEqual(found,{'arista_ceos':['site/ceos:1','site/ceos:2'],'linux':['alpine:3']})
+
     def test_builder_revision_keeps_the_lab_name_and_shows_what_changes(self):
         with self.fixture():
             renamed=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':YAML.decode().replace('name: training','name: other',1),'base':{'yaml':'x'}}))

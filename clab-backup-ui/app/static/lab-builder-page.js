@@ -26,7 +26,7 @@ const BUILDER_TEMPLATES=[
 function builderTemplateList(known){return BUILDER_TEMPLATES.map(t=>({...t,image:(known&&known[t.kind]&&known[t.kind][0])||t.image}));}
 function builderImages(templates,known){return [...new Set([...templates.map(t=>t.image),...Object.values(known||{}).flat()].filter(i=>typeof i==='string'&&i))];}
 // eth{n} counts from 1, {n:0} from the given start: the pattern grammar of the editor's templates.
-function builderInterface(pattern,index){const m=/\{n(?::(\d+))?\}/.exec(pattern||'eth{n}');if(!m)return (pattern||'eth')+index;return pattern.replace(m[0],String((m[1]===undefined?1:Number(m[1]))+index));}
+function builderInterface(pattern,index){const p=pattern||'eth{n}',m=/\{n(?::(\d+))?\}/.exec(p);if(!m)return p+(index+1);return p.replace(m[0],String((m[1]===undefined?1:Number(m[1]))+index));}
 const BUILDER_STARTERS=[{id:'blank',label:'Blank canvas',nodes:0,links:[]},{id:'pair',label:'Two devices, one link',nodes:2,links:[[0,1]]},{id:'triangle',label:'Three devices in a triangle',nodes:3,links:[[0,1],[1,2],[2,0]]}];
 function builderStarter(id,name,template){
  const shape=BUILDER_STARTERS.find(s=>s.id===id)||BUILDER_STARTERS[0],t=template||BUILDER_TEMPLATES[0],used=Array(shape.nodes).fill(0);
