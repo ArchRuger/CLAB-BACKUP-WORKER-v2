@@ -34,7 +34,7 @@ connection is saved yet:
 | VM username | `clab-discovery` |
 | VM password | The password you just created in the VM terminal |
 | Inspection method | Installed discovery and file helper |
-| Automatic discovery | Enabled |
+| Check the VM automatically for running labs | Checked |
 
 Choose **Save and test connection**. The manager saves the password encrypted and
 never returns it to the browser. Reopening the dialog shows an empty password field;
@@ -126,5 +126,5 @@ settings are untouched.
 | Save failed | Check free disk space and data ownership; retain state.key and state.enc. |
 
 **Manager settings → Start fresh** retains the VM connection, password, fingerprint
-and state.key. **Remove lab** affects only the selected saved workspace. Neither
+and state.key. **Remove from this manager…** affects only the selected saved workspace. Neither
 operation changes the VM account password. New labs still require import confirmation.

@@ -72,7 +72,7 @@ date -u
 | `Next step` | `1` if your GitHub repository already exists, otherwise `2` and skip step 5 |
 
 The browser Wireshark and Grafana phases run without questions. Wait for
-`Manager 1.30.18: running; HTTP and version checks passed.` The image build and the
+`Manager 1.30.19: running; HTTP and version checks passed.` The image build and the
 two stacks take several minutes. If a step fails, read the error, fix it in a second
 terminal, then type `1` to retry. A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.
@@ -86,6 +86,7 @@ Create the GitHub repository first, with **Add a README** selected. Then:
 | `Where are your lab configurations going?` | `1` |
 | `HTTPS clone URL (Code > HTTPS on GitHub)` | `GITHUB_URL` |
 | `Checkout directory [/home/archtop/labs/...]` | Enter |
+| `Repository subfolder for this lab` | Enter for a one-lab repository, or a folder name such as `bgp` |
 | `Install GitHub CLI with sudo apt-get? (y/N)` | `y` |
 | One-time code, then `Press Enter to open ...` | Copy the code, press Enter. On **Windows** open https://github.com/login/device, paste the code, authorize |
 | `Commit author name` | Your name |
@@ -167,10 +168,10 @@ opens by itself the first time:
 |---|---|
 | VM address | `127.0.0.1` |
 | SSH port | `22` |
-| Username | `clab-discovery` |
-| Password | The password created in step 4 |
+| VM username | `clab-discovery` |
+| VM password | The password created in step 4 |
 | Inspection method | Installed discovery and file helper |
-| Automatic discovery | Enabled |
+| Check the VM automatically for running labs | Checked |
 
 Click **Save and test connection**.
 
@@ -187,7 +188,7 @@ In the **browser**:
 3. Devices with their own logins: **Advanced › Credentials → Add credentials** for each
    network OS, then open a device (**Devices → Details**) → **Test login now**. Devices
    with containerlab's default login need nothing.
-4. **Back up all configurations…** from **More ▾** on the map.
+4. **Back up all configurations** from **More ▾** on the map.
 
 Deployed from the VM terminal instead (`sudo containerlab deploy -t
 /etc/containerlab/LAB_NAME/LAB_NAME.clab.yaml`)? Open
@@ -206,7 +207,7 @@ Deployed from the VM terminal instead (`sudo containerlab deploy -t
 
 1. **Save progress** in the lab header → choose the registered checkout, a folder and
    the devices → **Save progress**.
-2. Wait for **Saved to Git** → check the files on GitHub.
+2. In **Review before uploading** click **Upload these changes** → wait for **Saved to Git** → check the files on GitHub.
 
 ## 13. Check everything
 

@@ -3,9 +3,9 @@
 Use your **existing Ubuntu VM account**. On a standalone VM, you do not need an
 additional Linux user. The VM username and GitHub username can be different.
 
-**Recommended:** `bash deploy/install.sh` handles the full VM setup and then
+**Recommended:** `bash "$HOME/projects/clab-manager/deploy/install.sh"` handles the full VM setup and then
 opens the Git terminal wizard. For a working manager, choose **Git setup / repair
-only**, or run `bash deploy/install.sh --git`. See [INSTALL.md](INSTALL.md).
+only**, or run `bash "$HOME/projects/clab-manager/deploy/install.sh" --git`. See [INSTALL.md](INSTALL.md).
 
 **From the manager:** once the VM account is signed in to GitHub CLI, a lab can also
 be connected without the terminal: open the lab → the **Progress** tab → **Connect
@@ -72,8 +72,9 @@ the manager's application source directory under `~/projects/`.
 
 Finally, open your lab in the manager and click **Save progress** in the lab header:
 the first save asks for the registered checkout, the folder and the devices (the
-same settings are under **Progress › Save location**). It captures, exports, commits
-and pushes automatically; there is no separate Commit button. Confirm the save
+same settings are under **Progress › Save location**). It captures, exports and commits
+automatically, then opens **Review before uploading**; choose **Upload these changes**
+to push. There is no separate Commit button. Confirm the save
 reports **Saved to Git** and the
 repository contains `latest/` with configurations and `manifest.json`.
 
@@ -291,8 +292,8 @@ need no container rebuild.
 ## Fix a failed save
 
 Open the **original failed save** from progress history. Its snapshot is already
-preserved. Repair the stated problem, then use its **Retry save and upload** or
-**Upload now** button. Retry uses the existing snapshot/commit.
+preserved. Repair the stated problem, then use its **Retry save, then review**,
+**Review and upload…** or **Upload now** button. Retry uses the existing snapshot/commit.
 
 | Symptom | Action |
 |---|---|

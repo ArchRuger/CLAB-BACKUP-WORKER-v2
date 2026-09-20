@@ -60,12 +60,12 @@ telemetry on (the default for labs created since 1.23.0), the sequence is:
    provisions gNMI as described in [TELEMETRY.md](TELEMETRY.md).
 2. Grafana picks the file up within 30 seconds: the dashboard appears in the **Lab
    maps** folder as `Lab map · <name>`.
-3. The lab header's button reads **Lab map in Grafana ↗** and opens it; Grafana runs
+3. The **Telemetry** card on the lab's **Tools** tab reads **Open lab map ↗** and opens it; Grafana runs
    only while someone reads it, so the button first starts it on the VM when it is
    stopped (a few seconds) and then shows the map. Node and link colours follow the
    nodes as they reach *Streaming*; rates appear after the first two counter samples
    (about 20 seconds).
-4. Rename the lab, redraw it (*Edit diagram*, or re-import the annotations) or add nodes,
+4. Rename the lab, redraw it (*Edit map*, or re-import the annotations) or add nodes,
    and the map follows on the next pass. Remove the lab from the manager and its map
    disappears from Grafana within 30 seconds.
 
@@ -73,8 +73,8 @@ What the map needs from the lab, and what happens when it is missing:
 
 | Requirement | Without it |
 |---|---|
-| A drawing (imported topology; positions come from the annotations file or the manager's default grid) | No map for that lab; the button reads **Grafana ↗** and opens the lab overview instead. Import the topology once. |
-| Drawing node names that match the inventory (containerlab node names, short names or `clab-<lab>-<node>`) | Unmatched nodes and their links are drawn static grey, without dots or rates. The manager's own map marks them *Unmatched* too. |
+| A drawing (imported topology; positions come from the annotations file or the manager's default grid) | No map for that lab; the button reads **Open network dashboard ↗** and opens the lab overview instead. Import the topology once. |
+| Drawing node names that match the inventory (containerlab node names, short names or `clab-<lab>-<node>`) | Unmatched nodes and their links are drawn static grey, without dots or rates. The manager's own map marks them *Not in this lab* too. |
 | A supported kind on the node (cEOS, XRv9k, cJunosEvolved) with telemetry streaming | The node dot stays grey, its ports and links grey and still. |
 | Interface names in the drawing in containerlab form (`eth1`) or the NOS form (`Ethernet1`, `Gi0/0/0/0`, `et-0/0/0`) | The manager maps them per kind; an unknown form is used verbatim and simply matches nothing, so that link stays grey. |
 | The Flow panel loaded in Grafana | The dashboard exists but the panel says the plugin is missing. Rerun the setup. |
@@ -86,7 +86,7 @@ manager's own map uses, so they are done once and serve both views:
 
 - **Layout and looks.** Positions, icons (router, switch, server), icon colours, label
   positions, groups and text notes come from the drawing. Edit them in the manager
-  (*Edit diagram*) or maintain the containerlab `.annotations.json` next to the topology
+  (*Edit map*) or maintain the containerlab `.annotations.json` next to the topology
   and re-import; the Grafana map is regenerated from the result.
 - **Names.** The node label on the map is the drawing label; the series names behind
   the scenes use the inventory short name (`ceos1`) and the NOS interface name

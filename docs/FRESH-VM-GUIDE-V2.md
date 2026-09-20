@@ -483,7 +483,7 @@ file on the VM; keep logging in as your normal administrator and keep
 root, which is fine for containerlab and the manager. If you also want to edit
 them in VS Code without sudo, upload them into an engineer-owned project folder
 as described in step 9 instead. Later,
-`bash deploy/check-install.sh --require-admin-sftp` confirms that the rule is
+`bash "$HOME/projects/clab-manager/deploy/check-install.sh" --require-admin-sftp` confirms that the rule is
 still effective.
 [WinSCP sudo/SFTP guidance](https://winscp.net/eng/docs/faq_su)
 
@@ -510,7 +510,7 @@ The extension checks the groups of the account it runs under and needs both
 `containerlab deploy` from its terminal needs the sudo-less SUID mode. The
 installer deliberately leaves your account out of those groups, keeps the lab
 folders root-owned and removes the SUID bit, because the manager only needs its
-restricted `clab-discovery` account. `bash deploy/install.sh` therefore offers
+restricted `clab-discovery` account. `bash "$HOME/projects/clab-manager/deploy/install.sh"` therefore offers
 **VS Code / Containerlab extension access** in its standard flow, and as menu
 option 3 for an installation that already exists. The equivalent one command,
 run from any directory as your normal account, is:
@@ -537,13 +537,13 @@ logins, and the VS Code server already running on the VM keeps the old ones, so:
 Both groups grant root-equivalent control of the VM; grant them only to your own
 engineer account, never `clab-discovery`. The manager keeps using sudo through
 its restricted gateway and needs none of this. Later runs of
-`sudo bash deploy/start-manager.sh` reapply the recorded access automatically,
+`sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh"` reapply the recorded access automatically,
 which matters because the operations setup resets the projects folder and a
 containerlab package upgrade installs a new binary without the SUID bit; the
-manual equivalent is `sudo bash deploy/setup-engineer-access.sh --refresh`.
+manual equivalent is `sudo bash "$HOME/projects/clab-manager/deploy/setup-engineer-access.sh" --refresh`.
 Files you create in VS Code belong to you with group `clab_admins`, and
 topologies the manager creates in those folders are group-editable too.
-`bash deploy/check-install.sh` reports **Engineer access** and names the exact
+`bash "$HOME/projects/clab-manager/deploy/check-install.sh"` reports **Engineer access** and names the exact
 missing piece if either error returns.
 
 **Still `Extension activation failed. Insufficient permissions`?** The VS Code
@@ -639,10 +639,10 @@ Open **VM connection** and enter:
 |---|---|
 | VM address | `127.0.0.1` — the manager container shares the VM network |
 | SSH port | `22`, or the VM's actual SSH port |
-| Username | `clab-discovery` |
-| Password | The `clab-discovery` password created during installer setup |
+| VM username | `clab-discovery` |
+| VM password | The `clab-discovery` password created during installer setup |
 | Inspection method | Installed discovery and file helper |
-| Automatic discovery | Enabled |
+| Check the VM automatically for running labs | Checked |
 
 Use **Save and test connection**. The first successful connection saves and
 trusts the VM's SSH fingerprint. Reopen **VM connection** and compare the saved
@@ -696,15 +696,16 @@ select the matching NOS when adding a credential profile:
 | Juniper vQFX | `juniper_vqfx` | `vr-vqfx`, `vqfx` |
 | Juniper vJunos-switch | `juniper_vjunosswitch` | `vr-vjunosswitch`, `vjunosswitch` |
 
-Enter the actual device username/password; the manager does not fill in default
-passwords. If upgrading a saved lab, **Lab actions ▾ › Sync topology from VM** can map
+The manager falls back to containerlab's documented default login for these kinds;
+add credentials with the actual device username/password when yours differs. If upgrading a saved lab, **Lab actions ▾ › Sync topology from VM** can map
 unknown devices to these kinds, or choose the network OS under **Edit connection** in
 the device panel (**Advanced**). Review
 **Include in backups** because existing selections are preserved. The same
 Junos SSH driver used for cJunosEvolved captures
 `show configuration | display set | no-more`; saved files use `.set`, Git
 manifests report `junos-display-set`, and individual downloads use
-`vQFX_*.cfg` or `vJunos-switch_*.cfg`. Live configuration restore is unavailable.
+`vQFX_*.cfg` or `vJunos-switch_*.cfg`. Applying a saved configuration to a running
+node ([GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node)) is available for vJunos-switch, not for vQFX.
 See the [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
 [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) requirements,
 including the vJunos-switch VM limitation in step 1. Live login and backup of
@@ -749,7 +750,7 @@ transfer, device backup and Git push remain separate evidence. Installer menu
 checked restricted helper execution and local container/version/HTTP readiness
 before browser setup; the saved SSH connection is checked here afterwards.
 
-If **Deploy a new lab → Lab topologies on the VM** reports **Operations helper is unavailable**,
+If **Deploy a new lab → Lab folders on the VM** reports **Operations helper is unavailable**,
 update both the image and helper from this matching source checkout and retest the
 actual failed folder:
 
@@ -767,15 +768,16 @@ for diagnosis, larger folder trees, JSON output and all options.
 After those checks, finish the real Git workflow in the browser:
 
 1. Choose **Save progress** in the lab header.
-2. Wait for **Saved to Git** and check GitHub for the files under `latest/` and its
+2. In **Review before uploading**, check what changed and click **Upload these changes**.
+3. Wait for **Saved to Git** and check GitHub for the files under `latest/` and its
    `manifest.json`.
 
-Save progress captures, exports, commits and pushes. There is no separate Commit
+Save progress captures, exports and commits, and pushes once you confirm the review. There is no separate Commit
 button, and setup itself did not already push these configs. You may then save a
 baseline or named checkpoint as appropriate for your lab.
 
 If a push fails, open the **original save** under **Recent saves** and use its
-**Retry save and upload** or **Upload now** action after
+**Retry save, then review**, **Review and upload…** or **Upload now** action after
 fixing the reported problem. Do not keep making captures or manually commit the
 manager's staged files as the normal repair. [Git recovery guide](GIT-SETUP.md#fix-a-failed-save)
 

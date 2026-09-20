@@ -1,4 +1,4 @@
-# Maintenance audit (in progress) — 1.30.18
+# Maintenance audit (in progress) — 1.30.19
 
 A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release
 per chunk. **Read `docs/maintenance-audit/PICKUP.md` first**, then `docs/maintenance-audit/AUDIT.md`
@@ -14,6 +14,8 @@ the first one). UI review 001 is complete and merged; its open points are in its
 `docs/maintenance-audit/tools/check_links.py` is a gate for any change that moves or renames a document.
 (4) The documentation tools under `docs/redesign/tools/`, `docs/ui-review-001/tools/` and
 `docs/lab-builder/tools/` are working regression tooling; their location does not make them disposable.
+(5) Chunk 2 corrected the installation and operations guides (the record's disposition table has the list).
+A guide must never again say a save uploads by itself: every upload goes through *Review before uploading*.
 
 # UI review 001 — 1.30.17
 

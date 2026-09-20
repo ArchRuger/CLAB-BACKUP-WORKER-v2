@@ -1,3 +1,25 @@
+# Maintenance audit, chunk 2: installation and operations guides — 1.30.19
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.18 (`569a58a`, pushed). Documentation
+only. **Static evidence**: every corrected statement was traced to a script or a page by a worker task
+(`install-manager.py`, `start-manager.sh`, `setup_capture.py`, `setup_telemetry.py`, `check_install.py`,
+`git-onboard.py`, `git-progress.js` `gitUploadLabel`, `management.js`, `inventory.DEFAULT_CREDENTIALS`,
+`restore_junos.SUPPORTED_KINDS`), and the lead checked seventeen of the labels it wrote against the
+static files by search and the two Junos statements against the code.
+
+## What was run
+
+- `python3 deploy/verify-release.py`, `python3 docs/maintenance-audit/tools/check_links.py` (79 files, 0
+  problems), `git diff --check`.
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. `node --test tests/*.js`: 189
+  of 189.
+
+## Not run
+
+No installer, setup script, health check or Docker command was executed; nothing here re-validates an
+installation. The `passwd` and GitHub CLI prompt wording in the quick install comes from those tools and
+was not reproduced.
+
 # Maintenance audit, chunk 1: agent guidance — 1.30.18
 
 Prepared on `claude/maintenance-audit` (cut from `main` `d510b7a`) on 2026-09-20 on the dev VM

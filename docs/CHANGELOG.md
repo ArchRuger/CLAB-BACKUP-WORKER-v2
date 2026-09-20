@@ -4,6 +4,32 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.19
+
+**Maintenance audit, chunk 2: the installation and operations guides against the scripts and the UI.**
+Documentation only. Eleven guides were compared with `deploy/` and the manager; the installer menu, phases,
+flags, upgrade and recovery procedures, ports, `.env` keys, limits and health-check outcomes were correct
+and are unchanged. What was wrong:
+
+- **A save does not upload by itself.** Six guides still said *Save progress* "commits and pushes
+  automatically" and told the reader to wait for *Saved to Git*; since the upload review became mandatory
+  that wait never ends. They now include **Review before uploading › Upload these changes**, and the retry
+  buttons carry their real names (*Retry save, then review*, *Review and upload…*, *Upload now*).
+- The fresh VM guide and the Wiki guide said the Junos switch kinds get no default login and no live
+  restore; both have containerlab's documented default login, and vJunos-switch supports *Apply to running
+  lab* (vQFX does not).
+- The manual setup guide said to set `UI_BIND` / `UI_PORT` in the shell; they belong in
+  `clab-backup-ui/.env` (`sudo` drops shell variables and the Grafana setup reads the port from that file).
+- Labels from before the redesign are replaced by the ones the pages show: the VM connection fields,
+  *Labs found on the VM…*, *Add lab*, *Sync topology from VM*, *Update topology file…*, *Link to a running
+  lab…*, *Lab folders on the VM*, *Restart devices*, **Lab actions ▾ › Advanced options**, the Tools ›
+  Telemetry links, the capture dialog names, *Remove from this manager…*.
+- The quick install lists the Git wizard's subfolder prompt; inline commands that only worked from the
+  source folder are absolute; the Wiki guide says engineer access needs lab operations first.
+
+Found and recorded, not changed (see the audit record's remaining debt): `deploy/compose.image.yml` does not
+pass the Grafana idle time, and the stack setup scripts on an image-only installation.
+
 ## Changes in 1.30.18
 
 **Maintenance audit, chunk 1: agent guidance agrees with the application again.** Documentation only; the

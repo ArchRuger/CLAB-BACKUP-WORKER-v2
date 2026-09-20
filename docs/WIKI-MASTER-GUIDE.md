@@ -371,7 +371,7 @@ If Docker already works, verify it and skip its installation block. Do not run C
 
 ## Step 5.1 — Allow the engineer to use Docker and Containerlab
 
-**Ubuntu VM:** the optional VS Code workflow needs the normal engineer account in the `docker` and `clab_admins` groups, lab folders that account can write, and the containerlab binary with its SUID bit. The terminal installer in Part 6 installs containerlab without the SUID bit, keeps `/etc/containerlab` root-owned and adds your account to no group, because the manager only needs `clab-discovery`; the Containerlab extension then stops with `Extension activation failed. Insufficient permissions. Ensure archtop is in the clab_admins and docker group(s).` and its explorer reports `EACCES: permission denied, mkdir '/etc/containerlab/...'`. Answer **1** to the installer's *VS Code / Containerlab extension access* question, choose menu option 3 later, or run the same step yourself from the source folder as the engineer account:
+**Ubuntu VM:** the optional VS Code workflow needs the normal engineer account in the `docker` and `clab_admins` groups, lab folders that account can write, and the containerlab binary with its SUID bit. The terminal installer in Part 6 installs containerlab without the SUID bit, keeps `/etc/containerlab` root-owned and adds your account to no group, because the manager only needs `clab-discovery`; the Containerlab extension then stops with `Extension activation failed. Insufficient permissions. Ensure archtop is in the clab_admins and docker group(s).` and its explorer reports `EACCES: permission denied, mkdir '/etc/containerlab/...'`. Answer **1** to the installer's *VS Code / Containerlab extension access* question, choose menu option 3 later, or run the same step yourself as the engineer account once the source is present (Part 6) and lab operations are enabled (Parts 9–10; the script refuses before that):
 
 ```bash
 sudo bash "$HOME/projects/clab-manager/deploy/setup-engineer-access.sh" --owner "$(id -un)"
@@ -723,7 +723,7 @@ your chosen port in browser and health checks.
 An image-only build needs the final build context argument:
 
 ```bash
-sudo docker build --pull --no-cache -t "clab-backup:$(cat clab-backup-ui/VERSION)" ./clab-backup-ui
+sudo docker build --pull --no-cache -t "clab-backup:$(cat "$HOME/projects/clab-manager/clab-backup-ui/VERSION")" "$HOME/projects/clab-manager/clab-backup-ui"
 ```
 
 Building an image alone neither configures the Linux account nor starts the
@@ -898,8 +898,8 @@ configuration.
 
 In **Advanced › Credentials**, choose the matching network OS and enter the device's
 actual login. Each kind has its own default-profile selection. Inventory credentials
-remain available, and credentials assigned to a device take precedence. The manager
-does not supply a default password. Use **Edit connection** under **Advanced** in
+remain available, and credentials assigned to a device take precedence. Without
+either, the manager falls back to containerlab's documented default login for the kind (since 1.22.0). Use **Edit connection** under **Advanced** in
 the device panel to correct an individual device's network OS, credentials or SSH
 endpoint.
 
@@ -943,7 +943,7 @@ The browser CLI is an SSH session from the manager to the device. Test the saved
 |---|---|
 | **Back up configuration** (device panel or right-click menu) | The named device, regardless of its **Include in backups** checkbox |
 | **Back up now** / automatic interval (**Tools › Configuration backups**) | Devices ticked **Include in backups** |
-| **Back up all configurations…** (**More ▾** on the map) | Reviews all ready devices, including unticked ones; lists skipped devices |
+| **Back up all configurations** (**More ▾** on the map) | Reviews all ready devices, including unticked ones; lists skipped devices |
 | Download under **Backups on this VM** (Tools) or **Backups of this device** (device panel) | Saved configuration snapshot from the selected job |
 | **Save device configurations** (**Lab actions ▾ › All lab operations…**) | Separate containerlab host operation; behavior depends on the device kind |
 
@@ -969,7 +969,7 @@ container on the VM and opens in a browser tab. See [CAPTURE.md](CAPTURE.md).
 
 **Save progress** (lab header or **Progress** tab) captures the selected devices,
 exports the completed snapshot into the engineer's registered VM repository, commits
-changed configuration files and pushes. Set this up once using [Part 21](#part-21). An ordinary backup or
+changed configuration files and, after you confirm **Review before uploading**, pushes. Set this up once using [Part 21](#part-21). An ordinary backup or
 schedule does not publish to that repository automatically.
 
 ## SuperPuTTY session export
@@ -1001,7 +1001,7 @@ All lab operations…** for the complete list, or right-click a lab card on Home
 | Favourite star (lab card) | Sorts this lab above other labs on My labs. |
 | Edit map | Move devices and annotations; add text, boxes, circles and lines; edit styling; save or export the map file / draw.io. |
 | Delete topology file | Separate source deletion; refused while its deployment exists. Keeps a VM recovery copy. |
-| Deploy | Home leads with two cards. **Deploy**: *Choose a file on the lab VM…* (also **Manager ▾ › Deploy a new lab…**) and *Upload a file from this computer…* (the file is shown, written to the VM by a reviewed operation, then deployed like any other). **Build**: *Open the lab builder*. The first opens the topology browser **Lab topologies on the VM** (**All lab folders**, **Up one folder**). Existing files are read-only. |
+| Deploy | Home leads with two cards. **Deploy**: *Choose a file on the lab VM…* (also **Manager ▾ › Deploy a new lab…**) and *Upload a file from this computer…* (the file is shown, written to the VM by a reviewed operation, then deployed like any other). **Build**: *Open the lab builder*. The first opens the topology browser **Lab folders on the VM** (**All lab folders**, **Up one folder**). Existing files are read-only. |
 | Write a new topology… | Creates a new VM YAML after structure preview and confirmation; never replaces an existing file. |
 | Preview topology / Add to My labs without starting / Deploy lab | Read an existing file, add it to My labs without starting it, or separately review deployment. |
 | Download a lab from GitHub… / Browse popular labs… | Optional HTTPS project acquisition, followed by review of files and separate deployment. |
@@ -1037,7 +1037,7 @@ custom artwork uses a generic network symbol. Exports run locally without an
 external diagram service. CLI and backup actions remain in the manager.
 
 The map's **More ▾** menu also provides **Open all CLIs ↗** and **Back up all
-configurations…**, including in the expanded view. Back up all reviews ready devices
+configurations**, including in the expanded view. Back up all reviews ready devices
 and lists skipped devices. Per-device right-click **Open CLI ↗**, **Capture traffic…**,
 **Back up configuration** and **Device details** remain available.
 
@@ -1048,7 +1048,7 @@ There is no sidebar. The top bar carries the product name, a breadcrumb **My lab
 connection…**, **Refresh lab list**, **Deploy a new lab…**, **Import lab files…**,
 **Import an Ansible inventory…**, **Running labs on the VM…**, **Operation
 history…**, **Manager settings…** and **Diagnostics**. Deploy a new lab opens the
-topology browser **Lab topologies on the VM**.
+topology browser **Lab folders on the VM**.
 
 **Running labs on the VM…** shows the inspection output as a readable table in a
 wider dialog. Long topology paths wrap; the other columns retain room for readable
@@ -1169,6 +1169,7 @@ recreating the container. This preserves the registered repository bindings.
 Then recreate using the image Compose file:
 
 ```bash
+cd "$HOME/projects/clab-manager"
 sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml \
   up -d --no-build --pull never --force-recreate
 ```
@@ -1584,14 +1585,14 @@ requests. Requiring it for merges is a separate branch-protection setting.
 # Part 21 — Save lab progress to the engineer's Git repository {#part-21}
 
 Once configured, **Save progress** captures the lab's chosen devices, commits a
-complete configuration set in the engineer's repository and pushes it. The goal
+complete configuration set in the engineer's repository and pushes it once you confirm the review. The goal
 is one daily action after a lab experiment. Setup happens once for each checkout.
 
 ## Step 21.1 — Run guided Git setup
 
 The full terminal installer opens this wizard after manager verification. To
-return later, select **Git setup / repair only** in `bash deploy/install.sh`, or
-run `bash deploy/install.sh --git`. Git has six numbered phases with retry,
+return later, select **Git setup / repair only** in `bash "$HOME/projects/clab-manager/deploy/install.sh"`, or
+run `bash "$HOME/projects/clab-manager/deploy/install.sh" --git`. Git has six numbered phases with retry,
 GitHub sign-in recovery and cancel/resume. It preserves the chosen existing
 registration's remote, label, prefix and branch; multiple managed prefixes are
 selected explicitly. Reading those protected settings and registering require
@@ -1698,7 +1699,8 @@ permissions. A normal checkout with a published initial commit is required;
 
 This completes setup; continue to Step 21.3 in the manager UI. See
 [GIT-SETUP.md](GIT-SETUP.md) for the short guide, account/password table and recovery
-steps. **Save progress automatically commits and pushes. There is no separate
+steps. **Save progress automatically commits, then asks you to review before it pushes
+(Upload these changes). There is no separate
 Commit button.** If a save fails, fix its problem and retry that original save.
 Do not start another save or manually commit manager-staged files as the normal
 recovery path. If already manually committed, publish that commit as the owner,
@@ -1787,7 +1789,7 @@ features and limits. The report always separates manual workstation WinSCP,
 real NOS backup and Git push verification. An optional `--git-remote` read
 does not prove write permission. See [all report options and recovery](HEALTH-CHECK.md).
 
-Then choose **Save progress** and confirm **Saved to Git** (the status card on the
+Then choose **Save progress**, confirm the review (**Upload these changes**) and confirm **Saved to Git** (the status card on the
 Progress tab and the last-save sentence in the lab header) plus the expected files
 on the remote. Keep this deliberate workflow test even when the automated report
 passes.
@@ -1868,7 +1870,7 @@ tool.
 
 Capture, commit and push have separate results. A successful snapshot remains
 available even if the repository is busy or remote authentication fails. **Retry
-save and upload** reuses its captured files. **Upload now** reuses its recorded
+save, then review** reuses its captured files. **Review and upload…** / **Upload now** reuse its recorded
 commit. A restart reconciles the job with the VM journal instead of issuing a new
 capture silently. Inspect the save under **Recent saves** before assuming it reached
 the remote.
