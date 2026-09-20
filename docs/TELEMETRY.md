@@ -250,7 +250,7 @@ What it does:
   name the way the manager does);
 - stops Grafana again: it is on demand. The container is named
   `clab-manager-grafana` with the restart policy `no`, so nothing but the manager
-  starts it (`docker start` through the VM helper when a lab's Grafana button is
+  starts it (`docker start` through the VM helper when a lab's *Open lab map ↗* or *Open network dashboard ↗* link is
   used) and the manager stops it after `TELEMETRY_GRAFANA_IDLE_MINUTES` (default 15,
   written into `.env` by this setup) without a dashboard request. Prometheus keeps
   running with its 15-minute retention;

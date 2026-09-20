@@ -16,7 +16,7 @@ import paramiko
 from fastapi import File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
-from .inventory import ALIASES, PLATFORMS, address, literal, port, read_data
+from .inventory import ALIASES, address, literal, read_data
 
 COMMANDS = {'helper': 'sudo -n /usr/local/sbin/clab-manager-inspect',
             'direct': 'containerlab inspect --all --format json'}

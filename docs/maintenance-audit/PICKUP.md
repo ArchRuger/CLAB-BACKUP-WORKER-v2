@@ -6,7 +6,9 @@ in [AUDIT.md](AUDIT.md).
 
 ## How the work is delivered
 
-- Branch `claude/maintenance-audit`, cut from `main` `d510b7a`. Remote `origin`. Push with the `ArchRuger`
+- Branch `claude/maintenance-audit`, cut from `main` `d510b7a`. The maintainer merged chunks 1 to 3 as pull request #44 on 2026-09-20
+  (`main` `a9c6015`); the branch was fast-forwarded to that merge and the work continues on it, to be offered
+  as a second pull request. Remote `origin`. Push with the `ArchRuger`
   gh account (`gh auth switch -u ArchRuger`), then switch back to `pruger-dev` so lab saves keep working.
   Never force-push, tag, publish an image, deploy or merge.
 - One chunk = one bounded change → checks → `python3 deploy/set-release.py` to the next patch number →
@@ -25,12 +27,19 @@ in [AUDIT.md](AUDIT.md).
 |---|---|---|
 | 1 | Agent guidance: `CLAUDE.md` without the handoff import, invariant digest and routing table (reviewed by R1), architecture module map, pickup status lines, archive links, documentation index, link checker, this folder | pushed, `569a58a` |
 | 2 | Installation and operations guides (T1): eleven files | pushed, `e2bb15b` |
-| 3 | Student workflow guides (T2): seven files, plus the three stale tour screenshots regenerated from the fixture manager | complete when this commit is on the remote |
-| 4 | Code cleanup (T3): dead CSS, two dead handlers, unused imports, stale wording printed by deploy scripts and `vm-connection.html`, eight test files added to CI | same |
-| 5 | Final verification: an independent verifier over chunks 2 to 4, a risk reviewer over the CSS removal; fixes; final state of the record | not started |
+| 3 | Student workflow guides (T2): seven files, plus the three stale tour screenshots regenerated from the fixture manager | pushed, `3bbc8d0` |
+| 4 | Code cleanup (T3): dead CSS, two dead handlers, unused imports, stale wording printed by deploy scripts and `vm-connection.html`, eight test files added to CI | pushed, `a59378a`; reviewed independently before the commit |
+| 5 | The telemetry `.env` key table, three project agent definitions with their models and the "Delegating work" section of `CLAUDE.md`, fixes from the independent verification of chunks 2 and 3, final state of the record | complete when this commit is on the remote |
 
 The state column is filled in by the commit that completes a chunk; a chunk is complete only when its
 commit is on the remote branch.
+
+## Next
+
+The pass is complete with chunk 5. What is left needs the maintainer: the decisions in the record's §5
+(two behaviour defects found by reading, the image compose file, the unused names in the sensitive
+modules, the dead `lastOpened()` that a test pins), a second pull request for chunks 4 and 5, and a check
+in a session without the forced subagent model that the three project agents resolve to their models.
 
 ## Unfinished work
 

@@ -17,9 +17,9 @@
      9  Banner, toast, empty,       21  Diagram editor
         skeleton                    22  Git progress family (git-*)
     10  Tabs, section headings,     23  Git places (folder browser)
-        metrics, deployment bar     24  Restore
+        metrics                     24  Restore
     11  Cards, panels, tools, kv    25  Capture (dialog, viewer, guides)
-    12  Forms                       26  Standalone pages & legacy sidebar
+    12  Forms                       26  Standalone pages
                                     27  Focus, motion
                                     28  Breakpoints (1280 / 1100 / 900 / 760)
 
@@ -89,7 +89,6 @@
   /* two-tone focus ring: 2px --focus-ring outside a 2px --focus-gap separator */
   --focus-ring: #0e4a63;
   --focus-gap: var(--surface);
-  --focus: var(--focus-ring);   /* legacy alias */
   --focus-on-dark: #9ad4ea;
   --wire: #6f8593;              /* topology link stroke (3.85 on surface, 3.57 on the cream canvas) */
   --backdrop: rgba(23, 36, 48, .45);
@@ -186,7 +185,6 @@ code { font-size: .92em; }
 /* inline SVG sprite glyphs (#i-info #i-clock #i-alert …): sized here, otherwise an inline <svg> renders 300×150 */
 .icon, svg.icon { width: 16px; height: 16px; fill: currentColor; flex: none; vertical-align: -3px; }
 .subtitle { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
-.section-description { font-size: 13px; color: var(--muted); margin: 6px 0 16px; }
 .notice { font-size: 12px; line-height: 1.6; color: var(--muted); padding: 12px 0; }
 
 .muted { color: var(--muted); }
@@ -238,7 +236,7 @@ code { font-size: .92em; }
 .brand small { display: block; font-size: 12px; font-weight: 500; letter-spacing: .06em; color: var(--muted); margin-top: 2px; }
 
 /* breadcrumb: "My labs / <lab name> ▾" */
-.crumbs, .crumb {
+.crumbs {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -247,7 +245,7 @@ code { font-size: .92em; }
   font-size: 13px;
   color: var(--muted);
 }
-.crumbs strong, .crumb strong, #breadcrumb {
+.crumbs strong, #breadcrumb {
   font-weight: 600;
   color: var(--ink);
   overflow: hidden;
@@ -255,7 +253,7 @@ code { font-size: .92em; }
   white-space: nowrap;
   min-width: 0;
 }
-.crumb > span, .crumbs > span:not(#breadcrumb) { color: var(--muted); }
+.crumbs > span:not(#breadcrumb) { color: var(--muted); }
 .crumbs button:not(.button), #crumb-home {
   border: 0;
   background: none;
@@ -339,7 +337,7 @@ details.lab-switcher > :not(summary) {
 .lab-item.active small { color: var(--accent-strong); }
 
 /* activity indicator ("Saving progress…", hidden when idle). The dot pulses only while
-   render() marks it busy (.busy or data-busy="true"); the legacy "Worker idle" text stays static. */
+   render() marks it busy (.busy or data-busy="true"). */
 .worker-state {
   display: inline-flex;
   align-items: center;
@@ -402,7 +400,7 @@ footer {
 .start-card .start-reason { color: var(--warn-strong); font-weight: 600; }
 .home-hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; }
 .home-hero p { margin: 4px 0 0; color: var(--muted); }
-.home-hero .actions, .home-actions { padding: 0; flex-wrap: wrap; }
+.home-hero .actions { padding: 0; flex-wrap: wrap; }
 
 .lab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .lab-card {
@@ -429,7 +427,7 @@ footer {
 .lab-card-head { display: flex; align-items: flex-start; gap: 8px; }
 /* the tools are a div too: left out here, or they take half of the card and the name wraps early */
 .lab-card-head > h3, .lab-card-head > div:not(.lab-card-tools):not(.card-tools) { min-width: 0; flex: 1; }
-.lab-card-tools, .lab-card .card-tools { display: flex; gap: 2px; margin: -6px -8px 0 auto; flex: none; }
+.lab-card-tools { display: flex; gap: 2px; margin: -6px -8px 0 auto; flex: none; }
 .lab-card .icon-button { font-size: 18px; min-width: 30px; min-height: 30px; }
 .icon-button[aria-pressed="true"] { color: var(--accent); }
 .icon-button[aria-pressed="true"]:hover { background: var(--accent-soft); color: var(--accent-strong); }
@@ -460,16 +458,6 @@ footer {
   color: var(--muted);
 }
 .lab-header-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-
-.page-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-.page-heading > div { min-width: 0; }
 
 /* --------------------------------------------------------------------------
    6. Buttons
@@ -704,47 +692,6 @@ footer {
 }
 .git-save-options button:hover:not(:disabled), .git-save-options button:focus-visible { background: var(--surface-2); }
 
-/* "More ▾" inside the legacy tab strip */
-.extra-views { position: relative; align-self: stretch; margin-top: 0; }
-.tabs .extra-views { margin-top: 0; font-size: 13px; font-weight: 500; }
-.extra-views summary {
-  cursor: pointer;
-  list-style: none;
-  padding: 10px 12px;
-  font-size: inherit;
-  color: var(--muted);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
-.extra-views summary::-webkit-details-marker { display: none; }
-.extra-views summary::after { content: " ▾"; }
-.extra-views summary:hover { color: var(--ink); }
-.extra-views summary.active { border-color: var(--accent); color: var(--ink); font-weight: 600; }
-.extra-views-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  min-width: 190px;
-  padding: 6px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-menu);
-  z-index: 12;
-}
-.tabs .extra-views-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 9px 12px;
-  border: 0;
-  border-radius: var(--radius);
-  background: none;
-  font-weight: 500;
-  color: var(--text);
-}
-.extra-views-menu button:hover { background: var(--surface-2); color: var(--ink); }
-
 /* right-click node menu (topology.js) */
 .node-context-menu {
   position: fixed;
@@ -865,9 +812,6 @@ footer {
 .git-tag.other { background: var(--neutral-soft); color: var(--neutral); }
 .git-tag.pending { background: var(--warn-soft); color: var(--warn-strong); }
 
-.platform-pills { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
-.platform-pills span { font: 12px var(--mono); border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; color: var(--muted); }
-
 @keyframes pill-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: .35; transform: scale(.8); }
@@ -964,7 +908,7 @@ footer {
 .empty-state .actions, .empty-state .empty-actions { justify-content: center; padding: 10px 0 0; }
 .empty-state .caption { margin-top: 12px; }
 
-.blank-state, .empty-panel {
+.blank-state {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
@@ -977,26 +921,8 @@ footer {
 .blank-state p { font-size: 13px; margin: 0; }
 .blank-state .actions { justify-content: center; padding: 14px 0 0; }
 
-/* legacy landing panel (section#empty) */
-.empty-panel { position: relative; overflow: hidden; padding: 56px 24px; }
-.empty-panel h2 { font-size: 22px; }
-.empty-panel p { max-width: 540px; margin: 12px auto 20px; font-size: 14px; }
-.empty-panel .empty-note { font-size: 12px; margin-bottom: 0; }
-.empty-panel .empty-vm-note { font-size: 13px; color: var(--warn-strong); margin: 14px auto 0; max-width: 520px; }
+/* notes on the first-run page (section#empty) */
 .empty-vm-note:empty { display: none; }
-.file-icon {
-  width: 56px;
-  height: 62px;
-  margin: 0 auto 20px;
-  border: 1px solid var(--line-strong);
-  border-top: 3px solid var(--accent);
-  border-radius: var(--radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font: 12px var(--mono);
-  color: var(--muted);
-}
 .empty-discovered {
   max-width: 560px;
   margin: 24px auto 0;
@@ -1044,7 +970,7 @@ footer {
 }
 
 /* --------------------------------------------------------------------------
-   10. Tabs, control row, section headings, metrics, deployment bar
+   10. Tabs, section headings, metrics
    -------------------------------------------------------------------------- */
 .tabs {
   display: flex;
@@ -1068,18 +994,6 @@ footer {
 }
 .tabs button:hover { color: var(--ink); background: var(--surface-2); }
 .tabs button.active, .tabs button[aria-selected="true"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
-
-.control-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 20px;
-}
-.control-row .tabs { border-bottom: 0; margin: 0; }
-.control-row > .actions { flex-wrap: wrap; padding: 0 0 8px; }
 
 .section-heading {
   display: flex;
@@ -1115,24 +1029,6 @@ footer {
 .metrics > div:last-child { border-right: 0; }
 .metrics span { font-size: 12px; color: var(--muted); }
 .metrics strong { font: 600 20px var(--mono); color: var(--ink); letter-spacing: -.02em; }
-
-.deployment-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 16px 20px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-}
-.deployment-bar > div:first-child { min-width: 0; flex: 1; }
-.deployment-bar p { margin: 4px 0; font-size: 13px; }
-.deployment-bar small { color: var(--muted); font-size: 12px; }
-.deployment-bar .actions { flex-wrap: wrap; max-width: 520px; padding: 0; }
 .deployment-nos, p.deployment-nos { margin: 6px 0 0; font-size: 13px; font-weight: 600; }
 .deployment-nos.ready { color: var(--ok); }
 .deployment-nos.booting { color: var(--warn); }
@@ -1151,18 +1047,6 @@ footer {
 }
 .panel + .panel, .card + .card { margin-top: 16px; }
 .panel.danger-zone, .card.danger-zone { border-left: 4px solid var(--danger); }
-.card-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-  margin: 0 0 10px;
-}
-.card-title .pill, .card-title .badge { font-weight: 600; }
 .card > p:first-of-type, .panel > p:first-of-type { margin-top: 0; }
 .card .caption, .panel .caption { margin-top: 4px; }
 
@@ -1276,7 +1160,7 @@ input[type=checkbox], input[type=radio] {
 input[type=color] { padding: 2px; min-height: 34px; }
 input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); }
 
-dialog :where(label:not(.checkbox-label)), .git-binding-form > label:not(.checkbox-label), .field-label {
+dialog :where(label:not(.checkbox-label)), .git-binding-form > label:not(.checkbox-label) {
   display: block;
   font-size: 12px;
   font-weight: 600;
@@ -1409,7 +1293,7 @@ tr:last-child td { border-bottom: 0; }
 }
 .device-row > div { min-width: 0; }
 .device-row .node-name { font-size: 15px; }
-.device-row small, .device-row .device-meta, .device-row .caption { display: block; margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.device-row small, .device-row .caption { display: block; margin: 2px 0 0; font-size: 12px; color: var(--muted); }
 .device-row .platform { margin-left: 6px; }
 .device-row .node-actions { min-width: 0; justify-content: flex-end; }
 .device-row .pill { margin-right: 6px; }
@@ -1419,7 +1303,7 @@ tr:last-child td { border-bottom: 0; }
 .device-row[aria-current="true"] { box-shadow: inset 3px 0 0 var(--accent); border-color: var(--line-strong); }
 
 .device-rail { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.device-rail h2, .device-rail h3, .device-rail .card-title { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
+.device-rail h2, .device-rail h3 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
 /* rail cards are narrow: the name and the state pill share the first line and the network OS badge gets a
    line of its own, so a long platform label (Junos (vJunos-switch)) never runs under the pill */
 .device-rail .device-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name state" "platform platform" "reason reason" "actions actions"; padding: 10px 12px; gap: 0 10px; }
@@ -1432,7 +1316,7 @@ tr:last-child td { border-bottom: 0; }
 .device-rail .empty-state { padding: 24px 16px; }
 .device-rail .caption { margin-top: 8px; }
 
-.topology-layout, .topology-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.topology-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 
 .node-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 205px; }
 .node-actions button {
@@ -1541,7 +1425,6 @@ dialog > p:first-of-type { margin-top: 0; }
 .dialog-head > div { min-width: 0; }
 .dialog-head h2 { margin: 0; }
 .dialog-head .icon-button { margin: -6px -8px 0 0; }
-.dialog-body { margin-top: 12px; }
 
 #vm-dialog { max-height: 90dvh; overflow: auto; }
 #remove-lab-name { font-weight: 700; overflow-wrap: anywhere; }
@@ -1834,7 +1717,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
   min-width: 0;
 }
 .op-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.op-grid button, .op-history button, .op-file-list button {
+.op-grid button, .op-history button {
   height: auto;
   min-height: 42px;
   flex-direction: column;
@@ -1882,8 +1765,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
   color: var(--ink);
   resize: vertical;
 }
-.op-history, .op-file-list { display: grid; gap: 8px; margin: 16px 0; }
-.op-file-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.op-history { display: grid; gap: 8px; margin: 16px 0; }
 .op-layout-map {
   display: block;
   width: 100%;
@@ -1896,9 +1778,6 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 }
 .op-layout-map .map-device { cursor: grab; }
 .op-layout-map .map-device:active { cursor: grabbing; }
-.op-coordinates { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.op-coordinates label { display: grid; grid-template-columns: 1fr 80px 80px; align-items: center; gap: 6px; font-size: 12px; margin: 0; }
-.op-coordinates input { width: 100%; padding: 6px 8px; min-height: 32px; }
 .op-session-list { margin-top: 20px; }
 .op-session-list p { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; border-bottom: 1px solid var(--line); padding: 12px 0; margin: 0; }
 .op-session-list strong { min-width: 160px; }
@@ -2001,7 +1880,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 .git-destination { text-align: left; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; color: var(--ink); }
 .git-progress-bar p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
 
-.git-repository-card, .git-binding-form, .git-saves {
+.git-binding-form {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   padding: 20px;
@@ -2009,8 +1888,6 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
   margin: 16px 0;
   min-width: 0;
 }
-.git-repository-card p, .git-saves > p { font-size: 13px; }
-.git-repository-card .actions { padding: 8px 0 0; flex-wrap: wrap; }
 .git-binding-form > select { width: 100%; }
 .git-binding-form > .actions { padding: 16px 0 0; }
 .git-node-scope {
@@ -2054,9 +1931,6 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
   overflow-wrap: anywhere;
   margin: 0;
 }
-/* legacy button rows */
-button.git-saved-job { display: flex; flex-direction: column; gap: 6px; padding: 14px; cursor: pointer; }
-button.git-saved-job:hover { background: var(--surface-2); border-color: var(--line-strong); }
 /* details rows: <summary><pill> <sentence> · <relative time></summary> + dl.kv + actions */
 details.git-saved-job > summary {
   display: flex;
@@ -2277,7 +2151,7 @@ body.capture-viewer { height: 100vh; min-height: 0; display: flex; flex-directio
 .vm-guide pre { overflow: auto; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); padding: 16px; border-radius: var(--radius-lg); font-size: 13px; line-height: 1.55; }
 
 /* --------------------------------------------------------------------------
-   26. Standalone pages (workspace, debug) & the legacy sidebar shell
+   26. Standalone pages (workspace, debug)
    -------------------------------------------------------------------------- */
 .standalone-workspace { background: var(--bg); }
 .standalone-workspace main { max-width: 1200px; margin: 24px auto; }
@@ -2316,34 +2190,7 @@ body.capture-viewer { height: 100vh; min-height: 0; display: flex; flex-directio
 .debug-card dd { margin: 0; overflow-wrap: anywhere; }
 .debug-failure { color: var(--danger); }
 
-/* legacy shell (aside.sidebar + main) — light rail so the old index.html still renders */
-.workspace { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
-.sidebar {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  color: var(--text);
-  padding: 20px 14px;
-  border-right: 1px solid var(--line);
-}
-.sidebar .brand { margin-bottom: 20px; padding: 0 6px; white-space: normal; }
-.sidebar .brandmark { width: 32px; height: 32px; }
-.side-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 10px;
-  margin-bottom: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .06em;
-}
-.sidebar nav { flex: none; min-height: 50px; max-height: 260px; overflow: auto; }
+/* side buttons and hints (the labs-found-on-the-VM dialog) */
 .side-hint { color: var(--muted); padding: 0 10px; font-size: 13px; margin: 8px 0; overflow-wrap: anywhere; }
 .side-button {
   display: block;
@@ -2360,14 +2207,6 @@ body.capture-viewer { height: 100vh; min-height: 0; display: flex; flex-directio
 }
 .side-button:hover:not(:disabled) { background: var(--surface-2); }
 .side-button small { display: block; margin-top: 4px; font-weight: 400; color: var(--muted); }
-.side-button.side-primary { background: var(--accent); color: #fff; border-color: var(--accent); min-height: 44px; }
-.side-button.side-primary:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); }
-.side-bottom { margin-top: 24px; padding: 16px 10px 0; color: var(--muted); border-top: 1px solid var(--line); }
-.side-caption { font-size: 12px; letter-spacing: .04em; line-height: 1.5; }
-.side-bottom p { font: 12px var(--mono); color: var(--text); margin: 10px 0 8px; }
-.side-bottom small { font-size: 12px; }
-.side-bottom .text-button { margin-top: 12px; color: var(--accent); }
-.sidebar .icon-button:hover { background: var(--surface-2); }
 #discovery-files { font-size: 13px; margin: 12px 0; color: var(--muted); }
 #discovery-files summary { cursor: pointer; }
 #discovery-file-list p { overflow-wrap: anywhere; margin: 8px 0; }
@@ -2385,8 +2224,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 [tabindex="0"]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .map-device:focus:not(:focus-visible), .topology-wire:focus:not(:focus-visible) { outline: none; }
 /* inset rings for items drawn inside a menu or a tab strip */
-.lab-switcher > summary:focus-visible, .lab-switcher > .menu-button:focus-visible, .tabs button:focus-visible, .extra-views summary:focus-visible,
-.menu-list button:focus-visible, .menu-list a:focus-visible, .git-save-options button:focus-visible, .extra-views-menu button:focus-visible,
+.lab-switcher > summary:focus-visible, .lab-switcher > .menu-button:focus-visible, .tabs button:focus-visible,
+.menu-list button:focus-visible, .menu-list a:focus-visible, .git-save-options button:focus-visible,
 .lab-item:focus-visible, .op-tree-file:focus-visible, .git-outline summary:focus-visible { outline-offset: -3px; box-shadow: none; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2414,7 +2253,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .device-state-glyph { forced-color-adjust: none; stroke: Canvas; }
   .map-device.state-neutral .device-state-dot { fill: Canvas; }
   .map-device.state-neutral .device-state-glyph .glyph-hollow, .map-device.state-neutral .device-state-glyph [data-glyph="hollow"] { stroke: CanvasText; }
-  .tabs button.active, .tabs button[aria-selected="true"], .extra-views summary.active { border-bottom: 3px solid Highlight; }
+  .tabs button.active, .tabs button[aria-selected="true"] { border-bottom: 3px solid Highlight; }
   .device-row[aria-current="true"] { border-left: 3px solid Highlight; box-shadow: none; }
   .skeleton, .skeleton-line { border: 1px solid GrayText; }
 }
@@ -2425,7 +2264,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* ≤1280: the device rail stacks under the map */
 @media (max-width: 1280px) {
-  .topology-layout, .topology-body { grid-template-columns: minmax(0, 1fr); }
+  .topology-layout { grid-template-columns: minmax(0, 1fr); }
   .device-rail .device-row { grid-template-columns: minmax(96px, 1.4fr) minmax(0, 1fr) auto; }
   .device-rail .device-row .node-actions { grid-column: auto; justify-content: flex-end; }
   .device-rail { gap: 8px; }
@@ -2449,16 +2288,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .content { padding: 16px 16px 24px; }
   .topbar { padding: 0 16px; gap: 12px; }
   .tabs { overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: thin; }
-  /* the legacy strip holds the More ▾ dropdown (details.extra-views): a scroll container would clip
-     its absolutely positioned menu, so that strip wraps instead, and any strip with the menu open
-     stops clipping */
-  .control-row .tabs { flex-wrap: wrap; overflow: visible; }
-  .tabs:has(.extra-views[open]) { overflow: visible; }
   .tabs button { white-space: nowrap; padding: 10px; }
   .lab-header-actions { flex-basis: 100%; }
   .git-places-body { grid-template-columns: 1fr; }
   .git-outline { border-right: 0; border-bottom: 1px solid var(--line); max-height: 220px; }
-  .op-sections, .op-coordinates, .op-file-list { grid-template-columns: 1fr; }
+  .op-sections { grid-template-columns: 1fr; }
   .operations-dialog { padding: 18px; }
   #operation-review .dialog-actions { bottom: -18px; margin: 20px -18px 0; padding: 12px 18px 14px; }
   .debug-grid { grid-template-columns: 1fr; }
@@ -2478,7 +2312,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .metrics > div:nth-child(2) { border-right: 0; }
   .metrics > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
   .metrics strong { font-size: 18px; }
-  .page-heading, .section-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .section-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
   .actions { width: 100%; }
   .actions .button { flex: 1 1 auto; }
   .banner { flex-direction: column; align-items: flex-start; }
@@ -2508,36 +2342,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .health-grid { grid-template-columns: 105px minmax(0, 1fr); gap: 10px; }
   .kv { grid-template-columns: 1fr; gap: 2px 0; }
   .kv dd { margin-bottom: 8px; }
-  .empty-panel h2 { font-size: 20px; }
   .empty-state { padding: 32px 16px; }
-  .deployment-bar { align-items: flex-start; flex-direction: column; }
-  .deployment-bar .actions { padding: 0; }
   .git-progress-bar { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px; }
   .git-save-control { align-self: flex-end; }
   .git-save-control.menu-stacked .git-save-options { width: min(274px, calc(100vw - 48px)); }
-  .git-repository-card, .git-binding-form, .git-saves { padding: 14px; }
-  .git-repository-card .actions { width: auto; }
-  .git-repository-card .button, #git-version-dialog .button { white-space: normal; }
+  .git-binding-form { padding: 14px; }
+  #git-version-dialog .button { white-space: normal; }
   .git-node-scope .checkbox-label span { overflow-wrap: anywhere; }
   #git-version-dialog .actions { flex-wrap: wrap; }
   .diagram-properties { max-height: none; }
   .diagram-workspace .op-layout-map { height: 45vh; }
   .op-inspection th { white-space: normal; }
   .op-inspection td { min-width: 80px; }
-  .tabs .extra-views summary { font-size: 12px; }
   .workspace-choice { padding: 20px; min-height: 140px; }
   .capture-interfaces { grid-template-columns: 1fr 1fr; }
 
-  /* legacy sidebar shell collapses into a strip */
-  .workspace { display: block; }
-  .sidebar { position: relative; height: auto; padding: 16px; display: block; }
-  .sidebar .brand { margin: 0 0 14px; }
-  .side-label { padding: 0; margin-bottom: 8px; }
-  .side-bottom { padding: 12px 0 0; margin: 12px 0 0; }
-  .side-bottom .side-caption, .side-bottom p, .side-bottom small { display: none; }
-  .side-bottom .text-button { margin: 0; }
-  .sidebar nav { display: flex; gap: 8px; overflow: auto; max-height: none; }
-  .sidebar .lab-item { width: auto; min-width: 170px; max-width: 260px; margin: 0; }
   .side-button { margin: 10px 0 0; width: 100%; }
 }
 

@@ -142,9 +142,10 @@ the full diagrams.net application. Structural topology changes are made in the
 original VM YAML and imported/synced separately.
 
 The map's **More ▾** menu (also in the expanded map) offers **Open all CLIs ↗** and
-**Back up all configurations**. Back up all reviews every device that can be backed up
-now, including devices not selected for scheduled backups, and lists the devices it
-will skip and why. Right-click a device on the map for Open CLI, Capture traffic, Back
+**Back up all configurations**. Back up all covers every device that can be backed up
+now, including devices not selected for scheduled backups. When every device is ready it
+starts at once; when some cannot be backed up, or a job is already running, it first lists
+the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Capture traffic, Back
 up configuration and Device details.
 
 ## Review and persistence

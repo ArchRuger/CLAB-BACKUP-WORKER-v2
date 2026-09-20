@@ -714,11 +714,11 @@ def check_telemetry_dashboards(ctx):
                     'Rerun ' + ctx.repair('setup-telemetry.sh') + ' (it creates TELEMETRY_MAPS_DIR for the manager user and recreates the manager).')
             return
         idle = control.get('idle_minutes')
-        ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana is provisioned and stopped until someone opens it: the manager starts it on TCP {port} from a lab\'s Grafana button'
+        ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana is provisioned and stopped until someone opens it: the manager starts it on TCP {port} from a lab\'s Tools tab (Open network dashboard or Open lab map)'
                 + (f' and stops it after {idle} minute{"" if idle == 1 else "s"} without an open dashboard' if isinstance(idle, int) and idle else '')
                 + '. Prometheus scrapes the manager metrics endpoint'
                 + (f' and {maps["dashboards"]} lab map(s) are provisioned.' if isinstance(maps.get('dashboards'), int) else '.'))
-        ctx.manual.append(f'Grafana: open Grafana ↗ from a deployed lab, confirm it starts within a minute and shows the Lab overview and the lab map '
+        ctx.manual.append('Grafana: choose Open lab map ↗ or Open network dashboard ↗ (Tools › Telemetry) in a deployed lab, confirm it starts within a minute and shows the Lab overview and the lab map '
                           '(the Flow panel is verified while Grafana runs; rerun this check then for the full dashboard check).')
         return
     settings_result, settings = ctx.http('/api/frontend/settings', base=f'http://127.0.0.1:{port}')

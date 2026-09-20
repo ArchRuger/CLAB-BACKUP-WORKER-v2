@@ -496,9 +496,9 @@ def main(argv=None):
         return 2
     success_banner(['SUCCESS', 'Lab-config checkout registered with the manager.',
                     'Destination: ' + (binding['prefix'] or 'repository root')])
-    print('\nReady. In the manager: open your lab > More > Git repository.')
+    print('\nReady. In the manager: open your lab > Progress > Save location.')
     print('Select this checkout and devices, review the destination, then Save progress.')
-    print('Save progress commits and pushes automatically. No separate Commit button is needed.')
+    print('Save progress commits, then shows what changed: choose Upload these changes to push. No separate Commit button is needed.')
     print('If a push fails, reopen that save and Retry; do not create a new capture or manually commit its staged files.')
     return 0
 

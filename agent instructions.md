@@ -1,4 +1,4 @@
-# Maintenance audit (in progress) — 1.30.20
+# Maintenance audit — 1.30.22
 
 A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release
 per chunk. **Read `docs/maintenance-audit/PICKUP.md` first**, then `docs/maintenance-audit/AUDIT.md`
@@ -19,6 +19,17 @@ A guide must never again say a save uploads by itself: every upload goes through
 (6) Chunk 3 corrected the student guides and replaced three tour images from `verify_after.py`'s 1440×900
 captures (the tour says they are fixture data; keep that sentence true). `clab-backup-ui/NODE-FEATURES.md`
 "Backup download names" is now the living statement of the download naming contract.
+(7) Chunk 4 removed dead CSS, two handlers and unused imports. Before deleting anything in the shared-globals
+UI repeat that method: whole-token search over scripts, pages, Python, the editor bundle, vendor, tests and
+the Playwright tools, then `verify_after.py` and a screenshot comparison **with a control run** (two runs
+of the same stylesheet already differ in about a third of the captures). Unused names in `host_git.py`,
+`restore.py` and `restore_junos.py` were left for a risk review; do not sweep them up as routine cleanup.
+Eight more test files run in CI; a new test file still has to be added to the workflow by hand.
+(8) Chunk 5 closed the pass: `.claude/agents/` holds `docs-auditor` (Sonnet), `mechanical-editor` (Haiku) and
+`risk-reviewer` (Opus, read-only), described in `CLAUDE.md` "Delegating work"; verify the model a worker
+actually ran on, because user settings can force one model for all. The audit's open decisions (the scaffold
+tool's `snapshot`, the empty review after an unchanged save, the image compose file, unused names in the
+sensitive modules) are in `docs/maintenance-audit/AUDIT.md` §5; none of them was changed.
 
 # UI review 001 — 1.30.17
 

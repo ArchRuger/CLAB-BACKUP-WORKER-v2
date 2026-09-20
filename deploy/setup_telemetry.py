@@ -214,7 +214,7 @@ def wait_ready(env_path, timeout=90, base='http://127.0.0.1'):
                     last[name] = 'unexpected answer'
             except HTTPError as error:
                 last[name] = f'HTTP {error.code}'
-            except (URLError, OSError, ValueError) as error:
+            except (URLError, OSError, ValueError):
                 last[name] = 'no answer'
         if pending:
             time.sleep(2)

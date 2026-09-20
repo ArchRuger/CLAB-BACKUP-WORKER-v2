@@ -9,7 +9,7 @@ import uuid
 import zipfile
 from contextlib import asynccontextmanager
 import paramiko
-from fastapi import FastAPI, Request, UploadFile, File, Form, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles

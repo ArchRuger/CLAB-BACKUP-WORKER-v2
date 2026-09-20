@@ -148,7 +148,6 @@ function openSetup(replace=false, deployedName=''){
  $('setup-title').textContent=lab?'Update the topology file':'Import lab files';if($('setup-submit'))$('setup-submit').textContent=lab?'Update lab':'Add lab';$('setup-dialog').showModal();
 }
 $('new-lab').onclick=$('import-empty').onclick=()=>openSetup();
-if($('home-import'))$('home-import').onclick=()=>openSetup();
 $('import-inventory-empty').onclick=()=>openImport();
 $('vm-connect-empty').onclick=()=>openVmDialog();
 if($('home-vm-connect'))$('home-vm-connect').onclick=()=>openVmDialog();

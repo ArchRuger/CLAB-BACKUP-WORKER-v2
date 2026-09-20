@@ -1,5 +1,4 @@
 """Bounded data-only importer for containerlab Ansible inventories."""
-import json
 import re
 import yaml
 

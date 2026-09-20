@@ -943,7 +943,7 @@ The browser CLI is an SSH session from the manager to the device. Test the saved
 |---|---|
 | **Back up configuration** (device panel or right-click menu) | The named device, regardless of its **Include in backups** checkbox |
 | **Back up now** / automatic interval (**Tools › Configuration backups**) | Devices ticked **Include in backups** |
-| **Back up all configurations** (**More ▾** on the map) | Reviews all ready devices, including unticked ones; lists skipped devices |
+| **Back up all configurations** (**More ▾** on the map) | Backs up all ready devices, including unticked ones; starts at once when every device is ready, otherwise lists the skipped devices first and asks for confirmation |
 | Download under **Backups on this VM** (Tools) or **Backups of this device** (device panel) | Saved configuration snapshot from the selected job |
 | **Save device configurations** (**Lab actions ▾ › All lab operations…**) | Separate containerlab host operation; behavior depends on the device kind |
 
@@ -1037,8 +1037,8 @@ custom artwork uses a generic network symbol. Exports run locally without an
 external diagram service. CLI and backup actions remain in the manager.
 
 The map's **More ▾** menu also provides **Open all CLIs ↗** and **Back up all
-configurations**, including in the expanded view. Back up all reviews ready devices
-and lists skipped devices. Per-device right-click **Open CLI ↗**, **Capture traffic…**,
+configurations**, including in the expanded view. Back up all starts at once when every
+device is ready; otherwise it lists the skipped devices first and asks for confirmation. Per-device right-click **Open CLI ↗**, **Capture traffic…**,
 **Back up configuration** and **Device details** remain available.
 
 ## The Manager menu and running lab details

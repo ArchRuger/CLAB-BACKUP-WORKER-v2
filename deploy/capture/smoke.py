@@ -7,7 +7,6 @@ capture stack: the preflight refuses any existing clab-manager-capture project.
 """
 import asyncio
 import io
-import json
 import os
 from pathlib import Path
 import secrets
