@@ -4,7 +4,7 @@
 // two-document store, so the manager never implements the editor's command protocol.
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "@containerlab/clab-ui";
+import { App, useTopoViewerStore } from "@containerlab/clab-ui";
 import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
 import { TopologySessionCore } from "@containerlab/clab-ui/session";
 import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
@@ -105,6 +105,8 @@ async function mount(draft: BuilderDraft): Promise<void> {
   const t = page.templates();
   const initialData = { dockerImages: page.images(), customNodes: t.list, defaultNode: t.defaultName, customIcons: [] };
   createRoot(document.getElementById("root")!).render(<App initialData={initialData as never} runtime={runtime} />);
+  // The editor opens locked because its other hosts show running labs. A builder draft is there to be edited.
+  if (useTopoViewerStore.getState().isLocked) useTopoViewerStore.getState().toggleLock();
 }
 
 window.labBuilderPage.ready(mount);

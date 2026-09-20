@@ -16,6 +16,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from .discovery import PinnedHostKey, vm_password, parse_definition, stamp
+from .inventory import read_data
 from .topology import parse_drawing
 from .drawio_export import drawio
 from .layout import decorations, annotations, revision
@@ -173,6 +174,26 @@ class LabOperations:
 
         @app.get('/api/operations/popular')
         def popular(): return self.invoke({'mode': 'popular'})
+
+        @app.get('/api/operations/known-images')
+        def known_images():
+            """Container images named by the topologies already in My labs, per kind. The lab builder
+            offers them first, so a new lab starts from images this site is known to use."""
+            found = {}
+            with self.store.lock: texts = [l.get('definition_yaml') or '' for l in self.store.state['labs']]
+            for text in texts:
+                try: topology = read_data(text.encode()).get('topology') or {}
+                except (ValueError, TypeError, AttributeError, RecursionError): continue
+                defaults = topology.get('defaults') if isinstance(topology.get('defaults'), dict) else {}
+                kinds = topology.get('kinds') if isinstance(topology.get('kinds'), dict) else {}
+                for node in (topology.get('nodes') or {}).values() if isinstance(topology.get('nodes'), dict) else []:
+                    node = node if isinstance(node, dict) else {}
+                    kind = node.get('kind') or defaults.get('kind')
+                    kind_settings = kinds.get(kind) if isinstance(kinds.get(kind), dict) else {}
+                    image = node.get('image') or kind_settings.get('image') or defaults.get('image')
+                    if isinstance(kind, str) and isinstance(image, str) and 0 < len(kind) <= 120 and 0 < len(image) <= 300 and '{{' not in image:
+                        counts = found.setdefault(kind, {}); counts[image] = counts.get(image, 0) + 1
+            return {'images': {kind: sorted(counts, key=lambda i: (-counts[i], i))[:12] for kind, counts in sorted(found.items())}}
 
         @app.post('/api/operations/parse-yaml')
         def parse_yaml(data: Request):

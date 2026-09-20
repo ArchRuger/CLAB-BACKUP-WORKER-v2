@@ -1,0 +1,25 @@
+/* The lab builder page: the manager's bar on top, SR Labs' editor below it.
+   The editor's own stylesheet makes html, body and #root fill the window; this file loads after it. */
+html,body.lab-builder{height:100%;margin:0;overflow:hidden;background:var(--bg);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}
+.builder-bar{position:fixed;inset:0 0 auto 0;height:52px;display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-4);background:var(--surface);border-bottom:1px solid var(--line);z-index:5}
+.builder-back{color:var(--accent);text-decoration:none;font-weight:600}
+.builder-title{color:var(--ink)}
+.builder-name{font-weight:600;color:var(--ink);max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.builder-spacer{flex:1}
+.builder-note{position:fixed;inset:52px 0 auto 0;margin:0;padding:var(--space-2) var(--space-4);background:var(--surface-2);border-bottom:1px solid var(--line);z-index:4}
+.lab-builder #root{position:fixed;inset:52px 0 22px 0;width:auto;height:auto}
+.builder-welcome{position:fixed;inset:52px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);text-align:center;background:var(--bg);z-index:3}
+.builder-welcome p{max-width:60ch;margin:0}
+.builder-welcome[hidden],.builder-problem[hidden],.builder-note[hidden]{display:none}
+.builder-problem{position:fixed;inset:52px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);background:rgba(244,246,248,.94);z-index:6}
+.builder-credit{position:fixed;inset:auto 0 0 0;height:22px;margin:0;padding:0 var(--space-4);font-size:12px;line-height:22px;color:var(--muted);background:var(--surface);border-top:1px solid var(--line);z-index:2}
+.builder-yaml{max-height:60vh}
+.builder-draft-list .op-session-row{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap}
+.lab-builder dialog{font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}
+/* Editor controls that cannot work in a builder and have no switch in this editor version. Hidden by
+   their test ids; tests/test_lab_builder_assets.js fails when the bundled editor stops carrying them. */
+[data-testid="navbar-deploy"],[data-testid="navbar-deploy-menu"],[data-testid="navbar-apply-dirty-badge"],
+[data-testid="navbar-layout-geo"],[data-testid="navbar-split-view"],
+[data-testid="svg-export-grafana-bundle"],[data-testid="svg-export-grafana-advanced-btn"]{display:none !important}
+/* The editor's colours follow the manager's palette; its type and shapes stay its own. */
+.lab-builder{--clab-ui-accent:#1d6f8e}
