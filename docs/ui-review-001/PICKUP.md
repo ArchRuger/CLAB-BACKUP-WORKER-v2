@@ -39,30 +39,31 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.4 | UI-004 | Explanation pane in the Save progress menu (`gitSaveHelp`, `gitSaveMenuPlacement` in `git-progress.js`) | `check_ui004.py` 74/74 at five window sizes, `verify_after.py` 95/95 ×3, `~/ui-review/review-001/chunk03/` |
 | 1.30.5 | UI-007 A + B | *Git repo details*; `#git-change-folder` open on entry, fold remembered per lab (`gitFolderCollapsed`) | `check_ui007ab.py` 11/11, `verify_after.py` 96/96 ×3, `~/ui-review/review-001/chunk04/` |
 | 1.30.6 | UI-007 C | Mandatory review before an upload, enforced in `app/git_progress.py` (`Retry.reviewed`) and driven by `gitReviewJob` | `check_ui007c.py` 17/17, `verify_after.py` 97/97 ×3 on fresh fixture data, python 706, `~/ui-review/review-001/chunk05/` |
+| 1.30.7 | UI-008 part 1 | Planned folders kept by the manager (`git_folders`, tree `planned`, `plan: true`, `DELETE …/folders`); fixture helper made faithful | `check_ui008a.py` 17/17, `verify_after.py` 97/97 ×3, python 708, node 174, `~/ui-review/review-001/chunk06/` |
 
 ## Next
 
-Chunk 6 = **UI-008** (repository folder browser). Start by reproducing: create `working` under
-`JunOS-TEST-2` and watch it disappear. Where to look: `app/static/git-places.js` (`gitTreeModel`,
-`gitPlacesMarkup`, `gitPlacesShow`, expansion/selection state in `gitPlacesState`), `gitNewFolder` /
-`gitUseFolder` in `git-progress.js`, `POST /api/git/repositories/{id}/folders` and the `/tree` route in
-`app/git_progress.py`, and the helper's `browse` mode in `app/host_git.py` (ls-tree of HEAD plus the
-sibling registrations as `folders`: an empty registered folder exists only as a registration until its
-first save, which is the likely reason it vanishes from a tree built from committed files). The
-fixture's scripted helper is in `docs/redesign/tools/fixture_manager.py`; the real helper can be
-driven with real Git in `tests/test_host_git.py` (`HostGitPlacesTests`). Do not change `host_git.py`
-unless the root cause is there (security-sensitive, needs a helper refresh). Then UI-006, UI-002,
-UI-003 as listed at the end of `CHECKLIST.md`.
+Chunk 6b = **UI-008 part 2**, all in `app/static/git-places.js` (+ `style.css`): `outline()` in
+`gitPlacesMarkup` derives `open` from the selection only, and the `<summary>` click handler in
+`gitPlacesShow` calls `preventDefault()` and selects, so no folder can be collapsed, ancestors of the
+selection are forced open and other branches never stay open. Plan: an `expanded` set in
+`gitPlacesState` (reset when `bindingId` changes; first show = root + ancestors of the lab's folder),
+a separate twisty control that toggles expansion without selecting, selecting a folder expands its
+ancestors once, a `current` class/marker for the save destination that is distinct from `selected`,
+focus restored after `draw()`, and `white-space: nowrap` / ellipsis for names in `.git-outline`.
+Then UI-006 (Devices tab), UI-002 (Home), UI-003 (map parity) as listed in `CHECKLIST.md`.
 
 ## Known limits and open points
 
-- 1.30.2 to 1.30.6 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.5 (`gh run list --branch claude/ui-review-001`).
+- 1.30.2 to 1.30.7 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.6 (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
   --manager-only` (helpers must match the release); record here when that was last done: **not yet for
   this branch**.
 - `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home.
 - The successful import confirmation was not exercised in a browser (the fixture VM refuses the preview).
+
+- Seen while fixing UI-008, not addressed: if the manager's `bind_lab` fails after the VM already retired the old registration (`destination` route), the lab keeps pointing at a registration that no longer exists. Pre-existing; needs a decision on recovery (re-register the source).
 
 ## Unfinished work
 

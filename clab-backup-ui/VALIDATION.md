@@ -1,3 +1,52 @@
+# UI review 001, step 6: folders made in the folder browser stay — 1.30.7
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.6 (`973fcda`,
+pushed, CI green). Requirement UI-008 (persistence part) of `docs/ui-review-001/CHECKLIST.md`.
+**Fixture and unit level only: no live VM, Git repository, lab or device was involved**, and the
+development manager running on the VM was not rebuilt.
+
+## Reproduction and root cause
+
+The registration logic of the real helper was driven directly (`host_git.register_prefix` with a
+temporary registry, no mocks of its rules) and its result fed into the page's `gitTreeModel`: with the
+lab saving to `JunOS-TEST-2`, creating `JunOS-TEST-2/working` without retiring is **refused**
+("Lab folders in one repository cannot overlap"); with retire the registry holds only
+`JunOS-TEST-2/working`; after a second folder made the same way the registry holds only
+`JunOS-TEST-2/solution` and the tree no longer contains `working`; going back to the parent leaves
+neither. Cause and fix are described in the changelog. `app/host_git.py` was not changed.
+
+## What was run
+
+- `python -m unittest discover -s tests -t tests`: 708 tests, 1 skipped (the opt-in SSH fixture), OK.
+  New in `test_git_progress.py` (`GitPlacesTests`, with a fake helper that retires and refuses overlaps
+  like the real one): the reported sequence (plan `working` under the lab's own folder; the lab moves
+  into it, on to `solution`, back to the parent; the VM keeps one registration and the tree keeps all
+  three), duplicates refused for a planned, a registered and a committed name, no phantom entry after a
+  refusal or a failed store write, persistence across a restart, nothing in `/api/state`, and the
+  removal of an unused planned folder without any VM request.
+- `node --test tests/*.js`: 174 of 174. New in `test_git_places_ui.js`: the model with and without
+  planned folders (the first half asserts the defect), the truthful wording, the folder being a valid
+  destination for its own lab only, the removal offered only for an empty, unregistered, childless
+  folder; *New folder…* for a connected lab sends `plan: true`, selects the folder, says the lab still
+  saves where it did, refuses a duplicate before any request, and an unconnected lab still registers.
+- `python3 deploy/verify-release.py`, `node --check` on both scripts, `git diff --check`.
+- **Browser, fixture manager on fresh data** (its scripted helper now behaves like the real one):
+  `verify_after.py` 97 of 97 at three viewports, 0 console errors, 0 page errors.
+  `docs/ui-review-001/tools/check_ui008a.py` 17 of 17: `working` created beneath the folder the lab
+  saves to appears at once, is selected, can be chosen, is described as not in the repository yet, and
+  the save destination is unchanged; still listed after two polls, a reload and a tab change; a
+  duplicate is refused in the dialog with no success message; *Save this lab here* moves the lab into
+  it; after the lab moved on to a second new folder the first is **still listed** while the VM
+  registers only the folder in use; still listed after a reload; *Remove empty folder* takes it off
+  the list and a folder with saved files offers no removal. Screenshots inspected:
+  `~/ui-review/review-001/chunk06/` on the VM.
+
+## Not covered
+
+No run against the installed helper and a real checkout (the helper is unchanged, and its registration
+rules were exercised directly as described above). "Still available after a failed save" was not
+driven in a browser: a save never touches the folder list or the registrations.
+
 # UI review 001, step 5: the review before an upload is mandatory — 1.30.6
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.5 (`95435e6`,

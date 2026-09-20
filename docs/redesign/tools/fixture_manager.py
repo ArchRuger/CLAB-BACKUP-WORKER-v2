@@ -180,12 +180,24 @@ class FakeGit:
         if mode == 'register-prefix':
             prefix = request.get('prefix', '')
             existing = next((r for r in self.registrations if r['prefix'] == prefix and r['path'] == reg['path']), None)
+            # Like app/host_git.py: lab folders of one checkout cannot overlap unless the source registration
+            # is being retired, and a retire removes it (an empty folder the lab leaves is then known to nobody
+            # but the manager's planned-folder list).
+            retire = request.get('retire') is True
+            if not existing:
+                for other in self.registrations:
+                    if other['path'] != reg['path'] or (other is reg and retire):
+                        continue
+                    if not prefix or not other['prefix'] or prefix.startswith(other['prefix'] + '/') or other['prefix'].startswith(prefix + '/'):
+                        raise ValueError('Lab folders in one repository cannot overlap: ' + (other['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
+            if retire and (not existing or existing is not reg):
+                self.registrations.remove(reg)
             if existing:
-                return {'repository': dict(existing)}
+                return dict(existing)
             new = dict(reg, id='reg-' + hashlib.sha1(prefix.encode()).hexdigest()[:8], label=f"Course-Labs / {prefix or 'top level'}", prefix=prefix,
                        revision='rev-' + hashlib.sha1(prefix.encode()).hexdigest()[:6])
             self.registrations.append(new)
-            return {'repository': dict(new)}
+            return dict(new)  # the helper answers with the registration itself (host_git.register_prefix)
         if mode == 'connect':
             url, prefix = str(request.get('url', '')), request.get('prefix', '')
             name = url.rstrip('/').split('/')[-1].removesuffix('.git') or 'repo'

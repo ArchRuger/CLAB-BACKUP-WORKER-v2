@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.6
+# UI review 001 (in progress) — 1.30.7
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -41,6 +41,16 @@ store `True`; **never rewrite stored bindings** (pending jobs compare `digest(bi
 place that sends `{push:true, reviewed:true}`; a quiet save that ends `review_pending` opens it by
 itself; the job window and Recent saves route unreviewed uploads to it. A push sends every earlier
 unpushed commit of the branch too; the review says so when such saves exist.
+(6) **1.30.7, UI-008 part 1 — empty folders.** Git has no empty folders and the VM registry holds only the
+folder a lab saves to now (`register-prefix` with `retire` removes the previous one; nested lab folders
+"cannot overlap"), so the manager keeps `state['git_folders'][<checkout path>]` = prefixes made or chosen
+through it (`remember_folders()` in `git_progress.py`: `POST …/folders`, with `plan: true` for a folder
+that is only listed; the `destination` route remembers the folder the lab leaves and the new one;
+`DELETE …/folders` forgets one; capped at `MAX_PLANNED_FOLDERS`; never in `/api/state`). The tree route
+adds `planned`; `gitTreeModel(files, folders, planned)` sets `dir.planned`, and `pending` means "no
+saved file yet". Never word a pending folder as existing in the repository. Do not change
+`host_git.py` for this. The fixture's scripted helper must keep matching the real one (retire, overlap
+refusal, a flat `register-prefix` answer).
 
 # Lab builder quality pass — 1.30.1
 

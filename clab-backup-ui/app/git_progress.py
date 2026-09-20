@@ -26,6 +26,7 @@ from .lab_operations import operation_busy, scrub, GIT_BUSY
 from .runner import now
 
 PROTOCOL = 'clab-manager-git-v1'
+MAX_PLANNED_FOLDERS = 200
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_WIRE = 24 * 1024 * 1024
@@ -477,6 +478,7 @@ class GitProgress:
         class Folder(BaseModel):
             model_config = ConfigDict(extra='forbid')
             prefix: str = Field(default='', max_length=500)
+            plan: bool = False
 
         class Destination(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -496,6 +498,23 @@ class GitProgress:
             if value and (len(value) > 500 or '\\' in value or any(not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', part) or part.lower() == '.git' or part in ('.', '..') for part in value.split('/'))):
                 raise HTTPException(400, 'Use folder names with letters, numbers, dashes or underscores; use / to nest. No leading slash, no .. and no .git parts.')
             return value
+
+        # Folders made or chosen through the manager, per checkout. Git has no empty folders and the VM
+        # registry only knows the folder a lab saves to now (a move retires the previous registration, and
+        # a folder inside a lab's own folder cannot be registered beside it), so without this list an empty
+        # folder stops existing the moment the lab saves somewhere else. They are plans, not directories:
+        # the tree reports them as `planned` and the page says they are not in the repository yet.
+        def planned_folders(path):
+            with self.store.lock: return list(self.store.state.get('git_folders', {}).get(path, []))
+
+        def remember_folders(path, *prefixes):
+            with self.store.lock:
+                known = self.store.state.setdefault('git_folders', {}).setdefault(path, [])
+                fresh = [p for p in dict.fromkeys(prefixes) if p and p not in known]
+                if not fresh: return
+                known.extend(fresh); del known[:-MAX_PLANNED_FOLDERS]
+                try: self.store.save()
+                except OSError: del known[-len(fresh):]
 
         def bound_labs():
             return {lab['git_binding']['binding_id']: dict(id=lab['id'], name=lab['name']) for lab in self.store.state['labs'] if lab.get('git_binding')}
@@ -596,16 +615,44 @@ class GitProgress:
             with self.store.lock: labs = bound_labs()
             folders = [dict(f, lab=labs.get(f.get('id'))) for f in result.get('folders', []) if isinstance(f, dict)]
             return dict(repository=result.get('repository', repo), head=result.get('head', ''), files=result.get('files', []),
-                        truncated=bool(result.get('truncated')), saved=result.get('saved', {}), folders=folders)
+                        truncated=bool(result.get('truncated')), saved=result.get('saved', {}), folders=folders,
+                        planned=planned_folders(repo['path']))
 
         @app.post('/api/git/repositories/{binding_id}/folders')
         def folder(binding_id: str, data: Folder):
             prefix = folder_value(data.prefix)
             repo, binding = catalog_binding(binding_id)
+            if data.plan:
+                # A folder to save into later: nothing is registered or written on the VM. The repository is
+                # read once so a name that exists (committed, a lab folder, or planned) is refused as a duplicate.
+                if not prefix: raise HTTPException(400, 'Enter a folder name.')
+                seen = call({'mode': 'browse'}, binding)
+                taken = {f.get('prefix') for f in seen.get('folders', []) if isinstance(f, dict)} | set(planned_folders(repo['path']))
+                if prefix in taken or any(str(f.get('path', '')).startswith(prefix + '/') for f in seen.get('files', []) if isinstance(f, dict)):
+                    raise HTTPException(409, 'A folder named ' + prefix + ' already exists in this repository. Pick it in the list instead.')
+                remember_folders(repo['path'], prefix)
+                if prefix not in planned_folders(repo['path']): raise HTTPException(500, 'The folder could not be stored. Nothing was created.')
+                self.store.event('git.folder', 'Repository folder planned for later saves.', lab_id='')
+                return {'planned': prefix}
             created = call({'mode': 'register-prefix', 'prefix': prefix}, binding)
             if not isinstance(created, dict) or not created.get('id'): raise HTTPException(409, 'The VM did not return the new folder registration.')
+            remember_folders(repo['path'], prefix)
             self.store.event('git.folder', 'Repository folder registered for lab saves.', lab_id='')
             return {'repository': created}
+
+        @app.delete('/api/git/repositories/{binding_id}/folders')
+        def forget_folder(binding_id: str, data: Folder):
+            """Forget a planned folder that was never used. Nothing on the VM changes; a folder with saved files or a lab stays visible anyway."""
+            prefix = folder_value(data.prefix)
+            repo, _ = catalog_binding(binding_id)
+            with self.store.lock:
+                known = self.store.state.get('git_folders', {}).get(repo['path'], [])
+                if prefix not in known: raise HTTPException(404, 'This folder is not one the manager created.')
+                known.remove(prefix)
+                try: self.store.save()
+                except OSError:
+                    known.append(prefix); raise HTTPException(500, 'The change could not be stored.')
+            return {'forgotten': prefix}
 
         @app.post('/api/labs/{lab_id}/git/destination')
         def destination(lab_id: str, data: Destination):
@@ -625,6 +672,8 @@ class GitProgress:
             created = call({'mode': 'register-prefix', 'prefix': prefix, 'retire': True}, binding)
             if not isinstance(created, dict) or not created.get('id'): raise HTTPException(409, 'The VM did not return the new folder registration.')
             new_binding = bind_lab(lab_id, created, node_names, review, before, 'git.destination', 'Lab repository folder changed to ' + (prefix or 'the repository root') + '.')
+            # The folder the lab leaves is retired on the VM; keep it (and the new one) reachable while empty.
+            remember_folders(binding['repository'].get('path', ''), source, prefix)
             job = None
             if data.move_files:
                 with self.store.lock:

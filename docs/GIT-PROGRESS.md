@@ -199,8 +199,12 @@ registration IDs and folder names.
 
 - The folder this lab saves to is tagged **This lab**; a folder another lab saves to is
   tagged with that lab's name. `latest/`, `baseline/` and `checkpoints/` are described in
-  plain words, and a lab folder that has never been saved to reads *created on first
-  save*, because Git only shows a folder once a file is committed in it.
+  plain words. A folder that holds nothing yet reads *not in the repository until the first
+  save*: Git keeps no empty folders, so the manager remembers the folders made or chosen here
+  and keeps listing them, also after the lab moved to another folder (the VM registers only
+  the folder a lab saves to now). **New folder…** without *Save … here from now on* only adds
+  the folder to the list; **Remove empty folder** takes an unused one off it again. Neither
+  changes anything in the repository or where the lab saves.
 - **Save this lab here** moves the lab to the selected folder. The folder becomes the
   lab's registered destination, the device selection stays as it
   was, and the lab's previous folder registration is retired. When files were already

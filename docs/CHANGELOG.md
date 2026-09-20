@@ -4,6 +4,35 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.7
+
+**UI review 001, step 6: a folder made in the folder browser no longer disappears (UI-008, part 1).**
+Manager and frontend; the VM helpers are unchanged apart from the lockstep version. Part 2 (expanding
+and collapsing the tree, the destination highlight, state kept across refreshes) follows.
+
+- **Root cause.** Git keeps no empty folders, so a new folder existed only as a *lab folder
+  registration* on the VM, and the browser's tree is built from the committed files plus those
+  registrations. Moving a lab (*Save this lab here*, or *New folder…* with *Save … here from now on*)
+  retires the lab's previous registration. An empty folder the lab left, such as `working` under
+  `JunOS-TEST-2` once the lab saved to a second new folder or went back to the parent, was therefore
+  known to nothing and vanished. Creating a folder inside the lab's own folder *without* moving there
+  was refused outright by the VM's rule that lab folders cannot overlap.
+- **Fix.** The manager remembers, per checkout, the folders made or chosen through it
+  (`git_folders` in its state; the tree route reports them as `planned`), and the folder browser draws
+  them. They are told apart truthfully: *Empty folder · not in the repository until the first save*,
+  and inside one: *Nothing is saved here yet. The folder is kept by the manager and appears in the
+  repository with the first save into it.* No directory or commit is claimed. Such a folder can be
+  chosen (*Save this lab here* registers it on the VM as before), survives refreshes, polling,
+  reloads, a manager restart and the lab moving elsewhere.
+- **New folder…** for a connected lab without *Save … here from now on* now only lists the folder
+  (`POST …/folders` with `plan: true`): nothing is registered on the VM and the message says that the
+  lab still saves where it did. A name that already exists (saved, a lab folder or planned) is refused
+  in the dialog before anything is sent, and by the manager with 409; a refused or failed creation
+  leaves no entry. An empty folder that nothing uses can be taken off the list (*Remove empty folder*,
+  `DELETE …/folders`); nothing on the VM changes.
+- Tooling: the fixture manager's scripted Git helper now retires registrations, refuses overlapping
+  lab folders and answers `register-prefix` like `app/host_git.py`; it had hidden this defect.
+
 ## Changes in 1.30.6
 
 **UI review 001, step 5: the review before an upload is mandatory (UI-007 C).** Manager and frontend;

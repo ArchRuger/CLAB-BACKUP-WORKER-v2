@@ -544,6 +544,16 @@ class GitPlacesTests(GitProgressTests):
             if self.publish_error: raise ValueError(self.publish_error)
             prefix = request['prefix']
             existing = next((r for r in self.registry if r['prefix'] == prefix and (mode == 'register-prefix' or r.get('push_url') == request['url'])), None)
+            if mode == 'register-prefix' and getattr(self, 'faithful', False):
+                # What the real helper does (host_git.plan_prefix / register_prefix): lab folders of one
+                # checkout cannot overlap unless the source is being retired, and retiring removes it.
+                source = next(r for r in self.registry if r['id'] == request['binding_id'])
+                if not existing:
+                    for other in self.registry:
+                        if other is source and request.get('retire'): continue
+                        if not prefix or not other['prefix'] or prefix.startswith(other['prefix'] + '/') or other['prefix'].startswith(prefix + '/'):
+                            raise ValueError('Lab folders in one repository cannot overlap: ' + (other['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
+                if request.get('retire'): self.registry.remove(source)
             if existing: return dict(existing)
             created = dict(self.repo, id=mode + '-' + (prefix or 'root'), prefix=prefix, revision='rev-' + (prefix or 'root'), label='Bens lab / ' + (prefix or 'root'))
             if mode == 'connect': created.update(push_url=request['url'], path='/home/ben/labs/' + request['url'].rsplit('/', 1)[-1].removesuffix('.git'), label=request['url'].rsplit('/', 1)[-1])
@@ -581,6 +591,53 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual(len([r for r in self.sent if r['mode'] == 'register-prefix']), 1)
         catalog = self.client.get('/api/git/repositories').json()['repositories']
         self.assertIn('courses/eth', [r['prefix'] for r in catalog])
+
+    def test_an_empty_folder_stays_in_the_tree_when_the_lab_moves_on_and_the_vm_retires_its_registration(self):
+        # The reported case: the lab saves to JunOS-TEST-2, a folder "working" is created beneath it.
+        self.faithful = True
+        self.registry = [dict(self.repo, prefix='JunOS-TEST-2')]
+        tree = lambda: self.client.get('/api/git/repositories/' + self.store.lab(self.lab['id'])['git_binding']['binding_id'] + '/tree').json()
+        with self.store.lock:
+            self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'] = 'JunOS-TEST-2'; self.store.save()
+        # Beside-the-lab registration is impossible inside the lab's own folder; a planned folder is not.
+        refused = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/working'))
+        self.assertEqual(refused.status_code, 409); self.assertIn('cannot overlap', refused.text)
+        self.assertEqual(tree()['planned'], [], 'a refused creation leaves no phantom folder')
+        planned = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/working', plan=True))
+        self.assertEqual(planned.status_code, 200, planned.text); self.assertEqual(planned.json(), {'planned': 'JunOS-TEST-2/working'})
+        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix' and r['prefix'] == 'JunOS-TEST-2/working' and r.get('retire')], 'planning registers nothing on the VM')
+        self.assertEqual(tree()['planned'], ['JunOS-TEST-2/working'])
+        self.assertEqual([f['prefix'] for f in tree()['folders']], ['JunOS-TEST-2'], 'the save destination did not change')
+        # Duplicates are refused accurately: planned, a lab folder, and a committed folder.
+        for name in ('JunOS-TEST-2/working', 'JunOS-TEST-2', 'bgp'):
+            again = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix=name, plan=True))
+            self.assertEqual(again.status_code, 409, name); self.assertIn('already exists', again.text)
+        self.assertEqual(self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='', plan=True)).status_code, 400)
+        # The lab moves into it, then on to a second folder, then back: the VM keeps one registration only.
+        for prefix in ('JunOS-TEST-2/working', 'JunOS-TEST-2/solution', 'JunOS-TEST-2'):
+            moved = self.client.post(self.url + '/destination', json=dict(prefix=prefix))
+            self.assertEqual(moved.status_code, 200, moved.text)
+            self.assertEqual([r['prefix'] for r in self.registry], [prefix])
+        now = tree()
+        self.assertEqual([f['prefix'] for f in now['folders']], ['JunOS-TEST-2'])
+        self.assertEqual(sorted(now['planned']), ['JunOS-TEST-2', 'JunOS-TEST-2/solution', 'JunOS-TEST-2/working'], 'the folders the lab left are still there')
+        self.assertEqual(sorted(Store(self.tmp.name).state['git_folders'][self.repo['path']]), sorted(now['planned']), 'and they survive a restart')
+        self.assertNotIn('git_folders', self.client.get('/api/state').json())
+        # A planned folder that was never used can be forgotten; nothing on the VM is involved.
+        sent = len(self.sent)
+        gone = self.client.request('DELETE', '/api/git/repositories/' + self.registry[0]['id'] + '/folders', json=dict(prefix='JunOS-TEST-2/solution'))
+        self.assertEqual(gone.status_code, 200, gone.text)
+        self.assertEqual(len([r for r in self.sent[sent:] if r['mode'] not in ('list',)]), 0)
+        self.assertNotIn('JunOS-TEST-2/solution', tree()['planned'])
+        self.assertEqual(self.client.request('DELETE', '/api/git/repositories/' + self.registry[0]['id'] + '/folders', json=dict(prefix='never-made')).status_code, 404)
+
+    def test_a_failed_store_write_creates_no_planned_folder(self):
+        persist = self.store.save
+        with patch.object(self.store, 'save', side_effect=OSError('disk')):
+            response = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='notes', plan=True))
+        self.assertEqual(response.status_code, 500); self.assertIn('Nothing was created', response.text)
+        self.assertEqual(self.client.get('/api/git/repositories/bens-lab/tree').json()['planned'], [])
+        self.assertTrue(callable(persist))
 
     def test_changing_the_folder_rebinds_the_lab_and_moves_files_without_recapturing(self):
         self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='')).status_code, 409)

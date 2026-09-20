@@ -69,6 +69,45 @@ test('the browser markup escapes names and labels and explains each folder',()=>
  assert.match(fresh,/data-git-places-action="use"  title="">Choose this folder/);
  assert.doesNotMatch(context.gitPlacesMarkup(mine,{selected:'',current:'',repoName:'repo',canAct:false}),/data-git-places-action/);
 });
+test('an empty folder made through the manager stays in the tree, is told apart from a saved one, and can be chosen',()=>{
+ const context=makeContext(),lab=[{id:'j2',label:'repo / JunOS-TEST-2',prefix:'JunOS-TEST-2',lab:{id:'lab',name:'Junos lab'}}];
+ const without=context.gitTreeModel([{path:'JunOS-TEST-2/latest/r1.cfg',size:10}],lab);
+ assert.equal(without.nodes.has('JunOS-TEST-2/working'),false,'this is the reported defect: nothing but the manager remembers an empty folder');
+ const model=context.gitTreeModel([{path:'JunOS-TEST-2/latest/r1.cfg',size:10}],lab,['JunOS-TEST-2/working','JunOS-TEST-2/solution/week-1','JunOS-TEST-2','/bad','',7]);
+ same(model.nodes.get('JunOS-TEST-2').dirs.map(d=>d.name),['latest','solution','working']);
+ const working=model.nodes.get('JunOS-TEST-2/working');assert.equal(working.planned,true);assert.equal(working.pending,true);assert.equal(working.registration,null);
+ assert.equal(model.nodes.get('JunOS-TEST-2').pending,false,'a planned folder that holds saved files is an ordinary folder');assert.equal(model.nodes.get('JunOS-TEST-2/solution').pending,false,'an unplanned parent is not flagged');assert.equal(model.nodes.get('JunOS-TEST-2/solution/week-1').pending,true);
+ assert.equal(model.nodes.has('/bad'),false);assert.equal(model.nodes.size,6);
+ const choice=context.gitFolderChoice(model,'JunOS-TEST-2/working','j2');assert.equal(choice.allowed,true,'a folder inside the lab\'s own folder is a valid destination for that lab');
+ assert.equal(context.gitFolderChoice(model,'JunOS-TEST-2/working','someone-else').allowed,false,'and stays closed to other labs');
+ const parent=context.gitPlacesMarkup(model,{selected:'JunOS-TEST-2',current:'j2',repoName:'repo',head:'a',saved:{latest:1},canAct:true,connected:true,canForget:true});
+ assert.match(parent,/data-git-place="JunOS-TEST-2\/working"><td><span class="name"><i class="git-folder-icon  pending"><\/i>working<\/span><\/td><td class="desc">Empty folder  <b class="git-tag pending">not in the repository until the first save<\/b>/);
+ assert.doesNotMatch(parent,/data-git-places-action="forget"/,'only the empty folder itself offers its removal');
+ const inside=context.gitPlacesMarkup(model,{selected:'JunOS-TEST-2/working',current:'j2',repoName:'repo',head:'a',saved:{latest:1},canAct:true,connected:true,canForget:true});
+ assert.match(inside,/Nothing is saved here yet\. The folder is kept by the manager and appears in the repository with the first save into it\./);
+ assert.match(inside,/data-git-places-action="use"  title="">Save this lab here/);assert.match(inside,/data-git-places-action="forget"/);
+ assert.doesNotMatch(context.gitPlacesMarkup(model,{selected:'JunOS-TEST-2/solution',current:'j2',repoName:'repo',canAct:true,connected:true,canForget:true}),/data-git-places-action="forget"/,'a folder that holds another folder is not removable');
+ assert.doesNotMatch(context.gitPlacesMarkup(model,{selected:'JunOS-TEST-2/working',current:'j2',repoName:'repo',canAct:true,connected:true}),/data-git-places-action="forget"/);
+});
+test('New folder: a connected lab plans the folder without moving, a duplicate is refused before any request, an unconnected lab still registers',async()=>{
+ const context=makeContext(),calls=[],toasts=[],elements=new Map();let shown=0;
+ const field=(value='')=>({value,checked:false,hidden:false,querySelector:()=>({textContent:''})});
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],field());return {close(){this.closed=true;}};};
+ context.$=id=>elements.get(id)||null;context.opTask=async(dialog,fn)=>fn();context.notify=m=>toasts.push(m);context.gitShowRepository=async()=>{shown++;};
+ context.json=async(endpoint,method,payload)=>{calls.push({endpoint,method,payload});return payload.plan?{planned:payload.prefix}:{repository:{id:'reg-new',prefix:payload.prefix}};};
+ const tree={repository:{id:'j2',path:'/home/ben/labs/Course-Labs'}},model=context.gitTreeModel([{path:'JunOS-TEST-2/latest/r1.cfg',size:10}],[{id:'j2',prefix:'JunOS-TEST-2',lab:{id:'lab',name:'Junos lab'}}],['JunOS-TEST-2/working']);
+ context.gitLoadContext=async()=>({binding:{binding_id:'j2',repository:{path:'/home/ben/labs/Course-Labs',prefix:'JunOS-TEST-2'}}});context.state.labs=[{id:'lab',name:'Junos lab'}];
+ await context.gitNewFolder('lab','JunOS-TEST-2',model,tree);
+ elements.get('git-new-folder-name').value='working';elements.get('git-new-folder-use').checked=false;
+ await assert.rejects(elements.get('git-new-folder-confirm').onclick(),/A folder named JunOS-TEST-2\/working already exists/);assert.equal(calls.length,0,'a duplicate sends nothing and reports no success');assert.equal(toasts.length,0);
+ elements.get('git-new-folder-name').value='solution';await elements.get('git-new-folder-confirm').onclick();
+ assert.deepEqual(JSON.parse(JSON.stringify(calls)),[{endpoint:'/git/repositories/j2/folders',method:'POST',payload:{prefix:'JunOS-TEST-2/solution',plan:true}}]);
+ assert.equal(vm.runInContext('gitPlacesState.selected',context),'JunOS-TEST-2/solution','the new folder is selected at once');assert.equal(shown,1);
+ assert.match(toasts[0],/^Folder JunOS-TEST-2\/solution is listed\. Junos lab still saves to JunOS-TEST-2\.$/,'browsing and creating never change the save destination');
+ context.gitLoadContext=async()=>({binding:null});calls.length=0;
+ await context.gitNewFolder('lab','',model,tree);elements.get('git-new-folder-name').value='fresh';await elements.get('git-new-folder-confirm').onclick();
+ assert.deepEqual(JSON.parse(JSON.stringify(calls[0].payload)),{prefix:'fresh'});
+});
 test('the connected card names the folder path and offers the switch and disconnect actions',()=>{
  const context=makeContext(),container={innerHTML:'',querySelectorAll:()=>[]};
  context.$=id=>id==='git-repository-content'?container:null;context.state.labs=[{id:'lab',name:'BGP <lab>'}];

@@ -181,7 +181,7 @@ function gitRenderRepository(id,context,catalog,extras={}){
  const places=typeof gitPlacesState!=='undefined'?gitPlacesState:null,requested=!!(places&&places.open),openBrowser=!activeBinding||requested||!gitFolderCollapsed.has(id);if(places)places.open=false;
  const optionLabel=value=>{const twins=repositories.filter(r=>gitRepoName(r)===gitRepoName(value)&&(r.prefix||'')===(value.prefix||''));return `${gitRepoName(value)} › ${value.prefix||'(whole repository)'}${twins.length>1?' · '+value.owner:''}`;};
  const option=value=>`<option value="${esc(value.id)}" ${value.id===preselect?'selected':''}>${esc(optionLabel(value))}</option>`;
- const tree=extras.tree||null,model=tree&&typeof gitTreeModel==='function'?gitTreeModel(tree.files,tree.folders):null;
+ const tree=extras.tree||null,model=tree&&typeof gitTreeModel==='function'?gitTreeModel(tree.files,tree.folders,tree.planned):null;
  const form=repositories.length?`<form id="git-binding-form" class="git-binding-form">
   <details id="git-change-folder" class="git-change-folder" ${openBrowser?'open':''}><summary>${activeBinding?'Change folder…':'Choose a folder for this lab'}</summary>
    <label for="git-binding-id">Save location</label><select id="git-binding-id" required>${!preselect?'<option value="">Choose a save location</option>':''}${repositories.map(option).join('')}</select>
@@ -208,7 +208,7 @@ function gitRenderRepository(id,context,catalog,extras={}){
   if(!panel)return;
   if(!bindingId){panel.innerHTML='<p class="git-empty-folder">Pick a repository above to see its folders.</p>';return;}
   const browsed=repositories.find(value=>value.id===bindingId),connected=!!binding&&!!browsed&&browsed.path===repo.path;
-  gitPlacesShow(panel,id,bindingId,{current:binding?.binding_id||'',connected,tree:bindingId===binding?.binding_id?tree:undefined,onUse:(path,model_,tree_)=>gitUseFolder(id,path,model_,tree_),onNew:(path,model_,tree_)=>gitNewFolder(id,path,model_,tree_),onApply:typeof restoreFromFolder==='function'?(path,model_,tree_)=>restoreFromFolder(id,path,tree_):undefined});
+  gitPlacesShow(panel,id,bindingId,{current:binding?.binding_id||'',connected,tree:bindingId===binding?.binding_id?tree:undefined,onUse:(path,model_,tree_)=>gitUseFolder(id,path,model_,tree_),onNew:(path,model_,tree_)=>gitNewFolder(id,path,model_,tree_),onForget:(path,model_,tree_)=>gitForgetFolder(id,path,tree_),onApply:typeof restoreFromFolder==='function'?(path,model_,tree_)=>restoreFromFolder(id,path,tree_):undefined});
  };
  if(form_){
   const change=()=>{const selectedRepo=repositories.find(value=>value.id===$('git-binding-id').value);$('git-binding-destination').textContent=selectedRepo?gitRegisteredDestination(selectedRepo):'';const changed=gitBindingChanged(binding,selectedRepo);$('git-exposure-label').hidden=!changed;$('git-exposure').required=changed;$('git-exposure').checked=false;showPlaces(selectedRepo?.id||binding?.binding_id||'');};
@@ -364,17 +364,25 @@ async function gitUseFolder(id,path,model,tree){
 async function gitNewFolder(id,parent,model,tree){
  const context=await gitLoadContext(id,true),binding=context.binding,repoName=gitRepoName(tree.repository),labName=gitLabName(id);
  const connected=!!binding&&binding.repository?.path===tree.repository?.path,current=connected?gitLabFolder(model,binding.binding_id):null,count=current?current.count:0,from=binding?.repository?.prefix||'the repository root';
- const dialog=opDialog('git-new-folder-dialog','New folder',`<p class="op-path">${esc(repoName)}${parent?' › '+esc(parent):''} › <em>new folder</em></p><label for="git-new-folder-name">Folder name</label><input id="git-new-folder-name" maxlength="360" placeholder="Week-04/BGP/Final-State" autocomplete="off" spellcheck="false"><p class="form-help">Letters, numbers, dashes, dots and underscores. Use <code>/</code> to create nested folders in one step. A new folder appears in the repository after the first save into it.</p><p class="git-destination-line" id="git-new-folder-result" hidden><span>Result</span><code></code></p>${connected?`<label class="checkbox-label"><input id="git-new-folder-use" type="checkbox" checked> Save ${esc(labName)} here from now on</label>${count?`<label class="checkbox-label"><input id="git-new-folder-move" type="checkbox" checked> Also move the ${count} files already saved under <code>${esc(from)}</code> into it. The move is saved and uploaded to the repository right away.</label>`:''}`:'<p class="form-help">The folder is ready for this lab. Next, tick the devices to include under Save settings and choose Connect.</p>'}<div class="dialog-actions"><button class="button secondary" id="git-new-folder-cancel">Cancel</button><button class="button primary" id="git-new-folder-confirm">Create folder</button></div>`);
+ const dialog=opDialog('git-new-folder-dialog','New folder',`<p class="op-path">${esc(repoName)}${parent?' › '+esc(parent):''} › <em>new folder</em></p><label for="git-new-folder-name">Folder name</label><input id="git-new-folder-name" maxlength="360" placeholder="Week-04/BGP/Final-State" autocomplete="off" spellcheck="false"><p class="form-help">Letters, numbers, dashes, dots and underscores. Use <code>/</code> to create nested folders in one step. The folder is listed here at once; Git keeps no empty folders, so it appears in the repository with the first save into it.</p><p class="git-destination-line" id="git-new-folder-result" hidden><span>Result</span><code></code></p>${connected?`<label class="checkbox-label"><input id="git-new-folder-use" type="checkbox" checked> Save ${esc(labName)} here from now on</label>${count?`<label class="checkbox-label"><input id="git-new-folder-move" type="checkbox" checked> Also move the ${count} files already saved under <code>${esc(from)}</code> into it. The move is saved and uploaded to the repository right away.</label>`:''}`:'<p class="form-help">The folder is ready for this lab. Next, tick the devices to include under Save settings and choose Connect.</p>'}<div class="dialog-actions"><button class="button secondary" id="git-new-folder-cancel">Cancel</button><button class="button primary" id="git-new-folder-confirm">Create folder</button></div>`);
  const result=$('git-new-folder-result'),resultCode=result.querySelector('code');
  const preview=()=>{const full=gitDestinationPreview(parent,$('git-new-folder-name').value);result.hidden=!full;resultCode.textContent=full?repoName+' / '+full:'';};
  $('git-new-folder-name').oninput=preview;preview();
  $('git-new-folder-cancel').onclick=()=>dialog.close();
  $('git-new-folder-confirm').onclick=()=>opTask(dialog,async()=>{
   const nested=gitFolderPath($('git-new-folder-name').value),prefix=parent?parent+'/'+nested:nested;
+  if(model.nodes.has(prefix))throw new Error('A folder named '+prefix+' already exists. Pick it in the list instead.');
   if(connected&&$('git-new-folder-use')?.checked){await gitApplyDestination(id,prefix,!!$('git-new-folder-move')?.checked,labName);dialog.close();return;}
-  const created=await json('/git/repositories/'+encodeURIComponent(tree.repository.id)+'/folders','POST',{prefix});
-  dialog.close();gitPlacesState.selected=prefix;gitPlacesState.open=true;if(!connected)gitPendingSelection=created.repository.id;await gitShowRepository(true);notify('Folder '+prefix+' is ready.');
+  // Connected and not moving there: the folder is only kept by the manager (a lab folder cannot be
+  // registered inside or beside-overlapping another on the VM). Where this lab saves does not change.
+  // Not connected yet: register it, so it is preselected in the connection form as before.
+  const created=await json('/git/repositories/'+encodeURIComponent(tree.repository.id)+'/folders','POST',connected?{prefix,plan:true}:{prefix});
+  dialog.close();gitPlacesState.selected=prefix;gitPlacesState.open=true;if(!connected)gitPendingSelection=created.repository.id;await gitShowRepository(true);notify(connected?'Folder '+prefix+' is listed. '+labName+' still saves to '+from+'.':'Folder '+prefix+' is ready.');
  });
+}
+async function gitForgetFolder(id,path,tree){
+ await json('/git/repositories/'+encodeURIComponent(tree.repository.id)+'/folders','DELETE',{prefix:path});
+ gitPlacesState.selected=path.split('/').slice(0,-1).join('/');gitPlacesState.open=true;await gitShowRepository(true);notify('Folder '+path+' removed from the list. Nothing in the repository changed.');
 }
 async function gitSwitchRepository(id){
  const [context,catalog]=await Promise.all([gitLoadContext(id,true),(await api('/git/repositories')).json()]);
