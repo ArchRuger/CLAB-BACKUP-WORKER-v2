@@ -19,6 +19,7 @@ services:
       TELEMETRY_STACK: ${TELEMETRY_STACK:-disabled}
       TELEMETRY_GRAFANA_PORT: ${TELEMETRY_GRAFANA_PORT:-3000}
       TELEMETRY_PROMETHEUS_PORT: ${TELEMETRY_PROMETHEUS_PORT:-9090}
+      TELEMETRY_GRAFANA_IDLE_MINUTES: ${TELEMETRY_GRAFANA_IDLE_MINUTES:-15}
     volumes:
       - type: bind
         source: /srv/containerlab-node-manager/data

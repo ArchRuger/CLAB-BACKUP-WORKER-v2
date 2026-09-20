@@ -4,6 +4,28 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.23
+
+**Maintenance audit follow-up 1: the course scaffold tool works with the mandatory upload review, and
+prepared-image installations get the Grafana idle time and a way to set up both stacks.** No change to the
+manager or the helpers beyond the lockstep version.
+
+- `deploy/scaffold-lab.py snapshot` could not finish since an upload needs a review: the save ended *Waiting
+  for your review*, the tool's rebind to `work` was refused (a waiting save blocks a folder change) and the
+  lab was left saving into `reference/<state>`. It now lists the files it saved and asks before it uploads,
+  stating the review through the same retry route the page uses; `--yes` answers for a script, and without
+  a terminal the tool refuses before it changes anything. Answering no sets the save aside (*Keep snapshot
+  only*), so the state stays on the lab VM and the lab is still pointed back at `work`. When an upload
+  fails it says plainly that the lab still saves to the reference folder and how to recover. Its test
+  manager now behaves like the real one (review, refusal of the folder change, refusal of an unreviewed
+  upload); the old tool fails those tests.
+- `deploy/compose.image.yml` passes `TELEMETRY_GRAFANA_IDLE_MINUTES` like the source-build file (default 15,
+  so nothing changes for an installation that never set it). A test keeps the two files' settings equal.
+- The Wiki guide's prepared-image part explains how to set up browser Wireshark and the dashboards there:
+  both setup scripts with `--no-recreate`, their settings copied into `deploy/image.env`, the manager
+  recreated with the image Compose file, and `UI_PORT` in `clab-backup-ui/.env` when it is not 8081.
+  `deploy/image.env` is now git-ignored, because it then holds the capture session token.
+
 ## Changes in 1.30.22
 
 **Maintenance audit, chunk 5: what the independent verification found, the telemetry settings table, and

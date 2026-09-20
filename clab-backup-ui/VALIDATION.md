@@ -1,3 +1,29 @@
+# Maintenance audit follow-up 1: scaffold tool, prepared-image settings — 1.30.23
+
+Prepared on `claude/maintenance-audit` on 2026-09-20, fast-forwarded to `main` `fc6da24` (pull request #45
+merged by the maintainer). **Unit and static evidence; nothing live.**
+
+## What was run
+
+- `tests/test_scaffold_lab.py`: 9 tests. The fake manager was first made to behave like
+  `app/git_progress.py` (a save ends `review_pending`, the `destination` route answers 409 while a save
+  waits, a retry without `reviewed` answers 409, dismiss needs the acknowledgement). Against that fake the
+  **old** tool fails five tests, among them the original snapshot test; the new tool passes all nine: the
+  review is stated and the upload happens before the rebind, a "no" sets the save aside and still rebinds,
+  no terminal and no `--yes` changes nothing, a failed upload reports that the lab still saves to the
+  reference folder and attempts no rebind.
+- `tests/test_release_consistency.py`: the new parity test passes, and fails with the compose line removed.
+  `docker compose -f deploy/compose.image.yml config` shows the variable as 15 by default and as the given
+  value when set.
+- Both full suites (716 Python tests with 1 skipped, 189 browser tests), `verify-release.py`,
+  `check_links.py`, `git diff --check`.
+
+## Not run
+
+`scaffold-lab.py` was not run against a real manager, lab or Git host: the statement that a set-aside save
+goes up with the next upload follows from the helper's push (it sends the branch) and was not exercised. The
+prepared-image instructions were written from the scripts and not executed on a VM.
+
 # Maintenance audit, chunk 5: verification fixes, telemetry keys, agent routes — 1.30.22
 
 Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.21 (`a59378a`, pushed, **CI green including

@@ -34,6 +34,18 @@ in [AUDIT.md](AUDIT.md).
 The state column is filled in by the commit that completes a chunk; a chunk is complete only when its
 commit is on the remote branch.
 
+## Follow-ups (chosen by the maintainer after the pass)
+
+Pull request #45 (chunks 4 and 5) was merged on 2026-09-20 (`main` `fc6da24`); the branch was fast-forwarded
+again. The maintainer chose six of the record's open items, in this order:
+
+| Follow-up | Content | State |
+|---|---|---|
+| 1 | Scaffold tool and the mandatory review; image compose line and parity test; prepared-image stack instructions; `deploy/image.env` ignored | complete when this commit is on the remote |
+| 2 | `shell.js` `lastOpened()` and the `clab.lastLab` write removed, the test's claim rewritten | not started |
+| 3 | Pure deletions in `host_git.py`, `restore.py`, `restore_junos.py` after a risk review (`pending_rollback_shell` and `COMMIT_ERROR` stay until the maintainer decides whether to wire the probe) | not started |
+| 4 | Manager-side `unchanged` save status (`finish()` in `git_progress.py`), risk-reviewed; the careful part is a HEAD that was never uploaded | not started |
+
 ## Next
 
 The pass is complete with chunk 5. What is left needs the maintainer: the decisions in the record's §5

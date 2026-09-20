@@ -1501,6 +1501,28 @@ For image-only installations use these same env-file/Compose arguments for
 status, logs, stop, start, backups and upgrades. Continue with Part 11 to save
 the VM password in the manager. Do not run the source-build launcher offline.
 
+**Browser Wireshark and the Grafana dashboards on a prepared-image installation.** The two
+setup scripts write their settings to `clab-backup-ui/.env` and normally finish by recreating
+the manager from the source-build Compose file, which is the wrong file here. Run them with
+`--no-recreate`, copy their settings into `deploy/image.env`, and recreate the manager with the
+image Compose file yourself. Both stacks need their container images (pulled by the scripts, or
+loaded beforehand on a VM without internet access). If `UI_PORT` is not 8081, put the same
+`UI_PORT` line into `clab-backup-ui/.env` first: the dashboards setup reads the manager's port
+from that file for the Prometheus scrape target.
+
+```bash
+cd "$HOME/projects/clab-manager"
+sudo bash deploy/setup-capture.sh --no-recreate
+sudo bash deploy/setup-telemetry.sh --no-recreate
+sudo grep -E '^(CAPTURE_|TELEMETRY_)' clab-backup-ui/.env | sudo tee -a deploy/image.env >/dev/null
+sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml \
+  up -d --no-build --pull never --force-recreate
+```
+
+`deploy/image.env` now holds the capture session token: keep it readable by the installing
+account only (`chmod 600 deploy/image.env`). After a later rerun of either setup script, replace
+those lines in `deploy/image.env` rather than appending a second copy. Then run the health check.
+
 ## Engineer handoff record
 
 | Record | Value to fill in |
