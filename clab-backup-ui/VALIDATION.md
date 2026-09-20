@@ -1,8 +1,8 @@
 # UI review 001, step 13: Edit map in the builder's editor — 1.30.14
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.13 (`3ee4b3c`,
-pushed). UI-003 steps C and D of `docs/ui-review-001/MAP-PARITY.md`. **Fixture only: no live VM, lab or
-device was involved**; the development manager on the VM still runs 1.30.11.
+pushed). UI-003 steps C and D of `docs/ui-review-001/MAP-PARITY.md`. Fixture first; a short live pass on the dev VM followed the push and is recorded below. No network
+device was involved.
 
 ## What was run
 
@@ -36,12 +36,22 @@ device was involved**; the development manager on the VM still runs 1.30.11.
   the map with that key kept; every write of the whole run went to `…/map-document`. Screenshots
   inspected: `~/ui-review/review-001/chunk13/` and `chunk14/` on the VM.
 
+## Live, after the push: the development manager on the VM at 1.30.14
+
+`sudo bash deploy/start-manager.sh --manager-only` from `723d5e8` (CI green, bundle rebuilt there too):
+manager `clab-backup:1.30.14`, helpers refreshed. Through the LAN address `http://192.168.132.132:8081`
+(a plain-HTTP origin, fresh browser cache) and **only on the QA lab `qa-nos-105458`** left by the lab
+builder quality pass: *Edit map* on the lab page opens the editor on that lab, *Saved in the manager*; a
+dragged device marks it unsaved; **Save map** changes the stored position, leaves the topology text
+identical and is the only write request of the run (`PUT …/map-document`); 0 console / page errors. The
+QA map was then put back byte for byte through the same route. The maintainer's course labs were not
+opened in the editor. Screenshot: `~/ui-review/review-001/live-1.30.14/`.
+
 ## Not covered
 
 Resize and rotate handles, groups by dragging devices in, copy / paste, generated layouts, link label
 offsets and the appearance settings were **seen to be present** in this mode but not each driven and
-saved in a browser; only device moves, added text with style and imports were round-tripped. No pass on
-the live dev VM and none through the LAN address (the immutable bundle needs this release deployed).
+saved in a browser; only device moves, added text with style and imports were round-tripped.
 
 # UI review 001, step 12: the manager keeps the whole map document — 1.30.13
 

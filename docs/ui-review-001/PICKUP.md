@@ -64,9 +64,9 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
    `nodeAnnotations`; view mode does not show that editor, so this depends on the decision in 2.
 4. **The Topology view draws less than the editor stores** (rotation, line arrows, rounded text
    background, nested levels): extend `parse_drawing` / `topology-render.js` where cheap, document the rest.
-5. **Live pass**: rebuild the development manager (`sudo bash deploy/start-manager.sh --manager-only`) at
-   this release or later and open Edit map through `http://192.168.132.132:8081` on a scratch lab
-   (the immutable bundle only updates with the release number). Do not edit the maintainer's course maps
+5. **Live pass**: done for open / drag / save at 1.30.14 on the QA lab `qa-nos-105458`; repeat it for the
+   rows of item 1 after each bundle change (rebuild with `sudo bash deploy/start-manager.sh --manager-only`;
+   the immutable bundle only updates with the release number). Do not edit the maintainer's course maps
    without asking.
 
 ## Known limits and open points
@@ -74,8 +74,9 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 - Every release of this branch was validated against the fixture manager; 1.30.11 also had a read-only live pass. CI was green for 1.30.2 to 1.30.12 when this was written (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
-  --manager-only` (helpers must match the release); last done at **1.30.11 (`ae73300`) on 2026-09-20**,
-  followed by a read-only live check through `http://192.168.132.132:8081` (see VALIDATION, 1.30.12).
+  --manager-only` (helpers must match the release); last done at **1.30.14 (`723d5e8`) on 2026-09-20**,
+  followed by a live check of the map editor through `http://192.168.132.132:8081` on the QA lab
+  `qa-nos-105458` only (see VALIDATION, 1.30.14; the read-only pass of 1.30.11 is under 1.30.12).
 - `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home.
 - The successful import confirmation was not exercised in a browser (the fixture VM refuses the preview).
 
