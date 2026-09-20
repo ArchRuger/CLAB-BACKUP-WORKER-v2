@@ -191,6 +191,18 @@ a fake `$`, `esc` and `state`. Copy `tests/test_operations_ui.js` for a module o
 - Commit with Git (dotfiles included, LF enforced by `.gitattributes`); never replace files through
   a browser upload. Never force-push, tag, publish an image or deploy unless asked.
 
+## Delegating work
+
+Three project agents in `.claude/agents/` carry their model in the definition, so a task's route does not
+depend on the session's model: `docs-auditor` (Sonnet: one domain's guides against the code, edits only the
+files it is given), `mechanical-editor` (Haiku: replacements that were already decided) and `risk-reviewer`
+(Opus, read-only: deletions, instruction migrations and the sensitive boundaries above). Run scripts and
+searches before asking any model; give a worker the exact question, its files, the invariants that apply and
+the acceptance checks, not the whole history; one owner per file; the lead alone bumps the release, writes
+the shared records, commits and pushes. A user or managed setting can force every subagent onto one model
+(`CLAUDE_CODE_SUBAGENT_MODEL`, `availableModels`): check what a worker actually ran on before you report
+a route as used, and do not work around such a setting.
+
 ## Invariants that must not regress
 
 One line each; the handoff section named in the routing table has the reasoning and the detail.

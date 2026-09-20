@@ -1,3 +1,27 @@
+# Maintenance audit, chunk 5: verification fixes, telemetry keys, agent routes — 1.30.22
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.21 (`a59378a`, pushed, **CI green including
+the new step with the eight added test files**). The maintainer merged 1.30.18 to 1.30.20 as pull request
+#44 during the session; the branch was fast-forwarded to that merge. Documentation and agent configuration
+only. **Static and unit evidence.**
+
+## What was run
+
+- An independent read-only task verified 36 added or changed statements of the two documentation chunks
+  against the scripts, pages and routes: 34 correct, one wrong (*Back up all configurations*,
+  `management.js` starts the backup at once when nothing is skipped and no job runs), one imprecise (the
+  naming guide on `scaffold-lab.py snapshot`). Both are corrected; the lead read the cited code lines first.
+- The telemetry key table was read from `deploy/setup_telemetry.py` (`port_value`, the bind address check,
+  the idle-minutes check) and `deploy/compose.telemetry.yml`.
+- `python3 deploy/verify-release.py`, `check_links.py`, `git diff --check`, both test suites (711 Python
+  tests with 1 skipped, 189 browser tests).
+
+## Not run
+
+The agent definitions were not exercised with their intended models: this session's user settings force
+every subagent onto the session's model, which three probe tasks confirmed at the start. Whether `sonnet`,
+`haiku` and `opus` resolve as intended has to be checked in a session without that setting.
+
 # Maintenance audit, chunk 4: dead code, setup wording, CI test list — 1.30.21
 
 Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.20 (`3bbc8d0`, pushed; CI green for

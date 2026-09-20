@@ -50,7 +50,7 @@ Grafana plugin and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.30.21 — guided setup
+Containerlab Node Manager 1.30.22 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -112,7 +112,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The installer ends with `Manager 1.30.21: running; HTTP and version checks passed.`
+The installer ends with `Manager 1.30.22: running; HTTP and version checks passed.`
 and the local address. Open `http://VM_IP:8081` from your workstation (the VM's LAN
 address, not the workstation's `127.0.0.1`).
 
@@ -156,6 +156,19 @@ started), so an idle VM does not carry Grafana's memory:
 sudo bash "$HOME/projects/clab-manager/deploy/setup-capture.sh"
 sudo bash "$HOME/projects/clab-manager/deploy/setup-telemetry.sh"
 ```
+
+The telemetry setup keeps these keys in `clab-backup-ui/.env`; change one there and run
+`setup-telemetry.sh` again (it validates them before it touches anything):
+
+| Key | Default | Rule |
+|---|---|---|
+| `TELEMETRY_GRAFANA_PORT` | 3000 | A TCP port; must differ from `UI_PORT` and the Prometheus port, because all three share the host network |
+| `TELEMETRY_GRAFANA_BIND` | `0.0.0.0` | An IP address Grafana listens on |
+| `TELEMETRY_PROMETHEUS_PORT` | 9090 | A TCP port; Prometheus listens on localhost only |
+| `TELEMETRY_GRAFANA_IDLE_MINUTES` | 15 | 0 to 1440; 0 never stops Grafana once started |
+
+The capture stack has no such choice: its setup writes the Edgeshark and session service addresses as
+localhost ports 5001 and 5801 and the manager expects exactly those.
 
 To take a stack down deliberately, add `--remove`. The capture stack stops and
 `CAPTURE_PROVIDER=disabled` is written (the session token is kept); the telemetry

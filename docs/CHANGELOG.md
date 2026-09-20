@@ -4,6 +4,28 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.22
+
+**Maintenance audit, chunk 5: what the independent verification found, the telemetry settings table, and
+task routes for agents.** Documentation and agent configuration only.
+
+- An independent check of 36 statements that the two documentation chunks had added or changed found 34
+  correct. The two others are fixed: **Back up all configurations** does not always open a review (it starts
+  at once when every device is ready, and lists the devices it will skip and asks for confirmation only
+  otherwise; the guides had said "reviews" since before this audit), and the naming guide now says exactly
+  what `scaffold-lab.py snapshot` leaves behind and how to recover (the defect itself stays in the audit
+  record for a decision).
+- [Guided VM installation](INSTALL.md) names the four telemetry keys of `clab-backup-ui/.env` with their
+  defaults and rules (`TELEMETRY_GRAFANA_PORT`, `TELEMETRY_GRAFANA_BIND`, `TELEMETRY_PROMETHEUS_PORT`,
+  `TELEMETRY_GRAFANA_IDLE_MINUTES`); no guide had named the first three. The capture stack's ports are fixed
+  by its setup, and the guide says so.
+- `.claude/agents/` has three small project agents whose model is part of their definition
+  (`docs-auditor`, `mechanical-editor`, `risk-reviewer`), and `CLAUDE.md` "Delegating work" says when to use
+  each, who owns shared files, and that a user or managed setting can force every subagent onto one model.
+- The [audit record](maintenance-audit/AUDIT.md) is final for this pass: every audited document or group has
+  a disposition, each important workflow is mapped to its code, guide and evidence, and the remaining debt
+  lists what needs a decision.
+
 ## Changes in 1.30.21
 
 **Maintenance audit, chunk 4: proven dead code removed, stale wording in the setup scripts, and eight test
