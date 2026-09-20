@@ -123,6 +123,9 @@ function shellEscape(e){
 function shellPointerDown(e){const target=e.target&&typeof e.target.closest==='function'?e.target:null;const menu=target?target.closest('.menu, details#git-save-menu, details#lab-switcher'):null;closeMenus(menu||undefined);}
 // localStorage: the last opened lab, when each lab was opened, and dismissed job warnings.
 function rememberOpened(id){if(!id)return false;shellSet('localStorage','clab.lastLab',id);return shellSet('localStorage','clab.opened.'+id,new Date().toISOString());}
+// sessionStorage: the Home list tab the student chose (home.js), for this browser session.
+function homeTab(){return shellGet('sessionStorage','clab.homeTab')||'recent';}
+function rememberHomeTab(tab){return shellSet('sessionStorage','clab.homeTab',String(tab||'recent'));}
 function lastOpened(){return shellGet('localStorage','clab.lastLab')||'';}
 function openedAt(id){return id?shellGet('localStorage','clab.opened.'+id)||'':'';}
 function isDismissed(jobId){return !!jobId&&!!shellGet('localStorage','clab.dismissed.'+jobId);}

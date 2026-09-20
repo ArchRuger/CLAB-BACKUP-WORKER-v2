@@ -390,6 +390,25 @@ class OperationAPITests(unittest.TestCase):
             self.assertEqual(response.status_code,409)
             with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
 
+    def test_last_deployed_is_the_real_time_of_a_succeeded_deploy_and_never_invented(self):
+        from app.lab_operations import last_deployed
+        public=lambda:next(l for l in self.client.get('/api/state',headers=self.auth).json()['labs'] if l['id']==self.lab_id)
+        def run(action,exit_code=0):
+            with self.fixture() as remote,patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit') as submit:
+                remote.side_effect=(lambda inner:lambda host,req,*a:dict(exit_code=exit_code) if req['mode']=='run' else inner(host,req,*a))(remote.side_effect)
+                job=self.confirm(self.preview(action)['token']).json();args=submit.call_args.args;args[0](*args[1:])
+            return next(j for j in self.store.state['operations'] if j['id']==job['id'])
+        self.fixture();self.assertEqual(public()['last_deployed'],'','a lab this manager never deployed has no deployment time')
+        self.assertEqual(run('deploy',exit_code=1)['status'],'failed');self.assertEqual(public()['last_deployed'],'','a failed deploy is not a deployment')
+        first=run('deploy');self.assertEqual(first['status'],'succeeded');self.assertEqual(public()['last_deployed'],first['finished'])
+        self.assertEqual(Store(self.tmp.name).lab(self.lab_id)['last_deployed'],first['finished'],'kept on the lab: the operation history is capped')
+        stopped=run('stop');self.assertEqual(stopped['status'],'succeeded');self.assertEqual(public()['last_deployed'],first['finished'],'stopping, saving or inspecting is unrelated activity')
+        again=run('redeploy');self.assertEqual(public()['last_deployed'],again['finished']);self.assertGreaterEqual(again['finished'],first['finished'])
+        # A lab deployed before the record existed: the newest succeeded deploy of the history, nothing else
+        lab=self.store.lab(self.lab_id);del lab['last_deployed']
+        self.assertEqual(last_deployed(self.store.state,lab),again['finished'])
+        self.assertEqual(last_deployed({'operations':[dict(lab_id=self.lab_id,action='deploy',status='failed',finished='2026-01-01T00:00:00Z'),dict(lab_id='other',action='deploy',status='succeeded',finished='2026-01-02T00:00:00Z'),dict(lab_id=self.lab_id,action='start',status='succeeded',finished='2026-01-03T00:00:00Z')]},lab),'')
+
     def test_output_redaction_persistence_and_restart(self):
         with self.fixture(),patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit') as submit:
             job=self.confirm(self.preview()['token']).json();args=submit.call_args.args
@@ -436,6 +455,56 @@ class OperationAPITests(unittest.TestCase):
                 self.assertEqual(self.confirm(preview['token']).status_code,500)
             self.assertEqual(self.store.state['operations'],original)
             self.assertIn(preview['token'],self.app.state.operations.previews);submit.assert_not_called()
+
+    def test_the_map_document_is_kept_whole_and_the_drawing_follows_it(self):
+        with self.fixture() as remote:
+            url='/api/labs/'+self.lab_id+'/map-document'
+            lab=self.store.lab(self.lab_id);yaml_before=lab['definition_yaml'];ids=[n['id'] for n in lab['drawing']['nodes']]
+            opened=self.client.get(url,headers=self.auth);self.assertEqual(opened.status_code,200,opened.text);opened=opened.json()
+            self.assertEqual(opened['yaml'],yaml_before);self.assertEqual(sorted(a['id'] for a in json.loads(opened['annotations'])['nodeAnnotations']),sorted(ids),'a lab with only a drawing opens with a document written from it')
+            document={'nodeAnnotations':[{'id':ids[0],'position':{'x':400,'y':120},'groupId':'core','futureField':{'kept':True}},{'id':ids[1],'position':{'x':40,'y':60}}],
+                      'groupStyleAnnotations':[{'id':'core','name':'Core','parentId':'site','level':'2','position':{'x':300,'y':60},'width':300,'height':200,'backgroundColor':'#ffeecc'}],
+                      'freeShapeAnnotations':[{'id':'s1','shapeType':'line','position':{'x':0,'y':0},'endPosition':{'x':90,'y':40},'lineEndArrow':True,'lineArrowSize':12,'rotation':15}],
+                      'freeTextAnnotations':[{'id':'t1','text':'Area 0','position':{'x':10,'y':10},'fontSize':20,'roundedBackground':True,'geoCoordinates':{'lat':1,'lng':2}}],
+                      'trafficRateAnnotations':[{'id':'tr1','nodeId':ids[0],'interfaceName':'eth1'}],'aliasEndpointAnnotations':[{'yamlNodeId':ids[0],'interface':'eth9','aliasNodeId':'x'}],
+                      'viewerSettings':{'gridStyle':'quadratic','linkLabelMode':'on-select'},'somethingNew':[1,2,3]}
+            text=json.dumps(document,indent=1)
+            calls=remote.call_count
+            saved=self.client.put(url,headers=self.auth,json={'annotations':text,'revision':opened['revision']});self.assertEqual(saved.status_code,200,saved.text)
+            self.assertEqual(remote.call_count,calls,'a map edit calls no VM helper: nothing is deployed, read or written there')
+            again=self.client.get(url,headers=self.auth).json()
+            self.assertEqual(again['annotations'],text,'byte for byte: group membership, nesting, arrows, geo coordinates, widgets and unknown keys are all kept')
+            self.assertEqual(again['revision'],saved.json()['revision']);self.assertNotEqual(again['revision'],opened['revision'])
+            lab=self.store.lab(self.lab_id);drawing=lab['drawing']
+            self.assertEqual({n['id']:(n['x'],n['y']) for n in drawing['nodes']}[ids[0]],(400,120),'the Topology view follows the saved map')
+            self.assertEqual(sorted(d['type'] for d in drawing['decorations']),['group','line','text']);self.assertTrue(drawing['placed']);self.assertEqual(drawing['settings']['labelMode'],'on-select')
+            self.assertEqual(lab['definition_yaml'],yaml_before,'the topology text is never touched');self.assertEqual(Store(self.tmp.name).lab(self.lab_id)['annotations'],text)
+            public=json.dumps(self.client.get('/api/state',headers=self.auth).json());self.assertNotIn('futureField',public);self.assertNotIn('annotations_for',public)
+            # refusals change nothing
+            stale=self.client.put(url,headers=self.auth,json={'annotations':text,'revision':opened['revision']});self.assertEqual(stale.status_code,409);self.assertIn('changed since it was opened',stale.text)
+            for bad,reason in (('[1]','cannot read this map'),('{not json','cannot read this map'),(json.dumps({'nodeAnnotations':[{'id':''}]}),'cannot read this map')):
+                refused=self.client.put(url,headers=self.auth,json={'annotations':bad,'revision':again['revision']});self.assertEqual(refused.status_code,400,bad);self.assertIn(reason,refused.text)
+            self.assertEqual(self.client.put(url,headers=self.auth,json={'annotations':text,'revision':again['revision'],'yaml':'name: other'}).status_code,422,'the request cannot carry a topology')
+            self.assertEqual(self.client.get(url,headers=self.auth).json()['annotations'],text)
+            self.store.state['operations'].append(dict(id='busy',lab_id=self.lab_id,action='deploy',status='running',name='x'))
+            self.assertEqual(self.client.put(url,headers=self.auth,json={'annotations':text,'revision':again['revision']}).status_code,409);self.store.state['operations'].pop()
+            # the older dialog still saves, and its change is never served with the document it did not write
+            moved=self.client.put('/api/labs/'+self.lab_id+'/layout',headers=self.auth,json={'positions':{ids[0]:[5,5]}});self.assertEqual(moved.status_code,200,moved.text)
+            after=json.loads(self.client.get(url,headers=self.auth).json()['annotations'])
+            self.assertEqual(next(a for a in after['nodeAnnotations'] if a['id']==ids[0])['position'],{'x':5,'y':5});self.assertNotIn('somethingNew',after)
+            # a lab without a topology text keeps the simple editor
+            lab['definition_yaml']='';none=self.client.get(url,headers=self.auth);self.assertEqual(none.status_code,409);self.assertIn('simple editor',none.text)
+
+    def test_an_imported_annotations_file_is_kept_as_it_came(self):
+        with self.fixture():
+            lab=self.store.lab(self.lab_id);ids=[n['id'] for n in lab['drawing']['nodes']]
+            text=json.dumps({'nodeAnnotations':[{'id':i,'position':{'x':10*k,'y':20},'groupId':'g'} for k,i in enumerate(ids)],'groupStyleAnnotations':[{'id':'g','name':'G','position':{'x':0,'y':0},'width':100,'height':80}],'vendorExtension':{'a':1}})
+            sent=self.client.post('/api/labs/'+self.lab_id+'/topology',headers=self.auth,files={'annotations':('lab.annotations.json',text.encode(),'application/json'),'topology':('lab.clab.yaml',lab['definition_yaml'].encode(),'application/x-yaml')})
+            self.assertEqual(sent.status_code,200,sent.text)
+            self.assertEqual(self.client.get('/api/labs/'+self.lab_id+'/map-document',headers=self.auth).json()['annotations'],text,'Import map keeps the file, not only what the manager draws')
+            from app.layout import keep_document, map_document
+            keep_document(lab,b'');self.assertNotIn('annotations',lab);self.assertIn('nodeAnnotations',map_document(lab))
+            keep_document(lab,'x'*(1024*1024+1));self.assertNotIn('annotations',lab,'an oversized text is not stored')
 
     def test_removed_drawio_layouts_rejected(self):
         with self.fixture():

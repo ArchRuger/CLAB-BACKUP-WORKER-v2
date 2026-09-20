@@ -250,7 +250,7 @@ test('the builder opens in the folder being browsed, else in the project folder'
  assert.equal(c.opLabels.publish,'Save lab to the VM');assert.match(c.opReviewCopy.revise.body(),/previous version is kept/);
 });
 test('a student with no labs finds the builder from the first page, and the builder page can preview a saved map',()=>{
- assert.match(read('index.html'),/<section id="empty"[^]*?<a class="button secondary" id="build-empty" href="\/static\/lab-builder\.html">Build a lab visually…<\/a>/);
+ assert.match(read('index.html'),/<section class="home-start" id="home-start"[^]*?<a class="button primary" id="home-build" href="\/static\/lab-builder\.html">Open the lab builder<\/a>[^]*?<section id="empty"/);
  // "Deploy or add this lab…" opens the Topology file dialog on the builder page; its Preview topology needs the map renderer
  const html=read('lab-builder.html');assert.match(html,/topology-render\.js\?v=/);assert.ok(html.indexOf('lab-builder-page.js')<html.indexOf('operations.js'));
  for(const id of ['builder-note','builder-note-text','builder-note-retry','builder-hint','builder-problem-download','builder-problem-retry','builder-problem-reload','builder-templates-file'])assert.ok(html.includes('id="'+id+'"'),id);
@@ -261,7 +261,9 @@ test('a student with no labs finds the builder from the first page, and the buil
 test('every editor control the page hides still exists in the bundled editor',()=>{
  const css=read('lab-builder.css'),ids=[...css.matchAll(/\[data-testid="([a-z-]+)"\]/g)].map(m=>m[1]);assert.ok(ids.length>=7,ids.join());
  const dir=path.join(__dirname,'../app/static/lab-builder/assets'),code=fs.readdirSync(dir).filter(f=>f.endsWith('.js')).map(f=>fs.readFileSync(path.join(dir,f),'utf8')).join('\n');
- for(const id of ids)assert.ok(code.includes(id),'the bundled editor no longer has '+id);
+ // Context menu entries and palette tabs get their test id from a template (`context-menu-item-${id}`,
+ // `panel-tab-${id}`): the bundle then holds the template and the id, not the joined string.
+ for(const id of ids){const item=/^(context-menu-item|panel-tab)-(.+)$/.exec(id);assert.ok(item&&!code.includes(id)?code.includes(item[1]+'-${')&&code.includes('"'+item[2]+'"'):code.includes(id),'the bundled editor no longer has '+id);}
  assert.doesNotMatch(code,/new Function\(|\beval\(/,'the bundle must run under script-src self');
 });
 test('the committed assets are the ones the manifest names, and the page loads only versioned entry files',()=>{

@@ -1,3 +1,172 @@
+# UI review 001, step 13: Edit map in the builder's editor — 1.30.14
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.13 (`3ee4b3c`,
+pushed). UI-003 steps C and D of `docs/ui-review-001/MAP-PARITY.md`. Fixture first; a short live pass on the dev VM followed the push and is recorded below. No network
+device was involved.
+
+## What was run
+
+- The bundle was rebuilt with Node 24.21.0 (`node build.mjs`; only `assets/main.js` and the manifest
+  changed) and `node build.mjs --check` reproduces the committed assets (132 files).
+- `node --test tests/*.js`: 186 of 186. New `tests/test_map_editor_ui.js` (in the CI browser list): the
+  page's pure rules (lab id from the hash, way back, dirty rule, file name, status words, map-file
+  checks); the editor mounted with `mapOnly`, the first reading as baseline, a changed topology text
+  refused and not kept, the save carrying only `annotations` and `revision` and using the answered
+  revision next time, no operation request of any kind; a refused save not reported as saved, the leave
+  dialog's three ways, the draw.io export asking for a save first; a lab without a topology text told
+  why; `opLayout()` going to the map editor only when the lab view says so; the page loading neither
+  `operations.js` nor the builder's page script; the adapter's whitelist holding the annotation
+  commands and none of the topology ones. `test_lab_builder_ui.js`: the new hidden controls exist in
+  the bundle (templated test ids are recognised).
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK (`test_nodes.py`: the map
+  editor page gets exactly the builder's content security policy and its script none of it).
+- `python3 deploy/verify-release.py` (the new page is in the versioned-page list), `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 98 of 98 at three viewports, 0 console
+  errors, 0 page errors (its Edit map section now opens the map editor and returns).
+  `docs/ui-review-001/tools/check_ui003.py` 27 of 27: *Edit map* on the lab page opens the editor on the
+  lab's map with its groups, texts and shapes, saved and with Save off, the drawing tools in the
+  palette; a dragged device marks the map unsaved; the pane menu offers Add Group / Text / Shape only;
+  *Add Text* opens the inline toolbar, and the typed bold text is in the saved document; a device
+  cannot be deleted and its menu has no runtime, edit or delete entry; no deploy control; link label
+  mode, lab settings, layouts and fit are present; leaving with changes asks; the save is **one request
+  to the map document**, the position is saved, the topology text is byte-identical, nothing the
+  manager does not draw is lost, the manager's drawing follows; the downloaded map file equals the
+  stored document; the draw.io export downloads; *Back to the lab* shows the Topology tab; reopening
+  shows the saved map; a wrong JSON file is refused in words and a map file with an unknown key replaces
+  the map with that key kept; every write of the whole run went to `…/map-document`. Screenshots
+  inspected: `~/ui-review/review-001/chunk13/` and `chunk14/` on the VM.
+
+## Live, after the push: the development manager on the VM at 1.30.14
+
+`sudo bash deploy/start-manager.sh --manager-only` from `723d5e8` (CI green, bundle rebuilt there too):
+manager `clab-backup:1.30.14`, helpers refreshed. Through the LAN address `http://192.168.132.132:8081`
+(a plain-HTTP origin, fresh browser cache) and **only on the QA lab `qa-nos-105458`** left by the lab
+builder quality pass: *Edit map* on the lab page opens the editor on that lab, *Saved in the manager*; a
+dragged device marks it unsaved; **Save map** changes the stored position, leaves the topology text
+identical and is the only write request of the run (`PUT …/map-document`); 0 console / page errors. The
+QA map was then put back byte for byte through the same route. The maintainer's course labs were not
+opened in the editor. Screenshot: `~/ui-review/review-001/live-1.30.14/`.
+
+## Not covered
+
+Resize and rotate handles, groups by dragging devices in, copy / paste, generated layouts, link label
+offsets and the appearance settings were **seen to be present** in this mode but not each driven and
+saved in a browser; only device moves, added text with style and imports were round-tripped.
+
+# UI review 001, step 12: the manager keeps the whole map document — 1.30.13
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.12 (`f4feb2c`,
+pushed). UI-003 step B of `docs/ui-review-001/MAP-PARITY.md`. Manager only; unit and API level. **No
+browser, VM or device was involved**; no page calls the new routes yet.
+
+## What was run
+
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. New in
+  `test_lab_operations.py`: a lab with only a drawing opens with a document written from it; a saved
+  document with group membership and nesting, a line arrow, rotation, geo coordinates, a rounded text
+  background, traffic-rate and alias entries, viewer settings and unknown keys comes back byte for
+  byte, also after a restart; the drawing follows (positions, decorations, label mode, `placed`); the
+  topology text is unchanged; no VM helper is called; none of it is in `/api/state`; a stale revision,
+  non-object or unreadable JSON, an empty node id, a request that carries a topology and a busy lab are
+  refused and change nothing; after a save through the older `…/layout` route the document is written
+  from the new drawing; a lab without a topology text answers 409 with the reason; *Import map…* keeps
+  the uploaded file; an empty or oversized text is not stored.
+- `node --test tests/*.js`: 182 of 182. `python3 deploy/verify-release.py`, `git diff --check`.
+
+# UI review 001, step 11: capability matrix, and a live read-only check of 1.30.11 — 1.30.12
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.11 (`ae73300`,
+pushed). Documentation only, so the suites are those of 1.30.11 plus the release checks.
+
+## What was run
+
+- `python3 deploy/verify-release.py`, `git diff --check`, `test_release*.py`, `node --test tests/*.js`
+  (182 of 182).
+- The matrix was made by reading the installed package (`node_modules/@containerlab/clab-ui` 0.3.2:
+  types, host contracts, the UI chunk's mode gates), `lab-builder/src/main.tsx`, `diagram-editor.js`,
+  `app/topology.py`, `app/layout.py` and `app/lab_operations.py`. **No row was exercised in a browser.**
+
+## Live, read-only: the development manager on the VM at 1.30.11
+
+`sudo bash deploy/start-manager.sh --manager-only` from this branch at `ae73300` (the capture service was
+left alone): manager `clab-backup:1.30.11`, helpers refreshed by the launcher, `/api/git/repositories`
+200. A Playwright pass through the LAN address `http://192.168.132.132:8081` (a plain-HTTP origin) over the
+maintainer's real data, **sending no write request** (asserted) and with 0 console / page errors: Home
+shows the Deploy and Build cards, *Recent labs* selected with real times backfilled from the operation
+history (*Deployed 4 hours ago* … *3 days ago*), no discovered section; *Manager ▾ › Labs found on the
+VM…* opens; *Lab actions* has *Advanced options*; the Devices list is flush with its heading; on
+*JunOS-TEST-2* Save location opens with *Change folder…* unfolded on the real repository tree, the
+destination `JunOS-TEST-2/Base` marked current, *Git repo details*, no review checkbox; the Save menu
+explains *Save on this VM only*. Screenshots: `~/ui-review/review-001/live-1.30.11/`. Not done live: any
+save, review-and-upload, folder creation, move, upload or deployment (they change the maintainer's
+repository or labs).
+
+# UI review 001, step 10: Recent labs by real deployments — 1.30.11
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.10 (`9204c11`,
+pushed, CI green). Requirement UI-002 (lab list) of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no
+live VM, lab or device was involved** (deployments were the fixture's scripted operations), and the
+development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `python -m unittest discover -s tests -t tests`: 709 tests, 1 skipped, OK. New in
+  `test_lab_operations.py`: no time for a lab never deployed, none after a failed deploy, the job's own
+  finish time after a succeeded deploy (in `/api/state` and on disk), unchanged by a succeeded stop,
+  moved by a redeploy, and the backfill from history that ignores failed deploys, other labs and other
+  actions.
+- `node --test tests/*.js`: 182 of 182. `test_home_ui.js`: the two orders (newest first, equal times
+  and undated labs by name, favourites only under *All labs*), the state never reordered, opening and
+  saving not moving anything, the card's *Deployed … · Last opened …* and *No deployment recorded by this
+  manager*, no Continue block, the tab kept across polls and visits with unchanged markup not
+  reassigned, an unknown stored tab falling back, the arrow keys; `test_shell_ui.js`: the tab store,
+  also with storage blocked. The older Start-button and escaping tests now read the list.
+- `python3 deploy/verify-release.py`, `node --check` on the changed scripts, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 98 of 98 at three viewports, 0 console
+  errors, 0 page errors (one check added: the start cards lead and the list opens on *Recent labs*).
+  `docs/ui-review-001/tools/check_ui002b.py` 20 of 20: with no recorded deployment the labs are listed
+  by name and none shows a time; no Continue block; after a reviewed redeploy of `vlan-lab` it leads
+  the list with *Deployed just now*, the undated labs follow by name; after a second redeploy the newer
+  one leads; opening another lab, a favourite and two polls change nothing but that lab's *Last opened*
+  note; *All labs* puts the favourite first; the tab survives polls, a lab visit and a reload; the
+  arrow keys move tab and focus; card actions are present; a long lab name fits on one line with the
+  tools at the card's right edge. Screenshots inspected: `~/ui-review/review-001/chunk10/` on the VM.
+
+# UI review 001, step 9: Home leads with Deploy and Build — 1.30.10
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.9 (`fad6698`,
+pushed, CI green, merged to `main` by the maintainer as pull request #41; the branch was fast-forwarded
+to that merge). Requirement UI-002 (starting actions) of `docs/ui-review-001/CHECKLIST.md`. **Fixture
+only: no live VM, lab or device was involved**, and the development manager on the VM was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 180 of 180. New: Home's two cards, their order before *Continue* and the
+  list, the wording about where files are, Build as a direct builder link, no duplicate buttons on the
+  empty page, the cards hidden until the state is known (`test_home_ui.js`); both Deploy buttons off
+  with the reason in words when the VM is unconfigured or away (`test_readiness_ui.js`, the former
+  `deploy-empty` assertions); the upload's refusals, the path built from a lab name with separators and
+  dots, no VM request for a refused file, the editor opened as *Uploaded lab file* with only the
+  reviewed create available, and `opPublishedPath()` for create, publish, failures and other actions
+  (`test_operations_ui.js`).
+- `python -m unittest discover -s tests -t tests`: 708 tests, 1 skipped, OK.
+  `python3 deploy/verify-release.py`, `node --check` on the changed scripts, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 97 of 97 at three viewports, 0 console
+  errors, 0 page errors. `docs/ui-review-001/tools/check_ui002a.py` 25 of 25: at 1366×768 and a 1280×720
+  laptop at 150 % and 200 % zoom the two cards are equal, precede the labs, and no button is clipped;
+  *Choose a file on the lab VM…* opens the VM folders, which say so and link to the upload; Build links
+  to the builder; the upload refuses no file, a `.txt` and a broken topology in words; a good file is
+  shown with its destination and cannot be deployed yet; *Create file on the VM…* opens the operation
+  review; after confirming, *Deploy or add this lab…* appears, then *Deploy lab* opens its own review;
+  with the VM reported as away both Deploy buttons are off with the sentence and Build stays; with no
+  labs the two cards stand above *No labs yet*. Screenshots inspected:
+  `~/ui-review/review-001/chunk09/` on the VM.
+
+## Not covered
+
+The reviewed `create` was confirmed against the fixture's scripted operations helper only; the real
+helper's `create` is unchanged and was not run in this step.
+
 # UI review 001, step 8: the Devices tab lines up — 1.30.9
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.8 (`473a9bd`,

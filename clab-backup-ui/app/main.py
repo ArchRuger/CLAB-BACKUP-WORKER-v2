@@ -23,7 +23,7 @@ from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
 from .discovery import Discovery, lab_status, node_available
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
-from .lab_operations import LabOperations, operation_busy
+from .lab_operations import LabOperations, last_deployed, operation_busy
 from .git_progress import GitProgress, public_job as public_git_job
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
@@ -122,7 +122,7 @@ def create_app(data_dir=None):
         # xterm's DOM renderer creates font, cell-width and ANSI-color styles, and the lab builder's
         # editor (React Flow, MUI) sets element styles at run time.
         # Permit those only in their dedicated documents; scripts remain self-only.
-        styles="'self' 'unsafe-inline'" if request.url.path in ('/static/terminal.html', '/static/capture-session.html', '/static/lab-builder.html') else "'self'"
+        styles="'self' 'unsafe-inline'" if request.url.path in ('/static/terminal.html', '/static/capture-session.html', '/static/lab-builder.html', '/static/map-editor.html') else "'self'"
         response.headers['Content-Security-Policy']=f"default-src 'self'; script-src 'self'; style-src {styles}; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         return response
     diagnostics = Diagnostics(store, discovery, operations)
@@ -134,7 +134,7 @@ def create_app(data_dir=None):
         if not lab: raise HTTPException(404,'Lab not found')
         return lab
     def public_lab(lab):
-        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry')}
+        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','annotations','annotations_for')}
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
         result['nodes']=[]
         with services.lock: checks={k:copy.deepcopy(v) for k,v in services.checks.items() if k[0]==lab['id']}
@@ -152,6 +152,9 @@ def create_app(data_dir=None):
             row['telemetry']=telemetry.node_status(lab,n)
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)
+        result['last_deployed']=last_deployed(store.state,lab)
+        # Edit map opens the full map editor when the manager has the lab's topology text and a map; otherwise the simple dialog.
+        result['map_editor']=bool(lab.get('definition_yaml') and lab.get('drawing'))
         result['nos_readiness']=summarize([row['nos_login'] for row in result['nodes']])
         result['telemetry']=telemetry.lab_summary(lab)
         return result

@@ -125,13 +125,14 @@ function renderNosReadiness(lab){
 }
 // Deploy-first Home: connect the VM, then deploy or pick up a running lab.
 function renderLanding(discovery,lab){
- if(lab||!$('deploy-empty'))return;
+ if(lab||!$('home-deploy'))return;
  const configured=!!discovery.configured,connected=!!discovery.connected;
  $('vm-connect-empty').hidden=configured;
- $('deploy-empty').disabled=!connected;
- $('deploy-empty').title=connected?'':'Connect the lab VM to browse its topology files.';
- if($('home-deploy')){$('home-deploy').disabled=!connected;$('home-deploy').title=$('deploy-empty').title;}
- if($('home-deploy-reason')){$('home-deploy-reason').textContent=$('deploy-empty').title;$('home-deploy-reason').hidden=connected;}
+ // Both ways of deploying end on the lab VM (browsing its folders, or copying the uploaded file there), so
+ // both wait for the connection and say so in words; the builder keeps its drawing in the browser and does not.
+ const reason=connected?'':!configured?'Connect the lab VM first: deploying needs it. Building a lab works without it.':'Waiting for the lab VM to answer: deploying needs it. Building a lab works meanwhile.';
+ for(const id of ['home-deploy','home-upload'])if($(id)){$(id).disabled=!connected;$(id).title=reason;}
+ if($('home-deploy-reason')){$('home-deploy-reason').textContent=reason;$('home-deploy-reason').hidden=connected;}
  // Home keeps a VM prompt even when labs exist: cards read "Status unknown" without one.
  if($('home-vm-banner')){const note=!configured?'Connect this manager to your lab VM first. Starting labs, finding running labs and opening device CLIs all use that connection.':!connected?(discovery.error||'Waiting for the lab VM to answer. Deploy becomes available as soon as it does.'):'';$('home-vm-banner').hidden=!note;if($('home-vm-banner-text'))$('home-vm-banner-text').textContent=note;if($('home-vm-connect'))$('home-vm-connect').textContent=configured?'VM connection…':'Connect the VM';}
  $('empty-vm-note').textContent=!configured?'Connect this manager to your lab VM first. Starting labs, finding running labs and opening device CLIs all use that connection.':!connected?(discovery.error||'Waiting for the lab VM to answer. Deploy becomes available as soon as it does.'):'';

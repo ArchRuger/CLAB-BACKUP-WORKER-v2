@@ -37,3 +37,12 @@ body.lab-builder{display:flex;flex-direction:column}
 .lab-builder{--clab-ui-accent:#1d6f8e}
 /* The manager limits media to its container; the editor draws links in a zero-width overlay that overflows on purpose. */
 .lab-builder #root svg{max-width:none}
+
+/* The map editor (map-editor.html): the editor runs in its view mode over a lab that exists. What that
+   mode still offers but cannot mean anything here is hidden: runtime actions of a device or a link (the
+   manager's own pages do those), the traffic-rate widget (needs live statistics), and the palette's
+   device tab (inert in this mode; the page opens the Annotations tab). */
+.map-editor [data-testid="context-menu-item-start-node"],.map-editor [data-testid="context-menu-item-stop-node"],.map-editor [data-testid="context-menu-item-restart-node"],
+.map-editor [data-testid="context-menu-item-ssh-node"],.map-editor [data-testid="context-menu-item-shell-node"],.map-editor [data-testid="context-menu-item-logs-node"],
+.map-editor [data-testid="context-menu-item-add-traffic-rate"],.map-editor [data-testid="context-menu-item-open-node-palette"],
+.map-editor [data-testid="panel-tab-nodes"]{display:none !important}

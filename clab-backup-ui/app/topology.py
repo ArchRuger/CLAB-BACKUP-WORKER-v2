@@ -238,7 +238,8 @@ def install(app,store):
     @app.post('/api/labs/{lab_id}/topology')
     async def upload(lab_id:str, annotations:UploadFile=File(...), topology:UploadFile|None=File(None)):
         try:
-            result=parse_drawing(await annotations.read(1024*1024+1),await topology.read(1024*1024+1) if topology and topology.filename else None)
+            raw_annotations=await annotations.read(1024*1024+1)
+            result=parse_drawing(raw_annotations,await topology.read(1024*1024+1) if topology and topology.filename else None)
         except (ValueError,TypeError,AttributeError,RecursionError) as exc: raise HTTPException(400,'Invalid drawing: '+str(exc))
         finally:
             await annotations.close()
@@ -246,7 +247,8 @@ def install(app,store):
         with store.lock:
             from .lab_operations import operation_busy
             if operation_busy(store.state,lab_id): raise HTTPException(409,'Wait for the lab operation to finish.')
-            lab=lab_for(lab_id); lab['drawing']=result; store.save()
+            from .layout import keep_document
+            lab=lab_for(lab_id); lab['drawing']=result; keep_document(lab,raw_annotations); store.save()
             store.event('topology.import',f'Imported {len(result["nodes"])} drawing nodes and {len(result["links"])} links',lab_id=lab_id)
             return bind_drawing(lab)
     class Export(BaseModel):

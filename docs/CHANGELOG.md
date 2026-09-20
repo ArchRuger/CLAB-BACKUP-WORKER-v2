@@ -4,6 +4,131 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.14
+
+**UI review 001, step 13: Edit map is the lab builder's editor in a map mode (UI-003, steps C and D).**
+Frontend, the editor adapter and one public flag in the manager; the VM helpers are unchanged apart from
+the lockstep version. UI-003 is **not yet complete**: the open rows are listed at the end and in
+[docs/ui-review-001/MAP-PARITY.md](ui-review-001/MAP-PARITY.md).
+
+- **Edit map opens the same editor as the lab builder**, on the lab's own map
+  (`/static/map-editor.html#lab=<id>`), for every lab whose topology text the manager has (the lab view
+  carries `map_editor`). It brings the builder's map tools: dragging devices on the 20 px grid,
+  generated layouts, free text with the inline toolbar (bold, italic, underline, alignment, size) and
+  the text panel, rectangles, circles and lines with resize and rotate handles, arrows, corner radius
+  and rotation, groups with membership by dragging devices in and nesting, copy / paste / duplicate /
+  delete of annotations, per-link label offsets, the link label mode, grid style and colours, zoom,
+  pan and fit, and the SVG export. A lab without a topology text (imported from an inventory) keeps
+  the simple dialog, which is unchanged.
+- **The drawing only.** The editor runs in its *view* mode, where adding, editing and deleting devices and
+  links are absent. Because that mode is enforced in the editor's UI only, the adapter refuses every
+  engine command that is not annotation-only, restores the topology text if it ever differed, and the
+  page refuses a changed topology too; the save request can carry nothing but the annotations and the
+  revision they were opened with. The page loads neither `operations.js` nor the builder's draft code:
+  it has no way to deploy, publish, revise or reach the VM. Runtime actions of the editor's device menu
+  (start, stop, SSH …), the traffic-rate widget, the inert device palette and the deploy controls are
+  hidden; a test fails when an editor upgrade renames one of them.
+- **Save, cancel, conflict.** *Saved in the manager* / *Unsaved changes* in the bar; **Save map** stores the
+  document and the manager derives its drawing, so the lab's Topology tab, the draw.io export and the
+  annotations download follow. **Back to the lab** asks (*Keep editing*, *Discard changes*, *Save map and
+  leave*) only when something is unsaved, and the browser warns on closing the tab. A map changed
+  elsewhere since it was opened is refused, nothing is reported as saved, and the student can download
+  their version.
+- **Kept:** *Download map file* (now the full document, with everything the manager does not draw),
+  *Export to draw.io* (from the saved map) and *Import map file…* (checked in words, replaces the map,
+  unknown keys included) are in the editor's bar; *Import map…* on the lab page is unchanged.
+- **Open rows of UI-003:** undo / redo is absent in the editor's view mode (row 8); the device look (icon,
+  colours, label position) is still not editable, because upstream edits it through a topology command
+  (row 9); the manager's Topology view stores but does not draw rotation, line arrows, rounded text
+  backgrounds and nested-group levels. Observed upstream behaviour: after *Add Text* from the context
+  menu the inline box has to be clicked before typing.
+
+## Changes in 1.30.13
+
+**UI review 001, step 12: the manager keeps the whole map document (UI-003, step B).** Manager only; no
+page uses it yet, and *Edit map* is unchanged. UI-003 is not complete.
+
+- **The full annotations document per lab.** Until now the manager kept only its own drawing of a map
+  and dropped what it does not draw (group membership and nesting, line arrows, geo coordinates,
+  traffic-rate and alias entries, unknown keys). It now also keeps the annotations text a drawing was
+  derived from: for *Import map…*, a lab registered with its files, and the import and *Sync topology
+  from VM* of a lab's files. The text is private like the topology text and never part of `/api/state`.
+- **`GET` and `PUT /api/labs/{id}/map-document`**, for the map editor that follows. Reading returns the
+  lab's topology text, its annotations document and a revision; a lab that has only a drawing gets a
+  document written from it. Saving takes the annotations text and the revision it was opened with,
+  refuses a stale revision, a lab with a running operation, a text above 1 MiB and anything
+  `parse_drawing` cannot read, then stores the text **untouched** and derives the drawing again, so the
+  Topology view, the draw.io export and the annotations download follow. The request cannot carry a
+  topology; the topology text is only read; no VM helper is called.
+- The older *Edit map* dialog keeps saving through `PUT …/layout`. A stored document is tied to the
+  drawing it produced, so after such a save (or a sync) the editor is given a document written from the
+  current drawing, never a stale one.
+
+## Changes in 1.30.12
+
+**UI review 001, step 11: the map-editing capability matrix (UI-003, step A).** Documentation only; no
+behaviour changed. UI-003 (Edit map gets the visual builder's map-editing capabilities) is **not**
+complete: this release records what parity means and how it will be reached.
+
+- [docs/ui-review-001/MAP-PARITY.md](ui-review-001/MAP-PARITY.md) compares, from the code, the
+  map-editing tools of the installed editor (`@containerlab/clab-ui` 0.3.2) with today's *Edit map*,
+  row by row with a status, and lists what stays out because it is topology editing.
+- Finding: the manager keeps only its own normalised drawing, not the annotations document, and drops
+  what it does not draw (group membership and nesting, line arrows, geo coordinates, unknown keys).
+  Parity and "never drop unsupported data" therefore need the full document to be stored.
+- Decision: reuse the embedded editor in a *map mode* (its `view` mode, plus an adapter that refuses
+  every command that is not annotation-only and a save that refuses a changed topology text), over a
+  full annotations document kept per lab from which the drawing is derived. The old dialog stays until
+  that path is validated; import, the annotations download and the draw.io export stay.
+
+## Changes in 1.30.11
+
+**UI review 001, step 10: Recent labs, ordered by real deployments (UI-002, part 2).** Manager and
+frontend; the VM helpers are unchanged apart from the lockstep version. This completes UI-002.
+
+- **Recent labs.** Below *Deploy* and *Build* the lab list has two tabs. **Recent labs** (the first
+  and default tab) lists every lab by its most recent deployment, newest first. **All labs** keeps the
+  order Home always had: favourites first, then by name. A line under the tabs says which order is
+  shown. The separate *Continue where you left off* block is gone, so nothing outranks the two starting
+  choices; every card still says when the lab was last opened.
+- **Real deployment times only.** The manager records `last_deployed` on a lab when a *deploy* or
+  *redeploy* it ran succeeds (a failed one, a start, a stop or a save is not a deployment), and the
+  lab view in `/api/state` carries it. For a lab deployed before this release the newest succeeded
+  deployment of the kept operation history is used. A lab the manager never deployed (imported from a
+  running VM, deployed from a terminal, or with its history gone) has no time: its card reads *No
+  deployment recorded by this manager* and it comes after all dated labs, by name, so it is never
+  presented as recently deployed. Nothing is estimated from discovery, saves or visits.
+- **The order and the tab stay put.** Opening a lab, saving, a favourite and background polling do not
+  reorder *Recent labs*; the chosen tab is kept for the browser session across polls, a lab visit and
+  a reload, and the arrow keys move between the tabs. Unchanged cards are not redrawn.
+- Lab names on the cards no longer break in the middle of a word: the card's tool buttons had been
+  taking half of the card's width.
+
+## Changes in 1.30.10
+
+**UI review 001, step 9: Home leads with Deploy and Build (UI-002, part 1).** Frontend only. Part 2
+(the lab list under a *Recent labs* tab, ordered by the most recent deployment) follows.
+
+- **Two starting choices.** Every Home, with or without labs, begins with two equal cards. **Deploy**:
+  *Choose a file on the lab VM…* (the topology browser) and *Upload a file from this computer…*.
+  **Build**: *Open the lab builder*, a direct link to the visual lab builder, not another deployment
+  dialog. The wording says where the files are: on the lab VM, or on this computer and copied to the VM
+  when the student confirms. The old secondary *Deploy a new lab* button in the page header and the
+  second set of the same buttons on the empty page are gone; **Manager ▾ › Deploy a new lab…** stays.
+- **Upload without a bypass.** The browser reads the chosen file; a wrong file type, an empty file, one
+  above 1 MiB, a binary file or a topology the manager cannot read is refused in plain words (with the
+  manager's own reason for the last). A good file opens the existing topology editor as *Uploaded lab
+  file* with its text and its destination inside a trusted lab folder
+  (`<folder>/<lab name>.clab.yaml`), and the only way on is the reviewed **Create file on the VM…**
+  operation. Nothing can be deployed before that.
+- **After a created file: Deploy or add this lab….** A finished `create` now offers the same next step as
+  a builder save (*Saved as … It is not running yet.*), for an uploaded and for a typed topology, so the
+  student no longer has to find the new file in the browser again. The helper is unchanged; the page
+  uses the job's own path.
+- While the lab VM is not connected both Deploy buttons are off and a visible sentence says why and
+  that building works meanwhile. The topology browser says that its files are on the lab VM and links
+  to the upload.
+
 ## Changes in 1.30.9
 
 **UI review 001, step 8: the Devices tab lines up (UI-006).** Stylesheet only; no markup, script,

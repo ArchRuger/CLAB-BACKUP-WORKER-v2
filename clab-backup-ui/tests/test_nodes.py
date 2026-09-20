@@ -148,7 +148,10 @@ class NodeTests(unittest.TestCase):
         self.assertIn("style-src 'self' 'unsafe-inline'", policy); self.assertIn("script-src 'self';", policy)
         for refused in ('unsafe-eval', 'blob:', 'worker-src', 'http:', 'https:'): self.assertNotIn(refused, policy)
         self.assertEqual(builder.headers['cache-control'], 'no-store')
-        for other in ('/', '/static/lab-builder-page.js', '/static/lab-builder.css', '/static/lab-builder/manifest.json'):
+        # The map editor is the same editor over an existing lab's map: the same policy, nothing wider.
+        editor = self.client.get('/static/map-editor.html'); self.assertEqual(editor.status_code, 200)
+        self.assertEqual(editor.headers['content-security-policy'], policy)
+        for other in ('/', '/static/map-editor-page.js', '/static/lab-builder-page.js', '/static/lab-builder.css', '/static/lab-builder/manifest.json'):
             response = self.client.get(other)
             self.assertNotIn('unsafe-inline', response.headers['content-security-policy'], other); self.assertEqual(response.headers['cache-control'], 'no-store', other)
         asset = self.client.get('/static/lab-builder/assets/main.js')

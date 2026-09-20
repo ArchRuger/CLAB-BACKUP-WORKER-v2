@@ -813,7 +813,7 @@ sudo containerlab inspect --all
 ```
 
 The command deploys the training devices; the manager stays running independently.
-Alternatively, use **Deploy a new lab** (on Home or under **Manager ▾**) to browse an
+Alternatively, use **Deploy › Choose a file on the lab VM…** on Home (or **Manager ▾ › Deploy a new lab…**) to browse an
 undeployed topology on the VM and review its deployment through the UI once the VM
 connection works.
 
@@ -1001,7 +1001,7 @@ All lab operations…** for the complete list, or right-click a lab card on Home
 | Favourite star (lab card) | Sorts this lab above other labs on My labs. |
 | Edit map | Move devices and annotations; add text, boxes, circles and lines; edit styling; save or export the map file / draw.io. |
 | Delete topology file | Separate source deletion; refused while its deployment exists. Keeps a VM recovery copy. |
-| Deploy a new lab | On Home and under **Manager ▾**: the topology browser **Lab topologies on the VM** (**All lab folders**, **Up one folder**). Existing files are read-only. |
+| Deploy | Home leads with two cards. **Deploy**: *Choose a file on the lab VM…* (also **Manager ▾ › Deploy a new lab…**) and *Upload a file from this computer…* (the file is shown, written to the VM by a reviewed operation, then deployed like any other). **Build**: *Open the lab builder*. The first opens the topology browser **Lab topologies on the VM** (**All lab folders**, **Up one folder**). Existing files are read-only. |
 | Write a new topology… | Creates a new VM YAML after structure preview and confirmation; never replaces an existing file. |
 | Preview topology / Add to My labs without starting / Deploy lab | Read an existing file, add it to My labs without starting it, or separately review deployment. |
 | Download a lab from GitHub… / Browse popular labs… | Optional HTTPS project acquisition, followed by review of files and separate deployment. |

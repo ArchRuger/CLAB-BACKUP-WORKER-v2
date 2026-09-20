@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.9
+# UI review 001 (in progress) — 1.30.14
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -66,6 +66,51 @@ and the outline's scroll position after each redraw. Children of a closed branch
 is 32px high (`.node-name` inline-flex, the state cell's first grid row, `.node-actions`), so a new
 child of `deviceRow()` must fit one of the three cells. The rail keeps the 1.29.1 named-area grid. The
 single-column rule at 760px must keep resetting `#device-list` too.
+(9) **1.30.10, UI-002 part 1 — Home starts with `#home-start`**: two `.start-card`s, Deploy
+(`#home-deploy` → `openDeploy()`, `#home-upload` → `opUpload()`) and Build (`#home-build`, a plain link
+to the builder). `#deploy-empty`, `#build-empty` and `#home-actions` are gone; `renderLanding()` keys on
+`#home-deploy` and disables both Deploy buttons with a visible reason while the VM is away.
+`opUpload()` (`operations.js`) must stay a front door to the existing review: file checks
+(`opUploadProblem`, 1 MiB), `/operations/parse-yaml` with an empty path (reads nothing from the VM),
+`opUploadPath()` = `<trusted root>/<sanitised lab name>.clab.yaml` (the helper's `create` needs an
+existing parent), then `opEdit('', '', path, {text, file})`, whose only action is the reviewed `create`.
+Never write an uploaded file any other way. `opPublishedPath(job)` lets a finished `create` offer
+*Deploy or add this lab…* from the job's own `path`.
+(10) **1.30.11, UI-002 part 2 — Recent labs.** `lab['last_deployed']` is written only by
+`LabOperations.record_deployment()` when a `deploy`/`redeploy` job ends with exit code 0;
+`last_deployed(state, lab)` (same module) falls back to the newest succeeded deploy of the capped
+history and is what `public_lab` reports. **Never derive a deployment time from anything else**
+(discovery's `last_success`, saves, visits). `home.js`: `homeOrder(labs, tab)` (`recent`: time
+descending, undated labs last by name; `all`: favourites, then name), `HOME_TABS`, the tab stored by
+`homeTab()` / `rememberHomeTab()` in `shell.js` (sessionStorage), `homeDeployedLine()`. `#home-continue`
+and the `continued` card variant are gone; do not bring back a block above the list.
+`.lab-card-head > div:not(.lab-card-tools)` is what lets a lab name use the card's width.
+(11) **1.30.12, UI-003 step A**: `docs/ui-review-001/MAP-PARITY.md` is the capability matrix and the
+chosen approach (the embedded editor in its `view` mode behind a command whitelist, over a full
+annotations document stored per lab; the drawing is derived from it). UI-003 is open until every row of
+that matrix is done or listed as incomplete. Do not grow `diagram-editor.js` into a second editor.
+(12) **1.30.13, UI-003 step B**: `lab['annotations']` (text) + `lab['annotations_for']` (the revision of the
+drawing derived from it), both private (`public_lab` leaves them out). `layout.keep_document(lab, raw)`
+is called right after `lab['drawing']` is set from an annotations text (upload in `topology.py`,
+registration and the positions event in `discovery.py`, `vm_files.prepare_lab`);
+`layout.map_document(lab)` returns the stored text only while `annotations_for` equals the drawing's
+revision, else `annotations(drawing)`. `GET`/`PUT /api/labs/{id}/map-document` (in `lab_operations.py`
+beside `/layout`): the save stores the text untouched, derives the drawing with
+`parse_drawing(text, definition_yaml)`, sets `placed`, never writes the topology and calls no helper.
+A new place that replaces a drawing must call `keep_document` or the document silently falls back.
+(13) **1.30.14, UI-003 steps C + D — Edit map is the builder's editor in map mode.** Adapter
+(`lab-builder/src/main.tsx`): a draft with `mapOnly` runs `mode: "view"`; `MAP_COMMANDS` is the whole
+whitelist (`batch` only when every inner command is in it; never add a topology command, `undo` or
+`redo`, which restore both files); after every settled operation a topology text that differs from the
+loaded one is restored and the edit refused. A change to `main.tsx` needs `node build.mjs` with Node 24
+(`~/research/lab-builder/tooling/`) and reaches browsers only with a new release number. Page:
+`map-editor.html` + `map-editor-page.js` define their own `window.labBuilderPage` and must keep loading
+**neither `operations.js` nor `lab-builder-page.js`**; they talk to `GET`/`PUT …/map-document` and
+`GET …/drawio` only. `public_lab` adds `map_editor`; `opLayout()` sends Edit map there, else
+`editDiagram()` (kept for labs without a topology text). `.map-editor` rules in `lab-builder.css` hide
+runtime menu entries, the traffic-rate entry and the device palette tab; test ids built from a template
+(`context-menu-item-${id}`, `panel-tab-${id}`) are handled in `test_lab_builder_ui.js`. `/static/map-editor.html`
+shares the builder's CSP exemption (`main.py`) and is in `verify-release.py`'s page list.
 
 # Lab builder quality pass — 1.30.1
 

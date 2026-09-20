@@ -48,6 +48,7 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Telemetry settings… | Telemetry on or off for this lab, the login used for gNMI, why a device is not streaming, retry, removal of the lines the manager added, and the network dashboard's state. |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the lab is running. |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
+| Upload a file from this computer… (Home › Deploy, and the link in the topology browser) | For a topology file that is on your computer: the browser reads it, the manager checks that it is a topology it can read, you see the text and where it will be written, **Create file on the VM…** runs as a reviewed operation, and **Deploy or add this lab…** continues as for any file on the VM. Only that one file is uploaded (up to 1 MiB); files it refers to must be on the VM. |
 | Build a lab visually… / Edit visually… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Edit visually…* opens an existing topology file; saving again is only possible while the lab is not deployed and keeps a copy of the previous version. |
 | Write a new topology… | Creates a new topology file on the VM after a structure preview and confirmation; never replaces an existing file. |
 | Add to My labs without starting / Deploy lab | Read an existing file and add the lab to My labs without deploying, or deploy it: *Deploy lab* saves the workspace (devices, map, VM source path) first and then reviews the containerlab command, so the lab is in My labs at once and nothing needs importing afterwards. |
@@ -107,11 +108,17 @@ acceptance procedure are in [TELEMETRY.md](TELEMETRY.md).
 
 ## The map and its editor
 
-Choose **Edit map** (Topology tab, Tools tab or Lab actions ▾ › Advanced options) to move devices, add
-text, boxes, circles and lines, or edit their appearance. Undo reverses edits; closing
-offers to discard unsaved changes. Save persists the manager map. *Download map file*
-(annotations JSON) and *Export draw.io* include unsaved edits without writing VM files.
-Concurrent edits are rejected if the saved map changed; reopen it before editing again.
+Choose **Edit map** (Topology tab, Tools tab or Lab actions ▾ › Advanced options). For a lab whose
+topology file the manager has, it opens the same editor as the [lab builder](LAB-BUILDER.md), on the
+lab's own map and for the drawing only: drag devices, use a generated layout, add and style text,
+rectangles, circles, lines and groups (drag devices into a group), copy and paste annotations, set link
+label offsets, the link label mode and the grid. Devices and links cannot be added, changed or removed
+there, nothing is deployed and the running lab is not touched; the editor cannot send anything but the
+map to the manager. **Save map** stores it and the Topology tab follows; **Back to the lab** asks when
+something is unsaved. *Download map file* gives the full annotations document, *Export to draw.io* uses
+the saved map, and *Import map file…* replaces the map with a file from your computer. A map that was
+changed elsewhere since it was opened is not overwritten: reopen it. A lab without a topology file in the
+manager (imported from an inventory) opens a simpler dialog with text, boxes, circles, lines and Undo.
 
 The editor changes device positions; connections follow the devices. The full export
 contains editable devices, connections, interface labels, groups/shapes, notes, colours

@@ -19,7 +19,7 @@ from .discovery import PinnedHostKey, vm_password, parse_definition, stamp
 from .inventory import read_data
 from .topology import parse_drawing
 from .drawio_export import drawio
-from .layout import decorations, annotations, revision
+from .layout import MAX_DOCUMENT, annotations, decorations, keep_document, map_document, revision
 
 BUSY = ('queued', 'running')
 GIT_BUSY = ('queued', 'capturing', 'exporting', 'pushing')
@@ -106,6 +106,20 @@ def remote(host, request, output=None, stopping=None, timeout=None):
             raise ValueError(operation_connection_error(status, stderr))
         return result
     finally: client.close()
+
+
+DEPLOY_ACTIONS = ('deploy', 'redeploy')
+
+
+def last_deployed(state, lab):
+    """When this manager last deployed the lab, or ''. The lab's own record first; for a lab deployed before
+    that record existed, the newest succeeded deploy in the (capped) operation history. A lab that was
+    deployed from a terminal, or whose history is gone, has none: the page must not invent one."""
+    known = lab.get('last_deployed') or ''
+    if known: return known
+    stamps = [j.get('finished') or '' for j in state.get('operations', [])
+              if j.get('lab_id') == lab.get('id') and j.get('action') in DEPLOY_ACTIONS and j.get('status') == 'succeeded']
+    return max(stamps, default='')
 
 
 def scrub(text, state):
@@ -394,6 +408,53 @@ class LabOperations:
             self.store.event('topology.layout', 'Diagram layout and annotations saved', lab_id=lab_id)
             return {'saved': True}
 
+        # The map editor (the lab builder in map mode) works on the full annotations document. Reading it
+        # changes nothing. Saving it is a map edit and nothing else: the topology text is only read, to
+        # derive the drawing again; no helper is called, nothing is deployed and nothing on the VM changes.
+        class MapDocument(BaseModel):
+            model_config = ConfigDict(extra="forbid")
+            annotations: str = Field(max_length=MAX_DOCUMENT)
+            revision: str = Field(min_length=1, max_length=64)
+
+        def map_lab(lab_id):
+            lab = self.store.lab(lab_id)
+            if not lab: raise HTTPException(404, 'Lab not found.')
+            if not lab.get('definition_yaml'):
+                raise HTTPException(409, 'This lab has no topology file in the manager, so its map opens in the simple editor. Add the topology under Advanced › Update topology file… to use the full map editor.')
+            if not lab.get('drawing'): raise HTTPException(404, 'Import a topology map first.')
+            return lab
+
+        @app.get('/api/labs/{lab_id}/map-document')
+        def read_map_document(lab_id: str):
+            with self.store.lock:
+                lab = map_lab(lab_id)
+                return dict(name=lab['name'], yaml=lab['definition_yaml'], annotations=map_document(lab), revision=revision(lab['drawing']))
+
+        @app.put('/api/labs/{lab_id}/map-document')
+        def save_map_document(lab_id: str, data: MapDocument):
+            if len(data.annotations.encode()) > MAX_DOCUMENT: raise HTTPException(400, 'The map is larger than 1 MiB.')
+            with self.store.lock:
+                self.guard(lab_id); lab = map_lab(lab_id)
+                if data.revision != revision(lab['drawing']): raise HTTPException(409, 'The map changed since it was opened. Reopen the map editor; your other changes were not saved.')
+                try:
+                    if not isinstance(json.loads(data.annotations), dict): raise ValueError('not an object')
+                    drawing = parse_drawing(data.annotations.encode(), lab['definition_yaml'].encode())
+                except (ValueError, TypeError, AttributeError, RecursionError) as exc:
+                    raise HTTPException(400, 'The manager cannot read this map: ' + str(exc)[:200])
+                # A map a person saved is theirs: discovery never replaces it with the VM's annotations file.
+                drawing['placed'] = True
+                previous = {k: lab.get(k) for k in ('drawing', 'annotations', 'annotations_for')}
+                lab['drawing'] = drawing; keep_document(lab, data.annotations)
+                try: self.store.save()
+                except OSError:
+                    for key, value in previous.items():
+                        if value is None: lab.pop(key, None)
+                        else: lab[key] = value
+                    raise HTTPException(500, 'Could not save the map. Try again.')
+                saved = revision(drawing)
+            self.store.event('topology.layout', 'Map saved from the map editor', lab_id=lab_id)
+            return {'saved': True, 'revision': saved}
+
         @app.post('/api/labs/{lab_id}/annotations')
         def export_annotations(lab_id: str, data: Layout):
             with self.store.lock:
@@ -411,6 +472,14 @@ class LabOperations:
                 lab['drawing'] = drawing
                 content = drawio(lab)
             return Response(content, media_type='application/xml', headers={'Content-Disposition': "attachment; filename=topology.drawio; filename*=UTF-8''" + quote(lab['name']+'.drawio', safe='')})
+
+    def record_deployment(self, ident, finished):
+        """A deploy or redeploy that succeeded is when the lab was last deployed: kept on the lab, because
+        the operation history is capped. Written with the job's own save; nothing else sets this field."""
+        with self.store.lock:
+            job = next((j for j in self.store.state['operations'] if j['id'] == ident), None)
+            lab = self.store.lab(job['lab_id']) if job and job.get('action') in DEPLOY_ACTIONS and job.get('lab_id') else None
+            if lab: lab['last_deployed'] = finished
 
     def execute(self, ident, host, req):
         with self.store.lock: self.active.add(ident)
@@ -430,8 +499,10 @@ class LabOperations:
             update(status='running', started=stamp(), message='Executing on the VM')
             result = remote(host, req, output, self.stopping)
             with self.store.lock: clean = scrub(raw_output, self.store.state)
+            finished = stamp()
+            if result.get('exit_code') == 0: self.record_deployment(ident, finished)
             update(status='succeeded' if result.get('exit_code') == 0 else 'failed', exit_code=result.get('exit_code'),
-                   finished=stamp(), output=clean, result=result, message='Operation completed' if result.get('exit_code') == 0 else 'Host command returned an error')
+                   finished=finished, output=clean, result=result, message='Operation completed' if result.get('exit_code') == 0 else 'Host command returned an error')
         except Exception as exc:
             message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
             with self.store.lock: clean = scrub(raw_output, self.store.state); message = scrub(message, self.store.state)

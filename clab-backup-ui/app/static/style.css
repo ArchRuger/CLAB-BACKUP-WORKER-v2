@@ -392,6 +392,14 @@ footer {
 
 /* Home — My labs */
 .home { display: grid; gap: 24px; align-content: start; }
+/* The two ways to start a lab: equal cards, side by side while there is room. */
+.home-start { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.start-card { display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: var(--radius-lg); }
+.start-card h2 { font-size: 20px; margin: 0; }
+.start-card p { margin: 0; font-size: 14px; color: var(--text); }
+.start-card p.caption { font-size: 12px; color: var(--muted); }
+.start-card .actions { padding: 0; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.start-card .start-reason { color: var(--warn-strong); font-weight: 600; }
 .home-hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; }
 .home-hero p { margin: 4px 0 0; color: var(--muted); }
 .home-hero .actions, .home-actions { padding: 0; flex-wrap: wrap; }
@@ -412,9 +420,15 @@ footer {
 .lab-card h3 { font-size: 16px; }
 .lab-card p, .lab-card .lab-status-line { margin: 0; font-size: 13px; color: var(--muted); }
 .lab-card .actions { margin-top: auto; padding: 10px 0 0; flex-wrap: wrap; }
-#home-continue, .lab-card.continue { border-left: 4px solid var(--accent); }
+.home-labs { display: grid; gap: 12px; }
+.home-tabs { margin: 0; }
+.home-tab-note { margin: 0; }
+.lab-card-times { margin: 0; }
+/* a lab name breaks at its separators, not in the middle of a word, and takes the width it needs */
+.lab-card h3 { overflow-wrap: break-word; word-break: normal; hyphens: none; }
 .lab-card-head { display: flex; align-items: flex-start; gap: 8px; }
-.lab-card-head > h3, .lab-card-head > div { min-width: 0; flex: 1; }
+/* the tools are a div too: left out here, or they take half of the card and the name wraps early */
+.lab-card-head > h3, .lab-card-head > div:not(.lab-card-tools):not(.card-tools) { min-width: 0; flex: 1; }
 .lab-card-tools, .lab-card .card-tools { display: flex; gap: 2px; margin: -6px -8px 0 auto; flex: none; }
 .lab-card .icon-button { font-size: 18px; min-width: 30px; min-height: 30px; }
 .icon-button[aria-pressed="true"] { color: var(--accent); }

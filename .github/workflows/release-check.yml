@@ -67,7 +67,7 @@ jobs:
         run: '"$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p "test_telemetry*.py" -v'
       - name: Check browser regressions
         working-directory: clab-backup-ui
-        run: node --test tests/test_lab_builder_ui.js tests/test_operations_ui.js tests/test_debug_ui.js tests/test_capture_ui.js tests/test_capture_session_ui.js tests/test_topology_ui.js tests/test_vm_password_ui.js tests/test_readiness_ui.js tests/test_download_ui.js tests/test_grafana_ui.js tests/test_git_progress_ui.js tests/test_git_places_ui.js tests/test_restore_ui.js tests/test_status_ui.js tests/test_shell_ui.js tests/test_home_ui.js tests/test_diagram_editor_ui.js tests/test_topology_menu_ui.js
+        run: node --test tests/test_lab_builder_ui.js tests/test_map_editor_ui.js tests/test_operations_ui.js tests/test_debug_ui.js tests/test_capture_ui.js tests/test_capture_session_ui.js tests/test_topology_ui.js tests/test_vm_password_ui.js tests/test_readiness_ui.js tests/test_download_ui.js tests/test_grafana_ui.js tests/test_git_progress_ui.js tests/test_git_places_ui.js tests/test_restore_ui.js tests/test_status_ui.js tests/test_shell_ui.js tests/test_home_ui.js tests/test_diagram_editor_ui.js tests/test_topology_menu_ui.js
       - name: Check that the committed lab builder assets match their source
         # The editor bundle under app/static/lab-builder is built here, never on a lab VM. A fresh build
         # from the lockfile must reproduce the committed manifest byte for byte.

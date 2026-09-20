@@ -5,7 +5,7 @@ anything: Git and the remote are the authority for what was committed and pushed
 
 ## How the work is delivered
 
-- Branch `claude/ui-review-001`, cut from `main` `21823c6` (release 1.30.1). Remote `origin` =
+- Branch `claude/ui-review-001`, cut from `main` `21823c6` (release 1.30.1). The maintainer merged it up to 1.30.9 as pull request #41 on 2026-09-20 (`main` `d588c9a`); the branch was fast-forwarded to that merge and the work continues on it, to be offered as a second pull request. Remote `origin` =
   `https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2.git`. Push with the `ArchRuger` gh account
   (`gh auth switch -u ArchRuger`), then switch back to `pruger-dev` so lab saves keep working.
 - One chunk = implement → tests → browser check → `python3 deploy/set-release.py X.Y.(Z+1)` → the three
@@ -42,32 +42,41 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.7 | UI-008 part 1 | Planned folders kept by the manager (`git_folders`, tree `planned`, `plan: true`, `DELETE …/folders`); fixture helper made faithful | `check_ui008a.py` 17/17, `verify_after.py` 97/97 ×3, python 708, node 174, `~/ui-review/review-001/chunk06/` |
 | 1.30.8 | UI-008 part 2 | Tree expansion owned by the student (`gitPlacesState.expanded`, `.git-twist`), `current` vs `selected`, focus and scroll kept | `check_ui008b.py` 21/21, `verify_after.py` 97/97 ×3, node 176, `~/ui-review/review-001/chunk07/` |
 | 1.30.9 | UI-006 | Devices tab: list indent removed, one list grid with subgrid rows, aligned heading controls (CSS only) | `check_ui006.py` 89/89 at five sizes, `verify_after.py` 97/97 ×3, before/after in `~/ui-review/review-001/chunk08/` |
+| 1.30.10 | UI-002 part 1 | Home `#home-start` cards (Deploy: VM file / upload; Build), `opUpload()` through the reviewed `create`, `opPublishedPath()` | `check_ui002a.py` 25/25, `verify_after.py` 97/97 ×3, node 180, `~/ui-review/review-001/chunk09/` |
+| 1.30.11 | UI-002 part 2 | *Recent labs* / *All labs* tabs, `last_deployed` recorded by the manager, no Continue block, card title width | `check_ui002b.py` 20/20, `verify_after.py` 98/98 ×3, python 709, node 182, `~/ui-review/review-001/chunk10/` |
+| 1.30.12 | UI-003 step A | `MAP-PARITY.md`: capability matrix from the code, approach chosen; live read-only check of 1.30.11 on the dev VM | `~/ui-review/review-001/live-1.30.11/` |
+| 1.30.13 | UI-003 step B | Manager keeps the full annotations document (`lab['annotations']`, `keep_document`, `map_document`), `GET`/`PUT …/map-document` | python 711 (unit/API only, no browser) |
+| 1.30.14 | UI-003 steps C + D | Adapter map mode (`mapOnly`, `MAP_COMMANDS`), `map-editor.html` / `map-editor-page.js`, Edit map wired by `map_editor`, exports and import kept | `check_ui003.py` 27/27, `verify_after.py` 98/98 ×3, node 186, python 711, bundle `--check` OK, `~/ui-review/review-001/chunk13`, `chunk14` |
 
 ## Next
 
-Chunk 9 = **UI-002 part 1** (Home: Deploy and Build as the two primary actions). Today: `#home` in
-`index.html` has a hero with a secondary *Deploy a new lab* button (`#home-deploy` → `openDeploy()` in
-`operations.js`, the VM file browser), the empty state has *Deploy a new lab*, *Build a lab visually…*
-(a link to `/static/lab-builder.html`) and *Import lab files…* (`openSetup()` in `management.js`, the
-upload dialog). Plan: two equal cards above the lab list on every Home (with and without labs): DEPLOY
-with *Choose a lab file on the VM…* (`openDeploy`) and *Upload lab files from this computer…*
-(`openSetup`), BUILD opening the builder directly; wording that says where the files are; disabled
-reasons as visible text when the VM is not connected (upload and Build do not need the VM — check).
-Chunk 10 = **UI-002 part 2**: lab list under a *Recent labs* tab ordered by the most recent deployment.
-First find what the manager really records (`lab['deployment']`, operations history in
-`state.operations` with `action` deploy/redeploy and `finished`, `lab.created`); never invent a time;
-labs without one go last in a stable order (name), and say so in this file. Keep favourites, card
-actions and *Continue where you left off* no more prominent than the two actions; the tab and the order
-must not change on the 4 s poll. Then UI-003 (map parity): start with the capability matrix
-`docs/ui-review-001/MAP-PARITY.md` from the bundled editor and `diagram-editor.js`.
+**UI-003 is the only open requirement, and it is not complete.** What remains (step E of `MAP-PARITY.md`):
+
+1. **Drive every ◐ row in a browser and save it**: extend `docs/ui-review-001/tools/check_ui003.py` (shape
+   with resize/rotate/arrows, group creation and dragging a device in, copy/paste/duplicate, a generated
+   layout, link label offset, link label mode, grid appearance, SVG export), each followed by save →
+   reopen → compare the stored document, then flip the row to ☑.
+2. **Row 8, undo / redo**: absent in the editor's view mode. Options: a page-level history of the
+   annotations document (remount with an earlier text), or running the editor in edit mode with the
+   whitelist and hiding the topology tools by test id. Decide after trying the first.
+3. **Row 9, device look** (icon, colours, label position): upstream edits it with `editNode`. An adapter
+   translation would accept `editNode` only when nothing but annotation fields differ, and write them as
+   `nodeAnnotations`; view mode does not show that editor, so this depends on the decision in 2.
+4. **The Topology view draws less than the editor stores** (rotation, line arrows, rounded text
+   background, nested levels): extend `parse_drawing` / `topology-render.js` where cheap, document the rest.
+5. **Live pass**: done for open / drag / save at 1.30.14 on the QA lab `qa-nos-105458`; repeat it for the
+   rows of item 1 after each bundle change (rebuild with `sudo bash deploy/start-manager.sh --manager-only`;
+   the immutable bundle only updates with the release number). Do not edit the maintainer's course maps
+   without asking.
 
 ## Known limits and open points
 
-- 1.30.2 to 1.30.9 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.8 (`gh run list --branch claude/ui-review-001`).
+- Every release of this branch was validated against the fixture manager; 1.30.11 also had a read-only live pass. CI was green for 1.30.2 to 1.30.12 when this was written (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
-  --manager-only` (helpers must match the release); record here when that was last done: **not yet for
-  this branch**.
+  --manager-only` (helpers must match the release); last done at **1.30.14 (`723d5e8`) on 2026-09-20**,
+  followed by a live check of the map editor through `http://192.168.132.132:8081` on the QA lab
+  `qa-nos-105458` only (see VALIDATION, 1.30.14; the read-only pass of 1.30.11 is under 1.30.12).
 - `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home.
 - The successful import confirmation was not exercised in a browser (the fixture VM refuses the preview).
 

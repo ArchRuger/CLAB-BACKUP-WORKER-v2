@@ -386,6 +386,9 @@ class Discovery:
                 from .topology import unplaced
                 if bundle['files'].get('annotations') and unplaced(lab.get('drawing')) and not unplaced(candidate['drawing']):
                     lab['drawing'] = candidate['drawing']
+                    for key in ('annotations', 'annotations_for'):
+                        if candidate.get(key): lab[key] = candidate[key]
+                        else: lab.pop(key, None)
                     self.store.event('topology.positions', 'Placed the map nodes from the annotations file beside the deployed topology', lab_id=lab['id'])
 
     def public(self):
@@ -633,7 +636,9 @@ class Discovery:
                 lab.update(nodes=parsed['nodes'],deployment_name=parsed['deployed_name'],container_prefix=parsed['prefix'],
                            definition_yaml=raw.decode('utf-8-sig'),updated=stamp(),source=definition.filename or 'lab.clab.yaml')
                 self.store.state['ignored_labs'] = [n for n in self.store.state.get('ignored_labs', []) if n != parsed['deployed_name']]
-                if ann or not lab.get('drawing'): lab['drawing']=drawing
+                if ann or not lab.get('drawing'):
+                    from .layout import keep_document
+                    lab['drawing']=drawing; keep_document(lab,ann or b'')
                 reconcile(self.store.state); self.store.save()
                 self.store.event('lab.register',f'Registered lab definition with {len(lab["nodes"])} nodes',lab_id=lab['id'])
                 return public_lab(lab)

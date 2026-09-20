@@ -166,7 +166,7 @@ def collect(inspection, labels_for=None, reader=read_regular, path_type=Path, de
                     report['status'] = 'unreadable'
             if kind not in source['files']:
                 source['warnings'].append(kind + ': ' + report['status'])
-    return {'protocol': PROTOCOL, 'helper_version': '1.30.9', 'inspect': inspection, 'sources': sources}
+    return {'protocol': PROTOCOL, 'helper_version': '1.30.14', 'inspect': inspection, 'sources': sources}
 
 
 def main():

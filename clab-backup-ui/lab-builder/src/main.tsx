@@ -12,7 +12,9 @@ import { applyThemeVars } from "@containerlab/clab-ui/theme";
 import { parseDocument } from "yaml";
 import "@containerlab/clab-ui/styles/global.css";
 
-interface BuilderDraft { id: string; name: string; yaml: string; annotations: string }
+// mapOnly: the page is the manager's map editor (../../app/static/map-editor-page.js). The topology is an
+// existing lab's and must come out exactly as it went in; only the annotations document is edited.
+interface BuilderDraft { id: string; name: string; yaml: string; annotations: string; mapOnly?: boolean }
 interface BuilderTemplate { name: string; kind: string; [key: string]: unknown }
 interface BuilderPage {
   // Stores the pair durably (browser storage) before returning; throws when another tab changed the draft.
@@ -29,6 +31,18 @@ interface BuilderPage {
   ready(mount: (draft: BuilderDraft) => Promise<void>): void;
 }
 declare global { interface Window { labBuilderPage: BuilderPage; __DOCKER_IMAGES__?: string[] } }
+
+// Everything the map editor may ask the engine to do: each of these writes the annotations document only.
+// The editor's view mode already hides adding, editing and deleting devices and links, but it enforces that
+// in its own UI only; the engine applies whatever it is sent, so the refusal is made here.
+const MAP_COMMANDS = new Set(["savePositions", "savePositionsAndAnnotations", "setAnnotations", "setAnnotationsWithMemberships",
+  "setEdgeAnnotations", "setViewerSettings", "setNodeGroupMembership", "setNodeGroupMemberships"]);
+const mapCommandAllowed = (command: unknown): boolean => {
+  const c = command as { command?: string; payload?: { commands?: unknown[] }; commands?: unknown[] };
+  if (c?.command === "batch") { const inner = c.payload?.commands ?? c.commands; return Array.isArray(inner) && inner.length > 0 && inner.every(mapCommandAllowed); }
+  return typeof c?.command === "string" && MAP_COMMANDS.has(c.command);
+};
+const refused = (message: string) => Object.assign(new Error(message), { code: "topology" });
 
 const enoent = (p: string) => Object.assign(new Error(`ENOENT: no such file, open '${p}'`), { code: "ENOENT" });
 
@@ -56,8 +70,9 @@ async function mount(draft: BuilderDraft): Promise<void> {
   const files = new DraftFiles();
   files.files.set(yamlPath, draft.yaml);
   if (draft.annotations) files.files.set(layoutPath, draft.annotations);
+  const mapOnly = draft.mapOnly === true, mode = mapOnly ? "view" : "edit";
   const core = new TopologySessionCore({
-    fs: files, yamlFilePath: yamlPath, mode: "edit", deploymentState: "undeployed",
+    fs: files, yamlFilePath: yamlPath, mode, deploymentState: "undeployed",
     logger: { debug() {}, info() {}, warn() {}, error: (m: unknown) => console.error(m) }
   });
   // One engine operation at a time, and the draft is stored before the editor hears the answer: an
@@ -65,6 +80,11 @@ async function mount(draft: BuilderDraft): Promise<void> {
   let queue: Promise<unknown> = Promise.resolve();
   const settled = <T,>(work: () => Promise<T>): Promise<T> => {
     const run = queue.then(work).then((value) => {
+      // Second line of defence in the map editor: whatever happened, the topology text leaves as it came.
+      if (mapOnly && (files.files.get(yamlPath) ?? "") !== draft.yaml) {
+        files.files.set(yamlPath, draft.yaml);
+        const e = refused("The map editor does not change the topology. That edit was not kept."); page.problem(e.message, "topology"); throw e;
+      }
       try { page.persist(files.files.get(yamlPath) ?? "", files.files.get(layoutPath) ?? ""); }
       catch (e) { page.problem(e instanceof Error ? e.message : String(e), (e as { code?: string }).code); throw e; }
       return value;
@@ -112,12 +132,14 @@ async function mount(draft: BuilderDraft): Promise<void> {
     topoViewer: topoViewer as never,
     topology: {
       requestSnapshot: () => settled(() => core.getSnapshot()),
-      dispatchCommand: (_context, revision, command) => settled(() => core.applyCommand(command as never, revision))
+      dispatchCommand: (_context, revision, command) => mapOnly && !mapCommandAllowed(command)
+        ? Promise.reject(refused("The map editor changes the drawing only: positions, text, shapes, groups and label settings."))
+        : settled(() => core.applyCommand(command as never, revision))
     }
   });
   const runtime = createClabUiRuntime({
     host,
-    initialContext: { mode: "edit", deploymentState: "undeployed", path: yamlPath, sessionId: `builder-${draft.id}` },
+    initialContext: { mode, deploymentState: "undeployed", path: yamlPath, sessionId: `builder-${draft.id}` },
     disabledTabIds: ["yaml", "json"]
   });
   window.__DOCKER_IMAGES__ = page.images();

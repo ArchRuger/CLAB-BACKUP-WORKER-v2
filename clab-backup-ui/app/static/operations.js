@@ -214,13 +214,16 @@ async function opShowJob(id){
    const inspected=inspectAction&&job.status==='succeeded'&&rows.length;
    const emptyInspection=inspectAction&&job.status==='succeeded'&&/(^|\n)\s*(?:\[\s*\]|\{\s*\})\s*(?=\n|$)/.test(job.output||'');
    pre.hidden=!!inspected||emptyInspection;
-   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(job.status==='succeeded'&&job.result?.published_path?`<p>Saved as <code>${esc(job.result.published_path)}</code>. It is not running yet.</p><button class="button primary" id="op-open-published">Deploy or add this lab…</button>`:'');
-   $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(job.result.published_path)));
+   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p><button class="button primary" id="op-open-published">Deploy or add this lab…</button>`:'');
+   $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
   }catch(e){if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
  };dialog.onclose=()=>{if(!follows)clearTimeout(opOutputTimer);};await poll();
 }
+// The topology file a finished job left on the VM, to continue with "Deploy or add this lab…": the builder's
+// save names it in its result; a created file (typed or uploaded) is the job's own path.
+function opPublishedPath(job){if(!job||job.status!=='succeeded')return '';return job.result?.published_path||(job.action==='create'&&/\.ya?ml$/i.test(job.path||'')?job.path:'');}
 async function opHistory(labId=''){
  const jobs=await(await api('/operations')).json();
  const lab=labId?(state.labs||[]).find(l=>l.id===labId):null;
@@ -274,7 +277,8 @@ async function opBrowse(path='',labId=''){
  const lab=labId?(state.labs||[]).find(l=>l.id===labId):null,labPath=opPath(lab);
  if(lab&&!path&&labPath)path=labPath.includes('/')?labPath.slice(0,labPath.lastIndexOf('/')):'';
  const result=await json('/operations/browse','POST',{path});
- const dialog=opDialog('op-browser',lab?'Lab files · '+lab.name:'Deploy a new lab',`<p class="op-path">${esc(result.path||'Lab folders on the VM')}</p><div class="actions"><button class="button secondary" id="op-roots">All lab folders</button><button class="button secondary" id="op-up">Up one folder</button><button class="button secondary" id="op-build">Build a lab visually…</button><button class="button secondary" id="op-create">Write a new topology…</button><button class="button secondary" id="op-clone">Download a lab from GitHub…</button><button class="button secondary" id="op-popular">Browse popular labs…</button></div><div class="op-file-tree" id="op-file-tree" aria-label="Lab topology files"></div><p class="form-help">Open a folder and pick a topology file (.clab.yaml) to view or deploy it. Only topology files are listed, up to 500 per folder.</p>${lab?'':'<p class="form-help">Have lab files on your computer instead? Use Manager ▾ › Import lab files….</p>'}`);
+ const dialog=opDialog('op-browser',lab?'Lab files · '+lab.name:'Deploy a new lab',`<p class="op-path">${esc(result.path||'Lab folders on the VM')}</p><div class="actions"><button class="button secondary" id="op-roots">All lab folders</button><button class="button secondary" id="op-up">Up one folder</button><button class="button secondary" id="op-build">Build a lab visually…</button><button class="button secondary" id="op-create">Write a new topology…</button><button class="button secondary" id="op-clone">Download a lab from GitHub…</button><button class="button secondary" id="op-popular">Browse popular labs…</button></div><div class="op-file-tree" id="op-file-tree" aria-label="Lab topology files"></div><p class="form-help">Open a folder and pick a topology file (.clab.yaml) to view or deploy it. Only topology files are listed, up to 500 per folder.</p>${lab?'':'<p class="form-help">These are files on the lab VM. Is the topology file on your computer instead? <button type="button" class="link-button" id="op-browse-upload">Upload it from this computer…</button></p>'}`);
+ {const upload=$('op-browse-upload');if(upload)upload.onclick=()=>{dialog.close();opUpload();};}
  const addEntries=(container,entries)=>{
   entries=opTopologyEntries(entries);
   if(!entries.length){container.textContent='No topology files in this folder.';return;}
@@ -304,12 +308,14 @@ async function opBrowse(path='',labId=''){
   help.textContent+=' Files are available, but the VM command check failed — open Diagnostics for details. Online downloads stay off.';
  });
 }
-async function opEdit(path,labId='',newPath=''){
+// upload: {text, file} for a topology the student chose on their own computer (opUpload); it goes
+// through the same review as a topology typed here.
+async function opEdit(path,labId='',newPath='',upload=null){
  if(!path)labId='';
- const value=path?await json('/operations/read','POST',{path}):{text:'name: new-lab\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:latest\n',path:newPath};
+ const value=path?await json('/operations/read','POST',{path}):{text:upload?upload.text:'name: new-lab\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:latest\n',path:newPath};
  const isYaml=/\.ya?ml$/i.test(value.path);
  opEditorContext={path:value.path,labId,isNew:!path};
- const dialog=opDialog('op-editor',path?'Topology file':'New topology file',`<label>File location on the VM<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology (YAML)':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Deploy lab adds this lab to My labs and starts its devices on the VM. Add without starting keeps it in My labs only. Existing files can't be edited as text here — use Edit visually, or edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Create file on the VM…</button>':''}${path&&isYaml?'<button class="button secondary" id="op-build-edit">Edit visually…</button><button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Add to My labs without starting')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
+ const dialog=opDialog('op-editor',path?'Topology file':upload?'Uploaded lab file':'New topology file',`${upload?`<p class="op-notice">Read from <strong>${esc(upload.file)}</strong> on this computer. Nothing is on the lab VM yet: <em>Create file on the VM…</em> shows what will be written and asks you to confirm; afterwards you can deploy it.</p>`:''}<label>File location on the VM<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology (YAML)':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Deploy lab adds this lab to My labs and starts its devices on the VM. Add without starting keeps it in My labs only. Existing files can't be edited as text here — use Edit visually, or edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Create file on the VM…</button>':''}${path&&isYaml?'<button class="button secondary" id="op-build-edit">Edit visually…</button><button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Add to My labs without starting')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
  $('op-edit-path').value=value.path;$('op-edit-text').value=value.text;
  $('op-build-edit')?.addEventListener('click',()=>opBuilderOpen({path}));
  $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
@@ -330,6 +336,32 @@ async function opEdit(path,labId='',newPath=''){
   await opReview({action:'deploy',lab_id:id,path,name:parsed.name});
  }));
 }
+// Deploy › Upload a file from this computer. The browser reads the file; the manager checks that it is a
+// topology it can read back; the student sees the text and where it will go; the reviewed `create`
+// operation writes it on the VM; "Deploy or add this lab…" continues as for any file on the VM.
+const OP_UPLOAD_LIMIT=1024*1024;
+function opUploadProblem(file){
+ if(!file)return 'Choose a file first.';
+ if(!/\.ya?ml$/i.test(file.name||''))return 'Choose a containerlab topology file. Its name ends in .clab.yaml, .clab.yml, .yaml or .yml.';
+ if(!file.size)return 'This file is empty.';
+ if(file.size>OP_UPLOAD_LIMIT)return 'This file is larger than 1 MiB, which is more than a topology file can be. Choose the .clab.yaml file itself, not an archive or a configuration dump.';
+ return '';
+}
+// <trusted folder>/<lab name>.clab.yaml; the VM only creates files directly inside a lab folder it trusts.
+function opUploadPath(root,name){const safe=String(name||'').replace(/[^A-Za-z0-9_.-]+/g,'-').replace(/^[^A-Za-z0-9_]+/,'').replace(/[-.]+$/,'').slice(0,80)||'uploaded-lab';return String(root||'/srv/containerlab-node-manager/projects').replace(/\/+$/,'')+'/'+safe+'.clab.yaml';}
+function opUpload(){
+ const dialog=opDialog('op-upload','Upload a lab file from this computer','<p>Choose the lab\'s containerlab topology file (<code>.clab.yaml</code>) on <strong>this computer</strong>. It is shown to you next, and copied to the <strong>lab VM</strong> only after you confirm.</p><label for="op-upload-file">Topology file</label><div class="upload-field"><input id="op-upload-file" type="file" accept=".yaml,.yml"><small>YAML · up to 1 MiB</small></div><p class="form-help">Only this one file is uploaded. Files it refers to (startup configurations, certificates) have to be on the lab VM already. Is the lab on the VM already? Use <em>Choose a file on the lab VM…</em> instead.</p><div class="dialog-actions"><button class="button secondary" id="op-upload-cancel">Cancel</button><button class="button primary" id="op-upload-next">Continue</button></div>');
+ $('op-upload-cancel').onclick=()=>dialog.close();
+ $('op-upload-next').onclick=()=>opTask(dialog,async()=>{
+  const file=$('op-upload-file').files&&$('op-upload-file').files[0],problem=opUploadProblem(file);if(problem)throw new Error(problem);
+  const text=await file.text();
+  if(/\u0000/.test(text))throw new Error('This does not look like a text file. Choose the .clab.yaml topology file.');
+  let parsed;try{parsed=await opParse('',text);}catch(error){throw new Error('This file is not a containerlab topology the manager can read: '+error.message);}
+  let roots=[];try{roots=(await opCapabilities()).roots||[];}catch{roots=[];}
+  dialog.close();await opEdit('','',opUploadPath(opBuilderRoot('',roots),parsed.name),{text,file:file.name});
+ });
+ return dialog;
+}
 function opClone(url='',project=''){
  const dialog=opDialog('op-clone-dialog','Download a lab from GitHub','<label>Repository address<input id="op-clone-url" type="url" placeholder="https://github.com/owner/repository"></label><label>Folder name on the VM<input id="op-clone-name" maxlength="120"></label><p>The lab is downloaded into the VM\'s lab folder (/srv/containerlab-node-manager/projects). Existing folders are never overwritten. Afterwards pick a topology from it to deploy. Needs internet downloads enabled on the VM.</p><button class="button primary" id="op-clone-review">Download…</button>');
  $('op-clone-url').value=url;$('op-clone-name').value=project;
@@ -344,7 +376,11 @@ function opMapPreview(drawing,name,positioned=false){
  const dialog=opDialog('op-map-preview','Topology preview · '+name,`<svg id="op-preview-map" class="topology-map op-layout-map" role="img" aria-label="Proposed topology"></svg><p>${positioned?'Wiring from the topology file; device positions from its saved map file.':'Wiring from the topology file. Devices sit on a default grid — arrange them later with Edit map.'}</p>`);
  const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing);svg.setAttribute('viewBox',measureTopology(svg).join(' '));return dialog;
 }
-async function opLayout(id){return editDiagram(id);}
+// Edit map. A lab whose topology text the manager has opens the full map editor (the lab builder's editor
+// in map mode, map-editor.html): it edits the drawing only and leaves through its own Save / Back. A lab
+// without one (imported from an inventory) keeps the simple dialog.
+function opMapEditorUrl(id){return '/static/map-editor.html#lab='+encodeURIComponent(id);}
+async function opLayout(id){const lab=(state.labs||[]).find(l=>l.id===id);if(lab&&lab.map_editor){location.assign(opMapEditorUrl(id));return;}return editDiagram(id);}
 // reason / destroyReason say, in student words, why Start or Destroy is unavailable right now.
 function opQuickActions(lab,discovery,isBusy=false){
  const status=lab?.deployment?.status, known=['Not deployed','Running','Stopped','Partially running'].includes(status);

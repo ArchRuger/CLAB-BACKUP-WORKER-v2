@@ -18,25 +18,34 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - Decision: the first-run empty page (no labs at all) keeps its short *Already running on the VM*
   list until UI-002 rebuilds Home; it is the onboarding path the install guides use.
 
-## UI-002 — Deploy and Build are the two primary Home actions ☐
+## UI-002 — Deploy and Build are the two primary Home actions ☑ (1.30.10 and 1.30.11)
 
-- ☐ Two prominent choices: DEPLOY (browse files on the VM, or upload from this computer) and BUILD
-  (opens the visual lab builder directly).
-- ☐ Wording says where the files are (VM versus own computer); errors are understandable.
-- ☐ Lab list below, under a *Recent labs* tab, newest deployment first, from real deployment
-  information; a documented stable fallback for labs without it.
-- ☐ Favourites, card actions and lab access kept; *Continue where you left off* no longer outranks
-  the two actions or overrides the order.
-- ☐ Polling and navigation do not reset the active tab or reorder by unrelated activity.
+- ☑ Two prominent, equal choices on every Home: DEPLOY (*Choose a file on the lab VM…*, *Upload a file
+  from this computer…*) and BUILD (*Open the lab builder*, a direct link). 1.30.10
+- ☑ Wording says where the files are; upload errors are plain sentences; the upload reuses the
+  reviewed `create` and the existing *Deploy or add this lab…* / *Deploy lab* reviews, no bypass. 1.30.10
+- ☑ Lab list below under a *Recent labs* tab (default), newest deployment first, from the manager's
+  own record of succeeded deploys/redeploys (`last_deployed`); *All labs* keeps favourites first. 1.30.11
+- ☑ Fallback, documented on the page and here: a lab without a recorded deployment comes after all
+  dated labs, by name, and its card reads *No deployment recorded by this manager*. 1.30.11
+- ☑ Favourites, card actions and lab access kept; the *Continue where you left off* block is gone
+  (each card still shows *Last opened*). 1.30.11
+- ☑ Polling, visits, saves and favourites do not reorder *Recent labs*; the tab is kept for the session. 1.30.11
+- ☑ Lab card titles no longer break inside a word. 1.30.11
 
-## UI-003 — Edit map gets the visual builder's map-editing capabilities ☐
+## UI-003 — Edit map gets the visual builder's map-editing capabilities ◐ (matrix 1.30.12, document storage 1.30.13, editor in map mode 1.30.14; rows 8 and 9 and the per-row browser pass open)
 
-- ☐ Capability matrix: installed builder versus Edit map (`docs/ui-review-001/MAP-PARITY.md`).
-- ☐ Every map-editing capability of the matrix implemented and tested, or listed as incomplete.
-- ☐ Positions, text, shapes, annotations and style survive save, close, reopen and further edits.
-- ☐ The manager's topology view draws the saved map correctly; unsupported data is never dropped.
-- ☐ Cancel / unsaved-change behaviour; no deployment, no topology or runtime change from a map edit.
-- ☐ Annotation import/download and draw.io export kept.
+- ☑ Capability matrix: installed builder versus Edit map, and the approach (`docs/ui-review-001/MAP-PARITY.md`). 1.30.12
+- ◐ Every map-editing capability of the matrix implemented and tested, or listed as incomplete: see the
+  Status column of `MAP-PARITY.md` (1.30.14: the editor itself is in place; undo/redo and the device look are
+  open; most tools are present but not yet each driven and saved in a browser).
+- ◐ Positions and text with style survive save, close and reopen (browser, 1.30.14); the full document is
+  stored byte for byte (unit, 1.30.13). Shapes, groups and further edits: not yet driven in a browser.
+- ◐ The Topology view follows the saved map (positions, texts, shapes, groups); data it cannot draw
+  (rotation, arrows, nesting, unknown keys) is kept, not drawn. 1.30.14
+- ☑ Cancel / unsaved-change behaviour; no deployment, no topology or runtime change from a map edit
+  (adapter whitelist, topology restore, page check, save route; browser: every write went to the map document). 1.30.14
+- ☑ Annotation import/download and draw.io export kept (in the editor's bar; Import map… on the lab page unchanged). 1.30.14
 
 ## UI-004 — Save progress options are explained ☑ 1.30.4
 
@@ -101,6 +110,6 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 ## Planned chunk order
 
 1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 (1.30.4, done) → 4. UI-007 A+B (1.30.5, done) → 5. UI-007 C (1.30.6, done) → 6. UI-008 root
-cause and fix (1.30.7, done) → 6b. UI-008 tree expansion and highlight (1.30.8, done) → 7. UI-006 (1.30.9, done) → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
-10+. UI-003 matrix, then parity in increments. One patch release, one commit and one verified push
+cause and fix (1.30.7, done) → 6b. UI-008 tree expansion and highlight (1.30.8, done) → 7. UI-006 (1.30.9, done) → 8. UI-002 Home actions (1.30.10, done) → 9. UI-002 Recent labs tab and order (1.30.11, done) →
+10. UI-003 matrix (1.30.12, done) → 11+. UI-003 steps B to E of `MAP-PARITY.md`. One patch release, one commit and one verified push
 per chunk.
