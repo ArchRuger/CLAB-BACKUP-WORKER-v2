@@ -1754,12 +1754,13 @@ first save asks where the lab's progress should be saved (repository, folder and
 devices). The same settings live on the **Progress** tab under **Save location**:
 **Change folder…** opens the folder browser **Folders in this repository** (with
 **New folder…**, **Save this lab here**, **Use a different repository…** and
-**Connect by URL…**), and **Save settings** holds the devices included in every save
-and **Let me review changes before they are uploaded**; **Save location settings…**
+**Connect by URL…**), and **Save settings** holds the devices included in every save;
+**Save location settings…**
 in the **Save progress ▾** menu opens the same place. Select the registered checkout,
 review the included devices, review the branch/destination and acknowledge that
 device configurations will be committed there. The device selection is independent
-of the **Include in backups** checkboxes. The review option pauses before uploading.
+of the **Include in backups** checkboxes. Every save pauses for your review before anything
+is uploaded; there is no setting that skips it.
 Save the settings, then run the final installation report from the **ordinary
 Ubuntu account** before your first save:
 
@@ -1801,11 +1802,10 @@ flowchart TD
     F --> G{Files changed?}
     G -- Yes --> K[Commit exact changed files]
     G -- No --> L[Keep existing commit]
-    K --> R{Review before push enabled?}
-    L --> R
-    R -- Yes --> S[Review changes; choose Upload now]
-    R -- No --> H[Push selected branch]
-    S --> H
+    K --> S[Review before uploading: see what changed]
+    L --> S
+    S -- Upload these changes --> H[Push selected branch]
+    S -- Not now --> N[Saved on this VM; waiting for your review]
     H -- Verified --> I[Saved to Git]
     H -- Offline or rejected --> J[Saved on this VM; Upload now]
 ```
@@ -1846,7 +1846,7 @@ saves, so a separate timestamp folder is unnecessary for each Save progress.
 
 | Action | Meaning |
 |---|---|
-| Save progress (lab header, Progress tab) | Capture, export latest, commit changes and push; honor the review preference. |
+| Save progress (lab header, Progress tab) | Capture, export latest and commit changes on the VM; push only after the mandatory review (*Upload these changes*). |
 | Save on this VM only (Save progress ▾, Progress › More ▾) | Capture and commit without pushing. |
 | Create checkpoint… | Update latest and preserve the same capture under a new descriptive checkpoint name. |
 | Set baseline… (Progress › More ▾) | Select a complete capture to change baseline only; review explicit replacement if a baseline already exists. |

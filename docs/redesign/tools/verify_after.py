@@ -303,8 +303,16 @@ def progress(r):
     p.wait_for_function('() => document.getElementById("git-save-progress").textContent === "Saving…"', timeout=10000)
     r.check('save: header button reads Saving…', True)
     r.check('save: no job window for a plain save', r.js('() => !document.getElementById("git-job-dialog")?.open'))
-    p.wait_for_function('() => document.getElementById("git-save-progress").textContent === "Save progress"', timeout=60000)
-    r.check('save: finished and the status card agrees', r.js('() => document.getElementById("git-progress-status").textContent.startsWith("Saved to Git")'), r.js('() => document.getElementById("git-progress-status").textContent'))
+    # The review before an upload is mandatory: the save stops on the VM, the review opens by itself and
+    # only its button uploads.
+    p.wait_for_selector('#git-diff-dialog[open] #git-review-push', timeout=60000)
+    r.check('save: the review opens before anything is uploaded', r.js('() => document.querySelector("#git-diff-dialog h2").textContent') == 'Review before uploading' and r.js('() => document.getElementById("git-progress-status").textContent.startsWith("Saved on this VM")'), r.js('() => document.getElementById("git-progress-status").textContent'))
+    r.shot('39-review-before-upload')
+    p.click('#git-review-push')
+    p.wait_for_function('() => document.getElementById("git-progress-status").textContent.startsWith("Saved to Git")', timeout=60000)
+    r.check('save: uploaded after the review and the status card agrees', True)
+    if r.js('() => !!document.getElementById("git-job-dialog")?.open'):
+        p.keyboard.press('Escape')
     # An unbound lab: the header button leads to the first-save dialog
     p.click('#crumb-home')
     p.wait_for_selector('#home:not([hidden])')

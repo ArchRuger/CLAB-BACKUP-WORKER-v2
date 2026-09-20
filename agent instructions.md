@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.5
+# UI review 001 (in progress) — 1.30.6
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -30,6 +30,17 @@ details*. `#git-change-folder` renders `open` unless the lab id is in `gitFolder
 `git-progress.js`, filled and emptied by the disclosure's own `toggle` event, page lifetime only);
 `gitPlacesState.open` (Browse the repository…) opens it for one render and is the only thing that
 scrolls to the save settings. The card is rendered by `gitShowRepository()`, not by the 4 s poll.
+(5) **1.30.6, UI-007 C — the review before an upload is mandatory; do not reintroduce an opt-out.**
+Manager (`app/git_progress.py`): the save route sets `review = data.push`, so `want_push` is never true
+for a save and it ends `review_pending`; `Retry` has `reviewed`, and a push retry of a job with a commit
+needs `data.reviewed` or a recorded `job['reviewed']` (else 409), a push retry without a commit becomes
+a local retry with `review_before_push=True`, a `move` job is exempt; `reviewed` is in `PUBLIC_JOB`.
+`review_before_push` stays in the `Link`/`Connect` models for old pages and is ignored; new bindings
+store `True`; **never rewrite stored bindings** (pending jobs compare `digest(binding)`). Page
+(`git-progress.js`): `gitNeedsReview(job)`, `gitUploadLabel(job)`, `gitReviewJob(job)` is the only
+place that sends `{push:true, reviewed:true}`; a quiet save that ends `review_pending` opens it by
+itself; the job window and Recent saves route unreviewed uploads to it. A push sends every earlier
+unpushed commit of the branch too; the review says so when such saves exist.
 
 # Lab builder quality pass — 1.30.1
 

@@ -33,7 +33,7 @@ FORMATS = {'juniper_cjunosevolved': 'junos-display-set', 'juniper_vqfx': 'junos-
            'juniper_vjunosswitch': 'junos-display-set', 'cisco_xrv9k': 'iosxr-running-config',
            'arista_ceos': 'eos-running-config'}
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'message', 'backup_job_id',
-              'commit', 'pushed', 'target', 'checkpoint', 'changed_files', 'snapshot_path', 'note', 'review_before_push')
+              'commit', 'pushed', 'target', 'checkpoint', 'changed_files', 'snapshot_path', 'note', 'review_before_push', 'reviewed')
 
 
 def digest(value):
@@ -432,11 +432,15 @@ class GitProgress:
                 self.store.save()
 
     def install(self, app):
+        # The review before an upload is mandatory (UI review 001, UI-007 C). `review_before_push` is still
+        # accepted from pages loaded before that release, and ignored: a new binding records True, a
+        # stored False is never consulted, and stored bindings are left alone so pending saves keep
+        # their binding digest.
         class Link(BaseModel):
             model_config = ConfigDict(extra='forbid')
             binding_id: str = Field(min_length=1, max_length=120)
             node_names: list[str] = Field(min_length=1, max_length=500)
-            review_before_push: bool = False
+            review_before_push: bool = True
 
         class Save(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -453,6 +457,7 @@ class GitProgress:
         class Retry(BaseModel):
             model_config = ConfigDict(extra='forbid')
             push: bool = True
+            reviewed: bool = False
 
         class Dismiss(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -505,7 +510,7 @@ class GitProgress:
         def bind_lab(lab_id, repo, node_names, review, before, event, message):
             """Point the lab at a registration after a live status check; the exposure acknowledgement is the caller's job."""
             binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
-                           host_identity=before, node_names=node_names, review_before_push=review)
+                           host_identity=before, node_names=node_names, review_before_push=True)
             call({'mode': 'status'}, binding)
             with self.store.lock:
                 self.idle(); self.guard_pending(lab_id)
@@ -561,7 +566,7 @@ class GitProgress:
             repo = next((r for r in result['repositories'] if r['id'] == data.binding_id), None)
             if not repo: raise HTTPException(400, 'Choose a repository registered by the VM administrator.')
             binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
-                           host_identity=before, node_names=data.node_names, review_before_push=data.review_before_push)
+                           host_identity=before, node_names=data.node_names, review_before_push=True)
             call({'mode': 'status'}, binding)
             with self.store.lock:
                 self.idle(); self.guard_pending(lab_id)
@@ -693,7 +698,9 @@ class GitProgress:
                     if set(snapshot['manifest']['node_names']) != set(names): raise HTTPException(400, 'Capture must contain exactly the configured devices.')
                 context = dict(node_names=sorted(names), excluded_nodes=sorted(n['name'] for n in lab['nodes'] if n['name'] not in names),
                                topology_digest=hashlib.sha256(lab['definition_yaml'].encode()).hexdigest() if lab.get('definition_yaml') else None)
-                review = binding.get('review_before_push', False) and data.push
+                # A save a person starts never uploads by itself: it stops at review_pending and the upload
+                # is a retry that states the review happened. The binding's old preference is not read.
+                review = data.push
                 request = dict(target=data.target, checkpoint=data.checkpoint, push=False,
                                replace_baseline=data.replace_baseline, expected_baseline=data.expected_baseline,
                                allow_removed=data.allow_removed, message=data.note.strip() or f'Save {lab["name"]} progress')
@@ -720,7 +727,17 @@ class GitProgress:
                 if job['status'] in ('dismissed', 'capture_incomplete', 'failed'): raise HTTPException(409, 'Start a new save for this capture outcome.')
                 if job['status'] == 'synced': return public_job(job)
                 if digest(self.binding(job['lab_id'])) != job['binding_digest']: raise HTTPException(409, 'Repository settings changed. Reconnect the original destination.')
-                self.update(job_id, status='queued', retry=True, retry_push=data.push, message='Retry queued; the saved capture will be reused.')
+                # Uploading a save needs its review: stated with this request, or recorded by an earlier
+                # one (an upload that failed after the review). A save without a commit has nothing to
+                # review yet, so its retry saves on the VM and then waits for the review. A folder move
+                # carries no configuration change and keeps its own confirmed upload.
+                push, changes = data.push, {}
+                if push and job.get('target') != 'move':
+                    if not job.get('commit'): push, changes = False, dict(review_before_push=True)
+                    elif not (data.reviewed or job.get('reviewed')):
+                        raise HTTPException(409, 'Review the changes of this save before uploading it.')
+                    elif not job.get('reviewed'): changes = dict(reviewed=now())
+                self.update(job_id, status='queued', retry=True, retry_push=push, message='Retry queued; the saved capture will be reused.', **changes)
             return self.schedule(job)
 
         @app.post('/api/git/jobs/{job_id}/dismiss')

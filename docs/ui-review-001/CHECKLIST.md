@@ -46,8 +46,8 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - ☑ On hover and on keyboard focus (and as the option's accessible description); a pane inside the
   menu, placed by measurement so it stays inside the window, never over an option, and reading it
   never closes the menu.
-- Follow-up for UI-007 C: the checkpoint text says "uploaded … unless you untick the upload"; review
-  becomes mandatory there and the wording has to follow.
+- The checkpoint text was updated with UI-007 C (1.30.6): uploaded only after the student has seen
+  what changed and confirmed.
 
 ## UI-005 — Lab actions dropdown is simpler ☑ 1.30.3
 
@@ -64,15 +64,19 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - ☐ Long names and multi-line reasons do not overlap or shift other rows; every state stays readable.
 - ☐ Laptop widths and zoom: no clipped actions, no needless horizontal scrolling.
 
-## UI-007 — Save location clean-up, review is mandatory ◐ (A + B in 1.30.5)
+## UI-007 — Save location clean-up, review is mandatory ☑ (A + B 1.30.5, C 1.30.6)
 
 - ☑ A. The marked *Technical details* disclosure reads *Git repo details* (only `.git-location-tech`
   on the Save location card). 1.30.5
 - ☑ B. *Change folder…* is open when Save location opens; a deliberate fold survives polling, a tab
   change and the re-render after *Save settings* (per lab, for the life of the page). 1.30.5
-- ☐ C. The *Let me review changes before they are uploaded* checkbox is gone; the review always
-  happens for the user-started upload/save it governs, also for saved opt-outs; cancel uploads
-  nothing and reports nothing as saved. Scheduled / non-interactive work is not altered silently.
+- ☑ C. The checkbox is gone; every user-started save stops on the VM and opens *Review before
+  uploading* with *Upload these changes* / *Not now*; the manager refuses an upload that does not
+  state the review, so a stored opt-out or an old page cannot bypass it; cancel uploads nothing and
+  reports *Not uploaded*. 1.30.6
+- Findings: nothing scheduled or non-interactive creates Git saves (automatic backups never did), so
+  no conflict arose. A folder move keeps its own confirmed upload (no configuration change to review).
+  A push always sends every earlier unpushed commit of the branch; the review window says so.
 
 ## UI-008 — Repository folder browser ☐
 
@@ -85,7 +89,7 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 
 ## Planned chunk order
 
-1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 (1.30.4, done) → 4. UI-007 A+B (1.30.5, done) → 5. UI-007 C → 6. UI-008 root
+1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 (1.30.4, done) → 4. UI-007 A+B (1.30.5, done) → 5. UI-007 C (1.30.6, done) → 6. UI-008 root
 cause and fix → 7. UI-006 → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
 10+. UI-003 matrix, then parity in increments. One patch release, one commit and one verified push
 per chunk.

@@ -38,24 +38,26 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.3 | UI-005 | *Advanced options* group at the bottom of **Lab actions ▾** (`data-menu-group` / `data-menu-panel`, behaviour in `shell.js` `initMenu`) | `check_ui005.py` all passed, `verify_after.py` 95/95 ×3, `~/ui-review/review-001/chunk02/` |
 | 1.30.4 | UI-004 | Explanation pane in the Save progress menu (`gitSaveHelp`, `gitSaveMenuPlacement` in `git-progress.js`) | `check_ui004.py` 74/74 at five window sizes, `verify_after.py` 95/95 ×3, `~/ui-review/review-001/chunk03/` |
 | 1.30.5 | UI-007 A + B | *Git repo details*; `#git-change-folder` open on entry, fold remembered per lab (`gitFolderCollapsed`) | `check_ui007ab.py` 11/11, `verify_after.py` 96/96 ×3, `~/ui-review/review-001/chunk04/` |
+| 1.30.6 | UI-007 C | Mandatory review before an upload, enforced in `app/git_progress.py` (`Retry.reviewed`) and driven by `gitReviewJob` | `check_ui007c.py` 17/17, `verify_after.py` 97/97 ×3 on fresh fixture data, python 706, `~/ui-review/review-001/chunk05/` |
 
 ## Next
 
-Chunk 5 = **UI-007 C**: remove the *Let me review changes before they are uploaded* checkbox
-(`#git-review-before-push` in `gitRenderRepository`, `git-progress.js`) and make the review mandatory.
-Where the flag lives: `review_before_push` in `app/git_progress.py` (the binding, the job, `status =
-'review_pending'` near line 420, the save route near line 696 `review = binding.get(...) and
-data.push`), sent by the frontend in the binding PUT, in connect-by-URL and as `false` in the first-save
-flow. To decide first: which paths are user-started (Save progress, checkpoint, baseline, first save)
-and whether anything scheduled or non-interactive creates Git jobs (if it does and shares the flag, ask
-the maintainer instead of guessing). A saved `false` must not bypass the review, so enforce it in the
-manager, not only in the page. Update `gitSaveHelp('checkpoint')`, the save dialog's *Upload after
-saving* wording, `docs/GIT-PROGRESS.md` and the tests that pin the opt-out. Then the order at the end of
-`CHECKLIST.md`.
+Chunk 6 = **UI-008** (repository folder browser). Start by reproducing: create `working` under
+`JunOS-TEST-2` and watch it disappear. Where to look: `app/static/git-places.js` (`gitTreeModel`,
+`gitPlacesMarkup`, `gitPlacesShow`, expansion/selection state in `gitPlacesState`), `gitNewFolder` /
+`gitUseFolder` in `git-progress.js`, `POST /api/git/repositories/{id}/folders` and the `/tree` route in
+`app/git_progress.py`, and the helper's `browse` mode in `app/host_git.py` (ls-tree of HEAD plus the
+sibling registrations as `folders`: an empty registered folder exists only as a registration until its
+first save, which is the likely reason it vanishes from a tree built from committed files). The
+fixture's scripted helper is in `docs/redesign/tools/fixture_manager.py`; the real helper can be
+driven with real Git in `tests/test_host_git.py` (`HostGitPlacesTests`). Do not change `host_git.py`
+unless the root cause is there (security-sensitive, needs a helper refresh). Then UI-006, UI-002,
+UI-003 as listed at the end of `CHECKLIST.md`.
 
 ## Known limits and open points
 
-- 1.30.2 to 1.30.5 were validated against the fixture manager only; CI was green for 1.30.2, 1.30.3 and 1.30.4 (`gh run list --branch claude/ui-review-001`). The development manager running on the VM
+- 1.30.2 to 1.30.6 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.5 (`gh run list --branch claude/ui-review-001`).
+- UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
   --manager-only` (helpers must match the release); record here when that was last done: **not yet for
   this branch**.

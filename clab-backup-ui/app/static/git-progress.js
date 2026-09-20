@@ -75,7 +75,7 @@ const GIT_SAVE_HELP_ACTIONS=['checkpoint','local','history','settings'];
 function gitSaveHelp(action,binding){
  const folder=binding?gitFolderWords(binding):'the save location',host=(typeof statusHost==='function'&&statusHost(gitRepository(binding).push_url))||'the online repository';
  const help={
-  checkpoint:{title:'Create checkpoint…',what:'Reads the configuration of every included device now and keeps it as a named version that later saves never overwrite. You choose the name first.',where:'Goes to checkpoints/<name> in '+folder+', and is uploaded to '+host+' unless you untick the upload.'},
+  checkpoint:{title:'Create checkpoint…',what:'Reads the configuration of every included device now and keeps it as a named version that later saves never overwrite. You choose the name first.',where:'Goes to checkpoints/<name> in '+folder+'. It is uploaded to '+host+' only after you have seen what changed and confirmed the upload.'},
   local:{title:'Save on this VM only',what:'Reads the configuration of every included device now and saves it as your latest version, without uploading anything.',where:'Stays in the lab VM’s copy of '+folder+'. Upload it later with Progress › More › Upload saved progress.'},
   history:{title:'Saved versions & history',what:'Lists every saved version and every save of this repository, to view, download, compare or apply. Nothing is read from the devices and nothing new is saved.',where:'Opens a window; your saves stay as they are.'},
   settings:{title:'Save location settings…',what:'Shows which repository and folder this lab saves to and which devices are included, and lets you change them.',where:'Opens Progress › Save location. Nothing is saved or moved until you confirm a change there.'},
@@ -192,7 +192,7 @@ function gitRenderRepository(id,context,catalog,extras={}){
   <fieldset class="git-node-scope"><legend>Devices included in every save</legend>${supported.map(node=>`<label class="checkbox-label"><input type="checkbox" name="git-node" value="${esc(node.name)}" ${selected.has(node.name)?'checked':''}> <span>${esc(node.short_name||node.name)} <small>${esc(platformLabel(node.platform))}</small></span></label>`).join('')||'<p>No supported configuration devices in this lab.</p>'}</fieldset>
   ${excluded.length?`<p class="form-help">${excluded.map(node=>esc(node.short_name||node.name||node)).join(', ')} can’t be included yet — configuration saves aren’t supported for ${excluded.length===1?'its':'their'} platform.</p>`:''}
   <p class="form-help">If an included device can’t be reached, the save stops and nothing is written — an older configuration is never saved in its place.</p>
-  <label class="checkbox-label"><input id="git-review-before-push" type="checkbox" ${binding?.review_before_push?'checked':''}> Let me review changes before they are uploaded</label>
+  <p class="form-help">Nothing is uploaded without you: after a save you see what changed and choose whether to upload it.</p>
   <label id="git-exposure-label" class="checkbox-label"><input id="git-exposure" type="checkbox"> ${esc(GIT_EXPOSURE_TEXT)}</label>
   <details class="caption"><summary>Registration details</summary><p id="git-binding-destination" class="op-path"></p><p>Git runs on the VM as the registered account with the login configured there. This app never asks for a Git password.</p></details>
   <p class="form-error" role="alert"></p><div class="actions"><button type="submit" class="button primary" ${supported.length?'':'disabled'}>${activeBinding?'Save settings':'Connect save location'}</button></div></form>`:'';
@@ -217,7 +217,7 @@ function gitRenderRepository(id,context,catalog,extras={}){
    const node_names=[...form_.querySelectorAll('[name="git-node"]:checked')].map(input=>input.value);
    if(!node_names.length)throw new Error('Choose at least one device to include.');
    if(gitBindingChanged(binding,repositories.find(value=>value.id===$('git-binding-id').value))&&!$('git-exposure').checked)throw new Error(GIT_EXPOSURE_ERROR);
-   await json('/labs/'+encodeURIComponent(id)+'/git','PUT',{binding_id:$('git-binding-id').value,node_names,review_before_push:$('git-review-before-push').checked});
+   await json('/labs/'+encodeURIComponent(id)+'/git','PUT',{binding_id:$('git-binding-id').value,node_names});
    await gitShowRepository(true);await refresh();notify(activeBinding?'Save settings updated.':'Save location connected. You can save progress now.');
   });};
  }else if(activeBinding)showPlaces(binding.binding_id);
@@ -318,7 +318,7 @@ function gitRenderSaves(id,context){
  const jobs=gitLabJobs(id,context).slice(0,20);
  const open=new Set(typeof list.querySelectorAll==='function'?[...list.querySelectorAll('details[open]')].map(d=>d.dataset?.gitJob||d.getAttribute?.('data-git-job')):[]);
  const html=jobs.map(job=>{const pending=gitPendingStates.has(job.status);
-  return `<details class="git-saved-job" data-git-job="${esc(job.id)}" ${open.has(job.id)?'open':''}><summary><span class="pill ${esc(gitSavePill(job))}">${esc(gitSavedAs(job))}</span> <span>${esc(gitSaveSentence(job))} · ${esc(gitWhen(job.finished||job.created))}</span></summary><dl class="kv"><dt>Saved as</dt><dd>${esc(gitSavedAs(job))}</dd><dt>Where</dt><dd>${esc(gitFolderWords(context.binding))}</dd>${job.commit?`<dt>Commit</dt><dd class="mono">${esc(job.commit.slice(0,10))}</dd>`:''}<dt>Upload</dt><dd>${esc(gitUploadState(job))}</dd>${job.note?`<dt>Note</dt><dd>${esc(job.note)}</dd>`:''}<dt>Job id</dt><dd class="mono">${esc(job.id)}</dd><dt>Message</dt><dd>${esc(job.message||'')}</dd></dl><div class="actions"><button type="button" class="button secondary small" data-git-job-open="${esc(job.id)}">Open</button>${pending?`<button type="button" class="button primary small" data-git-job-upload="${esc(job.id)}">${job.commit?'Upload now':'Retry save and upload'}</button><button type="button" class="button secondary small" data-git-job-keep="${esc(job.id)}">Keep snapshot only</button>`:''}</div></details>`;}).join('')
+  return `<details class="git-saved-job" data-git-job="${esc(job.id)}" ${open.has(job.id)?'open':''}><summary><span class="pill ${esc(gitSavePill(job))}">${esc(gitSavedAs(job))}</span> <span>${esc(gitSaveSentence(job))} · ${esc(gitWhen(job.finished||job.created))}</span></summary><dl class="kv"><dt>Saved as</dt><dd>${esc(gitSavedAs(job))}</dd><dt>Where</dt><dd>${esc(gitFolderWords(context.binding))}</dd>${job.commit?`<dt>Commit</dt><dd class="mono">${esc(job.commit.slice(0,10))}</dd>`:''}<dt>Upload</dt><dd>${esc(gitUploadState(job))}</dd>${job.note?`<dt>Note</dt><dd>${esc(job.note)}</dd>`:''}<dt>Job id</dt><dd class="mono">${esc(job.id)}</dd><dt>Message</dt><dd>${esc(job.message||'')}</dd></dl><div class="actions"><button type="button" class="button secondary small" data-git-job-open="${esc(job.id)}">Open</button>${pending?`<button type="button" class="button primary small" data-git-job-upload="${esc(job.id)}">${esc(gitUploadLabel(job))}</button><button type="button" class="button secondary small" data-git-job-keep="${esc(job.id)}">Keep snapshot only</button>`:''}</div></details>`;}).join('')
   ||(context.binding?'<p class="caption">No saves yet. Save progress creates a snapshot you can return to later.</p>':'<p class="caption">Saves appear here once this lab has a save location.</p>');
  gitVersionsMarkup(list,html);
 }
@@ -326,6 +326,7 @@ async function gitSavesAction(button,id=activeId){
  const jobId=button.dataset.gitJobOpen||button.dataset.gitJobUpload||button.dataset.gitJobKeep;if(!jobId)return;
  const job=gitLabJobs(id).find(item=>item.id===jobId);
  if(button.dataset.gitJobOpen)return gitShowJob(jobId,job);
+ if(button.dataset.gitJobUpload&&job&&gitNeedsReview(job))return gitReviewJob(job);
  if(button.dataset.gitJobUpload){const result=await json('/git/jobs/'+encodeURIComponent(jobId)+'/retry','POST',{push:true});gitRememberJob(result);await gitShowJob(result.id,result);await refresh();return;}
  if(button.dataset.gitJobKeep&&job)return gitDismissJob(job);
 }
@@ -397,7 +398,7 @@ async function gitConnectByUrl(id,options={}){
   if(!$('git-connect-ack').checked)throw new Error(GIT_EXPOSURE_ERROR);
   const button=$('git-connect-confirm'),label=button.textContent;button.textContent='Connecting… this can take a minute';
   try{
-   const result=await json('/labs/'+encodeURIComponent(id)+'/git/connect','POST',{url,prefix:folder,acknowledge:true,node_names:context.binding?.node_names||[],review_before_push:context.binding?.review_before_push||false});
+   const result=await json('/labs/'+encodeURIComponent(id)+'/git/connect','POST',{url,prefix:folder,acknowledge:true,node_names:context.binding?.node_names||[]});
    dialog.close();gitContexts.delete(id);gitPlacesState.selected=folder;await refresh();if(gitTabActive())await gitShowRepository(true);notify(labName+' now saves to '+gitRepoName(result.binding?.repository)+'.');
    if(options.firstSave)await gitSubmitSave(id,{target:'latest',push:true},undefined,{quiet:true});
   }finally{button.textContent=label;}
@@ -423,7 +424,7 @@ async function gitFirstSave(id=activeId){
   const inRepo=repositories.filter(r=>r.path===path);
   let registration=inRepo.find(r=>(r.prefix||'')===folder);
   if(!registration)registration=(await json('/git/repositories/'+encodeURIComponent(inRepo[0].id)+'/folders','POST',{prefix:folder})).repository;
-  await json('/labs/'+encodeURIComponent(id)+'/git','PUT',{binding_id:registration.id,node_names,review_before_push:false});
+  await json('/labs/'+encodeURIComponent(id)+'/git','PUT',{binding_id:registration.id,node_names});
   gitContexts.delete(id);dialog.close();await refresh();if(gitTabActive())await gitShowRepository(true);
   await gitSubmitSave(id,{target:'latest',push:true},undefined,{quiet:true});
  });
@@ -462,7 +463,7 @@ async function gitSaveOptions(target,id=activeId){
  ${baseline?`<p>The baseline is the reference version for this lab (for example the instructor's starting state). Pick one of the complete saves below — no device is read or changed.</p><label for="git-baseline-job">Use this saved configuration</label><select id="git-baseline-job" required><option value="">Choose a saved configuration</option>${backups.map(job=>`<option value="${esc(job.id)}" title="${esc(job.id)}">${esc(gitWhen(job.created))} · ${job.nodes.length} devices</option>`).join('')}</select>${backups.length?'':`<p class="op-notice">No complete save includes all ${total} devices yet. Save progress first, then set the baseline.</p>`}<details class="caption"><summary>Details</summary><p>Setting the baseline does not check whether the version can be applied to a running lab.</p></details>${baselineRevision?'<label class="checkbox-label"><input type="checkbox" id="git-replace-baseline"> Replace the current baseline with this version (the previous one stays in history)</label>':''}`:`<p>${local?'Saves a snapshot on the lab VM without uploading it. You can upload it later from Recent saves.':'A checkpoint is a named version you can return to later.'}</p>`}
  ${checkpoint?'<label for="git-checkpoint-name">Checkpoint name</label><input id="git-checkpoint-name" maxlength="100" placeholder="OSPF-complete" autocomplete="off" spellcheck="false"><p class="form-help">Letters, numbers, underscores or hyphens. Each name can be used once.</p><p class="caption" id="git-checkpoint-preview" hidden></p>':''}
  <label for="git-save-note">${checkpoint?'What did you get working? (optional)':'Note (optional)'}</label><input id="git-save-note" maxlength="300" placeholder="${checkpoint?'For example: OSPF adjacencies up on every router':'What changed in this experiment?'}">
- ${local?'':'<label class="checkbox-label"><input id="git-save-push" type="checkbox" checked> Upload after saving'+(context.binding.review_before_push?' (you asked to review changes first, so the upload waits for your review)':'')+'</label>'}
+ ${local?'':'<label class="checkbox-label"><input id="git-save-push" type="checkbox" checked> Upload after saving — you see what changed first and confirm the upload</label>'}
  <details><summary>Devices removed from this lab</summary><label class="checkbox-label"><input id="git-allow-removed" type="checkbox"> Also remove saved files for devices that are no longer included (their older versions stay in history)</label></details>
  <div class="dialog-actions"><button class="button secondary" id="git-save-cancel">Cancel</button><button class="button primary" id="git-save-confirm" ${baseline&&!backups.length?'disabled':''}>${label}</button></div>`);
  const requestId=gitRequestId();$('git-save-cancel').onclick=()=>dialog.close();
@@ -492,8 +493,8 @@ function gitRenderJob(job){
  if(gitDialogJob!==job.id||!$('git-job-dialog')?.open)return;
  const heading=typeof $('git-job-dialog').querySelector==='function'?$('git-job-dialog').querySelector('h2'):null;if(heading)heading.textContent=gitJobTitle(job);
  $('git-job-detail').innerHTML=gitJobMarkup(job);
- const pending=gitPendingStates.has(job.status),active=gitActiveStates.has(job.status),hasCommit=!!job.commit;
- $('git-job-actions').innerHTML=`${job.backup_job_id?'<button class="button secondary" data-git-job-action="backup">View configuration backup</button>':''}${hasCommit?'<button class="button secondary" data-git-job-action="review">Review changes</button>':''}${pending?`<button class="button primary" data-git-job-action="push">${hasCommit?'Upload now':'Retry save and upload'}</button>${!hasCommit?'<button class="button secondary" data-git-job-action="local">Retry save on this VM only</button>':''}<button class="button secondary" data-git-job-action="dismiss">Keep snapshot only</button>`:''}${active?'<p class="form-help" role="status">You can close this window. The save continues in the background and its result appears under Progress › Recent saves.</p>':''}`;
+ const pending=gitPendingStates.has(job.status),active=gitActiveStates.has(job.status),hasCommit=!!job.commit,review=gitNeedsReview(job);
+ $('git-job-actions').innerHTML=`${job.backup_job_id?'<button class="button secondary" data-git-job-action="backup">View configuration backup</button>':''}${hasCommit&&!(pending&&review)?'<button class="button secondary" data-git-job-action="review">Review changes</button>':''}${pending?`<button class="button primary" data-git-job-action="${review?'review':'push'}">${gitUploadLabel(job)}</button>${!hasCommit?'<button class="button secondary" data-git-job-action="local">Retry save on this VM only</button>':''}<button class="button secondary" data-git-job-action="dismiss">Keep snapshot only</button>`:''}${active?'<p class="form-help" role="status">You can close this window. The save continues in the background and its result appears under Progress › Recent saves.</p>':''}`;
  for(const button of $('git-job-actions').querySelectorAll('[data-git-job-action]'))button.onclick=()=>opTask($('git-job-dialog'),async()=>{
   const action=button.dataset.gitJobAction;
   if(action==='backup'){$('git-job-dialog').close();selectLab(job.lab_id);showTab('backups');const capture=[...document.querySelectorAll('.job')].find(item=>item.dataset.job===job.backup_job_id);if(capture){capture.open=true;capture.scrollIntoView({block:'center',behavior:'smooth'});}return;}
@@ -502,11 +503,19 @@ function gitRenderJob(job){
   const result=await json('/git/jobs/'+encodeURIComponent(job.id)+'/retry','POST',{push:action==='push'});gitRememberJob(result);await gitShowJob(result.id,result);await refresh();
  });
 }
+// The review before an upload is mandatory: a save with a commit is uploaded only from the review
+// window, by the student's own choice, and the manager refuses an upload that does not say so. A save
+// whose review already happened (its upload failed afterwards) and a folder move upload directly.
+function gitNeedsReview(job){return !!job&&!!job.commit&&!job.reviewed&&!job.pushed&&job.target!=='move';}
+function gitUploadLabel(job){return !job.commit?'Retry save, then review':gitNeedsReview(job)?'Review and upload…':'Upload now';}
 async function gitReviewJob(job){
  const result=await json('/labs/'+encodeURIComponent(job.lab_id)+'/git/compare','POST',{job_id:job.id});
- const dialog=opDialog('git-diff-dialog','Review this save',`<p>What this save changed compared with the previous one. Configuration files may contain passwords or keys.</p><details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${gitDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${gitPendingStates.has(job.status)?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
+ const waiting=gitPendingStates.has(job.status),decide=waiting&&gitNeedsReview(job),context=gitContexts.get(job.lab_id),host=(typeof statusHost==='function'&&statusHost(gitRepository(context?.binding).push_url))||'the online repository';
+ const others=decide?gitLabJobs(job.lab_id,context).filter(item=>item.id!==job.id&&item.commit&&!item.pushed&&gitPendingStates.has(item.status)).length:0;
+ const dialog=opDialog('git-diff-dialog',decide?'Review before uploading':'Review this save',`<p>What this save changed compared with the previous one. Configuration files may contain passwords or keys.</p>${decide?`<p class="op-notice" id="git-review-decision">This save is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${others?` Uploading also sends ${others} earlier ${others===1?'save':'saves'} that ${others===1?'is':'are'} still waiting on the VM.`:''}</p>`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${gitDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?'<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button><button class="button primary" id="git-review-push">Upload these changes</button>':waiting?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
  $('git-review-files').onclick=()=>opTask(dialog,()=>gitViewVersion(job.lab_id,{commit:job.commit,path:gitTargetPath(job)}));
- $('git-review-push')?.addEventListener('click',()=>opTask(dialog,async()=>{const next=await json('/git/jobs/'+encodeURIComponent(job.id)+'/retry','POST',{push:true});dialog.close();gitRememberJob(next);await gitShowJob(next.id,next);await refresh();}));
+ if($('git-review-cancel'))$('git-review-cancel').onclick=()=>{dialog.close();notify('Not uploaded. The save stays on the lab VM; upload it from Progress › Recent saves when you are ready.');};
+ $('git-review-push')?.addEventListener('click',()=>opTask(dialog,async()=>{const next=await json('/git/jobs/'+encodeURIComponent(job.id)+'/retry','POST',{push:true,reviewed:true});dialog.close();gitRememberJob(next);await gitShowJob(next.id,next);await refresh();}));
 }
 function gitDoneToast(job){
  if(job.target==='checkpoint')return `Checkpoint '${job.checkpoint||''}' saved.`;
@@ -526,7 +535,7 @@ function gitStartWatch(job,options={}){
    if(gitActiveStates.has(value.status))gitWatchTimer=setTimeout(poll,1500);
    else{
     gitWatch=null;await refresh();
-    if(watch.quiet){if(['push_pending','export_pending','failed','capture_incomplete','interrupted','review_pending'].includes(value.status))await gitShowJob(value.id,value);else notify(gitDoneToast(value));}
+    if(watch.quiet){if(value.status==='review_pending'&&gitNeedsReview(value))await gitReviewJob(value);else if(['push_pending','export_pending','failed','capture_incomplete','interrupted','review_pending'].includes(value.status))await gitShowJob(value.id,value);else notify(gitDoneToast(value));}
     if(gitTabActive()&&activeId===value.lab_id)await gitShowRepository(true);
    }
   }catch(error){if(gitWatch===watch){gitWatch=null;if(gitDialogJob===job.id&&$('git-job-dialog')?.open)$('git-job-dialog').querySelector('.form-error').textContent='The save status could not be refreshed. Close and reopen this save to check it. ('+error.message+')';else if(watch.quiet)notify('The save status could not be refreshed. Open the save under Progress › Recent saves to check it.');}}

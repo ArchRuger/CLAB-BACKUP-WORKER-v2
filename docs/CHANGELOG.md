@@ -4,6 +4,33 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.6
+
+**UI review 001, step 5: the review before an upload is mandatory (UI-007 C).** Manager and frontend;
+the VM helpers are unchanged apart from the lockstep version. This is an intended change of behaviour:
+until now a save uploaded by itself unless *Let me review changes before they are uploaded* was ticked.
+
+- **No opt-out any more.** The checkbox is gone from *Save location › Save settings*. Every save a
+  person starts (Save progress, a checkpoint, a baseline, the first save) is committed on the lab VM and
+  then opens **Review before uploading**: what the save changed, a line saying that nothing is
+  uploaded unless the student chooses it (and, when earlier saves are still waiting on the VM, that
+  they go along), **Upload these changes** and **Not now — keep it on the VM**. Declining uploads
+  nothing and says *Not uploaded*; the save stays in *Recent saves* as *Waiting for your review* and
+  the status line reads *Saved on this VM*, never *Saved to Git*.
+- **Enforced by the manager, not by the page.** A save request never pushes on its own, and
+  `POST /api/git/jobs/{id}/retry` with `push` answers 409 *Review the changes of this save before
+  uploading it* unless the request states the review (`reviewed: true`) or the job already records
+  one (an upload that failed after its review is repeated with **Upload now**). A save location stored
+  with the old opt-out and a page loaded before this release therefore cannot upload unreviewed
+  changes. A retry of a save that has no commit yet saves on the VM first and then waits for the
+  review. `review_before_push` is still accepted in requests and ignored; new save locations record it
+  as on, and stored ones are left alone so saves that are waiting keep working.
+- Every upload button follows: *Recent saves* and the save window offer **Review and upload…** for a
+  save that was never reviewed, also for a *Save on this VM only* that is uploaded later.
+- Not changed: *Save on this VM only* (no upload, no review), a folder move (it carries no
+  configuration change and keeps its own confirmed upload), and automatic backups, which never
+  created Git saves. Nothing scheduled or non-interactive shared the preference.
+
 ## Changes in 1.30.5
 
 **UI review 001, step 4: Save location shows its folders and names its Git details (UI-007 A and B).**

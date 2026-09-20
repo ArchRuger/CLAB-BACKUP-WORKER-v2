@@ -1,3 +1,44 @@
+# UI review 001, step 5: the review before an upload is mandatory — 1.30.6
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.5 (`95435e6`,
+pushed). Requirement UI-007 C of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no live VM, Git
+repository, lab or device was involved** (the fixture manager runs the real application with a scripted
+Git helper), and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `python -m unittest discover -s tests -t tests`: 706 tests, 1 skipped (the opt-in SSH fixture), OK.
+  `test_git_progress.py` (32): eight tests that expected a save to upload by itself now assert
+  `review_pending` with no push request and reach `synced` through the reviewed retry, every other
+  claim kept (no recapture, the identical publication body on replay, ancestor reconciliation, baseline
+  conditions, storage recovery). New: a binding stored with the old opt-out and requests without the
+  review (`{push:true}`, `reviewed:false`, an empty body) are refused with 409 and change nothing;
+  keeping the save on the VM needs no review; the reviewed upload pushes exactly once and records
+  `reviewed`; a new binding records the review as on whatever the request says.
+- `node --test tests/*.js`: 172 of 172. New in `test_git_progress_ui.js`: which saves need the review
+  (also a local save uploaded later, not a folder move, not a reviewed one), the button labels, cancel
+  sends no upload request and says *Not uploaded*, the upload states `reviewed: true`, *Recent saves* and
+  the save window lead to the review and have no direct upload, a synced save is reviewed read-only;
+  the page source no longer contains the checkbox or sends the preference. `test_git_places_ui.js`:
+  the Recent saves row labels for an unreviewed, a reviewed and a commit-less pending save.
+- `python3 deploy/verify-release.py`, `node --check app/static/git-progress.js`, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 97 of 97 at three viewports, 0 console
+  errors, 0 page errors (its save flow now waits for the review, checks *Saved on this VM*, uploads
+  from the review and then expects *Saved to Git*). `docs/ui-review-001/tools/check_ui007c.py` 17 of 17
+  on a lab whose stored save location carries the old opt-out: no checkbox, the new sentence and the
+  device selection in the form; Save progress ends in *Review before uploading*; *Not now* says *Not
+  uploaded*, the job is `review_pending` and not pushed, the status line says *Saved on this VM*; a raw
+  `retry {push:true}` from the page is refused with 409 and changes nothing; *Recent saves* offers
+  *Review and upload…*, and *Upload these changes* ends `synced` with `reviewed` recorded; *Save on
+  this VM only* has no upload box, opens no review and uploads nothing. Screenshots inspected:
+  `~/ui-review/review-001/chunk05/` on the VM.
+
+## Not covered
+
+The fixture's scripted helper returns an empty comparison, so the review window was seen in a browser
+with *No differences*; the diff markup itself is covered by the unit tests. No real push to a Git host
+was made in this step.
+
 # UI review 001, step 4: Save location, Git repo details and the open folder browser — 1.30.5
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.4 (`a5bc0b4`,

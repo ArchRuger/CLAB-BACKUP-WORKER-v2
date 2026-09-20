@@ -171,16 +171,16 @@ repeats them on its status card, whose **More ▾** adds the rest.
 
 | Action | Result |
 |---|---|
-| **Save progress** | Capture the configured device selection, export `latest`, commit changes and push; the *review before upload* preference pauses before the push. A save that succeeds only shows a toast; the save window opens on its own when something needs you. |
+| **Save progress** | Capture the configured device selection, export `latest`, commit changes on the VM, then open **Review before uploading**: what the save changed, with **Upload these changes** and **Not now — keep it on the VM**. Nothing is pushed without that choice (the manager refuses an upload that does not state the review, whatever an older save location setting said), and declining leaves the save on the VM as *Waiting for your review*. A save with nothing new only shows a toast; the save window opens on its own when something else needs you. |
 | **Save on this VM only** | Capture and commit without pushing. |
 | **Create checkpoint…** | Capture a named milestone in `checkpoints/<name>`. |
 | **Set baseline…** | Select a complete recorded capture for `baseline`; replacing one is reviewed explicitly. |
 | **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* diffs it against the lab's `latest/` (never against the running devices); *Apply to running lab…* replaces the running configuration of the selected Junos devices with that version (no reboot; backed up first) without changing where the lab saves. |
 | **Full history…** | Every commit of the lab's folder with its versions. |
-| **Upload saved progress** / **Upload now** | Publish the existing saved commit without recapturing devices. |
+| **Upload saved progress** / **Review and upload…** | Publish a saved commit without recapturing devices, through the same review (a save reviewed before, whose upload failed, reads **Upload now**). |
 | **Update from the repository** | Update an eligible clean checkout using a fast-forward; no merge/rebase conflict resolution. |
-| **Recent saves** (Open / Upload now / Keep snapshot only) | One row per save with what happened; *Open* shows the save window with the details and retries. |
-| **Save location settings…** / the *Save location* card | The repository and folder the lab saves to, the devices included in every save and the review preference; **Change folder…** (unfolded when the card opens) holds the folder browser, *Git repo details* shows the push destination, branch, VM account and checkout path, **Browse the repository…** under *Saved versions* opens the same browser. |
+| **Recent saves** (Open / Review and upload… / Keep snapshot only) | One row per save with what happened; *Open* shows the save window with the details and retries. |
+| **Save location settings…** / the *Save location* card | The repository and folder the lab saves to, the devices included in every save; **Change folder…** (unfolded when the card opens) holds the folder browser, *Git repo details* shows the push destination, branch, VM account and checkout path, **Browse the repository…** under *Saved versions* opens the same browser. |
 | **Save this lab here** | Move this lab to the selected folder of its repository, optionally with the files already saved. |
 | **New folder…** | Create a folder in the repository for this lab (or for a later lab). |
 | **Use a different repository…** / **Connect by URL…** | Switch to another registered checkout, or connect a repository by its HTTPS URL. |
@@ -202,8 +202,8 @@ registration IDs and folder names.
   plain words, and a lab folder that has never been saved to reads *created on first
   save*, because Git only shows a folder once a file is committed in it.
 - **Save this lab here** moves the lab to the selected folder. The folder becomes the
-  lab's registered destination, the device selection and review preference stay as they
-  were, and the lab's previous folder registration is retired. When files were already
+  lab's registered destination, the device selection stays as it
+  was, and the lab's previous folder registration is retired. When files were already
   saved under the old folder, the confirmation offers to move them along: every
   `latest/`, `baseline/` and `checkpoints/` file of the old folder is moved in one commit
   and pushed, and the move is recorded as a *Folder move* job with the same retry, review
@@ -292,7 +292,7 @@ flowchart TD
 |---|---|
 | A selected device failed | Inspect the save under **Recent saves** (or the backup under Tools › Configuration backups), repair access and start a new save. Successful files remain local; the repository's complete latest is retained. |
 | Complete snapshot; repository needs attention | Resolve the reported checkout problem as Ben, then **Retry export** from that job. |
-| Commit exists; push failed or review is required | Review the recorded commit and use **Upload now** on its row (or the banner's *Retry*). No new capture is needed. |
+| Commit exists; its review is still open or the push failed | **Review and upload…** on its row opens the review and uploads on your choice; after a reviewed upload failed the row reads **Upload now** (or use the banner's *Retry*). No new capture is needed. |
 | Remote advanced / push rejected | Inspect the repository as Ben. Resolve divergence outside the app; never force push merely to clear the status. |
 | Unexpected branch, URL, owner or repository identity | Restore the registered destination or deliberately register/reconnect the intended checkout after resolving pending work. |
 | The wrong repository is connected | Choose **Use a different repository…** on the *Save location* card: pick another registered checkout, or connect the right one by its HTTPS URL. Nothing is deleted from either repository; files already saved stay where they are. |
