@@ -212,7 +212,8 @@ class HostOperations:
         if not folder.exists(): return 'new'
         if folder.is_symlink() or not folder.is_dir(): raise ValueError('The lab folder name is taken by something that is not a folder.')
         present = {}
-        for entry in os.scandir(folder):
+        with os.scandir(folder) as listing: entries = list(listing)
+        for entry in entries:
             if entry.name.startswith('.clab-manager-') and entry.is_file(follow_symlinks=False) and entry.stat(follow_symlinks=False).st_uid == os.geteuid(): continue
             if entry.name not in wanted: raise ValueError('A lab folder with this name already exists on the VM: ' + str(folder) + '. Choose another lab name.')
             try: present[entry.name] = self.owned_bytes(entry.path)
@@ -366,9 +367,9 @@ class HostOperations:
                     root_fd = os.open(folder.parent, os.O_RDONLY | os.O_DIRECTORY)
                     try: os.fsync(root_fd)
                     finally: os.close(root_fd)
-                for entry in os.scandir(folder):  # temporaries of an interrupted run of this helper
-                    if entry.name.startswith('.clab-manager-'): os.unlink(entry.name, dir_fd=folder_fd)
                 existing = set(os.listdir(folder))
+                for name in [n for n in existing if n.startswith('.clab-manager-')]:  # temporaries of an interrupted run
+                    os.unlink(name, dir_fd=folder_fd)
                 for name in sorted(wanted, key=lambda n: not n.endswith(ANNOTATIONS_SUFFIX)):
                     if name in existing: continue
                     placed[name] = self.place(folder_fd, name, wanted[name], mode)

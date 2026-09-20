@@ -170,6 +170,90 @@ class HostOperationTests(unittest.TestCase):
                 self.host.execute(req, lambda _: None)
         self.assertEqual(target.read_bytes(), b'operator-created topology')
 
+    # --- lab builder: publish a new lab folder, revise a lab that is not deployed -------------------
+    BUILT = b'name: built\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:latest\n'
+    LAYOUT = '{"nodeAnnotations":[{"id":"r1","position":{"x":10,"y":20}}]}'
+
+    def publish(self, name='built', **options):
+        options = {'root': str(self.root), 'text': self.BUILT.decode(), 'annotations': self.LAYOUT, **options}
+        req = dict(action='publish', name=name, options=options); plan = self.host.plan(req)
+        return req, plan
+
+    def test_publish_derives_every_path_and_writes_the_layout_before_the_topology(self):
+        req, plan = self.publish(); folder = self.root/'built'
+        self.assertEqual(plan['path'], str(folder/'built.clab.yml')); self.assertEqual(plan['files'], ['built.clab.yml', 'built.clab.yml.annotations.json'])
+        order = []; place = self.host.place
+        with patch.object(self.host, 'place', side_effect=lambda fd, name, *a, **k: (order.append(name), place(fd, name, *a, **k))[1]):
+            result = self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        self.assertEqual(order, ['built.clab.yml.annotations.json', 'built.clab.yml'])
+        self.assertEqual(result['published_path'], plan['path'])
+        self.assertEqual((folder/'built.clab.yml').read_bytes(), self.BUILT); self.assertEqual((folder/'built.clab.yml.annotations.json').read_text(), self.LAYOUT)
+        self.assertEqual(sorted(p.name for p in folder.iterdir()), plan['files'])
+        if os.name == 'posix':
+            self.assertEqual((folder/'built.clab.yml').stat().st_mode & 0o777, 0o644); self.assertEqual(folder.stat().st_mode & 0o7777, 0o755)
+        self.assertIn(str(folder/'built.clab.yml'), [e['path'] for e in self.host.browse(str(folder))['entries']])
+        for bad in (dict(root=str(self.root/'built')), dict(root='/'), dict(root=str(self.root) + '/../x'), dict(text=''), dict(text='x' * (512 * 1024 + 1)), dict(annotations=7)):
+            with self.assertRaises(ValueError): self.publish(name='other', **bad)
+        with self.assertRaisesRegex(ValueError, 'literal'): self.publish(name='../escape')
+        with self.assertRaisesRegex(ValueError, 'Unsupported operation options'): self.host.plan(dict(action='publish', name='x', options={'root': str(self.root), 'text': 'a', 'path': '/etc/passwd'}))
+
+    def test_publish_never_overwrites_and_a_repeat_with_the_same_content_is_a_no_op(self):
+        req, plan = self.publish(); self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        again = self.host.plan(req); self.assertEqual(again['digest'], plan['digest']); self.assertIn('already saved', again['warnings'][0])
+        before = (self.root/'built'/'built.clab.yml').stat().st_mtime_ns
+        self.assertEqual(self.host.execute({**req, 'digest': again['digest']}, lambda _: None), {'exit_code': 0, 'already_published': True})
+        self.assertEqual((self.root/'built'/'built.clab.yml').stat().st_mtime_ns, before)
+        with self.assertRaisesRegex(ValueError, 'already exists'): self.publish(text=self.BUILT.decode() + '# changed\n')
+        (self.root/'taken').mkdir(); (self.root/'taken'/'notes.txt').write_text('mine')
+        with self.assertRaisesRegex(ValueError, 'already exists'): self.publish(name='taken')
+        self.assertEqual((self.root/'taken'/'notes.txt').read_text(), 'mine')
+
+    def test_publish_resumes_only_what_its_own_write_order_can_leave_behind(self):
+        folder = self.root/'built'; folder.mkdir(); (folder/'built.clab.yml.annotations.json').write_text(self.LAYOUT); (folder/'.clab-manager-0123').write_text('partial')
+        req, plan = self.publish(); self.assertIn('stopped half way', plan['warnings'][0])
+        self.assertTrue(self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)['resumed'])
+        self.assertEqual(sorted(p.name for p in folder.iterdir()), ['built.clab.yml', 'built.clab.yml.annotations.json'])
+        # A topology without the layout that was asked for is a state this helper never produces.
+        other = self.root/'other'; other.mkdir(); (other/'other.clab.yml').write_bytes(self.BUILT)
+        with self.assertRaisesRegex(ValueError, 'already exists'): self.publish(name='other')
+
+    def test_publish_takes_back_only_its_own_files_when_a_write_fails(self):
+        req, plan = self.publish(); place = self.host.place
+        def fail_on_topology(fd, name, *a, **k):
+            if not name.endswith('.json'): raise OSError('disk full')
+            return place(fd, name, *a, **k)
+        with patch.object(self.host, 'place', side_effect=fail_on_topology), self.assertRaises(OSError):
+            self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        self.assertFalse((self.root/'built').exists())
+        self.assertEqual(self.host.plan(req)['warnings'], [])
+
+    def test_revise_needs_an_undeployed_lab_the_opened_versions_and_keeps_recovery_copies(self):
+        req, plan = self.publish(); self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        path = Path(plan['path']); side = Path(plan['path'] + '.annotations.json'); sha = lambda b: hashlib.sha256(b).hexdigest()
+        changed = self.BUILT.decode() + '    r2:\n      kind: linux\n'
+        revise = lambda **options: dict(action='revise', name='built', path=str(path), options={'text': changed, 'annotations': '{"nodeAnnotations":[]}', 'base': {'yaml': sha(self.BUILT), 'annotations': sha(self.LAYOUT.encode())}, **options})
+        with self.assertRaisesRegex(ValueError, 'changed on the VM'): self.host.plan(revise(base={'yaml': 'stale', 'annotations': sha(self.LAYOUT.encode())}))
+        with self.assertRaisesRegex(ValueError, 'changed on the VM'): self.host.plan(revise(base={'yaml': sha(self.BUILT), 'annotations': ''}))
+        self.rows['built'] = [dict(name='clab-built-r1', lab_name='built', state='running', container_id='x', absLabPath=str(path))]
+        with self.assertRaisesRegex(ValueError, 'deployed'): self.host.plan(revise())
+        self.rows.pop('built'); self.rows['renamed'] = [dict(name='clab-renamed-r1', lab_name='renamed', state='running', container_id='x', absLabPath=str(path))]
+        with self.assertRaisesRegex(ValueError, 'deployed'): self.host.plan(revise())
+        self.rows.pop('renamed')
+        request = revise(); review = self.host.plan(request); result = self.host.execute({**request, 'digest': review['digest']}, lambda _: None)
+        self.assertEqual(path.read_text(), changed); self.assertEqual(side.read_text(), '{"nodeAnnotations":[]}')
+        self.assertEqual(Path(result['recovery_path']).read_bytes(), self.BUILT)
+        self.assertEqual(Path(result['recovery_paths'][side.name]).read_text(), self.LAYOUT)
+        self.assertEqual(sorted(p.name for p in path.parent.iterdir() if not p.name.startswith('.')), [path.name, side.name])
+        with self.assertRaisesRegex(ValueError, 'changed'): self.host.execute({**request, 'digest': review['digest']}, lambda _: None)
+        # The layout is left alone when the request carries none.
+        keep = dict(action='revise', name='built', path=str(path), options={'text': self.BUILT.decode(), 'base': {'yaml': sha(changed.encode())}})
+        self.host.execute({**keep, 'digest': self.host.plan(keep)['digest']}, lambda _: None)
+        self.assertEqual(side.read_text(), '{"nodeAnnotations":[]}')
+
+    def test_capabilities_advertise_the_builder_actions(self):
+        actions = self.host.capabilities()['actions']
+        self.assertTrue(actions['publish']['available']); self.assertTrue(actions['revise']['available'])
+
     def test_inspection_stderr_does_not_corrupt_json(self):
         code, out=capture([sys.executable,'-c','import sys; print("[]"); print("INFO inspection",file=sys.stderr)'],cwd=str(self.root))
         self.assertEqual(code,0);self.assertEqual(json.loads(out),[])
@@ -229,6 +313,37 @@ class OperationAPITests(unittest.TestCase):
             response=self.confirm(preview['token']);self.assertEqual(response.status_code,200,response.text)
             self.assertEqual(self.confirm(preview['token']).status_code,409);submit.assert_called_once()
             self.assertEqual(Store(self.tmp.name).state['operations'][0]['status'],'queued')
+
+    def test_builder_save_is_checked_by_the_manager_before_the_helper_sees_it(self):
+        built='name: built\ntopology:\n  nodes:\n    r1:\n      kind: linux\n'; layout='{"nodeAnnotations":[{"id":"r1","position":{"x":1,"y":2}}]}'
+        post=lambda **body:self.client.post('/api/operations/preview',headers=self.auth,json=body)
+        with self.fixture() as remote,patch.object(self.app.state.operations.pool,'submit') as submit:
+            remote.side_effect=(lambda inner:lambda host,req,*a:{**inner(host,req,*a),'path':'/srv/labs/built/built.clab.yml'} if req['mode']=='preview' and req['action']=='publish' else inner(host,req,*a))(remote.side_effect)
+            for text,reason in (('name: built\ntopology:\n  nodes: {}\n','topology.nodes'),('a: &x 1\nb: *x\n','cannot read'),('name: bad name\ntopology:\n  nodes:\n    r1: {}\n','cannot read')):
+                refused=post(action='publish',options={'root':'/srv/labs','text':text});self.assertEqual(refused.status_code,400,refused.text);self.assertIn(reason,refused.json()['detail'])
+            self.assertEqual(post(action='publish',options={'root':'/srv/labs','text':built,'annotations':'[1]'}).status_code,400)
+            self.assertEqual(post(action='publish',options={'root':'/srv/labs','text':built,'path':'/etc/passwd'}).status_code,400)
+            self.assertEqual(post(action='publish',options={'root':'/srv/labs','text':built+'#'+'x'*(1536*1024)}).status_code,400)
+            ok=post(action='publish',options={'root':'/srv/labs','text':built,'annotations':layout});self.assertEqual(ok.status_code,200,ok.text)
+            self.assertEqual(ok.json()['name'],'built');self.assertNotIn('options',{k for k in ok.json() if k=='options' and ok.json()[k]})
+            # A layout the manager's map cannot read is saved for the editor, and the review says so.
+            warned=post(action='publish',options={'root':'/srv/labs','text':built,'annotations':'{"nodeAnnotations":[{"id":"r1"},{"id":"r1"}]}'}).json()
+            self.assertIn('default grid',warned['warnings'][0])
+            job=self.confirm(ok.json()['token']).json();self.assertEqual((job['action'],job['path']),('publish','/srv/labs/built/built.clab.yml'))
+            self.assertNotIn('kind: linux',json.dumps(self.store.state['operations']));submit.assert_called_once()
+            self.assertEqual(submit.call_args.args[3]['options']['annotations'],layout)
+        # The name of a lab already in My labs with another topology file cannot be taken over.
+        with self.fixture() as remote:
+            remote.side_effect=(lambda inner:lambda host,req,*a:{**inner(host,req,*a),'path':'/srv/labs/training/training.clab.yml'} if req['mode']=='preview' else inner(host,req,*a))(remote.side_effect)
+            taken=post(action='publish',options={'root':'/srv/labs','text':YAML.decode()});self.assertEqual(taken.status_code,409,taken.text);self.assertIn('already in My labs',taken.json()['detail'])
+
+    def test_builder_revision_keeps_the_lab_name_and_shows_what_changes(self):
+        with self.fixture():
+            renamed=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':YAML.decode().replace('name: training','name: other',1),'base':{'yaml':'x'}}))
+            self.assertEqual(renamed.status_code,400,renamed.text);self.assertIn('cannot change',renamed.json()['detail'])
+            changed=YAML.decode()+'# a student change\n'
+            review=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':changed,'base':{'yaml':hashlib.sha256(YAML).hexdigest()}}))
+            self.assertEqual(review.status_code,200,review.text);self.assertIn('+# a student change',review.json()['diff'])
 
     def test_host_revision_expiry_and_backup_conflicts(self):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
