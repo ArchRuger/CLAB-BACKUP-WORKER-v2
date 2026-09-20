@@ -243,6 +243,13 @@ class DiscoveryParserTests(unittest.TestCase):
         self.assertEqual(parsed['nodes'][0]['platform'],'cisco_xrv9k')
         with self.assertRaises(ValueError):parse_definition(YAML.replace(b'training',b'${LAB_NAME}'))
 
+    def test_a_node_takes_its_kind_and_settings_from_its_group_before_the_defaults(self):
+        text=b'name: grouped\ntopology:\n  defaults:\n    kind: arista_ceos\n    mgmt-ipv4: 10.0.0.9\n  groups:\n    spines:\n      kind: juniper_vjunosswitch\n      mgmt-ipv4: 10.0.0.7\n  nodes:\n    leaf1: {}\n    spine1:\n      group: spines\n    spine2:\n      group: spines\n      kind: cisco_xrv9k\n      mgmt-ipv4: 10.0.0.8\n    lost:\n      group: missing\n'
+        nodes={n['short_name']:n for n in parse_definition(text)['nodes']}
+        self.assertEqual([nodes[n]['platform'] for n in ('leaf1','spine1','spine2','lost')],['arista_ceos','juniper_vjunosswitch','cisco_xrv9k','arista_ceos'])
+        self.assertEqual([nodes[n]['address'] for n in ('leaf1','spine1','spine2')],['10.0.0.9','10.0.0.7','10.0.0.8'])
+        with self.assertRaisesRegex(ValueError,'mappings'):parse_definition(text.replace(b'  groups:\n    spines:\n      kind: juniper_vjunosswitch\n      mgmt-ipv4: 10.0.0.7\n',b'  groups: [a]\n'))
+
     def test_vm_host_key_pinning(self):
         first=paramiko.RSAKey.generate(1024);second=paramiko.RSAKey.generate(1024)
         client=paramiko.SSHClient();policy=PinnedHostKey('')
