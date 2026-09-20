@@ -180,7 +180,7 @@ repeats them on its status card, whose **More ▾** adds the rest.
 | **Upload saved progress** / **Upload now** | Publish the existing saved commit without recapturing devices. |
 | **Update from the repository** | Update an eligible clean checkout using a fast-forward; no merge/rebase conflict resolution. |
 | **Recent saves** (Open / Upload now / Keep snapshot only) | One row per save with what happened; *Open* shows the save window with the details and retries. |
-| **Save location settings…** / the *Save location* card | The repository and folder the lab saves to, the devices included in every save and the review preference; **Change folder…** opens the folder browser, **Browse the repository…** under *Saved versions* opens the same browser. |
+| **Save location settings…** / the *Save location* card | The repository and folder the lab saves to, the devices included in every save and the review preference; **Change folder…** (unfolded when the card opens) holds the folder browser, *Git repo details* shows the push destination, branch, VM account and checkout path, **Browse the repository…** under *Saved versions* opens the same browser. |
 | **Save this lab here** | Move this lab to the selected folder of its repository, optionally with the files already saved. |
 | **New folder…** | Create a folder in the repository for this lab (or for a later lab). |
 | **Use a different repository…** / **Connect by URL…** | Switch to another registered checkout, or connect a repository by its HTTPS URL. |

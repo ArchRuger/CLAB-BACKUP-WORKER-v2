@@ -77,6 +77,21 @@ test('the connected card names the folder path and offers the switch and disconn
  assert.match(container.innerHTML,/data-git-repo-action="switch"/);assert.match(container.innerHTML,/data-git-repo-action="unlink"/);assert.match(container.innerHTML,/id="git-places-panel"/);assert.match(container.innerHTML,/data-git-repo-action="connect"/);
  assert.doesNotMatch(container.innerHTML,/<lab>/);
 });
+test('Save location opens with the folder browser unfolded, keeps a deliberate fold per lab, and names its Git details',()=>{
+ const context=makeContext(),listeners={},folder={open:true,addEventListener(name,fn){listeners[name]=fn;}},container={innerHTML:'',querySelectorAll:()=>[]};
+ context.$=id=>id==='git-repository-content'?container:id==='git-change-folder'?folder:null;context.state.labs=[{id:'lab',name:'BGP'},{id:'other',name:'OSPF'}];
+ const bound={binding:{binding_id:'repo',node_names:['r1'],repository:{label:'x',path:'/home/ben/labs/Course-Labs',remote:'origin',branch:'main',prefix:'bgp',push_url:'https://github.com/ben/Course-Labs.git',owner:'ben'}},supported_nodes:[{name:'r1',platform:'arista_ceos'}]},catalog={repositories:[{id:'repo',label:'x',path:'/home/ben/labs/Course-Labs',owner:'ben',branch:'main',prefix:'bgp',revision:'r'}]};
+ const render=(id='lab')=>{context.gitRenderRepository(id,bound,catalog);return container.innerHTML;};
+ assert.match(render(),/<details id="git-change-folder" class="git-change-folder" open><summary>Change folder…<\/summary>/,'unfolded on entry');
+ assert.match(container.innerHTML,/<details class="caption git-location-tech"><summary>Git repo details<\/summary>/);assert.doesNotMatch(container.innerHTML,/<summary>Technical details<\/summary>/);
+ assert.match(container.innerHTML,/<summary>Registration details<\/summary>/,'other disclosures keep their names');
+ folder.open=false;listeners.toggle();
+ assert.match(render(),/class="git-change-folder" ><summary>/,'a deliberate fold survives the next render');
+ assert.match(render('other'),/class="git-change-folder" open>/,'another lab is not affected');
+ vm.runInContext('gitPlacesState.open=true',context);assert.match(render(),/class="git-change-folder" open>/,'Browse the repository… opens it for that render');
+ assert.match(render(),/class="git-change-folder" ><summary>/,'and the fold is still remembered afterwards');
+ folder.open=true;listeners.toggle();assert.match(render(),/class="git-change-folder" open>/,'opening it again forgets the fold');
+});
 test('move jobs read as folder moves and open the latest folder',()=>{
  const {gitTargetLabel,gitTargetPath,gitDestination}=makeContext();
  assert.equal(gitTargetLabel({target:'move',snapshot_path:'courses/bgp/latest'}),'Folder move → courses/bgp');assert.equal(gitTargetLabel({target:'move',snapshot_path:'latest'}),'Folder move → repository root');

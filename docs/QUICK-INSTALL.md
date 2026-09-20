@@ -72,7 +72,7 @@ date -u
 | `Next step` | `1` if your GitHub repository already exists, otherwise `2` and skip step 5 |
 
 The browser Wireshark and Grafana phases run without questions. Wait for
-`Manager 1.30.4: running; HTTP and version checks passed.` The image build and the
+`Manager 1.30.5: running; HTTP and version checks passed.` The image build and the
 two stacks take several minutes. If a step fails, read the error, fix it in a second
 terminal, then type `1` to retry. A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.

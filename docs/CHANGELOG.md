@@ -4,6 +4,20 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.5
+
+**UI review 001, step 4: Save location shows its folders and names its Git details (UI-007 A and B).**
+Frontend only. The third part of UI-007 (the review before an upload becomes mandatory) is the next step.
+
+- **Git repo details.** The disclosure on the *Save location* card that shows the verified push
+  destination, the branch, the VM account and the checkout path is now called *Git repo details*. No
+  other *Technical details* or *Details* disclosure was renamed.
+- **Change folder… is open.** The folder browser is unfolded when Save location is entered, for a
+  connected lab too, so the save-folder controls are visible at once. A student who folds it keeps it
+  folded for that lab while the page stays open (across background polling, a tab change and the
+  re-render after *Save settings*); *Browse the repository…* and picking another repository open it
+  again, and only those still scroll to it. A new visit starts unfolded.
+
 ## Changes in 1.30.4
 
 **UI review 001, step 3: the Save progress options explain themselves (UI-004).** Frontend only.

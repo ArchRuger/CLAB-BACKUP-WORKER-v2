@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.4
+# UI review 001 (in progress) — 1.30.5
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -25,6 +25,11 @@ render without rewriting unchanged text, `gitShowSaveHelp()` shows one on `mouse
 `gitSaveMenuPlacement()` (pure) + `gitPlaceSaveMenu()` set `menu-from-left` / `menu-stacked` on
 `.git-save-control` when the `<details>` opens. A new option in that menu needs a help entry, an
 `aria-describedby` and a case in `GIT_SAVE_HELP_ACTIONS`. UI-007 C will change the upload wording.
+(4) **1.30.5, UI-007 A + B**: on the Save location card only `.git-location-tech` reads *Git repo
+details*. `#git-change-folder` renders `open` unless the lab id is in `gitFolderCollapsed` (a `Set` in
+`git-progress.js`, filled and emptied by the disclosure's own `toggle` event, page lifetime only);
+`gitPlacesState.open` (Browse the repository…) opens it for one render and is the only thing that
+scrolls to the save settings. The card is rendered by `gitShowRepository()`, not by the 4 s poll.
 
 # Lab builder quality pass — 1.30.1
 

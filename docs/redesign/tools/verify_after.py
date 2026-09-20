@@ -240,7 +240,7 @@ def progress(r):
     r.check('progress: apply offered only where a restore artifact exists', info['apply'] >= 2, info['apply'])
     r.check('progress: compare with my latest save on the other rows', info['compare'] >= 2, info['compare'])
     r.check('progress: recent saves in student words', len(info['saves']) >= 2 and any('Progress saved to Git' in s for s in info['saves']), info['saves'])
-    r.check('progress: save location collapsed for a connected lab', info['locationHead'] == 'Save location' and info['folderOpen'] is False, info)
+    r.check('progress: save location shows its folder browser for a connected lab', info['locationHead'] == 'Save location' and info['folderOpen'] is True, info)
     r.check('progress: advanced details filled', (not info['advancedHidden']) and 'Verified push destination' in info['pushUrl'], info['pushUrl'])
     r.check('progress: last configuration change is one click away', info['lastChange'].startswith('Last configuration change'), info['lastChange'])
     r.check('progress: header line agrees', info['header'].startswith('Saved to Git'), info['header'])
@@ -292,8 +292,8 @@ def progress(r):
     r.check('checkpoint dialog: name sanitised live', r.js('() => document.getElementById("git-checkpoint-name").value === "ospf-done" && document.getElementById("git-checkpoint-preview").textContent === "Saved as: ospf-done"'))
     r.shot('38-checkpoint')
     p.click('#git-save-cancel')
-    # Change folder… opens the browser inside the form
-    p.click('#git-change-folder > summary')
+    # Change folder… is unfolded when Save location is entered: the browser is inside the form
+    r.check('save location: Change folder is open on entry', r.js('() => document.getElementById("git-change-folder").open'))
     p.wait_for_selector('#git-places-panel .git-places-head', timeout=15000)
     places = r.js('() => ({use: document.querySelector("[data-git-places-action=use]")?.textContent, crumbs: [...document.querySelectorAll(".git-crumbs button")].map(b => b.textContent), select: document.getElementById("git-binding-id")?.value, heading: document.querySelector("#git-change-folder h3")?.textContent})')
     r.check('save location: folder browser with Save this lab here and the heading', places['use'] == 'Save this lab here' and places['heading'] == 'Folders in this repository', places)

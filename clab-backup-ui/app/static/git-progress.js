@@ -169,12 +169,16 @@ async function gitShowRepository(force=false){
   for(const button of container.querySelectorAll('[data-git-repo-action]'))button.onclick=()=>gitRunAction(button.dataset.gitRepoAction,id);
  }
 }
+const gitFolderCollapsed=new Set();
 function gitRenderRepository(id,context,catalog,extras={}){
  const binding=context.binding,repo=gitRepository(binding),repositories=catalog.repositories||[],supported=context.supported_nodes||[],excluded=context.unsupported_nodes||[];
  const selected=new Set(binding?.node_names||supported.map(node=>node.name));
  const activeBinding=!!binding,labName=gitLabName(id),repoName=gitRepoName(repo);
  const preselect=gitPendingSelection&&repositories.some(value=>value.id===gitPendingSelection)?gitPendingSelection:binding?.binding_id||'';gitPendingSelection='';
- const places=typeof gitPlacesState!=='undefined'?gitPlacesState:null,openBrowser=!activeBinding||!!(places&&places.open);if(places)places.open=false;
+ // The folder browser is open when Save location is entered. A student who folds it keeps it folded for
+ // that lab across re-renders (gitFolderCollapsed), until they open it again or ask for it by name
+ // (Browse the repository…, a repository picked in the list), which also scrolls to it.
+ const places=typeof gitPlacesState!=='undefined'?gitPlacesState:null,requested=!!(places&&places.open),openBrowser=!activeBinding||requested||!gitFolderCollapsed.has(id);if(places)places.open=false;
  const optionLabel=value=>{const twins=repositories.filter(r=>gitRepoName(r)===gitRepoName(value)&&(r.prefix||'')===(value.prefix||''));return `${gitRepoName(value)} › ${value.prefix||'(whole repository)'}${twins.length>1?' · '+value.owner:''}`;};
  const option=value=>`<option value="${esc(value.id)}" ${value.id===preselect?'selected':''}>${esc(optionLabel(value))}</option>`;
  const tree=extras.tree||null,model=tree&&typeof gitTreeModel==='function'?gitTreeModel(tree.files,tree.folders):null;
@@ -192,7 +196,7 @@ function gitRenderRepository(id,context,catalog,extras={}){
   <label id="git-exposure-label" class="checkbox-label"><input id="git-exposure" type="checkbox"> ${esc(GIT_EXPOSURE_TEXT)}</label>
   <details class="caption"><summary>Registration details</summary><p id="git-binding-destination" class="op-path"></p><p>Git runs on the VM as the registered account with the login configured there. This app never asks for a Git password.</p></details>
   <p class="form-error" role="alert"></p><div class="actions"><button type="submit" class="button primary" ${supported.length?'':'disabled'}>${activeBinding?'Save settings':'Connect save location'}</button></div></form>`:'';
- const technical=activeBinding?`<details class="caption git-location-tech"><summary>Technical details</summary>${repo.push_url?`<p class="op-path">Verified push destination: <code>${esc(repo.push_url)}</code></p>`:''}<p class="op-path">Branch ${esc(repo.branch||'')} · VM account ${esc(repo.owner||'')} · ${esc(repo.path||'')}</p></details>`:'';
+ const technical=activeBinding?`<details class="caption git-location-tech"><summary>Git repo details</summary>${repo.push_url?`<p class="op-path">Verified push destination: <code>${esc(repo.push_url)}</code></p>`:''}<p class="op-path">Branch ${esc(repo.branch||'')} · VM account ${esc(repo.owner||'')} · ${esc(repo.path||'')}</p></details>`:'';
  $('git-repository-content').innerHTML=activeBinding
   ?`<section class="card git-save-location" id="git-save-location" aria-labelledby="git-save-location-title"><h2 id="git-save-location-title">Save location</h2><p class="git-destination-line"><span>${esc(labName)} saves to</span><code>${esc(repoName)}</code>${repo.prefix?`<span aria-hidden="true">›</span><code>${esc(repo.prefix)}</code>`:''}<span aria-hidden="true">›</span><code>latest/</code></p><p class="form-help">Each save includes ${selected.size} ${selected.size===1?'device':'devices'}.</p><div class="actions"><button type="button" class="button secondary" data-git-repo-action="switch">Use a different repository…</button><button type="button" class="button secondary" data-git-repo-action="connect">Connect by URL…</button></div><p class="form-help">Connected the wrong repository? Choose <strong>Use a different repository</strong>. Nothing is deleted, and files already saved stay where they are. To stop saving here, <button type="button" class="text-button git-inline-action" data-git-repo-action="unlink">disconnect this lab</button>.</p>${technical}${form}</section>`
   :repositories.length
@@ -219,7 +223,9 @@ function gitRenderRepository(id,context,catalog,extras={}){
  }else if(activeBinding)showPlaces(binding.binding_id);
  for(const button of $('git-repository-content').querySelectorAll('[data-git-repo-action]'))button.onclick=()=>gitRunAction(button.dataset.gitRepoAction,id);
  for(const button of $('git-repository-content').querySelectorAll('[data-git-job]'))button.onclick=()=>opTask(null,()=>gitShowJob(button.dataset.gitJob));
- if(openBrowser&&activeBinding){const settings=$('git-save-settings');if(settings&&typeof settings.scrollIntoView==='function')settings.scrollIntoView({block:'start',behavior:'smooth'});}
+ const folder=$('git-change-folder');
+ if(folder&&typeof folder.addEventListener==='function')folder.addEventListener('toggle',()=>{if(folder.open)gitFolderCollapsed.delete(id);else gitFolderCollapsed.add(id);});
+ if(requested&&activeBinding){const settings=$('git-save-settings');if(settings&&typeof settings.scrollIntoView==='function')settings.scrollIntoView({block:'start',behavior:'smooth'});}
 }
 // Saved versions: rows come from the repository tree the folder browser already reads (folders with a
 // latest/ save), grouped for the student; the History dialog keeps the commit list.

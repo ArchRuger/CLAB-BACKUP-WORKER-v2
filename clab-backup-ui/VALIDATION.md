@@ -1,3 +1,26 @@
+# UI review 001, step 4: Save location, Git repo details and the open folder browser — 1.30.5
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.4 (`a5bc0b4`,
+pushed, CI green). Requirements UI-007 A and B of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no
+live VM, lab or device was involved**, and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 170 of 170. New in `test_git_places_ui.js`: unfolded on entry, the renamed
+  disclosure (and *Registration details* untouched), a deliberate fold kept per lab across renders,
+  opened for one render by *Browse the repository…* without forgetting the fold, forgotten when the
+  student opens it again.
+- `python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check app/static/git-progress.js`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 96 of 96 at three viewports, 0 console errors, 0 page
+  errors (the check "save location collapsed for a connected lab" became "shows its folder browser",
+  which is this requirement; one check added for *Change folder* being open on entry).
+  `docs/ui-review-001/tools/check_ui007ab.py` 11 of 11: open on entry with the folder browser loaded;
+  the disclosure reads *Git repo details* and shows push destination, branch, account and path; the
+  Advanced tab's own *Technical details* panel is unchanged; a fold survives two polls, leaving and
+  reopening the tab, and the re-render after *Save settings*; *Browse the repository…* opens it again;
+  a fresh page starts open. Screenshots inspected: `~/ui-review/review-001/chunk04/` on the VM.
+
 # UI review 001, step 3: Save progress options are explained — 1.30.4
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.3 (`760a5ad`,
