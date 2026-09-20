@@ -2,6 +2,8 @@
    The editor's own stylesheet makes html, body and #root fill the window; this file loads after it. */
 html,body.lab-builder{height:100%;margin:0;overflow:hidden;background:var(--bg);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}
 .builder-bar{position:fixed;inset:0 0 auto 0;height:52px;display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-4);background:var(--surface);border-bottom:1px solid var(--line);z-index:5}
+.builder-bar>*{flex:none;white-space:nowrap}
+.builder-bar #builder-status{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .builder-back{color:var(--accent);text-decoration:none;font-weight:600}
 .builder-title{color:var(--ink)}
 .builder-name{font-weight:600;color:var(--ink);max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -23,3 +25,5 @@ html,body.lab-builder{height:100%;margin:0;overflow:hidden;background:var(--bg);
 [data-testid="svg-export-grafana-bundle"],[data-testid="svg-export-grafana-advanced-btn"]{display:none !important}
 /* The editor's colours follow the manager's palette; its type and shapes stay its own. */
 .lab-builder{--clab-ui-accent:#1d6f8e}
+/* The manager limits media to its container; the editor draws links in a zero-width overlay that overflows on purpose. */
+.lab-builder #root svg{max-width:none}

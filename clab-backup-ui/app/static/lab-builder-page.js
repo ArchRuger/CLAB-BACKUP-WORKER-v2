@@ -62,7 +62,7 @@ function draftStatus(draft){
  if(!draft)return {tone:'neutral',text:''};
  if(!draft.vm)return {tone:'warn',text:'Draft · kept in this browser only · not on the VM yet'};
  const same=draft.vm.yaml===draft.yaml&&(draft.vm.annotations||'')===(draft.annotations||'');
- return same?{tone:'ok',text:'Saved on the VM · '+draft.vm.path}:{tone:'warn',text:'Changes not saved to the VM yet · '+draft.vm.path};
+ return same?{tone:'ok',text:'Saved on the VM',detail:draft.vm.path}:{tone:'warn',text:'Changes not saved to the VM yet',detail:draft.vm.path};
 }
 async function builderHash(text){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('');}
 // The request the reviewed save sends: a new lab folder, or a revision of the versions this draft opened.
@@ -75,7 +75,7 @@ async function builderSaveRequest(draft,hash=builderHash){
 // --- the page ---------------------------------------------------------------------------------------
 function builderTemplatesStored(){try{const v=JSON.parse(localStorage.getItem(BUILDER_PREFIX+'templates')||'null');if(v&&Array.isArray(v.list)&&v.list.length)return v;}catch{}return null;}
 function builderRenderBar(){
- const s=draftStatus(builderDraft);$('builder-name').textContent=builderDraft?builderDraft.name:'';$('builder-status').textContent=s.text;$('builder-status').className='pill '+s.tone;
+ const s=draftStatus(builderDraft);$('builder-name').textContent=builderDraft?builderDraft.name:'';$('builder-status').textContent=s.text;$('builder-status').title=s.detail||'';$('builder-status').className='pill '+s.tone;
  const can=!!builderDraft&&builderCaps?.actions?.[builderDraft.vm?'revise':'publish']?.available;
  $('builder-save').disabled=!can;$('builder-save').textContent=builderDraft?.vm?'Save changes to the VM…':'Save to the VM…';
  for(const id of ['builder-yaml','builder-download'])$(id).disabled=!builderDraft;
@@ -135,8 +135,18 @@ async function builderSave(){
 // Called by operations.js when a lab operation started from this page finishes.
 function opJobDone(job){
  if(!builderPending||!builderDraft||job.action!==builderPending.action||job.status!=='succeeded'||!job.result?.published_path)return;
- try{builderDraft=draftWrite(localStorage,{...builderDraft,vm:{path:job.result.published_path,yaml:builderPending.yaml,annotations:builderPending.annotations}},builderDraft.revision);}catch(e){builderProblem(e.message);}
+ const saved=builderPending,path=job.result.published_path;
+ try{builderDraft=draftWrite(localStorage,{...builderDraft,vm:{path,yaml:saved.yaml,annotations:saved.annotations}},builderDraft.revision);}catch(e){builderProblem(e.message);}
  builderPending=null;builderRenderBar();
+ // A lab that is already in My labs keeps the devices and the map it was registered with. After a
+ // revision the manager takes the new topology and layout, so its own map and device list follow.
+ const lab=(state.labs||[]).find(l=>opPath(l)===path);
+ if(lab&&saved.action==='revise')opTask(null,async()=>{
+  const form=new FormData(),name=path.split('/').pop();form.append('lab_id',lab.id);
+  form.append('definition',new Blob([saved.yaml],{type:'text/yaml'}),name);
+  if(saved.annotations)form.append('annotations',new Blob([saved.annotations],{type:'application/json'}),name+'.annotations.json');
+  await api('/lab-definitions',{method:'POST',body:form});await refresh();notify('My labs now shows the saved topology of '+lab.name+'.');
+ });
 }
 async function builderOpenFromVm(path){
  const source=await json('/operations/read','POST',{path});let layout='';
