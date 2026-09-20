@@ -217,6 +217,28 @@ test('the outcome of a save reaches the draft when its dialog was closed, and a 
  // the result of another job is not taken for this one
  p.run(`builderPending={yaml:'x',annotations:'',action:'publish',job:'job2'};opJobDone({id:'job1',action:'publish',status:'succeeded',result:{published_path:'/other'}})`);assert.equal(p.run('builderPending.job'),'job2');
 });
+test('opening the VM version never discards a draft with unsaved changes unasked, whichever draft is newer',async()=>{
+ const changed=TOPOLOGY+'# changed on the VM\n',answer=(url,body)=>url.endsWith('/operations/read')?(body.path===VM_PATH?{text:changed,sha256:'h2'}:{refused:'The selected VM path no longer exists.'}):url.endsWith('/operations/parse-yaml')?{name:'lab1'}:{};
+ const seed=`draftWrite(builderStore,{id:'new:lab1:x',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY+'# my work\n')},vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:''}},undefined);draftWrite(builderStore,{id:'vm:${VM_PATH}',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)},vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:''}},undefined);`;
+ let asked=0;const keep=page({answer});keep.c.confirm=()=>{asked++;return false;};keep.run(seed);
+ const kept=await keep.run(`builderOpenFromVm('${VM_PATH}')`);assert.equal(asked,1,'the student is asked');assert.match(kept.yaml,/my work/);assert.match(keep.c.draftRead(keep.store,'new:lab1:x').yaml,/my work/,'Cancel keeps the work');
+ const drop=page({answer});drop.c.confirm=()=>true;drop.run(seed);const fresh=await drop.run(`builderOpenFromVm('${VM_PATH}')`);assert.match(fresh.yaml,/changed on the VM/);assert.equal(drop.c.draftList(drop.store).length,1);
+});
+test('a save remembers where it went: a rename after a lost answer does not orphan the lab on the VM',async()=>{
+ const p=page({answer:(url,body)=>url.endsWith('/operations/read')?(body.path===VM_PATH?{text:TOPOLOGY,sha256:'h1'}:{refused:'The selected VM path no longer exists.'}):{}});
+ const sent=await p.c.builderHash(TOPOLOGY),renamed=TOPOLOGY.replace('name: lab1','name: lab2');
+ p.run(`builderDraft=draftWrite(builderStore,{id:'new:lab1',name:'lab2',root:'/srv/labs',yaml:${JSON.stringify(renamed)},saving:{path:'${VM_PATH}',yaml:'${sent}',annotations:''}},undefined);`);await p.run('builderReconcile()');
+ assert.equal(p.run('builderDraft.vm.path'),VM_PATH);assert.match(p.el('builder-note-text').textContent,/keeps its name: set it back to lab1/);
+ // an "already saved" answer carries no path: the one the save was sent to is used, not the one the draft would get now
+ p.run(`builderDraft=draftWrite(builderStore,{id:'new:lab9',name:'lab9b',root:'/srv/labs',yaml:'name: lab9b\\n'},undefined);builderPending={yaml:'name: lab9\\n',annotations:'',action:'publish',path:'/srv/labs/lab9/lab9.clab.yml'};opJobDone({action:'publish',status:'succeeded',result:{already_published:true}})`);
+ assert.equal(p.run('builderDraft.vm.path'),'/srv/labs/lab9/lab9.clab.yml');
+});
+test('Try to store it again also works when it was the page, not the editor, that could not store',()=>{
+ const base=storage(),full={...base,getItem:k=>base.getItem(k),setItem(k,v){if(full.refuse)throw new Error('quota');base.setItem(k,v);},get length(){return base.length;}};
+ const p=page({storage:full,answer:()=>({})});p.run(`builderDraft=draftWrite(builderStore,{id:'new:lab1',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)}},undefined);`);
+ full.refuse=true;p.run("try{draftWrite(builderStore,{...builderDraft,saving:true},builderDraft.revision);}catch(e){builderProblem(e.message,e.code);}");assert.equal(p.el('builder-problem-retry').hidden,false);assert.equal(p.el('builder-save').disabled,true);
+ p.run('builderStoreAgain()');assert.ok(!p.calls.includes('reload'),'still no room: nothing pretends otherwise');full.refuse=false;p.run('builderStoreAgain()');assert.ok(p.calls.includes('reload'));
+});
 test('the builder opens in the folder being browsed, else in the project folder',()=>{
  const c=load(),roots=['/etc/containerlab','/srv/containerlab-node-manager/projects'];
  assert.equal(c.opBuilderRoot('/etc/containerlab/course/week1',roots),'/etc/containerlab');assert.equal(c.opBuilderRoot('',roots),'/srv/containerlab-node-manager/projects');

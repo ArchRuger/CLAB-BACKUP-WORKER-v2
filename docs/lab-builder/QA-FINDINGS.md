@@ -49,6 +49,11 @@ verified unless the status column says otherwise.
 | R-12 | USABILITY | nit | A | Save off without a reason while capabilities load | fixed |
 | R-13 | DEFECT | nit | B | An imported default template starred a second template | fixed |
 | R-14 | NOTE | nit | packaging | `yaml` imported by `main.tsx` without being a declared dependency | fixed (pinned) |
+| D-1 | DEFECT | medium | E | (own regression, second review) opening the VM version could discard an older draft with unsaved changes unasked | fixed |
+| D-2 | DEFECT | low | F | A state refresh that failed right after the confirm left Save blocked until reload | fixed |
+| D-3 | DEFECT | low | F | *Try to store it again* did nothing when it was the page's own write that failed | fixed |
+| D-4 | DEFECT | low | F | The path of a save was not remembered: a rename after a lost answer orphaned the lab on the VM | fixed |
+| D-5 | USABILITY | low | C | Opening a draft file could remove two same-named drafts after one question, and deleted before it wrote | fixed (writes first, says how many); two unsaved drafts may still share a name after a rename, which the save then refuses |
 | T-1 | TEST | medium | E | `student_workflow.py` "refused while deployed" passed on the review's own wording | fixed |
 | T-2 | TEST | low | G | `verify_after.py` expected the Topology file dialog without *Edit visually…* (stale since 1.30.0) | fixed |
 | T-3 | TEST | medium | D | `student_workflow.py` "the deploy job succeeds" was `True`, and its wait matched the previous job's banner | fixed |
@@ -113,4 +118,7 @@ was saved with a recovery copy and the lab deployed.
   was upgraded with `docker compose up --build` instead of `start-manager.sh`. A capture session that is not
   this pass's was running, so the capture stack was left alone (`start-manager.sh --manager-only`). Capture
   discovery through the manager answered for the builder-made lab.
+- Not covered by a unit test: the `opJobStarted` call inside `opReview` and `opJobLost` after ten failed polls
+  (both exercised by the browser runs only); the ≤900 px rule of the sticky review row was checked in a
+  browser at 911 px, not below.
 - No student took part. Everything here is a browser walkthrough, failure injection and review.

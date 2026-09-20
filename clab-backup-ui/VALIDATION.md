@@ -8,9 +8,9 @@ exercised is listed at the end. No student took part in this pass.
 
 ## What was run
 
-**Unit and integration (this checkout).** `node --test tests/*.js`: 160 of 160.
+**Unit and integration (this checkout).** `node --test tests/*.js`: 163 of 163.
 `python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
-`tests/test_lab_builder_ui.js` grew from 11 to 26 tests (a page-level harness over a fake document:
+`tests/test_lab_builder_ui.js` grew from 11 to 29 tests (a page-level harness over a fake document:
 failed stores, lost answers, refusals and the rebase, renames, hashing without `crypto.subtle`, the job
 follow with a closed dialog, imports, storage refused); `test_operations_ui.js` and
 `test_lab_operations.py` gained the image hint, the shortened-diff marker, the empty-lab message and the
@@ -19,7 +19,8 @@ build (Node 24, `yaml` now a pinned dependency). `verify-release.py`: both halve
 clean.
 
 **Browser, fixture manager** (the real app, VM answered in-process; Chromium through Playwright).
-`docs/lab-builder/tools/student_workflow.py`: 40 of 40, three consecutive runs, zero console errors, page
+`docs/lab-builder/tools/student_workflow.py`: every check passes (40, or 39 on a fresh fixture that has no
+known Linux image yet: that check is conditional), three consecutive runs and once more on the final code, zero console errors, page
 errors and CSP violations. Two of its older checks proved nothing and were rewritten (T-1, T-3 in the
 register); the fixture now reports a lab it deployed as running. `docs/redesign/tools/verify_after.py`
 (main application): 93 of 93 at 1920×1080, 1440×900 and 1366×768, 0 console / 0 page errors (one stale
@@ -51,6 +52,13 @@ after one *Redeploy* through the manager. **All four links proven by LLDP on the
 `sw1 ge-0/0/1 ↔ ceos2 Ethernet2` (LLDP was switched on in the two Junos devices of this QA lab for the
 check); the `et-` and `ge-` interfaces up/up. The manager's own map used the builder's layout; capture
 discovery listed the lab's containers.
+
+**Independent review.** Three fresh reviewers: data integrity of the release as it was (15 findings), the
+first two commits of this pass (16, among them the plain-HTTP hashing defect), and the fixes for that
+review (one own regression with data loss, four low items). Every confirmed finding is fixed and has a
+test or a browser check; the register says which. The final code was run again after the last fix: unit
+suites, fixture workflow, the fix verification script (19 of 19) and the live workflow through the LAN
+address (40 of 40).
 
 ## Not exercised, or blocked
 

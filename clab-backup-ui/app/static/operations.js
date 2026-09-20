@@ -149,7 +149,8 @@ async function opReview(request){
   // must not stay open over the lab page that now reports how the operation goes.
   for(const id of ['op-editor','op-browser'])if($(id)?.open)$(id).close();
   if(typeof selectLab==='function'&&labId&&labId!==activeId&&(state.labs||[]).some(l=>l.id===labId))selectLab(labId);
-  await refresh();
+  // The job exists: a state refresh that fails must not keep its output (and its outcome) from being followed.
+  try{await refresh();}catch{}
   // Lifecycle actions on the open lab report through the header and the banner ([View output]);
   // result-bearing actions open their output right away.
   if(opLifecycle.includes(value.action)&&labId&&labId===activeId&&typeof renderLabBanner==='function'){notify(label+'…');return;}
