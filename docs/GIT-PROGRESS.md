@@ -3,7 +3,7 @@
 Choose where a lab's progress is saved once (the first **Save progress** asks; the
 **Progress** tab's *Save location* card holds the setting afterwards), then use
 **Save progress** to capture its selected devices, save the complete capture in that
-repository, commit changed configurations and push. Ben keeps his existing Git login and
+repository, commit changed configurations and, after you have reviewed the changes, push. Ben keeps his existing Git login and
 commit identity. The manager never asks for his Git token.
 
 The Git helper is installed on the VM by the guided installer and refreshed by every
@@ -26,8 +26,10 @@ flowchart TD
     F --> G{Configuration changes?}
     G -- Yes --> H[Commit to selected branch]
     G -- No --> I[Keep existing commit]
-    H --> J[Push]
-    I --> J
+    H --> R{Review before uploading}
+    R -- Upload these changes --> J[Push]
+    R -- Not now --> M[Saved on the VM; waiting for your review]
+    I --> R
     J -- Verified --> K[Saved to Git]
     J -- Unavailable or rejected --> L[Saved locally; retry push]
 ```
@@ -61,8 +63,9 @@ with `start-manager.sh` or `setup-git.sh --refresh` and retain their current own
 In the lab, open the **Progress** tab. The first **Save progress** asks where the
 lab's progress should be saved — the registered repository, a folder in it and the
 devices to include — and the *Save location* card keeps the same settings for later
-changes. **Save progress** then captures, commits and pushes automatically. A separate
-Commit button is not needed.
+changes. **Save progress** then captures and commits automatically and shows the changes
+for review before anything is uploaded (see *Everyday buttons*); the review cannot be
+switched off. A separate Commit button is not needed.
 
 The following sections are manual authentication and recovery reference. The
 quickstart guide covers advanced registration, other HTTPS providers and separate
@@ -171,7 +174,7 @@ repeats them on its status card, whose **More ▾** adds the rest.
 
 | Action | Result |
 |---|---|
-| **Save progress** | Capture the configured device selection, export `latest`, commit changes on the VM, then open **Review before uploading**: what the save changed, with **Upload these changes** and **Not now — keep it on the VM**. Nothing is pushed without that choice (the manager refuses an upload that does not state the review, whatever an older save location setting said), and declining leaves the save on the VM as *Waiting for your review*. A save with nothing new only shows a toast; the save window opens on its own when something else needs you. |
+| **Save progress** | Capture the configured device selection, export `latest`, commit changes on the VM, then open **Review before uploading**: what the save changed, with **Upload these changes** and **Not now — keep it on the VM**. Nothing is pushed without that choice (the manager refuses an upload that does not state the review, whatever an older save location setting said), and declining leaves the save on the VM as *Waiting for your review*. The save window opens on its own when something else needs you. |
 | **Save on this VM only** | Capture and commit without pushing. |
 | **Create checkpoint…** | Capture a named milestone in `checkpoints/<name>`. |
 | **Set baseline…** | Select a complete recorded capture for `baseline`; replacing one is reviewed explicitly. |
@@ -213,15 +216,18 @@ registration IDs and folder names.
   was, and the lab's previous folder registration is retired. When files were already
   saved under the old folder, the confirmation offers to move them along: every
   `latest/`, `baseline/` and `checkpoints/` file of the old folder is moved in one commit
-  and pushed, and the move is recorded as a *Folder move* job with the same retry, review
-  and push handling as a save. Earlier versions stay in Git history either way; a pending
+  and pushed, and the move is recorded as a *Folder move* job with the same retry and push
+  handling as a save. A folder move changes no configuration, so it is uploaded on that
+  confirmation (the dialog says so) and has no separate *Review before uploading* step. Earlier versions stay in Git history either way; a pending
   save has to finish or be dismissed first.
 - **New folder…** creates a folder beside the existing ones. It accepts a whole nested
   path such as `Week-04/BGP/Final-State`, so a deep destination like
   `CCNP-SP/Labs/Week-04/BGP/Final-State` is created in one step; the dialog shows the
-  resulting `repository / folder` destination as you type. With *Save this lab here*
-  ticked, the lab moves into it immediately; otherwise the folder is only registered and
-  waits for a lab.
+  resulting `repository / folder` destination as you type. With *Save … here from now on*
+  ticked, the lab moves into it immediately; otherwise, for a lab that already saves to
+  this repository, the folder is only added to the manager's list (see above) and nothing
+  is registered on the VM. For a lab that is not connected yet, the new folder is
+  registered and preselected for **Connect**.
 - Folders of one repository never overlap: a folder cannot be created inside another
   lab's folder, `latest/`, `baseline/` and `checkpoints/` cannot be chosen as
   destinations, and a repository that a lab saves to at its root cannot also hold lab
@@ -286,8 +292,8 @@ include unpublished snapshots, manager device credentials or diagram edits.
 flowchart TD
     A[Save needs attention] --> B{Last durable outcome}
     B -- Partial capture --> C[Fix device access; start a fresh capture]
-    B -- Complete snapshot --> D[Fix checkout; Retry export]
-    B -- Local commit --> E[Fix login/network/remote; Push saved progress]
+    B -- Complete snapshot --> D[Fix checkout; Retry save, then review]
+    B -- Local commit --> E[Fix login/network/remote; Review and upload, or Upload now]
     B -- Interrupted response --> F[Reconcile recorded job with host journal]
     C --> G[Keep previous latest until capture completes]
     D --> H[Reuse recorded capture]
@@ -298,7 +304,7 @@ flowchart TD
 | Message or condition | Next step |
 |---|---|
 | A selected device failed | Inspect the save under **Recent saves** (or the backup under Tools › Configuration backups), repair access and start a new save. Successful files remain local; the repository's complete latest is retained. |
-| Complete snapshot; repository needs attention | Resolve the reported checkout problem as Ben, then **Retry export** from that job. |
+| Complete snapshot; repository needs attention | Resolve the reported checkout problem as Ben, then open that save under **Recent saves** and choose **Retry save, then review** (or **Retry save on this VM only**). |
 | Commit exists; its review is still open or the push failed | **Review and upload…** on its row opens the review and uploads on your choice; after a reviewed upload failed the row reads **Upload now** (or use the banner's *Retry*). No new capture is needed. |
 | Remote advanced / push rejected | Inspect the repository as Ben. Resolve divergence outside the app; never force push merely to clear the status. |
 | Unexpected branch, URL, owner or repository identity | Restore the registered destination or deliberately register/reconnect the intended checkout after resolving pending work. |

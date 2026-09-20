@@ -4,6 +4,32 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.20
+
+**Maintenance audit, chunk 3: the student workflow guides against the UI code and the routes.**
+Documentation and three screenshots only.
+
+- [Save progress](GIT-PROGRESS.md): the introduction and both flowcharts pass through **Review before
+  uploading**; a *Folder move* uploads on its own confirmation and has no separate review; **New folder…**
+  without the tick only plans a folder for a connected lab; the recovery table uses the buttons that exist
+  (*Retry save, then review*, *Retry save on this VM only*) instead of two that never did.
+- [Lab operations](LAB-OPERATIONS.md), [Lab builder](LAB-BUILDER.md) and
+  [Node features](../clab-backup-ui/NODE-FEATURES.md): *Edit map* has Undo / Redo, *Device look…* and
+  *Link labels…*; line arrows, rounded text backgrounds and nested group levels are kept in the map document
+  but not drawn on the Topology tab; destroy cleans up by default where the helper allows it; the
+  **Advanced options** group; importing a lab found on the VM needs the confirmation. Node features drops
+  the labels from before the redesign and gains **Backup download names**, the file and ZIP naming contract
+  that no living guide described.
+- [Naming](NAMING.md) no longer says an upload is automatic, and says that `deploy/scaffold-lab.py snapshot`
+  stops at the review (recorded as a defect in the audit record, not fixed here).
+- README and [Tour](TOUR.md): workstation upload, the lab builder, the upload review and *Diagnostics*;
+  `00-home.png`, `20-devices.png` and `30-progress.png` showed pages that no longer exist and are replaced
+  by captures of the current UI from the fixture manager (scripted VM answers, example data, as the tour
+  says).
+
+Two behaviour defects were found by reading and are in the audit record for a decision: the scaffold tool's
+`snapshot`, and a save with nothing new opening a review with an empty diff.
+
 ## Changes in 1.30.19
 
 **Maintenance audit, chunk 2: the installation and operations guides against the scripts and the UI.**

@@ -30,6 +30,13 @@ back.
 
 The map you drew is what the manager's own Topology tab shows: the builder writes the same
 `<file>.annotations.json` layout file as the VS Code Containerlab extension, next to the topology.
+The Topology tab draws a little less than the editor stores: line arrows, rounded text backgrounds
+and nested group levels are kept in the file and shown by the editor, but not drawn there.
+
+The builder changes a topology only while the lab is **not deployed**. To rearrange or annotate the
+map of a lab in My labs, deployed or not, use **Edit map** in the lab instead: it is this same editor
+restricted to the drawing, and it never writes the topology or anything on the VM (see
+[Lab operations](LAB-OPERATIONS.md#the-map-and-its-editor)).
 
 ## Drafts live in this browser
 

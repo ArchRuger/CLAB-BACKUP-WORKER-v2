@@ -24,8 +24,8 @@ in [AUDIT.md](AUDIT.md).
 | Chunk | Content | State |
 |---|---|---|
 | 1 | Agent guidance: `CLAUDE.md` without the handoff import, invariant digest and routing table (reviewed by R1), architecture module map, pickup status lines, archive links, documentation index, link checker, this folder | pushed, `569a58a` |
-| 2 | Installation and operations guides (T1): eleven files | complete when this commit is on the remote |
-| 3 | Student workflow guides (T2): seven files, plus the three stale tour screenshots regenerated from the fixture manager | same |
+| 2 | Installation and operations guides (T1): eleven files | pushed, `e2bb15b` |
+| 3 | Student workflow guides (T2): seven files, plus the three stale tour screenshots regenerated from the fixture manager | complete when this commit is on the remote |
 | 4 | Code cleanup (T3): dead CSS, two dead handlers, unused imports, stale wording printed by deploy scripts and `vm-connection.html`, eight test files added to CI | same |
 | 5 | Final verification: an independent verifier over chunks 2 to 4, a risk reviewer over the CSS removal; fixes; final state of the record | not started |
 

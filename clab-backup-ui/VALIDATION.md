@@ -1,3 +1,25 @@
+# Maintenance audit, chunk 3: student workflow guides and tour screenshots — 1.30.20
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.19 (`e2bb15b`, pushed). Documentation and
+images only. **Static and fixture evidence.**
+
+## What was run
+
+- A worker task traced each corrected statement to the code (`git_progress.py` save, retry and destination
+  routes, `git-progress.js`, `git-places.js`, `home.js` `homeOrder`, `operations.js` `opDestroyOptions`,
+  `map-editor.html`, `downloads.py`); the lead read its diff and checked the labels by search.
+- `docs/redesign/tools/verify_after.py` against the fixture manager on fresh scratch data, stylesheet as
+  released: 98 of 98 checks at 1920×1080, 1440×900 and 1366×768, 0 console errors, 0 page errors. The three
+  replaced tour images are this run's 1440×900 captures; the lead looked at the Home and Progress captures
+  (start cards, *Recent labs* / *All labs*, *Git repo details*, *Change folder…* open, no review opt-out).
+- `python3 deploy/verify-release.py`, `check_links.py` (79 files, 0 problems), `git diff --check`, both test
+  suites (711 Python tests with 1 skipped, 189 browser tests).
+
+## Not run
+
+The two defects reported in the changelog were read from the code, not reproduced. No image of Edit map,
+the lab builder, the save help pane or the upload review was added. Nothing live.
+
 # Maintenance audit, chunk 2: installation and operations guides — 1.30.19
 
 Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.18 (`569a58a`, pushed). Documentation

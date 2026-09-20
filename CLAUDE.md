@@ -230,7 +230,7 @@ One line each; the handoff section named in the routing table has the reasoning 
 - Restore is Junos only, over direct node SSH: hierarchical candidate, `load override`, `commit check`,
   `commit confirmed`, reconnect, confirm; the pre-restore backup is mandatory; never fake
   commit-confirmed; snapshots without a restore artifact are view and download only.
-- Download names follow the contract in `clab-backup-ui/NODE-FEATURES.md` and
+- Download names follow the contract in `clab-backup-ui/NODE-FEATURES.md` "Backup download names" and
   baseline §11 of the handoff; internal storage names intentionally differ and stay stable;
   frozen snapshot metadata is never relabelled from the current inventory.
 

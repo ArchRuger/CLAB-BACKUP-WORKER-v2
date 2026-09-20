@@ -9,21 +9,24 @@ Wireshark from the browser, watch the network live in Grafana, back up device
 configurations and save lab progress to Git. Nothing is installed on your workstation;
 you only need a browser.
 
-Current release: **1.30.19** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
+Current release: **1.30.20** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
 
 ## What it does
 
-- **Deploy and manage labs** from the topology files on your VM: deploy, redeploy,
+- **Deploy and manage labs** from the topology files on your VM, from a file you upload
+  from your workstation, or from a lab you draw in the visual lab builder: deploy, redeploy,
   start, stop, destroy and inspect, each shown for review before it runs. The
   workspace, map and node logins are ready as soon as you click *Deploy lab*.
 - **Know when a lab is really up.** Containers run long before a network OS is
   usable, so the manager logs in to every node and asks for `show version` until it
   answers, then opens SSH and runs a login test by itself.
 - **Work on the nodes**: browser SSH terminals, a topology map with right-click
-  actions, an editable diagram with draw.io export, SuperPuTTY session export.
+  actions, a map editor (*Edit map*: the drawing only, never the topology) with draw.io
+  export, SuperPuTTY session export.
 - **Keep configurations**: on-demand and scheduled backups over Ansible for EOS,
   Junos and IOS-XR, per-device history and downloads, and *Save progress* that commits
-  and pushes to your Git repository from the VM with your existing login.
+  on the VM and, after you have reviewed the changes, pushes to your Git repository with
+  your existing login.
 - **See the packets**: Wireshark runs on the VM in an isolated container and streams
   to your browser. Pick a node's port on the map and start.
 - **Watch the network live, in Grafana.** Once a node answers, the manager configures
@@ -35,7 +38,7 @@ Current release: **1.30.19** · [changelog](docs/CHANGELOG.md) · [all documenta
   router or per lab.
 - **Stay in step with the VM**: read-only discovery every 30 seconds over a
   restricted SSH account, automatic node addresses, VM file sync, a health report and
-  a debug panel.
+  a Diagnostics page.
 
 Device kinds with backup and login-test drivers: Arista cEOS, Juniper cJunosEvolved,
 vJunos-switch and vQFX, Cisco XRv9k. Any node that speaks SSH gets a terminal.
@@ -77,7 +80,7 @@ elsewhere.
    defaults; say `y` to the plan, enter your sudo password, and create a password for
    `clab-discovery` when asked (write it down). Choose `2` at *Next step* to set up
    Git later. The image build and the two stacks take a few minutes; the installer
-   ends with `Manager 1.30.19: running; HTTP and version checks passed.`
+   ends with `Manager 1.30.20: running; HTTP and version checks passed.`
 
 3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.
@@ -156,6 +159,7 @@ where data lives) and a module map are in [docs/ARCHITECTURE.md](docs/ARCHITECTU
 | [Guided installation](docs/INSTALL.md) | Understand the installer's menu and phases, upgrades and the two stacks |
 | [VM connection](docs/VM-CONNECTION.md) | Set up or repair the `clab-discovery` account and password |
 | [Lab operations](docs/LAB-OPERATIONS.md) | Start, stop, redeploy and destroy labs, edit the map, read device readiness |
+| [Lab builder](docs/LAB-BUILDER.md) | Draw a new lab in the browser, save it to the VM and deploy it, or edit the topology of a lab that is not deployed |
 | [Git setup](docs/GIT-SETUP.md) and [Save progress](docs/GIT-PROGRESS.md) | Register a checkout, then save, checkpoint, compare, apply and push from the Progress tab |
 | [Browser Wireshark](docs/CAPTURE.md) | Run capture sessions, download captures, repair or remove the capture stack |
 | [Network telemetry](docs/TELEMETRY.md) | Understand what the manager collects, the Grafana dashboards, per-NOS support and the live acceptance procedure |

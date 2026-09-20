@@ -80,7 +80,7 @@ All eight requirements are delivered. What is left is optional or needs the main
   --manager-only` (helpers must match the release); last done at **1.30.17 (`e7be534`) on 2026-09-20**,
   followed by a live check of the map editor through `http://192.168.132.132:8081` on the QA lab
   `qa-nos-105458` only (see VALIDATION, 1.30.14; the read-only pass of 1.30.11 is under 1.30.12).
-- `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home. The maintenance audit found `30-progress.png` and `20-devices.png` stale as well (see `docs/maintenance-audit/`).
+- `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home. The maintenance audit found `30-progress.png` and `20-devices.png` stale as well and replaced all three from the fixture manager at 1.30.20.
 - The successful import confirmation was not exercised in a browser (the fixture VM refuses the preview).
 
 - Seen while fixing UI-008, not addressed: if the manager's `bind_lab` fails after the VM already retired the old registration (`destination` route), the lab keeps pointing at a registration that no longer exists. Pre-existing; needs a decision on recovery (re-register the source).

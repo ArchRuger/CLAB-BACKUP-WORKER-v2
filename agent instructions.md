@@ -1,4 +1,4 @@
-# Maintenance audit (in progress) — 1.30.19
+# Maintenance audit (in progress) — 1.30.20
 
 A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release
 per chunk. **Read `docs/maintenance-audit/PICKUP.md` first**, then `docs/maintenance-audit/AUDIT.md`
@@ -16,6 +16,9 @@ the first one). UI review 001 is complete and merged; its open points are in its
 `docs/lab-builder/tools/` are working regression tooling; their location does not make them disposable.
 (5) Chunk 2 corrected the installation and operations guides (the record's disposition table has the list).
 A guide must never again say a save uploads by itself: every upload goes through *Review before uploading*.
+(6) Chunk 3 corrected the student guides and replaced three tour images from `verify_after.py`'s 1440×900
+captures (the tour says they are fixture data; keep that sentence true). `clab-backup-ui/NODE-FEATURES.md`
+"Backup download names" is now the living statement of the download naming contract.
 
 # UI review 001 — 1.30.17
 
