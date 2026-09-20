@@ -6,9 +6,10 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { App, useTopoViewerStore } from "@containerlab/clab-ui";
 import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
-import { TopologySessionCore } from "@containerlab/clab-ui/session";
+import { TopologySessionCore, mergeCustomNodeTemplates, parseCustomNodeTemplatesExport } from "@containerlab/clab-ui/session";
 import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
+import { parseDocument } from "yaml";
 import "@containerlab/clab-ui/styles/global.css";
 
 interface BuilderDraft { id: string; name: string; yaml: string; annotations: string }
@@ -19,8 +20,12 @@ interface BuilderPage {
   templates(): { list: BuilderTemplate[]; defaultName: string };
   saveTemplates(list: BuilderTemplate[], defaultName: string): void;
   images(): string[];
+  // The text of a template file the student picked, or null when the file dialog was dismissed.
+  chooseTemplates(): Promise<string | null>;
+  notify(message: string): void;
   requestSave(): void;
-  problem(message: string): void;
+  // code: "storage" (the browser could not store the draft) or "conflict" (another tab holds a newer one).
+  problem(message: string, code?: string): void;
   ready(mount: (draft: BuilderDraft) => Promise<void>): void;
 }
 declare global { interface Window { labBuilderPage: BuilderPage; __DOCKER_IMAGES__?: string[] } }
@@ -43,6 +48,10 @@ class DraftFiles implements FileSystemAdapter {
 
 async function mount(draft: BuilderDraft): Promise<void> {
   const page = window.labBuilderPage;
+  // The engine acknowledges edits to a document it cannot parse (a syntax error, a repeated key) and writes
+  // none of them. Such a topology is refused here, with the parser's own reason and line.
+  const flaw = parseDocument(draft.yaml, { prettyErrors: true }).errors[0];
+  if (flaw) throw Object.assign(new Error(flaw.message.split("\n")[0]), { code: "unreadable" });
   const yamlPath = `/draft/${draft.name}.clab.yml`, layoutPath = `${yamlPath}.annotations.json`;
   const files = new DraftFiles();
   files.files.set(yamlPath, draft.yaml);
@@ -57,7 +66,7 @@ async function mount(draft: BuilderDraft): Promise<void> {
   const settled = <T,>(work: () => Promise<T>): Promise<T> => {
     const run = queue.then(work).then((value) => {
       try { page.persist(files.files.get(yamlPath) ?? "", files.files.get(layoutPath) ?? ""); }
-      catch (e) { page.problem(e instanceof Error ? e.message : String(e)); throw e; }
+      catch (e) { page.problem(e instanceof Error ? e.message : String(e), (e as { code?: string }).code); throw e; }
       return value;
     });
     queue = run.catch(() => undefined);
@@ -72,7 +81,16 @@ async function mount(draft: BuilderDraft): Promise<void> {
     // The editor's own deploy controls are hidden by the page; a keyboard path still lands here.
     runLifecycle() { emit({ type: "lifecycleStatus", status: "success" }); page.requestSave(); },
     cancelLifecycle() { emit({ type: "lifecycleStatus", status: "error", errorMessage: "Cancelled" }); },
-    toggleSplitView: nothing, runNodeAction: nothing, captureInterface: nothing, setLinkImpairment: nothing, importCustomNodes: nothing,
+    toggleSplitView: nothing, runNodeAction: nothing, captureInterface: nothing, setLinkImpairment: nothing,
+    // The palette's Import templates: the file format and the merge rules are the editor's own.
+    importCustomNodes() {
+      page.chooseTemplates().then((text) => {
+        if (text === null) return;
+        const t = page.templates(), merged = mergeCustomNodeTemplates(t.list as never, parseCustomNodeTemplatesExport(text));
+        page.saveTemplates(merged.customNodes as never, t.defaultName); pushTemplates();
+        page.notify(`Device templates imported: ${merged.added} new, ${merged.replaced} replaced.`);
+      }).catch((e) => page.notify(e instanceof Error ? e.message : String(e)));
+    },
     requestIconList() { emit({ type: "iconList", icons: [] }); }, uploadIcon: nothing, deleteIcon: nothing, reconcileIcons: nothing,
     exportGrafanaBundle(payload: { requestId: string }) { emit({ type: "svgExportResult", requestId: payload.requestId, success: false, error: "Not available in the lab builder." }); },
     dumpCssVars: nothing,

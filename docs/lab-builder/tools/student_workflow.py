@@ -104,8 +104,15 @@ def run(p):
     pg.goto(args.base + f'/static/lab-builder.html#draft=new:{LAB}'); pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1000)
     bx = pg.get_by_text('Linux host', exact=True).bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(640, 560, steps=12); pg.mouse.up(); pg.wait_for_timeout(900)
     check('a later edit shows as not saved to the VM', 'Changes not saved' in pg.inner_text('#builder-status') and 'Save changes' in pg.inner_text('#builder-save'))
-    pg.click('#builder-save'); pg.wait_for_timeout(2500)
-    check('saving over a deployed lab is refused with the reason', 'deployed' in pg.inner_text('#toast').lower() or 'deployed' in pg.inner_text('body').lower()); shot('11-refused-while-deployed')
+    for attempt in range(30):  # the manager learns from discovery that the lab runs; the refusal below needs that
+        if pg.evaluate(f"fetch('/api/state').then(r => r.json()).then(s => /running/i.test(s.labs.find(l => l.name === '{LAB}')?.deployment?.status || ''))"): break
+        pg.wait_for_timeout(2000)
+    pg.reload(); pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1500)
+    check('a deployed lab is announced when its draft opens, before any work is lost', pg.locator('#builder-note').is_visible() and 'is deployed' in pg.inner_text('#builder-note'), pg.inner_text('#builder-note'))
+    pg.click('#builder-save'); pg.wait_for_selector('#builder-save-problem', timeout=20000); pg.wait_for_timeout(400)
+    refusal = pg.inner_text('#builder-save-problem')
+    check('saving over a deployed lab is refused with the reason, in a dialog that stays', 'deployed' in refusal.lower() and 'Your draft is kept' in refusal and not pg.locator('#op-confirm').is_visible(), refusal[:200]); shot('11-refused-while-deployed')
+    pg.click('#builder-save-problem-close')
     lab_id = pg.evaluate(f"fetch('/api/state').then(r => r.json()).then(s => s.labs.find(l => l.name === '{LAB}').id)")
     token = pg.evaluate(f"fetch('/api/operations/preview', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{action:'destroy', lab_id:'{lab_id}', options:{{cleanup:true}}}})}}).then(r => r.json()).then(v => v.token)")
     job_id = pg.evaluate(f"fetch('/api/operations/confirm', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{token:'{token}'}})}}).then(r => r.json()).then(j => j.id)")
@@ -113,6 +120,7 @@ def run(p):
     pg.wait_for_timeout(4000)  # the manager refreshes discovery before it accepts the next operation
     for attempt in range(10):  # discovery needs a poll to see that the lab is gone; a review may open late
         if pg.locator('#op-confirm').is_visible(): break
+        if pg.locator('#builder-save-problem-close').is_visible(): pg.click('#builder-save-problem-close')  # still refused: the dialog stays until closed
         try: pg.click('#builder-save', timeout=3000); pg.wait_for_selector('#op-confirm', timeout=10000)
         except Exception: pg.wait_for_timeout(2000)
     check('after destroy the save review shows what changes', pg.locator('#op-confirm').is_visible() and '+' in pg.inner_text('#operation-review') and 'kind: linux' in pg.inner_text('#operation-review')); shot('12-revise-review')

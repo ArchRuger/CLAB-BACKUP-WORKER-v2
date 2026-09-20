@@ -185,10 +185,14 @@ function opJobBanner(job){
 async function opShowJob(id){
  clearTimeout(opOutputTimer);
  const dialog=opDialog('operation-output','Lab operation','<div id="op-job-banner" class="op-banner" hidden></div><pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
+ // A page that acts on the outcome (the lab builder's opJobDone) hears it even when this dialog was closed
+ // while the job ran; a poll that fails is repeated, because one lost answer must not hide how the job ended.
+ let fails=0;const follows=typeof opJobDone==='function';
  const poll=async()=>{
-  if(!dialog.open)return;
+  if(!dialog.open&&!follows)return;
   try{
-   const job=await(await api('/operations/'+id)).json();
+   const job=await(await api('/operations/'+id)).json();fails=0;
+   if(!dialog.open){if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();opJobDone(job);}return;}
    const heading=dialog.querySelector('h2');if(heading)heading.textContent=(opLabels[job.action]||job.action)+(job.name?' · '+job.name:'');
    const banner=opJobBanner(job),shown=$('op-job-banner');shown.hidden=false;shown.className='op-banner '+banner.tone;shown.innerHTML=`<strong>${esc(banner.title)}</strong><span>${esc(banner.detail)}</span>${banner.exit?`<small class="${job.exit_code?'op-exit-bad':''}">${esc(banner.exit)}</small>`:''}`;
    const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for the VM…';if(follow)pre.scrollTop=pre.scrollHeight;
@@ -202,8 +206,8 @@ async function opShowJob(id){
    $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(job.result.published_path)));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
-  }catch(e){dialog.querySelector('.form-error').textContent=e.message;}
- };dialog.onclose=()=>clearTimeout(opOutputTimer);await poll();
+  }catch(e){if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);}
+ };dialog.onclose=()=>{if(!follows)clearTimeout(opOutputTimer);};await poll();
 }
 async function opHistory(labId=''){
  const jobs=await(await api('/operations')).json();
@@ -248,6 +252,8 @@ function opBuilderRoot(path,roots){
  return inside||list.find(r=>r==='/srv/containerlab-node-manager/projects')||list[0]||'/srv/containerlab-node-manager/projects';
 }
 function opBuilderUrl(values){return '/static/lab-builder.html#'+new URLSearchParams(Object.fromEntries(Object.entries(values).filter(([,v])=>v)));}
+// On the builder page itself only the fragment changes, which loads nothing: the page has one editor per load.
+function opBuilderOpen(values){const url=opBuilderUrl(values),here=location.pathname==='/static/lab-builder.html';location.assign(url);if(here)location.reload();}
 function openDeploy(){return opTask(null,()=>opBrowse());}
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open the CLI launcher',`<p>Your browser blocked the new tab. Use this button instead:</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open CLI launcher <span aria-hidden="true">↗</span></a>`);}
 function opTopologyEntries(entries){return entries.filter(entry=>entry.directory||/\.clab\.ya?ml$/i.test(entry.name));}
@@ -271,7 +277,7 @@ async function opBrowse(path='',labId=''){
  };
  addEntries($('op-file-tree'),result.entries);
  $('op-roots').onclick=()=>opTask(dialog,()=>opBrowse());$('op-up').onclick=()=>opTask(dialog,()=>opBrowse(result.parent||''));
- $('op-build').onclick=()=>location.assign(opBuilderUrl({root:opBuilderRoot(result.path,opCaps?.roots)}));
+ $('op-build').onclick=()=>opBuilderOpen({root:opBuilderRoot(result.path,opCaps?.roots)});
  $('op-create').onclick=()=>opEdit('','',(result.path||'/srv/containerlab-node-manager/projects')+'/new-lab.clab.yaml');$('op-clone').onclick=()=>opClone();$('op-popular').onclick=()=>opTask(dialog,()=>opPopular());
  // Listing files does not depend on Containerlab's command help probes. Render
  // immediately; only the optional network controls need capabilities.
@@ -293,7 +299,7 @@ async function opEdit(path,labId='',newPath=''){
  opEditorContext={path:value.path,labId,isNew:!path};
  const dialog=opDialog('op-editor',path?'Topology file':'New topology file',`<label>File location on the VM<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology (YAML)':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Deploy lab adds this lab to My labs and starts its devices on the VM. Add without starting keeps it in My labs only. Existing files can't be edited as text here — use Edit visually, or edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Create file on the VM…</button>':''}${path&&isYaml?'<button class="button secondary" id="op-build-edit">Edit visually…</button><button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Add to My labs without starting')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
  $('op-edit-path').value=value.path;$('op-edit-text').value=value.text;
- $('op-build-edit')?.addEventListener('click',()=>location.assign(opBuilderUrl({path})));
+ $('op-build-edit')?.addEventListener('click',()=>opBuilderOpen({path}));
  $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
  $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value}})));
  $('op-add-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
