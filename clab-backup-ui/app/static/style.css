@@ -1494,6 +1494,8 @@ dialog > p:first-of-type { margin-top: 0; }
   padding: 24px;
 }
 .operations-dialog::backdrop { background: var(--backdrop); }
+/* The review's decision stays in view however long the YAML or the differences are (small windows, zoom). */
+#operation-review .dialog-actions { position: sticky; bottom: -24px; margin: 20px -24px 0; padding: 12px 24px 20px; background: var(--surface); border-top: 1px solid var(--line); }
 .operations-dialog h2 { margin: 6px 0 16px; }
 .operations-dialog .dialog-head { margin-bottom: 16px; }
 .operations-dialog .dialog-head h2 { margin: 0; }
@@ -2395,6 +2397,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .git-outline { border-right: 0; border-bottom: 1px solid var(--line); max-height: 220px; }
   .op-sections, .op-coordinates, .op-file-list { grid-template-columns: 1fr; }
   .operations-dialog { padding: 18px; }
+  #operation-review .dialog-actions { bottom: -18px; margin: 20px -18px 0; padding: 12px 18px 14px; }
   .debug-grid { grid-template-columns: 1fr; }
   .debug-input { flex-direction: column; align-items: stretch; }
   .debug-page .section-heading { align-items: flex-start; flex-direction: column; }
@@ -2512,6 +2515,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .op-save-line.danger { color: var(--danger-strong); }
 .op-banner small { display: block; font-size: 12px; opacity: .85; }
 .op-banner small.op-exit-bad { font-weight: 600; }
+.op-banner .op-banner-hint { margin: 8px 0 0; font-weight: 400; }
 .op-session-row .pill { margin-right: 4px; }
 .op-session-row .caption { flex: 1 1 260px; }
 .workspace-links { margin: 24px 0 0; color: var(--muted); font-size: 13px; }

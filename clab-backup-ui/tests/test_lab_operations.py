@@ -129,6 +129,10 @@ class HostOperationTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.host.plan(req)
         self.path.write_bytes(b'x'*(1024*1024+1))
         with self.assertRaises(ValueError):self.host.read(str(self.path))
+        # The lab builder tells a file that is not there from a VM it could not ask by this wording
+        # (builderAbsent in static/lab-builder-page.js): a missing topology, and a missing lab folder.
+        for gone in (self.root/'gone.clab.yml',self.root/'no-folder'/'gone.clab.yml'):
+            with self.assertRaisesRegex(ValueError,'no longer exists'):self.host.read(str(gone))
 
     def test_clone_and_optional_tools_are_bounded(self):
         req=self.request('clone',url='https://github.com/srl-labs/example',project='example');plan=self.host.plan(req)
@@ -335,7 +339,7 @@ class OperationAPITests(unittest.TestCase):
         post=lambda **body:self.client.post('/api/operations/preview',headers=self.auth,json=body)
         with self.fixture() as remote,patch.object(self.app.state.operations.pool,'submit') as submit:
             remote.side_effect=(lambda inner:lambda host,req,*a:{**inner(host,req,*a),'path':'/srv/labs/built/built.clab.yml'} if req['mode']=='preview' and req['action']=='publish' else inner(host,req,*a))(remote.side_effect)
-            for text,reason in (('name: built\ntopology:\n  nodes: {}\n','topology.nodes'),('a: &x 1\nb: *x\n','cannot read'),('name: bad name\ntopology:\n  nodes:\n    r1: {}\n','cannot read')):
+            for text,reason in (('name: built\ntopology:\n  nodes: {}\n','at least one device'),('a: &x 1\nb: *x\n','cannot read'),('name: bad name\ntopology:\n  nodes:\n    r1: {}\n','cannot read')):
                 refused=post(action='publish',options={'root':'/srv/labs','text':text});self.assertEqual(refused.status_code,400,refused.text);self.assertIn(reason,refused.json()['detail'])
             self.assertEqual(post(action='publish',options={'root':'/srv/labs','text':built,'annotations':'[1]'}).status_code,400)
             self.assertEqual(post(action='publish',options={'root':'/srv/labs','text':built,'path':'/etc/passwd'}).status_code,400)
@@ -364,6 +368,9 @@ class OperationAPITests(unittest.TestCase):
             changed=YAML.decode()+'# a student change\n'
             review=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':changed,'base':{'yaml':hashlib.sha256(YAML).hexdigest()}}))
             self.assertEqual(review.status_code,200,review.text);self.assertIn('+# a student change',review.json()['diff'])
+            # A list of differences that is cut short says so instead of ending in the middle of a line.
+            long=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='revise',path='/etc/containerlab/training.clab.yaml',options={'text':YAML.decode()+''.join('# line %d\n'%i for i in range(30000)),'base':{'yaml':hashlib.sha256(YAML).hexdigest()}}))
+            self.assertEqual(long.status_code,200,long.text);self.assertIn('not shown',long.json()['diff'][-120:])
 
     def test_host_revision_expiry_and_backup_conflicts(self):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:

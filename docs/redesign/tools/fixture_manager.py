@@ -579,6 +579,17 @@ def build(data_dir, port):
         for line in ('INFO[0000] Containerlab (fixture) started', f'INFO[0001] {action} {name}', 'INFO[0003] done'):
             output(line + '\n')
             time.sleep(1.2)
+        # What discovery would see next on a real VM: a deployed lab runs, a destroyed one is gone. Without
+        # this a lab deployed here never counts as deployed, and "refused while deployed" cannot be shown.
+        with store.lock:
+            lab = next((l for l in store.state['labs'] if (l.get('deployment_name') or l['name']) == name), None)
+            groups = store.state['discovery'].setdefault('labs', {})
+            if action in ('deploy', 'redeploy', 'start') and lab:
+                groups[name] = [dict(name=n['name'], address=f'172.20.21.{10 + i}', state='running', kind=n.get('kind', '')) for i, n in enumerate(lab['nodes'])]
+            elif action == 'destroy':
+                groups.pop(name, None)
+            reconcile(store.state)
+            store.save()
         return {'exit_code': 0}
 
     def fake_remote(host, request, output=None, stopping=None, timeout=None):

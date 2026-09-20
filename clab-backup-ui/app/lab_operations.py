@@ -248,6 +248,7 @@ class LabOperations:
                 if set(options) - {'root', 'text', 'annotations', 'base'}: raise HTTPException(400, 'Unsupported save options.')
                 try: parsed = parse_definition(str(options.get('text', '')).encode())
                 except (ValueError, TypeError, AttributeError, RecursionError) as exc:
+                    if 'topology.nodes' in str(exc): raise HTTPException(400, 'Add at least one device before saving: a lab without devices cannot be deployed.')
                     raise HTTPException(400, 'The manager cannot read this topology: ' + (str(exc) if type(exc) is ValueError else 'it is not a literal Containerlab topology.'))
                 if data.action == 'revise' and parsed['name'] != source_name: raise HTTPException(400, 'The lab name cannot change when saving again. It is ' + source_name + ' on the VM.')
                 name = source_name = parsed['name']
@@ -260,7 +261,8 @@ class LabOperations:
                     except (ValueError, TypeError, AttributeError, KeyError, RecursionError):
                         notes.append('The manager cannot read this map layout, so its own map will start from the default grid. The layout file is still saved for the editor.')
                 if len(json.dumps(options)) > 1536 * 1024: raise HTTPException(400, 'This lab is too large to save in one step (topology and map layout together must stay under 1.5 MiB).')
-                if source: diff = ''.join(difflib.unified_diff(source['text'].splitlines(True), str(options['text']).splitlines(True), 'on the VM', 'your changes', n=2))[:200000]
+                if source: diff = ''.join(difflib.unified_diff(source['text'].splitlines(True), str(options['text']).splitlines(True), 'on the VM', 'your changes', n=2))
+                if len(diff) > 200000: diff = diff[:200000] + '\n… the rest of the differences is not shown (the list is long).\n'
             req = dict(mode='preview', action=data.action, path=path, name=name, source_name=source_name, options=options)
             result = self.invoke(req)
             if data.action == 'publish':

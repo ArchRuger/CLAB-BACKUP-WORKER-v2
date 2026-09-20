@@ -4,6 +4,50 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.1
+
+**Lab builder quality pass.** Fixes found by walking the student journeys in a real browser (fixture
+and the live dev VM, including a multi-vendor lab built in the builder) and by an independent review;
+the register is [docs/lab-builder/QA-FINDINGS.md](lab-builder/QA-FINDINGS.md). The VM helpers are
+unchanged apart from the lockstep version (refresh them with `start-manager.sh` as for every release).
+
+- **Nothing is shown as kept that is not.** When the browser cannot store a change (storage full or
+  switched off, or a newer version from another tab), the status says so, editing pauses, *Download
+  this version* carries the newest work, *Try to store it again* works once there is room, and *Save
+  to the VM* stays off meanwhile. Before, the download the message asked for was the previous version.
+  A browser that refuses storage altogether still builds, with a standing note that the draft lives
+  in that tab only. Draft revisions are tokens, so a draft deleted and made again elsewhere cannot be
+  overwritten by a tab that still holds the old one.
+- **A save whose answer got lost is no dead end.** The job is followed when its dialog is closed, a
+  failed poll is repeated, an *already saved* result marks the draft saved, and a draft that never
+  heard how its save ended asks the VM the next time it opens. A refused save is a dialog that stays,
+  says that nothing changed and that the draft is kept, and, when the VM holds another version than
+  the draft started from, offers *Open the VM version* and *Review the differences…* (a reviewed
+  revision of the version that is on the VM now). Before, the refusal was a six-second toast and a
+  draft with a stale base could never be saved.
+- **The lab name is what the topology says.** Renaming the lab in the editor's Lab settings renames a
+  draft that is not on the VM yet everywhere on the page; a lab that is on the VM keeps its name and
+  the page says so at once instead of at the save.
+- **A topology the editor cannot parse is refused** (a syntax error, the same key twice), with the
+  parser's reason and line. Before, it opened and every edit was accepted and silently dropped.
+  Downloaded drafts are checked by the manager's parser when they are opened.
+- **One draft per lab**, the VM's own hashes as the base of a revision (a file with a byte-order mark
+  could be opened but never saved), and the editor opens with the images this site already uses.
+- **Reasons on the page.** *Save to the VM* is never off without the reason under the bar (VM not
+  connected, helper too old, unusable name) with *Check again*; a deployed lab is announced when its
+  draft opens; an empty canvas says how to begin; an empty My labs page offers *Build a lab
+  visually…*; a lab without devices is refused with "Add at least one device before saving".
+- **Working controls.** The palette's *Import templates*; *Preview topology* and *Edit visually…* in
+  the Topology file dialog when it is opened from the builder page.
+- **Lab operations (all pages).** A failed deploy says in words which images the VM does not have and
+  where to correct them; the folder browser closes when an operation is confirmed instead of covering
+  the lab page and its result; the review's *Cancel* / confirm row stays in view in a small window or
+  at browser zoom; a long list of differences that is cut short says so.
+- The builder bar keeps *Save to the VM* in the window down to about 900 px (150 % zoom on a laptop).
+- Tooling: the fixture manager reports a lab it deployed as running, so the workflow's "refused while
+  deployed" check exercises the refusal (it passed on the review's own wording before); the redesign
+  gate knows the *Edit visually…* button.
+
 ## Changes in 1.30.0
 
 **Lab builder.** A new page draws a Containerlab lab in the browser and saves it to the VM

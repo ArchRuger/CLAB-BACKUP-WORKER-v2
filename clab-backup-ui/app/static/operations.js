@@ -15,7 +15,7 @@ function opDialog(id,title,body){
 async function opTask(dialog,fn){
  const error=dialog?.querySelector('.form-error');if(error)error.textContent='';
  const buttons=dialog?[...dialog.querySelectorAll('button:not(:disabled)')]:[];buttons.forEach(b=>b.disabled=true);
- try{return await fn();}catch(e){if(error)error.textContent=e.message;else if(typeof showActionError==='function')showActionError(e.message);else notify(e.message);}finally{buttons.forEach(b=>b.disabled=false);}
+ try{return await fn();}catch(e){if(error){error.textContent=e.message;if(typeof error.scrollIntoView==='function')error.scrollIntoView({block:'nearest'});}else if(typeof showActionError==='function')showActionError(e.message);else notify(e.message);}finally{buttons.forEach(b=>b.disabled=false);}
 }
 function opPath(lab){return lab?.vm_project_path||lab?.vm_source?.files?.definition?.path||'';}
 function opName(lab){return lab?.deployment_name||lab?.name||'';}
@@ -144,9 +144,13 @@ async function opReview(request){
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
  $('op-confirm').onclick=()=>opTask(dialog,async()=>{
   const job=await json('/operations/confirm','POST',{token:value.token});dialog.close();
-  if($('op-editor')?.open)$('op-editor').close();
+  if(typeof opJobStarted==='function')opJobStarted(job);
+  // The file has been chosen and the operation runs: the file dialogs are done, and the folder browser
+  // must not stay open over the lab page that now reports how the operation goes.
+  for(const id of ['op-editor','op-browser'])if($(id)?.open)$(id).close();
   if(typeof selectLab==='function'&&labId&&labId!==activeId&&(state.labs||[]).some(l=>l.id===labId))selectLab(labId);
-  await refresh();
+  // The job exists: a state refresh that fails must not keep its output (and its outcome) from being followed.
+  try{await refresh();}catch{}
   // Lifecycle actions on the open lab report through the header and the banner ([View output]);
   // result-bearing actions open their output right away.
   if(opLifecycle.includes(value.action)&&labId&&labId===activeId&&typeof renderLabBanner==='function'){notify(label+'…');return;}
@@ -176,21 +180,33 @@ function opInspectionRows(output){
 function opInspectionTable(rows){return `<div class="op-inspection"><table><caption>${rows.length} running ${rows.length===1?'device':'devices'}</caption><thead><tr>${['Topology','Lab','Device','Type / image','State / health','IPv4 / IPv6'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.topology)||'—'}</td><td>${esc(r.lab)}</td><td>${esc(r.node)}</td><td>${esc(r.kind)}<small>${esc(r.image)}</small></td><td>${esc(r.state)}</td><td>${esc(r.ipv4)}<small>${esc(r.ipv6)}</small></td></tr>`).join('')}</tbody></table></div>`;}
 // The outcome is what a reader looks for first: a large green (or red) banner names
 // the action, the lab and the result before the raw command output; the exit code is a detail.
+// A failure a student can act on, in words. Image references are shown as the topology names them
+// (containerlab prints the registry it tried in front).
+function opJobHint(job){
+ if(!['failed','interrupted'].includes(job.status))return '';
+ const images=[...new Set([...String(job.output||'').matchAll(/Failed to pull image\s+image=(\S+)/g)].map(m=>m[1].replace(/^docker\.io\/(library\/)?/,'')))];
+ if(images.length)return 'The VM does not have '+(images.length>1?'these images':'this image')+' and could not download '+(images.length>1?'them':'it')+': '+images.join(', ')+'. Check the image name on the devices that use '+(images.length>1?'them':'it')+' (open the topology file and choose Edit visually, then the device\'s Image field), or ask for the image to be installed on the VM.';
+ return '';
+}
 function opJobBanner(job){
  const label=opLabels[job.action]||job.action,done=job.status==='succeeded',failed=['failed','interrupted'].includes(job.status);
  const detail=[job.name,job.message].filter(Boolean).join(' · ');
  const exit=job.exit_code===null||job.exit_code===undefined?'':'Exit code '+job.exit_code;
- return {tone:done?'good':failed?'bad':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:`${label} ${job.status}…`,detail,exit};
+ return {tone:done?'good':failed?'bad':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:`${label} ${job.status}…`,detail,exit,...(opJobHint(job)?{hint:opJobHint(job)}:{})};
 }
 async function opShowJob(id){
  clearTimeout(opOutputTimer);
  const dialog=opDialog('operation-output','Lab operation','<div id="op-job-banner" class="op-banner" hidden></div><pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
+ // A page that acts on the outcome (the lab builder's opJobDone) hears it even when this dialog was closed
+ // while the job ran; a poll that fails is repeated, because one lost answer must not hide how the job ended.
+ let fails=0;const follows=typeof opJobDone==='function';
  const poll=async()=>{
-  if(!dialog.open)return;
+  if(!dialog.open&&!follows)return;
   try{
-   const job=await(await api('/operations/'+id)).json();
+   const job=await(await api('/operations/'+id)).json();fails=0;
+   if(!dialog.open){if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();opJobDone(job);}return;}
    const heading=dialog.querySelector('h2');if(heading)heading.textContent=(opLabels[job.action]||job.action)+(job.name?' · '+job.name:'');
-   const banner=opJobBanner(job),shown=$('op-job-banner');shown.hidden=false;shown.className='op-banner '+banner.tone;shown.innerHTML=`<strong>${esc(banner.title)}</strong><span>${esc(banner.detail)}</span>${banner.exit?`<small class="${job.exit_code?'op-exit-bad':''}">${esc(banner.exit)}</small>`:''}`;
+   const banner=opJobBanner(job),shown=$('op-job-banner');shown.hidden=false;shown.className='op-banner '+banner.tone;shown.innerHTML=`<strong>${esc(banner.title)}</strong><span>${esc(banner.detail)}</span>${banner.exit?`<small class="${job.exit_code?'op-exit-bad':''}">${esc(banner.exit)}</small>`:''}${banner.hint?`<p class="op-banner-hint">${esc(banner.hint)}</p>`:''}`;
    const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for the VM…';if(follow)pre.scrollTop=pre.scrollHeight;
    const rows=opInspectionRows(job.output||'');
    const inspectAction=['inspect','inspect-all'].includes(job.action);
@@ -202,8 +218,8 @@ async function opShowJob(id){
    $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(job.result.published_path)));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
-  }catch(e){dialog.querySelector('.form-error').textContent=e.message;}
- };dialog.onclose=()=>clearTimeout(opOutputTimer);await poll();
+  }catch(e){if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
+ };dialog.onclose=()=>{if(!follows)clearTimeout(opOutputTimer);};await poll();
 }
 async function opHistory(labId=''){
  const jobs=await(await api('/operations')).json();
@@ -248,6 +264,8 @@ function opBuilderRoot(path,roots){
  return inside||list.find(r=>r==='/srv/containerlab-node-manager/projects')||list[0]||'/srv/containerlab-node-manager/projects';
 }
 function opBuilderUrl(values){return '/static/lab-builder.html#'+new URLSearchParams(Object.fromEntries(Object.entries(values).filter(([,v])=>v)));}
+// On the builder page itself only the fragment changes, which loads nothing: the page has one editor per load.
+function opBuilderOpen(values){if(location.pathname==='/static/lab-builder.html'&&typeof builderGo==='function')builderGo(Object.fromEntries(Object.entries(values).filter(([,v])=>v)));else location.assign(opBuilderUrl(values));}
 function openDeploy(){return opTask(null,()=>opBrowse());}
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open the CLI launcher',`<p>Your browser blocked the new tab. Use this button instead:</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open CLI launcher <span aria-hidden="true">↗</span></a>`);}
 function opTopologyEntries(entries){return entries.filter(entry=>entry.directory||/\.clab\.ya?ml$/i.test(entry.name));}
@@ -271,7 +289,7 @@ async function opBrowse(path='',labId=''){
  };
  addEntries($('op-file-tree'),result.entries);
  $('op-roots').onclick=()=>opTask(dialog,()=>opBrowse());$('op-up').onclick=()=>opTask(dialog,()=>opBrowse(result.parent||''));
- $('op-build').onclick=()=>location.assign(opBuilderUrl({root:opBuilderRoot(result.path,opCaps?.roots)}));
+ $('op-build').onclick=()=>opBuilderOpen({root:opBuilderRoot(result.path,opCaps?.roots)});
  $('op-create').onclick=()=>opEdit('','',(result.path||'/srv/containerlab-node-manager/projects')+'/new-lab.clab.yaml');$('op-clone').onclick=()=>opClone();$('op-popular').onclick=()=>opTask(dialog,()=>opPopular());
  // Listing files does not depend on Containerlab's command help probes. Render
  // immediately; only the optional network controls need capabilities.
@@ -293,7 +311,7 @@ async function opEdit(path,labId='',newPath=''){
  opEditorContext={path:value.path,labId,isNew:!path};
  const dialog=opDialog('op-editor',path?'Topology file':'New topology file',`<label>File location on the VM<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology (YAML)':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Deploy lab adds this lab to My labs and starts its devices on the VM. Add without starting keeps it in My labs only. Existing files can't be edited as text here — use Edit visually, or edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Create file on the VM…</button>':''}${path&&isYaml?'<button class="button secondary" id="op-build-edit">Edit visually…</button><button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Add to My labs without starting')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
  $('op-edit-path').value=value.path;$('op-edit-text').value=value.text;
- $('op-build-edit')?.addEventListener('click',()=>location.assign(opBuilderUrl({path})));
+ $('op-build-edit')?.addEventListener('click',()=>opBuilderOpen({path}));
  $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
  $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value}})));
  $('op-add-project')?.addEventListener('click',()=>opTask(dialog,async()=>{

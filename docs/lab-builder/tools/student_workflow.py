@@ -34,7 +34,15 @@ def run(p):
     draft = lambda: json.loads(pg.evaluate(f"localStorage.getItem('clab-builder:draft:new:{LAB}')") or 'null')
     def menu(target, item):
         x, y = center(target); pg.mouse.click(x, y, button='right'); pg.wait_for_timeout(350); pg.get_by_role('menuitem', name=item).click(); pg.wait_for_timeout(500)
-    def wait_job(word='succeeded', timeout=args.job_timeout): pg.wait_for_function(f"document.querySelector('#op-job-banner')?.textContent.includes('{word}')", timeout=timeout)
+    def wait_job(label, timeout=args.job_timeout):
+        # The output dialog is reused: the banner of the job before this one may still be showing, so the
+        # label of the awaited operation has to be in it as well as the word that ends it.
+        end = time.time() + timeout / 1000
+        while time.time() < end:
+            text = pg.inner_text('#op-job-banner') if pg.locator('#op-job-banner').count() else ''
+            if label in text and ('succeeded' in text or 'failed' in text or 'interrupted' in text): return text
+            pg.wait_for_timeout(500)
+        raise TimeoutError('no result for ' + label)
 
     # 1. From the manager's Home page into the builder
     pg.goto(args.base + '/'); pg.wait_for_selector('#home-deploy', timeout=15000); pg.click('#home-deploy'); pg.wait_for_selector('#op-build', timeout=15000)
@@ -62,6 +70,8 @@ def run(p):
     # 2. Build: add a device, link it, edit it, delete and undo
     bx = pg.get_by_text('Linux host', exact=True).bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(640, 520, steps=12); pg.mouse.up(); pg.wait_for_timeout(900)
     check('a device dragged from the palette is added', nodes() == 4 and ADDED in draft()['yaml'])
+    known = pg.evaluate("fetch('/api/operations/known-images').then(r => r.json()).then(v => (v.images.linux || [])[0] || '')")
+    if known: check('a device from the palette carries the image this site already uses for its kind', f'image: {known}' in draft()['yaml'].split(ADDED + ':')[1], known)
     menu(node(ADDED), 'Create Link'); x, y = center(node(N1)); pg.mouse.click(x, y); pg.wait_for_timeout(900)
     check('a link is drawn with allocated interfaces', edges() == 4 and f'"{ADDED}:eth1", "{N1}:' in draft()['yaml'], draft()['yaml'][-200:])
     menu(node(ADDED), 'Edit Node'); pg.get_by_label('Node Name').fill('pc1'); pg.get_by_role('button', name='Apply', exact=True).first.click(); pg.wait_for_timeout(900)
@@ -92,7 +102,7 @@ def run(p):
     pg.click('#op-open-published'); pg.wait_for_selector('#op-deploy-project', timeout=15000)
     check('the saved file opens in the normal Topology file dialog', f'{LAB}.clab.yml' in pg.input_value('#op-edit-path')); shot('08-topology-file')
     pg.click('#op-deploy-project'); pg.wait_for_selector('#op-confirm', timeout=20000); check('Deploy lab asks for the usual review', 'Start' in pg.inner_text('#operation-review h2')); pg.click('#op-confirm')
-    wait_job(); shot('09-deployed'); check('the deploy job succeeds', True)
+    ended = wait_job('Start lab'); shot('09-deployed'); check('the deploy job succeeds', 'succeeded' in ended, ended)
     pg.goto(args.base + '/'); pg.wait_for_timeout(2500)
     labs = pg.evaluate("state.labs.map(l => ({name: l.name, path: l.vm_project_path, nodes: l.nodes.length}))"); mine = next((l for l in labs if l['name'] == LAB), None)
     check('the lab is in My labs, linked to its topology file, with its devices', bool(mine) and mine['path'].endswith(f'/{LAB}/{LAB}.clab.yml') and mine['nodes'] == 3, mine); shot('10-my-labs')
@@ -104,15 +114,30 @@ def run(p):
     pg.goto(args.base + f'/static/lab-builder.html#draft=new:{LAB}'); pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1000)
     bx = pg.get_by_text('Linux host', exact=True).bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(640, 560, steps=12); pg.mouse.up(); pg.wait_for_timeout(900)
     check('a later edit shows as not saved to the VM', 'Changes not saved' in pg.inner_text('#builder-status') and 'Save changes' in pg.inner_text('#builder-save'))
-    pg.click('#builder-save'); pg.wait_for_timeout(2500)
-    check('saving over a deployed lab is refused with the reason', 'deployed' in pg.inner_text('#toast').lower() or 'deployed' in pg.inner_text('body').lower()); shot('11-refused-while-deployed')
+    for attempt in range(30):  # the manager learns from discovery that the lab runs; the refusal below needs that
+        if pg.evaluate(f"fetch('/api/state').then(r => r.json()).then(s => /running/i.test(s.labs.find(l => l.name === '{LAB}')?.deployment?.status || ''))"): break
+        pg.wait_for_timeout(2000)
+    pg.reload(); pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1500)
+    check('a deployed lab is announced when its draft opens, before any work is lost', pg.locator('#builder-note').is_visible() and 'is deployed' in pg.inner_text('#builder-note'), pg.inner_text('#builder-note'))
+    for attempt in range(20):  # while the automatic login test of the new lab runs, the refusal is "wait for the job": also a dialog, not the one meant here
+        pg.click('#builder-save'); pg.wait_for_selector('#builder-save-problem', timeout=20000); pg.wait_for_timeout(400)
+        refusal = pg.inner_text('#builder-save-problem')
+        if 'deployed' in refusal.lower(): break
+        pg.click('#builder-save-problem-close'); pg.wait_for_timeout(3000)
+    check('saving over a deployed lab is refused with the reason, in a dialog that stays', 'deployed' in refusal.lower() and 'Your draft is kept' in refusal and not pg.locator('#op-confirm').is_visible(), refusal[:200]); shot('11-refused-while-deployed')
+    pg.click('#builder-save-problem-close')
     lab_id = pg.evaluate(f"fetch('/api/state').then(r => r.json()).then(s => s.labs.find(l => l.name === '{LAB}').id)")
-    token = pg.evaluate(f"fetch('/api/operations/preview', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{action:'destroy', lab_id:'{lab_id}', options:{{cleanup:true}}}})}}).then(r => r.json()).then(v => v.token)")
+    token = None
+    for attempt in range(30):  # refused while another job runs for the lab (the automatic login test of a lab that just came up)
+        token = pg.evaluate(f"fetch('/api/operations/preview', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{action:'destroy', lab_id:'{lab_id}', options:{{cleanup:true}}}})}}).then(r => r.json()).then(v => v.token || null)")
+        if token: break
+        pg.wait_for_timeout(2000)
     job_id = pg.evaluate(f"fetch('/api/operations/confirm', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{token:'{token}'}})}}).then(r => r.json()).then(j => j.id)")
     pg.wait_for_function(f"fetch('/api/operations/{job_id}').then(r => r.json()).then(j => j.status === 'succeeded')", timeout=90000, polling=1000)
     pg.wait_for_timeout(4000)  # the manager refreshes discovery before it accepts the next operation
     for attempt in range(10):  # discovery needs a poll to see that the lab is gone; a review may open late
         if pg.locator('#op-confirm').is_visible(): break
+        if pg.locator('#builder-save-problem-close').is_visible(): pg.click('#builder-save-problem-close')  # still refused: the dialog stays until closed
         try: pg.click('#builder-save', timeout=3000); pg.wait_for_selector('#op-confirm', timeout=10000)
         except Exception: pg.wait_for_timeout(2000)
     check('after destroy the save review shows what changes', pg.locator('#op-confirm').is_visible() and '+' in pg.inner_text('#operation-review') and 'kind: linux' in pg.inner_text('#operation-review')); shot('12-revise-review')

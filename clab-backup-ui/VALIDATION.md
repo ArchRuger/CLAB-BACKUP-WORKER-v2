@@ -1,3 +1,75 @@
+# Lab builder quality pass — 1.30.1
+
+Prepared on `claude/lab-builder-quality-pass` from `main` `5e9aa86` on 2026-09-20 on the dev VM
+`clab-llm-dev2`. Findings, causes and evidence: `docs/lab-builder/QA-FINDINGS.md`; scripts, screenshots
+and logs: `~/research/lab-builder/qa/` on the VM. Not pushed, not tagged, no image published.
+Assessment: **ready for an evaluation with students on the paths listed under "live"**; what was not
+exercised is listed at the end. No student took part in this pass.
+
+## What was run
+
+**Unit and integration (this checkout).** `node --test tests/*.js`: 163 of 163.
+`python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
+`tests/test_lab_builder_ui.js` grew from 11 to 29 tests (a page-level harness over a fake document:
+failed stores, lost answers, refusals and the rebase, renames, hashing without `crypto.subtle`, the job
+follow with a closed dialog, imports, storage refused); `test_operations_ui.js` and
+`test_lab_operations.py` gained the image hint, the shortened-diff marker, the empty-lab message and the
+helper wording the page depends on. `node build.mjs --check`: the committed editor assets match a fresh
+build (Node 24, `yaml` now a pinned dependency). `verify-release.py`: both halves pass. `git diff --check`
+clean.
+
+**Browser, fixture manager** (the real app, VM answered in-process; Chromium through Playwright).
+`docs/lab-builder/tools/student_workflow.py`: every check passes (40, or 39 on a fresh fixture that has no
+known Linux image yet: that check is conditional), three consecutive runs and once more on the final code, zero console errors, page
+errors and CSP violations. Two of its older checks proved nothing and were rewritten (T-1, T-3 in the
+register); the fixture now reports a lab it deployed as running. `docs/redesign/tools/verify_after.py`
+(main application): 93 of 93 at 1920×1080, 1440×900 and 1366×768, 0 console / 0 page errors (one stale
+expectation from the previous release corrected). Exploratory scripts with failure injection
+(`~/research/lab-builder/qa/walk/w1`–`w14`): storage full and storage refused, capabilities unavailable,
+manager unreachable, missing draft and missing path, lost answer with and without later edits, a closed
+job dialog, hostile and broken draft files, a repeated YAML key, template export and import, the
+first-use page without labs (partly by keyboard), long names, 125 % and 150 % zoom. The important
+screenshots were looked at, before and after.
+
+**Browser, live manager on this VM** (`clab-backup:1.30.1` built by `start-manager.sh --manager-only`,
+helpers refreshed to the same release and verified by the launcher; real gateway and helper).
+`student_workflow.py --template "Linux host"`: 39 of 39 on the intermediate build and **40 of 40 on the
+final build through `http://192.168.132.132:8081`**, which is not a secure context
+(`isSecureContext false`, `crypto.subtle undefined`): publish, real deploy, refusal while deployed, real
+destroy, revision with recovery copy, My labs following the revision, *Edit visually…*.
+
+**Real NOS, live.** A lab built in the builder with four devices of three vendors
+(`qa-nos-105458`: 2 × cEOS 4.35.0F, cJunosEvolved 26.2R1.7-EVO, vJunos-switch 23.2R1.14; links
+`ceos1:eth1–ceos2:eth1`, `ceos1:eth2–ptx1:et-0/0/0`, `ptx1:et-0/0/1–sw1:ge-0/0/0`,
+`sw1:ge-0/0/1–ceos2:eth2`). First deploy with image names the VM does not have: failed as it should, the
+output named both images, the lab page showed the failure with *View output* and *Try again*. Images
+corrected with *Edit visually…*, revision saved (recovery copy reported), deploy succeeded. Both cEOS
+ready in about a minute, vJunos-switch ready after about 14 minutes (manager readiness, SSH
+`show version`); cJunosEvolved never answered on that first deploy (over 40 minutes, no soft lockups
+logged; this host has shown the same hang before with a lab that is not the builder's) and was ready
+after one *Redeploy* through the manager. **All four links proven by LLDP on the running devices**:
+`ceos1 Et1 ↔ ceos2 Ethernet1`, `ceos1 Et2 ↔ ptx1 et-0/0/0`, `ptx1 et-0/0/1 ↔ sw1 ge-0/0/0`,
+`sw1 ge-0/0/1 ↔ ceos2 Ethernet2` (LLDP was switched on in the two Junos devices of this QA lab for the
+check); the `et-` and `ge-` interfaces up/up. The manager's own map used the builder's layout; capture
+discovery listed the lab's containers.
+
+**Independent review.** Three fresh reviewers: data integrity of the release as it was (15 findings), the
+first two commits of this pass (16, among them the plain-HTTP hashing defect), and the fixes for that
+review (one own regression with data loss, four low items). Every confirmed finding is fixed and has a
+test or a browser check; the register says which. The final code was run again after the last fix: unit
+suites, fixture workflow, the fix verification script (19 of 19) and the live workflow through the LAN
+address (40 of 40).
+
+## Not exercised, or blocked
+
+- **Cisco XRv9k:** no image on this VM. Its interface pattern is unverified.
+- **Helper security review:** requested, stopped by the model's safety filter, not retried. No helper
+  code changed in this release apart from the version.
+- **Capture stack:** left on its existing image because a capture session that is not this pass's was
+  running; a full `start-manager.sh` refreshes it.
+- Firefox and Safari were not used; keyboard access was checked for the page's own dialogs, not for the
+  embedded editor's canvas; no screen reader was used.
+
 # Lab builder — 1.30.0
 
 Prepared on `claude/visual-lab-builder` from `398d726` (1.29.1) on 2026-09-20 on the dev VM

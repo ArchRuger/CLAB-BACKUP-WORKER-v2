@@ -1,25 +1,35 @@
 /* The lab builder page: the manager's bar on top, SR Labs' editor below it.
    The editor's own stylesheet makes html, body and #root fill the window; this file loads after it. */
 html,body.lab-builder{height:100%;margin:0;overflow:hidden;background:var(--bg);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}
-.builder-bar{position:fixed;inset:0 0 auto 0;height:52px;display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-4);background:var(--surface);border-bottom:1px solid var(--line);z-index:5}
+/* A column: the bar, a note when saving is not possible, the stage with the editor, the credit line. The note
+   takes the room it needs, so it never covers the editor's own toolbar. */
+body.lab-builder{display:flex;flex-direction:column}
+.builder-bar{flex:none;height:52px;display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-4);background:var(--surface);border-bottom:1px solid var(--line);z-index:5}
 .builder-bar>*{flex:none;white-space:nowrap}
 .builder-bar #builder-status{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .builder-back{color:var(--accent);text-decoration:none;font-weight:600}
 .builder-title{color:var(--ink)}
-.builder-name{font-weight:600;color:var(--ink);max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.builder-bar .builder-name{flex:0 1 auto;min-width:6ch;font-weight:600;color:var(--ink);max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* A small window or browser zoom: the name and the status give way, Save to the VM never leaves the window. */
+@media (max-width:1100px){.builder-title{display:none}.builder-bar{gap:var(--space-2);padding:0 var(--space-3)}.builder-bar .button{padding:7px 10px}}
 .builder-spacer{flex:1}
-.builder-note{position:fixed;inset:52px 0 auto 0;margin:0;padding:var(--space-2) var(--space-4);background:var(--surface-2);border-bottom:1px solid var(--line);z-index:4}
-.lab-builder #root{position:fixed;inset:52px 0 22px 0;width:auto;height:auto}
-.builder-welcome{position:fixed;inset:52px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);text-align:center;background:var(--bg);z-index:3}
-.builder-welcome p{max-width:60ch;margin:0}
-.builder-welcome[hidden],.builder-problem[hidden],.builder-note[hidden]{display:none}
-.builder-problem{position:fixed;inset:52px 0 0 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);background:rgba(244,246,248,.94);z-index:6}
-.builder-credit{position:fixed;inset:auto 0 0 0;height:22px;margin:0;padding:0 var(--space-4);font-size:12px;line-height:22px;color:var(--muted);background:var(--surface);border-top:1px solid var(--line);z-index:2}
+.builder-note{flex:none;margin:0;padding:var(--space-2) var(--space-4);background:var(--warn-soft);color:var(--warn-strong);border-bottom:1px solid var(--line)}
+.builder-note .button{margin-left:var(--space-2);padding:2px 10px;min-height:0}
+.builder-stage{flex:1 1 auto;min-height:0;position:relative}
+.lab-builder #root{position:absolute;inset:0;width:auto;height:auto}
+.builder-welcome{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);text-align:center;background:var(--bg);z-index:3}
+.builder-welcome p,.builder-problem p{max-width:60ch;margin:0}
+.builder-welcome[hidden],.builder-problem[hidden],.builder-note[hidden],.builder-hint[hidden]{display:none}
+.builder-problem{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);text-align:center;background:rgba(244,246,248,.94);z-index:6}
+.builder-problem #builder-problem-text{font-weight:600;color:var(--ink)}
+/* Shown on an empty canvas only, left of the palette, and never in the way of the pointer. */
+.builder-hint{position:absolute;left:var(--space-5);bottom:var(--space-5);max-width:44ch;margin:0;padding:var(--space-3) var(--space-4);background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--text);pointer-events:none;z-index:2}
+.builder-credit{flex:none;height:22px;margin:0;padding:0 var(--space-4);font-size:12px;line-height:22px;color:var(--muted);background:var(--surface);border-top:1px solid var(--line);z-index:2}
 .builder-yaml{max-height:60vh}
 .builder-draft-list .op-session-row{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap}
 .lab-builder dialog{font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}
 /* Editor controls that cannot work in a builder and have no switch in this editor version. Hidden by
-   their test ids; tests/test_lab_builder_assets.js fails when the bundled editor stops carrying them. */
+   their test ids; tests/test_lab_builder_ui.js fails when the bundled editor stops carrying them. */
 [data-testid="navbar-deploy"],[data-testid="navbar-deploy-menu"],[data-testid="navbar-apply-dirty-badge"],
 [data-testid="navbar-layout-geo"],[data-testid="navbar-split-view"],
 [data-testid="svg-export-grafana-bundle"],[data-testid="svg-export-grafana-advanced-btn"]{display:none !important}
