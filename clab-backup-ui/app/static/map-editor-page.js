@@ -6,6 +6,9 @@
 // has no route to the VM, to deployment or to the builder's drafts.
 const $=id=>document.getElementById(id);
 let mapLab='',mapDoc=null,mapBaseline=null,mapCurrent='',mapMount=null,mapMounted=false,mapSaving=false,mapPaused=false,toastTimer;
+// Undo / redo belong to the page: the editor has none in its view mode. mapEditor is the adapter's handle for
+// putting a whole document into the running editor; mapApplying marks the persist() that such a step causes.
+let mapEditor=null,mapApplying=false,mapHistory={entries:[],index:-1,at:0};
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6000);}
 async function api(path,options={}){
  let response;try{response=await fetch('/api'+path,options);}catch{throw Object.assign(new Error('The manager did not answer. Check that it is running, then try again.'),{network:true});}
@@ -27,12 +30,34 @@ function mapImportProblem(name,text){
  if(!data||typeof data!=='object'||Array.isArray(data)||!['nodeAnnotations','networkNodeAnnotations','freeTextAnnotations','groupStyleAnnotations','freeShapeAnnotations'].some(key=>key in data))return 'This JSON file is not a containerlab map file (.annotations.json).';
  return '';
 }
+// The history of the annotations document, as a value (pure; tests drive it directly). A new state drops what
+// could have been redone. States that follow each other within MAP_HISTORY_MERGE ms are one step (typing in
+// a text, a drag that settles twice); the step that Undo returns to is never overwritten that way.
+const MAP_HISTORY_LIMIT=60,MAP_HISTORY_MERGE=700;
+function mapHistoryPush(history,text,now){
+ const entries=history.entries.slice(0,history.index+1);
+ if(entries.length&&entries[entries.length-1]===text)return {...history,entries,index:entries.length-1};
+ const merge=entries.length>1&&history.index===history.entries.length-1&&history.merged!==false&&now-history.at<MAP_HISTORY_MERGE;
+ if(merge)entries[entries.length-1]=text;else entries.push(text);
+ while(entries.length>MAP_HISTORY_LIMIT)entries.shift();
+ return {entries,index:entries.length-1,at:now};
+}
+function mapHistoryStep(history,delta){const index=history.index+delta;return index<0||index>=history.entries.length?null:{...history,index,at:0,merged:false};}
 function mapDirty(){return mapIsDirty(mapBaseline,mapCurrent);}
+async function mapTravel(delta){
+ const next=mapHistoryStep(mapHistory,delta);if(!next||!mapEditor||mapApplying||mapSaving||mapPaused)return false;
+ mapApplying=true;mapRenderBar();
+ try{await mapEditor.applyAnnotations(next.entries[next.index]);mapHistory=next;return true;}
+ catch(error){notify((delta<0?'Undo':'Redo')+' did not work: '+error.message);return false;}
+ finally{mapApplying=false;mapRenderBar();}
+}
 function mapRenderBar(){
  const ready=mapMounted&&!mapPaused,view=mapStatusView({paused:mapPaused,saving:mapSaving,dirty:mapDirty()});
  $('map-status').textContent=mapDoc?view.text:'';$('map-status').className='pill '+view.pill;$('map-status').hidden=!mapDoc;
  $('map-save').disabled=!ready||mapSaving||!mapDirty();$('map-save').title=!ready?'':mapDirty()?'':'There is nothing to save.';
  $('map-download').disabled=!mapDoc;$('map-import').disabled=!ready||mapSaving;
+ const steady=ready&&!mapSaving&&!mapApplying&&!!mapEditor;
+ $('map-undo').disabled=!steady||mapHistory.index<=0;$('map-redo').disabled=!steady||mapHistory.index>=mapHistory.entries.length-1;
  $('map-drawio').disabled=!ready;$('map-drawio').title=mapDirty()?'The export is made from the saved map: save first.':'';
 }
 function mapProblem(message){mapPaused=true;$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem').hidden=false;mapRenderBar();}
@@ -62,8 +87,12 @@ const labBuilderPage={
  // editor's own reading of the document and becomes the baseline; a changed topology text is refused.
  persist(yaml,annotations){
   if(!mapDoc||yaml!==mapDoc.yaml)throw Object.assign(new Error('The map editor does not change the topology. That edit was not kept.'),{code:'topology'});
-  if(mapBaseline===null)mapBaseline=annotations;mapCurrent=annotations;mapRenderBar();
+  if(mapBaseline===null)mapBaseline=annotations;mapCurrent=annotations;
+  // A state the page itself put into the editor (undo, redo) is already in the history.
+  if(!mapApplying)mapHistory=mapHistoryPush(mapHistory,annotations,Date.now());
+  mapRenderBar();
  },
+ attach(editor){mapEditor=editor;mapRenderBar();},
  templates(){return {list:[],defaultName:''};},saveTemplates(){},images(){return [];},chooseTemplates:async()=>null,
  notify,requestSave(){mapSave();},problem(message){mapProblem(message);},
  ready(mount){mapMount=mount;mapOpen();}
@@ -94,6 +123,13 @@ if(typeof document!=='undefined'&&$('map-save')){
  $('map-leave-save').onclick=async()=>{$('map-leave').close();if(await mapSave())location.assign(mapBackUrl(mapLab));};
  $('map-import').onclick=()=>{$('map-import-error').textContent='';$('map-import-file').value='';$('map-import-dialog').showModal();};
  $('map-import-cancel').onclick=()=>$('map-import-dialog').close();$('map-import-confirm').onclick=()=>mapImport();
+ $('map-undo').onclick=()=>mapTravel(-1);$('map-redo').onclick=()=>mapTravel(1);
+ // Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y, except while typing in a field (the field's own undo applies there).
+ window.addEventListener('keydown',e=>{
+  if(!(e.ctrlKey||e.metaKey)||e.altKey)return;const key=e.key.toLowerCase(),target=e.target;
+  if(target&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName||'')))return;
+  if(key==='z'||key==='y'){e.preventDefault();e.stopPropagation();mapTravel(key==='y'||e.shiftKey?1:-1);}
+ },true);
  window.addEventListener('beforeunload',e=>{if(mapDirty()&&!mapPaused){e.preventDefault();e.returnValue='';}});
  mapStart();
 }

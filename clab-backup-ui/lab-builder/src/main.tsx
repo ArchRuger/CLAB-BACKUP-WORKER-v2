@@ -29,6 +29,9 @@ interface BuilderPage {
   // code: "storage" (the browser could not store the draft) or "conflict" (another tab holds a newer one).
   problem(message: string, code?: string): void;
   ready(mount: (draft: BuilderDraft) => Promise<void>): void;
+  // Map editor only: the page receives a way to put a whole annotations document into the running editor
+  // (its own undo / redo history, the device look). The topology is not reachable through it.
+  attach?(editor: { applyAnnotations(text: string): Promise<void> }): void;
 }
 declare global { interface Window { labBuilderPage: BuilderPage; __DOCKER_IMAGES__?: string[] } }
 
@@ -92,6 +95,18 @@ async function mount(draft: BuilderDraft): Promise<void> {
     queue = run.catch(() => undefined);
     return run;
   };
+
+  // The engine replaces the annotations document as one annotation-only command, and the editor redraws from
+  // the snapshot it is sent, as it does for a file changed outside it. Zoom, pan and selection stay.
+  if (mapOnly && page.attach) page.attach({
+    applyAnnotations: (text: string) => settled(async () => {
+      const before = await core.getSnapshot() as { revision: number };
+      const answer = await core.applyCommand({ command: "setAnnotationsContent", payload: { content: text }, skipHistory: true } as never, before.revision) as { type?: string; error?: string };
+      if (answer?.type === "topology-host:error" || answer?.type === "topology-host:reject") throw new Error(answer.error || "The editor did not accept that map.");
+      const snapshot = await core.getSnapshot();
+      window.postMessage({ type: "topology-host:snapshot", protocolVersion: 1, snapshot, reason: "external-change" }, window.location.origin);
+    })
+  });
 
   const listeners = new Set<(e: unknown) => void>();
   const emit = (e: unknown) => { for (const h of Array.from(listeners)) h(e); };

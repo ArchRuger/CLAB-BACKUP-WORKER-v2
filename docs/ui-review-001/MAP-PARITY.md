@@ -22,7 +22,7 @@ Status: ☐ open · ◐ available in Edit map since that release but not yet dri
 | 5 | Groups: create (menu, Ctrl+G, palette), name, level, colours, border, label position, **membership by dragging devices in, nesting** | yes | an imported group is shown and editable as a box; membership (`groupId`, `parentId`) is **dropped on import** | ◐ 1.30.14 (kept and shown; creating and membership not driven) |
 | 6 | Resize and rotate with handles | yes | no | ◐ 1.30.14 (present; not driven) |
 | 7 | Copy, paste, duplicate, delete by keyboard | yes (annotations only in view mode) | delete by button only | ◐ 1.30.14 (delete of a device refused in browser; rest present) |
-| 8 | Undo / redo | yes in edit mode; **absent in view mode** | undo (30 steps), no redo | ☐ absent in view mode |
+| 8 | Undo / redo | yes in edit mode; **absent in view mode** | undo (30 steps), no redo | ☑ 1.30.15 (page-level history; browser and unit) |
 | 9 | Device look: icon, icon colour, corner radius, label position, label direction, label background | yes, but through `editNode` (a topology command, edit mode only) | imported and drawn, not editable | ☐ not editable (topology command upstream) |
 | 10 | Per-link endpoint label offset | yes (Link editor → `edgeAnnotations`) | imported and drawn, not editable | ◐ 1.30.14 (present; not driven) |
 | 11 | Link label mode (show all / on select / hide) | yes (`navbar-link-labels`) | imported, not editable | ◐ 1.30.14 (present; not driven) |
@@ -78,4 +78,4 @@ than the editor can store (rotation, arrows, nested groups): what it cannot draw
 | B | Manager: store, serve and save the full annotations document; derive the drawing; keep unknown data; tests | 1.30.13 |
 | C | Adapter map mode (view mode, command whitelist, topology-unchanged check), page wiring, bundle rebuild, tests | 1.30.14 |
 | D | Edit map opens the builder in map mode; unsaved-change and cancel behaviour; exports and import kept; the Topology view follows the saved map | 1.30.14 (every row driven in a browser: still open, see the Status column) |
-| E | Gaps: undo/redo, device look, anything the browser pass finds | |
+| E | Gaps: undo/redo (1.30.15), device look, the per-row browser pass, anything it finds | in progress |

@@ -4,6 +4,22 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.15
+
+**UI review 001, step 14: Undo and Redo in Edit map (UI-003, row 8).** Frontend and the editor adapter.
+UI-003 is not yet complete (the device look and the per-row browser pass are open).
+
+- **Undo / Redo** buttons in the map editor's bar, and Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y (not
+  while typing in a field, where the field's own undo applies). The editor has no undo in the mode Edit
+  map uses, so the history is the page's own: each settled state of the map document is a step (up to
+  60; states that follow each other within 0.7 s are one step, so typing a text or a drag that settles
+  twice is a single undo), a new edit drops what could have been redone, and going back to the map as
+  it was opened leaves nothing to save.
+- A step is put into the running editor as one annotation-only engine command
+  (`setAnnotationsContent`) followed by the snapshot message the editor already understands for a file
+  changed outside it, so the canvas redraws in place and zoom, pan and the next edit keep working. The
+  engine's own undo, which restores the topology file as well, is never used.
+
 ## Changes in 1.30.14
 
 **UI review 001, step 13: Edit map is the lab builder's editor in a map mode (UI-003, steps C and D).**

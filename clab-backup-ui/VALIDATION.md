@@ -1,3 +1,25 @@
+# UI review 001, step 14: Undo and Redo in Edit map — 1.30.15
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.14 (`723d5e8` and
+the validation record `3f5fef5`, pushed, CI green). Row 8 of `docs/ui-review-001/MAP-PARITY.md`, approach
+chosen by the maintainer (a page-level history). **Fixture only.**
+
+## What was run
+
+- Bundle rebuilt with Node 24.21.0; `node build.mjs --check` reproduces the committed assets.
+- `node --test tests/*.js`: 187 of 187. New in `test_map_editor_ui.js`: the history as a value (first
+  state never merged away, quick successions merged, unchanged state ignored, a new edit after an undo
+  dropping the redo branch without overwriting the step returned to, the 60-step limit), the buttons
+  following it, a step going through the adapter's handle without being pushed again, *Saved in the
+  manager* and Save off back at the opened map, a failed step leaving the history where it was; the
+  adapter using `setAnnotationsContent` and never the engine's `undo`, `redo` or `setYamlContent`.
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. `verify-release.py`, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `docs/ui-review-001/tools/check_ui003.py` 29 of 29 (two
+  new: *Undo* puts a dragged device back on the canvas with nothing left to save and Undo off;
+  Ctrl+Shift+Z brings the move back with Redo off; everything after it, including the save with one
+  request and the byte-identical topology, still passes). An exploratory run also showed a drag after
+  an undo being accepted by the editor and dropping the redo branch.
+
 # UI review 001, step 13: Edit map in the builder's editor — 1.30.14
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.13 (`3ee4b3c`,

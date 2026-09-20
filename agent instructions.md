@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.14
+# UI review 001 (in progress) — 1.30.15
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -111,6 +111,13 @@ loaded one is restored and the edit refused. A change to `main.tsx` needs `node 
 runtime menu entries, the traffic-rate entry and the device palette tab; test ids built from a template
 (`context-menu-item-${id}`, `panel-tab-${id}`) are handled in `test_lab_builder_ui.js`. `/static/map-editor.html`
 shares the builder's CSP exemption (`main.py`) and is in `verify-release.py`'s page list.
+(14) **1.30.15, UI-003 row 8 — undo / redo is the page's.** `mapHistoryPush` / `mapHistoryStep` (pure) and
+`mapTravel()` in `map-editor-page.js`; `persist()` pushes every settled state unless `mapApplying`. The
+adapter hands the page `attach({applyAnnotations(text)})` (map mode only): inside `settled()` it applies
+`setAnnotationsContent` with `skipHistory` at the engine's current revision and then posts
+`{type: "topology-host:snapshot", protocolVersion: 1, snapshot, reason: "external-change"}` to the window,
+which is how the editor redraws without a remount. Never whitelist or call the engine's `undo` / `redo`.
+The same handle is the way to change anything else in the document from the page (the device look).
 
 # Lab builder quality pass — 1.30.1
 

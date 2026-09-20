@@ -74,6 +74,19 @@ with sync_playwright() as pw:
     time.sleep(1)
     check('row 1: dragging a device marks the map as unsaved', page.inner_text('#map-status') == 'Unsaved changes' and page.is_enabled('#map-save'))
 
+    # Row 8: undo and redo (the page's own history; the editor has none in this mode)
+    place = lambda: (round(node.bounding_box()['x']), round(node.bounding_box()['y']))
+    moved = place()
+    page.click('#map-undo')
+    page.wait_for_function('() => document.getElementById("map-status").textContent === "Saved in the manager"', timeout=10000)
+    time.sleep(.6)
+    check('row 8: Undo puts the device back and there is nothing left to save', place() == (round(box['x']), round(box['y'])) and page.is_disabled('#map-save') and page.is_disabled('#map-undo'), (place(), box))
+    page.mouse.click(900, 250)
+    page.keyboard.press('Control+Shift+z')
+    page.wait_for_function('() => document.getElementById("map-status").textContent === "Unsaved changes"', timeout=10000)
+    time.sleep(.6)
+    check('row 8: Redo (Ctrl+Shift+Z) brings the move back', place() == moved and page.is_disabled('#map-redo'), (place(), moved))
+
     # Rows 3 and 4: add a text and a shape from the pane menu
     page.mouse.click(620, 760, button='right')
     time.sleep(.5)

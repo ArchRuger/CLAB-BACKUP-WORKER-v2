@@ -47,6 +47,7 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.12 | UI-003 step A | `MAP-PARITY.md`: capability matrix from the code, approach chosen; live read-only check of 1.30.11 on the dev VM | `~/ui-review/review-001/live-1.30.11/` |
 | 1.30.13 | UI-003 step B | Manager keeps the full annotations document (`lab['annotations']`, `keep_document`, `map_document`), `GET`/`PUT …/map-document` | python 711 (unit/API only, no browser) |
 | 1.30.14 | UI-003 steps C + D | Adapter map mode (`mapOnly`, `MAP_COMMANDS`), `map-editor.html` / `map-editor-page.js`, Edit map wired by `map_editor`, exports and import kept | `check_ui003.py` 27/27, `verify_after.py` 98/98 ×3, node 186, python 711, bundle `--check` OK, `~/ui-review/review-001/chunk13`, `chunk14` |
+| 1.30.15 | UI-003 row 8 | Page-level Undo / Redo (`mapHistory*`, `mapTravel`, adapter `attach` → `applyAnnotations`) | `check_ui003.py` 29/29, node 187, bundle `--check` OK |
 
 ## Next
 
@@ -56,12 +57,10 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
    with resize/rotate/arrows, group creation and dragging a device in, copy/paste/duplicate, a generated
    layout, link label offset, link label mode, grid appearance, SVG export), each followed by save →
    reopen → compare the stored document, then flip the row to ☑.
-2. **Row 8, undo / redo**: absent in the editor's view mode. Options: a page-level history of the
-   annotations document (remount with an earlier text), or running the editor in edit mode with the
-   whitelist and hiding the topology tools by test id. Decide after trying the first.
-3. **Row 9, device look** (icon, colours, label position): upstream edits it with `editNode`. An adapter
-   translation would accept `editNode` only when nothing but annotation fields differ, and write them as
-   `nodeAnnotations`; view mode does not show that editor, so this depends on the decision in 2.
+2. **Row 8, undo / redo**: done in 1.30.15 as a page-level history (the maintainer's choice).
+3. **Row 9, device look** (icon, colours, label position): approved by the maintainer. Upstream edits it
+   with `editNode`, which view mode does not offer; do it as a page dialog that edits the device's entry
+   in `nodeAnnotations` and applies the document through `mapEditor.applyAnnotations` (one undo step).
 4. **The Topology view draws less than the editor stores** (rotation, line arrows, rounded text
    background, nested levels): extend `parse_drawing` / `topology-render.js` where cheap, document the rest.
 5. **Live pass**: done for open / drag / save at 1.30.14 on the QA lab `qa-nos-105458`; repeat it for the
