@@ -1,3 +1,15 @@
+# Maintenance audit follow-up 2: `lastOpened()` removed — 1.30.24
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.23 (`1807eee`, pushed). Frontend only.
+**Static and unit evidence.**
+
+- Consumers searched before the removal: every static script and page, the tests and the Playwright tools.
+  `lastOpened` had no reader outside `tests/test_shell_ui.js` and a fake in `tests/test_home_ui.js`;
+  `openedAt` is read by `home.js` and stays.
+- `node --test tests/*.js`: 189 of 189, with the rewritten storage test. `node --check app/static/shell.js`,
+  `verify-release.py`, `check_links.py`, `git diff --check`, the Python suite (716 tests, 1 skipped).
+- Not run: no browser pass; the change removes one storage write and no markup or style.
+
 # Maintenance audit follow-up 1: scaffold tool, prepared-image settings — 1.30.23
 
 Prepared on `claude/maintenance-audit` on 2026-09-20, fast-forwarded to `main` `fc6da24` (pull request #45

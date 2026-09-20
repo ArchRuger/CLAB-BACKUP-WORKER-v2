@@ -2,13 +2,13 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const NOW=Date.parse('2026-09-16T12:00:00Z');
-function harness(state,{lastLab='',opened={},quick,tab}={}){
+function harness(state,{opened={},quick,tab}={}){
  const elements=new Map(),calls={selectLab:[],openLabOperations:[],json:[],deploy:0};
  const element=id=>{if(!elements.has(id))elements.set(id,{id,hidden:false,disabled:false,innerHTML:'',textContent:'',listeners:{},attrs:{},classes:new Set(),addEventListener(name,fn){this.listeners[name]=fn;},setAttribute(n,v){this.attrs[n]=String(v);},classList:{toggle:(name,on)=>{const e=elements.get(id);if(on)e.classes.add(name);else e.classes.delete(name);}},focus(){calls.focus=id;}});return elements.get(id);};
  const tabStore={value:tab||''};
  const context=vm.createContext({$:element,esc,console,state:{labs:[],jobs:[],loaded:true,...state},current:()=>undefined,busy:()=>false,
   setMarkup(el,html){if(el._markup===html)return false;el.innerHTML=html;el._markup=html;return true;},
-  lastOpened:()=>lastLab,openedAt:id=>opened[id]||'',homeTab:()=>tabStore.value||'recent',rememberHomeTab:v=>{tabStore.value=v;return true;},Date:class extends Date{static now(){return NOW;}},
+  openedAt:id=>opened[id]||'',homeTab:()=>tabStore.value||'recent',rememberHomeTab:v=>{tabStore.value=v;return true;},Date:class extends Date{static now(){return NOW;}},
   selectLab(id,view){calls.selectLab.push([id,view]);},openLabOperations(id){calls.openLabOperations.push(id);},openDeploy(){calls.deploy++;},
   json:async(...args)=>{calls.json.push(args);return {};},refresh:async()=>{},notify(){}});
  if(quick)context.opQuickActions=quick;
@@ -42,7 +42,7 @@ test('Recent labs orders by the most recent deployment, newest first; opening, s
  const lab=(id,name,last_deployed,extra={})=>({...stopped,id,name,favorite:false,last_deployed,...extra});
  const labs=[lab('a','Alpha',''),lab('z','Zulu','2026-09-10T08:00:00Z'),lab('m','Mike','2026-09-15T08:00:00Z',{favorite:true}),lab('b','Bravo',undefined),lab('k','Kilo','2026-09-15T08:00:00Z')];
  const names=(h,t)=>Array.from(h.context.homeOrder(labs,t),l=>l.name);
- const h=harness({labs},{lastLab:'a',opened:{a:'2026-09-16T11:59:00Z'}});
+ const h=harness({labs},{opened:{a:'2026-09-16T11:59:00Z'}});
  assert.deepEqual(names(h,'recent'),['Kilo','Mike','Zulu','Alpha','Bravo'],'newest deployment first, equal times by name, undated labs last by name');
  assert.deepEqual(names(h,'all'),['Mike','Alpha','Bravo','Kilo','Zulu']);
  h.context.renderHome();const cards=h.element('lab-cards').innerHTML,order=['Kilo','Mike','Zulu','Alpha','Bravo'].map(n=>cards.indexOf('<h3>'+n+'</h3>'));
@@ -50,7 +50,7 @@ test('Recent labs orders by the most recent deployment, newest first; opening, s
  assert.equal(h.element('home-tab-note').textContent,'Most recently deployed first. Labs this manager has not deployed come last, by name.');
  assert.equal(h.element('home-tab-recent').attrs['aria-selected'],'true');assert.equal(h.element('home-tab-all').attrs['aria-selected'],'false');assert.ok(h.element('home-tab-recent').classes.has('active'));
  // the most recently OPENED lab (Alpha) and a git save do not move anything
- const saved2=harness({labs,git_jobs:[{id:'g',lab_id:'b',status:'synced',target:'latest',created:'2026-09-16T11:59:00Z',finished:'2026-09-16T11:59:30Z'}]},{lastLab:'b'});
+ const saved2=harness({labs,git_jobs:[{id:'g',lab_id:'b',status:'synced',target:'latest',created:'2026-09-16T11:59:00Z',finished:'2026-09-16T11:59:30Z'}]});
  assert.deepEqual(names(saved2,'recent'),['Kilo','Mike','Zulu','Alpha','Bravo']);
  assert.deepEqual(labs.map(l=>l.name),['Alpha','Zulu','Mike','Bravo','Kilo'],'the state itself is never reordered');
 });

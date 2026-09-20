@@ -1,4 +1,4 @@
-# Maintenance audit and its follow-ups — 1.30.23
+# Maintenance audit and its follow-ups — 1.30.24
 
 A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release
 per chunk. **Read `docs/maintenance-audit/PICKUP.md` first**, then `docs/maintenance-audit/AUDIT.md`
@@ -36,6 +36,8 @@ uploading or setting the save aside **before** it rebinds, because a waiting sav
 change. Keep `tests/test_scaffold_lab.py`'s fake manager faithful to `git_progress.py`; an always-`synced`
 fake hid this defect. The two manager compose files must pass the same settings (tested);
 `deploy/image.env` is git-ignored because it can hold the capture token.
+(10) Follow-up 2: `shell.js` has no `lastOpened()` and writes no `clab.lastLab`; `rememberOpened()` /
+`openedAt()` (per-lab open time, shown on the cards) stay.
 
 # UI review 001 — 1.30.17
 

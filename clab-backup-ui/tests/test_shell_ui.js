@@ -169,14 +169,15 @@ test('outside pointerdown closes menus; Escape at the document closes them and s
  assert.equal(h.gitSave.open,false);assert.equal(h.doc.activeElement,h.gitSummary);assert.equal(summary.stopped,true);
 });
 
-test('storage helpers remember the opened lab and dismissed jobs, and never throw when storage is blocked',()=>{
+test('storage helpers remember when a lab was opened and dismissed jobs, and never throw when storage is blocked',()=>{
  const h=harness();
- assert.equal(h.context.lastOpened(),'');assert.equal(h.context.openedAt('a'),'');
- assert.equal(h.context.rememberOpened('a'),true);assert.equal(h.context.lastOpened(),'a');assert.match(h.context.openedAt('a'),/^\d{4}-/);
+ assert.equal(h.context.openedAt('a'),'');
+ assert.equal(h.context.rememberOpened('a'),true);assert.match(h.context.openedAt('a'),/^\d{4}-/);assert.equal(h.context.openedAt('b'),'','one lab\'s time is not another\'s');
+ assert.equal(typeof h.context.lastOpened,'undefined','no reader is left for the Continue block that Home no longer has');
  assert.equal(h.context.isDismissed('job1'),false);assert.equal(h.context.dismissJob('job1'),true);assert.equal(h.context.isDismissed('job1'),true);
  assert.equal(h.context.rememberOpened(''),false);
  const blocked=harness({throwStorage:true,hash:'#lab=a'});
- assert.equal(blocked.context.rememberOpened('a'),false);assert.equal(blocked.context.lastOpened(),'');assert.equal(blocked.context.openedAt('a'),'');
+ assert.equal(blocked.context.rememberOpened('a'),false);assert.equal(blocked.context.openedAt('a'),'');
  assert.equal(blocked.context.isDismissed('x'),false);assert.equal(blocked.context.dismissJob('x'),false);
  assert.equal(blocked.context.applyRoute(),true,'routing works without sessionStorage');assert.deepEqual(blocked.calls.selectLab,[['a','topology']]);
  assert.equal(blocked.context.goHome(),true);

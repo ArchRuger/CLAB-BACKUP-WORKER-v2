@@ -4,6 +4,15 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.24
+
+**Maintenance audit follow-up 2: the last trace of Home's Continue block.** Frontend only, no visible change.
+`shell.js` no longer has `lastOpened()` and no longer writes `clab.lastLab` each time a lab is opened: the
+block that read it left Home when *Recent labs* arrived. `rememberOpened()` still records when each lab was
+opened, which the lab cards show. The test that pinned the old pair now claims what is still true (the time
+is recorded per lab, storage that throws is survived) and that no reader is left; the Home test harness lost
+its unused fake. A `clab.lastLab` value left in a browser is never read again.
+
 ## Changes in 1.30.23
 
 **Maintenance audit follow-up 1: the course scaffold tool works with the mandatory upload review, and
