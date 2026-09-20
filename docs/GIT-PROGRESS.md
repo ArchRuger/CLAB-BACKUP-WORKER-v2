@@ -197,6 +197,9 @@ so it matches what GitHub shows once the last save was pushed. The manager reads
 checkout through the Git helper; it never reads GitHub, and the browser sends only
 registration IDs and folder names.
 
+- Each folder with subfolders has an arrow that opens and closes it without selecting it; the
+  tree keeps the branches you opened, your selection and the keyboard focus across refreshes.
+  Looking at a folder never changes where the lab saves.
 - The folder this lab saves to is tagged **This lab**; a folder another lab saves to is
   tagged with that lab's name. `latest/`, `baseline/` and `checkpoints/` are described in
   plain words. A folder that holds nothing yet reads *not in the repository until the first

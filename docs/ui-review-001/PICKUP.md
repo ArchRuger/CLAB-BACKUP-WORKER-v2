@@ -40,22 +40,25 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.5 | UI-007 A + B | *Git repo details*; `#git-change-folder` open on entry, fold remembered per lab (`gitFolderCollapsed`) | `check_ui007ab.py` 11/11, `verify_after.py` 96/96 ×3, `~/ui-review/review-001/chunk04/` |
 | 1.30.6 | UI-007 C | Mandatory review before an upload, enforced in `app/git_progress.py` (`Retry.reviewed`) and driven by `gitReviewJob` | `check_ui007c.py` 17/17, `verify_after.py` 97/97 ×3 on fresh fixture data, python 706, `~/ui-review/review-001/chunk05/` |
 | 1.30.7 | UI-008 part 1 | Planned folders kept by the manager (`git_folders`, tree `planned`, `plan: true`, `DELETE …/folders`); fixture helper made faithful | `check_ui008a.py` 17/17, `verify_after.py` 97/97 ×3, python 708, node 174, `~/ui-review/review-001/chunk06/` |
+| 1.30.8 | UI-008 part 2 | Tree expansion owned by the student (`gitPlacesState.expanded`, `.git-twist`), `current` vs `selected`, focus and scroll kept | `check_ui008b.py` 21/21, `verify_after.py` 97/97 ×3, node 176, `~/ui-review/review-001/chunk07/` |
 
 ## Next
 
-Chunk 6b = **UI-008 part 2**, all in `app/static/git-places.js` (+ `style.css`): `outline()` in
-`gitPlacesMarkup` derives `open` from the selection only, and the `<summary>` click handler in
-`gitPlacesShow` calls `preventDefault()` and selects, so no folder can be collapsed, ancestors of the
-selection are forced open and other branches never stay open. Plan: an `expanded` set in
-`gitPlacesState` (reset when `bindingId` changes; first show = root + ancestors of the lab's folder),
-a separate twisty control that toggles expansion without selecting, selecting a folder expands its
-ancestors once, a `current` class/marker for the save destination that is distinct from `selected`,
-focus restored after `draw()`, and `white-space: nowrap` / ellipsis for names in `.git-outline`.
-Then UI-006 (Devices tab), UI-002 (Home), UI-003 (map parity) as listed in `CHECKLIST.md`.
+Chunk 8 = **UI-006** (Devices tab). `#devices-view` in `index.html` (heading, `#search`,
+`#devices-technical`), rows by `deviceRow()` in `app.js` into `#device-list`; the same function draws
+the narrow rail on the Topology tab (`.device-rail`), where `.device-row` is a named-area grid with
+wrapper divs at `display: contents` (see the 1.29.1 notes: a new child needs a grid area). Goal: one
+responsive grid for the Devices tab so identity/platform, state/reason, Open CLI and Details line up
+across rows, long names and multi-line reasons do not move other columns, no clipping at laptop widths
+and zoom; do not hide status information or change readiness semantics. Screenshot the tab first at
+1366×768 and 1280×720 @150 % with the fixture's mixed states (ready, starting, needs credentials,
+unmapped). Then UI-002 (Home: Deploy / Build, Recent labs tab ordered by real deployment time — find
+what the manager records per lab before choosing the fallback) and UI-003 (map parity: start with the
+capability matrix `docs/ui-review-001/MAP-PARITY.md`).
 
 ## Known limits and open points
 
-- 1.30.2 to 1.30.7 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.6 (`gh run list --branch claude/ui-review-001`).
+- 1.30.2 to 1.30.8 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.7 (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
   --manager-only` (helpers must match the release); record here when that was last done: **not yet for

@@ -108,6 +108,64 @@ test('New folder: a connected lab plans the folder without moving, a duplicate i
  await context.gitNewFolder('lab','',model,tree);elements.get('git-new-folder-name').value='fresh';await elements.get('git-new-folder-confirm').onclick();
  assert.deepEqual(JSON.parse(JSON.stringify(calls[0].payload)),{prefix:'fresh'});
 });
+test('the outline opens and closes by the student\'s own state: ancestors of the save location collapse, other branches stay open, selection never closes anything',()=>{
+ const context=makeContext(),tree=[{path:'labs/BGP/work/latest/r1.cfg',size:1},{path:'labs/BGP/start/latest/r1.cfg',size:1},{path:'labs/VLAN/latest/s1.cfg',size:1},{path:'notes/a.md',size:1}];
+ const model=context.gitTreeModel(tree,[{id:'me',prefix:'labs/BGP/work',lab:{id:'lab',name:'BGP'}}]);
+ same(context.gitAncestors('labs/BGP/work'),['','labs','labs/BGP']);same(context.gitAncestors(''),['']);same(context.gitAncestors('x'),['']);
+ const expanded=context.gitDefaultExpanded(model,'me');same([...expanded].sort(),['','labs','labs/BGP','labs/BGP/work'],'the first display leads to the folder the lab saves to');
+ same([...context.gitDefaultExpanded(model,'nobody')],[''],'a lab without a folder here starts with the top level only');
+ const draw=(selected='labs/BGP/work')=>context.gitPlacesMarkup(model,{selected,expanded,current:'me',repoName:'repo',canAct:true,connected:true});
+ const openOf=html=>[...html.matchAll(/<details (open )?class="[^"]*"><summary data-git-place="([^"]*)"/g)].filter(m=>m[1]).map(m=>m[2]);
+ same(openOf(draw()),['','labs','labs/BGP','labs/BGP/work']);
+ // An ancestor of the active save location can be collapsed, and stays collapsed when drawn again
+ context.gitToggleFolder(expanded,'labs/BGP');let html=draw();
+ same(openOf(html),['','labs']);assert.doesNotMatch(html,/data-git-place="labs\/BGP\/work" class/,'its children are not drawn');
+ assert.match(html,/data-git-place="labs\/BGP" class="holds-current"/,'the closed branch says that it holds the destination');assert.match(html,/This lab is inside/);
+ assert.match(html,/data-git-twist="labs\/BGP" aria-expanded="false" aria-label="Expand BGP"/);
+ // Another branch opens without touching that, and both survive selecting a third folder
+ context.gitToggleFolder(expanded,'labs/VLAN');context.gitRevealFolder(expanded,'notes');html=draw('notes');
+ same(openOf(html).sort(),['','labs','labs/VLAN','notes'].sort());assert.match(html,/data-git-place="notes" class="selected" aria-current="true"/);
+ assert.match(html,/This lab saves to labs\/BGP\/work\. Looking at other folders does not change that\./,'browsing is told apart from saving');
+ // Reopening restores the children; the destination is marked current, the browsed folder selected
+ context.gitToggleFolder(expanded,'labs/BGP');html=draw('labs/BGP/start');
+ assert.match(html,/data-git-place="labs\/BGP\/work" class="current">/);assert.match(html,/data-git-place="labs\/BGP\/start" class="selected" aria-current="true">/);assert.doesNotMatch(html,/holds-current/);
+ assert.match(html,/data-git-twist="labs\/BGP" aria-expanded="true" aria-label="Collapse BGP"/);
+ assert.doesNotMatch(draw('labs/BGP/work'),/Looking at other folders/);
+ assert.match(draw('labs/BGP/work'),/data-git-place="labs\/BGP\/work" class="selected current" aria-current="true">/);
+ // The top level cannot be closed, leaves have no twisty, a refresh keeps what still exists
+ context.gitToggleFolder(expanded,'');assert.ok(expanded.has(''));assert.doesNotMatch(html,/data-git-twist="labs\/BGP\/work\/latest"/);assert.doesNotMatch(html,/data-git-twist=""/);
+ expanded.add('gone/folder');same([...context.gitKeepExpanded(expanded,model)].includes('gone/folder'),false);assert.ok(context.gitKeepExpanded(expanded,model).has('labs/VLAN'));
+ const attack=context.gitTreeModel([{path:'<img src=x>/sub/a.cfg',size:1}],[]);assert.doesNotMatch(context.gitPlacesMarkup(attack,{selected:'',expanded:new Set(['','<img src=x>']),current:'',repoName:'r'}),/<img/);
+});
+test('the folder panel keeps branches, selection and focus across a refresh of the same repository and resets for another one',async()=>{
+ const context=makeContext(),files=[{path:'labs/BGP/work/latest/r1.cfg',size:1},{path:'labs/VLAN/latest/s1.cfg',size:1}],folders=[{id:'me',prefix:'labs/BGP/work',lab:{id:'lab',name:'BGP'}}];
+ const made=[];let focused=null;
+ const container={innerHTML:'',contains:el=>made.includes(el),querySelector:()=>null,querySelectorAll(sel){
+  const out=[],add=(attr,key,tag)=>{for(const m of this.innerHTML.matchAll(new RegExp('<'+tag+'[^>]* '+attr+'="([^"]*)"','g'))){const el={dataset:{[key]:m[1].replace(/&amp;/g,'&')},tagName:tag.toUpperCase(),focus(){focused=this;}};made.push(el);out.push(el);}};
+  if(sel==='[data-git-place]'){add('data-git-place','gitPlace','summary');add('data-git-place','gitPlace','button');add('data-git-place','gitPlace','tr');}
+  else if(sel==='[data-git-twist]')add('data-git-twist','gitTwist','button');
+  else if(sel==='.git-outline summary[data-git-place]')add('data-git-place','gitPlace','summary');
+  return out;}};
+ context.document={activeElement:null};context.gitRepoName=()=>'repo';context.opTask=async(d,fn)=>fn();
+ const tree={repository:{id:'me',path:'/home/ben/labs/Course-Labs'},files,folders,planned:[],head:'a',saved:{}};
+ await context.gitPlacesShow(container,'lab','me',{current:'me',tree,connected:true});
+ const state=()=>JSON.parse(vm.runInContext('JSON.stringify({selected:gitPlacesState.selected,expanded:[...gitPlacesState.expanded].sort()})',context));
+ same(state(),{selected:'labs/BGP/work',expanded:['','labs','labs/BGP','labs/BGP/work']});
+ // The student closes labs/BGP with its twisty and opens labs/VLAN; the twisty keeps the focus
+ vm.runInContext("gitToggleFolder(gitPlacesState.expanded,'labs/BGP');gitToggleFolder(gitPlacesState.expanded,'labs/VLAN');",context);
+ context.document.activeElement=made[made.length-1]={dataset:{gitTwist:'labs/BGP'},tagName:'BUTTON'};
+ await context.gitPlacesShow(container,'lab','me',{current:'me',tree:{...tree,files:[...files,{path:'labs/BGP/work/latest/r2.cfg',size:1}]},connected:true});
+ same(state(),{selected:'labs/BGP/work',expanded:['','labs','labs/BGP/work','labs/VLAN']},'a background refresh neither reopens the collapsed ancestor (labs/BGP) nor closes the other branch, and keeps the selection; a folder below a closed one remembers its own state');
+ assert.equal(focused&&focused.dataset.gitTwist,'labs/BGP','focus returns to the same control after the redraw');
+ assert.match(container.innerHTML,/data-git-place="labs\/BGP" class="holds-current"/);
+ // A folder the page itself selects (just created) is revealed once
+ vm.runInContext("gitPlacesState.selected='labs/BGP/work/new'",context);
+ await context.gitPlacesShow(container,'lab','me',{current:'me',tree:{...tree,planned:['labs/BGP/work/new']},connected:true});
+ assert.ok(state().expanded.includes('labs/BGP'));assert.equal(state().selected,'labs/BGP/work/new');
+ // Another repository starts from its own default
+ await context.gitPlacesShow(container,'lab','other',{current:'other',tree:{repository:{id:'other',path:'/home/ben/labs/Other'},files:[{path:'x/latest/a.cfg',size:1}],folders:[{id:'other',prefix:'x',lab:{id:'lab',name:'BGP'}}],planned:[]},connected:true});
+ same(state(),{selected:'x',expanded:['','x']});
+});
 test('the connected card names the folder path and offers the switch and disconnect actions',()=>{
  const context=makeContext(),container={innerHTML:'',querySelectorAll:()=>[]};
  context.$=id=>id==='git-repository-content'?container:null;context.state.labs=[{id:'lab',name:'BGP <lab>'}];

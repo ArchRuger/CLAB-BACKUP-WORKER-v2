@@ -78,7 +78,7 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
   no conflict arose. A folder move keeps its own confirmed upload (no configuration change to review).
   A push always sends every earlier unpushed commit of the branch; the review window says so.
 
-## UI-008 — Repository folder browser ◐ (part 1 in 1.30.7)
+## UI-008 — Repository folder browser ☑ (1.30.7 and 1.30.8)
 
 - ☑ Reproduced and root cause found (1.30.7): an empty folder existed only as a VM registration; a lab
   move retires the previous registration, so the folder the lab left vanished; a folder inside the
@@ -88,15 +88,16 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
   repository until the first save* (the manager's planned-folder list; no VM helper change). 1.30.7
 - ☑ Duplicates and failed creations are reported accurately, without phantom entries; an unused
   empty folder can be removed from the list. 1.30.7
-- ☐ Every folder with children expands and collapses, ancestors of the save location included; the
-  destination in use is highlighted without forcing its ancestry open; the browsed folder is told
-  apart from the save destination.
-- ☐ Expansion, selection and focus survive background refreshes. Long names do not wrap inside the
-  tree (seen in 1.30.7: "solutio / n" beside the *This lab* tag).
+- ☑ Every folder with children expands and collapses (own arrow control, keyboard too), ancestors of
+  the save location included; the destination is highlighted (`current`, *This lab*, *This lab is
+  inside* on a closed branch) without forcing its ancestry open; the browsed folder (`selected`) is
+  told apart, and the panel says that browsing does not change where the lab saves. 1.30.8
+- ☑ Expansion, selection, scroll position and focus survive background refreshes, re-renders and a
+  tab change while the folders exist; long names stay on one line. 1.30.8
 
 ## Planned chunk order
 
 1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 (1.30.4, done) → 4. UI-007 A+B (1.30.5, done) → 5. UI-007 C (1.30.6, done) → 6. UI-008 root
-cause and fix (1.30.7, done) → 6b. UI-008 tree expansion and highlight → 7. UI-006 → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
+cause and fix (1.30.7, done) → 6b. UI-008 tree expansion and highlight (1.30.8, done) → 7. UI-006 → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
 10+. UI-003 matrix, then parity in increments. One patch release, one commit and one verified push
 per chunk.

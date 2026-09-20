@@ -4,6 +4,31 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.8
+
+**UI review 001, step 7: the folder tree opens and closes by your own clicks (UI-008, part 2).**
+Frontend only. This completes UI-008.
+
+- **Every folder with children expands and collapses.** The tree used to derive its open branches from
+  the selected folder alone: the ancestors of the selection were forced open, no branch could be
+  closed, and no other branch stayed open. Each folder with children now has a small arrow of its own
+  that opens and closes it without selecting it (pointer, Enter or Space; on a focused folder the right
+  and left arrow keys do the same). The first display of a repository opens the way down to the folder
+  the lab saves to; after that only the student's clicks change it. Selecting a folder opens its
+  ancestors so it can be seen, and never closes anything.
+- **The save destination and the browsed folder look different.** The folder the lab saves to has an
+  accent bar, bold text and the *This lab* tag wherever the student is browsing; the browsed folder is
+  the filled row. A closed branch that contains the destination reads *This lab is inside*. While
+  another folder is looked at the panel says *This lab saves to … Looking at other folders does not
+  change that.*
+- **State survives refreshes.** Open branches, the selection, the tree's scroll position and the
+  keyboard focus are kept across background polling, the re-render after *Save settings*, a tab change
+  and a reload of the folder list, for as long as the folders exist; another repository starts from its
+  own default. A folder the page itself selects (one just created, the lab's new destination) is
+  revealed once.
+- Long folder names stay on one line with an ellipsis and the full name as a tooltip, and no longer
+  break beside the *This lab* tag.
+
 ## Changes in 1.30.7
 
 **UI review 001, step 6: a folder made in the folder browser no longer disappears (UI-008, part 1).**

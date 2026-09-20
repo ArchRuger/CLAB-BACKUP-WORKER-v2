@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.7
+# UI review 001 (in progress) — 1.30.8
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -51,6 +51,15 @@ adds `planned`; `gitTreeModel(files, folders, planned)` sets `dir.planned`, and 
 saved file yet". Never word a pending folder as existing in the repository. Do not change
 `host_git.py` for this. The fixture's scripted helper must keep matching the real one (retire, overlap
 refusal, a flat `register-prefix` answer).
+(7) **1.30.8, UI-008 part 2 — the tree's state belongs to the student.** `gitPlacesState.expanded` (a
+`Set`, `''` always in it) is the only source of open branches; `gitPlacesMarkup` takes it as
+`view.expanded`. It changes only through `gitToggleFolder` (the `.git-twist` button, ArrowRight /
+ArrowLeft on a focused `<summary>`) and `gitRevealFolder` (a selection). `gitPlacesShow` resets it to
+`gitDefaultExpanded` only when the checkout path differs (`expandedFor`), otherwise `gitKeepExpanded`;
+`revealed` makes a page-made selection visible once. Never derive `open` from the selection again.
+`summary.current` = the folder the lab saves to, `summary.selected` = the browsed folder,
+`holds-current` = a closed branch with the destination inside. `draw()` restores the focused control
+and the outline's scroll position after each redraw. Children of a closed branch are not rendered.
 
 # Lab builder quality pass — 1.30.1
 

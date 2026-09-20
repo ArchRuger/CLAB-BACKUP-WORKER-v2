@@ -1,3 +1,32 @@
+# UI review 001, step 7: the folder tree expands, collapses and keeps its state — 1.30.8
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.7 (`066a39e`,
+pushed, CI green). Requirement UI-008 (tree part) of `docs/ui-review-001/CHECKLIST.md`. **Fixture only:
+no live VM, Git repository, lab or device was involved**, and the development manager running on the VM
+was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 176 of 176. New in `test_git_places_ui.js`: the expansion rules
+  (`gitAncestors`, `gitDefaultExpanded`, `gitToggleFolder`, `gitRevealFolder`, `gitKeepExpanded`), an
+  ancestor of the save location collapsing and staying collapsed, *This lab is inside*, another branch
+  open at the same time, `current` against `selected`, the browsing sentence, no arrow on leaves or on
+  the top level, escaping; and the panel over a fake container: branches, selection and focus kept
+  across a refresh of the same checkout with changed files, a page-made selection revealed once, another
+  repository reset to its default.
+- `python -m unittest discover -s tests -t tests`: 708 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check app/static/git-places.js`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 97 of 97 at three viewports, 0 console errors, 0 page
+  errors. `docs/ui-review-001/tools/check_ui008b.py` 21 of 21: the first display leads to the save
+  folder, marked current with *This lab*; an ancestor of it collapses without changing the browsed
+  folder or the destination and reads *This lab is inside*; a second branch opens meanwhile; both
+  states survive two polls, the re-render after *Save settings* and a tab change; the ancestor reopens
+  as it was; browsing another folder moves the selection, not the current marker or the destination,
+  and the panel says where the lab saves; a second click closes nothing; the arrow control works from
+  the keyboard and keeps the focus; Right and Left open and close a focused folder without selecting
+  it; a 47-character name stays on one line with its tooltip; a folder the page created is revealed and
+  selected. Screenshots inspected: `~/ui-review/review-001/chunk07/` on the VM.
+
 # UI review 001, step 6: folders made in the folder browser stay — 1.30.7
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.6 (`973fcda`,
