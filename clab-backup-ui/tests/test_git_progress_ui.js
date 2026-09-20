@@ -205,6 +205,15 @@ test('save rows read as student sentences and the job window keeps the raw statu
  assert.match(markup,/Saved on this VM — upload needs attention/);assert.match(markup,/<details><summary>Details<\/summary>/);assert.match(markup,/push pending/);
  assert.match(context.gitJobMarkup(null),/No saves yet/);
 });
+
+test('a save with nothing new that is already uploaded reads as saved: no review, no upload offered',()=>{
+ const context=makeContext();
+ const job={id:'u',lab_id:'lab',status:'unchanged',pushed:true,commit:'c'.repeat(40),target:'latest',changed_files:[]};
+ assert.equal(context.gitNeedsReview(job),false,'there is nothing to review');
+ assert.equal(context.gitUploadState(job),'Uploaded');assert.equal(context.gitSavePill(job),'ok');
+ assert.match(context.gitDoneToast(job),/nothing had changed since your last save/);
+ assert.equal(context.gitJobTitle(job),'Progress saved');
+});
 test('the disabled reason of Save progress is visible text and an unbound lab keeps the button enabled',()=>{
  const context=makeContext();
  assert.equal(context.gitSaveReason(null,null),'');

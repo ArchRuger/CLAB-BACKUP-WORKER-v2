@@ -1,3 +1,31 @@
+# Maintenance audit follow-up 4: a save with nothing new — 1.30.26
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.25 (`2dd62a5`, pushed). Manager only.
+**Unit evidence; not exercised in a browser, against a real Git helper or a Git host.**
+
+- `tests/test_git_progress.py`, 37 tests. The fake helper can now answer `unchanged` like
+  `host_git.py` does (it never could, which is why this went unnoticed). New: after an uploaded save, a
+  save with nothing new ends `unchanged` and uploaded, sends no push, is not a pending save, and a retry
+  returns it without queueing work (this test fails on the previous manager: `review_pending`); while the
+  commit was never uploaded it keeps waiting for the review, stays pending, and an upload without the
+  stated review is still refused with 409; a commit uploaded under another binding digest does not count.
+  The last two pass on the previous manager too: they guard the conservative side of the rule.
+- `tests/test_git_progress_ui.js`: one added test pins what the page already did with such a job (no review
+  needed, *Uploaded*, the *nothing had changed* toast). It is a pin, not a test of this change: no page
+  file changed.
+- Full suites: 719 Python tests with 1 skipped, 190 browser tests. `verify-release.py`, `check_links.py`,
+  `git diff --check`.
+- An independent read-only risk review attacked the rule (a commit marked uploaded that is not on the
+  remote, an upload without review, other readers of the job status, ordering inside `finish()`, the
+  message still passing through `scrub`) and found nothing to fix. Its caveat is recorded here: "was
+  uploaded" is the manager's memory of a verified push, not a fresh look at the remote, so it is wrong only
+  after an out-of-band change to the remote (a force-push, a recreated repository, a changed remote URL in
+  the checkout); no upload is lost in that case, because the next save with changes is reviewed and its
+  push carries the branch.
+- Not covered: the fixture manager's scripted helper always commits and never answers `unchanged`, so
+  `verify_after.py` and the `check_ui*.py` tools cannot show this path; `check_ui007c.py` asserts that a
+  local save is not uploaded, which would need revisiting if the fixture ever answered `unchanged`.
+
 # Maintenance audit follow-up 3: unused code in the Git helper and the restore service — 1.30.25
 
 Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.24 (`08eac01`, pushed, CI green).

@@ -1,4 +1,4 @@
-# Maintenance audit and its follow-ups — 1.30.25
+# Maintenance audit and its follow-ups — 1.30.26
 
 A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release
 per chunk. **Read `docs/maintenance-audit/PICKUP.md` first**, then `docs/maintenance-audit/AUDIT.md`
@@ -41,6 +41,11 @@ fake hid this defect. The two manager compose files must pass the same settings 
 (11) Follow-up 3: `host_git.py` has no `allowed_version()` (the rule is `allowed_repo_version()`);
 `restore_junos.py` keeps the unused `pending_rollback_shell()` on purpose (the probe an interrupted restore
 would need; wiring it is a feature decision) and `COMMIT_ERROR` (a commit is judged by `COMMIT_OK`).
+(12) Follow-up 4: `finish()` in `git_progress.py` ends a save `unchanged` + `pushed` **only** when the helper
+answered `unchanged` and another job with the same commit is `pushed is True` under the same
+`binding_digest`; every other case keeps `review_pending` / `committed` so an un-uploaded commit still
+blocks folder changes. Do not loosen those three conditions and do not ask the helper to push from a save:
+the review stays the only way to upload. The fixture manager's helper never answers `unchanged`.
 
 # UI review 001 — 1.30.17
 

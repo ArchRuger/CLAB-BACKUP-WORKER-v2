@@ -43,15 +43,17 @@ again. The maintainer chose six of the record's open items, in this order:
 |---|---|---|
 | 1 | Scaffold tool and the mandatory review; image compose line and parity test; prepared-image stack instructions; `deploy/image.env` ignored | pushed, `1807eee` |
 | 2 | `shell.js` `lastOpened()` and the `clab.lastLab` write removed, the test's claim rewritten | pushed, `08eac01` |
-| 3 | Pure deletions in `host_git.py`, `restore.py`, `restore_junos.py` after a risk review (`pending_rollback_shell` and `COMMIT_ERROR` stay until the maintainer decides whether to wire the probe) | complete when this commit is on the remote; risk-reviewed before the commit |
-| 4 | Manager-side `unchanged` save status (`finish()` in `git_progress.py`), risk-reviewed; the careful part is a HEAD that was never uploaded | not started |
+| 3 | Pure deletions in `host_git.py`, `restore.py`, `restore_junos.py` after a risk review (`pending_rollback_shell` and `COMMIT_ERROR` stay until the maintainer decides whether to wire the probe) | pushed, `2dd62a5`; risk-reviewed before the commit |
+| 4 | Manager-side `unchanged` save status (`finish()` in `git_progress.py`), risk-reviewed; the careful part is a HEAD that was never uploaded | complete when this commit is on the remote; risk-reviewed before the commit |
 
 ## Next
 
-The pass is complete with chunk 5. What is left needs the maintainer: the decisions in the record's §5
-(two behaviour defects found by reading, the image compose file, the unused names in the sensitive
-modules, the dead `lastOpened()` that a test pins), a second pull request for chunks 4 and 5, and a check
-in a session without the forced subagent model that the three project agents resolve to their models.
+All six follow-ups the maintainer chose are done. Still open in the record's §5: whether
+`recreate-manager.sh` should handle a prepared-image installation (or that route be retired), whether an
+interrupted restore should probe the node (`pending_rollback_shell`), the garbled arrow in the audit log,
+the folder change that fails half-way, `CAPTURE_BIND` / `CAPTURE_PORT`, the vJunos-switch statement, the
+Wiki guide's map section, and the fixture helper that never answers `unchanged`. A pull request for the
+follow-ups is to be opened or merged by the maintainer.
 
 ## Unfinished work
 

@@ -4,6 +4,25 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.26
+
+**Maintenance audit follow-up 4: a save with nothing new no longer asks for a review of nothing.** Manager
+only (`app/git_progress.py`); the helpers changed by their lockstep version alone.
+
+- The VM helper has always answered `unchanged` when a save finds no changed file, but the manager ignored
+  it: the save ended *Waiting for your review*, the page opened **Review before uploading** with an empty
+  list, and that waiting save then blocked **Change folder…**, **Use a different repository…** and
+  **Connect by URL…** until the student uploaded or set aside nothing.
+- Now such a save ends *Saved to Git — nothing had changed since your last save*, but only when the manager
+  already knows that the very commit it reuses was uploaded through the same save location (another save of
+  it is recorded as uploaded, with the same binding). It is then not a pending save, and asking to upload
+  it again simply returns it.
+- Everything else keeps the previous path on purpose. When the commit was never uploaded, or was uploaded
+  under different save settings, the save still waits for the review and still blocks a folder change,
+  because there really is something on the VM that is not online. The review before an upload stays
+  mandatory: no route uploads without it, and none was added.
+- [Save progress](GIT-PROGRESS.md) describes both cases.
+
 ## Changes in 1.30.25
 
 **Maintenance audit follow-up 3: unused code removed from the Git helper and the restore service.** No

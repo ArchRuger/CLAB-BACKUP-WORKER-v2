@@ -47,6 +47,7 @@ class GitProgressTests(unittest.TestCase):
         self.repo = dict(id='bens-lab', label='Bens lab', owner='ben', path='/home/ben/labs/bgp',
                          remote='origin', branch='main', prefix='', revision='binding-1')
         self.sent = []; self.snapshots = {}; self.publish_error = ''; self.push_error = ''
+        self.nothing_new = False        # the helper's answer when a save finds no changed file: it reuses HEAD
         self.helper = patch('app.git_progress.remote_git', side_effect=self.remote).start()
         self.addCleanup(patch.stopall)
         self.dispatch = patch.object(self.progress.pool, 'submit').start()
@@ -66,6 +67,8 @@ class GitProgressTests(unittest.TestCase):
         if mode == 'publish':
             if self.publish_error: raise ValueError(self.publish_error)
             self.snapshots[request['operation_id']] = copy.deepcopy(request['snapshot'])
+            if self.nothing_new:
+                return dict(status='unchanged', commit='b'*40, pushed=None, changed_files=[], message='No configuration changes.', snapshot_path=request['target'])
             return dict(status='synced' if request['push'] else 'committed', commit='b'*40,
                         pushed=request['push'], changed_files=list(request['snapshot']['files']), snapshot_path=request['target'])
         if mode == 'push':
@@ -392,6 +395,39 @@ class GitProgressTests(unittest.TestCase):
         diff = self.client.post(self.url+'/compare', json={'job_id': job['id']})
         self.assertEqual(diff.status_code, 200, diff.text)
         self.assertEqual(diff.json()['files'][0]['status'], 'added')
+
+    def test_a_save_with_nothing_new_after_an_uploaded_save_is_unchanged_and_blocks_nothing(self):
+        first, _ = self.save(); self.run_save(first)
+        outcome, _ = self.review_and_upload(first); self.assertEqual(outcome['status'], 'synced')
+        self.nothing_new = True; self.sent.clear()
+        again, _ = self.save(); outcome, _ = self.run_save(again)
+        self.assertEqual(outcome['status'], 'unchanged'); self.assertTrue(outcome['pushed'])
+        self.assertEqual(outcome['changed_files'], []); self.assertIn('was uploaded', outcome['message'])
+        self.assertFalse(any(r['mode'] == 'push' for r in self.sent), 'nothing was uploaded for it')
+        with self.store.lock: self.assertFalse(pending_progress(self.store.state, self.lab['id']), 'it must not block a folder change')
+        self.dispatch.reset_mock()
+        same = self.client.post('/api/git/jobs/'+again['id']+'/retry', json={'push': True, 'reviewed': True})
+        self.assertEqual(same.status_code, 200, same.text); self.assertEqual(same.json()['status'], 'unchanged')
+        self.dispatch.assert_not_called()
+
+    def test_a_save_with_nothing_new_keeps_waiting_for_the_review_while_its_commit_was_never_uploaded(self):
+        first, _ = self.save(); outcome, _ = self.run_save(first)
+        self.assertEqual(outcome['status'], 'review_pending')           # saved on the VM, review declined so far
+        self.nothing_new = True
+        again, _ = self.save(); outcome, _ = self.run_save(again)
+        self.assertEqual(outcome['status'], 'review_pending'); self.assertFalse(outcome['pushed'])
+        with self.store.lock: self.assertTrue(pending_progress(self.store.state, self.lab['id']))
+        # the upload of that commit is still possible, and still needs the review
+        self.assertEqual(self.client.post('/api/git/jobs/'+again['id']+'/retry', json={'push': True}).status_code, 409)
+
+    def test_a_commit_uploaded_through_another_binding_does_not_make_a_save_unchanged(self):
+        first, _ = self.save(); self.run_save(first); self.review_and_upload(first)
+        with self.store.lock:
+            next(j for j in self.store.state['git_jobs'] if j['id'] == first['id'])['binding_digest'] = 'another-binding'
+            self.store.save()
+        self.nothing_new = True
+        again, _ = self.save(); outcome, _ = self.run_save(again)
+        self.assertEqual(outcome['status'], 'review_pending'); self.assertFalse(outcome['pushed'])
 
     def test_the_review_is_mandatory_even_for_a_saved_opt_out_and_an_old_page(self):
         # A binding saved before the review became mandatory says False; a page loaded before the
