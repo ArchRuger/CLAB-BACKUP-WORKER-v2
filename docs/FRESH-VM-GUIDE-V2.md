@@ -671,8 +671,8 @@ sudo containerlab inspect --all --format json
 Fresh Containerlab installation through this project uses sudo, so the Docker and
 `clab_admins` groups are not prerequisites for this workflow. If you applied the
 [VS Code fix](#vscode-access) in step 7, `containerlab` also runs without sudo for
-your own account. A lab deployed from the terminal appears on **My labs** under
-**Also running on the VM**; click **Add to My labs** and confirm the preview.
+your own account. A lab deployed from the terminal is listed under
+**Manager ▾ › Labs found on the VM…**; click it and confirm the preview.
 
 A Docker container marked Running does not prove that its NOS SSH service is
 ready; the device's pill says *Ready* when it is. Then:

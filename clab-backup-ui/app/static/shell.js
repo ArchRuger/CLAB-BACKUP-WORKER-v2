@@ -72,15 +72,32 @@ function initMenu(button){
  if(!list)return null;button._menuReady=true;
  if(!list.id)list.id=(button.id||'menu-'+(++shellMenuCount))+'-list';
  button.setAttribute('aria-haspopup','menu');button.setAttribute('aria-expanded','false');button.setAttribute('aria-controls',list.id);list.setAttribute('role','menu');list.hidden=true;
- const items=()=>[...list.querySelectorAll('[role="menuitem"]')].filter(item=>!item.disabled&&!item.hidden);
+ // A menu may hold one or more expandable groups: a [data-menu-group="<panel id>"] item shows and hides
+ // the [data-menu-panel] with that id. Items of a collapsed panel are skipped by the arrow keys, the
+ // toggle never closes the menu, and every panel is collapsed again when the menu opens.
+ const panelOf=toggle=>toggle&&typeof toggle.getAttribute==='function'&&toggle.getAttribute('data-menu-group')?shellEl(toggle.getAttribute('data-menu-group')):null;
+ const items=()=>[...list.querySelectorAll('[role="menuitem"]')].filter(item=>!item.disabled&&!item.hidden&&!(typeof item.closest==='function'&&item.closest('[data-menu-panel][hidden]')));
+ const setGroup=(toggle,expanded,focus)=>{
+  const panel=panelOf(toggle);if(!panel)return false;
+  panel.hidden=!expanded;toggle.setAttribute('aria-expanded',expanded?'true':'false');
+  if(expanded){const inside=items().filter(item=>shellContains(panel,item));if(focus&&inside[0]&&typeof inside[0].focus==='function')inside[0].focus();const last=inside[inside.length-1]||toggle;if(typeof last.scrollIntoView==='function')last.scrollIntoView({block:'nearest'});}
+  else if(focus&&typeof toggle.focus==='function')toggle.focus();
+  return true;
+ };
+ const toggles=()=>[...list.querySelectorAll('[data-menu-group]')];
  const close=restore=>{if(list.hidden)return false;list.hidden=true;button.setAttribute('aria-expanded','false');if(restore&&typeof button.focus==='function')button.focus();return true;};
- const open=()=>{closeMenus(wrapper);list.hidden=false;button.setAttribute('aria-expanded','true');const first=items()[0];if(first&&typeof first.focus==='function')first.focus();if(typeof CustomEvent==='function'&&typeof list.dispatchEvent==='function')list.dispatchEvent(new CustomEvent('menuopen'));};
+ const open=()=>{closeMenus(wrapper);for(const toggle of toggles())setGroup(toggle,false,false);list.hidden=false;button.setAttribute('aria-expanded','true');const first=items()[0];if(first&&typeof first.focus==='function')first.focus();if(typeof CustomEvent==='function'&&typeof list.dispatchEvent==='function')list.dispatchEvent(new CustomEvent('menuopen'));};
  button._menuClose=close;button._menuOpen=open;
  button.addEventListener('click',()=>{if(list.hidden)open();else close(false);});
  button.addEventListener('keydown',e=>{if(e.key==='ArrowDown'&&list.hidden){e.preventDefault();open();}});
  list.addEventListener('keydown',e=>{
   if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close(true);return;}
   if(e.key==='Tab'){close(false);return;}
+  if(e.key==='ArrowRight'||e.key==='ArrowLeft'){
+   const at=document.activeElement,toggle=at&&typeof at.closest==='function'?(at.closest('[data-menu-group]')||toggles().find(t=>shellContains(panelOf(t),at))):null;
+   if(toggle&&setGroup(toggle,e.key==='ArrowRight',true))e.preventDefault();
+   return;
+  }
   if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;
   const all=items();if(!all.length)return;e.preventDefault();
   const i=all.indexOf(document.activeElement),next=e.key==='Home'?0:e.key==='End'?all.length-1:e.key==='ArrowDown'?(i+1)%all.length:(i-1+all.length)%all.length;
@@ -88,7 +105,7 @@ function initMenu(button){
  });
  // Capture phase: the menu closes and focus returns to the button before the item's own handler runs,
  // so a dialog opened by the item gives focus back to the button when it closes.
- list.addEventListener('click',e=>{const item=e.target&&typeof e.target.closest==='function'?e.target.closest('[role="menuitem"]'):null;if(!item||item.disabled||!shellContains(list,item))return;close(true);},true);
+ list.addEventListener('click',e=>{const item=e.target&&typeof e.target.closest==='function'?e.target.closest('[role="menuitem"]'):null;if(!item||item.disabled||!shellContains(list,item))return;if(panelOf(item)){setGroup(item,item.getAttribute('aria-expanded')!=='true',false);return;}close(true);},true);
  return {open,close};
 }
 // Escape priority: node context menu (topology.js) → open menus → expanded map (topology.js). Closing a

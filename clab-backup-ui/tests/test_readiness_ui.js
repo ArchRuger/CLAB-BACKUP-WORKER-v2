@@ -47,6 +47,23 @@ test('containerlab default logins are named in the credential column',()=>{
  assert.equal(vm.runInContext(`profileName({profiles:[],defaults:{}},{platform:''})`,h.context),'Not configured');
 });
 
+test('Manager › Labs found on the VM lists what Home used to: labs to add, hidden labs with Stop hiding, and the file checks',()=>{
+ const h=managementHarness({discovery:{configured:true,connected:true,host:{enabled:true},discovered:[{name:'ceos-pair',nodes:2,running:2,imported:false},{name:'old',nodes:1,running:1,imported:true},{name:'gone',nodes:1,running:0,imported:false,excluded:true}],ignored_labs:['gone'],file_reports:{'ceos-pair':{definition:{message:'Found',paths:['/labs/a.clab.yml']}}}}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/home.js'),'utf8'),h.context);
+ h.context.renderManagement();
+ assert.equal(h.element('manager-vm-labs-note').textContent,'1 not in My labs · 1 hidden');assert.equal(h.element('manager-vm-labs-note').hidden,false);
+ assert.match(h.element('discovered-labs').innerHTML,/data-setup-name="ceos-pair">ceos-pair<small>Running on the VM · 2 of 2 devices running · Add to My labs/);
+ assert.doesNotMatch(h.element('discovered-labs').innerHTML,/>old<|>gone</);
+ assert.match(h.element('excluded-labs').innerHTML,/data-allow-import="gone"/);assert.match(h.element('excluded-labs').innerHTML,/data-clear-exclusion="gone">Stop hiding/);
+ assert.match(h.element('discovery-file-list').innerHTML,/\/labs\/a\.clab\.yml/);assert.equal(h.element('vm-labs-empty').hidden,true);
+ h.element('manager-vm-labs').onclick();assert.equal(h.element('vm-labs-dialog').open,true);
+ const none=managementHarness({discovery:{configured:true,connected:true,host:{enabled:true},discovered:[{name:'old',imported:true}]}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/home.js'),'utf8'),none.context);none.context.renderManagement();
+ assert.equal(none.element('manager-vm-labs-note').hidden,true);assert.equal(none.element('vm-labs-empty').hidden,false);assert.match(none.element('vm-labs-empty').textContent,/already in My labs/);
+ const away=managementHarness({discovery:{configured:true,connected:false,host:{enabled:true}}});none.context.state=away.context.state;none.context.renderManagement();
+ assert.match(none.element('vm-labs-empty').textContent,/does not answer/);
+});
+
 test('the landing page leads with deployment and lists labs already running on the VM',()=>{
  const h=managementHarness({discovery:{configured:true,connected:true,host:{enabled:true},discovered:[{name:'ceos-pair',nodes:2,running:2,imported:false},{name:'old',nodes:1,running:1,imported:true},{name:'gone',nodes:1,running:0,imported:false,excluded:true}]}});
  h.context.renderManagement();

@@ -4,6 +4,176 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.9
+
+**UI review 001, step 8: the Devices tab lines up (UI-006).** Stylesheet only; no markup, script,
+status wording or readiness rule changed.
+
+- **Flush with its heading.** The device list kept the browser's default list indent, so every row
+  started 40 px to the right of the *Devices* heading while its right edge met the search controls. The
+  list now has no indent, on the Devices tab and on the Topology tab's device rail.
+- **One grid for the whole list.** Each row used to be a grid of its own; the rows are now subgrids of
+  one list grid, so the device name and platform, the state with its reason, *Open CLI* and *Details*
+  start at the same position in every row whatever a row contains. Every cell begins with a line as high
+  as the buttons: name, state pill and *Open CLI* share one line in every row, and a reason or a long
+  name only makes its own row taller. Long names wrap inside their column, the platform badge follows
+  them, a reason is kept to a readable width, and the action buttons never wrap apart on a wide window.
+- **Heading, search and Technical view** sit on one line with controls of one height, aligned with
+  the bottom of the heading text. Below 760 px the rows become a single column and the search field
+  fills the width.
+
+## Changes in 1.30.8
+
+**UI review 001, step 7: the folder tree opens and closes by your own clicks (UI-008, part 2).**
+Frontend only. This completes UI-008.
+
+- **Every folder with children expands and collapses.** The tree used to derive its open branches from
+  the selected folder alone: the ancestors of the selection were forced open, no branch could be
+  closed, and no other branch stayed open. Each folder with children now has a small arrow of its own
+  that opens and closes it without selecting it (pointer, Enter or Space; on a focused folder the right
+  and left arrow keys do the same). The first display of a repository opens the way down to the folder
+  the lab saves to; after that only the student's clicks change it. Selecting a folder opens its
+  ancestors so it can be seen, and never closes anything.
+- **The save destination and the browsed folder look different.** The folder the lab saves to has an
+  accent bar, bold text and the *This lab* tag wherever the student is browsing; the browsed folder is
+  the filled row. A closed branch that contains the destination reads *This lab is inside*. While
+  another folder is looked at the panel says *This lab saves to … Looking at other folders does not
+  change that.*
+- **State survives refreshes.** Open branches, the selection, the tree's scroll position and the
+  keyboard focus are kept across background polling, the re-render after *Save settings*, a tab change
+  and a reload of the folder list, for as long as the folders exist; another repository starts from its
+  own default. A folder the page itself selects (one just created, the lab's new destination) is
+  revealed once.
+- Long folder names stay on one line with an ellipsis and the full name as a tooltip, and no longer
+  break beside the *This lab* tag.
+
+## Changes in 1.30.7
+
+**UI review 001, step 6: a folder made in the folder browser no longer disappears (UI-008, part 1).**
+Manager and frontend; the VM helpers are unchanged apart from the lockstep version. Part 2 (expanding
+and collapsing the tree, the destination highlight, state kept across refreshes) follows.
+
+- **Root cause.** Git keeps no empty folders, so a new folder existed only as a *lab folder
+  registration* on the VM, and the browser's tree is built from the committed files plus those
+  registrations. Moving a lab (*Save this lab here*, or *New folder…* with *Save … here from now on*)
+  retires the lab's previous registration. An empty folder the lab left, such as `working` under
+  `JunOS-TEST-2` once the lab saved to a second new folder or went back to the parent, was therefore
+  known to nothing and vanished. Creating a folder inside the lab's own folder *without* moving there
+  was refused outright by the VM's rule that lab folders cannot overlap.
+- **Fix.** The manager remembers, per checkout, the folders made or chosen through it
+  (`git_folders` in its state; the tree route reports them as `planned`), and the folder browser draws
+  them. They are told apart truthfully: *Empty folder · not in the repository until the first save*,
+  and inside one: *Nothing is saved here yet. The folder is kept by the manager and appears in the
+  repository with the first save into it.* No directory or commit is claimed. Such a folder can be
+  chosen (*Save this lab here* registers it on the VM as before), survives refreshes, polling,
+  reloads, a manager restart and the lab moving elsewhere.
+- **New folder…** for a connected lab without *Save … here from now on* now only lists the folder
+  (`POST …/folders` with `plan: true`): nothing is registered on the VM and the message says that the
+  lab still saves where it did. A name that already exists (saved, a lab folder or planned) is refused
+  in the dialog before anything is sent, and by the manager with 409; a refused or failed creation
+  leaves no entry. An empty folder that nothing uses can be taken off the list (*Remove empty folder*,
+  `DELETE …/folders`); nothing on the VM changes.
+- Tooling: the fixture manager's scripted Git helper now retires registrations, refuses overlapping
+  lab folders and answers `register-prefix` like `app/host_git.py`; it had hidden this defect.
+
+## Changes in 1.30.6
+
+**UI review 001, step 5: the review before an upload is mandatory (UI-007 C).** Manager and frontend;
+the VM helpers are unchanged apart from the lockstep version. This is an intended change of behaviour:
+until now a save uploaded by itself unless *Let me review changes before they are uploaded* was ticked.
+
+- **No opt-out any more.** The checkbox is gone from *Save location › Save settings*. Every save a
+  person starts (Save progress, a checkpoint, a baseline, the first save) is committed on the lab VM and
+  then opens **Review before uploading**: what the save changed, a line saying that nothing is
+  uploaded unless the student chooses it (and, when earlier saves are still waiting on the VM, that
+  they go along), **Upload these changes** and **Not now — keep it on the VM**. Declining uploads
+  nothing and says *Not uploaded*; the save stays in *Recent saves* as *Waiting for your review* and
+  the status line reads *Saved on this VM*, never *Saved to Git*.
+- **Enforced by the manager, not by the page.** A save request never pushes on its own, and
+  `POST /api/git/jobs/{id}/retry` with `push` answers 409 *Review the changes of this save before
+  uploading it* unless the request states the review (`reviewed: true`) or the job already records
+  one (an upload that failed after its review is repeated with **Upload now**). A save location stored
+  with the old opt-out and a page loaded before this release therefore cannot upload unreviewed
+  changes. A retry of a save that has no commit yet saves on the VM first and then waits for the
+  review. `review_before_push` is still accepted in requests and ignored; new save locations record it
+  as on, and stored ones are left alone so saves that are waiting keep working.
+- Every upload button follows: *Recent saves* and the save window offer **Review and upload…** for a
+  save that was never reviewed, also for a *Save on this VM only* that is uploaded later.
+- Not changed: *Save on this VM only* (no upload, no review), a folder move (it carries no
+  configuration change and keeps its own confirmed upload), and automatic backups, which never
+  created Git saves. Nothing scheduled or non-interactive shared the preference.
+
+## Changes in 1.30.5
+
+**UI review 001, step 4: Save location shows its folders and names its Git details (UI-007 A and B).**
+Frontend only. The third part of UI-007 (the review before an upload becomes mandatory) is the next step.
+
+- **Git repo details.** The disclosure on the *Save location* card that shows the verified push
+  destination, the branch, the VM account and the checkout path is now called *Git repo details*. No
+  other *Technical details* or *Details* disclosure was renamed.
+- **Change folder… is open.** The folder browser is unfolded when Save location is entered, for a
+  connected lab too, so the save-folder controls are visible at once. A student who folds it keeps it
+  folded for that lab while the page stays open (across background polling, a tab change and the
+  re-render after *Save settings*); *Browse the repository…* and picking another repository open it
+  again, and only those still scroll to it. A new visit starts unfolded.
+
+## Changes in 1.30.4
+
+**UI review 001, step 3: the Save progress options explain themselves (UI-004).** Frontend only.
+
+- **An explanation beside the options.** The small menu next to **Save progress** now has a pane that
+  says, for the option under the pointer or the keyboard focus, what it does and where its result goes:
+  *Create checkpoint…* (reads the devices now, keeps a named version under `checkpoints/<name>` of the
+  lab's save folder, uploaded unless the upload is unticked), *Save on this VM only* (reads the devices
+  now, saves the latest version in the VM's copy of the folder, uploads nothing; *Upload saved progress*
+  publishes it later), *Saved versions & history* (a list to view, download, compare or apply; reads no
+  device and saves nothing) and *Save location settings…* (opens Progress › Save location; nothing
+  changes until a change is confirmed there). The texts name the lab's real folder and upload host and
+  follow what the manager does, not what the labels suggest.
+- The pane is part of the menu, so moving the pointer onto it to read does not close anything and it
+  never lies over an option. It sits to the left of the options on a wide window, to their right when
+  the save control has wrapped to the left edge, and under them when the window is too narrow for both
+  (placed by measurement each time the menu opens). Each option also carries its explanation as its
+  accessible description.
+- Fixed on the way: on a narrow or zoomed window the menu used to hang off the left edge of the window.
+
+## Changes in 1.30.3
+
+**UI review 001, step 2: a shorter Lab actions menu (UI-005).** Frontend only.
+
+- **Advanced options.** *Import map…*, *Edit map*, *Telemetry settings…* and *Operation history…* moved
+  into an expandable **Advanced options** group at the bottom of **Lab actions ▾**. Nothing else moved:
+  the lifecycle items, *Sync topology from VM*, *Packet capture…*, *Lab files…*, *All lab operations…*
+  and the separated destructive actions are where they were, and every moved action is still available
+  elsewhere too (*Edit map* on the map toolbar and the Tools tab, *Import map…* under the map's *More ▾*,
+  *Telemetry settings…* on the Tools tab, *Operation history…* under Advanced and in the Manager menu).
+- The group opens with a click, Enter, Space or the right arrow and closes with the left arrow; opening
+  it never closes the menu; its items are skipped by the arrow keys while it is collapsed; it is
+  collapsed again each time the menu opens. The moved items keep their disabled state and their reason
+  line. On a small window the menu scrolls inside itself instead of running off the screen, and the
+  last item is scrolled into view when the group opens.
+- `shell.js` supports such a group in any button menu (`data-menu-group` on the item,
+  `data-menu-panel` on the group).
+
+## Changes in 1.30.2
+
+**UI review 001, step 1: "Also running on the VM" leaves the main page (UI-001).** The first of a
+series of small releases that implement the maintainer's UI review; the requirement checklist and the
+pickup notes are in [docs/ui-review-001/](ui-review-001/CHECKLIST.md). Frontend only; the backend and
+the VM helpers are unchanged apart from the lockstep version.
+
+- **Home shows labs, not discovery.** The *Also running on the VM* section is gone from My labs. Its
+  contents are one click away under **Manager ▾ › Labs found on the VM…**: the labs the VM reports that
+  are not in My labs (click one to add it, with the same confirmation), the labs removed earlier with
+  *Import again* and *Stop hiding* (button, right-click and keyboard menu as before) and *File check
+  details*. The menu entry carries a count line (*1 not in My labs · 1 hidden*) so a waiting lab is
+  still noticed; the dialog says why it is empty when it is (VM not connected, VM not answering, or
+  every lab already added).
+- Nothing about discovery changed: no lab is imported or unhidden by the move, and the messages that
+  pointed at the old section (remove dialog, hidden-lab dialog, the toast after a removal) and the
+  guides now name the menu entry. The first-run page without any lab keeps its short *Already running
+  on the VM* list for now.
+
 ## Changes in 1.30.1
 
 **Lab builder quality pass.** Fixes found by walking the student journeys in a real browser (fixture

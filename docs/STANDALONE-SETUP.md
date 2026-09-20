@@ -158,7 +158,7 @@ Use **Remove from this manager…** (**Lab actions ▾** or **Advanced › Dange
 remove only a saved manager workspace, credentials, schedule and history entries.
 Backup files and audit logs stay on disk. No running container or VM lab file is
 modified. The default exclusion prevents automatic reimport; use **Stop hiding**
-under **Also running on the VM** on Home later, or uncheck the exclusion when
+under **Manager ▾ › Labs found on the VM…** later, or uncheck the exclusion when
 removing if you want to test immediate rediscovery. Both paths require confirmation
 before a new workspace is saved; cancelling the import retains its exclusion. Other
 labs and the VM connection remain.

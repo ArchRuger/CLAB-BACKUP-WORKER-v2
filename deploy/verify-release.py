@@ -13,7 +13,8 @@ or image tag (``clab-backup:1.x.y``) is refused outright, and the README, the ch
 validation record and the handoff notes must lead with the current release. Release history is
 written as ``since 1.19.3`` or ``1.22.0 or later``, which is allowed anywhere; the history files
 (``docs/CHANGELOG.md``, ``clab-backup-ui/VALIDATION.md``, ``agent instructions.md``),
-``docs/archive/`` and the design notes under ``docs/redesign/`` may name any release. A third-party version that shares the manager's major
+``docs/archive/``, the design notes under ``docs/redesign/`` and the per-release review log under
+``docs/ui-review-001/`` may name any release. A third-party version that shares the manager's major
 number (the Flow panel, for example) is recognised by the component name before it.
 
 ``python3 deploy/verify-release.py`` runs both checks (CI does the same);
@@ -43,7 +44,7 @@ DOC_ROOTS = ('README.md', 'docs', 'deploy', 'clab-backup-ui/README.md', 'clab-ba
              'clab-backup-ui/app/static/vm-connection.html', 'clab-backup-ui/app/static/capture-setup.html')
 # Release history: may name any release.
 HISTORY_FILES = ('docs/CHANGELOG.md', 'clab-backup-ui/VALIDATION.md', 'agent instructions.md')
-HISTORY_DIRS = ('docs/archive/', 'docs/redesign/')
+HISTORY_DIRS = ('docs/archive/', 'docs/redesign/', 'docs/ui-review-001/')
 # Where the current release must be named first, and how.
 LEADS = {
     'README.md': r'Current release: \*\*(\d+\.\d+\.\d+)\*\*',

@@ -1,3 +1,72 @@
+# UI review 001 (in progress) — 1.30.9
+
+The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
+`claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
+each chunk is validated and pushed) and `docs/ui-review-001/CHECKLIST.md` (UI-001 … UI-008 with their
+acceptance criteria). This section grows with each step; the newest facts are in the pickup file.
+(1) **1.30.2, UI-001**: Home has no *Also running on the VM* section. `#discovered-labs`,
+`#excluded-labs` and `#discovery-files` kept their ids and handlers and now live in
+`#vm-labs-dialog` (markup in `management.js`), opened by `#manager-vm-labs` in the Manager menu;
+`homeVmLabs(discovery)` in `home.js` is the pure count behind the menu's note line. Do not put a
+discovery list back on Home. `docs/ui-review-001/` may name any release (`HISTORY_DIRS` in
+`verify-release.py`).
+(2) **1.30.3, UI-005**: `#lab-actions-menu` ends with `#lab-actions-advanced-toggle`
+(`data-menu-group`) and `#lab-actions-advanced` (`data-menu-panel`, `hidden`) holding `menu-import-map`,
+`menu-map-edit`, `menu-telemetry`, `menu-operation-history` (ids, `data-proxy` mirrors and handlers
+unchanged). `initMenu()` in `shell.js` owns the behaviour for any menu: the toggle is a `menuitem` that
+never closes the menu, `items()` skips a hidden panel's items, ArrowRight/ArrowLeft expand and
+collapse, `open()` collapses every group. Only those four items were reviewed for the move; do not
+sweep other entries into the group. `#lab-actions-menu` has a `max-height` and scrolls inside itself.
+(3) **1.30.4, UI-004**: `.git-save-options` is a grid of `.git-save-list` (the `role="menu"`) and
+`#git-save-help`; `gitSaveHelp(action, binding)` in `git-progress.js` is the pure source of every
+explanation and must follow `execute()` in `app/git_progress.py` (a local save never uploads; history
+reads and saves nothing); `gitRenderSaveHelp()` fills the four `#git-save-help-<action>` entries on each
+render without rewriting unchanged text, `gitShowSaveHelp()` shows one on `mouseover`/`focusin`, and
+`gitSaveMenuPlacement()` (pure) + `gitPlaceSaveMenu()` set `menu-from-left` / `menu-stacked` on
+`.git-save-control` when the `<details>` opens. A new option in that menu needs a help entry, an
+`aria-describedby` and a case in `GIT_SAVE_HELP_ACTIONS`. UI-007 C will change the upload wording.
+(4) **1.30.5, UI-007 A + B**: on the Save location card only `.git-location-tech` reads *Git repo
+details*. `#git-change-folder` renders `open` unless the lab id is in `gitFolderCollapsed` (a `Set` in
+`git-progress.js`, filled and emptied by the disclosure's own `toggle` event, page lifetime only);
+`gitPlacesState.open` (Browse the repository…) opens it for one render and is the only thing that
+scrolls to the save settings. The card is rendered by `gitShowRepository()`, not by the 4 s poll.
+(5) **1.30.6, UI-007 C — the review before an upload is mandatory; do not reintroduce an opt-out.**
+Manager (`app/git_progress.py`): the save route sets `review = data.push`, so `want_push` is never true
+for a save and it ends `review_pending`; `Retry` has `reviewed`, and a push retry of a job with a commit
+needs `data.reviewed` or a recorded `job['reviewed']` (else 409), a push retry without a commit becomes
+a local retry with `review_before_push=True`, a `move` job is exempt; `reviewed` is in `PUBLIC_JOB`.
+`review_before_push` stays in the `Link`/`Connect` models for old pages and is ignored; new bindings
+store `True`; **never rewrite stored bindings** (pending jobs compare `digest(binding)`). Page
+(`git-progress.js`): `gitNeedsReview(job)`, `gitUploadLabel(job)`, `gitReviewJob(job)` is the only
+place that sends `{push:true, reviewed:true}`; a quiet save that ends `review_pending` opens it by
+itself; the job window and Recent saves route unreviewed uploads to it. A push sends every earlier
+unpushed commit of the branch too; the review says so when such saves exist.
+(6) **1.30.7, UI-008 part 1 — empty folders.** Git has no empty folders and the VM registry holds only the
+folder a lab saves to now (`register-prefix` with `retire` removes the previous one; nested lab folders
+"cannot overlap"), so the manager keeps `state['git_folders'][<checkout path>]` = prefixes made or chosen
+through it (`remember_folders()` in `git_progress.py`: `POST …/folders`, with `plan: true` for a folder
+that is only listed; the `destination` route remembers the folder the lab leaves and the new one;
+`DELETE …/folders` forgets one; capped at `MAX_PLANNED_FOLDERS`; never in `/api/state`). The tree route
+adds `planned`; `gitTreeModel(files, folders, planned)` sets `dir.planned`, and `pending` means "no
+saved file yet". Never word a pending folder as existing in the repository. Do not change
+`host_git.py` for this. The fixture's scripted helper must keep matching the real one (retire, overlap
+refusal, a flat `register-prefix` answer).
+(7) **1.30.8, UI-008 part 2 — the tree's state belongs to the student.** `gitPlacesState.expanded` (a
+`Set`, `''` always in it) is the only source of open branches; `gitPlacesMarkup` takes it as
+`view.expanded`. It changes only through `gitToggleFolder` (the `.git-twist` button, ArrowRight /
+ArrowLeft on a focused `<summary>`) and `gitRevealFolder` (a selection). `gitPlacesShow` resets it to
+`gitDefaultExpanded` only when the checkout path differs (`expandedFor`), otherwise `gitKeepExpanded`;
+`revealed` makes a page-made selection visible once. Never derive `open` from the selection again.
+`summary.current` = the folder the lab saves to, `summary.selected` = the browsed folder,
+`holds-current` = a closed branch with the destination inside. `draw()` restores the focused control
+and the outline's scroll position after each redraw. Children of a closed branch are not rendered.
+(8) **1.30.9, UI-006 — Devices tab, CSS only.** `.device-list` resets the `<ul>` indent (both lists).
+`#device-list` is the grid (`minmax(200px,1.1fr) minmax(240px,1.9fr) auto`), every `li` spans it and a
+`.device-row` is a `subgrid` of it (fallback: the row's own three columns); the first line of each cell
+is 32px high (`.node-name` inline-flex, the state cell's first grid row, `.node-actions`), so a new
+child of `deviceRow()` must fit one of the three cells. The rail keeps the 1.29.1 named-area grid. The
+single-column rule at 760px must keep resetting `#device-list` too.
+
 # Lab builder quality pass — 1.30.1
 
 Read docs/CHANGELOG.md "Changes in 1.30.1" and docs/lab-builder/QA-FINDINGS.md (every finding with its

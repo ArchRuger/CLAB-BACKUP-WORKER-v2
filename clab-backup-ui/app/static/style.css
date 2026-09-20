@@ -420,10 +420,9 @@ footer {
 .icon-button[aria-pressed="true"] { color: var(--accent); }
 .icon-button[aria-pressed="true"]:hover { background: var(--accent-soft); color: var(--accent-strong); }
 
-.home-discovered { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 20px; }
-.home-discovered h2, .home-discovered h3 { font-size: 15px; margin-bottom: 6px; }
-.home-discovered p { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
-.home-discovered details { margin-top: 8px; font-size: 13px; }
+.vm-labs .side-button { width: 100%; margin: 8px 0 0; }
+.vm-labs .side-hint { padding: 0; margin: 16px 0 0; }
+.vm-labs .empty-lab .side-button { margin: 0; }
 
 /* Lab workspace header */
 .lab-header {
@@ -615,6 +614,11 @@ footer {
 .menu-list button:disabled { opacity: 1; color: var(--muted); cursor: not-allowed; }
 .menu-list button:disabled .menu-reason { color: var(--muted); }
 .menu-list .button { width: auto; }
+.menu-group-toggle { justify-content: space-between; }
+.menu-group-toggle .icon { transition: transform .15s ease; }
+.menu-group-toggle[aria-expanded="true"] .icon { transform: rotate(180deg); }
+.menu-group { margin: 0 0 2px 10px; padding-left: 6px; border-left: 2px solid var(--line); }
+#lab-actions-menu { max-height: calc(100vh - 120px); overflow-y: auto; overscroll-behavior: contain; }
 .menu-sep { display: block; height: 1px; margin: 6px 4px; padding: 0; border: 0; background: var(--line); }
 .menu-danger button, .menu-list button.danger { color: var(--danger); }
 .menu-danger button:hover:not(:disabled), .menu-list button.danger:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger-strong); }
@@ -645,7 +649,11 @@ footer {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  width: 260px;
+  display: grid;
+  grid-template-columns: 300px 248px;
+  grid-template-areas: "help list";
+  width: max-content;
+  max-width: calc(100vw - 32px);
   z-index: 20;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -653,6 +661,22 @@ footer {
   padding: 6px;
   box-shadow: var(--shadow-menu);
 }
+.git-save-list { grid-area: list; }
+/* The explanation sits beside the options, never over them: to their left while the window has the
+   room, below them otherwise. */
+.git-save-help { grid-area: help; margin-right: 6px; padding: 9px 14px 9px 8px; border-right: 1px solid var(--line); font-size: 13px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+.git-save-help strong { display: block; margin-bottom: 4px; color: var(--ink); }
+.git-save-help p { margin: 0 0 6px; }
+.git-save-help p:last-child { margin-bottom: 0; }
+/* git-progress.js places the menu when it opens (gitSaveMenuPlacement): hanging from the control's left
+   edge when the control has wrapped to the left of the window, and with the explanation under the
+   options when the window cannot hold the two side by side. */
+.git-save-control.menu-from-left { position: relative; }
+.git-save-control.menu-from-left .git-save-menu { position: static; }
+.git-save-control.menu-from-left .git-save-options { left: 0; right: auto; grid-template-areas: "list help"; grid-template-columns: 248px 300px; }
+.git-save-control.menu-from-left .git-save-help { margin: 0 0 0 6px; padding: 9px 8px 9px 14px; border-right: 0; border-left: 1px solid var(--line); }
+.git-save-control.menu-stacked .git-save-options { grid-template-columns: minmax(0, 260px); grid-template-areas: "list" "help"; }
+.git-save-control.menu-stacked .git-save-help { margin: 6px 0 0; padding: 10px 12px 6px; border-left: 0; border-right: 0; border-top: 1px solid var(--line); min-height: 9.5em; }
 .git-save-options button {
   display: block;
   width: 100%;
@@ -1200,12 +1224,12 @@ dl.kv, .kv {
 .health-grid .mono { font-size: 12px; }
 
 /* disclosure defaults inside cards/dialogs; component rules override via higher specificity */
-:where(dialog, .drawer, .card, .panel, .tool-card, .lab-card, .home-discovered, .device-row, .drawer-section, .job-body, .git-repository-card, .git-saves, .git-binding-form, .banner) details > summary {
+:where(dialog, .drawer, .card, .panel, .tool-card, .lab-card, .vm-labs, .device-row, .drawer-section, .job-body, .git-repository-card, .git-saves, .git-binding-form, .banner) details > summary {
   font-size: 13px;
   font-weight: 600;
   color: var(--accent-strong);
 }
-:where(dialog, .card, .panel, .tool-card, .drawer-section, .home-discovered, .banner) > details { margin-top: 12px; font-size: 13px; }
+:where(dialog, .card, .panel, .tool-card, .drawer-section, .vm-labs, .banner) > details { margin-top: 12px; font-size: 13px; }
 :where(dialog, .card, .panel, .tool-card, .drawer-section) > details > :not(summary) { margin-top: 8px; }
 
 /* --------------------------------------------------------------------------
@@ -1335,7 +1359,30 @@ tr:last-child td { border-bottom: 0; }
 /* --------------------------------------------------------------------------
    14. Devices: rows, rail, node actions
    -------------------------------------------------------------------------- */
-.device-list { display: grid; gap: 8px; }
+.device-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+/* The Devices tab: one grid for the whole list, so identity, state and actions start at the same x in
+   every row whatever a row contains (each row is a subgrid of it). Every cell starts with a line as
+   high as the buttons, so the name, the state and Open CLI share a baseline and a reason only grows
+   its own row downwards. Without subgrid the rows fall back to their own three columns below. */
+#device-list { grid-template-columns: minmax(200px, 1.1fr) minmax(240px, 1.9fr) auto; column-gap: 20px; }
+#device-list > li { grid-column: 1 / -1; }
+#device-list .device-row { align-items: start; }
+@supports (grid-template-columns: subgrid) { #device-list .device-row { grid-template-columns: subgrid; } }
+#device-list .device-row > div:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
+#device-list .device-row > div:first-child .node-name { display: inline-flex; align-items: center; min-height: 32px; max-width: 100%; overflow-wrap: anywhere; }
+#device-list .device-row > div:first-child .platform { margin-left: 0; }
+#device-list .device-row > div:nth-child(2) { display: grid; grid-template-rows: minmax(32px, auto) auto; align-items: center; justify-items: start; }
+#device-list .device-row .pill { margin-right: 0; }
+#device-list .device-row .row-reason { margin: 0 0 2px; max-width: 60ch; }
+#device-list .device-row .node-actions { flex-wrap: nowrap; align-items: center; min-height: 32px; }
+/* heading, search and Technical view: one line, controls of one height, flush with the list's edges */
+#devices-view .section-heading .actions { align-items: stretch; }
+#devices-view .section-heading .actions > * { min-height: 36px; margin: 0; }
+@media (min-width: 761px) {
+  #devices-view .section-heading { align-items: end; }
+  #devices-view .section-heading .actions { flex-wrap: nowrap; }
+  #devices-view #search { flex: 0 1 280px; width: 280px; min-width: 0; }
+}
 .device-row {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
@@ -2101,22 +2148,24 @@ details.git-saved-job > :last-child { padding-bottom: 12px; }
   font-weight: 400;
   cursor: pointer;
   color: var(--ink);
-  overflow-wrap: anywhere;
+  min-width: 0;
 }
 .git-outline summary::-webkit-details-marker { display: none; }
-.git-outline summary::before {
-  content: "";
-  flex: none;
-  width: 0;
-  height: 0;
-  border: 4px solid transparent;
-  border-left: 5px solid var(--muted);
-  transition: transform .12s;
-}
-.git-outline details[open] > summary::before { transform: rotate(90deg); }
-.git-outline .git-leaf > summary::before { visibility: hidden; }
+/* The twisty is a control of its own: it opens and closes a branch without selecting the folder. */
+.git-twist, .git-twist-space { flex: none; width: 18px; height: 18px; margin: 0 -3px 0 -4px; }
+.git-twist { display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; background: none; cursor: pointer; }
+.git-twist::before { content: ""; width: 0; height: 0; border: 4px solid transparent; border-left: 5px solid var(--muted); margin-left: 4px; transition: transform .12s; }
+.git-twist[aria-expanded="true"]::before { transform: rotate(90deg); margin: 4px 0 0; }
+.git-twist:hover { background: var(--line); }
 .git-outline summary:hover { background: var(--surface); }
+.git-outline-name { min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.git-outline summary .git-tag { flex: none; }
+/* selected = the folder being looked at; current = the folder this lab saves to. They are different
+   things and look different: a filled row against an accent bar with the This lab tag. */
 .git-outline summary.selected { background: var(--accent-soft); color: var(--accent-strong); }
+.git-outline summary.current { box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+.git-outline summary.holds-current { box-shadow: inset 3px 0 0 var(--line-strong); }
+.git-tag.holds { background: none; color: var(--muted); font-weight: 500; padding-left: 0; }
 .git-outline-children { padding-left: 14px; }
 .git-folder-icon { width: 14px; height: 11px; border-radius: 2px; background: var(--line-strong); position: relative; flex: none; margin-top: 2px; }
 .git-folder-icon::before { content: ""; position: absolute; left: 0; top: -3px; width: 6px; height: 3px; border-radius: 2px 2px 0 0; background: inherit; }
@@ -2426,7 +2475,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .schedule-form { justify-content: flex-start; }
   .job summary { flex-wrap: wrap; }
   footer { flex-direction: column; gap: 8px; }
-  .device-row { grid-template-columns: 1fr; }
+  .device-row, #device-list, #device-list .device-row { grid-template-columns: 1fr; }
+  #device-list .device-row .node-actions { flex-wrap: wrap; }
+  #devices-view .section-heading .actions, #devices-view #search { width: 100%; }
+  #devices-view #search { flex: 1 1 160px; }
   .device-row .node-actions, .device-rail .device-row { justify-content: flex-start; grid-template-columns: 1fr; }
   .topology-stage { height: clamp(360px, calc(100dvh - 240px), 600px); min-height: 360px; }
   .topology-stage .map-tools { position: static; max-width: none; justify-content: flex-start; margin: 8px; }
@@ -2448,7 +2500,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .deployment-bar .actions { padding: 0; }
   .git-progress-bar { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px; }
   .git-save-control { align-self: flex-end; }
-  .git-save-options { width: min(260px, calc(100vw - 48px)); }
+  .git-save-control.menu-stacked .git-save-options { width: min(274px, calc(100vw - 48px)); }
   .git-repository-card, .git-binding-form, .git-saves { padding: 14px; }
   .git-repository-card .actions { width: auto; }
   .git-repository-card .button, #git-version-dialog .button { white-space: normal; }

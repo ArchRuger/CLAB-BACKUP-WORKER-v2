@@ -1,4 +1,4 @@
-// home.js: the Home page cards, the single-lab rule, escaping, the Start reason and the discovered section.
+// home.js: the Home page cards, the single-lab rule, escaping, the Start reason and the count of labs found on the VM.
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const NOW=Date.parse('2026-09-16T12:00:00Z');
@@ -12,7 +12,7 @@ function harness(state,{lastLab='',opened={},quick}={}){
   json:async(...args)=>{calls.json.push(args);return {};},refresh:async()=>{},notify(){}});
  if(quick)context.opQuickActions=quick;
  for(const file of ['status.js','home.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/'+file),'utf8'),context);
- return {context,element,calls};
+ return {context,element,calls,created:id=>elements.has(id)};
 }
 const running={id:'run',name:'BGP core',favorite:false,nodes:[{name:'r1',ssh_ready:true},{name:'r2',ssh_ready:true}],deployment:{status:'Running'},nos_readiness:{status:'ready',total:2,ready:2},git_binding:{binding_id:'b',repository:{push_url:'https://github.com/x/y'}},vm_project_path:'/labs/bgp.clab.yaml'};
 const stopped={id:'stop',name:'OSPF area 0',favorite:true,nodes:[{name:'s1'},{name:'s2'},{name:'s3'}],deployment:{status:'Not deployed'},vm_project_path:'/labs/ospf.clab.yaml'};
@@ -72,17 +72,18 @@ test('Start shows on labs that are not running, with the reason as visible text 
  const noOps=harness({labs:[stopped]});noOps.context.renderHome();assert.doesNotMatch(noOps.element('home-continue').innerHTML,/data-lab-start/,'no operations module, no Start button');
 });
 
-test('the discovered section shows whenever the VM has a lab that is not in My labs or one was hidden, once the state has loaded',()=>{
- const shown=harness({labs:[running,stopped],discovery:{discovered:[{name:'extra',imported:false}]}});shown.context.renderHome();
- assert.equal(shown.element('home-discovered').hidden,false);assert.equal(shown.element('home-skeleton').hidden,true);
- const imported=harness({labs:[running],discovery:{discovered:[{name:'run',imported:true}],ignored_labs:[]}});imported.context.renderHome();
- assert.equal(imported.element('home-discovered').hidden,true);
- const hiddenLab=harness({labs:[],discovery:{discovered:[],ignored_labs:['old']}});hiddenLab.context.renderHome();
- assert.equal(hiddenLab.element('home-discovered').hidden,false,'excluded labs stay reachable even with zero labs');
- const excludedOnly=harness({labs:[running],discovery:{discovered:[{name:'gone',imported:false,excluded:true}]}});excludedOnly.context.renderHome();
- assert.equal(excludedOnly.element('home-discovered').hidden,true,'an excluded discovery is listed under ignored_labs, not here');
+test('labs the VM has that are not in My labs, and hidden ones, are counted for Manager › Labs found on the VM and never drawn on Home',()=>{
+ const h=harness({labs:[running,stopped],discovery:{discovered:[{name:'extra',imported:false}]}});h.context.renderHome();
+ assert.equal(h.created('home-discovered'),false,'Home no longer has a discovered section');assert.equal(h.element('home-skeleton').hidden,true);
+ const count=d=>JSON.parse(vm.runInContext('JSON.stringify(homeVmLabs('+JSON.stringify(d)+'))',h.context));
+ assert.deepEqual(count({discovered:[{name:'extra',imported:false}]}),{waiting:1,hidden:0,note:'1 not in My labs'});
+ assert.deepEqual(count({discovered:[{name:'run',imported:true}],ignored_labs:[]}),{waiting:0,hidden:0,note:''});
+ assert.deepEqual(count({discovered:[],ignored_labs:['old']}),{waiting:0,hidden:1,note:'1 hidden'},'hidden labs stay reachable even with zero labs');
+ assert.deepEqual(count({discovered:[{name:'gone',imported:false,excluded:true}],ignored_labs:['gone']}),{waiting:0,hidden:1,note:'1 hidden'},'an excluded discovery is listed as hidden, not as waiting');
+ assert.deepEqual(count({discovered:[{name:'a'},{name:'b'}],ignored_labs:['c']}).note,'2 not in My labs · 1 hidden');
+ assert.deepEqual(count(undefined),{waiting:0,hidden:0,note:''});
  const loading=harness({labs:[],loaded:false,discovery:{discovered:[{name:'extra',imported:false}]}});loading.context.renderHome();
- assert.equal(loading.element('home-discovered').hidden,true);assert.equal(loading.element('home-skeleton').hidden,false);
+ assert.equal(loading.element('home-skeleton').hidden,false);
 });
 
 test('card actions are delegated: Open lab selects, Start selects then starts, the star toggles the favourite, ⋯ opens lab operations',async()=>{

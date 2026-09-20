@@ -820,7 +820,7 @@ connection works.
 In the manager:
 
 1. Choose **Manager ▾ › Refresh lab list**, or wait for the next 30-second check.
-2. On Home, under **Also running on the VM**, choose **Add to My labs** on the lab
+2. Open **Manager ▾ › Labs found on the VM…** and choose **Add to My labs** on the lab
    labelled **Ready to import**.
 3. Review its name, device counts, files and warnings, then click **Add lab**.
 4. Confirm the lab appears on **My labs** and that its devices have management
@@ -863,7 +863,7 @@ Automatic import is preferred. Review the preview before saving; cancelling leav
 
 ## Manual fallback
 
-If automatic file reading fails, check **File check details** under **Also running on the VM** on Home for attempted paths and errors. Choose **Manager ▾ › Import lab files…** (or **Import an Ansible inventory…**), then upload the original YAML, inventory and topology/annotations files through the relevant import forms. Annotations alone describe a drawing; supply YAML or topology data for wiring. Missing files, symlinks, oversized files and unusual unresolved definitions can require correction or manual import.
+If automatic file reading fails, check **File check details** under **Manager ▾ › Labs found on the VM…** for attempted paths and errors. Choose **Manager ▾ › Import lab files…** (or **Import an Ansible inventory…**), then upload the original YAML, inventory and topology/annotations files through the relevant import forms. Annotations alone describe a drawing; supply YAML or topology data for wiring. Missing files, symlinks, oversized files and unusual unresolved definitions can require correction or manual import.
 
 The helper accepts regular files without symlink components, with limits of 1 MiB per file, 8 MiB of file content per inspection and 100 labs. A root-owned generated inventory should work with the installed helper; do not make the lab tree world-writable to fix it.
 
@@ -1008,7 +1008,7 @@ All lab operations…** for the complete list, or right-click a lab card on Home
 
 ## Edit the map and export
 
-Choose **Edit map** on the Topology tab, under **Lab actions ▾** or on the
+Choose **Edit map** on the Topology tab, under **Lab actions ▾ › Advanced options** or on the
 **Tools › Map** card. Select a device or annotation on the canvas or from the item
 list. Drag it to move it, or enter coordinates. Add text, boxes, circles or lines;
 edit text, size, colors, opacity and border style in the properties panel.
@@ -1218,13 +1218,13 @@ settings. Neither is required for an image upgrade. Neither destroys live labs.
 |---|---|---|
 | Stop/recreate manager container | Retained in the bind mount | Unchanged |
 | Remove from this manager… | Removes one saved workspace/history entries; backup files and audit logs remain | Unchanged |
-| Stop hiding (Home › Also running on the VM) | Allows discovery to offer that lab again; does not import it | Unchanged |
+| Stop hiding (Manager ▾ › Labs found on the VM…) | Allows discovery to offer that lab again; does not import it | Unchanged |
 | Start fresh, type `RESET` | Clears workspaces, device credentials, schedules, backups, jobs/logs and exclusions; retains VM connection and `state.key` | Unchanged |
 | Stop devices | Workspace retained | Stops the open lab's devices; containers remain |
 | Destroy lab… | Workspace retained | Removes the selected deployment's containers and its generated lab folder (`containerlab destroy --cleanup`); the review names the folder |
 | Delete topology file | Separate operation | Removes original source only when undeployed; saves a recovery copy |
 
-After **Remove from this manager…**, the default exclusion keeps the lab hidden. On Home under **Also running on the VM**, choose **Stop hiding** on the hidden lab to offer it again. The next import still needs confirmation.
+After **Remove from this manager…**, the default exclusion keeps the lab hidden. Under **Manager ▾ › Labs found on the VM…**, choose **Stop hiding** on the hidden lab to offer it again. The next import still needs confirmation.
 
 Close active terminals and wait for jobs before **Start fresh**. Resolve pending
 Git saves, or explicitly choose **Keep snapshot only** to dismiss their export
@@ -1754,12 +1754,13 @@ first save asks where the lab's progress should be saved (repository, folder and
 devices). The same settings live on the **Progress** tab under **Save location**:
 **Change folder…** opens the folder browser **Folders in this repository** (with
 **New folder…**, **Save this lab here**, **Use a different repository…** and
-**Connect by URL…**), and **Save settings** holds the devices included in every save
-and **Let me review changes before they are uploaded**; **Save location settings…**
+**Connect by URL…**), and **Save settings** holds the devices included in every save;
+**Save location settings…**
 in the **Save progress ▾** menu opens the same place. Select the registered checkout,
 review the included devices, review the branch/destination and acknowledge that
 device configurations will be committed there. The device selection is independent
-of the **Include in backups** checkboxes. The review option pauses before uploading.
+of the **Include in backups** checkboxes. Every save pauses for your review before anything
+is uploaded; there is no setting that skips it.
 Save the settings, then run the final installation report from the **ordinary
 Ubuntu account** before your first save:
 
@@ -1801,11 +1802,10 @@ flowchart TD
     F --> G{Files changed?}
     G -- Yes --> K[Commit exact changed files]
     G -- No --> L[Keep existing commit]
-    K --> R{Review before push enabled?}
-    L --> R
-    R -- Yes --> S[Review changes; choose Upload now]
-    R -- No --> H[Push selected branch]
-    S --> H
+    K --> S[Review before uploading: see what changed]
+    L --> S
+    S -- Upload these changes --> H[Push selected branch]
+    S -- Not now --> N[Saved on this VM; waiting for your review]
     H -- Verified --> I[Saved to Git]
     H -- Offline or rejected --> J[Saved on this VM; Upload now]
 ```
@@ -1846,7 +1846,7 @@ saves, so a separate timestamp folder is unnecessary for each Save progress.
 
 | Action | Meaning |
 |---|---|
-| Save progress (lab header, Progress tab) | Capture, export latest, commit changes and push; honor the review preference. |
+| Save progress (lab header, Progress tab) | Capture, export latest and commit changes on the VM; push only after the mandatory review (*Upload these changes*). |
 | Save on this VM only (Save progress ▾, Progress › More ▾) | Capture and commit without pushing. |
 | Create checkpoint… | Update latest and preserve the same capture under a new descriptive checkpoint name. |
 | Set baseline… (Progress › More ▾) | Select a complete capture to change baseline only; review explicit replacement if a baseline already exists. |

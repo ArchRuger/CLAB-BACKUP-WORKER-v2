@@ -67,8 +67,17 @@ def home(r):
     r.check('home: lab cards render', len(cards) >= 1, cards)
     r.check('home: skeleton hidden after load', r.js('() => document.getElementById("home-skeleton").hidden'))
     r.check('home: no VM banner when the VM is connected', r.js('() => document.getElementById("home-vm-banner").hidden'))
-    r.check('home: other labs on the VM listed', not r.js('() => document.getElementById("home-discovered").hidden'))
+    r.check('home: no discovered section on the main page', r.js('() => !document.getElementById("home-discovered")'))
     r.check('home: no raw deployment words in pills', not any(c['pill'] in ('Unlinked', 'Not deployed', 'Partially running') for c in cards), cards)
+    # Labs the VM has that are not in My labs live under the Manager menu
+    p.click('#manager-button')
+    p.wait_for_selector('#manager-menu-list:not([hidden])')
+    r.check('manager menu: labs found on the VM are counted', 'not in My labs' in r.js('() => document.getElementById("manager-vm-labs-note").textContent'))
+    p.click('#manager-vm-labs')
+    p.wait_for_selector('#vm-labs-dialog[open]')
+    r.check('labs found on the VM: a lab can be added', r.js('() => document.querySelectorAll("#discovered-labs [data-setup-name]").length') >= 1)
+    r.shot('home-vm-labs-dialog')
+    p.click('#vm-labs-dialog .dialog-actions [data-dismiss]')
     # Manager menu open across a poll
     p.click('#manager-button')
     p.wait_for_selector('#manager-menu-list:not([hidden])')
@@ -231,7 +240,7 @@ def progress(r):
     r.check('progress: apply offered only where a restore artifact exists', info['apply'] >= 2, info['apply'])
     r.check('progress: compare with my latest save on the other rows', info['compare'] >= 2, info['compare'])
     r.check('progress: recent saves in student words', len(info['saves']) >= 2 and any('Progress saved to Git' in s for s in info['saves']), info['saves'])
-    r.check('progress: save location collapsed for a connected lab', info['locationHead'] == 'Save location' and info['folderOpen'] is False, info)
+    r.check('progress: save location shows its folder browser for a connected lab', info['locationHead'] == 'Save location' and info['folderOpen'] is True, info)
     r.check('progress: advanced details filled', (not info['advancedHidden']) and 'Verified push destination' in info['pushUrl'], info['pushUrl'])
     r.check('progress: last configuration change is one click away', info['lastChange'].startswith('Last configuration change'), info['lastChange'])
     r.check('progress: header line agrees', info['header'].startswith('Saved to Git'), info['header'])
@@ -283,8 +292,8 @@ def progress(r):
     r.check('checkpoint dialog: name sanitised live', r.js('() => document.getElementById("git-checkpoint-name").value === "ospf-done" && document.getElementById("git-checkpoint-preview").textContent === "Saved as: ospf-done"'))
     r.shot('38-checkpoint')
     p.click('#git-save-cancel')
-    # Change folder… opens the browser inside the form
-    p.click('#git-change-folder > summary')
+    # Change folder… is unfolded when Save location is entered: the browser is inside the form
+    r.check('save location: Change folder is open on entry', r.js('() => document.getElementById("git-change-folder").open'))
     p.wait_for_selector('#git-places-panel .git-places-head', timeout=15000)
     places = r.js('() => ({use: document.querySelector("[data-git-places-action=use]")?.textContent, crumbs: [...document.querySelectorAll(".git-crumbs button")].map(b => b.textContent), select: document.getElementById("git-binding-id")?.value, heading: document.querySelector("#git-change-folder h3")?.textContent})')
     r.check('save location: folder browser with Save this lab here and the heading', places['use'] == 'Save this lab here' and places['heading'] == 'Folders in this repository', places)
@@ -294,8 +303,16 @@ def progress(r):
     p.wait_for_function('() => document.getElementById("git-save-progress").textContent === "Saving…"', timeout=10000)
     r.check('save: header button reads Saving…', True)
     r.check('save: no job window for a plain save', r.js('() => !document.getElementById("git-job-dialog")?.open'))
-    p.wait_for_function('() => document.getElementById("git-save-progress").textContent === "Save progress"', timeout=60000)
-    r.check('save: finished and the status card agrees', r.js('() => document.getElementById("git-progress-status").textContent.startsWith("Saved to Git")'), r.js('() => document.getElementById("git-progress-status").textContent'))
+    # The review before an upload is mandatory: the save stops on the VM, the review opens by itself and
+    # only its button uploads.
+    p.wait_for_selector('#git-diff-dialog[open] #git-review-push', timeout=60000)
+    r.check('save: the review opens before anything is uploaded', r.js('() => document.querySelector("#git-diff-dialog h2").textContent') == 'Review before uploading' and r.js('() => document.getElementById("git-progress-status").textContent.startsWith("Saved on this VM")'), r.js('() => document.getElementById("git-progress-status").textContent'))
+    r.shot('39-review-before-upload')
+    p.click('#git-review-push')
+    p.wait_for_function('() => document.getElementById("git-progress-status").textContent.startsWith("Saved to Git")', timeout=60000)
+    r.check('save: uploaded after the review and the status card agrees', True)
+    if r.js('() => !!document.getElementById("git-job-dialog")?.open'):
+        p.keyboard.press('Escape')
     # An unbound lab: the header button leads to the first-save dialog
     p.click('#crumb-home')
     p.wait_for_selector('#home:not([hidden])')

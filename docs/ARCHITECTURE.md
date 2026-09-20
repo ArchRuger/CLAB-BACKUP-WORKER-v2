@@ -112,7 +112,7 @@ flowchart LR
     S[("Session store<br/>memory only · 15 min rings<br/>rates from counter deltas")]
     X["/api/telemetry/metrics<br/>Prometheus text: names, states, rates"]
     A["/api/labs/{id}/telemetry<br/>settings · retry · remove-config"]
-    U["Lab actions ▾ › Telemetry settings…<br/>Tools › Open lab map ↗ / Open network dashboard ↗"]
+    U["Lab actions ▾ › Advanced options › Telemetry settings…<br/>Tools › Open lab map ↗ / Open network dashboard ↗"]
     MP["Map publisher<br/>one provisioned dashboard per lab<br/>data/telemetry/dashboards"]
     G["Prometheus scrapes every 10 s, keeps 15 min<br/>Grafana on demand (started from the lab, stopped when idle):<br/>Lab overview · Interfaces · BGP · Lab maps"]
     N[("NOS gNMI<br/>6030 · 57400 · 32767")]

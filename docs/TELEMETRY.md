@@ -34,7 +34,7 @@ and the lab map follow what you do on the devices.
   `TELEMETRY_GRAFANA_IDLE_MINUTES` in `clab-backup-ui/.env` (0 keeps Grafana running once
   started; reload the manager after a change with `recreate-manager.sh`). Prometheus keeps
   running: it is small and must scrape while a lab streams.
-- **Telemetry settings…** on the **Tools** tab (also under **Lab actions ▾**): automatic
+- **Telemetry settings…** on the **Tools** tab (also under **Lab actions ▾ › Advanced options**): automatic
   telemetry on or off for the
   lab, the gNMI login profile, removal of the configuration lines the manager added,
   the reason a node is not streaming, and a retry for failed nodes.

@@ -36,6 +36,42 @@ test('diffs and job output escape configuration, filenames, notes and labels',()
  const output=context.gitJobMarkup({status:'push_pending',message:attack,target:attack,commit:attack,created:'2026-09-11T12:00:00Z'});
  assert.doesNotMatch(output,/<img/);assert.match(output,/push pending/);
 });
+test('every Save progress option is explained from what it really does: a local save never uploads, history saves nothing',()=>{
+ const context=makeContext();vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
+ const binding={binding_id:'b',repository:{path:'/home/me/labs/Course-Labs',prefix:'JunOS-TEST-2/working/',push_url:'https://github.com/me/Course-Labs.git'}};
+ const help=action=>context.gitSaveHelp(action,binding);
+ const actions=Array.from(vm.runInContext('GIT_SAVE_HELP_ACTIONS',context));assert.deepEqual(actions,['checkpoint','local','history','settings']);
+ assert.match(help('checkpoint').what,/Reads the configuration of every included device now/);assert.match(help('checkpoint').what,/named version that later saves never overwrite/);
+ assert.match(help('checkpoint').where,/checkpoints\/<name> in Course-Labs › JunOS-TEST-2\/working/);assert.match(help('checkpoint').where,/uploaded to github\.com only after you have seen what changed and confirmed the upload/);
+ assert.match(help('local').what,/without uploading anything/);assert.match(help('local').where,/Stays in the lab VM’s copy of Course-Labs › JunOS-TEST-2\/working/);assert.match(help('local').where,/Upload saved progress/);
+ assert.doesNotMatch(help('local').where,/github/,'a local save never names the upload host as its destination');
+ assert.match(help('history').what,/Nothing is read from the devices and nothing new is saved/);
+ assert.match(help('settings').where,/Nothing is saved or moved until you confirm/);
+ assert.equal(context.gitSaveHelp('push',binding),null);
+ assert.match(context.gitSaveHelp('checkpoint',{binding_id:'b',repository:{path:'/r'}}).where,/the online repository/,'an unknown push URL is not given a host name');
+ const attack={binding_id:'b',repository:{path:'/labs/<img src=x onerror=1>',push_url:'https://github.com/x/y'}};
+ assert.doesNotMatch(context.gitSaveHelpMarkup(context.gitSaveHelp('local',attack)),/<img/);
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ for(const action of actions){assert.match(html,new RegExp('data-git-action="'+action+'" aria-describedby="git-save-help-'+action+'"'));assert.match(html,new RegExp('<div id="git-save-help-'+action+'" hidden>'));}
+});
+test('the help pane shows one explanation at a time and the default line when no option is active',()=>{
+ const context=makeContext(),els={};for(const id of ['default','checkpoint','local','history','settings'])els['git-save-help-'+id]={hidden:id!=='default',innerHTML:''};
+ context.$=id=>els[id]||null;
+ context.gitRenderSaveHelp({binding_id:'b',repository:{path:'/r/Labs'}});assert.match(els['git-save-help-local'].innerHTML,/<strong>Save on this VM only<\/strong>/);
+ const first=els['git-save-help-local'].innerHTML;els['git-save-help-local'].innerHTML='kept';context.gitRenderSaveHelp({binding_id:'b',repository:{path:'/r/Labs'}});assert.equal(els['git-save-help-local'].innerHTML,'kept','an unchanged text is not rewritten on a poll');assert.ok(first);
+ context.gitShowSaveHelp('local');assert.equal(els['git-save-help-local'].hidden,false);assert.equal(els['git-save-help-default'].hidden,true);assert.equal(els['git-save-help-checkpoint'].hidden,true);
+ context.gitShowSaveHelp('history');assert.equal(els['git-save-help-local'].hidden,true);assert.equal(els['git-save-help-history'].hidden,false);
+ context.gitShowSaveHelp('');assert.equal(els['git-save-help-history'].hidden,true);assert.equal(els['git-save-help-default'].hidden,false);
+});
+test('the Save progress menu is placed where it fits: right-aligned, from the left of a wrapped control, stacked when the window is too narrow',()=>{
+ const context=makeContext(),place=box=>JSON.parse(JSON.stringify(context.gitSaveMenuPlacement(box)));
+ assert.deepEqual(place({left:690,right:873,vw:1366}),{side:'right',stacked:false},'a desktop header');
+ assert.deepEqual(place({left:440,right:622,vw:853}),{side:'right',stacked:false},'150 % zoom, header not wrapped');
+ assert.deepEqual(place({left:16,right:198,vw:640}),{side:'left',stacked:false},'200 % zoom, the control wrapped to the left edge');
+ assert.deepEqual(place({left:16,right:198,vw:512}),{side:'left',stacked:true},'250 % zoom: the explanation goes under the options');
+ assert.deepEqual(place({left:300,right:482,vw:500}),{side:'right',stacked:true});
+ assert.deepEqual(place({left:10,right:192,vw:260}),{side:'left',stacked:true},'nothing fits: the side with more room');assert.deepEqual(place({left:60,right:242,vw:260}),{side:'right',stacked:true});
+});
 test('Git Unix commit timestamps are interpreted as seconds',()=>{
  const context=makeContext();assert.equal(context.gitTime(0),'1970-01-01T00:00:00.000Z');assert.equal(context.gitTime(1789128000),'2026-09-11T12:00:00.000Z');
  assert.equal(context.gitTime('2026-09-11T12:00:00Z'),'2026-09-11T12:00:00.000Z');
@@ -82,6 +118,36 @@ test('one-click save captures fresh configurations and delegates review preferen
  context.gitSubmitSave=async(id,request)=>calls.push({id,request});
  await context.gitSaveProgress();assert.equal(calls.length,1);assert.equal(calls[0].id,'lab');assert.equal(calls[0].request.target,'latest');assert.equal(calls[0].request.push,true);assert.equal(calls[0].request.node_names,undefined);
  let opened=0;context.gitLoadContext=async()=>({binding:null});context.gitFirstSave=async()=>{opened++;};await context.gitSaveProgress();assert.equal(opened,1,'an unbound lab goes to the first-save flow');assert.equal(calls.length,1,'and nothing is saved yet');
+});
+test('the review before an upload is mandatory: every upload of an unreviewed save goes through the review window, and only its button uploads',async()=>{
+ const context=makeContext(),elements=new Map(),dialogs=new Map(),calls=[],toasts=[];
+ const element=()=>({onclick:null,innerHTML:'',listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},querySelectorAll:()=>[]});
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;context.notify=m=>toasts.push(m);context.opTask=async(dialog,fn)=>fn();context.refresh=async()=>{};
+ context.opDialog=(id,title,html)=>{for(const stale of ['git-review-cancel','git-review-push'])elements.delete(stale);for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;this.onclose?.();},querySelector:()=>null};dialogs.set(id,dialog);return dialog;};
+ context.json=async(endpoint,method,payload)=>{calls.push({endpoint,payload});return endpoint.endsWith('/compare')?{files:[{name:'r1.cfg',status:'modified',before:'a',after:'b'}]}:{id:'j',lab_id:'lab',status:'queued',commit:'c'.repeat(40),created:'2026-09-11T12:00:00Z'};};
+ const pending={id:'j',lab_id:'lab',status:'review_pending',target:'latest',commit:'c'.repeat(40),created:'2026-09-11T12:00:00Z'};
+ assert.equal(context.gitNeedsReview(pending),true);assert.equal(context.gitNeedsReview({...pending,reviewed:'2026-09-11T12:01:00Z'}),false);assert.equal(context.gitNeedsReview({...pending,commit:''}),false);
+ assert.equal(context.gitNeedsReview({...pending,target:'move'}),false,'a folder move has no configuration change to review');assert.equal(context.gitNeedsReview({...pending,status:'committed'}),true,'a local save uploaded later is reviewed too');
+ assert.equal(context.gitUploadLabel(pending),'Review and upload…');assert.equal(context.gitUploadLabel({...pending,reviewed:'x'}),'Upload now');assert.equal(context.gitUploadLabel({...pending,commit:''}),'Retry save, then review');
+ // Cancel: nothing is uploaded and nothing is reported as uploaded
+ await context.gitReviewJob(pending);const review=dialogs.get('git-diff-dialog');
+ assert.equal(review.title,'Review before uploading');assert.match(review.html,/Nothing is uploaded to the online repository unless you choose <strong>Upload these changes<\/strong>/);assert.match(review.html,/r1\.cfg/);
+ elements.get('git-review-cancel').onclick();assert.equal(review.open,false);assert.match(toasts[0],/^Not uploaded\. The save stays on the lab VM/);
+ assert.deepEqual(calls.map(c=>c.endpoint),['/labs/lab/git/compare'],'declining sends no upload request');
+ // Proceed: the upload states that the review happened
+ await context.gitReviewJob(pending);await elements.get('git-review-push').listeners.click();
+ assert.equal(calls[calls.length-1].endpoint,'/git/jobs/j/retry');assert.equal(JSON.stringify(calls[calls.length-1].payload),'{"push":true,"reviewed":true}');
+ // The Recent saves button and the job window lead to the review, never straight to the upload
+ calls.length=0;context.state.git_jobs=[pending];
+ await context.gitSavesAction({dataset:{gitJobUpload:'j'}},'lab');assert.deepEqual(calls.map(c=>c.endpoint),['/labs/lab/git/compare']);
+ await context.gitShowJob('j',pending);const actions=elements.get('git-job-actions').innerHTML;
+ assert.match(actions,/data-git-job-action="review">Review and upload…/);assert.doesNotMatch(actions,/data-git-job-action="push"/);assert.match(actions,/data-git-job-action="dismiss">Keep snapshot only/);
+ // A synced save is reviewed for reading only: no decision, no upload button
+ await context.gitReviewJob({...pending,status:'synced',pushed:true});assert.equal(dialogs.get('git-diff-dialog').title,'Review this save');assert.equal(elements.get('git-review-push'),undefined);assert.equal(elements.get('git-review-cancel'),undefined);
+});
+test('the save location form no longer offers to skip the review and never sends the old preference',()=>{
+ assert.doesNotMatch(source,/git-review-before-push|Let me review changes/);assert.doesNotMatch(source,/review_before_push\s*:/,'no request carries the preference any more');
+ assert.match(source,/Nothing is uploaded without you/);
 });
 test('an uncertain save response retries with the same persistent request ID',async()=>{
  const context=makeContext(),calls=[];let fail=true;

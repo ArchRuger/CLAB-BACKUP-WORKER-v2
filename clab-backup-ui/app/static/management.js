@@ -13,6 +13,14 @@ document.body.insertAdjacentHTML('beforeend', `
  <p class="form-error" role="alert"></p>
  <div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Cancel</button><button type="submit" class="button primary">Add lab</button></div>
 </form></dialog>
+<dialog id="vm-labs-dialog" aria-labelledby="vm-labs-title"><div class="vm-labs">
+ <div class="dialog-head"><h2 id="vm-labs-title">Labs found on the VM</h2><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
+ <p>Labs the VM reports that are not in My labs. Add one to open its devices here; nothing on the VM changes.</p>
+ <p id="vm-labs-empty" class="caption" role="status" hidden></p>
+ <div id="discovered-labs"></div><div id="excluded-labs"></div>
+ <details id="discovery-files"><summary>File check details</summary><div id="discovery-file-list"></div></details>
+ <div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Close</button></div>
+</div></dialog>
 <dialog id="remove-lab-dialog"><form id="remove-lab-form">
  <div class="dialog-head"><h2 id="remove-lab-title">Remove this lab from the manager?</h2><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
  <p id="remove-lab-name"></p>
@@ -20,7 +28,7 @@ document.body.insertAdjacentHTML('beforeend', `
  <p>This removes the lab from My labs: its device list, map, saved device logins, backup schedule and backup history entries. Backup files stay on this VM's disk.</p>
  <p>Nothing on the lab VM changes: the running devices and the topology files stay. Progress you saved to Git stays in the repository.</p>
  <label class="checkbox-label"><input id="remove-lab-exclude" type="checkbox" checked> Don't offer this lab for import again</label>
- <p class="form-help">Untick it if you want the lab to reappear under "Also running on the VM" on the Home page. Either way, adding it back needs your confirmation.</p>
+ <p class="form-help">Untick it if you want the lab to be offered again under Manager ▾ › Labs found on the VM…. Either way, adding it back needs your confirmation.</p>
  <p class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Cancel</button><button type="submit" class="button danger">Remove lab</button></div>
 </form></dialog>
 <dialog id="setup-dialog"><form id="setup-form">
@@ -89,6 +97,9 @@ function renderManagement(){
  // The same reports (every lab on the VM, imported ones included) stay reachable under Advanced › Deployment details.
  mgmtMarkup($('advanced-file-list'),fileMarkup);
  mgmtMarkup($('excluded-labs'),(discovery.ignored_labs||[]).length?'<p class="side-hint">Removed from this manager earlier</p>'+(discovery.ignored_labs||[]).map(name=>`<div class="empty-lab"><button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again · or stop hiding it so it appears automatically</small></button><button type="button" class="button secondary small" data-clear-exclusion="${esc(name)}">Stop hiding</button></div>`).join(''):'');
+ const found=typeof homeVmLabs==='function'?homeVmLabs(discovery):{waiting:0,hidden:0,note:''};
+ if($('manager-vm-labs-note')){$('manager-vm-labs-note').textContent=found.note;$('manager-vm-labs-note').hidden=!found.note;}
+ if($('vm-labs-empty')){$('vm-labs-empty').hidden=!!(found.waiting||found.hidden);$('vm-labs-empty').textContent=!discovery.configured?'Connect the VM first (Manager ▾ › VM connection…).':discovery.connected?'Every lab the VM reports is already in My labs.':'The VM does not answer, so its labs cannot be listed right now.';}
  maybePromptVmConnection();
  renderLanding(discovery,lab);
  if(!lab)return;
@@ -144,6 +155,7 @@ $('empty-discovered-list').onclick=e=>{const b=e.target.closest('[data-setup-nam
 $('import-top').onclick=()=>current()?openImport(true):openDeploy();
 $('update-definition').onclick=()=>openSetup(true);
 $('legacy-import').onclick=()=>{$('setup-dialog').close();openImport(!!$('setup-lab-id').value);};
+if($('manager-vm-labs'))$('manager-vm-labs').onclick=()=>{if(!$('vm-labs-dialog').open)$('vm-labs-dialog').showModal();};
 $('discovered-labs').onclick=e=>{const b=e.target.closest('[data-setup-name]');if(b)importDiscovered(b.dataset.setupName);};
 $('setup-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  const result=await(await api('/lab-definitions',{method:'POST',body:new FormData(e.target)})).json();
@@ -202,7 +214,7 @@ $('remove-lab-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,as
  $('remove-lab-dialog').close();
  if(activeId===id){if(typeof goHome==='function')goHome();else{activeId='';sessionStorage.removeItem('activeLab');if($('details-dialog').open)$('details-dialog').close();}}
  await refresh();
- notify(exclude?'Lab removed. You can add it back from Home › Also running on the VM.':'Lab removed. It can be offered for import again after confirmation.');
+ notify(exclude?'Lab removed. You can add it back from Manager ▾ › Labs found on the VM….':'Lab removed. It can be offered for import again after confirmation.');
 });};
 $('excluded-labs').onclick=e=>{
  const clear=e.target.closest('[data-clear-exclusion]');if(clear){openExclusionMenu(clear.dataset.clearExclusion);return;}
@@ -237,7 +249,7 @@ async function importDiscovered(name){
 $('auto-import-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()=>{
  const preview=importPreview;if(!preview)throw new Error('Preview the lab again before importing.');
  const lab=await json('/discovery/import','POST',{name:preview.name,token:preview.token});
- $('auto-import-dialog').close();await refresh();if(typeof selectLab==='function')selectLab(lab.id);else{activeId=lab.id;sessionStorage.setItem('activeLab',activeId);}notify('Lab added from the VM files.');
+ $('auto-import-dialog').close();if($('vm-labs-dialog')&&$('vm-labs-dialog').open)$('vm-labs-dialog').close();await refresh();if(typeof selectLab==='function')selectLab(lab.id);else{activeId=lab.id;sessionStorage.setItem('activeLab',activeId);}notify('Lab added from the VM files.');
 });};
 $('setup-auto-import').onclick=()=>importDiscovered($('setup-deployed-name').value);
 
@@ -253,7 +265,7 @@ $('manager-settings').onclick=()=>{
  });
 };
 function openExclusionMenu(name){
- const dialog=opDialog('exclusion-menu','Hidden lab',`<p><strong>${esc(name)}</strong></p><p>This lab was removed from the manager and is hidden from automatic import. Stop hiding it so it can appear under "Also running on the VM" again. Nothing is imported or changed on the VM.</p><button class="button primary" id="clear-exclusion">Stop hiding</button>`);
+ const dialog=opDialog('exclusion-menu','Hidden lab',`<p><strong>${esc(name)}</strong></p><p>This lab was removed from the manager and is hidden from automatic import. Stop hiding it so it is offered under Manager ▾ › Labs found on the VM… again. Nothing is imported or changed on the VM.</p><button class="button primary" id="clear-exclusion">Stop hiding</button>`);
  $('clear-exclusion').onclick=()=>opTask(dialog,async()=>{await json('/discovery/forget-exclusion','POST',{name});dialog.close();await refresh();notify('The lab can appear for import again.');});
 }
 $('excluded-labs').addEventListener('contextmenu',e=>{const button=e.target.closest('[data-allow-import]');if(button){e.preventDefault();openExclusionMenu(button.dataset.allowImport);}});

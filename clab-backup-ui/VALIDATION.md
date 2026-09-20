@@ -1,3 +1,258 @@
+# UI review 001, step 8: the Devices tab lines up — 1.30.9
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.8 (`473a9bd`,
+pushed, CI green). Requirement UI-006 of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no live VM,
+lab or device was involved**, and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- Before: screenshots of the tab at 1366×768 and 853×480 and the measured positions
+  (`~/ui-review/review-001/chunk08/before-devices-*.png`): list 40 px right of the heading, rows of 58
+  and 68 px with the pill at different heights.
+- `node --test tests/*.js`: 177 of 177 (new: the stylesheet rules this layout depends on, and the
+  rail's own named-area grid left alone). `python -m unittest discover -s tests -t tests`: 708 tests,
+  1 skipped, OK. `python3 deploy/verify-release.py`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 97 of 97 at three viewports, 0 console errors, 0 page
+  errors. `docs/ui-review-001/tools/check_ui006.py` 89 of 89, measuring the rendered layout at
+  1920×1080, 1366×768 and a 1280×720 laptop at 125 %, 150 % and 200 % zoom, each with the fixture's
+  states (Ready, Starting, Needs credentials, Needs attention, an unmapped device) and again with one
+  row given a 66-character name and a three-line reason: the list is flush with the heading on both
+  sides; identity, state, *Open CLI* and *Details* each start at one x in every row; name, state and
+  *Open CLI* share one line (three-column layouts); nothing overlaps, is clipped or leaves its row; no
+  sideways scrolling; search and *Technical view* have one height on one line; every state keeps its
+  label and reason. Then: search filters, the empty result spans the list, *Technical view* opens the
+  table, *Details* opens the panel, *Open CLI* opens the terminal tab, and the Topology rail is flush
+  with its heading. Screenshots inspected: `~/ui-review/review-001/chunk08/` on the VM.
+
+## Seen and left alone
+
+At 200 % zoom on a 1280×720 laptop (640 CSS pixels) the lab banner above the tabs is drawn far too tall
+and the top bar's brand overlaps the breadcrumb. Both predate this work and are outside UI-006.
+
+# UI review 001, step 7: the folder tree expands, collapses and keeps its state — 1.30.8
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.7 (`066a39e`,
+pushed, CI green). Requirement UI-008 (tree part) of `docs/ui-review-001/CHECKLIST.md`. **Fixture only:
+no live VM, Git repository, lab or device was involved**, and the development manager running on the VM
+was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 176 of 176. New in `test_git_places_ui.js`: the expansion rules
+  (`gitAncestors`, `gitDefaultExpanded`, `gitToggleFolder`, `gitRevealFolder`, `gitKeepExpanded`), an
+  ancestor of the save location collapsing and staying collapsed, *This lab is inside*, another branch
+  open at the same time, `current` against `selected`, the browsing sentence, no arrow on leaves or on
+  the top level, escaping; and the panel over a fake container: branches, selection and focus kept
+  across a refresh of the same checkout with changed files, a page-made selection revealed once, another
+  repository reset to its default.
+- `python -m unittest discover -s tests -t tests`: 708 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check app/static/git-places.js`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 97 of 97 at three viewports, 0 console errors, 0 page
+  errors. `docs/ui-review-001/tools/check_ui008b.py` 21 of 21: the first display leads to the save
+  folder, marked current with *This lab*; an ancestor of it collapses without changing the browsed
+  folder or the destination and reads *This lab is inside*; a second branch opens meanwhile; both
+  states survive two polls, the re-render after *Save settings* and a tab change; the ancestor reopens
+  as it was; browsing another folder moves the selection, not the current marker or the destination,
+  and the panel says where the lab saves; a second click closes nothing; the arrow control works from
+  the keyboard and keeps the focus; Right and Left open and close a focused folder without selecting
+  it; a 47-character name stays on one line with its tooltip; a folder the page created is revealed and
+  selected. Screenshots inspected: `~/ui-review/review-001/chunk07/` on the VM.
+
+# UI review 001, step 6: folders made in the folder browser stay — 1.30.7
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.6 (`973fcda`,
+pushed, CI green). Requirement UI-008 (persistence part) of `docs/ui-review-001/CHECKLIST.md`.
+**Fixture and unit level only: no live VM, Git repository, lab or device was involved**, and the
+development manager running on the VM was not rebuilt.
+
+## Reproduction and root cause
+
+The registration logic of the real helper was driven directly (`host_git.register_prefix` with a
+temporary registry, no mocks of its rules) and its result fed into the page's `gitTreeModel`: with the
+lab saving to `JunOS-TEST-2`, creating `JunOS-TEST-2/working` without retiring is **refused**
+("Lab folders in one repository cannot overlap"); with retire the registry holds only
+`JunOS-TEST-2/working`; after a second folder made the same way the registry holds only
+`JunOS-TEST-2/solution` and the tree no longer contains `working`; going back to the parent leaves
+neither. Cause and fix are described in the changelog. `app/host_git.py` was not changed.
+
+## What was run
+
+- `python -m unittest discover -s tests -t tests`: 708 tests, 1 skipped (the opt-in SSH fixture), OK.
+  New in `test_git_progress.py` (`GitPlacesTests`, with a fake helper that retires and refuses overlaps
+  like the real one): the reported sequence (plan `working` under the lab's own folder; the lab moves
+  into it, on to `solution`, back to the parent; the VM keeps one registration and the tree keeps all
+  three), duplicates refused for a planned, a registered and a committed name, no phantom entry after a
+  refusal or a failed store write, persistence across a restart, nothing in `/api/state`, and the
+  removal of an unused planned folder without any VM request.
+- `node --test tests/*.js`: 174 of 174. New in `test_git_places_ui.js`: the model with and without
+  planned folders (the first half asserts the defect), the truthful wording, the folder being a valid
+  destination for its own lab only, the removal offered only for an empty, unregistered, childless
+  folder; *New folder…* for a connected lab sends `plan: true`, selects the folder, says the lab still
+  saves where it did, refuses a duplicate before any request, and an unconnected lab still registers.
+- `python3 deploy/verify-release.py`, `node --check` on both scripts, `git diff --check`.
+- **Browser, fixture manager on fresh data** (its scripted helper now behaves like the real one):
+  `verify_after.py` 97 of 97 at three viewports, 0 console errors, 0 page errors.
+  `docs/ui-review-001/tools/check_ui008a.py` 17 of 17: `working` created beneath the folder the lab
+  saves to appears at once, is selected, can be chosen, is described as not in the repository yet, and
+  the save destination is unchanged; still listed after two polls, a reload and a tab change; a
+  duplicate is refused in the dialog with no success message; *Save this lab here* moves the lab into
+  it; after the lab moved on to a second new folder the first is **still listed** while the VM
+  registers only the folder in use; still listed after a reload; *Remove empty folder* takes it off
+  the list and a folder with saved files offers no removal. Screenshots inspected:
+  `~/ui-review/review-001/chunk06/` on the VM.
+
+## Not covered
+
+No run against the installed helper and a real checkout (the helper is unchanged, and its registration
+rules were exercised directly as described above). "Still available after a failed save" was not
+driven in a browser: a save never touches the folder list or the registrations.
+
+# UI review 001, step 5: the review before an upload is mandatory — 1.30.6
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.5 (`95435e6`,
+pushed). Requirement UI-007 C of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no live VM, Git
+repository, lab or device was involved** (the fixture manager runs the real application with a scripted
+Git helper), and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `python -m unittest discover -s tests -t tests`: 706 tests, 1 skipped (the opt-in SSH fixture), OK.
+  `test_git_progress.py` (32): eight tests that expected a save to upload by itself now assert
+  `review_pending` with no push request and reach `synced` through the reviewed retry, every other
+  claim kept (no recapture, the identical publication body on replay, ancestor reconciliation, baseline
+  conditions, storage recovery). New: a binding stored with the old opt-out and requests without the
+  review (`{push:true}`, `reviewed:false`, an empty body) are refused with 409 and change nothing;
+  keeping the save on the VM needs no review; the reviewed upload pushes exactly once and records
+  `reviewed`; a new binding records the review as on whatever the request says.
+- `node --test tests/*.js`: 172 of 172. New in `test_git_progress_ui.js`: which saves need the review
+  (also a local save uploaded later, not a folder move, not a reviewed one), the button labels, cancel
+  sends no upload request and says *Not uploaded*, the upload states `reviewed: true`, *Recent saves* and
+  the save window lead to the review and have no direct upload, a synced save is reviewed read-only;
+  the page source no longer contains the checkbox or sends the preference. `test_git_places_ui.js`:
+  the Recent saves row labels for an unreviewed, a reviewed and a commit-less pending save.
+- `python3 deploy/verify-release.py`, `node --check app/static/git-progress.js`, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 97 of 97 at three viewports, 0 console
+  errors, 0 page errors (its save flow now waits for the review, checks *Saved on this VM*, uploads
+  from the review and then expects *Saved to Git*). `docs/ui-review-001/tools/check_ui007c.py` 17 of 17
+  on a lab whose stored save location carries the old opt-out: no checkbox, the new sentence and the
+  device selection in the form; Save progress ends in *Review before uploading*; *Not now* says *Not
+  uploaded*, the job is `review_pending` and not pushed, the status line says *Saved on this VM*; a raw
+  `retry {push:true}` from the page is refused with 409 and changes nothing; *Recent saves* offers
+  *Review and upload…*, and *Upload these changes* ends `synced` with `reviewed` recorded; *Save on
+  this VM only* has no upload box, opens no review and uploads nothing. Screenshots inspected:
+  `~/ui-review/review-001/chunk05/` on the VM.
+
+## Not covered
+
+The fixture's scripted helper returns an empty comparison, so the review window was seen in a browser
+with *No differences*; the diff markup itself is covered by the unit tests. No real push to a Git host
+was made in this step.
+
+# UI review 001, step 4: Save location, Git repo details and the open folder browser — 1.30.5
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.4 (`a5bc0b4`,
+pushed, CI green). Requirements UI-007 A and B of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no
+live VM, lab or device was involved**, and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 170 of 170. New in `test_git_places_ui.js`: unfolded on entry, the renamed
+  disclosure (and *Registration details* untouched), a deliberate fold kept per lab across renders,
+  opened for one render by *Browse the repository…* without forgetting the fold, forgotten when the
+  student opens it again.
+- `python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check app/static/git-progress.js`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 96 of 96 at three viewports, 0 console errors, 0 page
+  errors (the check "save location collapsed for a connected lab" became "shows its folder browser",
+  which is this requirement; one check added for *Change folder* being open on entry).
+  `docs/ui-review-001/tools/check_ui007ab.py` 11 of 11: open on entry with the folder browser loaded;
+  the disclosure reads *Git repo details* and shows push destination, branch, account and path; the
+  Advanced tab's own *Technical details* panel is unchanged; a fold survives two polls, leaving and
+  reopening the tab, and the re-render after *Save settings*; *Browse the repository…* opens it again;
+  a fresh page starts open. Screenshots inspected: `~/ui-review/review-001/chunk04/` on the VM.
+
+# UI review 001, step 3: Save progress options are explained — 1.30.4
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.3 (`760a5ad`,
+pushed, CI green). Requirement UI-004 of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no live VM,
+lab or device was involved**, and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 169 of 169. New in `test_git_progress_ui.js`: the four explanations against
+  what the actions do (a local save never names the upload host, history saves nothing, an unknown push
+  URL is not given a host name, markup is escaped, every option in `index.html` is described by its
+  pane entry); one explanation at a time and no rewrite on a poll; the placement rule at six window
+  shapes.
+- `python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check app/static/git-progress.js`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 95 of 95 at three viewports, 0 console errors, 0 page
+  errors. `docs/ui-review-001/tools/check_ui004.py` 74 of 74 at 1366×768, 950×700 and a 1280×720 laptop
+  at 150 %, 200 % and 250 % zoom: hovering each option shows exactly its explanation; the pane is never
+  beyond the left or right edge, is on the menu surface, is not clipped and overlaps no option; the
+  menu and the text stay while the pointer rests on the explanation across a 4 s poll; Tab reaches the
+  four options and each focus shows its explanation; every option has an accessible description;
+  Escape closes the menu; the four actions still open what they opened before. At 200 % and 250 % zoom
+  (360 and 288 CSS pixels high) the lower part of the menu is reached by scrolling the page, as before.
+  Screenshots inspected: `~/ui-review/review-001/chunk03/` on the VM (the first 200 % screenshot showed
+  the pane without the menu background, caused by an old narrow-window width rule; fixed, and the check
+  now asserts that the pane lies on the menu surface).
+
+# UI review 001, step 2: Advanced options in the Lab actions menu — 1.30.3
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.2 (`2ebf251`,
+pushed, CI green). Requirement UI-005 of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no live VM,
+lab or device was involved**, and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 166 of 166. New in `test_shell_ui.js`: the group's behaviour over the fake
+  DOM (toggle keeps the menu open, collapsed items unreachable by arrows, disabled item skipped, left and
+  right arrows, a group item closes the menu before its handler runs, collapsed again on reopen) and a
+  structural test over `index.html` (exactly the four reviewed items in the group, the group last,
+  everything else still in the main list, *Edit map* still on the toolbar).
+- `python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check app/static/shell.js`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 95 of 95 at three viewports, 0 console errors, 0 page
+  errors. `docs/ui-review-001/tools/check_ui005.py`, all checks passed: at 1366×768 and at a 1280×720
+  laptop zoomed to 150 % (853×480 CSS pixels) the collapsed menu has none of the four items and ends with
+  *Advanced options*, the expanded menu stays inside the viewport with its last item visible (the menu
+  scrolls inside itself at the small size); keyboard only: End → toggle, right arrow enters the group,
+  left arrow collapses it, Enter expands it, End + Enter opens *Operation history*, Escape returns focus
+  to the *Lab actions* button; by pointer *Telemetry settings…*, *Import map…* and *Edit map* open from
+  the group; in a lab without a map the moved *Edit map* mirrors the toolbar's disabled state with its
+  reason. Screenshots inspected: `~/ui-review/review-001/chunk02/` on the VM.
+
+# UI review 001, step 1: labs found on the VM move under Manager — 1.30.2
+
+Prepared on `claude/ui-review-001` from `main` `21823c6` on 2026-09-20 on the dev VM `clab-llm-dev2`.
+Requirement UI-001 of `docs/ui-review-001/CHECKLIST.md`. The review PDF was not on the VM; the work
+follows the maintainer's written brief. **Fixture only: no live VM, lab or device was involved**, and
+the running development manager on the VM was not rebuilt for this step.
+
+## What was run
+
+- `node --test tests/*.js`: 164 of 164 (`test_home_ui.js`: the discovered-section test now asserts that
+  Home has no such section and checks `homeVmLabs()` with the same cases as before — imported, hidden,
+  excluded, loading; `test_readiness_ui.js`: new test for the menu count line, the dialog's three lists,
+  its empty texts and the menu entry opening it).
+- `python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check` on the changed scripts, `git diff --check`.
+- **Browser, fixture manager** (`docs/redesign/tools/fixture_manager.py`, Chromium through Playwright):
+  `verify_after.py` 95 of 95 checks at 1920×1080, 1440×900 and 1366×768, 0 console errors, 0 page
+  errors, one handled 409 per viewport as before (three checks replace the old "discovered section is
+  listed" one: no section on Home, the count line in the Manager menu, a lab offered in the dialog).
+  `docs/ui-review-001/tools/check_ui001.py` 7 of 7: no section and no "Also running on the VM" text on
+  Home; the dialog and the focused entry survive a 4 s poll; *Add to My labs* on the fixture's
+  `extra-lab` (the fixture VM has no files for it) opens the manual import with the refusal above the
+  dialog and imports nothing when closed; *Stop hiding* clears the exclusion and imports nothing;
+  Escape closes the dialog. Screenshots inspected: `~/ui-review/review-001/chunk01/` on the VM.
+
+## Not covered
+
+The confirmation path of a successful import preview was not exercised in a browser in this step (the
+fixture refuses the preview); its code is unchanged apart from closing the new dialog after the import.
+
 # Lab builder quality pass — 1.30.1
 
 Prepared on `claude/lab-builder-quality-pass` from `main` `5e9aa86` on 2026-09-20 on the dev VM

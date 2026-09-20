@@ -26,6 +26,7 @@ from .lab_operations import operation_busy, scrub, GIT_BUSY
 from .runner import now
 
 PROTOCOL = 'clab-manager-git-v1'
+MAX_PLANNED_FOLDERS = 200
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_WIRE = 24 * 1024 * 1024
@@ -33,7 +34,7 @@ FORMATS = {'juniper_cjunosevolved': 'junos-display-set', 'juniper_vqfx': 'junos-
            'juniper_vjunosswitch': 'junos-display-set', 'cisco_xrv9k': 'iosxr-running-config',
            'arista_ceos': 'eos-running-config'}
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'message', 'backup_job_id',
-              'commit', 'pushed', 'target', 'checkpoint', 'changed_files', 'snapshot_path', 'note', 'review_before_push')
+              'commit', 'pushed', 'target', 'checkpoint', 'changed_files', 'snapshot_path', 'note', 'review_before_push', 'reviewed')
 
 
 def digest(value):
@@ -432,11 +433,15 @@ class GitProgress:
                 self.store.save()
 
     def install(self, app):
+        # The review before an upload is mandatory (UI review 001, UI-007 C). `review_before_push` is still
+        # accepted from pages loaded before that release, and ignored: a new binding records True, a
+        # stored False is never consulted, and stored bindings are left alone so pending saves keep
+        # their binding digest.
         class Link(BaseModel):
             model_config = ConfigDict(extra='forbid')
             binding_id: str = Field(min_length=1, max_length=120)
             node_names: list[str] = Field(min_length=1, max_length=500)
-            review_before_push: bool = False
+            review_before_push: bool = True
 
         class Save(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -453,6 +458,7 @@ class GitProgress:
         class Retry(BaseModel):
             model_config = ConfigDict(extra='forbid')
             push: bool = True
+            reviewed: bool = False
 
         class Dismiss(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -472,6 +478,7 @@ class GitProgress:
         class Folder(BaseModel):
             model_config = ConfigDict(extra='forbid')
             prefix: str = Field(default='', max_length=500)
+            plan: bool = False
 
         class Destination(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -492,6 +499,23 @@ class GitProgress:
                 raise HTTPException(400, 'Use folder names with letters, numbers, dashes or underscores; use / to nest. No leading slash, no .. and no .git parts.')
             return value
 
+        # Folders made or chosen through the manager, per checkout. Git has no empty folders and the VM
+        # registry only knows the folder a lab saves to now (a move retires the previous registration, and
+        # a folder inside a lab's own folder cannot be registered beside it), so without this list an empty
+        # folder stops existing the moment the lab saves somewhere else. They are plans, not directories:
+        # the tree reports them as `planned` and the page says they are not in the repository yet.
+        def planned_folders(path):
+            with self.store.lock: return list(self.store.state.get('git_folders', {}).get(path, []))
+
+        def remember_folders(path, *prefixes):
+            with self.store.lock:
+                known = self.store.state.setdefault('git_folders', {}).setdefault(path, [])
+                fresh = [p for p in dict.fromkeys(prefixes) if p and p not in known]
+                if not fresh: return
+                known.extend(fresh); del known[:-MAX_PLANNED_FOLDERS]
+                try: self.store.save()
+                except OSError: del known[-len(fresh):]
+
         def bound_labs():
             return {lab['git_binding']['binding_id']: dict(id=lab['id'], name=lab['name']) for lab in self.store.state['labs'] if lab.get('git_binding')}
 
@@ -505,7 +529,7 @@ class GitProgress:
         def bind_lab(lab_id, repo, node_names, review, before, event, message):
             """Point the lab at a registration after a live status check; the exposure acknowledgement is the caller's job."""
             binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
-                           host_identity=before, node_names=node_names, review_before_push=review)
+                           host_identity=before, node_names=node_names, review_before_push=True)
             call({'mode': 'status'}, binding)
             with self.store.lock:
                 self.idle(); self.guard_pending(lab_id)
@@ -561,7 +585,7 @@ class GitProgress:
             repo = next((r for r in result['repositories'] if r['id'] == data.binding_id), None)
             if not repo: raise HTTPException(400, 'Choose a repository registered by the VM administrator.')
             binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
-                           host_identity=before, node_names=data.node_names, review_before_push=data.review_before_push)
+                           host_identity=before, node_names=data.node_names, review_before_push=True)
             call({'mode': 'status'}, binding)
             with self.store.lock:
                 self.idle(); self.guard_pending(lab_id)
@@ -591,16 +615,44 @@ class GitProgress:
             with self.store.lock: labs = bound_labs()
             folders = [dict(f, lab=labs.get(f.get('id'))) for f in result.get('folders', []) if isinstance(f, dict)]
             return dict(repository=result.get('repository', repo), head=result.get('head', ''), files=result.get('files', []),
-                        truncated=bool(result.get('truncated')), saved=result.get('saved', {}), folders=folders)
+                        truncated=bool(result.get('truncated')), saved=result.get('saved', {}), folders=folders,
+                        planned=planned_folders(repo['path']))
 
         @app.post('/api/git/repositories/{binding_id}/folders')
         def folder(binding_id: str, data: Folder):
             prefix = folder_value(data.prefix)
             repo, binding = catalog_binding(binding_id)
+            if data.plan:
+                # A folder to save into later: nothing is registered or written on the VM. The repository is
+                # read once so a name that exists (committed, a lab folder, or planned) is refused as a duplicate.
+                if not prefix: raise HTTPException(400, 'Enter a folder name.')
+                seen = call({'mode': 'browse'}, binding)
+                taken = {f.get('prefix') for f in seen.get('folders', []) if isinstance(f, dict)} | set(planned_folders(repo['path']))
+                if prefix in taken or any(str(f.get('path', '')).startswith(prefix + '/') for f in seen.get('files', []) if isinstance(f, dict)):
+                    raise HTTPException(409, 'A folder named ' + prefix + ' already exists in this repository. Pick it in the list instead.')
+                remember_folders(repo['path'], prefix)
+                if prefix not in planned_folders(repo['path']): raise HTTPException(500, 'The folder could not be stored. Nothing was created.')
+                self.store.event('git.folder', 'Repository folder planned for later saves.', lab_id='')
+                return {'planned': prefix}
             created = call({'mode': 'register-prefix', 'prefix': prefix}, binding)
             if not isinstance(created, dict) or not created.get('id'): raise HTTPException(409, 'The VM did not return the new folder registration.')
+            remember_folders(repo['path'], prefix)
             self.store.event('git.folder', 'Repository folder registered for lab saves.', lab_id='')
             return {'repository': created}
+
+        @app.delete('/api/git/repositories/{binding_id}/folders')
+        def forget_folder(binding_id: str, data: Folder):
+            """Forget a planned folder that was never used. Nothing on the VM changes; a folder with saved files or a lab stays visible anyway."""
+            prefix = folder_value(data.prefix)
+            repo, _ = catalog_binding(binding_id)
+            with self.store.lock:
+                known = self.store.state.get('git_folders', {}).get(repo['path'], [])
+                if prefix not in known: raise HTTPException(404, 'This folder is not one the manager created.')
+                known.remove(prefix)
+                try: self.store.save()
+                except OSError:
+                    known.append(prefix); raise HTTPException(500, 'The change could not be stored.')
+            return {'forgotten': prefix}
 
         @app.post('/api/labs/{lab_id}/git/destination')
         def destination(lab_id: str, data: Destination):
@@ -620,6 +672,8 @@ class GitProgress:
             created = call({'mode': 'register-prefix', 'prefix': prefix, 'retire': True}, binding)
             if not isinstance(created, dict) or not created.get('id'): raise HTTPException(409, 'The VM did not return the new folder registration.')
             new_binding = bind_lab(lab_id, created, node_names, review, before, 'git.destination', 'Lab repository folder changed to ' + (prefix or 'the repository root') + '.')
+            # The folder the lab leaves is retired on the VM; keep it (and the new one) reachable while empty.
+            remember_folders(binding['repository'].get('path', ''), source, prefix)
             job = None
             if data.move_files:
                 with self.store.lock:
@@ -693,7 +747,9 @@ class GitProgress:
                     if set(snapshot['manifest']['node_names']) != set(names): raise HTTPException(400, 'Capture must contain exactly the configured devices.')
                 context = dict(node_names=sorted(names), excluded_nodes=sorted(n['name'] for n in lab['nodes'] if n['name'] not in names),
                                topology_digest=hashlib.sha256(lab['definition_yaml'].encode()).hexdigest() if lab.get('definition_yaml') else None)
-                review = binding.get('review_before_push', False) and data.push
+                # A save a person starts never uploads by itself: it stops at review_pending and the upload
+                # is a retry that states the review happened. The binding's old preference is not read.
+                review = data.push
                 request = dict(target=data.target, checkpoint=data.checkpoint, push=False,
                                replace_baseline=data.replace_baseline, expected_baseline=data.expected_baseline,
                                allow_removed=data.allow_removed, message=data.note.strip() or f'Save {lab["name"]} progress')
@@ -720,7 +776,17 @@ class GitProgress:
                 if job['status'] in ('dismissed', 'capture_incomplete', 'failed'): raise HTTPException(409, 'Start a new save for this capture outcome.')
                 if job['status'] == 'synced': return public_job(job)
                 if digest(self.binding(job['lab_id'])) != job['binding_digest']: raise HTTPException(409, 'Repository settings changed. Reconnect the original destination.')
-                self.update(job_id, status='queued', retry=True, retry_push=data.push, message='Retry queued; the saved capture will be reused.')
+                # Uploading a save needs its review: stated with this request, or recorded by an earlier
+                # one (an upload that failed after the review). A save without a commit has nothing to
+                # review yet, so its retry saves on the VM and then waits for the review. A folder move
+                # carries no configuration change and keeps its own confirmed upload.
+                push, changes = data.push, {}
+                if push and job.get('target') != 'move':
+                    if not job.get('commit'): push, changes = False, dict(review_before_push=True)
+                    elif not (data.reviewed or job.get('reviewed')):
+                        raise HTTPException(409, 'Review the changes of this save before uploading it.')
+                    elif not job.get('reviewed'): changes = dict(reviewed=now())
+                self.update(job_id, status='queued', retry=True, retry_push=push, message='Retry queued; the saved capture will be reused.', **changes)
             return self.schedule(job)
 
         @app.post('/api/git/jobs/{job_id}/dismiss')

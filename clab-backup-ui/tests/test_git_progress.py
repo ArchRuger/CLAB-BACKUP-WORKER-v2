@@ -107,6 +107,12 @@ class GitProgressTests(unittest.TestCase):
             self.progress.execute(job['id'])
         return self.client.get('/api/git/jobs/'+job['id']).json(), submit
 
+    def review_and_upload(self, job, expect=200):
+        """The student's explicit decision after the review: the only way a save is uploaded."""
+        response = self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True, 'reviewed': True})
+        self.assertEqual(response.status_code, expect, response.text)
+        return self.run_save(job)
+
     def capture_with_restore(self, lab_id=None, **kwargs):
         """A capture that also carries a hierarchical restore-grade artifact per node."""
         lab_id = lab_id or self.lab['id']; lab = self.store.lab(lab_id)
@@ -167,9 +173,13 @@ class GitProgressTests(unittest.TestCase):
     def test_fresh_save_uses_complete_capture_and_persists_provenance(self):
         job, _ = self.save()
         outcome, submit = self.run_save(job)
+        self.assertEqual(outcome['status'], 'review_pending')
+        self.assertFalse(outcome['pushed'])
+        self.assertFalse(any(r['mode'] == 'push' for r in self.sent))
+        self.assertEqual(submit.call_args.kwargs['node_names'], self.names)
+        outcome, again = self.review_and_upload(job); again.assert_not_called()
         self.assertEqual(outcome['status'], 'synced')
         self.assertTrue(outcome['pushed'])
-        self.assertEqual(submit.call_args.kwargs['node_names'], self.names)
         request = next(r for r in self.sent if r['mode'] == 'publish')
         self.assertEqual(request['snapshot']['manifest']['topology_provenance'], 'captured')
         self.assertEqual(request['snapshot']['manifest']['node_names'], sorted(self.names))
@@ -207,6 +217,8 @@ class GitProgressTests(unittest.TestCase):
         self.assertIsNone(result['manifest']['topology_digest'])
         job, _ = self.save(backup_job_id=backup['id'])
         outcome, submit = self.run_save(job)
+        self.assertEqual(outcome['status'], 'review_pending'); submit.assert_not_called()
+        outcome, submit = self.review_and_upload(job)
         self.assertEqual(outcome['status'], 'synced'); submit.assert_not_called()
 
     def test_missing_file_stops_export_and_size_and_hash_checks(self):
@@ -223,11 +235,11 @@ class GitProgressTests(unittest.TestCase):
         outcome, _ = self.run_save(job)
         self.assertEqual(outcome['status'], 'committed')
         self.push_error = 'Network unavailable'
-        self.assertEqual(self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True}).status_code, 200)
-        outcome, submit = self.run_save(job)
+        outcome, submit = self.review_and_upload(job)
         self.assertEqual(outcome['status'], 'push_pending'); submit.assert_not_called()
         self.push_error = ''
-        self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True})
+        # The review is recorded with the first upload attempt: repeating a failed upload needs no second one.
+        self.assertEqual(self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True}).status_code, 200)
         outcome, submit = self.run_save(job)
         self.assertEqual(outcome['status'], 'synced'); submit.assert_not_called()
         self.assertEqual(sum(r['mode'] == 'publish' for r in self.sent), 1)
@@ -239,10 +251,15 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(outcome['status'], 'export_pending')
         first = next(r for r in self.sent if r['mode'] == 'publish')
         self.publish_error = ''
+        # Nothing was committed yet, so there is nothing to review: the retry saves on the VM and waits.
         self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': True})
         outcome, submit = self.run_save(job); submit.assert_not_called()
         published = [r for r in self.sent if r['mode'] == 'publish']
         self.assertEqual(first, published[-1])
+        self.assertEqual(outcome['status'], 'review_pending')
+        self.assertFalse(any(r['mode'] == 'push' for r in self.sent))
+        outcome, submit = self.review_and_upload(job); submit.assert_not_called()
+        self.assertEqual(first, [r for r in self.sent if r['mode'] == 'publish'][-1])
         self.assertEqual(outcome['status'], 'synced')
 
     def test_save_and_push_with_lost_reply_can_retry_export_locally(self):
@@ -270,7 +287,7 @@ class GitProgressTests(unittest.TestCase):
             outcome, submit = self.run_save(job)
 
         submit.assert_not_called()
-        self.assertEqual(outcome['status'], 'committed')
+        self.assertEqual(outcome['status'], 'review_pending')
         self.assertFalse(outcome['pushed'])
         self.assertEqual(first, [r for r in self.sent if r['mode'] == 'publish'][-1])
         self.assertFalse(any(r['mode'] == 'push' for r in self.sent))
@@ -351,7 +368,8 @@ class GitProgressTests(unittest.TestCase):
             return result
 
         with patch('app.git_progress.remote_git', side_effect=verify_ancestor_ids):
-            outcome, _ = self.run_save(newest)
+            self.run_save(newest)
+            outcome, _ = self.review_and_upload(newest)
         self.assertEqual(outcome['status'], 'synced')
         self.assertEqual(reference['status'], 'synced')
         self.assertTrue(reference['pushed'])
@@ -375,12 +393,42 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(diff.status_code, 200, diff.text)
         self.assertEqual(diff.json()['files'][0]['status'], 'added')
 
+    def test_the_review_is_mandatory_even_for_a_saved_opt_out_and_an_old_page(self):
+        # A binding saved before the review became mandatory says False; a page loaded before the
+        # release still sends False. Neither uploads a save without the review.
+        with self.store.lock:
+            self.store.lab(self.lab['id'])['git_binding']['review_before_push'] = False; self.store.save()
+        job, _ = self.save(); outcome, _ = self.run_save(job)
+        self.assertEqual(outcome['status'], 'review_pending')
+        self.assertFalse(any(r['mode'] == 'push' for r in self.sent))
+        for body in ({'push': True}, {'push': True, 'reviewed': False}, {}):
+            refused = self.client.post('/api/git/jobs/'+job['id']+'/retry', json=body)
+            self.assertEqual(refused.status_code, 409, refused.text)
+            self.assertIn('Review the changes', refused.json()['detail'])
+        current = self.client.get('/api/git/jobs/'+job['id']).json()
+        self.assertEqual(current['status'], 'review_pending', 'a refused upload changes nothing and reports nothing as saved')
+        self.assertFalse(current['pushed']); self.assertFalse(any(r['mode'] == 'push' for r in self.sent))
+        self.dispatch.reset_mock()
+        # Declining the review: the save stays on the VM, and keeping it there needs no review.
+        self.assertEqual(self.client.post('/api/git/jobs/'+job['id']+'/retry', json={'push': False}).status_code, 200)
+        outcome, _ = self.run_save(job)
+        self.assertEqual(outcome['status'], 'review_pending'); self.assertFalse(any(r['mode'] == 'push' for r in self.sent))
+        outcome, submit = self.review_and_upload(job); submit.assert_not_called()
+        self.assertEqual(outcome['status'], 'synced'); self.assertTrue(outcome['reviewed'])
+        self.assertEqual(sum(r['mode'] == 'push' for r in self.sent), 1)
+        # A new binding records the review as on, whatever the request says.
+        response = self.client.put(self.url, json=dict(binding_id=self.repo['id'], node_names=self.names, review_before_push=False))
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIs(self.store.lab(self.lab['id'])['git_binding']['review_before_push'], True)
+
     def test_baseline_requires_complete_selected_capture_and_conditions(self):
         response = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex, target='baseline'))
         self.assertEqual(response.status_code, 400)
         backup = self.capture()
         job, _ = self.save(target='baseline', backup_job_id=backup['id'], replace_baseline=True, expected_baseline='c'*64)
         outcome, submit = self.run_save(job); submit.assert_not_called()
+        self.assertEqual(outcome['status'], 'review_pending')
+        outcome, submit = self.review_and_upload(job); submit.assert_not_called()
         self.assertEqual(outcome['status'], 'synced')
         request = next(r for r in self.sent if r['mode'] == 'publish')
         self.assertTrue(request['replace_baseline']); self.assertEqual(request['expected_baseline'], 'c'*64)
@@ -459,6 +507,8 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(retry.status_code, 200, retry.text)
         outcome, submit = self.run_save(job)
         submit.assert_not_called()
+        self.assertEqual(outcome['status'], 'review_pending')
+        outcome, submit = self.review_and_upload(job); submit.assert_not_called()
         self.assertEqual(outcome['status'], 'synced')
 
     def test_update_storage_failure_does_not_leave_active_marker(self):
@@ -494,6 +544,16 @@ class GitPlacesTests(GitProgressTests):
             if self.publish_error: raise ValueError(self.publish_error)
             prefix = request['prefix']
             existing = next((r for r in self.registry if r['prefix'] == prefix and (mode == 'register-prefix' or r.get('push_url') == request['url'])), None)
+            if mode == 'register-prefix' and getattr(self, 'faithful', False):
+                # What the real helper does (host_git.plan_prefix / register_prefix): lab folders of one
+                # checkout cannot overlap unless the source is being retired, and retiring removes it.
+                source = next(r for r in self.registry if r['id'] == request['binding_id'])
+                if not existing:
+                    for other in self.registry:
+                        if other is source and request.get('retire'): continue
+                        if not prefix or not other['prefix'] or prefix.startswith(other['prefix'] + '/') or other['prefix'].startswith(prefix + '/'):
+                            raise ValueError('Lab folders in one repository cannot overlap: ' + (other['prefix'] or 'the repository root') + ' is already a lab folder. Choose a folder beside it.')
+                if request.get('retire'): self.registry.remove(source)
             if existing: return dict(existing)
             created = dict(self.repo, id=mode + '-' + (prefix or 'root'), prefix=prefix, revision='rev-' + (prefix or 'root'), label='Bens lab / ' + (prefix or 'root'))
             if mode == 'connect': created.update(push_url=request['url'], path='/home/ben/labs/' + request['url'].rsplit('/', 1)[-1].removesuffix('.git'), label=request['url'].rsplit('/', 1)[-1])
@@ -531,6 +591,53 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual(len([r for r in self.sent if r['mode'] == 'register-prefix']), 1)
         catalog = self.client.get('/api/git/repositories').json()['repositories']
         self.assertIn('courses/eth', [r['prefix'] for r in catalog])
+
+    def test_an_empty_folder_stays_in_the_tree_when_the_lab_moves_on_and_the_vm_retires_its_registration(self):
+        # The reported case: the lab saves to JunOS-TEST-2, a folder "working" is created beneath it.
+        self.faithful = True
+        self.registry = [dict(self.repo, prefix='JunOS-TEST-2')]
+        tree = lambda: self.client.get('/api/git/repositories/' + self.store.lab(self.lab['id'])['git_binding']['binding_id'] + '/tree').json()
+        with self.store.lock:
+            self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'] = 'JunOS-TEST-2'; self.store.save()
+        # Beside-the-lab registration is impossible inside the lab's own folder; a planned folder is not.
+        refused = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/working'))
+        self.assertEqual(refused.status_code, 409); self.assertIn('cannot overlap', refused.text)
+        self.assertEqual(tree()['planned'], [], 'a refused creation leaves no phantom folder')
+        planned = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='JunOS-TEST-2/working', plan=True))
+        self.assertEqual(planned.status_code, 200, planned.text); self.assertEqual(planned.json(), {'planned': 'JunOS-TEST-2/working'})
+        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix' and r['prefix'] == 'JunOS-TEST-2/working' and r.get('retire')], 'planning registers nothing on the VM')
+        self.assertEqual(tree()['planned'], ['JunOS-TEST-2/working'])
+        self.assertEqual([f['prefix'] for f in tree()['folders']], ['JunOS-TEST-2'], 'the save destination did not change')
+        # Duplicates are refused accurately: planned, a lab folder, and a committed folder.
+        for name in ('JunOS-TEST-2/working', 'JunOS-TEST-2', 'bgp'):
+            again = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix=name, plan=True))
+            self.assertEqual(again.status_code, 409, name); self.assertIn('already exists', again.text)
+        self.assertEqual(self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='', plan=True)).status_code, 400)
+        # The lab moves into it, then on to a second folder, then back: the VM keeps one registration only.
+        for prefix in ('JunOS-TEST-2/working', 'JunOS-TEST-2/solution', 'JunOS-TEST-2'):
+            moved = self.client.post(self.url + '/destination', json=dict(prefix=prefix))
+            self.assertEqual(moved.status_code, 200, moved.text)
+            self.assertEqual([r['prefix'] for r in self.registry], [prefix])
+        now = tree()
+        self.assertEqual([f['prefix'] for f in now['folders']], ['JunOS-TEST-2'])
+        self.assertEqual(sorted(now['planned']), ['JunOS-TEST-2', 'JunOS-TEST-2/solution', 'JunOS-TEST-2/working'], 'the folders the lab left are still there')
+        self.assertEqual(sorted(Store(self.tmp.name).state['git_folders'][self.repo['path']]), sorted(now['planned']), 'and they survive a restart')
+        self.assertNotIn('git_folders', self.client.get('/api/state').json())
+        # A planned folder that was never used can be forgotten; nothing on the VM is involved.
+        sent = len(self.sent)
+        gone = self.client.request('DELETE', '/api/git/repositories/' + self.registry[0]['id'] + '/folders', json=dict(prefix='JunOS-TEST-2/solution'))
+        self.assertEqual(gone.status_code, 200, gone.text)
+        self.assertEqual(len([r for r in self.sent[sent:] if r['mode'] not in ('list',)]), 0)
+        self.assertNotIn('JunOS-TEST-2/solution', tree()['planned'])
+        self.assertEqual(self.client.request('DELETE', '/api/git/repositories/' + self.registry[0]['id'] + '/folders', json=dict(prefix='never-made')).status_code, 404)
+
+    def test_a_failed_store_write_creates_no_planned_folder(self):
+        persist = self.store.save
+        with patch.object(self.store, 'save', side_effect=OSError('disk')):
+            response = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='notes', plan=True))
+        self.assertEqual(response.status_code, 500); self.assertIn('Nothing was created', response.text)
+        self.assertEqual(self.client.get('/api/git/repositories/bens-lab/tree').json()['planned'], [])
+        self.assertTrue(callable(persist))
 
     def test_changing_the_folder_rebinds_the_lab_and_moves_files_without_recapturing(self):
         self.assertEqual(self.client.post(self.url + '/destination', json=dict(prefix='')).status_code, 409)

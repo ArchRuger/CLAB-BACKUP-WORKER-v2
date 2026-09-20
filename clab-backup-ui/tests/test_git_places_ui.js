@@ -69,6 +69,103 @@ test('the browser markup escapes names and labels and explains each folder',()=>
  assert.match(fresh,/data-git-places-action="use"  title="">Choose this folder/);
  assert.doesNotMatch(context.gitPlacesMarkup(mine,{selected:'',current:'',repoName:'repo',canAct:false}),/data-git-places-action/);
 });
+test('an empty folder made through the manager stays in the tree, is told apart from a saved one, and can be chosen',()=>{
+ const context=makeContext(),lab=[{id:'j2',label:'repo / JunOS-TEST-2',prefix:'JunOS-TEST-2',lab:{id:'lab',name:'Junos lab'}}];
+ const without=context.gitTreeModel([{path:'JunOS-TEST-2/latest/r1.cfg',size:10}],lab);
+ assert.equal(without.nodes.has('JunOS-TEST-2/working'),false,'this is the reported defect: nothing but the manager remembers an empty folder');
+ const model=context.gitTreeModel([{path:'JunOS-TEST-2/latest/r1.cfg',size:10}],lab,['JunOS-TEST-2/working','JunOS-TEST-2/solution/week-1','JunOS-TEST-2','/bad','',7]);
+ same(model.nodes.get('JunOS-TEST-2').dirs.map(d=>d.name),['latest','solution','working']);
+ const working=model.nodes.get('JunOS-TEST-2/working');assert.equal(working.planned,true);assert.equal(working.pending,true);assert.equal(working.registration,null);
+ assert.equal(model.nodes.get('JunOS-TEST-2').pending,false,'a planned folder that holds saved files is an ordinary folder');assert.equal(model.nodes.get('JunOS-TEST-2/solution').pending,false,'an unplanned parent is not flagged');assert.equal(model.nodes.get('JunOS-TEST-2/solution/week-1').pending,true);
+ assert.equal(model.nodes.has('/bad'),false);assert.equal(model.nodes.size,6);
+ const choice=context.gitFolderChoice(model,'JunOS-TEST-2/working','j2');assert.equal(choice.allowed,true,'a folder inside the lab\'s own folder is a valid destination for that lab');
+ assert.equal(context.gitFolderChoice(model,'JunOS-TEST-2/working','someone-else').allowed,false,'and stays closed to other labs');
+ const parent=context.gitPlacesMarkup(model,{selected:'JunOS-TEST-2',current:'j2',repoName:'repo',head:'a',saved:{latest:1},canAct:true,connected:true,canForget:true});
+ assert.match(parent,/data-git-place="JunOS-TEST-2\/working"><td><span class="name"><i class="git-folder-icon  pending"><\/i>working<\/span><\/td><td class="desc">Empty folder  <b class="git-tag pending">not in the repository until the first save<\/b>/);
+ assert.doesNotMatch(parent,/data-git-places-action="forget"/,'only the empty folder itself offers its removal');
+ const inside=context.gitPlacesMarkup(model,{selected:'JunOS-TEST-2/working',current:'j2',repoName:'repo',head:'a',saved:{latest:1},canAct:true,connected:true,canForget:true});
+ assert.match(inside,/Nothing is saved here yet\. The folder is kept by the manager and appears in the repository with the first save into it\./);
+ assert.match(inside,/data-git-places-action="use"  title="">Save this lab here/);assert.match(inside,/data-git-places-action="forget"/);
+ assert.doesNotMatch(context.gitPlacesMarkup(model,{selected:'JunOS-TEST-2/solution',current:'j2',repoName:'repo',canAct:true,connected:true,canForget:true}),/data-git-places-action="forget"/,'a folder that holds another folder is not removable');
+ assert.doesNotMatch(context.gitPlacesMarkup(model,{selected:'JunOS-TEST-2/working',current:'j2',repoName:'repo',canAct:true,connected:true}),/data-git-places-action="forget"/);
+});
+test('New folder: a connected lab plans the folder without moving, a duplicate is refused before any request, an unconnected lab still registers',async()=>{
+ const context=makeContext(),calls=[],toasts=[],elements=new Map();let shown=0;
+ const field=(value='')=>({value,checked:false,hidden:false,querySelector:()=>({textContent:''})});
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],field());return {close(){this.closed=true;}};};
+ context.$=id=>elements.get(id)||null;context.opTask=async(dialog,fn)=>fn();context.notify=m=>toasts.push(m);context.gitShowRepository=async()=>{shown++;};
+ context.json=async(endpoint,method,payload)=>{calls.push({endpoint,method,payload});return payload.plan?{planned:payload.prefix}:{repository:{id:'reg-new',prefix:payload.prefix}};};
+ const tree={repository:{id:'j2',path:'/home/ben/labs/Course-Labs'}},model=context.gitTreeModel([{path:'JunOS-TEST-2/latest/r1.cfg',size:10}],[{id:'j2',prefix:'JunOS-TEST-2',lab:{id:'lab',name:'Junos lab'}}],['JunOS-TEST-2/working']);
+ context.gitLoadContext=async()=>({binding:{binding_id:'j2',repository:{path:'/home/ben/labs/Course-Labs',prefix:'JunOS-TEST-2'}}});context.state.labs=[{id:'lab',name:'Junos lab'}];
+ await context.gitNewFolder('lab','JunOS-TEST-2',model,tree);
+ elements.get('git-new-folder-name').value='working';elements.get('git-new-folder-use').checked=false;
+ await assert.rejects(elements.get('git-new-folder-confirm').onclick(),/A folder named JunOS-TEST-2\/working already exists/);assert.equal(calls.length,0,'a duplicate sends nothing and reports no success');assert.equal(toasts.length,0);
+ elements.get('git-new-folder-name').value='solution';await elements.get('git-new-folder-confirm').onclick();
+ assert.deepEqual(JSON.parse(JSON.stringify(calls)),[{endpoint:'/git/repositories/j2/folders',method:'POST',payload:{prefix:'JunOS-TEST-2/solution',plan:true}}]);
+ assert.equal(vm.runInContext('gitPlacesState.selected',context),'JunOS-TEST-2/solution','the new folder is selected at once');assert.equal(shown,1);
+ assert.match(toasts[0],/^Folder JunOS-TEST-2\/solution is listed\. Junos lab still saves to JunOS-TEST-2\.$/,'browsing and creating never change the save destination');
+ context.gitLoadContext=async()=>({binding:null});calls.length=0;
+ await context.gitNewFolder('lab','',model,tree);elements.get('git-new-folder-name').value='fresh';await elements.get('git-new-folder-confirm').onclick();
+ assert.deepEqual(JSON.parse(JSON.stringify(calls[0].payload)),{prefix:'fresh'});
+});
+test('the outline opens and closes by the student\'s own state: ancestors of the save location collapse, other branches stay open, selection never closes anything',()=>{
+ const context=makeContext(),tree=[{path:'labs/BGP/work/latest/r1.cfg',size:1},{path:'labs/BGP/start/latest/r1.cfg',size:1},{path:'labs/VLAN/latest/s1.cfg',size:1},{path:'notes/a.md',size:1}];
+ const model=context.gitTreeModel(tree,[{id:'me',prefix:'labs/BGP/work',lab:{id:'lab',name:'BGP'}}]);
+ same(context.gitAncestors('labs/BGP/work'),['','labs','labs/BGP']);same(context.gitAncestors(''),['']);same(context.gitAncestors('x'),['']);
+ const expanded=context.gitDefaultExpanded(model,'me');same([...expanded].sort(),['','labs','labs/BGP','labs/BGP/work'],'the first display leads to the folder the lab saves to');
+ same([...context.gitDefaultExpanded(model,'nobody')],[''],'a lab without a folder here starts with the top level only');
+ const draw=(selected='labs/BGP/work')=>context.gitPlacesMarkup(model,{selected,expanded,current:'me',repoName:'repo',canAct:true,connected:true});
+ const openOf=html=>[...html.matchAll(/<details (open )?class="[^"]*"><summary data-git-place="([^"]*)"/g)].filter(m=>m[1]).map(m=>m[2]);
+ same(openOf(draw()),['','labs','labs/BGP','labs/BGP/work']);
+ // An ancestor of the active save location can be collapsed, and stays collapsed when drawn again
+ context.gitToggleFolder(expanded,'labs/BGP');let html=draw();
+ same(openOf(html),['','labs']);assert.doesNotMatch(html,/data-git-place="labs\/BGP\/work" class/,'its children are not drawn');
+ assert.match(html,/data-git-place="labs\/BGP" class="holds-current"/,'the closed branch says that it holds the destination');assert.match(html,/This lab is inside/);
+ assert.match(html,/data-git-twist="labs\/BGP" aria-expanded="false" aria-label="Expand BGP"/);
+ // Another branch opens without touching that, and both survive selecting a third folder
+ context.gitToggleFolder(expanded,'labs/VLAN');context.gitRevealFolder(expanded,'notes');html=draw('notes');
+ same(openOf(html).sort(),['','labs','labs/VLAN','notes'].sort());assert.match(html,/data-git-place="notes" class="selected" aria-current="true"/);
+ assert.match(html,/This lab saves to labs\/BGP\/work\. Looking at other folders does not change that\./,'browsing is told apart from saving');
+ // Reopening restores the children; the destination is marked current, the browsed folder selected
+ context.gitToggleFolder(expanded,'labs/BGP');html=draw('labs/BGP/start');
+ assert.match(html,/data-git-place="labs\/BGP\/work" class="current">/);assert.match(html,/data-git-place="labs\/BGP\/start" class="selected" aria-current="true">/);assert.doesNotMatch(html,/holds-current/);
+ assert.match(html,/data-git-twist="labs\/BGP" aria-expanded="true" aria-label="Collapse BGP"/);
+ assert.doesNotMatch(draw('labs/BGP/work'),/Looking at other folders/);
+ assert.match(draw('labs/BGP/work'),/data-git-place="labs\/BGP\/work" class="selected current" aria-current="true">/);
+ // The top level cannot be closed, leaves have no twisty, a refresh keeps what still exists
+ context.gitToggleFolder(expanded,'');assert.ok(expanded.has(''));assert.doesNotMatch(html,/data-git-twist="labs\/BGP\/work\/latest"/);assert.doesNotMatch(html,/data-git-twist=""/);
+ expanded.add('gone/folder');same([...context.gitKeepExpanded(expanded,model)].includes('gone/folder'),false);assert.ok(context.gitKeepExpanded(expanded,model).has('labs/VLAN'));
+ const attack=context.gitTreeModel([{path:'<img src=x>/sub/a.cfg',size:1}],[]);assert.doesNotMatch(context.gitPlacesMarkup(attack,{selected:'',expanded:new Set(['','<img src=x>']),current:'',repoName:'r'}),/<img/);
+});
+test('the folder panel keeps branches, selection and focus across a refresh of the same repository and resets for another one',async()=>{
+ const context=makeContext(),files=[{path:'labs/BGP/work/latest/r1.cfg',size:1},{path:'labs/VLAN/latest/s1.cfg',size:1}],folders=[{id:'me',prefix:'labs/BGP/work',lab:{id:'lab',name:'BGP'}}];
+ const made=[];let focused=null;
+ const container={innerHTML:'',contains:el=>made.includes(el),querySelector:()=>null,querySelectorAll(sel){
+  const out=[],add=(attr,key,tag)=>{for(const m of this.innerHTML.matchAll(new RegExp('<'+tag+'[^>]* '+attr+'="([^"]*)"','g'))){const el={dataset:{[key]:m[1].replace(/&amp;/g,'&')},tagName:tag.toUpperCase(),focus(){focused=this;}};made.push(el);out.push(el);}};
+  if(sel==='[data-git-place]'){add('data-git-place','gitPlace','summary');add('data-git-place','gitPlace','button');add('data-git-place','gitPlace','tr');}
+  else if(sel==='[data-git-twist]')add('data-git-twist','gitTwist','button');
+  else if(sel==='.git-outline summary[data-git-place]')add('data-git-place','gitPlace','summary');
+  return out;}};
+ context.document={activeElement:null};context.gitRepoName=()=>'repo';context.opTask=async(d,fn)=>fn();
+ const tree={repository:{id:'me',path:'/home/ben/labs/Course-Labs'},files,folders,planned:[],head:'a',saved:{}};
+ await context.gitPlacesShow(container,'lab','me',{current:'me',tree,connected:true});
+ const state=()=>JSON.parse(vm.runInContext('JSON.stringify({selected:gitPlacesState.selected,expanded:[...gitPlacesState.expanded].sort()})',context));
+ same(state(),{selected:'labs/BGP/work',expanded:['','labs','labs/BGP','labs/BGP/work']});
+ // The student closes labs/BGP with its twisty and opens labs/VLAN; the twisty keeps the focus
+ vm.runInContext("gitToggleFolder(gitPlacesState.expanded,'labs/BGP');gitToggleFolder(gitPlacesState.expanded,'labs/VLAN');",context);
+ context.document.activeElement=made[made.length-1]={dataset:{gitTwist:'labs/BGP'},tagName:'BUTTON'};
+ await context.gitPlacesShow(container,'lab','me',{current:'me',tree:{...tree,files:[...files,{path:'labs/BGP/work/latest/r2.cfg',size:1}]},connected:true});
+ same(state(),{selected:'labs/BGP/work',expanded:['','labs','labs/BGP/work','labs/VLAN']},'a background refresh neither reopens the collapsed ancestor (labs/BGP) nor closes the other branch, and keeps the selection; a folder below a closed one remembers its own state');
+ assert.equal(focused&&focused.dataset.gitTwist,'labs/BGP','focus returns to the same control after the redraw');
+ assert.match(container.innerHTML,/data-git-place="labs\/BGP" class="holds-current"/);
+ // A folder the page itself selects (just created) is revealed once
+ vm.runInContext("gitPlacesState.selected='labs/BGP/work/new'",context);
+ await context.gitPlacesShow(container,'lab','me',{current:'me',tree:{...tree,planned:['labs/BGP/work/new']},connected:true});
+ assert.ok(state().expanded.includes('labs/BGP'));assert.equal(state().selected,'labs/BGP/work/new');
+ // Another repository starts from its own default
+ await context.gitPlacesShow(container,'lab','other',{current:'other',tree:{repository:{id:'other',path:'/home/ben/labs/Other'},files:[{path:'x/latest/a.cfg',size:1}],folders:[{id:'other',prefix:'x',lab:{id:'lab',name:'BGP'}}],planned:[]},connected:true});
+ same(state(),{selected:'x',expanded:['','x']});
+});
 test('the connected card names the folder path and offers the switch and disconnect actions',()=>{
  const context=makeContext(),container={innerHTML:'',querySelectorAll:()=>[]};
  context.$=id=>id==='git-repository-content'?container:null;context.state.labs=[{id:'lab',name:'BGP <lab>'}];
@@ -76,6 +173,21 @@ test('the connected card names the folder path and offers the switch and disconn
  assert.match(container.innerHTML,/BGP &lt;lab&gt; saves to<\/span><code>Course-Labs<\/code>.*<code>bgp<\/code>.*<code>latest\/<\/code>/);
  assert.match(container.innerHTML,/data-git-repo-action="switch"/);assert.match(container.innerHTML,/data-git-repo-action="unlink"/);assert.match(container.innerHTML,/id="git-places-panel"/);assert.match(container.innerHTML,/data-git-repo-action="connect"/);
  assert.doesNotMatch(container.innerHTML,/<lab>/);
+});
+test('Save location opens with the folder browser unfolded, keeps a deliberate fold per lab, and names its Git details',()=>{
+ const context=makeContext(),listeners={},folder={open:true,addEventListener(name,fn){listeners[name]=fn;}},container={innerHTML:'',querySelectorAll:()=>[]};
+ context.$=id=>id==='git-repository-content'?container:id==='git-change-folder'?folder:null;context.state.labs=[{id:'lab',name:'BGP'},{id:'other',name:'OSPF'}];
+ const bound={binding:{binding_id:'repo',node_names:['r1'],repository:{label:'x',path:'/home/ben/labs/Course-Labs',remote:'origin',branch:'main',prefix:'bgp',push_url:'https://github.com/ben/Course-Labs.git',owner:'ben'}},supported_nodes:[{name:'r1',platform:'arista_ceos'}]},catalog={repositories:[{id:'repo',label:'x',path:'/home/ben/labs/Course-Labs',owner:'ben',branch:'main',prefix:'bgp',revision:'r'}]};
+ const render=(id='lab')=>{context.gitRenderRepository(id,bound,catalog);return container.innerHTML;};
+ assert.match(render(),/<details id="git-change-folder" class="git-change-folder" open><summary>Change folder…<\/summary>/,'unfolded on entry');
+ assert.match(container.innerHTML,/<details class="caption git-location-tech"><summary>Git repo details<\/summary>/);assert.doesNotMatch(container.innerHTML,/<summary>Technical details<\/summary>/);
+ assert.match(container.innerHTML,/<summary>Registration details<\/summary>/,'other disclosures keep their names');
+ folder.open=false;listeners.toggle();
+ assert.match(render(),/class="git-change-folder" ><summary>/,'a deliberate fold survives the next render');
+ assert.match(render('other'),/class="git-change-folder" open>/,'another lab is not affected');
+ vm.runInContext('gitPlacesState.open=true',context);assert.match(render(),/class="git-change-folder" open>/,'Browse the repository… opens it for that render');
+ assert.match(render(),/class="git-change-folder" ><summary>/,'and the fold is still remembered afterwards');
+ folder.open=true;listeners.toggle();assert.match(render(),/class="git-change-folder" open>/,'opening it again forgets the fold');
 });
 test('move jobs read as folder moves and open the latest folder',()=>{
  const {gitTargetLabel,gitTargetPath,gitDestination}=makeContext();
@@ -166,10 +278,10 @@ test('saved versions come from the repository tree: this lab first, instructor f
 test('recent saves rows explain each save and offer upload or keep-snapshot-only while one is pending',()=>{
  const context=makeContext();const list={innerHTML:'',querySelectorAll:()=>[]};context.$=id=>id==='git-saves-list'?list:null;
  const attack='<img src=x onerror=alert(1)>';
- const jobs=[{id:'p1',lab_id:'lab',status:'push_pending',target:'latest',commit:'abcdef1234567890',message:attack,created:'2026-09-11T12:00:00Z'},{id:'u1',lab_id:'lab',status:'dismissed',target:'update',created:'2026-09-11T11:00:00Z'},{id:'c1',lab_id:'lab',status:'synced',target:'checkpoint',checkpoint:'ospf-done',pushed:true,created:'2026-09-11T10:00:00Z'}];
+ const jobs=[{id:'p1',lab_id:'lab',status:'push_pending',target:'latest',commit:'abcdef1234567890',message:attack,created:'2026-09-11T12:00:00Z'},{id:'r1',lab_id:'lab',status:'push_pending',target:'latest',commit:'1234567890abcdef',reviewed:'2026-09-11T11:30:00Z',created:'2026-09-11T11:30:00Z'},{id:'e1',lab_id:'lab',status:'export_pending',target:'latest',created:'2026-09-11T11:20:00Z'},{id:'u1',lab_id:'lab',status:'dismissed',target:'update',created:'2026-09-11T11:00:00Z'},{id:'c1',lab_id:'lab',status:'synced',target:'checkpoint',checkpoint:'ospf-done',pushed:true,created:'2026-09-11T10:00:00Z'}];
  context.gitRenderSaves('lab',{binding:{binding_id:'b',repository:{path:'/home/ben/labs/Course-Labs',prefix:'bgp'}},jobs});
  assert.doesNotMatch(list.innerHTML,/<img/);assert.match(list.innerHTML,/&lt;img src=x/);
- assert.match(list.innerHTML,/data-git-job="p1"/);assert.match(list.innerHTML,/Saved on this VM — upload needs attention/);assert.match(list.innerHTML,/data-git-job-upload="p1">Upload now/);assert.match(list.innerHTML,/data-git-job-keep="p1">Keep snapshot only/);
+ assert.match(list.innerHTML,/data-git-job="p1"/);assert.match(list.innerHTML,/Saved on this VM — upload needs attention/);assert.match(list.innerHTML,/data-git-job-upload="p1">Review and upload…/,'a save that was never reviewed is uploaded through its review');assert.match(list.innerHTML,/data-git-job-keep="p1">Keep snapshot only/);assert.match(list.innerHTML,/data-git-job-upload="r1">Upload now/,'a reviewed save whose upload failed uploads directly');assert.match(list.innerHTML,/data-git-job-upload="e1">Retry save, then review/);
  assert.match(list.innerHTML,/Repository updated/);assert.match(list.innerHTML,/Checkpoint &#39;ospf-done&#39; saved/,'the checkpoint name is escaped like every interpolation');assert.doesNotMatch(list.innerHTML,/data-git-job-upload="c1"/,'an uploaded save has nothing to upload');
  assert.match(list.innerHTML,/Course-Labs › bgp/);
  context.gitRenderSaves('lab',{binding:null,jobs:[]});assert.match(list.innerHTML,/Saves appear here once this lab has a save location/);

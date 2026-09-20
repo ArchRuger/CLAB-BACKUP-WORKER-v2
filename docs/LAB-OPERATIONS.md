@@ -95,7 +95,7 @@ redeployed lab (new SSH host keys) never fails with *host key mismatch*.
 ## Telemetry after readiness
 
 With telemetry on (the default for labs created since 1.23.0; earlier labs turn it on
-once under **Lab actions ▾ › Telemetry settings…**), every device that has answered
+once under **Lab actions ▾ › Advanced options › Telemetry settings…**), every device that has answered
 `show version` is checked over SSH for its gNMI service, missing lines are added with
 the NOS's scoped commit, and a gNMI subscription streams interface rates, link state and
 BGP neighbours into memory for Prometheus to scrape. **Open lab map ↗** (or **Open
@@ -107,7 +107,7 @@ acceptance procedure are in [TELEMETRY.md](TELEMETRY.md).
 
 ## The map and its editor
 
-Choose **Edit map** (Topology tab, Tools tab or Lab actions ▾) to move devices, add
+Choose **Edit map** (Topology tab, Tools tab or Lab actions ▾ › Advanced options) to move devices, add
 text, boxes, circles and lines, or edit their appearance. Undo reverses edits; closing
 offers to discard unsaved changes. Save persists the manager map. *Download map file*
 (annotations JSON) and *Export draw.io* include unsaved edits without writing VM files.
@@ -138,7 +138,7 @@ up configuration and Device details.
 Every submitted host command requires a preview and confirmation. Review tokens
 expire after five minutes and bind the VM connection, original file digest and
 relevant deployment state. A change requires another preview. Output and outcome
-persist in **Operation history…** (Manager ▾ or Lab actions ▾); interrupted jobs require
+persist in **Operation history…** (Manager ▾ or Lab actions ▾ › Advanced options); interrupted jobs require
 inspection before retrying. Lifecycle commands can interrupt CLI sessions. Manager
 backups/import changes are blocked during an active lab operation.
 
