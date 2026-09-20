@@ -458,7 +458,7 @@ def pages(r):
     r.shot('57-topology-browser')
     p.locator('#op-file-tree .op-tree-file').first.click(); p.wait_for_selector('#op-editor[open]', timeout=15000); p.wait_for_timeout(300)
     editor = r.js('() => [...document.querySelectorAll("#op-editor .actions button")].map(b => b.textContent)')
-    r.check('topology file dialog: Preview topology / Add to My labs / Deploy lab', editor == ['Preview topology', 'Add to My labs without starting', 'Deploy lab'], editor)
+    r.check('topology file dialog: Preview topology / Edit visually / Add to My labs / Deploy lab', editor == ['Preview topology', 'Edit visually…', 'Add to My labs without starting', 'Deploy lab'], editor)
     p.click('#op-validate'); p.wait_for_selector('#op-map-preview[open]', timeout=15000); p.wait_for_timeout(300)
     r.shot('58-topology-preview')
     p.click('#op-map-preview [data-op-close]'); p.click('#op-editor [data-op-close]'); p.click('#op-browser [data-op-close]')

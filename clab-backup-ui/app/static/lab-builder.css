@@ -9,7 +9,9 @@ body.lab-builder{display:flex;flex-direction:column}
 .builder-bar #builder-status{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .builder-back{color:var(--accent);text-decoration:none;font-weight:600}
 .builder-title{color:var(--ink)}
-.builder-name{font-weight:600;color:var(--ink);max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.builder-bar .builder-name{flex:0 1 auto;min-width:6ch;font-weight:600;color:var(--ink);max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* A small window or browser zoom: the name and the status give way, Save to the VM never leaves the window. */
+@media (max-width:1100px){.builder-title{display:none}.builder-bar{gap:var(--space-2);padding:0 var(--space-3)}.builder-bar .button{padding:7px 10px}}
 .builder-spacer{flex:1}
 .builder-note{flex:none;margin:0;padding:var(--space-2) var(--space-4);background:var(--warn-soft);color:var(--warn-strong);border-bottom:1px solid var(--line)}
 .builder-note .button{margin-left:var(--space-2);padding:2px 10px;min-height:0}

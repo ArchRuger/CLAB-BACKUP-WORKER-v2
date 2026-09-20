@@ -62,6 +62,8 @@ def run(p):
     # 2. Build: add a device, link it, edit it, delete and undo
     bx = pg.get_by_text('Linux host', exact=True).bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(640, 520, steps=12); pg.mouse.up(); pg.wait_for_timeout(900)
     check('a device dragged from the palette is added', nodes() == 4 and ADDED in draft()['yaml'])
+    known = pg.evaluate("fetch('/api/operations/known-images').then(r => r.json()).then(v => (v.images.linux || [])[0] || '')")
+    if known: check('a device from the palette carries the image this site already uses for its kind', f'image: {known}' in draft()['yaml'].split(ADDED + ':')[1], known)
     menu(node(ADDED), 'Create Link'); x, y = center(node(N1)); pg.mouse.click(x, y); pg.wait_for_timeout(900)
     check('a link is drawn with allocated interfaces', edges() == 4 and f'"{ADDED}:eth1", "{N1}:' in draft()['yaml'], draft()['yaml'][-200:])
     menu(node(ADDED), 'Edit Node'); pg.get_by_label('Node Name').fill('pc1'); pg.get_by_role('button', name='Apply', exact=True).first.click(); pg.wait_for_timeout(900)

@@ -112,7 +112,7 @@ function builderNotice(){
  return lab&&/^(running|starting|partial)/i.test(lab.deployment?.status||'')?lab.name+' is deployed. You can edit the draft, but it can only be saved to the VM after the lab is destroyed (My labs → the lab → Destroy). Nothing in the running lab changes while you edit.':'';
 }
 function builderRenderBar(){
- const s=draftStatus(builderDraft,builderUnstored);$('builder-name').textContent=builderDraft?builderDraft.name:'';$('builder-status').textContent=s.text;$('builder-status').title=s.detail||'';$('builder-status').className='pill '+s.tone;
+ const s=draftStatus(builderDraft,builderUnstored);$('builder-name').textContent=builderDraft?builderDraft.name:'';$('builder-status').textContent=s.text;$('builder-status').title=[s.text,s.detail].filter(Boolean).join(' · ');$('builder-status').className='pill '+s.tone;
  const blocked=builderBlocked(),can=!!builderDraft&&!!builderCaps&&!blocked;
  $('builder-save').disabled=!can;$('builder-save').title=blocked;$('builder-save').textContent=builderDraft?.vm?'Save changes to the VM…':'Save to the VM…';
  for(const id of ['builder-yaml','builder-download'])$(id).disabled=!builderDraft;
@@ -274,12 +274,14 @@ async function builderStart(){
  const params=new URLSearchParams(location.hash.slice(1));
  for(const [id,fn] of [['builder-save',()=>opTask(null,builderSave)],['builder-yaml',builderYamlDialog],['builder-download',builderDownload],['builder-drafts',builderDraftsDialog],['builder-welcome-new',()=>builderNewDialog(params.get('root')||opBuilderRoot('',builderCaps?.roots))],['builder-welcome-drafts',builderDraftsDialog],['builder-problem-reload',()=>location.reload()],['builder-problem-download',builderDownload],['builder-problem-retry',builderStoreAgain],['builder-note-retry',()=>opTask(null,builderConnect)]])$(id).onclick=fn;
  builderRenderBar();
- // A draft is in this browser: it opens whether or not the manager answers.
+ // The editor takes its device templates when it opens, and they carry the images this site already uses,
+ // so the manager is asked first. A draft is in this browser: it opens even when the manager never answers.
+ const asked=(async()=>{await refresh();[,builderKnown]=await Promise.all([builderConnect(),api('/operations/known-images').then(r=>r.json()).then(v=>v.images||{}).catch(()=>({}))]);})();
+ await Promise.race([asked.catch(()=>{}),new Promise(done=>setTimeout(done,5000))]);
  const local=params.get('draft')?draftRead(builderStore,params.get('draft')):null;
  if(local)builderUse(local);else if(params.get('draft'))$('builder-welcome-message').textContent='That draft is not in this browser. Drafts stay in the browser they were made in: open a downloaded draft file, or start a new lab.';
  try{
-  await refresh();
-  [,builderKnown]=await Promise.all([builderConnect(),api('/operations/known-images').then(r=>r.json()).then(v=>v.images||{}).catch(()=>({}))]);
+  await asked;
   if(params.get('path'))builderUse(await builderOpenFromVm(params.get('path')));
   else if(!local&&params.get('root'))builderNewDialog(params.get('root'));
   await builderReconcile();

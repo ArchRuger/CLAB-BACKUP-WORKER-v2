@@ -144,7 +144,9 @@ async function opReview(request){
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
  $('op-confirm').onclick=()=>opTask(dialog,async()=>{
   const job=await json('/operations/confirm','POST',{token:value.token});dialog.close();
-  if($('op-editor')?.open)$('op-editor').close();
+  // The file has been chosen and the operation runs: the file dialogs are done, and the folder browser
+  // must not stay open over the lab page that now reports how the operation goes.
+  for(const id of ['op-editor','op-browser'])if($(id)?.open)$(id).close();
   if(typeof selectLab==='function'&&labId&&labId!==activeId&&(state.labs||[]).some(l=>l.id===labId))selectLab(labId);
   await refresh();
   // Lifecycle actions on the open lab report through the header and the banner ([View output]);
@@ -176,11 +178,19 @@ function opInspectionRows(output){
 function opInspectionTable(rows){return `<div class="op-inspection"><table><caption>${rows.length} running ${rows.length===1?'device':'devices'}</caption><thead><tr>${['Topology','Lab','Device','Type / image','State / health','IPv4 / IPv6'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.topology)||'—'}</td><td>${esc(r.lab)}</td><td>${esc(r.node)}</td><td>${esc(r.kind)}<small>${esc(r.image)}</small></td><td>${esc(r.state)}</td><td>${esc(r.ipv4)}<small>${esc(r.ipv6)}</small></td></tr>`).join('')}</tbody></table></div>`;}
 // The outcome is what a reader looks for first: a large green (or red) banner names
 // the action, the lab and the result before the raw command output; the exit code is a detail.
+// A failure a student can act on, in words. Image references are shown as the topology names them
+// (containerlab prints the registry it tried in front).
+function opJobHint(job){
+ if(!['failed','interrupted'].includes(job.status))return '';
+ const images=[...new Set([...String(job.output||'').matchAll(/Failed to pull image\s+image=(\S+)/g)].map(m=>m[1].replace(/^docker\.io\/(library\/)?/,'')))];
+ if(images.length)return 'The VM does not have '+(images.length>1?'these images':'this image')+' and could not download '+(images.length>1?'them':'it')+': '+images.join(', ')+'. Check the image name on the devices that use '+(images.length>1?'them':'it')+' (open the topology file and choose Edit visually, then the device\'s Image field), or ask for the image to be installed on the VM.';
+ return '';
+}
 function opJobBanner(job){
  const label=opLabels[job.action]||job.action,done=job.status==='succeeded',failed=['failed','interrupted'].includes(job.status);
  const detail=[job.name,job.message].filter(Boolean).join(' · ');
  const exit=job.exit_code===null||job.exit_code===undefined?'':'Exit code '+job.exit_code;
- return {tone:done?'good':failed?'bad':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:`${label} ${job.status}…`,detail,exit};
+ return {tone:done?'good':failed?'bad':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:`${label} ${job.status}…`,detail,exit,...(opJobHint(job)?{hint:opJobHint(job)}:{})};
 }
 async function opShowJob(id){
  clearTimeout(opOutputTimer);
@@ -194,7 +204,7 @@ async function opShowJob(id){
    const job=await(await api('/operations/'+id)).json();fails=0;
    if(!dialog.open){if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();opJobDone(job);}return;}
    const heading=dialog.querySelector('h2');if(heading)heading.textContent=(opLabels[job.action]||job.action)+(job.name?' · '+job.name:'');
-   const banner=opJobBanner(job),shown=$('op-job-banner');shown.hidden=false;shown.className='op-banner '+banner.tone;shown.innerHTML=`<strong>${esc(banner.title)}</strong><span>${esc(banner.detail)}</span>${banner.exit?`<small class="${job.exit_code?'op-exit-bad':''}">${esc(banner.exit)}</small>`:''}`;
+   const banner=opJobBanner(job),shown=$('op-job-banner');shown.hidden=false;shown.className='op-banner '+banner.tone;shown.innerHTML=`<strong>${esc(banner.title)}</strong><span>${esc(banner.detail)}</span>${banner.exit?`<small class="${job.exit_code?'op-exit-bad':''}">${esc(banner.exit)}</small>`:''}${banner.hint?`<p class="op-banner-hint">${esc(banner.hint)}</p>`:''}`;
    const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for the VM…';if(follow)pre.scrollTop=pre.scrollHeight;
    const rows=opInspectionRows(job.output||'');
    const inspectAction=['inspect','inspect-all'].includes(job.action);
