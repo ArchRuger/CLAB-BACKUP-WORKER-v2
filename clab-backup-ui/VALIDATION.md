@@ -1,3 +1,33 @@
+# UI review 001, step 1: labs found on the VM move under Manager — 1.30.2
+
+Prepared on `claude/ui-review-001` from `main` `21823c6` on 2026-09-20 on the dev VM `clab-llm-dev2`.
+Requirement UI-001 of `docs/ui-review-001/CHECKLIST.md`. The review PDF was not on the VM; the work
+follows the maintainer's written brief. **Fixture only: no live VM, lab or device was involved**, and
+the running development manager on the VM was not rebuilt for this step.
+
+## What was run
+
+- `node --test tests/*.js`: 164 of 164 (`test_home_ui.js`: the discovered-section test now asserts that
+  Home has no such section and checks `homeVmLabs()` with the same cases as before — imported, hidden,
+  excluded, loading; `test_readiness_ui.js`: new test for the menu count line, the dialog's three lists,
+  its empty texts and the menu entry opening it).
+- `python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check` on the changed scripts, `git diff --check`.
+- **Browser, fixture manager** (`docs/redesign/tools/fixture_manager.py`, Chromium through Playwright):
+  `verify_after.py` 95 of 95 checks at 1920×1080, 1440×900 and 1366×768, 0 console errors, 0 page
+  errors, one handled 409 per viewport as before (three checks replace the old "discovered section is
+  listed" one: no section on Home, the count line in the Manager menu, a lab offered in the dialog).
+  `docs/ui-review-001/tools/check_ui001.py` 7 of 7: no section and no "Also running on the VM" text on
+  Home; the dialog and the focused entry survive a 4 s poll; *Add to My labs* on the fixture's
+  `extra-lab` (the fixture VM has no files for it) opens the manual import with the refusal above the
+  dialog and imports nothing when closed; *Stop hiding* clears the exclusion and imports nothing;
+  Escape closes the dialog. Screenshots inspected: `~/ui-review/review-001/chunk01/` on the VM.
+
+## Not covered
+
+The confirmation path of a successful import preview was not exercised in a browser in this step (the
+fixture refuses the preview); its code is unchanged apart from closing the new dialog after the import.
+
 # Lab builder quality pass — 1.30.1
 
 Prepared on `claude/lab-builder-quality-pass` from `main` `5e9aa86` on 2026-09-20 on the dev VM

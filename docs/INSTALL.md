@@ -50,7 +50,7 @@ Grafana plugin and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.30.1 — guided setup
+Containerlab Node Manager 1.30.2 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -112,7 +112,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The installer ends with `Manager 1.30.1: running; HTTP and version checks passed.`
+The installer ends with `Manager 1.30.2: running; HTTP and version checks passed.`
 and the local address. Open `http://VM_IP:8081` from your workstation (the VM's LAN
 address, not the workstation's `127.0.0.1`).
 
@@ -263,7 +263,7 @@ The final terminal checks verify the local manager. On your workstation:
    fingerprint, reopen **Manager ▾ › VM connection…** and compare it with the VM
    console host key.
 2. Click **Deploy a new lab**, pick a topology on the VM and deploy it, or add a lab
-   that already runs from **Also running on the VM**. Wait until the lab header
+   that already runs from **Manager ▾ › Labs found on the VM…**. Wait until the lab header
    reports every device ready (*n of n devices ready*).
 3. Click **Open lab map ↗** under **Tools › Telemetry**: the manager starts Grafana on
    the VM (a few seconds) and shows the network dashboard; confirm it and the lab map

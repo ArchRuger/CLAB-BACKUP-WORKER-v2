@@ -1,0 +1,82 @@
+# UI review 001 — requirement checklist
+
+Source: the maintainer's brief of 2026-09-20, which translates
+`Containerlab_Node_Manager_UI_Review_001.pdf` (eight pages). The PDF itself was **not available on
+the dev VM**; every requirement below is taken from the brief's text. Status is what Git contains,
+not what a conversation said: check `git log` and the remote before trusting a row.
+
+Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that delivered it).
+
+## UI-001 — "Also running on the VM" leaves the main page ☑ 1.30.2
+
+- ☑ The section no longer occupies Home.
+- ☑ Reachable under the Manager menu: **Manager ▾ › Labs found on the VM…** (a dialog), with a count
+  line under the menu entry (*n not in My labs · n hidden*).
+- ☑ Add to My labs (confirmation with the files), hidden labs with *Import again* and *Stop hiding*
+  (button, right-click and keyboard menu) and *File check details* all moved unchanged.
+- ☑ Discovery behaviour untouched: no backend change, nothing is imported or unhidden by the move.
+- Decision: the first-run empty page (no labs at all) keeps its short *Already running on the VM*
+  list until UI-002 rebuilds Home; it is the onboarding path the install guides use.
+
+## UI-002 — Deploy and Build are the two primary Home actions ☐
+
+- ☐ Two prominent choices: DEPLOY (browse files on the VM, or upload from this computer) and BUILD
+  (opens the visual lab builder directly).
+- ☐ Wording says where the files are (VM versus own computer); errors are understandable.
+- ☐ Lab list below, under a *Recent labs* tab, newest deployment first, from real deployment
+  information; a documented stable fallback for labs without it.
+- ☐ Favourites, card actions and lab access kept; *Continue where you left off* no longer outranks
+  the two actions or overrides the order.
+- ☐ Polling and navigation do not reset the active tab or reorder by unrelated activity.
+
+## UI-003 — Edit map gets the visual builder's map-editing capabilities ☐
+
+- ☐ Capability matrix: installed builder versus Edit map (`docs/ui-review-001/MAP-PARITY.md`).
+- ☐ Every map-editing capability of the matrix implemented and tested, or listed as incomplete.
+- ☐ Positions, text, shapes, annotations and style survive save, close, reopen and further edits.
+- ☐ The manager's topology view draws the saved map correctly; unsupported data is never dropped.
+- ☐ Cancel / unsaved-change behaviour; no deployment, no topology or runtime change from a map edit.
+- ☐ Annotation import/download and draw.io export kept.
+
+## UI-004 — Save progress options are explained ☐
+
+- ☐ Create checkpoint, Save on this VM only, Saved versions & history, Save location settings: a
+  short, accurate explanation each, derived from the implementation.
+- ☐ On hover and on keyboard focus; inside the viewport; never covers an action or closes the menu.
+
+## UI-005 — Lab actions dropdown is simpler ☐
+
+- ☐ *Import map*, *Edit map*, *Telemetry settings*, *Operation history* move into an *Advanced
+  options* group at the bottom; nothing else moves (Packet capture, Lab files, All lab operations stay).
+- ☐ Pointer and keyboard; stays on screen; same lab states as before; *Edit map* stays on the map toolbar.
+
+## UI-006 — Devices tab is visually consistent ☐
+
+- ☐ Identity/platform, state/reason, Open CLI and Details align across rows; heading, search and
+  Technical view relate properly.
+- ☐ Long names and multi-line reasons do not overlap or shift other rows; every state stays readable.
+- ☐ Laptop widths and zoom: no clipped actions, no needless horizontal scrolling.
+
+## UI-007 — Save location clean-up, review is mandatory ☐
+
+- ☐ A. The marked *Technical details* disclosure reads *Git repo details* (only that one).
+- ☐ B. *Change folder…* is open when Save location opens; a deliberate collapse survives polling.
+- ☐ C. The *Let me review changes before they are uploaded* checkbox is gone; the review always
+  happens for the user-started upload/save it governs, also for saved opt-outs; cancel uploads
+  nothing and reports nothing as saved. Scheduled / non-interactive work is not altered silently.
+
+## UI-008 — Repository folder browser ☐
+
+- ☐ Reproduce: a folder `working` created under `JunOS-TEST-2` disappears. Root cause found.
+- ☐ A new folder appears at once under its parent, stays after refresh, polling and reopening, and
+  after a failed save while the location is still valid; empty folders are shown truthfully.
+- ☐ Every folder with children expands and collapses, ancestors of the save location included; the
+  destination in use is highlighted without forcing its ancestry open; browsing never changes it.
+- ☐ Expansion, selection and focus survive background refreshes; duplicates and errors are accurate.
+
+## Planned chunk order
+
+1. UI-001 (1.30.2, done) → 2. UI-005 → 3. UI-004 → 4. UI-007 A+B → 5. UI-007 C → 6. UI-008 root
+cause and fix → 7. UI-006 → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
+10+. UI-003 matrix, then parity in increments. One patch release, one commit and one verified push
+per chunk.

@@ -4,6 +4,25 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.2
+
+**UI review 001, step 1: "Also running on the VM" leaves the main page (UI-001).** The first of a
+series of small releases that implement the maintainer's UI review; the requirement checklist and the
+pickup notes are in [docs/ui-review-001/](ui-review-001/CHECKLIST.md). Frontend only; the backend and
+the VM helpers are unchanged apart from the lockstep version.
+
+- **Home shows labs, not discovery.** The *Also running on the VM* section is gone from My labs. Its
+  contents are one click away under **Manager ▾ › Labs found on the VM…**: the labs the VM reports that
+  are not in My labs (click one to add it, with the same confirmation), the labs removed earlier with
+  *Import again* and *Stop hiding* (button, right-click and keyboard menu as before) and *File check
+  details*. The menu entry carries a count line (*1 not in My labs · 1 hidden*) so a waiting lab is
+  still noticed; the dialog says why it is empty when it is (VM not connected, VM not answering, or
+  every lab already added).
+- Nothing about discovery changed: no lab is imported or unhidden by the move, and the messages that
+  pointed at the old section (remove dialog, hidden-lab dialog, the toast after a removal) and the
+  guides now name the menu entry. The first-run page without any lab keeps its short *Already running
+  on the VM* list for now.
+
 ## Changes in 1.30.1
 
 **Lab builder quality pass.** Fixes found by walking the student journeys in a real browser (fixture

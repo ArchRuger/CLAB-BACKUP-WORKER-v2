@@ -1,3 +1,16 @@
+# UI review 001 (in progress) — 1.30.2
+
+The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
+`claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
+each chunk is validated and pushed) and `docs/ui-review-001/CHECKLIST.md` (UI-001 … UI-008 with their
+acceptance criteria). This section grows with each step; the newest facts are in the pickup file.
+(1) **1.30.2, UI-001**: Home has no *Also running on the VM* section. `#discovered-labs`,
+`#excluded-labs` and `#discovery-files` kept their ids and handlers and now live in
+`#vm-labs-dialog` (markup in `management.js`), opened by `#manager-vm-labs` in the Manager menu;
+`homeVmLabs(discovery)` in `home.js` is the pure count behind the menu's note line. Do not put a
+discovery list back on Home. `docs/ui-review-001/` may name any release (`HISTORY_DIRS` in
+`verify-release.py`).
+
 # Lab builder quality pass — 1.30.1
 
 Read docs/CHANGELOG.md "Changes in 1.30.1" and docs/lab-builder/QA-FINDINGS.md (every finding with its

@@ -1,6 +1,6 @@
 'use strict';
-// home.js — the Home page ("My labs"): the Continue card, one card per lab, the "Also running on the
-// VM" section and the delegated card actions. Vocabulary comes from status.js and storage from shell.js;
+// home.js — the Home page ("My labs"): the Continue card, one card per lab and the delegated card
+// actions. Labs the VM runs that are not in My labs live under Manager ▾ › Labs found on the VM…. Vocabulary comes from status.js and storage from shell.js;
 // both are read at call time so the harness can load this file with stubs.
 function homeLabState(lab){return typeof labState==='function'?labState(lab,typeof labContext==='function'?labContext():state):{key:'',label:lab.deployment?.status||'Not matched to a running lab',pill:'neutral'};}
 function homeReadyLine(lab,ls){if(typeof readyLine==='function')return readyLine(lab,ls);const total=(lab.nodes||[]).length,ready=(lab.nodes||[]).filter(n=>n.ssh_ready).length;return ls.key==='stopped'?'Not running':['unlinked','unknown'].includes(ls.key)?'':`${ready} of ${total} devices ready`;}
@@ -29,9 +29,14 @@ function homeCard(lab,continued=false){
  return `<article class="lab-card${continued?' continue':''}" data-lab-id="${id}"><div class="lab-card-head"><div>${continued?'<p class="caption">Continue where you left off</p>':''}<h3>${name}</h3></div><div class="lab-card-tools"><button type="button" class="icon-button" data-lab-favorite="${id}" aria-pressed="${favourite?'true':'false'}" aria-label="${favLabel}" title="${favLabel}"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-star"></use></svg></button><button type="button" class="icon-button" data-lab-more="${id}" aria-label="More actions for ${name}" title="More actions">⋯</button></div></div><p class="lab-status-line"><span class="pill ${esc(ls.pill||'neutral')}">${esc(ls.label)}</span><span>${esc(homeReadyLine(lab,ls))}</span></p><p>${esc(homeSavedLine(lab))}</p>${openedLine?`<p>Last opened ${esc(openedLine)}</p>`:''}<div class="actions"><button type="button" class="button primary" data-lab="${id}">Open lab</button>${start}</div></article>`;
 }
 function homeMarkup(el,html){if(!el)return;if(typeof setMarkup==='function')setMarkup(el,html);else el.innerHTML=html;}
+// What Manager ▾ › Labs found on the VM… has to offer: labs the VM reports that are not in My labs, and
+// labs hidden after a removal. An excluded discovery counts as hidden only, never as waiting.
+function homeVmLabs(discovery){
+ const d=discovery||{},waiting=(d.discovered||[]).filter(l=>!l.imported&&!l.excluded).length,hidden=(d.ignored_labs||[]).length;
+ return {waiting,hidden,note:[waiting?waiting+' not in My labs':'',hidden?hidden+' hidden':''].filter(Boolean).join(' · ')};
+}
 // Called from render() on every poll; cheap because every list is diffed. With exactly one lab only the
-// Continue card is shown. The discovered section appears whenever the VM has a lab that is not in My labs
-// or a lab was hidden earlier, regardless of how many labs exist.
+// Continue card is shown.
 function renderHome(){
  if(!$('home'))return;
  if(typeof current==='function'&&current())return;
@@ -42,8 +47,6 @@ function renderHome(){
  const sorted=[...labs].sort((a,b)=>Number(!!b.favorite)-Number(!!a.favorite)||String(a.name).localeCompare(String(b.name)));
  const cards=$('lab-cards');if(cards){homeMarkup(cards,single?'':sorted.map(l=>homeCard(l,false)).join(''));cards.hidden=single||!labs.length;}
  if($('home-actions'))$('home-actions').hidden=!loaded||!labs.length;
- const discovery=state.discovery||{},others=(discovery.discovered||[]).some(l=>!l.imported&&!l.excluded)||(discovery.ignored_labs||[]).length>0;
- if($('home-discovered'))$('home-discovered').hidden=!loaded||!others;
 }
 if($('home')){
  $('home').addEventListener('click',async e=>{

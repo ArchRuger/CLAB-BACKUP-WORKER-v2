@@ -67,8 +67,17 @@ def home(r):
     r.check('home: lab cards render', len(cards) >= 1, cards)
     r.check('home: skeleton hidden after load', r.js('() => document.getElementById("home-skeleton").hidden'))
     r.check('home: no VM banner when the VM is connected', r.js('() => document.getElementById("home-vm-banner").hidden'))
-    r.check('home: other labs on the VM listed', not r.js('() => document.getElementById("home-discovered").hidden'))
+    r.check('home: no discovered section on the main page', r.js('() => !document.getElementById("home-discovered")'))
     r.check('home: no raw deployment words in pills', not any(c['pill'] in ('Unlinked', 'Not deployed', 'Partially running') for c in cards), cards)
+    # Labs the VM has that are not in My labs live under the Manager menu
+    p.click('#manager-button')
+    p.wait_for_selector('#manager-menu-list:not([hidden])')
+    r.check('manager menu: labs found on the VM are counted', 'not in My labs' in r.js('() => document.getElementById("manager-vm-labs-note").textContent'))
+    p.click('#manager-vm-labs')
+    p.wait_for_selector('#vm-labs-dialog[open]')
+    r.check('labs found on the VM: a lab can be added', r.js('() => document.querySelectorAll("#discovered-labs [data-setup-name]").length') >= 1)
+    r.shot('home-vm-labs-dialog')
+    p.click('#vm-labs-dialog .dialog-actions [data-dismiss]')
     # Manager menu open across a poll
     p.click('#manager-button')
     p.wait_for_selector('#manager-menu-list:not([hidden])')

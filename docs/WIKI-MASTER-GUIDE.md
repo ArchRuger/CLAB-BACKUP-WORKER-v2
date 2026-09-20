@@ -820,7 +820,7 @@ connection works.
 In the manager:
 
 1. Choose **Manager ▾ › Refresh lab list**, or wait for the next 30-second check.
-2. On Home, under **Also running on the VM**, choose **Add to My labs** on the lab
+2. Open **Manager ▾ › Labs found on the VM…** and choose **Add to My labs** on the lab
    labelled **Ready to import**.
 3. Review its name, device counts, files and warnings, then click **Add lab**.
 4. Confirm the lab appears on **My labs** and that its devices have management
@@ -863,7 +863,7 @@ Automatic import is preferred. Review the preview before saving; cancelling leav
 
 ## Manual fallback
 
-If automatic file reading fails, check **File check details** under **Also running on the VM** on Home for attempted paths and errors. Choose **Manager ▾ › Import lab files…** (or **Import an Ansible inventory…**), then upload the original YAML, inventory and topology/annotations files through the relevant import forms. Annotations alone describe a drawing; supply YAML or topology data for wiring. Missing files, symlinks, oversized files and unusual unresolved definitions can require correction or manual import.
+If automatic file reading fails, check **File check details** under **Manager ▾ › Labs found on the VM…** for attempted paths and errors. Choose **Manager ▾ › Import lab files…** (or **Import an Ansible inventory…**), then upload the original YAML, inventory and topology/annotations files through the relevant import forms. Annotations alone describe a drawing; supply YAML or topology data for wiring. Missing files, symlinks, oversized files and unusual unresolved definitions can require correction or manual import.
 
 The helper accepts regular files without symlink components, with limits of 1 MiB per file, 8 MiB of file content per inspection and 100 labs. A root-owned generated inventory should work with the installed helper; do not make the lab tree world-writable to fix it.
 
@@ -1218,13 +1218,13 @@ settings. Neither is required for an image upgrade. Neither destroys live labs.
 |---|---|---|
 | Stop/recreate manager container | Retained in the bind mount | Unchanged |
 | Remove from this manager… | Removes one saved workspace/history entries; backup files and audit logs remain | Unchanged |
-| Stop hiding (Home › Also running on the VM) | Allows discovery to offer that lab again; does not import it | Unchanged |
+| Stop hiding (Manager ▾ › Labs found on the VM…) | Allows discovery to offer that lab again; does not import it | Unchanged |
 | Start fresh, type `RESET` | Clears workspaces, device credentials, schedules, backups, jobs/logs and exclusions; retains VM connection and `state.key` | Unchanged |
 | Stop devices | Workspace retained | Stops the open lab's devices; containers remain |
 | Destroy lab… | Workspace retained | Removes the selected deployment's containers and its generated lab folder (`containerlab destroy --cleanup`); the review names the folder |
 | Delete topology file | Separate operation | Removes original source only when undeployed; saves a recovery copy |
 
-After **Remove from this manager…**, the default exclusion keeps the lab hidden. On Home under **Also running on the VM**, choose **Stop hiding** on the hidden lab to offer it again. The next import still needs confirmation.
+After **Remove from this manager…**, the default exclusion keeps the lab hidden. Under **Manager ▾ › Labs found on the VM…**, choose **Stop hiding** on the hidden lab to offer it again. The next import still needs confirmation.
 
 Close active terminals and wait for jobs before **Start fresh**. Resolve pending
 Git saves, or explicitly choose **Keep snapshot only** to dismiss their export

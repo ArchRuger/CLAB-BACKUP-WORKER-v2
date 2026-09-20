@@ -420,10 +420,9 @@ footer {
 .icon-button[aria-pressed="true"] { color: var(--accent); }
 .icon-button[aria-pressed="true"]:hover { background: var(--accent-soft); color: var(--accent-strong); }
 
-.home-discovered { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px 20px; }
-.home-discovered h2, .home-discovered h3 { font-size: 15px; margin-bottom: 6px; }
-.home-discovered p { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
-.home-discovered details { margin-top: 8px; font-size: 13px; }
+.vm-labs .side-button { width: 100%; margin: 8px 0 0; }
+.vm-labs .side-hint { padding: 0; margin: 16px 0 0; }
+.vm-labs .empty-lab .side-button { margin: 0; }
 
 /* Lab workspace header */
 .lab-header {
@@ -1200,12 +1199,12 @@ dl.kv, .kv {
 .health-grid .mono { font-size: 12px; }
 
 /* disclosure defaults inside cards/dialogs; component rules override via higher specificity */
-:where(dialog, .drawer, .card, .panel, .tool-card, .lab-card, .home-discovered, .device-row, .drawer-section, .job-body, .git-repository-card, .git-saves, .git-binding-form, .banner) details > summary {
+:where(dialog, .drawer, .card, .panel, .tool-card, .lab-card, .vm-labs, .device-row, .drawer-section, .job-body, .git-repository-card, .git-saves, .git-binding-form, .banner) details > summary {
   font-size: 13px;
   font-weight: 600;
   color: var(--accent-strong);
 }
-:where(dialog, .card, .panel, .tool-card, .drawer-section, .home-discovered, .banner) > details { margin-top: 12px; font-size: 13px; }
+:where(dialog, .card, .panel, .tool-card, .drawer-section, .vm-labs, .banner) > details { margin-top: 12px; font-size: 13px; }
 :where(dialog, .card, .panel, .tool-card, .drawer-section) > details > :not(summary) { margin-top: 8px; }
 
 /* --------------------------------------------------------------------------
