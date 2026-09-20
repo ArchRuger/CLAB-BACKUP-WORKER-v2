@@ -4,6 +4,60 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.17
+
+**UI review 001, step 16: link label distance in Edit map, and every map tool driven in a browser (UI-003,
+row 10 and the per-row pass).** Frontend only (the editor bundle is unchanged).
+
+- **Link labels…** in the map editor's bar: pick a link (the one selected on the canvas is preselected),
+  give it its own label distance from 0 to 60, or take that away again. It changes one entry of the
+  document's link annotations, found by the link's endpoints as the editor finds it; an entry that
+  carries anything else is kept, one that would be empty is removed. It is one Undo step, **Save map**
+  keeps it and the lab's Topology tab draws it. The label mode for all links stays the tag icon in the
+  editor's toolbar.
+- The editor's link menu no longer shows *capture* and *Link Impairments* in Edit map: they belong to a
+  running lab and did nothing here. *Packet capture…* on the lab page is unchanged.
+- With this release every row of the capability matrix was driven in a real browser, saved, reopened
+  and compared with the stored document: shapes (rectangle, circle, line) and resizing by handle, a group
+  and a device dragged into it, copy / paste / keyboard delete of annotations, a generated layout and
+  Undo taking all of it back, the link label mode, a grid setting, the SVG export, the device look and
+  the link label distance. What the manager's Topology tab does not draw (line arrows, rounded text
+  backgrounds, nested group levels) is stored and shown by the editor; that difference is documented in
+  [docs/ui-review-001/MAP-PARITY.md](ui-review-001/MAP-PARITY.md).
+
+## Changes in 1.30.16
+
+**UI review 001, step 15: the device look is editable in Edit map (UI-003, row 9).** Frontend only (the
+editor bundle is unchanged). UI-003 still has its per-row browser pass open.
+
+- **Device look…** in the map editor's bar opens on the device selected on the canvas (or any device of
+  the map) and sets how it is drawn: icon (the editor's 14 types, or the default by kind), icon colour,
+  icon corner radius, label position, label text direction and label background (a colour, transparent
+  or the default). *Apply to this device* changes exactly those six keys of that device's entry in the
+  map document; *default* removes a key instead of storing an empty value. The device itself, its kind,
+  its links and everything else in the document are untouched, and the editor's own topology form is
+  still not reachable.
+- The look is an ordinary edit: the canvas redraws at once, it is one Undo step, **Save map** keeps it,
+  and the lab's Topology tab draws the icon, colours and label position. Values the editor does not
+  accept are refused in words.
+- The map editor's bar wraps onto a second line instead of clipping **Save map** and the lab's name.
+
+## Changes in 1.30.15
+
+**UI review 001, step 14: Undo and Redo in Edit map (UI-003, row 8).** Frontend and the editor adapter.
+UI-003 is not yet complete (the device look and the per-row browser pass are open).
+
+- **Undo / Redo** buttons in the map editor's bar, and Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z and Ctrl/Cmd+Y (not
+  while typing in a field, where the field's own undo applies). The editor has no undo in the mode Edit
+  map uses, so the history is the page's own: each settled state of the map document is a step (up to
+  60; states that follow each other within 0.7 s are one step, so typing a text or a drag that settles
+  twice is a single undo), a new edit drops what could have been redone, and going back to the map as
+  it was opened leaves nothing to save.
+- A step is put into the running editor as one annotation-only engine command
+  (`setAnnotationsContent`) followed by the snapshot message the editor already understands for a file
+  changed outside it, so the canvas redraws in place and zoom, pan and the next edit keep working. The
+  engine's own undo, which restores the topology file as well, is never used.
+
 ## Changes in 1.30.14
 
 **UI review 001, step 13: Edit map is the lab builder's editor in a map mode (UI-003, steps C and D).**

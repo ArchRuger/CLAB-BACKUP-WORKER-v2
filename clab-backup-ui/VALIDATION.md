@@ -1,3 +1,94 @@
+# UI review 001, step 16: link label distance and the per-row browser pass — 1.30.17
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.16 (`e429911`,
+pushed, CI green). Row 10 and step E.1 of `docs/ui-review-001/MAP-PARITY.md`. **Fixture only.**
+
+## What was run
+
+- `node --test tests/*.js`: 189 of 189. New in `test_map_editor_ui.js`: links read from the manager's
+  drawing in topology order with malformed ones skipped, an existing entry's distance shown, a new entry
+  added with the link's endpoints, an existing one updated in place with its other keys, turning it off
+  keeping an entry that carries something else and removing one that does not, nothing added when there
+  is nothing to turn off, and 61, -1, 2.5, a word and an empty value refused. `test_lab_builder_ui.js`:
+  the three newly hidden link-menu entries exist in the bundle.
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. `verify-release.py`, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 98 of 98 at three viewports, 0 console
+  errors, 0 page errors; `check_ui003.py` 34 of 34; new `docs/ui-review-001/tools/check_ui003b.py` 20 of
+  20: a rectangle, a line and a circle added from the pane menu; the rectangle resized by its
+  bottom-right handle; a group added and *Backup-Worker* dragged into it becoming its member; an
+  annotation copied, pasted and deleted by keyboard with no device lost; the link label mode and a grid
+  setting stored in `viewerSettings`; the radial layout moving the devices and Undo returning every one
+  of them; the SVG export downloading an `<svg>`; the link menu without capture or impairment entries;
+  a distance of 75 refused in words and 48 stored on the chosen link; then **Save map**: the stored
+  document equals the editor's byte for byte, the topology text is byte-identical, every write of the
+  run went to `…/map-document`; after reopening the shapes, the group and its member are there and
+  nothing is unsaved; the manager's drawing has the shapes, the group, the label mode and the link's
+  distance of 48. Screenshots inspected: `~/ui-review/review-001/chunk17/` on the VM.
+
+## Live, after the push: the development manager on the VM at 1.30.17
+
+`sudo bash deploy/start-manager.sh --manager-only` from `e7be534` (CI green). Through the LAN address
+`http://192.168.132.132:8081` (plain HTTP, fresh browser cache) and **only on the QA lab `qa-nos-105458`**:
+a dragged device, *Undo* (back in place, nothing to save) and *Redo*; *Device look…* applying an icon and
+a label position to a device; *Link labels…* giving a link its own distance, *Undo* taking it back and
+*Redo* restoring it; **Save map** storing exactly the editor's document with the topology text identical
+and `PUT …/map-document` as the only write; the manager's drawing carrying the look; 0 console / page
+errors. The QA map was then put back byte for byte. A first attempt of this pass aborted in the script
+(the test drag had dropped one device onto another) before anything was saved. The maintainer's course
+labs were not opened in the editor. Screenshot: `~/ui-review/review-001/live-1.30.17/`.
+
+## Not driven one by one
+
+The remaining fields of the editor's text, shape and group panels (font family, italic, underline,
+alignment, colours, rotation, line arrows, corner radius, group level and label position), the rotate
+handle, duplicate (Ctrl+D) and zoom / pan. They go through the same panels and the same annotation
+commands as the fields that were driven.
+
+# UI review 001, step 15: the device look in Edit map — 1.30.16
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.15 (`f7927c1`,
+pushed). Row 9 of `docs/ui-review-001/MAP-PARITY.md`, approved by the maintainer. **Fixture only.**
+
+## What was run
+
+- `node --test tests/*.js`: 188 of 188. New in `test_map_editor_ui.js`: the devices and their current look
+  read from the document; applying a look changes the six look keys of one entry and nothing else (its
+  position, group and unknown keys, other devices, groups and unknown top-level keys compared);
+  *default* removes keys; an unknown icon, a colour that is not one, a radius outside 0–20 or not
+  whole, an unknown label position or direction and a CSS value as background are refused; a device
+  that is not on the map is refused; every offered icon exists in the bundled editor.
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. `verify-release.py`, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 98 of 98 at three viewports, 0 console
+  errors, 0 page errors. `docs/ui-review-001/tools/check_ui003.py` 34 of 34 (five new): the dialog opens
+  on the device selected on the canvas; icon, colour, corner radius and label position arrive in the
+  document; a radius of 99 is refused in words and changes nothing; the look is one undo step; after
+  **Save map** the manager's drawing carries the icon, the colour and the label position. The canvas was
+  inspected in a screenshot (a red, rounded server icon with its label above). The bar was measured at
+  1440, 1366 and 1024 px wide: no clipped button, the lab name not cut, no sideways scrolling.
+  Evidence: `~/ui-review/review-001/chunk16/` on the VM.
+
+# UI review 001, step 14: Undo and Redo in Edit map — 1.30.15
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.14 (`723d5e8` and
+the validation record `3f5fef5`, pushed, CI green). Row 8 of `docs/ui-review-001/MAP-PARITY.md`, approach
+chosen by the maintainer (a page-level history). **Fixture only.**
+
+## What was run
+
+- Bundle rebuilt with Node 24.21.0; `node build.mjs --check` reproduces the committed assets.
+- `node --test tests/*.js`: 187 of 187. New in `test_map_editor_ui.js`: the history as a value (first
+  state never merged away, quick successions merged, unchanged state ignored, a new edit after an undo
+  dropping the redo branch without overwriting the step returned to, the 60-step limit), the buttons
+  following it, a step going through the adapter's handle without being pushed again, *Saved in the
+  manager* and Save off back at the opened map, a failed step leaving the history where it was; the
+  adapter using `setAnnotationsContent` and never the engine's `undo`, `redo` or `setYamlContent`.
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. `verify-release.py`, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `docs/ui-review-001/tools/check_ui003.py` 29 of 29 (two
+  new: *Undo* puts a dragged device back on the canvas with nothing left to save and Undo off;
+  Ctrl+Shift+Z brings the move back with Redo off; everything after it, including the save with one
+  request and the byte-identical topology, still passes). An exploratory run also showed a drag after
+  an undo being accepted by the editor and dropping the redo branch.
+
 # UI review 001, step 13: Edit map in the builder's editor — 1.30.14
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.13 (`3ee4b3c`,

@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.14
+# UI review 001 (in progress) — 1.30.17
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -111,6 +111,25 @@ loaded one is restored and the edit refused. A change to `main.tsx` needs `node 
 runtime menu entries, the traffic-rate entry and the device palette tab; test ids built from a template
 (`context-menu-item-${id}`, `panel-tab-${id}`) are handled in `test_lab_builder_ui.js`. `/static/map-editor.html`
 shares the builder's CSP exemption (`main.py`) and is in `verify-release.py`'s page list.
+(14) **1.30.15, UI-003 row 8 — undo / redo is the page's.** `mapHistoryPush` / `mapHistoryStep` (pure) and
+`mapTravel()` in `map-editor-page.js`; `persist()` pushes every settled state unless `mapApplying`. The
+adapter hands the page `attach({applyAnnotations(text)})` (map mode only): inside `settled()` it applies
+`setAnnotationsContent` with `skipHistory` at the engine's current revision and then posts
+`{type: "topology-host:snapshot", protocolVersion: 1, snapshot, reason: "external-change"}` to the window,
+which is how the editor redraws without a remount. Never whitelist or call the engine's `undo` / `redo`.
+The same handle is the way to change anything else in the document from the page (the device look).
+(15) **1.30.16, UI-003 row 9 — Device look.** `#map-look-dialog` in `map-editor.html`; pure
+`mapLookDevices`, `mapLookClean`, `mapApplyLook` in `map-editor-page.js` edit the six `MAP_LOOK_KEYS` of one
+`nodeAnnotations` entry (a default removes the key) and `mapLookApply()` sends the document through
+`mapEditor.applyAnnotations` **without** `mapApplying`, so `persist()` records it as one undo step.
+`MAP_ICONS` must stay a subset of the editor's `NODE_TYPE_SET` (a test checks the bundle). The form is
+`novalidate` so refusals are the page's sentences. `.map-editor .builder-bar` wraps.
+(16) **1.30.17, UI-003 row 10 and the per-row pass.** `#map-link-dialog`: `mapLinks(links, text)` takes the
+links from `GET /api/labs/{id}/topology` (topology order) and `mapApplyLinkOffset()` writes
+`edgeAnnotations` entries keyed like the editor's `buildEdgeKey` (`source|sourceEndpoint|target|targetEndpoint`,
+0–60); the canvas selection maps to a link by `Clab-Link<n>`. The link menu's `capture-source`,
+`capture-target` and `impair-edge` are hidden in `.map-editor`. `docs/ui-review-001/tools/check_ui003b.py`
+drives the matrix rows; rerun it and `check_ui003.py` after any editor upgrade or adapter change.
 
 # Lab builder quality pass — 1.30.1
 

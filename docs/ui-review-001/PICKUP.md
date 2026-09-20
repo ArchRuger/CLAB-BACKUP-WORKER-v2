@@ -47,34 +47,32 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.12 | UI-003 step A | `MAP-PARITY.md`: capability matrix from the code, approach chosen; live read-only check of 1.30.11 on the dev VM | `~/ui-review/review-001/live-1.30.11/` |
 | 1.30.13 | UI-003 step B | Manager keeps the full annotations document (`lab['annotations']`, `keep_document`, `map_document`), `GET`/`PUT …/map-document` | python 711 (unit/API only, no browser) |
 | 1.30.14 | UI-003 steps C + D | Adapter map mode (`mapOnly`, `MAP_COMMANDS`), `map-editor.html` / `map-editor-page.js`, Edit map wired by `map_editor`, exports and import kept | `check_ui003.py` 27/27, `verify_after.py` 98/98 ×3, node 186, python 711, bundle `--check` OK, `~/ui-review/review-001/chunk13`, `chunk14` |
+| 1.30.15 | UI-003 row 8 | Page-level Undo / Redo (`mapHistory*`, `mapTravel`, adapter `attach` → `applyAnnotations`) | `check_ui003.py` 29/29, node 187, bundle `--check` OK |
+| 1.30.16 | UI-003 row 9 | *Device look…* dialog (`mapApplyLook` over `nodeAnnotations`, one undo step), bar wraps | `check_ui003.py` 34/34, `verify_after.py` 98/98 ×3, node 188, `~/ui-review/review-001/chunk16/` |
+| 1.30.17 | UI-003 row 10 + per-row pass | *Link labels…* dialog (`mapApplyLinkOffset`), link-menu runtime entries hidden, `check_ui003b.py` | `check_ui003b.py` 20/20, `check_ui003.py` 34/34, `verify_after.py` 98/98 ×3, node 189, `~/ui-review/review-001/chunk17/` |
 
 ## Next
 
-**UI-003 is the only open requirement, and it is not complete.** What remains (step E of `MAP-PARITY.md`):
+All eight requirements are delivered. What is left is optional or needs the maintainer:
 
-1. **Drive every ◐ row in a browser and save it**: extend `docs/ui-review-001/tools/check_ui003.py` (shape
-   with resize/rotate/arrows, group creation and dragging a device in, copy/paste/duplicate, a generated
-   layout, link label offset, link label mode, grid appearance, SVG export), each followed by save →
-   reopen → compare the stored document, then flip the row to ☑.
-2. **Row 8, undo / redo**: absent in the editor's view mode. Options: a page-level history of the
-   annotations document (remount with an earlier text), or running the editor in edit mode with the
-   whitelist and hiding the topology tools by test id. Decide after trying the first.
-3. **Row 9, device look** (icon, colours, label position): upstream edits it with `editNode`. An adapter
-   translation would accept `editNode` only when nothing but annotation fields differ, and write them as
-   `nodeAnnotations`; view mode does not show that editor, so this depends on the decision in 2.
-4. **The Topology view draws less than the editor stores** (rotation, line arrows, rounded text
-   background, nested levels): extend `parse_drawing` / `topology-render.js` where cheap, document the rest.
-5. **Live pass**: done for open / drag / save at 1.30.14 on the QA lab `qa-nos-105458`; repeat it for the
-   rows of item 1 after each bundle change (rebuild with `sudo bash deploy/start-manager.sh --manager-only`;
-   the immutable bundle only updates with the release number). Do not edit the maintainer's course maps
-   without asking.
+1. **The Topology tab does not draw line arrows, rounded text backgrounds and nested group levels** (the
+   document keeps them and the editor shows them). Drawing them means `parse_drawing` (`app/topology.py`)
+   reading `lineStartArrow` / `lineEndArrow` / `lineArrowSize` / `roundedBackground`, `topology-render.js`
+   and `app/telemetry_map.py` / `drawio_export.py` following. Ask before starting: it widens the
+   manager's drawing schema.
+2. **Live pass**: done at 1.30.17 on the QA lab `qa-nos-105458` through `http://192.168.132.132:8081`
+   (undo/redo, device look, link labels, save; see VALIDATION). The development manager runs 1.30.17.
+   Never edit the maintainer's course maps without asking.
+3. **A second pull request** for 1.30.10 onwards (the maintainer merged up to 1.30.9 as #41).
+4. Not exercised anywhere yet, by decision: a real review-and-upload to the Git host, a real upload
+   + `create`, a real folder move.
 
 ## Known limits and open points
 
 - Every release of this branch was validated against the fixture manager; 1.30.11 also had a read-only live pass. CI was green for 1.30.2 to 1.30.12 when this was written (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
-  --manager-only` (helpers must match the release); last done at **1.30.14 (`723d5e8`) on 2026-09-20**,
+  --manager-only` (helpers must match the release); last done at **1.30.17 (`e7be534`) on 2026-09-20**,
   followed by a live check of the map editor through `http://192.168.132.132:8081` on the QA lab
   `qa-nos-105458` only (see VALIDATION, 1.30.14; the read-only pass of 1.30.11 is under 1.30.12).
 - `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home.
