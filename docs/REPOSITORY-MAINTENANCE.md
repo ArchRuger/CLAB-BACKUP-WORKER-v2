@@ -43,7 +43,7 @@ refuses. The rules, enforced by `verify_docs()` in `deploy/verify-release.py`:
 - **Living guides** (`README.md`, `docs/*.md`, `deploy/*.md`, the app README,
   `NODE-FEATURES.md`, the VM connection and capture setup pages) may name the
   manager's release only where they mean the current one, for example the
-  installer's closing line `Manager 1.30.17: running`. Those mentions are moved by
+  installer's closing line `Manager 1.30.20: running`. Those mentions are moved by
   the bump tool.
 - **Release history** is written with a relational phrase, which is allowed
   anywhere: `since 1.23.0`, `before 1.21.1`, `introduced in 1.19.4`, `as of 1.22.0`,
@@ -60,6 +60,9 @@ refuses. The rules, enforced by `verify_docs()` in `deploy/verify-release.py`:
   `clab-backup-ui/VALIDATION.md`, `agent instructions.md` and everything under
   `docs/archive/`, `docs/redesign/` and `docs/ui-review-001/` (design notes and a per-release
   review log). Each of the first three must lead with the current release.
+- **Relative links and anchors resolve.** `python3 docs/maintenance-audit/tools/check_links.py` checks
+  every tracked Markdown file (standard library only, run from anywhere inside the checkout); run it
+  after moving or renaming a document, because a move breaks the links inside the moved file too.
 - **Every documented command works from any directory.** Scripts locate the
   checkout themselves; the guides write `bash "$HOME/projects/clab-manager/deploy/…"`
   and the health check's `Next:` lines print absolute paths. A command that needs a

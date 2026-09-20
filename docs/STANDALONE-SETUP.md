@@ -64,7 +64,7 @@ After verifying the new manager and history:
    recreated with the lab. Preserve your network nodes and their configuration.
 2. Remove the stopped old worker container when ready, for example:
    `docker rm clab-BGP_TheoryToPractice-Backup-Worker`.
-3. In the saved workspace, use **Update lab YAML** with the edited topology.
+3. In the saved workspace, use **Advanced › Deployment details › Update topology file…** with the edited topology.
    This removes the old worker from the saved node list while retaining history.
 
 Old inventory-only workspaces remain usable with their manual addresses and
@@ -105,7 +105,7 @@ After loading it, launch it with `deploy/compose.image.yml` as described in the
 Host networking shares the VM's network namespace. The UI binds directly to port
 8081, and the manager can reach node addresses that are reachable from the VM.
 There is no `ports:` mapping and no dependency on a lab Docker network's lifecycle.
-If needed, set `UI_BIND`/`UI_PORT` in your shell before Compose starts. Do not run
+If needed, set `UI_BIND`/`UI_PORT` in `clab-backup-ui/.env` before the launcher runs (`sudo` does not pass shell variables on, and the Grafana setup reads `UI_PORT` from that file). Do not run
 another application on the same listening address/port. Node routing, firewall and
 SSH readiness still apply; deployment status is not proof of a successful NOS login.
 
@@ -137,9 +137,9 @@ In **VM connection**:
 
 - VM address: `127.0.0.1` (the manager shares this VM's networking).
 - SSH port: the VM's SSH port, normally 22.
-- Username: `clab-discovery`.
+- VM username: `clab-discovery`.
 - VM password: the password created during host setup.
-- Inspection method: **Installed discovery helper**.
+- Inspection method: **Installed discovery and file helper**.
 - Save and test connection.
 
 The first successful SSH connection trusts and stores the VM fingerprint. Later
@@ -165,8 +165,8 @@ labs and the VM connection remain.
 
 
 The installed helper reads deployed lab files automatically. New labs wait for
-confirmation: click Ready to import, review files, and choose Import lab or Cancel. Existing
-workspaces show Updates available and offer **Sync from VM**, preserving matching
+confirmation: under **Manager ▾ › Labs found on the VM…** click the lab (*Ready to import*), review files, and choose **Add lab** or **Cancel**. Existing
+workspaces show Updates available and offer **Sync topology from VM**, preserving matching
 node settings, credentials, profiles, schedules and history. Missing files never
 delete a saved workspace. Optional files must be valid and match the YAML; invalid
 files block sync without partial changes. A missing annotation retains an existing
@@ -174,7 +174,7 @@ map. Original YAML is required. New labs can import the YAML while reporting an
 invalid optional file; credentials from a mismatched inventory are skipped.
 Old inspection-only helpers discover nodes only; the launcher installs the matching
 helper. The standard generated folder beside the YAML is tried even without Docker
-labels. **Discovery file details** shows paths and results; clicking a detected lab
+labels. **File check details** in that dialog shows paths and results; clicking a detected lab
 retries automatic import before offering manual upload.
 
 Normal setup/upgrades use the installer or the launcher, which update and verify
@@ -198,12 +198,12 @@ It does not execute YAML, deployment commands, startup configuration or bindings
 YAML anchors and unresolved variable-based identity/address fields are rejected;
 provide a resolved literal definition for those topologies.
 
-Set **Deployed lab name** when containerlab was launched with a name override.
-An existing workspace can use **Link deployment** without replacing its inventory.
+Set **Lab name on the VM** when containerlab was launched with a name override.
+An existing workspace can use **Link to a running lab…** (**Advanced › Deployment details**) without replacing its inventory.
 Only one saved workspace can be linked to each deployment name on this VM.
 Reimporting that definition updates its workspace instead of making a duplicate.
 A unique unlinked legacy workspace with the same lab name is reused; ambiguous
-matches require opening the intended workspace and using Update lab YAML.
+matches require opening the intended workspace and using **Update topology file…**.
 
 The manager polls every 30 seconds and also offers **Manager ▾ › Refresh lab list**:
 

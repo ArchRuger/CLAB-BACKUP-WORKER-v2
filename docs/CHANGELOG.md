@@ -4,6 +4,85 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.20
+
+**Maintenance audit, chunk 3: the student workflow guides against the UI code and the routes.**
+Documentation and three screenshots only.
+
+- [Save progress](GIT-PROGRESS.md): the introduction and both flowcharts pass through **Review before
+  uploading**; a *Folder move* uploads on its own confirmation and has no separate review; **New folder…**
+  without the tick only plans a folder for a connected lab; the recovery table uses the buttons that exist
+  (*Retry save, then review*, *Retry save on this VM only*) instead of two that never did.
+- [Lab operations](LAB-OPERATIONS.md), [Lab builder](LAB-BUILDER.md) and
+  [Node features](../clab-backup-ui/NODE-FEATURES.md): *Edit map* has Undo / Redo, *Device look…* and
+  *Link labels…*; line arrows, rounded text backgrounds and nested group levels are kept in the map document
+  but not drawn on the Topology tab; destroy cleans up by default where the helper allows it; the
+  **Advanced options** group; importing a lab found on the VM needs the confirmation. Node features drops
+  the labels from before the redesign and gains **Backup download names**, the file and ZIP naming contract
+  that no living guide described.
+- [Naming](NAMING.md) no longer says an upload is automatic, and says that `deploy/scaffold-lab.py snapshot`
+  stops at the review (recorded as a defect in the audit record, not fixed here).
+- README and [Tour](TOUR.md): workstation upload, the lab builder, the upload review and *Diagnostics*;
+  `00-home.png`, `20-devices.png` and `30-progress.png` showed pages that no longer exist and are replaced
+  by captures of the current UI from the fixture manager (scripted VM answers, example data, as the tour
+  says).
+
+Two behaviour defects were found by reading and are in the audit record for a decision: the scaffold tool's
+`snapshot`, and a save with nothing new opening a review with an empty diff.
+
+## Changes in 1.30.19
+
+**Maintenance audit, chunk 2: the installation and operations guides against the scripts and the UI.**
+Documentation only. Eleven guides were compared with `deploy/` and the manager; the installer menu, phases,
+flags, upgrade and recovery procedures, ports, `.env` keys, limits and health-check outcomes were correct
+and are unchanged. What was wrong:
+
+- **A save does not upload by itself.** Six guides still said *Save progress* "commits and pushes
+  automatically" and told the reader to wait for *Saved to Git*; since the upload review became mandatory
+  that wait never ends. They now include **Review before uploading › Upload these changes**, and the retry
+  buttons carry their real names (*Retry save, then review*, *Review and upload…*, *Upload now*).
+- The fresh VM guide and the Wiki guide said the Junos switch kinds get no default login and no live
+  restore; both have containerlab's documented default login, and vJunos-switch supports *Apply to running
+  lab* (vQFX does not).
+- The manual setup guide said to set `UI_BIND` / `UI_PORT` in the shell; they belong in
+  `clab-backup-ui/.env` (`sudo` drops shell variables and the Grafana setup reads the port from that file).
+- Labels from before the redesign are replaced by the ones the pages show: the VM connection fields,
+  *Labs found on the VM…*, *Add lab*, *Sync topology from VM*, *Update topology file…*, *Link to a running
+  lab…*, *Lab folders on the VM*, *Restart devices*, **Lab actions ▾ › Advanced options**, the Tools ›
+  Telemetry links, the capture dialog names, *Remove from this manager…*.
+- The quick install lists the Git wizard's subfolder prompt; inline commands that only worked from the
+  source folder are absolute; the Wiki guide says engineer access needs lab operations first.
+
+Found and recorded, not changed (see the audit record's remaining debt): `deploy/compose.image.yml` does not
+pass the Grafana idle time, and the stack setup scripts on an image-only installation.
+
+## Changes in 1.30.18
+
+**Maintenance audit, chunk 1: agent guidance agrees with the application again.** Documentation only; the
+manager, the helpers and the editor bundle changed by their lockstep version alone. The record is
+[docs/maintenance-audit/AUDIT.md](maintenance-audit/AUDIT.md).
+
+- `CLAUDE.md` no longer says the student UI redesign is unreleased or that the checkout has no Docker (the
+  redesign, the lab builder and UI review 001 are released and merged; an agent now discovers its
+  environment). It stops importing the whole handoff history on every session (the default-loaded
+  instructions go from 141,185 to 28,817 bytes) and instead carries the invariants that must not
+  regress and a routing table that names, for each area, the handoff sections, the guide and the tests to
+  read first. `agent instructions.md` and its symlink are unchanged and still checked by the release check.
+  It also separates the three frontend layers: the plain-script manager UI, the editor built ahead of time
+  with Node 24 from `clab-backup-ui/lab-builder/`, and a VM that needs neither Node nor npm.
+- An independent review of that migration found five obligations or statements to fix before it could be
+  used (the section-listing command missed the `##` sections, the no-login same-origin model and the
+  logging secrecy contract were not stated, *Sync topology from VM* was described wrongly, a folder was named before it
+  existed) and seven routing gaps; all are applied.
+- `docs/ARCHITECTURE.md`: the module map's static-files row described the UI before the redesign; it now
+  lists the current scripts and standalone pages, and `downloads.py` and `grafana_control.py` have rows.
+- `docs/ui-review-001/PICKUP.md` and `docs/lab-builder/PICKUP.md` say, checked against GitHub, that their
+  work is merged; every open point and qualification is kept.
+- `docs/archive/DOCKER-HUB-SETUP.md`: six relative links broken by its move into the archive are repaired.
+  `docs/maintenance-audit/tools/check_links.py` checks every tracked Markdown link and anchor, and the
+  maintenance rules name it. The documentation index lists the naming guide, which it had missed, and the
+  audit folder.
+
 ## Changes in 1.30.17
 
 **UI review 001, step 16: link label distance in Edit map, and every map tool driven in a browser (UI-003,

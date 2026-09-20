@@ -29,7 +29,9 @@ Everything containerlab can do with a lab is under **Lab actions ▾** in the la
 (or right-click a lab card on Home; keyboard: Shift+F10). The menu carries the everyday
 actions — **Start lab** (or *Start stopped devices*), **Stop devices**, **Restart
 devices**, **Redeploy lab…**, **Destroy lab…** — and **All lab operations…** opens the
-complete list in three groups: *Deployment*, *Lab tools* and *Danger*. A disabled item
+complete list in three groups: *Deployment*, *Lab tools* and *Danger*. **Advanced options**
+at the bottom of the menu unfolds in place (click, Enter or ArrowRight) and holds **Import map…**,
+**Edit map**, **Telemetry settings…** and **Operation history…**. A disabled item
 says why underneath it (the VM is not connected, the lab is not running, another
 operation is running, the lab has no topology file on the VM). The **Manager ▾** menu in
 the top bar holds the actions that are not about one lab: **Deploy a new lab…**,
@@ -37,14 +39,14 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 
 | Action | Behaviour |
 |---|---|
-| Start lab / Deploy lab, Redeploy lab, Destroy lab | Operate on the original VM topology. Destroy always runs `containerlab destroy --cleanup`, so the containers and the generated lab folder (`clab-<name>`) go together and the next deploy starts clean; the review names the folder under *Technical details* before you confirm. Redeploy keeps that folder unless you choose *Redeploy lab and clear the lab folder…*, and falls back to destroy then deploy when necessary. |
+| Start lab / Deploy lab, Redeploy lab, Destroy lab | Operate on the original VM topology. Destroy runs `containerlab destroy --cleanup` (whenever the installed containerlab offers `--cleanup`; there is no variant without it), so the containers and the generated lab folder (`clab-<name>`) go together and the next deploy starts clean; the review names the folder under *Technical details* before you confirm. Redeploy keeps that folder unless you choose *Redeploy and clear the lab folder…* (*Redeploy lab and clear the lab folder…* under All lab operations…), and falls back to destroy then deploy when necessary. |
 | Apply topology changes | Applies the original VM YAML to the running lab when the installed containerlab supports it. |
 | Start / Stop / Restart devices | Every device of the lab. Stop keeps the containers; Destroy removes them. |
 | Show running devices, Running labs on the VM | A readable table (topology, lab, device, type/image, state/health, IPv4/IPv6) in the operation window. Failed or incomplete output stays visible for diagnosis. |
 | Save device configurations | containerlab's kind-dependent save command. The manager's own backups (Tools › Configuration backups) and *Save progress* are separate. |
 | Open all CLIs ↗ | A launcher page with one row per device (state pill, Open CLI ↗) and *Open all ready CLIs*. Allow pop-ups; at most 32 CLIs at once. |
-| Add to / Remove from favourites | Sorts the lab first on Home. |
-| Edit map | Move devices and notes, add text, boxes, circles and lines, style, undo, save and export the map as JSON or draw.io. |
+| Add to / Remove from favourites | Sorts the lab first under *All labs* on Home; *Recent labs* is ordered by the last successful deploy or redeploy this manager ran, and nothing else (visits, saves and favourites do not reorder it). |
+| Edit map | Move devices and notes, add text, boxes, circles, lines and groups, style, undo and redo, save and export the map as JSON or draw.io; never changes devices, links or the topology file (see *The map and its editor*). |
 | Telemetry settings… | Telemetry on or off for this lab, the login used for gNMI, why a device is not streaming, retry, removal of the lines the manager added, and the network dashboard's state. |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the lab is running. |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
@@ -112,13 +114,18 @@ Choose **Edit map** (Topology tab, Tools tab or Lab actions ▾ › Advanced opt
 topology file the manager has, it opens the same editor as the [lab builder](LAB-BUILDER.md), on the
 lab's own map and for the drawing only: drag devices, use a generated layout, add and style text,
 rectangles, circles, lines and groups (drag devices into a group), copy and paste annotations, set link
-label offsets, the link label mode and the grid. Devices and links cannot be added, changed or removed
+label offsets, the link label mode and the grid. The bar above the editor adds **Undo** / **Redo**
+(Ctrl+Z, Ctrl+Shift+Z; map changes only), **Device look…** (a device's icon, colours and label) and
+**Link labels…** (how far a link's interface names sit from its devices). Devices and links cannot be added, changed or removed
 there, nothing is deployed and the running lab is not touched; the editor cannot send anything but the
 map to the manager. **Save map** stores it and the Topology tab follows; **Back to the lab** asks when
 something is unsaved. *Download map file* gives the full annotations document, *Export to draw.io* uses
 the saved map, and *Import map file…* replaces the map with a file from your computer. A map that was
 changed elsewhere since it was opened is not overwritten: reopen it. A lab without a topology file in the
 manager (imported from an inventory) opens a simpler dialog with text, boxes, circles, lines and Undo.
+The Topology tab draws less than the editor can store: line arrows, rounded text backgrounds and nested
+group levels are kept in the map document and shown by the editor, but are not drawn on the Topology tab
+(rotation, colours, borders, corner radius, label offsets and the label mode are).
 
 The editor changes device positions; connections follow the devices. The full export
 contains editable devices, connections, interface labels, groups/shapes, notes, colours
@@ -135,7 +142,7 @@ the full diagrams.net application. Structural topology changes are made in the
 original VM YAML and imported/synced separately.
 
 The map's **More ▾** menu (also in the expanded map) offers **Open all CLIs ↗** and
-**Back up all configurations…**. Back up all reviews every device that can be backed up
+**Back up all configurations**. Back up all reviews every device that can be backed up
 now, including devices not selected for scheduled backups, and lists the devices it
 will skip and why. Right-click a device on the map for Open CLI, Capture traffic, Back
 up configuration and Device details.
@@ -148,6 +155,13 @@ relevant deployment state. A change requires another preview. Output and outcome
 persist in **Operation history…** (Manager ▾ or Lab actions ▾ › Advanced options); interrupted jobs require
 inspection before retrying. Lifecycle commands can interrupt CLI sessions. Manager
 backups/import changes are blocked during an active lab operation.
+
+A lab that already runs on the VM but is not in My labs is listed under **Manager ▾ › Labs
+found on the VM…** (Home itself carries no such list, except the short *Already running on the
+VM* list of the first-run page while My labs is empty). **Add to My labs** reads the lab's
+files, shows them for review and imports only when you confirm with **Add lab**; discovery
+never imports a lab by itself. A lab removed with the hide option stays listed there as
+hidden until **Import again** or **Stop hiding**.
 
 Discovery matches imported lab names to the original VM topology path. Open
 **Manager ▾ › Deploy a new lab…** to add an undeployed topology. **Sync topology from VM**

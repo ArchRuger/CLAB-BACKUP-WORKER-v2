@@ -1,5 +1,10 @@
 # UI review 001 — pickup notes
 
+**Status, checked against GitHub on 2026-09-20: complete and merged.** Pull requests #41, #42 and #43 brought
+`claude/ui-review-001` into `main` (merge `d510b7a`, release 1.30.17); nothing on the branch is unmerged. The notes
+below are the record of the work. Still current: the open points under *Next* (items 1 and 4) and *Known limits and
+open points*. New work starts from `main` on its own branch, not on `claude/ui-review-001`.
+
 Read this, then `CHECKLIST.md`, then `git log --oneline origin/claude/ui-review-001` before doing
 anything: Git and the remote are the authority for what was committed and pushed, this file is not.
 
@@ -63,7 +68,7 @@ All eight requirements are delivered. What is left is optional or needs the main
 2. **Live pass**: done at 1.30.17 on the QA lab `qa-nos-105458` through `http://192.168.132.132:8081`
    (undo/redo, device look, link labels, save; see VALIDATION). The development manager runs 1.30.17.
    Never edit the maintainer's course maps without asking.
-3. **A second pull request** for 1.30.10 onwards (the maintainer merged up to 1.30.9 as #41).
+3. ~~A second pull request for 1.30.10 onwards~~: done, merged as #42 and #43.
 4. Not exercised anywhere yet, by decision: a real review-and-upload to the Git host, a real upload
    + `create`, a real folder move.
 
@@ -75,7 +80,7 @@ All eight requirements are delivered. What is left is optional or needs the main
   --manager-only` (helpers must match the release); last done at **1.30.17 (`e7be534`) on 2026-09-20**,
   followed by a live check of the map editor through `http://192.168.132.132:8081` on the QA lab
   `qa-nos-105458` only (see VALIDATION, 1.30.14; the read-only pass of 1.30.11 is under 1.30.12).
-- `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home.
+- `docs/TOUR.md` images of Home still show the old page; they are replaced once UI-002 has settled Home. The maintenance audit found `30-progress.png` and `20-devices.png` stale as well and replaced all three from the fixture manager at 1.30.20.
 - The successful import confirmation was not exercised in a browser (the fixture VM refuses the preview).
 
 - Seen while fixing UI-008, not addressed: if the manager's `bind_lab` fails after the VM already retired the old registration (`destination` route), the lab keeps pointing at a registration that no longer exists. Pre-existing; needs a decision on recovery (re-register the source).

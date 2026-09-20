@@ -29,7 +29,7 @@ and the lab map follow what you do on the devices.
   data volume) and moves on to the dashboard; the manager then watches Grafana's own
   request counters and stops it again after 15 minutes without an open dashboard (a
   dashboard tab refreshes every 10 seconds, so it keeps Grafana alive). **Telemetry
-  settings…** (**Tools › Telemetry** or **Lab actions ▾**) shows the state and has
+  settings…** (**Tools › Telemetry** or **Lab actions ▾ › Advanced options**) shows the state and has
   **Stop Grafana now**. The idle time is
   `TELEMETRY_GRAFANA_IDLE_MINUTES` in `clab-backup-ui/.env` (0 keeps Grafana running once
   started; reload the manager after a change with `recreate-manager.sh`). Prometheus keeps
@@ -306,7 +306,7 @@ Run this on a lab VM with one node of each kind, after installing with
    Interfaces dashboard must show the oper state; unshut and confirm green.
 6. Where BGP runs, clear a session and confirm the neighbour state and prefix
    counts change on the BGP neighbours dashboard.
-7. Restart one node. Through the manager (*Restart lab nodes*, stop, destroy or
+7. Restart one node. Through the manager (*Restart devices*, stop, destroy or
    redeploy) the lab's session is cleared at once (`telemetry.clear` in the action
    log) and the node returns to Waiting. After a bare `docker restart` the address
    and running state do not change, so the node reports *Failed: the gNMI port did

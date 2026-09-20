@@ -239,7 +239,7 @@ Even when automated checks pass, verify these actions yourself:
 4. Open the network dashboard (**Tools › Telemetry › Open lab map ↗**) from a deployed
    lab and confirm the dashboards and the lab map follow traffic; start a capture
    (**Capture traffic…**) and confirm packets arrive in Wireshark.
-5. Use **Save progress** deliberately, wait for **Saved to Git**, and inspect the
+5. Use **Save progress** deliberately, confirm the review (**Upload these changes**), wait for **Saved to Git**, and inspect the
    expected remote files. A public remote can be readable anonymously;
    `ls-remote` does not prove GitHub write permission or branch-rule acceptance.
 

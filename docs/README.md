@@ -36,6 +36,7 @@ Three conventions hold across every guide:
 | [Lab operations](LAB-OPERATIONS.md) | You start, stop, redeploy or destroy labs, browse the VM's topologies, edit the map, or want to know how device readiness is judged. |
 | [Git setup](GIT-SETUP.md) | You register a VM checkout so *Save progress* can commit and push with the owner's login. |
 | [Save progress](GIT-PROGRESS.md) | You use the Progress tab: saves, checkpoints, baselines, saved versions, compare, apply to the running lab and the save location. |
+| [Naming and structure for lab courses](NAMING.md) | You are an instructor building a course: the names the manager depends on, the recommended repository layout for reference states, and the scaffold tool. |
 | [Browser Wireshark](CAPTURE.md) | You start capture sessions, download captures, repair or remove the capture stack, or need the security boundary of the capture services. |
 | [Network telemetry](TELEMETRY.md) | You want to know what the manager collects from a deployed lab and how, what the Grafana dashboards show, the per-lab setting, per-NOS support, bounds, security notes and the live acceptance procedure. |
 | [Grafana lab map](GRAFANA-MAP.md) | You want the srl-telemetry-lab style weathermap in Grafana: how the manager generates one per lab, what a new lab needs, what you still craft, and how to build a hand-tuned variant from the generated SVG and configuration. |
@@ -49,6 +50,7 @@ Three conventions hold across every guide:
 | [Tour](TOUR.md) | Screenshots of the UI: the deploy-to-ready sequence, node actions, SSH, backups, Git and Wireshark in the browser. |
 | [Architecture](ARCHITECTURE.md) | Diagrams of the system, the VM access boundary, the deploy-to-ready sequence, the telemetry path, the capture stack and persistence, plus a module map and the VM paths. |
 | [Changelog](CHANGELOG.md) | Release notes for every version since 1.10, newest first. |
+| [Maintenance audit](maintenance-audit/AUDIT.md) | The documentation audit record: what each document is for and what was decided about it, the map from each workflow to its code, guide and evidence, the remaining debt, and the [pickup file](maintenance-audit/PICKUP.md). |
 | [Repository maintenance](REPOSITORY-MAINTENANCE.md) | The release rules: the lockstep version set, the documentation conventions, the bump procedure, packaging limits and the CI workflow. |
 | [Wiki master guide](WIKI-MASTER-GUIDE.md) | The long-form build and operations guide formatted for Wiki.js. |
 | [Node features](../clab-backup-ui/NODE-FEATURES.md) | Node-level behaviour: SSH terminals, backups, the map and exports. |

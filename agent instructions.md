@@ -1,4 +1,26 @@
-# UI review 001 (in progress) — 1.30.17
+# Maintenance audit (in progress) — 1.30.20
+
+A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release
+per chunk. **Read `docs/maintenance-audit/PICKUP.md` first**, then `docs/maintenance-audit/AUDIT.md`
+(dispositions, the workflow-to-guide map, the remaining debt with two confirmed defects that still need a
+decision). Facts to preserve.
+(1) **`CLAUDE.md` no longer imports this file.** It carries the current state, the invariants and a routing
+table into the sections below; keep it that way. When a release adds a binding fact, put the detail here,
+add one line to the invariants only if it is a must-never, and add this file's section to the right
+routing row. Do not re-import the history, and do not delete the symlink `agent-instructions.md`.
+(2) Sections below are history; their headings must keep naming their release (`verify-release.py` reads
+the first one). UI review 001 is complete and merged; its open points are in its pickup file.
+(3) `docs/maintenance-audit/` is a living-docs folder: it names chunks by number, never an older release.
+`docs/maintenance-audit/tools/check_links.py` is a gate for any change that moves or renames a document.
+(4) The documentation tools under `docs/redesign/tools/`, `docs/ui-review-001/tools/` and
+`docs/lab-builder/tools/` are working regression tooling; their location does not make them disposable.
+(5) Chunk 2 corrected the installation and operations guides (the record's disposition table has the list).
+A guide must never again say a save uploads by itself: every upload goes through *Review before uploading*.
+(6) Chunk 3 corrected the student guides and replaced three tour images from `verify_after.py`'s 1440×900
+captures (the tour says they are fixture data; keep that sentence true). `clab-backup-ui/NODE-FEATURES.md`
+"Backup download names" is now the living statement of the download naming contract.
+
+# UI review 001 — 1.30.17
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how

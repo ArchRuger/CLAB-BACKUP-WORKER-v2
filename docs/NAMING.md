@@ -76,9 +76,9 @@ So separate the states you give the student from the folder they save into:
 
 - **One master repository you own** is the source of truth for all labs.
 - **Each student uses their own copy** — a fork of the master (or a repository created from it as
-  a template). In the manager, the student uses *Use a different repository → Connect by URL* with
-  their fork's HTTPS URL and their own GitHub login, so their *Save progress* pushes to their repo.
-- **Updates:** *Update from remote* only fast-forwards the student's own remote. If you revise
+  a template). In the manager, the student uses *Use a different repository…* or *Connect by URL…* (the *Save location* card) with
+  their fork's HTTPS URL and their own GitHub login, so their *Save progress* uploads to their repo (after the review every upload gets).
+- **Updates:** *Update from the repository* only fast-forwards the student's own remote. If you revise
   labs after students fork, they sync their fork from your master on GitHub, or you hand out a
   fresh template per cohort. The manager does not track a second "upstream" remote.
 
@@ -93,7 +93,11 @@ On your build box, once per lab:
    `python3 deploy/scaffold-lab.py snapshot <lab-slug> start` — captures the running config and
    saves it (and its restore-grade candidate) into `reference/start`, then rebinds to `work`.
 4. Repeat for `solution` and `broken-01` (configure, then `snapshot <lab-slug> <state>`).
-5. Push is automatic; the states are now in your master repo for students to clone and apply.
+5. Upload the states: the manager uploads a save only after its review (**Review and upload…**
+   under Progress › Recent saves), and the script cannot state that review. `snapshot` was written
+   when an upload could follow a save directly and has not been re-run since; expect it to stop after
+   the save (*Waiting for your review*) until the script is updated, and check that the lab is bound
+   to `work` again before the student saves.
 
 The student then applies `reference/start` to begin, works in `work`, applies `reference/solution`
 to check, and applies `reference/broken-01` to practise recovery — all without a reboot and

@@ -1,5 +1,9 @@
 # Visual lab builder: pickup file
 
+**Status: released and merged into `main`** (the builder since 1.30.0, its quality pass in the following patch
+release; pull requests #39 and #40). The branch named below is history: new work starts from `main`. The decisions
+stay binding, and the open findings are in [QA-FINDINGS.md](QA-FINDINGS.md).
+
 Branch `claude/visual-lab-builder`. The maintainer approved the build on 2026-09-20 with every
 recommended default. This file is the single place that says what is decided, what is done and what is
 next; update it with every committed chunk.

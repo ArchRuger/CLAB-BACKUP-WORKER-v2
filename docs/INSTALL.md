@@ -50,7 +50,7 @@ Grafana plugin and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.30.17 — guided setup
+Containerlab Node Manager 1.30.20 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -112,7 +112,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The installer ends with `Manager 1.30.17: running; HTTP and version checks passed.`
+The installer ends with `Manager 1.30.20: running; HTTP and version checks passed.`
 and the local address. Open `http://VM_IP:8081` from your workstation (the VM's LAN
 address, not the workstation's `127.0.0.1`).
 
@@ -284,7 +284,7 @@ The final terminal checks verify the local manager. On your workstation:
    ```
 
 6. Resolve any **FAIL**, **WARN** or **SKIP** items using their displayed next
-   steps. Then choose **Save progress** and check that it reports **Saved to Git** and
+   steps. Then choose **Save progress**, confirm **Upload these changes** in the review and check that it reports **Saved to Git** and
    that the intended files appear on GitHub.
 
 Host trust, lab selection and device credentials still require your choices in

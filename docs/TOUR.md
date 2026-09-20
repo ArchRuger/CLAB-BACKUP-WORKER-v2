@@ -12,7 +12,7 @@ are exactly what a live manager shows.
 
 **Home is the list of your labs.** Each card carries the lab's state — *Running*,
 *Starting*, *Stopped*, *Needs attention* — how many devices are ready and when progress
-was last saved; the list opens on *Recent labs* (most recently deployed first; *All labs* lists favourites first), under the two starting choices *Deploy* and *Build*. Labs that run on the
+was last saved; the list opens on *Recent labs* (most recently deployed first, from the manager's own record of successful deploys and redeploys; labs it has not deployed come last, by name; *All labs* lists favourites first), under the two starting choices *Deploy* (*Choose a file on the lab VM…* or *Upload a file from this computer…*) and *Build* (*Open the lab builder*). Labs that run on the
 VM but are not in the manager yet are listed under *Manager ▾ › Labs found on the VM…*,
 where one click adds them. The **Manager ▾** menu holds everything that is not about one lab: the VM
 connection, importing lab files, deploying a new lab, the labs running on the VM,
@@ -37,8 +37,8 @@ to capture either end.
 
 ![Device menu on the map](images/ui/11-topology-context-menu.png)
 
-**Devices.** One row per device with its state and what to do about it; *Technical
-details* unfolds the classic table with addresses, network OS, credentials and the last
+**Devices.** One row per device with its state and what to do about it; **Technical
+view** switches to the classic table with addresses, network OS, credentials and the last
 checks. The device panel shows the same state, the actions, the backups of that device
 and, under *Advanced*, the connection and credential settings.
 
@@ -65,7 +65,7 @@ you to acknowledge before *Replace configurations*.
 
 **Tools.** Packet capture, telemetry (the live lab map and dashboards in Grafana, started
 on the VM when needed) and the manager's own configuration backups, with *Open all
-CLIs* and the map exports under *More tools*.
+CLIs* and *Edit map* (where the map file download and the draw.io export are) under *More tools*.
 
 ![Tools](images/ui/40-tools.png)
 
@@ -78,7 +78,8 @@ list of lab operations and the danger zone.
 
 ## Every lab operation is reviewed before it runs
 
-**Lab actions ▾** starts, stops, restarts, redeploys and destroys the lab. The review
+**Lab actions ▾** starts, stops, restarts, redeploys and destroys the lab; its *Advanced
+options* group holds *Import map…*, *Edit map*, *Telemetry settings…* and *Operation history…*. The review
 names the action, says what happens to the devices, warns that unsaved configuration
 changes are lost, shows when progress was last saved (in red when it never was) and
 offers *Save progress first*; the exact containerlab command sits under *Technical

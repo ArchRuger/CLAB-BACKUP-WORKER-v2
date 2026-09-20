@@ -65,12 +65,12 @@ configured to capture from arbitrary remote Edgeshark hosts.
 - Stop capture in Wireshark, then **File → Save As** under **/pcaps**, typing the
   full file name ending in `.pcapng`: Wireshark on the VM does not add the extension.
   The viewer's *How to save a capture* toggle repeats these steps.
-- Click **Download saved captures (.tar)** and extract the archive to obtain the
+- Click **Download saved captures** and extract the `.tar` archive to obtain the
   PCAP/PCAPNG files. Files saved outside `/pcaps` are not included. While nothing
   has been saved there yet, the button reports "No saved captures yet" instead of
   handing over an empty archive.
 - **Reconnect viewer** returns to the existing session. Closing a tab leaves it
-  available under **Sessions in this browser** until idle expiry.
+  available under **Your capture sessions** until idle expiry.
 - **End session** deletes its container and temporary files, with confirmation.
 - Maximum **4 concurrent sessions**, **15 minutes idle** without viewer polling,
   and **2 hours total lifetime**. Cleanup normally sweeps every 15 seconds.
@@ -86,8 +86,8 @@ Clearing cookies loses access until automatic cleanup.
 ## Coverage
 
 Live node management/data ports, host NICs, bridges, veth, VLAN, VXLAN, loopback
-and other namespace interfaces are selectable when exposed by Edgeshark. **All
-host targets** (under *Advanced*) includes interfaces outside the drawing. Shared host namespaces
+and other namespace interfaces are selectable when exposed by Edgeshark. The scope
+**Everything on the VM** (under *Advanced*) includes interfaces outside the drawing. Shared host namespaces
 are deduplicated with aliases; node/lab views retain exact container-name matching.
 Multiple interfaces in one namespace share a PCAPNG stream. Separate namespaces
 use separate sessions. Either link endpoint captures that side's traffic.

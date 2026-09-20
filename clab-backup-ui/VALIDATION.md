@@ -1,3 +1,76 @@
+# Maintenance audit, chunk 3: student workflow guides and tour screenshots — 1.30.20
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.19 (`e2bb15b`, pushed). Documentation and
+images only. **Static and fixture evidence.**
+
+## What was run
+
+- A worker task traced each corrected statement to the code (`git_progress.py` save, retry and destination
+  routes, `git-progress.js`, `git-places.js`, `home.js` `homeOrder`, `operations.js` `opDestroyOptions`,
+  `map-editor.html`, `downloads.py`); the lead read its diff and checked the labels by search.
+- `docs/redesign/tools/verify_after.py` against the fixture manager on fresh scratch data, stylesheet as
+  released: 98 of 98 checks at 1920×1080, 1440×900 and 1366×768, 0 console errors, 0 page errors. The three
+  replaced tour images are this run's 1440×900 captures; the lead looked at the Home and Progress captures
+  (start cards, *Recent labs* / *All labs*, *Git repo details*, *Change folder…* open, no review opt-out).
+- `python3 deploy/verify-release.py`, `check_links.py` (79 files, 0 problems), `git diff --check`, both test
+  suites (711 Python tests with 1 skipped, 189 browser tests).
+
+## Not run
+
+The two defects reported in the changelog were read from the code, not reproduced. No image of Edit map,
+the lab builder, the save help pane or the upload review was added. Nothing live.
+
+# Maintenance audit, chunk 2: installation and operations guides — 1.30.19
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.18 (`569a58a`, pushed). Documentation
+only. **Static evidence**: every corrected statement was traced to a script or a page by a worker task
+(`install-manager.py`, `start-manager.sh`, `setup_capture.py`, `setup_telemetry.py`, `check_install.py`,
+`git-onboard.py`, `git-progress.js` `gitUploadLabel`, `management.js`, `inventory.DEFAULT_CREDENTIALS`,
+`restore_junos.SUPPORTED_KINDS`), and the lead checked seventeen of the labels it wrote against the
+static files by search and the two Junos statements against the code.
+
+## What was run
+
+- `python3 deploy/verify-release.py`, `python3 docs/maintenance-audit/tools/check_links.py` (79 files, 0
+  problems), `git diff --check`.
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. `node --test tests/*.js`: 189
+  of 189.
+
+## Not run
+
+No installer, setup script, health check or Docker command was executed; nothing here re-validates an
+installation. The `passwd` and GitHub CLI prompt wording in the quick install comes from those tools and
+was not reproduced.
+
+# Maintenance audit, chunk 1: agent guidance — 1.30.18
+
+Prepared on `claude/maintenance-audit` (cut from `main` `d510b7a`) on 2026-09-20 on the dev VM
+`clab-llm-dev2`. Documentation only. **Static, unit and fixture evidence; nothing live.**
+
+## What was run
+
+- Baseline at `d510b7a` before any edit: `python -m unittest discover -s tests -t tests` 711 tests, 1
+  skipped, OK; `node --test tests/*.js` 189 of 189 (system Node 18); `verify-release.py` OK.
+- After the bump: the same two suites with the same counts, `python3 deploy/verify-release.py`,
+  `python3 docs/maintenance-audit/tools/check_links.py` (79 tracked Markdown files, 0 problems; 6 before,
+  all in the archived Docker Hub guide), `git diff --check`.
+- `docs/redesign/tools/verify_after.py` against the fixture manager on fresh scratch data: 98 of 98 checks
+  at 1920×1080, 1440×900 and 1366×768, 0 console errors, 0 page errors (one handled 409, as before). This
+  run overlapped the start of the stylesheet cleanup of a later chunk, so it is a baseline indication, not
+  that chunk's proof.
+- Model routing: three probe tasks requested as `haiku`, `sonnet` and `opus` all reported the session's
+  own model, because the user settings force one subagent model. Every delegated task of this audit
+  therefore ran on that model; the record says requested and effective for each.
+- The `CLAUDE.md` migration was reviewed by an independent read-only task against the full handoff file
+  and the code (CSP line, script order, CI workflow, editor pin, every test file named in the routing
+  table). Its twelve findings are applied; it found nothing still true that the old file had and the new
+  one dropped.
+
+## Not run
+
+No VM script, no manager rebuild, no lab, no Git remote other than this branch's push. The size figure is
+bytes on disk, not measured token usage.
+
 # UI review 001, step 16: link label distance and the per-row browser pass — 1.30.17
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.16 (`e429911`,
