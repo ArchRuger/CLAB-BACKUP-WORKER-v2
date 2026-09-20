@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.3
+# UI review 001 (in progress) — 1.30.4
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -17,6 +17,14 @@ unchanged). `initMenu()` in `shell.js` owns the behaviour for any menu: the togg
 never closes the menu, `items()` skips a hidden panel's items, ArrowRight/ArrowLeft expand and
 collapse, `open()` collapses every group. Only those four items were reviewed for the move; do not
 sweep other entries into the group. `#lab-actions-menu` has a `max-height` and scrolls inside itself.
+(3) **1.30.4, UI-004**: `.git-save-options` is a grid of `.git-save-list` (the `role="menu"`) and
+`#git-save-help`; `gitSaveHelp(action, binding)` in `git-progress.js` is the pure source of every
+explanation and must follow `execute()` in `app/git_progress.py` (a local save never uploads; history
+reads and saves nothing); `gitRenderSaveHelp()` fills the four `#git-save-help-<action>` entries on each
+render without rewriting unchanged text, `gitShowSaveHelp()` shows one on `mouseover`/`focusin`, and
+`gitSaveMenuPlacement()` (pure) + `gitPlaceSaveMenu()` set `menu-from-left` / `menu-stacked` on
+`.git-save-control` when the `<details>` opens. A new option in that menu needs a help entry, an
+`aria-describedby` and a case in `GIT_SAVE_HELP_ACTIONS`. UI-007 C will change the upload wording.
 
 # Lab builder quality pass — 1.30.1
 

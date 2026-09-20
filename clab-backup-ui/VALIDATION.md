@@ -1,3 +1,30 @@
+# UI review 001, step 3: Save progress options are explained — 1.30.4
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.3 (`760a5ad`,
+pushed, CI green). Requirement UI-004 of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no live VM,
+lab or device was involved**, and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 169 of 169. New in `test_git_progress_ui.js`: the four explanations against
+  what the actions do (a local save never names the upload host, history saves nothing, an unknown push
+  URL is not given a host name, markup is escaped, every option in `index.html` is described by its
+  pane entry); one explanation at a time and no rewrite on a poll; the placement rule at six window
+  shapes.
+- `python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check app/static/git-progress.js`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 95 of 95 at three viewports, 0 console errors, 0 page
+  errors. `docs/ui-review-001/tools/check_ui004.py` 74 of 74 at 1366×768, 950×700 and a 1280×720 laptop
+  at 150 %, 200 % and 250 % zoom: hovering each option shows exactly its explanation; the pane is never
+  beyond the left or right edge, is on the menu surface, is not clipped and overlaps no option; the
+  menu and the text stay while the pointer rests on the explanation across a 4 s poll; Tab reaches the
+  four options and each focus shows its explanation; every option has an accessible description;
+  Escape closes the menu; the four actions still open what they opened before. At 200 % and 250 % zoom
+  (360 and 288 CSS pixels high) the lower part of the menu is reached by scrolling the page, as before.
+  Screenshots inspected: `~/ui-review/review-001/chunk03/` on the VM (the first 200 % screenshot showed
+  the pane without the menu background, caused by an old narrow-window width rule; fixed, and the check
+  now asserts that the pane lies on the menu surface).
+
 # UI review 001, step 2: Advanced options in the Lab actions menu — 1.30.3
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.2 (`2ebf251`,

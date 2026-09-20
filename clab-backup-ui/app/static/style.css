@@ -649,7 +649,11 @@ footer {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  width: 260px;
+  display: grid;
+  grid-template-columns: 300px 248px;
+  grid-template-areas: "help list";
+  width: max-content;
+  max-width: calc(100vw - 32px);
   z-index: 20;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -657,6 +661,22 @@ footer {
   padding: 6px;
   box-shadow: var(--shadow-menu);
 }
+.git-save-list { grid-area: list; }
+/* The explanation sits beside the options, never over them: to their left while the window has the
+   room, below them otherwise. */
+.git-save-help { grid-area: help; margin-right: 6px; padding: 9px 14px 9px 8px; border-right: 1px solid var(--line); font-size: 13px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+.git-save-help strong { display: block; margin-bottom: 4px; color: var(--ink); }
+.git-save-help p { margin: 0 0 6px; }
+.git-save-help p:last-child { margin-bottom: 0; }
+/* git-progress.js places the menu when it opens (gitSaveMenuPlacement): hanging from the control's left
+   edge when the control has wrapped to the left of the window, and with the explanation under the
+   options when the window cannot hold the two side by side. */
+.git-save-control.menu-from-left { position: relative; }
+.git-save-control.menu-from-left .git-save-menu { position: static; }
+.git-save-control.menu-from-left .git-save-options { left: 0; right: auto; grid-template-areas: "list help"; grid-template-columns: 248px 300px; }
+.git-save-control.menu-from-left .git-save-help { margin: 0 0 0 6px; padding: 9px 8px 9px 14px; border-right: 0; border-left: 1px solid var(--line); }
+.git-save-control.menu-stacked .git-save-options { grid-template-columns: minmax(0, 260px); grid-template-areas: "list" "help"; }
+.git-save-control.menu-stacked .git-save-help { margin: 6px 0 0; padding: 10px 12px 6px; border-left: 0; border-right: 0; border-top: 1px solid var(--line); min-height: 9.5em; }
 .git-save-options button {
   display: block;
   width: 100%;
@@ -2452,7 +2472,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .deployment-bar .actions { padding: 0; }
   .git-progress-bar { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px; }
   .git-save-control { align-self: flex-end; }
-  .git-save-options { width: min(260px, calc(100vw - 48px)); }
+  .git-save-control.menu-stacked .git-save-options { width: min(274px, calc(100vw - 48px)); }
   .git-repository-card, .git-binding-form, .git-saves { padding: 14px; }
   .git-repository-card .actions { width: auto; }
   .git-repository-card .button, #git-version-dialog .button { white-space: normal; }

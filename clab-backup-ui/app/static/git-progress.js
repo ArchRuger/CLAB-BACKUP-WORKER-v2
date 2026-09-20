@@ -68,6 +68,41 @@ function gitActionButtons(){
  if(typeof document!=='undefined'&&document&&typeof document.querySelectorAll==='function')return [...document.querySelectorAll('[data-git-action]')];
  const menu=$('git-save-menu');return menu&&typeof menu.querySelectorAll==='function'?[...menu.querySelectorAll('[data-git-action]')]:[];
 }
+// What each option of the Save progress menu does and where its result goes, for the help pane beside
+// the options (shown on hover and on keyboard focus). Pure; every sentence follows execute() in
+// app/git_progress.py: a save reads the devices, a local save never pushes, history reads nothing.
+const GIT_SAVE_HELP_ACTIONS=['checkpoint','local','history','settings'];
+function gitSaveHelp(action,binding){
+ const folder=binding?gitFolderWords(binding):'the save location',host=(typeof statusHost==='function'&&statusHost(gitRepository(binding).push_url))||'the online repository';
+ const help={
+  checkpoint:{title:'Create checkpoint…',what:'Reads the configuration of every included device now and keeps it as a named version that later saves never overwrite. You choose the name first.',where:'Goes to checkpoints/<name> in '+folder+', and is uploaded to '+host+' unless you untick the upload.'},
+  local:{title:'Save on this VM only',what:'Reads the configuration of every included device now and saves it as your latest version, without uploading anything.',where:'Stays in the lab VM’s copy of '+folder+'. Upload it later with Progress › More › Upload saved progress.'},
+  history:{title:'Saved versions & history',what:'Lists every saved version and every save of this repository, to view, download, compare or apply. Nothing is read from the devices and nothing new is saved.',where:'Opens a window; your saves stay as they are.'},
+  settings:{title:'Save location settings…',what:'Shows which repository and folder this lab saves to and which devices are included, and lets you change them.',where:'Opens Progress › Save location. Nothing is saved or moved until you confirm a change there.'},
+ };
+ return help[action]||null;
+}
+function gitSaveHelpMarkup(help){return help?`<strong>${esc(help.title)}</strong><p>${esc(help.what)}</p><p class="caption">${esc(help.where)}</p>`:'';}
+function gitRenderSaveHelp(binding){for(const action of GIT_SAVE_HELP_ACTIONS){const el=$('git-save-help-'+action);if(!el)continue;const html=gitSaveHelpMarkup(gitSaveHelp(action,binding));if(el._markup!==html){el.innerHTML=html;el._markup=html;}}}
+// One explanation at a time; the default line returns when the pointer and the focus have left the options.
+function gitShowSaveHelp(action){
+ let shown=false;
+ for(const name of GIT_SAVE_HELP_ACTIONS){const el=$('git-save-help-'+name);if(!el)continue;el.hidden=name!==action;if(name===action)shown=true;}
+ if($('git-save-help-default'))$('git-save-help-default').hidden=shown;
+}
+// Where the open menu fits. `left`/`right` are the save control's edges, `vw` the window width; the menu
+// is 570px wide with the explanation beside the options and 274px with it underneath. Right-aligned to
+// the control is the normal place; a control that wrapped to the left edge gets the menu from its left.
+function gitSaveMenuPlacement({left,right,vw}){
+ const WIDE=570,NARROW=274,EDGE=8,fits=width=>right-width>=EDGE?'right':left+width<=vw-EDGE?'left':'';
+ const wide=fits(WIDE);if(wide)return {side:wide,stacked:false};
+ return {side:fits(NARROW)||(left<=vw-right?'left':'right'),stacked:true};
+}
+function gitPlaceSaveMenu(){
+ const menu=$('git-save-menu'),control=menu&&menu.parentElement;if(!control||typeof control.getBoundingClientRect!=='function'||typeof document==='undefined')return;
+ const box=control.getBoundingClientRect(),place=gitSaveMenuPlacement({left:box.left,right:box.right,vw:document.documentElement.clientWidth});
+ control.classList.toggle('menu-from-left',place.side==='left');control.classList.toggle('menu-stacked',place.stacked);
+}
 function gitInsideMenu(button){return typeof button.closest==='function'&&!!button.closest('#git-save-menu');}
 // Why Save progress is unavailable right now, as visible text; an unbound lab keeps the button
 // enabled because it opens the first-save flow.
@@ -87,7 +122,7 @@ function renderGitProgress(){
  const reason=gitSaveReason(binding,active),label=gitSubmitting||active?'Saving…':binding?'Save progress':'Connect a save location…';
  for(const id of ['git-save-progress','progress-save']){const button=$(id);if(!button)continue;button.textContent=label;button.disabled=!!reason;button.title=reason||(binding?'Save every device’s configuration to '+gitDestination(binding):'Choose where this lab’s progress is saved');}
  if($('progress-save-reason')){$('progress-save-reason').textContent=reason;$('progress-save-reason').hidden=!reason;}
- $('git-save-menu').hidden=!binding;
+ $('git-save-menu').hidden=!binding;gitRenderSaveHelp(binding);
  for(const button of gitActionButtons()){button.disabled=(gitSubmitting||!!active)&&!['history','load','settings'].includes(button.dataset.gitAction);if(!gitInsideMenu(button))button.hidden=!binding;}
  const more=$('progress-more-button');if(more&&more.parentElement)more.parentElement.hidden=!binding;
  if($('git-problem')){$('git-problem').hidden=!problem;if($('git-problem-text'))$('git-problem-text').textContent=problem;}
@@ -568,6 +603,9 @@ if(typeof $==='function'&&$('git-progress-bar')){
  $('git-repository-refresh').onclick=()=>opTask(null,()=>gitShowRepository(true));
  $('git-open-settings').onclick=gitOpenRepository;
  for(const button of gitActionButtons())button.onclick=()=>gitRunAction(button.dataset.gitAction);
+ // The help pane follows the pointer and the keyboard focus; leaving an option for the pane keeps its text.
+ {const menu=$('git-save-menu'),pick=e=>{const b=e.target&&typeof e.target.closest==='function'?e.target.closest('[data-git-action]'):null;if(b)gitShowSaveHelp(b.dataset.gitAction);};
+  if(menu&&typeof menu.addEventListener==='function'){menu.addEventListener('mouseover',pick);menu.addEventListener('focusin',pick);menu.addEventListener('toggle',()=>{if(menu.open)gitPlaceSaveMenu();else gitShowSaveHelp('');});}}
  if($('git-saved-versions'))$('git-saved-versions').addEventListener('click',event=>{const button=event.target.closest('[data-git-version-action]');if(!button)return;const row=gitVersionRows[Number(button.dataset.gitVersion)];if(row)gitVersionAction(button.dataset.gitVersionAction,row);});
  if($('git-saves-list'))$('git-saves-list').addEventListener('click',event=>{const button=event.target.closest('[data-git-job-open],[data-git-job-upload],[data-git-job-keep]');if(button)opTask(null,()=>gitSavesAction(button));});
  document.addEventListener('click',event=>{const menu=$('git-save-menu');if(menu?.open&&!menu.contains(event.target))menu.open=false;});

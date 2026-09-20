@@ -165,7 +165,8 @@ another lab's folder.
 ## Everyday buttons
 
 The lab header carries **Save progress** with a small menu (Create checkpoint…, Save on
-this VM only, Saved versions & history, Save location settings…); the **Progress** tab
+this VM only, Saved versions & history, Save location settings…) that explains the option
+under the pointer or the keyboard focus: what it does and where its result goes; the **Progress** tab
 repeats them on its status card, whose **More ▾** adds the rest.
 
 | Action | Result |

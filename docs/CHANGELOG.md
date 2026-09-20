@@ -4,6 +4,26 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.4
+
+**UI review 001, step 3: the Save progress options explain themselves (UI-004).** Frontend only.
+
+- **An explanation beside the options.** The small menu next to **Save progress** now has a pane that
+  says, for the option under the pointer or the keyboard focus, what it does and where its result goes:
+  *Create checkpoint…* (reads the devices now, keeps a named version under `checkpoints/<name>` of the
+  lab's save folder, uploaded unless the upload is unticked), *Save on this VM only* (reads the devices
+  now, saves the latest version in the VM's copy of the folder, uploads nothing; *Upload saved progress*
+  publishes it later), *Saved versions & history* (a list to view, download, compare or apply; reads no
+  device and saves nothing) and *Save location settings…* (opens Progress › Save location; nothing
+  changes until a change is confirmed there). The texts name the lab's real folder and upload host and
+  follow what the manager does, not what the labels suggest.
+- The pane is part of the menu, so moving the pointer onto it to read does not close anything and it
+  never lies over an option. It sits to the left of the options on a wide window, to their right when
+  the save control has wrapped to the left edge, and under them when the window is too narrow for both
+  (placed by measurement each time the menu opens). Each option also carries its explanation as its
+  accessible description.
+- Fixed on the way: on a narrow or zoomed window the menu used to hang off the left edge of the window.
+
 ## Changes in 1.30.3
 
 **UI review 001, step 2: a shorter Lab actions menu (UI-005).** Frontend only.

@@ -36,6 +36,42 @@ test('diffs and job output escape configuration, filenames, notes and labels',()
  const output=context.gitJobMarkup({status:'push_pending',message:attack,target:attack,commit:attack,created:'2026-09-11T12:00:00Z'});
  assert.doesNotMatch(output,/<img/);assert.match(output,/push pending/);
 });
+test('every Save progress option is explained from what it really does: a local save never uploads, history saves nothing',()=>{
+ const context=makeContext();vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
+ const binding={binding_id:'b',repository:{path:'/home/me/labs/Course-Labs',prefix:'JunOS-TEST-2/working/',push_url:'https://github.com/me/Course-Labs.git'}};
+ const help=action=>context.gitSaveHelp(action,binding);
+ const actions=Array.from(vm.runInContext('GIT_SAVE_HELP_ACTIONS',context));assert.deepEqual(actions,['checkpoint','local','history','settings']);
+ assert.match(help('checkpoint').what,/Reads the configuration of every included device now/);assert.match(help('checkpoint').what,/named version that later saves never overwrite/);
+ assert.match(help('checkpoint').where,/checkpoints\/<name> in Course-Labs › JunOS-TEST-2\/working/);assert.match(help('checkpoint').where,/uploaded to github\.com unless you untick/);
+ assert.match(help('local').what,/without uploading anything/);assert.match(help('local').where,/Stays in the lab VM’s copy of Course-Labs › JunOS-TEST-2\/working/);assert.match(help('local').where,/Upload saved progress/);
+ assert.doesNotMatch(help('local').where,/github/,'a local save never names the upload host as its destination');
+ assert.match(help('history').what,/Nothing is read from the devices and nothing new is saved/);
+ assert.match(help('settings').where,/Nothing is saved or moved until you confirm/);
+ assert.equal(context.gitSaveHelp('push',binding),null);
+ assert.match(context.gitSaveHelp('checkpoint',{binding_id:'b',repository:{path:'/r'}}).where,/the online repository/,'an unknown push URL is not given a host name');
+ const attack={binding_id:'b',repository:{path:'/labs/<img src=x onerror=1>',push_url:'https://github.com/x/y'}};
+ assert.doesNotMatch(context.gitSaveHelpMarkup(context.gitSaveHelp('local',attack)),/<img/);
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ for(const action of actions){assert.match(html,new RegExp('data-git-action="'+action+'" aria-describedby="git-save-help-'+action+'"'));assert.match(html,new RegExp('<div id="git-save-help-'+action+'" hidden>'));}
+});
+test('the help pane shows one explanation at a time and the default line when no option is active',()=>{
+ const context=makeContext(),els={};for(const id of ['default','checkpoint','local','history','settings'])els['git-save-help-'+id]={hidden:id!=='default',innerHTML:''};
+ context.$=id=>els[id]||null;
+ context.gitRenderSaveHelp({binding_id:'b',repository:{path:'/r/Labs'}});assert.match(els['git-save-help-local'].innerHTML,/<strong>Save on this VM only<\/strong>/);
+ const first=els['git-save-help-local'].innerHTML;els['git-save-help-local'].innerHTML='kept';context.gitRenderSaveHelp({binding_id:'b',repository:{path:'/r/Labs'}});assert.equal(els['git-save-help-local'].innerHTML,'kept','an unchanged text is not rewritten on a poll');assert.ok(first);
+ context.gitShowSaveHelp('local');assert.equal(els['git-save-help-local'].hidden,false);assert.equal(els['git-save-help-default'].hidden,true);assert.equal(els['git-save-help-checkpoint'].hidden,true);
+ context.gitShowSaveHelp('history');assert.equal(els['git-save-help-local'].hidden,true);assert.equal(els['git-save-help-history'].hidden,false);
+ context.gitShowSaveHelp('');assert.equal(els['git-save-help-history'].hidden,true);assert.equal(els['git-save-help-default'].hidden,false);
+});
+test('the Save progress menu is placed where it fits: right-aligned, from the left of a wrapped control, stacked when the window is too narrow',()=>{
+ const context=makeContext(),place=box=>JSON.parse(JSON.stringify(context.gitSaveMenuPlacement(box)));
+ assert.deepEqual(place({left:690,right:873,vw:1366}),{side:'right',stacked:false},'a desktop header');
+ assert.deepEqual(place({left:440,right:622,vw:853}),{side:'right',stacked:false},'150 % zoom, header not wrapped');
+ assert.deepEqual(place({left:16,right:198,vw:640}),{side:'left',stacked:false},'200 % zoom, the control wrapped to the left edge');
+ assert.deepEqual(place({left:16,right:198,vw:512}),{side:'left',stacked:true},'250 % zoom: the explanation goes under the options');
+ assert.deepEqual(place({left:300,right:482,vw:500}),{side:'right',stacked:true});
+ assert.deepEqual(place({left:10,right:192,vw:260}),{side:'left',stacked:true},'nothing fits: the side with more room');assert.deepEqual(place({left:60,right:242,vw:260}),{side:'right',stacked:true});
+});
 test('Git Unix commit timestamps are interpreted as seconds',()=>{
  const context=makeContext();assert.equal(context.gitTime(0),'1970-01-01T00:00:00.000Z');assert.equal(context.gitTime(1789128000),'2026-09-11T12:00:00.000Z');
  assert.equal(context.gitTime('2026-09-11T12:00:00Z'),'2026-09-11T12:00:00.000Z');

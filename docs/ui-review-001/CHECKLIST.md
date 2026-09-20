@@ -38,11 +38,16 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - ☐ Cancel / unsaved-change behaviour; no deployment, no topology or runtime change from a map edit.
 - ☐ Annotation import/download and draw.io export kept.
 
-## UI-004 — Save progress options are explained ☐
+## UI-004 — Save progress options are explained ☑ 1.30.4
 
-- ☐ Create checkpoint, Save on this VM only, Saved versions & history, Save location settings: a
-  short, accurate explanation each, derived from the implementation.
-- ☐ On hover and on keyboard focus; inside the viewport; never covers an action or closes the menu.
+- ☑ Create checkpoint, Save on this VM only, Saved versions & history, Save location settings: what
+  each does and where the result goes, derived from the implementation (`gitSaveHelp()`), naming the
+  lab's real folder and upload host.
+- ☑ On hover and on keyboard focus (and as the option's accessible description); a pane inside the
+  menu, placed by measurement so it stays inside the window, never over an option, and reading it
+  never closes the menu.
+- Follow-up for UI-007 C: the checkpoint text says "uploaded … unless you untick the upload"; review
+  becomes mandatory there and the wording has to follow.
 
 ## UI-005 — Lab actions dropdown is simpler ☑ 1.30.3
 
@@ -78,7 +83,7 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 
 ## Planned chunk order
 
-1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 → 4. UI-007 A+B → 5. UI-007 C → 6. UI-008 root
+1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 (1.30.4, done) → 4. UI-007 A+B → 5. UI-007 C → 6. UI-008 root
 cause and fix → 7. UI-006 → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
 10+. UI-003 matrix, then parity in increments. One patch release, one commit and one verified push
 per chunk.
