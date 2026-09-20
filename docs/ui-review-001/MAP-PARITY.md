@@ -8,29 +8,30 @@ Made on 2026-09-20 from the code, not from screenshots: the installed editor is
 `app/layout.py` `annotations()` and `app/drawio_export.py`). Nothing here was tried in a browser yet;
 each row is checked there when it is implemented.
 
-Status: ☐ open · ◐ partly · ☑ done (with the release).
+Status: ☐ open · ◐ available in Edit map since that release but not yet driven and saved in a browser
+(or only partly) · ☑ done and validated (with the release).
 
 ## 1. Capabilities
 
 | # | Map-editing capability | Visual builder 0.3.2 | Edit map today | Status |
 |---|---|---|---|---|
-| 1 | Move devices by dragging | yes, snaps to a 20 px grid | yes, free; also X/Y fields | ☐ |
-| 2 | Generated layouts (preset, force, auto, radial) | yes (`navbar-layout`) | no | ☐ |
-| 3 | Free text: add, edit in place, font family/size/colour, bold, italic, underline, alignment, background, rotation, rounded background | yes (pane menu, palette, inline toolbar, panel) | add/move/delete; text, size, colour, fill, opacity, alignment, weight only | ☐ |
-| 4 | Shapes: rectangle, circle, line; fill colour/opacity, border colour/width/style, corner radius, rotation, **line arrows and arrow size** | yes, with resize and rotate handles | rectangle, circle, line; size by number fields; no handles, rotation, corner radius or arrows | ☐ |
-| 5 | Groups: create (menu, Ctrl+G, palette), name, level, colours, border, label position, **membership by dragging devices in, nesting** | yes | an imported group is shown and editable as a box; membership (`groupId`, `parentId`) is **dropped on import** | ☐ |
-| 6 | Resize and rotate with handles | yes | no | ☐ |
-| 7 | Copy, paste, duplicate, delete by keyboard | yes (annotations only in view mode) | delete by button only | ☐ |
-| 8 | Undo / redo | yes in edit mode; **absent in view mode** | undo (30 steps), no redo | ☐ |
-| 9 | Device look: icon, icon colour, corner radius, label position, label direction, label background | yes, but through `editNode` (a topology command, edit mode only) | imported and drawn, not editable | ☐ |
-| 10 | Per-link endpoint label offset | yes (Link editor → `edgeAnnotations`) | imported and drawn, not editable | ☐ |
-| 11 | Link label mode (show all / on select / hide) | yes (`navbar-link-labels`) | imported, not editable | ☐ |
-| 12 | Grid style, line width, colours | yes (Lab settings › Appearance) | colours imported, not editable | ☐ |
+| 1 | Move devices by dragging | yes, snaps to a 20 px grid | yes, free; also X/Y fields | ◐ 1.30.14 (browser: saved and drawn) |
+| 2 | Generated layouts (preset, force, auto, radial) | yes (`navbar-layout`) | no | ◐ 1.30.14 (present; not driven) |
+| 3 | Free text: add, edit in place, font family/size/colour, bold, italic, underline, alignment, background, rotation, rounded background | yes (pane menu, palette, inline toolbar, panel) | add/move/delete; text, size, colour, fill, opacity, alignment, weight only | ◐ 1.30.14 (browser: add, bold, saved; other styles present) |
+| 4 | Shapes: rectangle, circle, line; fill colour/opacity, border colour/width/style, corner radius, rotation, **line arrows and arrow size** | yes, with resize and rotate handles | rectangle, circle, line; size by number fields; no handles, rotation, corner radius or arrows | ◐ 1.30.14 (present; not driven) |
+| 5 | Groups: create (menu, Ctrl+G, palette), name, level, colours, border, label position, **membership by dragging devices in, nesting** | yes | an imported group is shown and editable as a box; membership (`groupId`, `parentId`) is **dropped on import** | ◐ 1.30.14 (kept and shown; creating and membership not driven) |
+| 6 | Resize and rotate with handles | yes | no | ◐ 1.30.14 (present; not driven) |
+| 7 | Copy, paste, duplicate, delete by keyboard | yes (annotations only in view mode) | delete by button only | ◐ 1.30.14 (delete of a device refused in browser; rest present) |
+| 8 | Undo / redo | yes in edit mode; **absent in view mode** | undo (30 steps), no redo | ☐ absent in view mode |
+| 9 | Device look: icon, icon colour, corner radius, label position, label direction, label background | yes, but through `editNode` (a topology command, edit mode only) | imported and drawn, not editable | ☐ not editable (topology command upstream) |
+| 10 | Per-link endpoint label offset | yes (Link editor → `edgeAnnotations`) | imported and drawn, not editable | ◐ 1.30.14 (present; not driven) |
+| 11 | Link label mode (show all / on select / hide) | yes (`navbar-link-labels`) | imported, not editable | ◐ 1.30.14 (present; not driven) |
+| 12 | Grid style, line width, colours | yes (Lab settings › Appearance) | colours imported, not editable | ◐ 1.30.14 (present; not driven) |
 | 13 | z-order | field `zIndex` kept; no control in either | field kept | n/a |
-| 14 | Zoom, pan, fit | yes | fit only | ☐ |
-| 15 | Export: SVG | yes | no | ☐ |
-| 16 | Export: draw.io; download `.annotations.json`; import `.annotations.json` | no | **yes, must stay** | ☐ keep |
-| 17 | Save with a conflict check; cancel / discard question | draft revision check (`draftWrite`) | yes (`revision`, discard dialog) | ☐ keep |
+| 14 | Zoom, pan, fit | yes | fit only | ◐ 1.30.14 (present) |
+| 15 | Export: SVG | yes | no | ◐ 1.30.14 (present; not driven) |
+| 16 | Export: draw.io; download `.annotations.json`; import `.annotations.json` | no | **yes, must stay** | ☑ 1.30.14 (browser: download, draw.io, import) |
+| 17 | Save with a conflict check; cancel / discard question | draft revision check (`draftWrite`) | yes (`revision`, discard dialog) | ☑ 1.30.14 (browser and unit) |
 | — | Not map editing, stays out: add/remove devices and links, kinds, images, lab settings, deploy, Geo layout (hidden), traffic-rate widgets (need runtime statistics), raw YAML/JSON tabs (off: CSP) | | | |
 
 ## 2. What the documents hold
@@ -75,6 +76,6 @@ than the editor can store (rotation, arrows, nested groups): what it cannot draw
 |---|---|---|
 | A | This matrix and the decision | 1.30.12 |
 | B | Manager: store, serve and save the full annotations document; derive the drawing; keep unknown data; tests | 1.30.13 |
-| C | Adapter map mode (view mode, command whitelist, topology-unchanged check), page wiring, bundle rebuild, tests | |
-| D | Edit map opens the builder in map mode; unsaved-change and cancel behaviour; exports and import kept; browser validation of every row; the Topology view draws what was saved | |
+| C | Adapter map mode (view mode, command whitelist, topology-unchanged check), page wiring, bundle rebuild, tests | 1.30.14 |
+| D | Edit map opens the builder in map mode; unsaved-change and cancel behaviour; exports and import kept; the Topology view follows the saved map | 1.30.14 (every row driven in a browser: still open, see the Status column) |
 | E | Gaps: undo/redo, device look, anything the browser pass finds | |

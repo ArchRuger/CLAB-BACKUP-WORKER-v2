@@ -33,14 +33,19 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - ☑ Polling, visits, saves and favourites do not reorder *Recent labs*; the tab is kept for the session. 1.30.11
 - ☑ Lab card titles no longer break inside a word. 1.30.11
 
-## UI-003 — Edit map gets the visual builder's map-editing capabilities ◐ (matrix 1.30.12, document storage 1.30.13; editor integration open)
+## UI-003 — Edit map gets the visual builder's map-editing capabilities ◐ (matrix 1.30.12, document storage 1.30.13, editor in map mode 1.30.14; rows 8 and 9 and the per-row browser pass open)
 
 - ☑ Capability matrix: installed builder versus Edit map, and the approach (`docs/ui-review-001/MAP-PARITY.md`). 1.30.12
-- ☐ Every map-editing capability of the matrix implemented and tested, or listed as incomplete.
-- ☐ Positions, text, shapes, annotations and style survive save, close, reopen and further edits.
-- ☐ The manager's topology view draws the saved map correctly; unsupported data is never dropped.
-- ☐ Cancel / unsaved-change behaviour; no deployment, no topology or runtime change from a map edit.
-- ☐ Annotation import/download and draw.io export kept.
+- ◐ Every map-editing capability of the matrix implemented and tested, or listed as incomplete: see the
+  Status column of `MAP-PARITY.md` (1.30.14: the editor itself is in place; undo/redo and the device look are
+  open; most tools are present but not yet each driven and saved in a browser).
+- ◐ Positions and text with style survive save, close and reopen (browser, 1.30.14); the full document is
+  stored byte for byte (unit, 1.30.13). Shapes, groups and further edits: not yet driven in a browser.
+- ◐ The Topology view follows the saved map (positions, texts, shapes, groups); data it cannot draw
+  (rotation, arrows, nesting, unknown keys) is kept, not drawn. 1.30.14
+- ☑ Cancel / unsaved-change behaviour; no deployment, no topology or runtime change from a map edit
+  (adapter whitelist, topology restore, page check, save route; browser: every write went to the map document). 1.30.14
+- ☑ Annotation import/download and draw.io export kept (in the editor's bar; Import map… on the lab page unchanged). 1.30.14
 
 ## UI-004 — Save progress options are explained ☑ 1.30.4
 

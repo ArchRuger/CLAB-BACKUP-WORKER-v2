@@ -4,6 +4,45 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.14
+
+**UI review 001, step 13: Edit map is the lab builder's editor in a map mode (UI-003, steps C and D).**
+Frontend, the editor adapter and one public flag in the manager; the VM helpers are unchanged apart from
+the lockstep version. UI-003 is **not yet complete**: the open rows are listed at the end and in
+[docs/ui-review-001/MAP-PARITY.md](ui-review-001/MAP-PARITY.md).
+
+- **Edit map opens the same editor as the lab builder**, on the lab's own map
+  (`/static/map-editor.html#lab=<id>`), for every lab whose topology text the manager has (the lab view
+  carries `map_editor`). It brings the builder's map tools: dragging devices on the 20 px grid,
+  generated layouts, free text with the inline toolbar (bold, italic, underline, alignment, size) and
+  the text panel, rectangles, circles and lines with resize and rotate handles, arrows, corner radius
+  and rotation, groups with membership by dragging devices in and nesting, copy / paste / duplicate /
+  delete of annotations, per-link label offsets, the link label mode, grid style and colours, zoom,
+  pan and fit, and the SVG export. A lab without a topology text (imported from an inventory) keeps
+  the simple dialog, which is unchanged.
+- **The drawing only.** The editor runs in its *view* mode, where adding, editing and deleting devices and
+  links are absent. Because that mode is enforced in the editor's UI only, the adapter refuses every
+  engine command that is not annotation-only, restores the topology text if it ever differed, and the
+  page refuses a changed topology too; the save request can carry nothing but the annotations and the
+  revision they were opened with. The page loads neither `operations.js` nor the builder's draft code:
+  it has no way to deploy, publish, revise or reach the VM. Runtime actions of the editor's device menu
+  (start, stop, SSH …), the traffic-rate widget, the inert device palette and the deploy controls are
+  hidden; a test fails when an editor upgrade renames one of them.
+- **Save, cancel, conflict.** *Saved in the manager* / *Unsaved changes* in the bar; **Save map** stores the
+  document and the manager derives its drawing, so the lab's Topology tab, the draw.io export and the
+  annotations download follow. **Back to the lab** asks (*Keep editing*, *Discard changes*, *Save map and
+  leave*) only when something is unsaved, and the browser warns on closing the tab. A map changed
+  elsewhere since it was opened is refused, nothing is reported as saved, and the student can download
+  their version.
+- **Kept:** *Download map file* (now the full document, with everything the manager does not draw),
+  *Export to draw.io* (from the saved map) and *Import map file…* (checked in words, replaces the map,
+  unknown keys included) are in the editor's bar; *Import map…* on the lab page is unchanged.
+- **Open rows of UI-003:** undo / redo is absent in the editor's view mode (row 8); the device look (icon,
+  colours, label position) is still not editable, because upstream edits it through a topology command
+  (row 9); the manager's Topology view stores but does not draw rotation, line arrows, rounded text
+  backgrounds and nested-group levels. Observed upstream behaviour: after *Add Text* from the context
+  menu the inline box has to be clicked before typing.
+
 ## Changes in 1.30.13
 
 **UI review 001, step 12: the manager keeps the whole map document (UI-003, step B).** Manager only; no

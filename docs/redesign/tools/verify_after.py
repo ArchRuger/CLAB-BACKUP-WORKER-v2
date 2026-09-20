@@ -173,13 +173,17 @@ def topology(r):
     p.click('#devices-technical')
     # Map editor and export-sessions dialogs
     r.tab('topology')
+    # Edit map opens the full map editor (the lab builder's editor in map mode) for a lab whose topology
+    # text the manager has; docs/ui-review-001/tools/check_ui003.py exercises it in depth.
     p.click('#map-edit')
-    p.wait_for_selector('#op-layout-editor[open]')
-    r.check('editor: titled Edit lab map with student copy', r.js('() => document.querySelector("#op-layout-editor h2").textContent === "Edit lab map" && !!document.getElementById("op-layout-save") && document.getElementById("op-layout-save").textContent === "Save map"'))
-    r.check('editor: no state dots on the editing canvas', r.js('() => [...document.querySelectorAll("#op-layout-map .device-state-dot")].every(c => getComputedStyle(c).display === "none")'))
+    p.wait_for_url('**/static/map-editor.html#lab=*', timeout=15000)
+    p.wait_for_selector('.react-flow__node', timeout=30000)
+    r.check('editor: Edit map opens the map editor on this lab, saved and with Save off', r.js('() => document.getElementById("map-name").textContent.length > 0 && document.getElementById("map-status").textContent === "Saved in the manager" && document.getElementById("map-save").disabled'))
+    r.check('editor: no deploy control and the drawing-only notice', r.js('() => !document.querySelector("[data-testid=navbar-deploy]")?.offsetParent && /drawing only/.test(document.getElementById("map-note").textContent)'))
     r.shot('14-map-editor')
-    p.click('#diagram-cancel')
-    r.check('editor: closes without changes', r.js('() => !document.getElementById("op-layout-editor").open'))
+    p.click('#map-back')
+    p.wait_for_selector('#lab-content:not([hidden]) #topology-map', timeout=20000)
+    r.check('editor: Back to the lab returns to the lab without a question when nothing changed', r.js('() => !document.getElementById("lab-content").hidden'))
     p.click('#map-more-button')
     p.click('#import-map')
     p.wait_for_selector('#map-dialog[open]')

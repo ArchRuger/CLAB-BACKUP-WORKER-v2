@@ -108,11 +108,17 @@ acceptance procedure are in [TELEMETRY.md](TELEMETRY.md).
 
 ## The map and its editor
 
-Choose **Edit map** (Topology tab, Tools tab or Lab actions ▾ › Advanced options) to move devices, add
-text, boxes, circles and lines, or edit their appearance. Undo reverses edits; closing
-offers to discard unsaved changes. Save persists the manager map. *Download map file*
-(annotations JSON) and *Export draw.io* include unsaved edits without writing VM files.
-Concurrent edits are rejected if the saved map changed; reopen it before editing again.
+Choose **Edit map** (Topology tab, Tools tab or Lab actions ▾ › Advanced options). For a lab whose
+topology file the manager has, it opens the same editor as the [lab builder](LAB-BUILDER.md), on the
+lab's own map and for the drawing only: drag devices, use a generated layout, add and style text,
+rectangles, circles, lines and groups (drag devices into a group), copy and paste annotations, set link
+label offsets, the link label mode and the grid. Devices and links cannot be added, changed or removed
+there, nothing is deployed and the running lab is not touched; the editor cannot send anything but the
+map to the manager. **Save map** stores it and the Topology tab follows; **Back to the lab** asks when
+something is unsaved. *Download map file* gives the full annotations document, *Export to draw.io* uses
+the saved map, and *Import map file…* replaces the map with a file from your computer. A map that was
+changed elsewhere since it was opened is not overwritten: reopen it. A lab without a topology file in the
+manager (imported from an inventory) opens a simpler dialog with text, boxes, circles, lines and Undo.
 
 The editor changes device positions; connections follow the devices. The full export
 contains editable devices, connections, interface labels, groups/shapes, notes, colours

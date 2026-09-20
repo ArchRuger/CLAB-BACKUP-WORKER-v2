@@ -1,3 +1,48 @@
+# UI review 001, step 13: Edit map in the builder's editor — 1.30.14
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.13 (`3ee4b3c`,
+pushed). UI-003 steps C and D of `docs/ui-review-001/MAP-PARITY.md`. **Fixture only: no live VM, lab or
+device was involved**; the development manager on the VM still runs 1.30.11.
+
+## What was run
+
+- The bundle was rebuilt with Node 24.21.0 (`node build.mjs`; only `assets/main.js` and the manifest
+  changed) and `node build.mjs --check` reproduces the committed assets (132 files).
+- `node --test tests/*.js`: 186 of 186. New `tests/test_map_editor_ui.js` (in the CI browser list): the
+  page's pure rules (lab id from the hash, way back, dirty rule, file name, status words, map-file
+  checks); the editor mounted with `mapOnly`, the first reading as baseline, a changed topology text
+  refused and not kept, the save carrying only `annotations` and `revision` and using the answered
+  revision next time, no operation request of any kind; a refused save not reported as saved, the leave
+  dialog's three ways, the draw.io export asking for a save first; a lab without a topology text told
+  why; `opLayout()` going to the map editor only when the lab view says so; the page loading neither
+  `operations.js` nor the builder's page script; the adapter's whitelist holding the annotation
+  commands and none of the topology ones. `test_lab_builder_ui.js`: the new hidden controls exist in
+  the bundle (templated test ids are recognised).
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK (`test_nodes.py`: the map
+  editor page gets exactly the builder's content security policy and its script none of it).
+- `python3 deploy/verify-release.py` (the new page is in the versioned-page list), `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 98 of 98 at three viewports, 0 console
+  errors, 0 page errors (its Edit map section now opens the map editor and returns).
+  `docs/ui-review-001/tools/check_ui003.py` 27 of 27: *Edit map* on the lab page opens the editor on the
+  lab's map with its groups, texts and shapes, saved and with Save off, the drawing tools in the
+  palette; a dragged device marks the map unsaved; the pane menu offers Add Group / Text / Shape only;
+  *Add Text* opens the inline toolbar, and the typed bold text is in the saved document; a device
+  cannot be deleted and its menu has no runtime, edit or delete entry; no deploy control; link label
+  mode, lab settings, layouts and fit are present; leaving with changes asks; the save is **one request
+  to the map document**, the position is saved, the topology text is byte-identical, nothing the
+  manager does not draw is lost, the manager's drawing follows; the downloaded map file equals the
+  stored document; the draw.io export downloads; *Back to the lab* shows the Topology tab; reopening
+  shows the saved map; a wrong JSON file is refused in words and a map file with an unknown key replaces
+  the map with that key kept; every write of the whole run went to `…/map-document`. Screenshots
+  inspected: `~/ui-review/review-001/chunk13/` and `chunk14/` on the VM.
+
+## Not covered
+
+Resize and rotate handles, groups by dragging devices in, copy / paste, generated layouts, link label
+offsets and the appearance settings were **seen to be present** in this mode but not each driven and
+saved in a browser; only device moves, added text with style and imports were round-tripped. No pass on
+the live dev VM and none through the LAN address (the immutable bundle needs this release deployed).
+
 # UI review 001, step 12: the manager keeps the whole map document — 1.30.13
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.12 (`f4feb2c`,

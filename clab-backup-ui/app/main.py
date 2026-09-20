@@ -122,7 +122,7 @@ def create_app(data_dir=None):
         # xterm's DOM renderer creates font, cell-width and ANSI-color styles, and the lab builder's
         # editor (React Flow, MUI) sets element styles at run time.
         # Permit those only in their dedicated documents; scripts remain self-only.
-        styles="'self' 'unsafe-inline'" if request.url.path in ('/static/terminal.html', '/static/capture-session.html', '/static/lab-builder.html') else "'self'"
+        styles="'self' 'unsafe-inline'" if request.url.path in ('/static/terminal.html', '/static/capture-session.html', '/static/lab-builder.html', '/static/map-editor.html') else "'self'"
         response.headers['Content-Security-Policy']=f"default-src 'self'; script-src 'self'; style-src {styles}; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         return response
     diagnostics = Diagnostics(store, discovery, operations)
@@ -153,6 +153,8 @@ def create_app(data_dir=None):
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)
         result['last_deployed']=last_deployed(store.state,lab)
+        # Edit map opens the full map editor when the manager has the lab's topology text and a map; otherwise the simple dialog.
+        result['map_editor']=bool(lab.get('definition_yaml') and lab.get('drawing'))
         result['nos_readiness']=summarize([row['nos_login'] for row in result['nodes']])
         result['telemetry']=telemetry.lab_summary(lab)
         return result

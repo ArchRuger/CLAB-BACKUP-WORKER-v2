@@ -376,7 +376,11 @@ function opMapPreview(drawing,name,positioned=false){
  const dialog=opDialog('op-map-preview','Topology preview · '+name,`<svg id="op-preview-map" class="topology-map op-layout-map" role="img" aria-label="Proposed topology"></svg><p>${positioned?'Wiring from the topology file; device positions from its saved map file.':'Wiring from the topology file. Devices sit on a default grid — arrange them later with Edit map.'}</p>`);
  const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing);svg.setAttribute('viewBox',measureTopology(svg).join(' '));return dialog;
 }
-async function opLayout(id){return editDiagram(id);}
+// Edit map. A lab whose topology text the manager has opens the full map editor (the lab builder's editor
+// in map mode, map-editor.html): it edits the drawing only and leaves through its own Save / Back. A lab
+// without one (imported from an inventory) keeps the simple dialog.
+function opMapEditorUrl(id){return '/static/map-editor.html#lab='+encodeURIComponent(id);}
+async function opLayout(id){const lab=(state.labs||[]).find(l=>l.id===id);if(lab&&lab.map_editor){location.assign(opMapEditorUrl(id));return;}return editDiagram(id);}
 // reason / destroyReason say, in student words, why Start or Destroy is unavailable right now.
 function opQuickActions(lab,discovery,isBusy=false){
  const status=lab?.deployment?.status, known=['Not deployed','Running','Stopped','Partially running'].includes(status);

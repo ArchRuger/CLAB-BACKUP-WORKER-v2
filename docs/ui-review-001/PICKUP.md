@@ -46,20 +46,32 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.11 | UI-002 part 2 | *Recent labs* / *All labs* tabs, `last_deployed` recorded by the manager, no Continue block, card title width | `check_ui002b.py` 20/20, `verify_after.py` 98/98 ×3, python 709, node 182, `~/ui-review/review-001/chunk10/` |
 | 1.30.12 | UI-003 step A | `MAP-PARITY.md`: capability matrix from the code, approach chosen; live read-only check of 1.30.11 on the dev VM | `~/ui-review/review-001/live-1.30.11/` |
 | 1.30.13 | UI-003 step B | Manager keeps the full annotations document (`lab['annotations']`, `keep_document`, `map_document`), `GET`/`PUT …/map-document` | python 711 (unit/API only, no browser) |
+| 1.30.14 | UI-003 steps C + D | Adapter map mode (`mapOnly`, `MAP_COMMANDS`), `map-editor.html` / `map-editor-page.js`, Edit map wired by `map_editor`, exports and import kept | `check_ui003.py` 27/27, `verify_after.py` 98/98 ×3, node 186, python 711, bundle `--check` OK, `~/ui-review/review-001/chunk13`, `chunk14` |
 
 ## Next
 
-**UI-003 step B is done (1.30.13)**: see the handoff notes (12) for the contract of
-`GET`/`PUT /api/labs/{id}/map-document`.
-**Step C**: `lab-builder/src/main.tsx` map mode (hash `#map=<lab id>`): `mode: "view"`, unlock, command
-whitelist in `dispatchCommand`, no publish/revise/lifecycle, persist through the new route instead of
-the draft store; rebuild with `npm run build` in `clab-backup-ui/lab-builder` (Node 24, the manifest is
-compared in CI) — a changed bundle only reaches browsers with a new release number.
-**Step D/E** as listed in `MAP-PARITY.md`.
+**UI-003 is the only open requirement, and it is not complete.** What remains (step E of `MAP-PARITY.md`):
+
+1. **Drive every ◐ row in a browser and save it**: extend `docs/ui-review-001/tools/check_ui003.py` (shape
+   with resize/rotate/arrows, group creation and dragging a device in, copy/paste/duplicate, a generated
+   layout, link label offset, link label mode, grid appearance, SVG export), each followed by save →
+   reopen → compare the stored document, then flip the row to ☑.
+2. **Row 8, undo / redo**: absent in the editor's view mode. Options: a page-level history of the
+   annotations document (remount with an earlier text), or running the editor in edit mode with the
+   whitelist and hiding the topology tools by test id. Decide after trying the first.
+3. **Row 9, device look** (icon, colours, label position): upstream edits it with `editNode`. An adapter
+   translation would accept `editNode` only when nothing but annotation fields differ, and write them as
+   `nodeAnnotations`; view mode does not show that editor, so this depends on the decision in 2.
+4. **The Topology view draws less than the editor stores** (rotation, line arrows, rounded text
+   background, nested levels): extend `parse_drawing` / `topology-render.js` where cheap, document the rest.
+5. **Live pass**: rebuild the development manager (`sudo bash deploy/start-manager.sh --manager-only`) at
+   this release or later and open Edit map through `http://192.168.132.132:8081` on a scratch lab
+   (the immutable bundle only updates with the release number). Do not edit the maintainer's course maps
+   without asking.
 
 ## Known limits and open points
 
-- 1.30.2 to 1.30.11 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.10 (`gh run list --branch claude/ui-review-001`).
+- Every release of this branch was validated against the fixture manager; 1.30.11 also had a read-only live pass. CI was green for 1.30.2 to 1.30.12 when this was written (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
   --manager-only` (helpers must match the release); last done at **1.30.11 (`ae73300`) on 2026-09-20**,

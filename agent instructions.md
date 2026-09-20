@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.13
+# UI review 001 (in progress) — 1.30.14
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -98,6 +98,19 @@ revision, else `annotations(drawing)`. `GET`/`PUT /api/labs/{id}/map-document` (
 beside `/layout`): the save stores the text untouched, derives the drawing with
 `parse_drawing(text, definition_yaml)`, sets `placed`, never writes the topology and calls no helper.
 A new place that replaces a drawing must call `keep_document` or the document silently falls back.
+(13) **1.30.14, UI-003 steps C + D — Edit map is the builder's editor in map mode.** Adapter
+(`lab-builder/src/main.tsx`): a draft with `mapOnly` runs `mode: "view"`; `MAP_COMMANDS` is the whole
+whitelist (`batch` only when every inner command is in it; never add a topology command, `undo` or
+`redo`, which restore both files); after every settled operation a topology text that differs from the
+loaded one is restored and the edit refused. A change to `main.tsx` needs `node build.mjs` with Node 24
+(`~/research/lab-builder/tooling/`) and reaches browsers only with a new release number. Page:
+`map-editor.html` + `map-editor-page.js` define their own `window.labBuilderPage` and must keep loading
+**neither `operations.js` nor `lab-builder-page.js`**; they talk to `GET`/`PUT …/map-document` and
+`GET …/drawio` only. `public_lab` adds `map_editor`; `opLayout()` sends Edit map there, else
+`editDiagram()` (kept for labs without a topology text). `.map-editor` rules in `lab-builder.css` hide
+runtime menu entries, the traffic-rate entry and the device palette tab; test ids built from a template
+(`context-menu-item-${id}`, `panel-tab-${id}`) are handled in `test_lab_builder_ui.js`. `/static/map-editor.html`
+shares the builder's CSP exemption (`main.py`) and is in `verify-release.py`'s page list.
 
 # Lab builder quality pass — 1.30.1
 
