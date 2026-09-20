@@ -20,13 +20,17 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.29.1'
+VERSION = '1.30.0'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 # The on-demand Grafana of the telemetry stack: deploy/compose.telemetry.yml names the container so
 # the manager can start and stop it here by a fixed argv; nothing else of Docker is reachable.
 GRAFANA_CONTAINER = 'clab-manager-grafana'
 GRAFANA_ACTIONS = ('status', 'start', 'stop')
+# The lab builder publishes a new lab folder (publish) and saves again over a lab that is not
+# deployed (revise). Both texts travel in one request line, so each stays well inside it.
+BUILDER_LIMIT = 512 * 1024
+ANNOTATIONS_SUFFIX = '.annotations.json'
 ENV = {'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'HOME': '/root',
        'GIT_TERMINAL_PROMPT': '0', 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null', 'NO_COLOR': '1'}
 
@@ -145,6 +149,7 @@ class HostOperations:
         if not actions['redeploy']['available'] and actions['deploy']['available'] and actions['destroy']['available']:
             actions['redeploy'] = {**actions['destroy'], 'fallback': True}
         actions['clone'] = {'available': bool(self.config.get('network')) and os.access(self.config.get('git', '/usr/bin/git'), os.X_OK)}
+        actions['publish'] = {'available': True}; actions['revise'] = {'available': True}
         return {'protocol': PROTOCOL, 'version': VERSION, 'actions': actions, 'roots': [str(p) for p in self.roots],
                 'network': bool(self.config.get('network'))}
 
@@ -184,16 +189,53 @@ class HostOperations:
                 groups.setdefault(name, []).append(row)
         return groups
 
+    def builder_texts(self, options):
+        """The YAML and the optional annotations of a builder request; None means no annotations."""
+        text = options.get('text'); annotations = options.get('annotations')
+        if not isinstance(text, str) or not text.strip() or len(text.encode()) > BUILDER_LIMIT: raise ValueError('The topology must be text smaller than 512 KiB.')
+        if annotations is not None and (not isinstance(annotations, str) or len(annotations.encode()) > BUILDER_LIMIT):
+            raise ValueError('The map layout must be text smaller than 512 KiB.')
+        return text, annotations
+
+    def owned_bytes(self, path):
+        """Bytes of a regular, single-link file of this account, read without following a symlink."""
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid() or info.st_size > BUILDER_LIMIT: return None
+            return os.read(fd, BUILDER_LIMIT + 1)
+        finally: os.close(fd)
+
+    def publish_state(self, folder, wanted):
+        """new, reuse, resume or published. A folder is only ours to continue when everything in it is what
+        this request would have written, in the order it writes: the annotations first, the YAML last."""
+        if not folder.exists(): return 'new'
+        if folder.is_symlink() or not folder.is_dir(): raise ValueError('The lab folder name is taken by something that is not a folder.')
+        present = {}
+        with os.scandir(folder) as listing: entries = list(listing)
+        for entry in entries:
+            # Left by this helper: temporaries of an interrupted run, and the recovery copies of a deleted lab.
+            if entry.name.startswith('.clab-manager-') and not entry.is_symlink() and entry.stat(follow_symlinks=False).st_uid == os.geteuid() and (entry.is_file(follow_symlinks=False) or entry.name == '.clab-manager-history'): continue
+            if entry.name not in wanted: raise ValueError('A lab folder with this name already exists on the VM: ' + str(folder) + '. Choose another lab name.')
+            try: present[entry.name] = self.owned_bytes(entry.path)
+            except OSError: present[entry.name] = None
+            if present[entry.name] != wanted[entry.name]: raise ValueError('A lab folder with this name already exists on the VM: ' + str(folder) + '. Choose another lab name.')
+        yaml_name = next(n for n in wanted if not n.endswith(ANNOTATIONS_SUFFIX))
+        if yaml_name in present: 
+            if len(present) != len(wanted): raise ValueError('A lab folder with this name already exists on the VM: ' + str(folder) + '. Choose another lab name.')
+            return 'published'
+        return 'resume' if present else 'reuse'  # reuse: only this helper's recovery copies are left in it
+
     def plan(self, req):
         action = req.get('action')
-        if action not in (*LIFECYCLE, 'inspect-all', 'create', 'delete', 'clone'): raise ValueError('Unsupported lab operation.')
+        if action not in (*LIFECYCLE, 'inspect-all', 'create', 'delete', 'clone', 'publish', 'revise'): raise ValueError('Unsupported lab operation.')
         options = req.get('options') or {}
-        if not isinstance(options, dict) or set(options) - {'cleanup', 'graceful', 'url', 'project', 'text'}:
+        if not isinstance(options, dict) or set(options) - {'cleanup', 'graceful', 'url', 'project', 'text', 'annotations', 'root', 'base'}:
             raise ValueError('Unsupported operation options.')
         for key in ('cleanup', 'graceful'):
             if key in options and type(options[key]) is not bool: raise ValueError('Invalid boolean option.')
         name = identity(req.get('name', 'manager'))
-        path = None; source_hash = ''; affected = []; argv = []; steps = []; warnings = []
+        path = None; source_hash = ''; affected = []; argv = []; steps = []; warnings = []; extra = {}
         if action == 'clone':
             if not self.config.get('network'): raise ValueError('Repository downloads are disabled in host operations setup.')
             url = options.get('url', '')
@@ -212,6 +254,19 @@ class HostOperations:
             if path.exists() or path.suffix not in ('.yaml', '.yml'): raise ValueError('Choose a new YAML filename in a trusted project directory.')
             self.path(str(path.parent))
             source_hash = 'new'
+        elif action == 'publish':
+            # Every path is derived here from the lab name; the request only names a trusted root.
+            root = options.get('root')
+            if not isinstance(root, str) or Path(root) not in self.roots: raise ValueError('Choose one of the trusted lab folders for the new lab.')
+            text, annotations = self.builder_texts(options)
+            folder = self.path(str(Path(root) / name), exists=False); self.path(root)
+            path = folder / (name + '.clab.yml')
+            wanted = {path.name: text.encode()}
+            if annotations is not None: wanted[path.name + ANNOTATIONS_SUFFIX] = annotations.encode()
+            state = self.publish_state(folder, wanted)
+            source_hash = 'new'
+            extra = {'folder': str(folder), 'files': sorted(wanted), 'folder_mode': 0o2775 if Path(root).stat().st_mode & stat.S_ISGID else 0o755}
+            if state in ('published', 'resume'): warnings.append('This lab is already saved on the VM with the same content; nothing will be written.' if state == 'published' else 'An earlier save of this lab stopped half way; this run completes it.')
         elif action == 'inspect-all':
             argv = [self.clab, 'inspect', '--all', '--format', 'json']
         else:
@@ -226,6 +281,23 @@ class HostOperations:
                     raise ValueError('The deployed lab name belongs to a different topology path.')
             if action in ('delete',):
                 if action == 'delete' and rows: raise ValueError('Destroy the deployment before deleting its source YAML.')
+                side = Path(str(path) + ANNOTATIONS_SUFFIX)
+                if side.is_file() and not side.is_symlink():
+                    extra = {'layout': str(side)}; warnings.append('The map layout file beside it is deleted as well. A recovery copy of both is kept.')
+            elif action == 'revise':
+                # Saving again is only for a lab that is not running: the running lab was built from the
+                # file on disk, and the request must come from exactly the versions it names.
+                running = rows or [r for g in groups.values() for r in g if (r.get('absLabPath') or r.get('labPath')) == str(path)]
+                if running: raise ValueError('This lab is deployed. Destroy it before saving topology changes.')
+                text, annotations = self.builder_texts(options)
+                opened = options.get('base') or {}
+                if not isinstance(opened, dict) or set(opened) - {'yaml', 'annotations'}: raise ValueError('Invalid saved-version reference.')
+                side = Path(str(path) + ANNOTATIONS_SUFFIX)
+                if side.is_symlink(): raise ValueError('Symlink paths are not supported.')
+                current = hashlib.sha256(side.read_bytes()).hexdigest() if side.is_file() and side.stat().st_size <= LIMIT else ''
+                if opened.get('yaml') != source_hash or (annotations is not None and opened.get('annotations', '') != current):
+                    raise ValueError('The topology changed on the VM after it was opened. Open it again before saving.')
+                extra = {'annotations_hash': current}
             elif action in LIFECYCLE:
                 help_text = self.help(action)
                 if not help_text and action == 'redeploy':
@@ -252,19 +324,114 @@ class HostOperations:
                     directories = sorted({str(r.get('labdir') or (r.get('labels') or {}).get('clab-node-lab-dir') or path.parent / ('clab-' + name)) for r in rows}) or [str(path.parent / ('clab-' + name))]
                     warnings.append('Cleanup removes generated lab artifacts. Expected lab directory: ' + ', '.join(directories) + '. Check any custom lab directory configured on the VM.')
             else: raise ValueError('Unknown lab operation.')
-        if action in ('create',):
+        if action == 'create':
             text = options.get('text')
             if not isinstance(text, str) or len(text.encode()) > LIMIT: raise ValueError('YAML must be smaller than 1 MiB.')
         base = {'action': action, 'name': name, 'source_name': req.get('source_name', name), 'path': str(path) if path else '', 'options': options,
-                'source_hash': source_hash, 'affected': affected, 'argv': argv, 'steps': steps}
+                'source_hash': source_hash, 'affected': affected, 'argv': argv, 'steps': steps, **extra}
         return {**base, 'digest': digest(base), 'warnings': warnings}
+
+    def place(self, folder_fd, name, data, mode, replace=False):
+        """Write one file inside an open folder: private temporary, flushed to disk, then published
+        under its name. A new file is linked (fails if the name exists); a revision replaces."""
+        temp = '.clab-manager-' + uuid.uuid4().hex
+        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder_fd)
+        try:
+            with os.fdopen(fd, 'wb') as handle:
+                handle.write(data); handle.flush(); os.fsync(handle.fileno()); os.fchmod(handle.fileno(), mode)
+                inode = os.fstat(handle.fileno()).st_ino
+            if replace: os.replace(temp, name, src_dir_fd=folder_fd, dst_dir_fd=folder_fd); temp = None
+            else:
+                try: os.link(temp, name, src_dir_fd=folder_fd, dst_dir_fd=folder_fd)
+                except FileExistsError: raise ValueError('The lab file now exists on the VM. Nothing was overwritten; review the save again.') from None
+            os.fsync(folder_fd)
+            return inode
+        finally:
+            if temp:
+                try: os.unlink(temp, dir_fd=folder_fd)
+                except FileNotFoundError: pass
+
+    def publish(self, plan, emit):
+        """Create the lab folder with its map layout first and its topology last, so the lab only
+        becomes visible to the file browser (which lists *.clab.yml) once it is complete."""
+        folder = Path(plan['folder']); text, annotations = self.builder_texts(plan['options'])
+        wanted = {n: (text if not n.endswith(ANNOTATIONS_SUFFIX) else annotations).encode() for n in plan['files']}
+        state = self.publish_state(folder, wanted)
+        if state == 'published':
+            emit({'output': 'This lab is already saved on the VM. Nothing was written.\n'}); return {'already_published': True}
+        made_folder = False; placed = {}
+        mode = 0o664 if plan['folder_mode'] & stat.S_ISGID else 0o644
+        try:
+            if state == 'new':
+                os.mkdir(folder, 0o700); made_folder = True
+            folder_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                if made_folder:
+                    os.fchmod(folder_fd, plan['folder_mode'])
+                    root_fd = os.open(folder.parent, os.O_RDONLY | os.O_DIRECTORY)
+                    try: os.fsync(root_fd)
+                    finally: os.close(root_fd)
+                existing = set(os.listdir(folder))
+                for name in [n for n in existing if n.startswith('.clab-manager-') and n != '.clab-manager-history']:  # temporaries of an interrupted run
+                    os.unlink(name, dir_fd=folder_fd)
+                for name in sorted(wanted, key=lambda n: not n.endswith(ANNOTATIONS_SUFFIX)):
+                    if name in existing: continue
+                    placed[name] = self.place(folder_fd, name, wanted[name], mode)
+            except BaseException:
+                # Take back only what this run published, and only while it is still that file.
+                for name, inode in placed.items():
+                    try:
+                        if os.stat(name, dir_fd=folder_fd, follow_symlinks=False).st_ino == inode: os.unlink(name, dir_fd=folder_fd)
+                    except OSError: pass
+                raise
+            finally: os.close(folder_fd)
+        except BaseException:
+            if made_folder:
+                try: os.rmdir(folder)
+                except OSError: pass
+            raise
+        emit({'output': 'Lab folder saved on the VM: ' + str(folder) + '\n'})
+        return {'published_path': plan['path'], 'resumed': state == 'resume'}
+
+    def revise(self, plan, emit):
+        path = Path(plan['path']); text, annotations = self.builder_texts(plan['options'])
+        side = path.name + ANNOTATIONS_SUFFIX
+        history = self.path(str(path.parent / '.clab-manager-history'), exists=False)
+        history.mkdir(mode=0o700, exist_ok=True)
+        folder_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            recovery = {}
+            for name in (path.name, side) if annotations is not None else (path.name,):
+                try: previous = self.owned_bytes_any(folder_fd, name)
+                except FileNotFoundError: continue
+                backup = history / (name + '.' + uuid.uuid4().hex)
+                with open(backup, 'xb') as handle:
+                    os.chmod(backup, 0o600); handle.write(previous); handle.flush(); os.fsync(handle.fileno())
+                recovery[name] = str(backup)
+            if hashlib.sha256(Path(path).read_bytes()).hexdigest() != plan['source_hash']: raise ValueError('The topology changed on the VM. Review the save again.')
+            keep = stat.S_IMODE(os.stat(path.name, dir_fd=folder_fd, follow_symlinks=False).st_mode)
+            if annotations is not None: self.place(folder_fd, side, annotations.encode(), keep, replace=True)
+            self.place(folder_fd, path.name, text.encode(), keep, replace=True)
+        finally: os.close(folder_fd)
+        emit({'output': 'Topology saved on the VM. The previous version was kept.\n'})
+        return {'published_path': str(path), 'recovery_path': recovery.get(path.name, ''), 'recovery_paths': recovery}
+
+    def owned_bytes_any(self, folder_fd, name):
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=folder_fd)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_size > LIMIT: raise ValueError('The saved lab files cannot be replaced safely.')
+            return os.read(fd, LIMIT + 1)
+        finally: os.close(fd)
 
     def execute(self, req, emit):
         plan = self.plan(req)
         if req.get('digest') != plan['digest']: raise ValueError('The topology or deployment changed. Preview the operation again.')
         action = plan['action']; path = Path(plan['path']) if plan['path'] else None
         result = {}; code = 0
-        if action in ('create', 'delete'):
+        if action == 'publish': result = self.publish(plan, emit)
+        elif action == 'revise': result = self.revise(plan, emit)
+        elif action in ('create', 'delete'):
             if action != 'create':
                 history = self.path(str(path.parent / '.clab-manager-history'), exists=False)
                 history.mkdir(mode=0o700, exist_ok=True)
@@ -272,6 +439,13 @@ class HostOperations:
                 with open(backup, 'xb') as stream_file:
                     os.chmod(backup, 0o600); stream_file.write(path.read_bytes())
                 result['recovery_path'] = str(backup)
+            if action == 'delete' and plan.get('layout'):
+                side = Path(plan['layout'])
+                if side.is_file() and not side.is_symlink() and side.stat().st_size <= LIMIT:
+                    kept = history / (side.name + '.' + uuid.uuid4().hex)
+                    with open(kept, 'xb') as stream_file:
+                        os.chmod(kept, 0o600); stream_file.write(side.read_bytes())
+                    side.unlink(); result['layout_recovery_path'] = str(kept)
             if action == 'delete': path.unlink()
             else:
                 temp = path.with_name('.clab-manager-' + uuid.uuid4().hex)

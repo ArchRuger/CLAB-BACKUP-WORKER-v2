@@ -32,6 +32,7 @@ Three conventions hold across every guide:
 
 | Guide | Use it when |
 |---|---|
+| [Lab builder](LAB-BUILDER.md) | You want to draw a new lab in the browser, save it to the VM and deploy it, or edit the topology of a lab that is not deployed. |
 | [Lab operations](LAB-OPERATIONS.md) | You start, stop, redeploy or destroy labs, browse the VM's topologies, edit the map, or want to know how device readiness is judged. |
 | [Git setup](GIT-SETUP.md) | You register a VM checkout so *Save progress* can commit and push with the owner's login. |
 | [Save progress](GIT-PROGRESS.md) | You use the Progress tab: saves, checkpoints, baselines, saved versions, compare, apply to the running lab and the save location. |

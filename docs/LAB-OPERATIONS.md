@@ -48,11 +48,12 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Telemetry settings… | Telemetry on or off for this lab, the login used for gNMI, why a device is not streaming, retry, removal of the lines the manager added, and the network dashboard's state. |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the lab is running. |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
+| Build a lab visually… / Edit visually… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Edit visually…* opens an existing topology file; saving again is only possible while the lab is not deployed and keeps a copy of the previous version. |
 | Write a new topology… | Creates a new topology file on the VM after a structure preview and confirmation; never replaces an existing file. |
 | Add to My labs without starting / Deploy lab | Read an existing file and add the lab to My labs without deploying, or deploy it: *Deploy lab* saves the workspace (devices, map, VM source path) first and then reviews the containerlab command, so the lab is in My labs at once and nothing needs importing afterwards. |
 | Download a lab from GitHub… / Browse popular labs… | Optional HTTPS download into the VM's lab folder, followed by a review of the files and a separate deployment. |
 
-Removed in earlier releases: existing VM YAML editing, copy topology path, manual
+Removed in earlier releases: editing existing VM YAML as text (the lab builder's reviewed *Save changes to the VM…* is the only way the manager replaces a topology file, and only for a lab that is not deployed), copy topology path, manual
 Select/link VM project shortcut, Open VM folder lab shortcut, separate Edit
 layout, horizontal/vertical diagram exports, SSHX/GoTTY and SR Linux fcli. These
 commands are rejected by the current manager and installed helper. Upgrade the

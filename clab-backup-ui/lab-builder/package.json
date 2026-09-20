@@ -1,0 +1,17 @@
+{
+  "name": "clab-manager-lab-builder",
+  "private": true,
+  "type": "module",
+  "description": "Build-time project for the lab builder page. Its output is committed under app/static/lab-builder; nothing here runs on a lab VM.",
+  "license": "MIT",
+  "scripts": { "build": "node build.mjs", "check": "node build.mjs --check" },
+  "engines": { "node": ">=24" },
+  "dependencies": {
+    "@containerlab/clab-ui": "0.3.2",
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}

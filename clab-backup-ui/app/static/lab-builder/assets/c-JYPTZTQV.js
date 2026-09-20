@@ -1,0 +1,1 @@
+import{i as e}from"/static/lab-builder/assets/c-J7QBU4CT.js";import{b as h}from"/static/lab-builder/assets/c-5V5QO733.js";import{d as c}from"/static/lab-builder/assets/c-65TME3XB.js";var t=c(h(),1),r=e((0,t.jsx)("path",{d:"M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3z"}),"OpenInNew");export{r as a};

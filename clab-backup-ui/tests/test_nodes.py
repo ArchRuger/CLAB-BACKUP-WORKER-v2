@@ -142,6 +142,19 @@ class NodeTests(unittest.TestCase):
         for client in clients:
             self.services.release(client)
 
+    def test_lab_builder_styles_are_scoped_to_its_document_and_only_its_assets_are_cached(self):
+        builder = self.client.get('/static/lab-builder.html'); policy = builder.headers['content-security-policy']
+        self.assertEqual(builder.status_code, 200)
+        self.assertIn("style-src 'self' 'unsafe-inline'", policy); self.assertIn("script-src 'self';", policy)
+        for refused in ('unsafe-eval', 'blob:', 'worker-src', 'http:', 'https:'): self.assertNotIn(refused, policy)
+        self.assertEqual(builder.headers['cache-control'], 'no-store')
+        for other in ('/', '/static/lab-builder-page.js', '/static/lab-builder.css', '/static/lab-builder/manifest.json'):
+            response = self.client.get(other)
+            self.assertNotIn('unsafe-inline', response.headers['content-security-policy'], other); self.assertEqual(response.headers['cache-control'], 'no-store', other)
+        asset = self.client.get('/static/lab-builder/assets/main.js')
+        self.assertEqual(asset.headers['cache-control'], 'public, max-age=31536000, immutable'); self.assertNotIn('unsafe-inline', asset.headers['content-security-policy'])
+        self.assertEqual(self.client.get('/static/lab-builder/assets/absent.js').headers['cache-control'], 'no-store')
+
     def test_terminal_styles_are_scoped_to_terminal_document(self):
         terminal = self.client.get('/static/terminal.html')
         dashboard = self.client.get('/')

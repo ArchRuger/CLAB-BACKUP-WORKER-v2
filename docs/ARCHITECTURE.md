@@ -48,7 +48,7 @@ flowchart TB
     S["sshd on the VM<br/>Match User clab-discovery · password auth · ForceCommand"]
     GW{"clab-manager-gateway<br/>switch on SSH_ORIGINAL_COMMAND"}
     I["clab-manager-inspect<br/>host_files.py · read-only<br/>containerlab inspect + lab file bundle"]
-    O["clab-manager-operate<br/>host_operations.py · deploy, destroy, start, stop,<br/>inspect, save, create, clone · trusted roots only"]
+    O["clab-manager-operate<br/>host_operations.py · deploy, destroy, start, stop,<br/>inspect, save, create, publish, revise, clone · trusted roots only"]
     Gt["clab-manager-git<br/>host_git.py · export, commit, push, browse, move<br/>as the checkout owner; register as root"]
     X["anything else → exit 64"]
     T[("/etc/clab-manager<br/>operations.json · git.json · engineer.json")]
@@ -181,6 +181,7 @@ lines.
 | `app/store.py` | Encrypted state file, atomic saves, bounded audit log, reset journal |
 | `app/discovery.py`, `app/vm_files.py`, `app/host_files.py` | VM connection, 30-second inspection loop, address reconciliation, lab file bundles and import; `host_files.py` is the helper installed on the VM |
 | `app/lab_operations.py`, `app/host_operations.py` | Reviewed containerlab commands with preview tokens and persistent output, topology browser and editor, diagram layout API; `host_operations.py` runs on the VM |
+| `app/static/lab-builder.html`, `lab-builder-page.js`, `lab-builder.css`, `app/static/lab-builder/`, `lab-builder/` | The [lab builder](LAB-BUILDER.md): the page and its plain-JavaScript logic (browser drafts, starters, templates, reviewed save), the committed editor assets (SR Labs clab-ui, its licence, notices and hash manifest), and the build-time TypeScript project that produces them (never built on a VM). Saving uses the `publish` and `revise` actions of `host_operations.py` |
 | `app/git_progress.py`, `app/host_git.py` | *Save progress*: capture, export, commit, push and history through the owner-scoped VM helper; the repository folder browser, folder moves and connecting a repository by URL. Junos snapshots also carry a hierarchical restore-grade artifact in the manifest |
 | `app/restore.py`, `app/restore_junos.py` | *Apply to running lab*: a managed restore job that backs up each target first, then loads a saved Junos configuration onto the running node with `load override` and a confirmed commit and verifies the result. It runs over the manager's direct node-SSH path — no host helper — and serialises with backups, Git saves and lab operations |
 | `app/runner.py` | Ansible `network_cli` backups and login tests, per-job environment and `known_hosts`, output validation, Git history of backups; Junos backups also capture the hierarchical restore candidate |

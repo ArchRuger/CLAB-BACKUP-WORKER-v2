@@ -1,5 +1,6 @@
 """Reviewed lab-level actions with review tokens and persistent job output."""
 import copy
+import difflib
 import json
 import re
 import socket
@@ -15,6 +16,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from .discovery import PinnedHostKey, vm_password, parse_definition, stamp
+from .inventory import read_data
 from .topology import parse_drawing
 from .drawio_export import drawio
 from .layout import decorations, annotations, revision
@@ -173,6 +175,26 @@ class LabOperations:
         @app.get('/api/operations/popular')
         def popular(): return self.invoke({'mode': 'popular'})
 
+        @app.get('/api/operations/known-images')
+        def known_images():
+            """Container images named by the topologies already in My labs, per kind. The lab builder
+            offers them first, so a new lab starts from images this site is known to use."""
+            found = {}
+            with self.store.lock: texts = [l.get('definition_yaml') or '' for l in self.store.state['labs']]
+            for text in texts:
+                try: topology = read_data(text.encode()).get('topology') or {}
+                except (ValueError, TypeError, AttributeError, RecursionError): continue
+                defaults = topology.get('defaults') if isinstance(topology.get('defaults'), dict) else {}
+                kinds = topology.get('kinds') if isinstance(topology.get('kinds'), dict) else {}
+                for node in (topology.get('nodes') or {}).values() if isinstance(topology.get('nodes'), dict) else []:
+                    node = node if isinstance(node, dict) else {}
+                    kind = node.get('kind') or defaults.get('kind')
+                    kind_settings = kinds.get(kind) if isinstance(kinds.get(kind), dict) else {}
+                    image = node.get('image') or kind_settings.get('image') or defaults.get('image')
+                    if isinstance(kind, str) and isinstance(image, str) and 0 < len(kind) <= 120 and 0 < len(image) <= 300 and '{{' not in image:
+                        counts = found.setdefault(kind, {}); counts[image] = counts.get(image, 0) + 1
+            return {'images': {kind: sorted(counts, key=lambda i: (-counts[i], i))[:12] for kind, counts in sorted(found.items())}}
+
         @app.post('/api/operations/parse-yaml')
         def parse_yaml(data: Request):
             invalid = (ValueError, TypeError, AttributeError, RecursionError)
@@ -196,7 +218,7 @@ class LabOperations:
 
         @app.post('/api/operations/preview')
         def preview(data: Request):
-            if data.action not in ("deploy", "redeploy", "destroy", "apply", "start", "stop", "restart", "save", "inspect", "inspect-all", "create", "delete", "clone"):
+            if data.action not in ("deploy", "redeploy", "destroy", "apply", "start", "stop", "restart", "save", "inspect", "inspect-all", "create", "delete", "clone", "publish", "revise"):
                 raise HTTPException(400, "This lab operation has been removed or is unsupported.")
             with self.store.lock:
                 self.guard(data.lab_id)
@@ -208,7 +230,8 @@ class LabOperations:
             options = copy.deepcopy(data.options)
             source_name = name
             source = None
-            if data.action not in ('create', 'clone', 'inspect-all'):
+            if data.action == 'publish': path = ''
+            if data.action not in ('create', 'clone', 'inspect-all', 'publish'):
                 source = self.invoke({'mode': 'read', 'path': path})
                 try: source_name = parse_definition(source['text'].encode())['name']
                 except (ValueError, TypeError, AttributeError, RecursionError): raise HTTPException(400, 'The VM file must contain a valid literal Containerlab topology.')
@@ -218,8 +241,36 @@ class LabOperations:
                     parsed = parse_definition(str(options.get('text', '')).encode())
                     if not lab or data.action == 'create': name = parsed['name']
                 except (ValueError, TypeError, AttributeError, RecursionError): raise HTTPException(400, 'Use valid literal Containerlab YAML for the new project.')
+            diff = ''; notes = []
+            if data.action in ('publish', 'revise'):
+                # The lab builder's save. The manager checks what it will later have to read back: a
+                # topology parse_definition accepts, under the name the folder and the file will carry.
+                if set(options) - {'root', 'text', 'annotations', 'base'}: raise HTTPException(400, 'Unsupported save options.')
+                try: parsed = parse_definition(str(options.get('text', '')).encode())
+                except (ValueError, TypeError, AttributeError, RecursionError) as exc:
+                    raise HTTPException(400, 'The manager cannot read this topology: ' + (str(exc) if type(exc) is ValueError else 'it is not a literal Containerlab topology.'))
+                if data.action == 'revise' and parsed['name'] != source_name: raise HTTPException(400, 'The lab name cannot change when saving again. It is ' + source_name + ' on the VM.')
+                name = source_name = parsed['name']
+                layout = options.get('annotations')
+                if layout is not None:
+                    try:
+                        if not isinstance(json.loads(layout), dict): raise ValueError()
+                    except (ValueError, TypeError, RecursionError): raise HTTPException(400, 'The map layout is not valid JSON.')
+                    try: parse_drawing(layout.encode(), str(options['text']).encode())
+                    except (ValueError, TypeError, AttributeError, KeyError, RecursionError):
+                        notes.append('The manager cannot read this map layout, so its own map will start from the default grid. The layout file is still saved for the editor.')
+                if len(json.dumps(options)) > 1536 * 1024: raise HTTPException(400, 'This lab is too large to save in one step (topology and map layout together must stay under 1.5 MiB).')
+                if source: diff = ''.join(difflib.unified_diff(source['text'].splitlines(True), str(options['text']).splitlines(True), 'on the VM', 'your changes', n=2))[:200000]
             req = dict(mode='preview', action=data.action, path=path, name=name, source_name=source_name, options=options)
             result = self.invoke(req)
+            if data.action == 'publish':
+                with self.store.lock:
+                    taken = next((l for l in self.store.state['labs'] if (l.get('deployment_name') or l['name']) == name and
+                                  (l.get('vm_project_path') or l.get('vm_source', {}).get('files', {}).get('definition', {}).get('path', '')) not in ('', result.get('path'))), None)
+                if taken: raise HTTPException(409, 'A lab named ' + name + ' is already in My labs with a different topology file. Choose another lab name.')
+                req['path'] = result.get('path', '')
+            if notes: result['warnings'] = notes + list(result.get('warnings', []))
+            if diff: result['diff'] = diff
             if source and result.get('source_hash') != source['sha256']: raise HTTPException(409, 'Source changed during review; retry.')
             with self.store.lock:
                 if self.store.state.get('host', {}).get('revision') != host_revision: raise HTTPException(409, 'VM connection changed. Preview again.')

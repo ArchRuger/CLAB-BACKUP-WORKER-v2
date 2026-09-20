@@ -4,6 +4,45 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.0
+
+**Lab builder.** A new page draws a Containerlab lab in the browser and saves it to the VM
+([docs/LAB-BUILDER.md](LAB-BUILDER.md)): *Deploy a new lab › Build a lab visually…*, and *Edit
+visually…* on an existing topology file. The editor is SR Labs' containerlab topology editor
+(`@containerlab/clab-ui`, Apache-2.0), embedded unmodified with the manager's own host: its editing
+engine runs in the page, so the manager only reads and writes two documents. Upgrading an installed
+VM needs the launcher (`start-manager.sh`), because saving uses two new actions of the operations
+helper; with an older helper the page says that saving is unavailable and drafts still work.
+
+- **Saving is a reviewed lab operation.** `publish` creates `<lab folder>/<lab>/<lab>.clab.yml` and
+  its `.annotations.json` layout: the helper derives every path from the lab name, writes through
+  flushed private temporaries relative to the open folder, links the layout first and the topology
+  last, never replaces anything, treats identical content as already saved and completes a save
+  that was interrupted. `revise` saves again over a lab that is **not deployed**, only from the
+  versions that were opened, keeps recovery copies of both files and shows the difference in the
+  review. The manager checks the topology with `parse_definition`, pins the lab name, refuses the
+  name of a lab that is in My labs with another topology file, caps the request size and warns
+  when its own map cannot read the layout. After a revision My labs takes the saved topology and map.
+- **Drafts live in the browser**, never on the manager: stored before the editor's edit is
+  acknowledged, protected against a second tab, downloadable and uploadable.
+- **Deleting a topology file** now deletes the layout file beside it (both with recovery copies),
+  and a lab folder that only holds those copies no longer blocks its name.
+- **Page policy.** `static/lab-builder.html` joins the two xterm pages in the `style-src
+  'unsafe-inline'` exception; `script-src 'self'` is unchanged, so the editor's YAML and JSON tabs
+  (schema validation by code generation) are off, its code editor is left out of the bundle, and
+  Geo layout, split view, Grafana export and the editor's own deploy menu are hidden. The content-
+  hashed files under `/static/lab-builder/assets/` are the only responses that may be cached.
+- **Assets are committed, never built on a VM.** `clab-backup-ui/lab-builder/` is the build-time
+  project (exact pins, lockfile); `node build.mjs --check` and CI compare a fresh build with the
+  committed hash manifest. Licence, generated third-party notices and
+  [deploy/LAB-BUILDER-THIRD-PARTY-NOTICES.md](../deploy/LAB-BUILDER-THIRD-PARTY-NOTICES.md) ship with them.
+- `GET /api/operations/known-images` lists the images the topologies in My labs already use, per
+  kind; the builder's device templates start from them.
+- **Fix:** `parse_definition` resolves a node's kind and settings through `topology.groups`
+  (node, group, kind, defaults). A device whose kind came from its group was identified from the
+  defaults and got the wrong driver.
+- CI now also runs `test_nodes.py` and `test_discovery.py`, which the explicit list had missed.
+
 ## Changes in 1.29.1
 
 A patch release of the student UI after a screenshot pass over every student page on a live

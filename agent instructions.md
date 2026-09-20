@@ -1,3 +1,59 @@
+# Lab builder — 1.30.0
+
+Read docs/LAB-BUILDER.md, docs/CHANGELOG.md "Changes in 1.30.0" and docs/lab-builder/PICKUP.md
+(decisions and their reasons; the research, the independent review and the throwaway prototype are
+outside the repository in `~/research/lab-builder/` on the dev VM). Facts to preserve.
+(1) **The editor is embedded, not forked.** `@containerlab/clab-ui` is pinned exactly in
+`clab-backup-ui/lab-builder/package.json`; `src/main.tsx` is the whole adapter: a custom
+`ClabUiHost` (the package's documented custom-host pattern), `TopologySessionCore` running in the
+page over `DraftFiles` (an in-memory two-document store: the engine's temporary and backup names
+never leave it), one engine operation at a time, and `labBuilderPage.persist()` called after each
+operation settles and **before** the editor hears the answer. Never flush on a timer: the engine's
+save is write-temp, rename-to-backup, rename, unlink, and a timer can catch the moment the topology
+is missing. The editor has no drift detection in this version; `draftWrite()`'s revision check is it.
+(2) **`script-src 'self'` is not negotiable.** The editor's YAML/JSON tabs compile a schema with
+ajv (`new Function`), so they are off (`disabledTabIds`) and the Monaco chunk is replaced by
+`src/monaco-stub.ts` at bundle time (the editor preloads it even with the tabs off). A build-time
+precompiled validator substituted for `ajv` was proven to work in the prototype if editable YAML is
+ever wanted; it is not a supported upstream hook. Embedded fonts are moved out of the CSS into files
+by `build.mjs` (font-src falls back to 'self'). Only `/static/lab-builder.html` gets inline styles;
+`/` must keep none (two older tests assert it).
+(3) **Hidden controls.** This editor version has no switch for its deploy menu, Geo layout, split
+view or Grafana export; `lab-builder.css` hides them by `data-testid` and
+`tests/test_lab_builder_ui.js` fails when the bundled editor no longer contains one of those ids.
+The host still answers `runLifecycle` (a `lifecycleStatus` event, then the manager's save), because
+without an answer the editor freezes. On an editor upgrade: rebuild, run that test, run
+`docs/lab-builder/tools/student_workflow.py`, and check whether upstream's `lifecycleActionsAvailable`
+prop has been published (it removes the need to hide the deploy menu).
+(4) **Helper contract** (`app/host_operations.py`, security-sensitive): `publish` takes only a
+trusted root, a name and the texts, derives every path, works relative to the open folder
+(`place()`: exclusive 0600 temporary, write, fsync, fchmod, link or replace, fsync the folder),
+layout first and topology last, rollback by inode of its own files only, `publish_state()` =
+new / reuse / resume / published where resume accepts only what that write order can leave behind.
+`revise` needs an undeployed lab (by name and by topology path), the opened versions' hashes in
+`options.base`, keeps recovery copies and the file mode. `delete` takes the layout file along. The
+digest binds the whole request including both texts; there is no run retry, recovery is a fresh
+preview. Keep the option whitelist exact. The 1.12.0 removal of `write` stands and its tests are
+untouched: `revise` is a different action with a narrower contract.
+(5) **Manager side** (`lab_operations.py`): publish/revise previews run `parse_definition`, pin the
+name on revise, refuse a name registered with another topology file, cap the encoded options at
+1.5 MiB, turn an unreadable layout into a warning (never a refusal: the editor writes shapes the
+manager's map rejects, e.g. one id in both node arrays), and add a unified diff for revise. Job
+records never hold file text. `GET /api/operations/known-images` reads `definition_yaml` only.
+(6) **Page** (`lab-builder-page.js`, plain house-style JavaScript loaded with `operations.js`, like
+`workspace.js`): drafts under `clab-builder:` in localStorage, `builderSaveRequest()` chooses publish
+or revise, `opJobDone()` (called by `operations.js` when a job it showed finishes) records the saved
+version and re-registers a lab that is in My labs after a revision. `lab-builder.css` must keep
+`.lab-builder #root svg{max-width:none}`: the manager's `img, svg {max-width:100%}` collapses the
+editor's zero-width link overlay and the wires vanish.
+(7) **Release tooling**: `lab-builder.html` is in `verify-release.py`'s versioned-page list; the
+assets' folder must not be called `dist/` (git-ignored) and notices must not be `.md` (dropped from
+the image); CI rebuilds the assets with Node 24 and compares the manifest.
+(8) Known and left alone: `setup-engineer-access.sh --refresh` re-modes the trusted roots
+recursively, which loosens existing `.clab-manager-history` recovery copies from 0600 to 0660
+(group `clab_admins`); removing a lab with `prevent_reimport` keeps its name in `ignored_labs`.
+Live-validated on the dev VM with Linux hosts only (VALIDATION.md).
+
 # Student UI screenshot pass and layout fixes — 1.29.1
 
 **Released as 1.29.1** directly on `main` (the user asked for a patch push, no feature branch).

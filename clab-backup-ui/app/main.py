@@ -116,10 +116,13 @@ def create_app(data_dir=None):
         response.headers['X-Content-Type-Options']='nosniff'
         response.headers['Referrer-Policy']='no-referrer'
         response.headers['X-Frame-Options']='DENY'
-        response.headers['Cache-Control']='no-store'
-        # xterm's DOM renderer creates font, cell-width and ANSI-color styles.
-        # Permit those only in its dedicated document; scripts remain self-only.
-        styles="'self' 'unsafe-inline'" if request.url.path in ('/static/terminal.html', '/static/capture-session.html') else "'self'"
+        # The lab builder's editor bundle is several megabytes of content-hashed files that only change
+        # with a release; everything else is never cached.
+        response.headers['Cache-Control']='public, max-age=31536000, immutable' if request.url.path.startswith('/static/lab-builder/assets/') and response.status_code == 200 else 'no-store'
+        # xterm's DOM renderer creates font, cell-width and ANSI-color styles, and the lab builder's
+        # editor (React Flow, MUI) sets element styles at run time.
+        # Permit those only in their dedicated documents; scripts remain self-only.
+        styles="'self' 'unsafe-inline'" if request.url.path in ('/static/terminal.html', '/static/capture-session.html', '/static/lab-builder.html') else "'self'"
         response.headers['Content-Security-Policy']=f"default-src 'self'; script-src 'self'; style-src {styles}; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         return response
     diagnostics = Diagnostics(store, discovery, operations)

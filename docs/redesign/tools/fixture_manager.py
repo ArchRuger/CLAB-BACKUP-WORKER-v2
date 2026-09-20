@@ -477,11 +477,12 @@ def build(data_dir, port):
             return {'path': '', 'parent': '', 'entries': [{'name': r, 'path': r, 'directory': True} for r in roots]}
         path = path.rstrip('/')
         if path == '/srv/containerlab-node-manager/projects':
-            return {'path': path, 'parent': '', 'entries': []}
+            names = sorted({f.split('/')[4] for f in vm_files if f.startswith(path + '/') and f.endswith('.clab.yml')})
+            return {'path': path, 'parent': '', 'entries': [{'name': n, 'path': f'{path}/{n}', 'directory': True} for n in names]}
         if path == '/etc/containerlab':
             names = sorted({f.split('/')[3] for f in vm_files})
             return {'path': path, 'parent': '', 'entries': [{'name': n, 'path': f'/etc/containerlab/{n}', 'directory': True} for n in names]}
-        entries = [{'name': f.rsplit('/', 1)[1], 'path': f, 'directory': False} for f in sorted(vm_files) if f.rsplit('/', 1)[0] == path]
+        entries = [{'name': f.rsplit('/', 1)[1], 'path': f, 'directory': False} for f in sorted(vm_files) if f.rsplit('/', 1)[0] == path and f.endswith(('.clab.yaml', '.clab.yml'))]
         if not entries and not any(f.startswith(path + '/') for f in vm_files):
             raise ValueError('The requested project directory no longer exists.')
         return {'path': path, 'parent': path.rsplit('/', 1)[0], 'entries': entries}
@@ -497,8 +498,26 @@ def build(data_dir, port):
         affected, argv, warnings, source_hash = [], [], [], ''
         if action == 'clone':
             raise ValueError('Repository downloads are disabled in host operations setup.')
+        extra = {}
         if action == 'create':
             source_hash = 'new'
+        elif action == 'publish':
+            # The lab builder's first save, scripted after app/host_operations.py: the paths are derived
+            # from the lab name, nothing existing is replaced, the same content again is a no-op.
+            root = options.get('root')
+            if root not in roots:
+                raise ValueError('Choose one of the trusted lab folders for the new lab.')
+            path = f'{root}/{name}/{name}.clab.yml'
+            wanted = {path: options.get('text')}
+            if options.get('annotations') is not None:
+                wanted[path + '.annotations.json'] = options['annotations']
+            present = {f: t for f, t in vm_files.items() if f.startswith(f'{root}/{name}/')}
+            if present and present != wanted:
+                raise ValueError(f'A lab folder with this name already exists on the VM: {root}/{name}. Choose another lab name.')
+            if present:
+                warnings.append('This lab is already saved on the VM with the same content; nothing will be written.')
+            source_hash = 'new'
+            extra = {'folder': f'{root}/{name}', 'files': sorted(f.rsplit('/', 1)[1] for f in wanted), 'folder_mode': 0o755}
         elif action == 'inspect-all':
             argv = ['/usr/bin/containerlab', 'inspect', '--all', '--format', 'json']
         else:
@@ -507,7 +526,16 @@ def build(data_dir, port):
             affected = [{'name': r['name'], 'id': r['container_id'], 'state': r['state']} for r in rows]
             if action == 'delete' and rows:
                 raise ValueError('Destroy the deployment before deleting its source YAML.')
-            if action != 'delete':
+            if action == 'revise':
+                if rows:
+                    raise ValueError('This lab is deployed. Destroy it before saving topology changes.')
+                opened = options.get('base') or {}
+                side = vm_files.get(path + '.annotations.json')
+                current = hashlib.sha256(side.encode()).hexdigest() if side is not None else ''
+                if opened.get('yaml') != source_hash or (options.get('annotations') is not None and opened.get('annotations', '') != current):
+                    raise ValueError('The topology changed on the VM after it was opened. Open it again before saving.')
+                extra = {'annotations_hash': current}
+            elif action != 'delete':
                 argv = ['/usr/bin/containerlab', action, '-t', path, '--name', name]
                 if action == 'inspect':
                     argv += ['--format', 'json']
@@ -518,7 +546,7 @@ def build(data_dir, port):
                 if options.get('cleanup'):
                     warnings.append('Cleanup removes generated lab artifacts. Expected lab directory: ' + path.rsplit('/', 1)[0] + '/clab-' + name + '. Check any custom lab directory configured on the VM.')
         base = {'action': action, 'name': name, 'source_name': req.get('source_name', name), 'path': path, 'options': options,
-                'source_hash': source_hash, 'affected': affected, 'argv': argv, 'steps': []}
+                'source_hash': source_hash, 'affected': affected, 'argv': argv, 'steps': [], **extra}
         return {**base, 'digest': hashlib.sha256(json.dumps(base, sort_keys=True).encode()).hexdigest(), 'warnings': warnings}
 
     def ops_run(req, output):
@@ -530,8 +558,18 @@ def build(data_dir, port):
             vm_files[req['path']] = req['options']['text']
             output('INFO created ' + req['path'] + '\n')
             return {'exit_code': 0}
+        if action in ('publish', 'revise'):
+            options = req['options']; target = plan['path']
+            if action == 'publish' and target in vm_files:
+                output('This lab is already saved on the VM. Nothing was written.\n')
+                return {'exit_code': 0, 'already_published': True}
+            if options.get('annotations') is not None:
+                vm_files[target + '.annotations.json'] = options['annotations']
+            vm_files[target] = options['text']
+            output(('Lab folder saved on the VM: ' + plan['folder'] if action == 'publish' else 'Topology saved on the VM. The previous version was kept.') + '\n')
+            return {'exit_code': 0, 'published_path': target, **({'recovery_path': target.rsplit('/', 1)[0] + '/.clab-manager-history/' + target.rsplit('/', 1)[1] + '.fixture'} if action == 'revise' else {})}
         if action == 'delete':
-            vm_files.pop(req['path'], None)
+            vm_files.pop(req['path'], None); vm_files.pop(req['path'] + '.annotations.json', None)
             output('INFO removed ' + req['path'] + '\n')
             return {'exit_code': 0, 'recovery_path': '/srv/containerlab-node-manager/recovery/' + name + '.clab.yaml'}
         if action in ('inspect', 'inspect-all'):
@@ -547,9 +585,9 @@ def build(data_dir, port):
         mode = request.get('mode')
         if mode == 'capabilities':
             actions = {a: {'available': True, 'cleanup': a in ('deploy', 'redeploy', 'destroy')} for a in
-                       ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect', 'inspect-all', 'create', 'delete')}
+                       ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect', 'inspect-all', 'create', 'delete', 'publish', 'revise')}
             actions['clone'] = {'available': False}
-            return {'protocol': 'clab-manager-operations-v1', 'version': __version__, 'actions': actions, 'network': False}
+            return {'protocol': 'clab-manager-operations-v1', 'version': __version__, 'actions': actions, 'roots': roots, 'network': False}
         if mode == 'browse':
             return ops_browse(str(request.get('path', '')))
         if mode == 'read':

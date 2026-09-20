@@ -51,8 +51,9 @@ def parse_definition(raw, deployed_name=''):
         raise ValueError('Upload no more than 2000 nodes')
     defaults = body.get('defaults') or {}
     kinds = body.get('kinds') or {}
-    if not isinstance(defaults, dict) or not isinstance(kinds, dict):
-        raise ValueError('Topology defaults and kinds must be mappings')
+    groups = body.get('groups') or {}
+    if not isinstance(defaults, dict) or not isinstance(kinds, dict) or not isinstance(groups, dict):
+        raise ValueError('Topology defaults, kinds and groups must be mappings')
     prefix = data.get('prefix', 'clab')
     if prefix != '': prefix = identifier(prefix, 'Container prefix')
     nodes = []
@@ -60,10 +61,14 @@ def parse_definition(raw, deployed_name=''):
         short = identifier(short, 'Node name')
         settings = settings or {}
         if not isinstance(settings, dict): raise ValueError('Node settings must be mappings')
-        kind = literal(settings.get('kind', defaults.get('kind', '')), 'Node kind', 120)
+        # Containerlab resolves a setting from the node, then its group, then its kind, then the defaults.
+        group_settings = groups.get(settings.get('group')) if isinstance(settings.get('group'), str) else None
+        group_settings = group_settings or {}
+        if not isinstance(group_settings, dict): raise ValueError('Group settings must be mappings')
+        kind = literal(settings.get('kind', group_settings.get('kind', defaults.get('kind', ''))), 'Node kind', 120)
         kind_settings = kinds.get(kind) or {}
         if not isinstance(kind_settings, dict): raise ValueError('Kind settings must be mappings')
-        effective = {**defaults, **kind_settings, **settings}
+        effective = {**defaults, **kind_settings, **group_settings, **settings}
         # Containerlab's empty prefix uses the bare node name.
         full = f'{prefix}-{deployed_name}-{short}' if prefix else short
         fixed = effective.get('mgmt-ipv4') or effective.get('mgmt-ipv6')
