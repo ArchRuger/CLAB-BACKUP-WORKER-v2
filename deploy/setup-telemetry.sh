@@ -49,7 +49,7 @@ else
   "${compose[@]}" --env-file "$env_file" stop grafana
   port=$(grep -E '^TELEMETRY_GRAFANA_PORT=' "$env_file" | tail -1 | cut -d= -f2)
   idle=$(grep -E '^TELEMETRY_GRAFANA_IDLE_MINUTES=' "$env_file" | tail -1 | cut -d= -f2)
-  echo "Grafana dashboards installed for TCP ${port:-3000} and stopped again: the manager starts Grafana when you open it from a lab (Grafana ↗) and stops it after ${idle:-15} minutes without an open dashboard (TELEMETRY_GRAFANA_IDLE_MINUTES in clab-backup-ui/.env; 0 keeps it running once started). Anonymous viewers can read the dashboards; admin edits need the password in clab-backup-ui/.env (TELEMETRY_GRAFANA_ADMIN_PASSWORD)."
+  echo "Grafana dashboards installed for TCP ${port:-3000} and stopped again: the manager starts Grafana when you open it from a lab (Tools › Open network dashboard ↗) and stops it after ${idle:-15} minutes without an open dashboard (TELEMETRY_GRAFANA_IDLE_MINUTES in clab-backup-ui/.env; 0 keeps it running once started). Anonymous viewers can read the dashboards; admin edits need the password in clab-backup-ui/.env (TELEMETRY_GRAFANA_ADMIN_PASSWORD)."
 fi
 if $recreate; then
   # The manager reads TELEMETRY_* from its environment, so it must be recreated to notice.

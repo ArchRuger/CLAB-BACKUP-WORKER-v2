@@ -25,7 +25,6 @@ from pathlib import Path
 from urllib.parse import quote
 from xml.sax.saxutils import escape as _escape
 
-from .telemetry_metrics import STATE_CODES
 from .telemetry_names import endpoint_candidates
 
 PLUGIN = 'andrewbmchugh-flow-panel'

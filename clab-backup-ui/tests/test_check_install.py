@@ -303,7 +303,7 @@ class InstallationCheckTests(unittest.TestCase):
         self.assertIn('stops it after 15 minutes', by_id(ctx, 'telemetry-dashboards')['detail'])
         self.assertIn('2 lab map(s)', by_id(ctx, 'telemetry-dashboards')['detail'])
         self.assertFalse(any(call.kwargs.get('base') == 'http://127.0.0.1:3100' for call in ctx.http.call_args_list), 'no Grafana request while it is stopped')
-        self.assertTrue(any('open Grafana ↗ from a deployed lab' in item for item in ctx.manual))
+        self.assertTrue(any('Open network dashboard ↗ (Tools › Telemetry) in a deployed lab' in item and 'Open lab map ↗' in item for item in ctx.manual))
         ctx = context()
         ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, running=False, scraping=False))
         check.check_telemetry_dashboards(ctx)

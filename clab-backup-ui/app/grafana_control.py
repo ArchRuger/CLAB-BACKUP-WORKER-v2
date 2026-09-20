@@ -1,7 +1,7 @@
 """On-demand Grafana: started through the VM helper when someone opens it, stopped when nobody reads it.
 
 Grafana idles at a few hundred MiB, so the telemetry stack leaves it stopped (deploy/setup-telemetry.sh,
-restart policy "no" in deploy/compose.telemetry.yml). When a lab's Grafana button is used the manager
+restart policy "no" in deploy/compose.telemetry.yml). When a lab's Grafana link (Tools tab) is used the manager
 starts the container through the reviewed operations helper (`docker start` of the fixed container
 name), waits for Grafana's health endpoint and sends the browser on. A monitor thread then reads
 Grafana's own request counters over the loopback and stops the container again after

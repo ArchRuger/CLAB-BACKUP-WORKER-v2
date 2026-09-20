@@ -153,4 +153,4 @@ then
   fi
   exit 1
 fi
-echo 'Git login remains with the repository owner. Select the repository under More > Git repository in the manager.'
+echo 'Git login remains with the repository owner. Select the repository under Progress > Save location in the manager.'

@@ -1,3 +1,38 @@
+# Maintenance audit, chunk 4: dead code, setup wording, CI test list — 1.30.21
+
+Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.20 (`3bbc8d0`, pushed; CI green for
+1.30.18 and 1.30.19 when this was written). **Static, unit and fixture evidence; nothing live.**
+
+## What was run
+
+- Candidates came from a read-only worker (pyflakes and vulture in a scratch environment, a reference count
+  of every top-level script definition and every CSS class over scripts, pages, Python, tests, tools, the
+  editor bundle and vendor files). The lead repeated the search for every class and import before editing,
+  and removed the CSS with a rule-aware script (its first version wrongly treated `:not(.x)` as dead and
+  split commas inside `:where()`; both were fixed before anything was applied).
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. `node --test tests/*.js`: 189
+  of 189. `node --check` on both scripts, `bash -n` on every deploy script, `python3 deploy/verify-release.py`,
+  `check_links.py`, `git diff --check`; after the bump `node build.mjs --check` under Node 24.
+- `docs/redesign/tools/verify_after.py` with the cleaned stylesheet on fresh fixture data: 98 of 98 checks at
+  three window sizes, 0 console errors, 0 page errors.
+- Screenshot comparison, 135 captures per run: original stylesheet against the cleaned one differs in 48
+  images; a control run of the original against itself differs in 47 (clock times, toasts, job times). The
+  ten images that differed clearly more than in the control were looked at: a menu entry that a script
+  unhides when the VM's capabilities arrive, a toast, tab-strip antialiasing that the control shows too, and
+  a text box the embedded editor had not finished rendering at one window size (identical at the other
+  two). None is a style effect.
+- An independent read-only review tried to find a producer for each removed selector, handler and import
+  (string-built class names, Python-emitted markup, standalone pages, the editor bundle, vendor files,
+  tests and tools; an AST check for the imports) and found none; it parsed both stylesheets into rules
+  (1001 to 931, no rule with a live selector lost) and ran the eight new CI files in an empty environment
+  without Git identity or Ansible collections: 69 tests pass. Its wording follow-ups are applied.
+
+## Not run
+
+The screenshots do not cover every dialog and state. No setup script was executed, so the changed closing
+lines were only read and syntax-checked. CI's result for this commit is reported in the pull request, not
+here.
+
 # Maintenance audit, chunk 3: student workflow guides and tour screenshots — 1.30.20
 
 Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.19 (`e2bb15b`, pushed). Documentation and

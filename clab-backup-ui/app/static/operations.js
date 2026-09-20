@@ -423,7 +423,6 @@ if($('import-top')){
  if(!$('lab-actions'))$('import-top').insertAdjacentHTML('beforebegin','<button class="button secondary" id="lab-actions" hidden>All lab operations…</button>');
 
  $('map-edit').onclick=()=>opTask(null,()=>opLayout(activeId));
- if($('deploy-empty'))$('deploy-empty').onclick=openDeploy;
  if($('lab-operations-all'))$('lab-operations-all').onclick=()=>openLabOperations();
  // Operation history for THIS lab from its menu and its Advanced tab; Manager ▾ keeps the history of every lab.
  for(const id of ['menu-operation-history','advanced-operation-history'])if($(id))$(id).onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTask(null,()=>opHistory(activeId));};

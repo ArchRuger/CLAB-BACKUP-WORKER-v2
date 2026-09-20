@@ -5,7 +5,6 @@ neighbour of every linked lab, plus node and link states. It is derived from the
 bounded snapshots the Telemetry tab reads, carries names only (no addresses, logins
 or configuration) and is served under /api/ with the manager's usual guards.
 """
-from .telemetry_store import STALE_AFTER
 
 RATES = (('rx_bps', 'clab_interface_receive_bits_per_second', 'Received bit rate derived from counter deltas'),
          ('tx_bps', 'clab_interface_transmit_bits_per_second', 'Transmitted bit rate derived from counter deltas'),

@@ -39,6 +39,7 @@ probes).
 | T1 | Installation and operations guides against `deploy/` | Domain auditor and writer | sonnet → session model | Large read scope, isolated context | T1 (eleven guides) | Release check, link check, findings table |
 | T2 | Student workflow guides against the UI code and routes | Domain auditor and writer | sonnet → session model | Same | T2 (nine files) | Same |
 | T3 | Dead-code and CI-gap candidates with consumer traces | Maintenance scout, read-only | sonnet → session model | Shared-globals tracing is context-heavy | none | Evidence per candidate |
+| V1 | A producer for any selector, handler or import removed in chunk 4; the new CI step on a clean runner | Risk reviewer, read-only | opus → session model | Consequential deletion | none | Finding list; none found, two wording follow-ups applied |
 | R1 | Lost or misstated obligations in the `CLAUDE.md` migration | Risk reviewer, read-only | opus → session model | Instruction migration is consequential | none | Finding list with severity |
 
 ## 3. Disposition table

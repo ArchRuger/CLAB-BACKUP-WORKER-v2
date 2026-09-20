@@ -4,6 +4,35 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.21
+
+**Maintenance audit, chunk 4: proven dead code removed, stale wording in the setup scripts, and eight test
+files that CI never ran.** No behaviour change; the helpers changed by their lockstep version alone.
+
+- `style.css` loses 70 rules and 20 entries of selector lists (about 200 lines) whose classes nothing
+  produces any more: the sidebar shell and the landing panel and tab strip of the UI before the redesign,
+  orphan classes (`card-title`, `control-row`, `deployment-bar`, `page-heading`, `op-coordinates`,
+  `dialog-body`, …), `button.git-saved-job` (the element is always a `<details>`) and the unused `--focus`
+  alias. Every class was searched as a whole token in the static scripts and pages, the Python modules, the
+  editor bundle, the vendor files, the tests and the Playwright tools; selectors that only mention such a
+  class inside `:not()`, `:where()` or `:is()` were left alone.
+- `operations.js` and `management.js` no longer attach handlers to `#deploy-empty` and `#home-import`,
+  which no markup creates. Seven unused imports and one unused exception name are gone from
+  `discovery.py`, `inventory.py`, `main.py`, `telemetry_map.py`, `telemetry_metrics.py`,
+  `deploy/capture/smoke.py` and `deploy/setup_telemetry.py`.
+- The Git setup's closing lines (`git-onboard.py`, `setup-git.sh`) sent the reader to *More › Git
+  repository* and said a save pushes automatically; they now say *Progress › Save location* and name the
+  review. The health check, the telemetry setup and the VM connection help page use the current labels
+  (*Open lab map ↗* / *Open network dashboard ↗*, *Check the VM automatically for running labs*).
+- CI (`release-check.yml`) has a new step for `test_app.py`, `test_downloads.py`, `test_topology.py`,
+  `test_diagram_editor.py`, `test_import_confirmation.py`, `test_remove_lab.py`, `test_manager_reset.py` and
+  `test_vm_password.py`: 69 tests on the backup pipeline, download names, import confirmation, removal and
+  reset that only ever ran locally. `test_eos_ssh.py` stays opt-in.
+
+Left alone on purpose and listed in the [audit record](maintenance-audit/AUDIT.md): unused names in
+`host_git.py`, `restore.py` and `restore_junos.py` (sensitive modules, a risk review first) and
+`shell.js` `lastOpened()` (dead in production but pinned by a test).
+
 ## Changes in 1.30.20
 
 **Maintenance audit, chunk 3: the student workflow guides against the UI code and the routes.**
