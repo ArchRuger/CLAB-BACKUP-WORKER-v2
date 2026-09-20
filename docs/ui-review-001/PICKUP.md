@@ -35,17 +35,19 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | Release | Requirement | What | Evidence |
 |---|---|---|---|
 | 1.30.2 | UI-001 | *Also running on the VM* moved to **Manager ▾ › Labs found on the VM…** (dialog `#vm-labs-dialog`, count line under the menu entry) | `check_ui001.py` 7/7, `verify_after.py` 95/95 ×3, `~/ui-review/review-001/chunk01/` |
+| 1.30.3 | UI-005 | *Advanced options* group at the bottom of **Lab actions ▾** (`data-menu-group` / `data-menu-panel`, behaviour in `shell.js` `initMenu`) | `check_ui005.py` all passed, `verify_after.py` 95/95 ×3, `~/ui-review/review-001/chunk02/` |
 
 ## Next
 
-Chunk 2 = **UI-005** (Lab actions dropdown: *Import map*, *Edit map*, *Telemetry settings*, *Operation
-history* into an *Advanced options* group at the bottom of `#lab-actions-menu` in `index.html`; menu
-keyboard handling is in `shell.js`; the pinned labels are in `tests/test_shell_ui.js` and
-`tests/test_topology_menu_ui.js`). Then the order at the end of `CHECKLIST.md`.
+Chunk 3 = **UI-004** (explanations for the Save progress options: `#git-save-menu` in `index.html` is a
+`<details>` with `.git-save-options`; the actions are dispatched on `data-git-action` in
+`git-progress.js`; derive each text from what the action really does there and in
+`app/git_progress.py`; hover **and** keyboard focus; must not clip or cover an action). Then the order
+at the end of `CHECKLIST.md`.
 
 ## Known limits and open points
 
-- 1.30.2 was validated against the fixture manager only. The development manager running on the VM
+- 1.30.2 and 1.30.3 were validated against the fixture manager only; CI was green for 1.30.2 (run 35515090009). The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
   --manager-only` (helpers must match the release); record here when that was last done: **not yet for
   this branch**.

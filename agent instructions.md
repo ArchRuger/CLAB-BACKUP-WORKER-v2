@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.2
+# UI review 001 (in progress) — 1.30.3
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -10,6 +10,13 @@ acceptance criteria). This section grows with each step; the newest facts are in
 `homeVmLabs(discovery)` in `home.js` is the pure count behind the menu's note line. Do not put a
 discovery list back on Home. `docs/ui-review-001/` may name any release (`HISTORY_DIRS` in
 `verify-release.py`).
+(2) **1.30.3, UI-005**: `#lab-actions-menu` ends with `#lab-actions-advanced-toggle`
+(`data-menu-group`) and `#lab-actions-advanced` (`data-menu-panel`, `hidden`) holding `menu-import-map`,
+`menu-map-edit`, `menu-telemetry`, `menu-operation-history` (ids, `data-proxy` mirrors and handlers
+unchanged). `initMenu()` in `shell.js` owns the behaviour for any menu: the toggle is a `menuitem` that
+never closes the menu, `items()` skips a hidden panel's items, ArrowRight/ArrowLeft expand and
+collapse, `open()` collapses every group. Only those four items were reviewed for the move; do not
+sweep other entries into the group. `#lab-actions-menu` has a `max-height` and scrolls inside itself.
 
 # Lab builder quality pass — 1.30.1
 

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.2"><script src="/static/status.js?v=1.30.2" defer></script><script src="/static/shell.js?v=1.30.2" defer></script><script src="/static/app.js?v=1.30.2" defer></script><script src="/static/topology-render.js?v=1.30.2" defer></script><script src="/static/topology.js?v=1.30.2" defer></script><script src="/static/home.js?v=1.30.2" defer></script><script src="/static/management.js?v=1.30.2" defer></script><script src="/static/operations.js?v=1.30.2" defer></script><script src="/static/diagram-editor.js?v=1.30.2" defer></script><script src="/static/git-progress.js?v=1.30.2" defer></script><script src="/static/git-places.js?v=1.30.2" defer></script><script src="/static/restore.js?v=1.30.2" defer></script><script src="/static/capture.js?v=1.30.2" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.3"><script src="/static/status.js?v=1.30.3" defer></script><script src="/static/shell.js?v=1.30.3" defer></script><script src="/static/app.js?v=1.30.3" defer></script><script src="/static/topology-render.js?v=1.30.3" defer></script><script src="/static/topology.js?v=1.30.3" defer></script><script src="/static/home.js?v=1.30.3" defer></script><script src="/static/management.js?v=1.30.3" defer></script><script src="/static/operations.js?v=1.30.3" defer></script><script src="/static/diagram-editor.js?v=1.30.3" defer></script><script src="/static/git-progress.js?v=1.30.3" defer></script><script src="/static/git-places.js?v=1.30.3" defer></script><script src="/static/restore.js?v=1.30.3" defer></script><script src="/static/capture.js?v=1.30.3" defer></script></head>
 <body>
 
 <svg hidden aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
@@ -75,12 +75,8 @@
           <button type="button" role="menuitem" data-op-action="restart" data-op-options="{}" disabled><span>Restart devices</span><small class="menu-reason" hidden></small></button>
           <hr class="menu-sep" role="separator">
           <button type="button" role="menuitem" id="menu-sync-vm" data-proxy="sync-vm"><span>Sync topology from VM</span><small class="menu-reason" hidden></small></button>
-          <button type="button" role="menuitem" id="menu-import-map" data-proxy="import-map"><span>Import map…</span><small class="menu-reason" hidden></small></button>
-          <button type="button" role="menuitem" id="menu-map-edit" data-proxy="map-edit"><span>Edit map</span><small class="menu-reason" hidden></small></button>
           <button type="button" role="menuitem" id="menu-capture" data-proxy="capture-open"><span>Packet capture…</span><small class="menu-reason" hidden></small></button>
-          <button type="button" role="menuitem" id="menu-telemetry"><span>Telemetry settings…</span></button>
           <button type="button" role="menuitem" id="menu-lab-files"><span>Lab files…</span></button>
-          <button type="button" role="menuitem" id="menu-operation-history"><span>Operation history…</span></button>
           <button type="button" role="menuitem" id="lab-actions" hidden><span>All lab operations…</span></button>
           <div class="menu-danger" role="group" aria-label="Destructive actions">
             <hr class="menu-sep" role="separator">
@@ -88,6 +84,14 @@
             <button type="button" role="menuitem" data-op-action="redeploy" data-op-options='{"cleanup":true}' data-op-variant="cleanup" disabled hidden><span>Redeploy and clear the lab folder…</span><small class="menu-reason" hidden></small></button>
             <button type="button" role="menuitem" id="menu-destroy" data-proxy="lab-destroy"><span>Destroy lab…</span><small class="menu-reason" hidden></small></button>
             <button type="button" role="menuitem" id="menu-remove-lab" data-proxy="remove-lab"><span>Remove from this manager…</span><small class="menu-reason" hidden></small></button>
+          </div>
+          <hr class="menu-sep" role="separator">
+          <button type="button" role="menuitem" class="menu-group-toggle" id="lab-actions-advanced-toggle" data-menu-group="lab-actions-advanced" aria-expanded="false" aria-controls="lab-actions-advanced"><span>Advanced options</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-chevron"></use></svg></button>
+          <div class="menu-group" id="lab-actions-advanced" data-menu-panel role="group" aria-labelledby="lab-actions-advanced-toggle" hidden>
+            <button type="button" role="menuitem" id="menu-import-map" data-proxy="import-map"><span>Import map…</span><small class="menu-reason" hidden></small></button>
+            <button type="button" role="menuitem" id="menu-map-edit" data-proxy="map-edit"><span>Edit map</span><small class="menu-reason" hidden></small></button>
+            <button type="button" role="menuitem" id="menu-telemetry"><span>Telemetry settings…</span></button>
+            <button type="button" role="menuitem" id="menu-operation-history"><span>Operation history…</span></button>
           </div>
         </div>
       </span>

@@ -44,11 +44,13 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
   short, accurate explanation each, derived from the implementation.
 - ☐ On hover and on keyboard focus; inside the viewport; never covers an action or closes the menu.
 
-## UI-005 — Lab actions dropdown is simpler ☐
+## UI-005 — Lab actions dropdown is simpler ☑ 1.30.3
 
-- ☐ *Import map*, *Edit map*, *Telemetry settings*, *Operation history* move into an *Advanced
-  options* group at the bottom; nothing else moves (Packet capture, Lab files, All lab operations stay).
-- ☐ Pointer and keyboard; stays on screen; same lab states as before; *Edit map* stays on the map toolbar.
+- ☑ *Import map*, *Edit map*, *Telemetry settings*, *Operation history* moved into an expandable
+  *Advanced options* group at the bottom; nothing else moved (Packet capture, Lab files, All lab
+  operations, lifecycle and destructive items stay).
+- ☑ Pointer and keyboard (click, Enter, Space, right/left arrow); the menu scrolls inside itself on a
+  small window; same disabled states and reasons as before; *Edit map* stays on the map toolbar.
 
 ## UI-006 — Devices tab is visually consistent ☐
 
@@ -76,7 +78,7 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 
 ## Planned chunk order
 
-1. UI-001 (1.30.2, done) → 2. UI-005 → 3. UI-004 → 4. UI-007 A+B → 5. UI-007 C → 6. UI-008 root
+1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 → 4. UI-007 A+B → 5. UI-007 C → 6. UI-008 root
 cause and fix → 7. UI-006 → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
 10+. UI-003 matrix, then parity in increments. One patch release, one commit and one verified push
 per chunk.

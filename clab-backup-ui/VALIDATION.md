@@ -1,3 +1,28 @@
+# UI review 001, step 2: Advanced options in the Lab actions menu — 1.30.3
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.2 (`2ebf251`,
+pushed, CI green). Requirement UI-005 of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no live VM,
+lab or device was involved**, and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- `node --test tests/*.js`: 166 of 166. New in `test_shell_ui.js`: the group's behaviour over the fake
+  DOM (toggle keeps the menu open, collapsed items unreachable by arrows, disabled item skipped, left and
+  right arrows, a group item closes the menu before its handler runs, collapsed again on reopen) and a
+  structural test over `index.html` (exactly the four reviewed items in the group, the group last,
+  everything else still in the main list, *Edit map* still on the toolbar).
+- `python -m unittest discover -s tests -t tests`: 705 tests, 1 skipped (the opt-in SSH fixture), OK.
+- `python3 deploy/verify-release.py`, `node --check app/static/shell.js`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 95 of 95 at three viewports, 0 console errors, 0 page
+  errors. `docs/ui-review-001/tools/check_ui005.py`, all checks passed: at 1366×768 and at a 1280×720
+  laptop zoomed to 150 % (853×480 CSS pixels) the collapsed menu has none of the four items and ends with
+  *Advanced options*, the expanded menu stays inside the viewport with its last item visible (the menu
+  scrolls inside itself at the small size); keyboard only: End → toggle, right arrow enters the group,
+  left arrow collapses it, Enter expands it, End + Enter opens *Operation history*, Escape returns focus
+  to the *Lab actions* button; by pointer *Telemetry settings…*, *Import map…* and *Edit map* open from
+  the group; in a lab without a map the moved *Edit map* mirrors the toolbar's disabled state with its
+  reason. Screenshots inspected: `~/ui-review/review-001/chunk02/` on the VM.
+
 # UI review 001, step 1: labs found on the VM move under Manager — 1.30.2
 
 Prepared on `claude/ui-review-001` from `main` `21823c6` on 2026-09-20 on the dev VM `clab-llm-dev2`.

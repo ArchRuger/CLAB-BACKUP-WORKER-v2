@@ -1008,7 +1008,7 @@ All lab operations…** for the complete list, or right-click a lab card on Home
 
 ## Edit the map and export
 
-Choose **Edit map** on the Topology tab, under **Lab actions ▾** or on the
+Choose **Edit map** on the Topology tab, under **Lab actions ▾ › Advanced options** or on the
 **Tools › Map** card. Select a device or annotation on the canvas or from the item
 list. Drag it to move it, or enter coordinates. Add text, boxes, circles or lines;
 edit text, size, colors, opacity and border style in the properties panel.

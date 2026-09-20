@@ -4,6 +4,24 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.3
+
+**UI review 001, step 2: a shorter Lab actions menu (UI-005).** Frontend only.
+
+- **Advanced options.** *Import map…*, *Edit map*, *Telemetry settings…* and *Operation history…* moved
+  into an expandable **Advanced options** group at the bottom of **Lab actions ▾**. Nothing else moved:
+  the lifecycle items, *Sync topology from VM*, *Packet capture…*, *Lab files…*, *All lab operations…*
+  and the separated destructive actions are where they were, and every moved action is still available
+  elsewhere too (*Edit map* on the map toolbar and the Tools tab, *Import map…* under the map's *More ▾*,
+  *Telemetry settings…* on the Tools tab, *Operation history…* under Advanced and in the Manager menu).
+- The group opens with a click, Enter, Space or the right arrow and closes with the left arrow; opening
+  it never closes the menu; its items are skipped by the arrow keys while it is collapsed; it is
+  collapsed again each time the menu opens. The moved items keep their disabled state and their reason
+  line. On a small window the menu scrolls inside itself instead of running off the screen, and the
+  last item is scrolled into view when the group opens.
+- `shell.js` supports such a group in any button menu (`data-menu-group` on the item,
+  `data-menu-panel` on the group).
+
 ## Changes in 1.30.2
 
 **UI review 001, step 1: "Also running on the VM" leaves the main page (UI-001).** The first of a

@@ -614,6 +614,11 @@ footer {
 .menu-list button:disabled { opacity: 1; color: var(--muted); cursor: not-allowed; }
 .menu-list button:disabled .menu-reason { color: var(--muted); }
 .menu-list .button { width: auto; }
+.menu-group-toggle { justify-content: space-between; }
+.menu-group-toggle .icon { transition: transform .15s ease; }
+.menu-group-toggle[aria-expanded="true"] .icon { transform: rotate(180deg); }
+.menu-group { margin: 0 0 2px 10px; padding-left: 6px; border-left: 2px solid var(--line); }
+#lab-actions-menu { max-height: calc(100vh - 120px); overflow-y: auto; overscroll-behavior: contain; }
 .menu-sep { display: block; height: 1px; margin: 6px 4px; padding: 0; border: 0; background: var(--line); }
 .menu-danger button, .menu-list button.danger { color: var(--danger); }
 .menu-danger button:hover:not(:disabled), .menu-list button.danger:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger-strong); }
