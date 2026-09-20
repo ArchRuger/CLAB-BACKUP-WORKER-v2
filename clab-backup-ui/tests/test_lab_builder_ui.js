@@ -6,7 +6,8 @@ function load(){const context=vm.createContext({console,crypto:require('node:cry
  // top-level const is not a property of the context; expose the tables the tests read
  for(const name of ['BUILDER_TEMPLATES','BUILDER_STARTERS','opLabels','opReviewCopy'])context[name]=vm.runInContext(name,context);
  return context;}
-const yaml=require(path.join(__dirname,'../lab-builder/node_modules/yaml'));
+// The starters are a fixed, small YAML shape; read them without a YAML library so this file has no dependencies.
+function starterShape(text){const nodes={},links=[];let node='';for(const line of text.split('\n')){let m;if((m=/^    ([A-Za-z0-9_.-]+):$/.exec(line))){node=m[1];nodes[node]={};}else if((m=/^      (kind|image): (.+)$/.exec(line)))nodes[node][m[1]]=m[2];else if((m=/^    - endpoints: \["([^"]+)", "([^"]+)"\]$/.exec(line)))links.push([m[1],m[2]]);}return {name:/^name: (.+)$/m.exec(text)[1],nodes,links};}
 
 test('lab names follow the literal rule of the VM helper and stay short',()=>{
  const c=load();
@@ -20,9 +21,9 @@ test('interface patterns count from one, or from the start the pattern names',()
 });
 test('starters are valid topologies whose links use each device interface once',()=>{
  const c=load();
- assert.deepEqual(yaml.parse(c.builderStarter('blank','empty').yaml),{name:'empty',topology:{nodes:{}}});assert.equal(c.builderStarter('blank','empty').annotations,'');
+ assert.equal(c.builderStarter('blank','empty').yaml,'name: empty\ntopology:\n  nodes: {}\n');assert.equal(c.builderStarter('blank','empty').annotations,'');
  for(const [id,nodes,links] of [['pair',2,1],['triangle',3,3]])for(const template of c.BUILDER_TEMPLATES){
-  const made=c.builderStarter(id,'lab',template),doc=yaml.parse(made.yaml),ends=doc.topology.links.flatMap(l=>l.endpoints);
+  const made=c.builderStarter(id,'lab',template),doc={topology:starterShape(made.yaml)},ends=doc.topology.links.flat();
   assert.equal(Object.keys(doc.topology.nodes).length,nodes);assert.equal(doc.topology.links.length,links);assert.equal(new Set(ends).size,ends.length,'an interface is used twice: '+ends);
   for(const node of Object.values(doc.topology.nodes))assert.deepEqual(node,{kind:template.kind,image:template.image});
   assert.deepEqual(JSON.parse(made.annotations).nodeAnnotations.map(n=>n.id),Object.keys(doc.topology.nodes));

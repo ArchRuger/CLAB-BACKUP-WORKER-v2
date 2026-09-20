@@ -211,8 +211,10 @@ Agents working on the code start with [agent instructions.md](agent%20instructio
 [MIT](LICENSE). The browser capture stack adapts Siemens Edgeshark (MIT) and runs the
 SR Labs Wireshark container; the UI vendors xterm.js (MIT); telemetry uses pygnmi
 (BSD-3) and runs Prometheus (Apache-2.0), Grafana OSS (AGPL-3.0) and the Flow panel
-plugin (Apache-2.0). Their notices are in
+plugin (Apache-2.0); the lab builder embeds the SR Labs containerlab topology editor
+(Apache-2.0) with its bundled dependencies. Their notices are in
 [deploy/CAPTURE-THIRD-PARTY-NOTICES.md](deploy/CAPTURE-THIRD-PARTY-NOTICES.md),
-[deploy/TELEMETRY-THIRD-PARTY-NOTICES.md](deploy/TELEMETRY-THIRD-PARTY-NOTICES.md) and
+[deploy/TELEMETRY-THIRD-PARTY-NOTICES.md](deploy/TELEMETRY-THIRD-PARTY-NOTICES.md),
+[deploy/LAB-BUILDER-THIRD-PARTY-NOTICES.md](deploy/LAB-BUILDER-THIRD-PARTY-NOTICES.md) and
 [clab-backup-ui/app/static/vendor/](clab-backup-ui/app/static/vendor/README.md).
 Vendor network OS images are licensed separately by their vendors.
