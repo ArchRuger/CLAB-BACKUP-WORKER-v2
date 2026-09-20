@@ -1,3 +1,32 @@
+# Maintenance audit, chunk 1: agent guidance — 1.30.18
+
+Prepared on `claude/maintenance-audit` (cut from `main` `d510b7a`) on 2026-09-20 on the dev VM
+`clab-llm-dev2`. Documentation only. **Static, unit and fixture evidence; nothing live.**
+
+## What was run
+
+- Baseline at `d510b7a` before any edit: `python -m unittest discover -s tests -t tests` 711 tests, 1
+  skipped, OK; `node --test tests/*.js` 189 of 189 (system Node 18); `verify-release.py` OK.
+- After the bump: the same two suites with the same counts, `python3 deploy/verify-release.py`,
+  `python3 docs/maintenance-audit/tools/check_links.py` (79 tracked Markdown files, 0 problems; 6 before,
+  all in the archived Docker Hub guide), `git diff --check`.
+- `docs/redesign/tools/verify_after.py` against the fixture manager on fresh scratch data: 98 of 98 checks
+  at 1920×1080, 1440×900 and 1366×768, 0 console errors, 0 page errors (one handled 409, as before). This
+  run overlapped the start of the stylesheet cleanup of a later chunk, so it is a baseline indication, not
+  that chunk's proof.
+- Model routing: three probe tasks requested as `haiku`, `sonnet` and `opus` all reported the session's
+  own model, because the user settings force one subagent model. Every delegated task of this audit
+  therefore ran on that model; the record says requested and effective for each.
+- The `CLAUDE.md` migration was reviewed by an independent read-only task against the full handoff file
+  and the code (CSP line, script order, CI workflow, editor pin, every test file named in the routing
+  table). Its twelve findings are applied; it found nothing still true that the old file had and the new
+  one dropped.
+
+## Not run
+
+No VM script, no manager rebuild, no lab, no Git remote other than this branch's push. The size figure is
+bytes on disk, not measured token usage.
+
 # UI review 001, step 16: link label distance and the per-row browser pass — 1.30.17
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.16 (`e429911`,

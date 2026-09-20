@@ -1,4 +1,21 @@
-# UI review 001 (in progress) — 1.30.17
+# Maintenance audit (in progress) — 1.30.18
+
+A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release
+per chunk. **Read `docs/maintenance-audit/PICKUP.md` first**, then `docs/maintenance-audit/AUDIT.md`
+(dispositions, the workflow-to-guide map, the remaining debt with two confirmed defects that still need a
+decision). Facts to preserve.
+(1) **`CLAUDE.md` no longer imports this file.** It carries the current state, the invariants and a routing
+table into the sections below; keep it that way. When a release adds a binding fact, put the detail here,
+add one line to the invariants only if it is a must-never, and add this file's section to the right
+routing row. Do not re-import the history, and do not delete the symlink `agent-instructions.md`.
+(2) Sections below are history; their headings must keep naming their release (`verify-release.py` reads
+the first one). UI review 001 is complete and merged; its open points are in its pickup file.
+(3) `docs/maintenance-audit/` is a living-docs folder: it names chunks by number, never an older release.
+`docs/maintenance-audit/tools/check_links.py` is a gate for any change that moves or renames a document.
+(4) The documentation tools under `docs/redesign/tools/`, `docs/ui-review-001/tools/` and
+`docs/lab-builder/tools/` are working regression tooling; their location does not make them disposable.
+
+# UI review 001 — 1.30.17
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how

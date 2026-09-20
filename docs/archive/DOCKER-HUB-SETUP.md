@@ -1,5 +1,5 @@
-> Historical guide for earlier releases. For 1.15.1, use [VM-CONNECTION.md](VM-CONNECTION.md)
-> and [FRESH-VM-GUIDE.md](archive/FRESH-VM-GUIDE.md). Their password setup replaces the SSH client key steps below.
+> Historical guide for earlier releases. For 1.15.1, use [VM-CONNECTION.md](../VM-CONNECTION.md)
+> and [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md). Their password setup replaces the SSH client key steps below.
 > Build 1.15.1 from source; no new registry image is claimed by this delivery.
 
 # Pulled the Docker image? Start here
@@ -57,7 +57,7 @@ is not present yet, run `sudo docker pull archtop/clab-backup:1.12.0` first.
 
 If Compose is missing, install the Docker Compose plugin for your Docker Engine
 installation using [Docker's Ubuntu installation guide](https://docs.docker.com/engine/install/ubuntu/).
-For an entirely unconfigured machine, [FRESH-VM-GUIDE.md](archive/FRESH-VM-GUIDE.md) covers
+For an entirely unconfigured machine, [FRESH-VM-GUIDE.md](FRESH-VM-GUIDE.md) covers
 Docker installation; return here to run the pulled image instead of building one.
 
 ## 2. Prepare the VM's SSH server and Containerlab
@@ -136,7 +136,7 @@ operation history, logs and configuration backup files. Keep `state.key` with
 Removing or replacing the container does not remove this bind-mounted directory.
 
 On an existing machine, migrate any old container-only data using
-[STANDALONE-SETUP.md](STANDALONE-SETUP.md) before starting a new manager. Run only
+[STANDALONE-SETUP.md](../STANDALONE-SETUP.md) before starting a new manager. Run only
 one manager process/container against a data directory.
 
 ## 5. Create the VM connection key
@@ -184,7 +184,7 @@ printf '%s\n' '{"mode":"capabilities"}' | sudo /usr/local/sbin/clab-manager-oper
 
 Both commands must report version **1.12.0** successfully. The verifiers avoid
 printing imported file contents, which may contain device passwords. If a check
-fails, repair the helper before continuing; see [VM-CONNECTION.md](VM-CONNECTION.md).
+fails, repair the helper before continuing; see [VM-CONNECTION.md](../VM-CONNECTION.md).
 
 If projects live elsewhere, add their actual parent directory with
 `sudo bash deploy/setup-operations.sh --lab-root /your/project/directory`.
@@ -406,7 +406,7 @@ settings. Neither is required for an image upgrade. Neither destroys live labs.
 | Nodes discovered but SSH/backup fails | Wait for NOS boot, verify credentials/driver and management address/port. |
 
 For fingerprint changes, lost-key replacement, multiple keys and detailed helper
-repair, use [VM-CONNECTION.md](VM-CONNECTION.md).
+repair, use [VM-CONNECTION.md](../VM-CONNECTION.md).
 
 ## Airgapped VMs
 

@@ -4,6 +4,33 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.18
+
+**Maintenance audit, chunk 1: agent guidance agrees with the application again.** Documentation only; the
+manager, the helpers and the editor bundle changed by their lockstep version alone. The record is
+[docs/maintenance-audit/AUDIT.md](maintenance-audit/AUDIT.md).
+
+- `CLAUDE.md` no longer says the student UI redesign is unreleased or that the checkout has no Docker (the
+  redesign, the lab builder and UI review 001 are released and merged; an agent now discovers its
+  environment). It stops importing the whole handoff history on every session (the default-loaded
+  instructions go from 141,185 to 28,817 bytes) and instead carries the invariants that must not
+  regress and a routing table that names, for each area, the handoff sections, the guide and the tests to
+  read first. `agent instructions.md` and its symlink are unchanged and still checked by the release check.
+  It also separates the three frontend layers: the plain-script manager UI, the editor built ahead of time
+  with Node 24 from `clab-backup-ui/lab-builder/`, and a VM that needs neither Node nor npm.
+- An independent review of that migration found five obligations or statements to fix before it could be
+  used (the section-listing command missed the `##` sections, the no-login same-origin model and the
+  logging secrecy contract were not stated, *Sync topology from VM* was described wrongly, a folder was named before it
+  existed) and seven routing gaps; all are applied.
+- `docs/ARCHITECTURE.md`: the module map's static-files row described the UI before the redesign; it now
+  lists the current scripts and standalone pages, and `downloads.py` and `grafana_control.py` have rows.
+- `docs/ui-review-001/PICKUP.md` and `docs/lab-builder/PICKUP.md` say, checked against GitHub, that their
+  work is merged; every open point and qualification is kept.
+- `docs/archive/DOCKER-HUB-SETUP.md`: six relative links broken by its move into the archive are repaired.
+  `docs/maintenance-audit/tools/check_links.py` checks every tracked Markdown link and anchor, and the
+  maintenance rules name it. The documentation index lists the naming guide, which it had missed, and the
+  audit folder.
+
 ## Changes in 1.30.17
 
 **UI review 001, step 16: link label distance in Edit map, and every map tool driven in a browser (UI-003,
