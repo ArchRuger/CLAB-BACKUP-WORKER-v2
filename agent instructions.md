@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.12
+# UI review 001 (in progress) — 1.30.13
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -89,6 +89,15 @@ and the `continued` card variant are gone; do not bring back a block above the l
 chosen approach (the embedded editor in its `view` mode behind a command whitelist, over a full
 annotations document stored per lab; the drawing is derived from it). UI-003 is open until every row of
 that matrix is done or listed as incomplete. Do not grow `diagram-editor.js` into a second editor.
+(12) **1.30.13, UI-003 step B**: `lab['annotations']` (text) + `lab['annotations_for']` (the revision of the
+drawing derived from it), both private (`public_lab` leaves them out). `layout.keep_document(lab, raw)`
+is called right after `lab['drawing']` is set from an annotations text (upload in `topology.py`,
+registration and the positions event in `discovery.py`, `vm_files.prepare_lab`);
+`layout.map_document(lab)` returns the stored text only while `annotations_for` equals the drawing's
+revision, else `annotations(drawing)`. `GET`/`PUT /api/labs/{id}/map-document` (in `lab_operations.py`
+beside `/layout`): the save stores the text untouched, derives the drawing with
+`parse_drawing(text, definition_yaml)`, sets `placed`, never writes the topology and calls no helper.
+A new place that replaces a drawing must call `keep_document` or the document silently falls back.
 
 # Lab builder quality pass — 1.30.1
 

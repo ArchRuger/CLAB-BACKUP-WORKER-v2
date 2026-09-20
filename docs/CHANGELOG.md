@@ -4,6 +4,27 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.13
+
+**UI review 001, step 12: the manager keeps the whole map document (UI-003, step B).** Manager only; no
+page uses it yet, and *Edit map* is unchanged. UI-003 is not complete.
+
+- **The full annotations document per lab.** Until now the manager kept only its own drawing of a map
+  and dropped what it does not draw (group membership and nesting, line arrows, geo coordinates,
+  traffic-rate and alias entries, unknown keys). It now also keeps the annotations text a drawing was
+  derived from: for *Import map…*, a lab registered with its files, and the import and *Sync topology
+  from VM* of a lab's files. The text is private like the topology text and never part of `/api/state`.
+- **`GET` and `PUT /api/labs/{id}/map-document`**, for the map editor that follows. Reading returns the
+  lab's topology text, its annotations document and a revision; a lab that has only a drawing gets a
+  document written from it. Saving takes the annotations text and the revision it was opened with,
+  refuses a stale revision, a lab with a running operation, a text above 1 MiB and anything
+  `parse_drawing` cannot read, then stores the text **untouched** and derives the drawing again, so the
+  Topology view, the draw.io export and the annotations download follow. The request cannot carry a
+  topology; the topology text is only read; no VM helper is called.
+- The older *Edit map* dialog keeps saving through `PUT …/layout`. A stored document is tied to the
+  drawing it produced, so after such a save (or a sync) the editor is given a document written from the
+  current drawing, never a stale one.
+
 ## Changes in 1.30.12
 
 **UI review 001, step 11: the map-editing capability matrix (UI-003, step A).** Documentation only; no

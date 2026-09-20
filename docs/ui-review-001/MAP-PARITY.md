@@ -74,7 +74,7 @@ than the editor can store (rotation, arrows, nested groups): what it cannot draw
 | Step | Content | Release |
 |---|---|---|
 | A | This matrix and the decision | 1.30.12 |
-| B | Manager: store, serve and save the full annotations document; derive the drawing; keep unknown data; tests | |
+| B | Manager: store, serve and save the full annotations document; derive the drawing; keep unknown data; tests | 1.30.13 |
 | C | Adapter map mode (view mode, command whitelist, topology-unchanged check), page wiring, bundle rebuild, tests | |
 | D | Edit map opens the builder in map mode; unsaved-change and cancel behaviour; exports and import kept; browser validation of every row; the Topology view draws what was saved | |
 | E | Gaps: undo/redo, device look, anything the browser pass finds | |

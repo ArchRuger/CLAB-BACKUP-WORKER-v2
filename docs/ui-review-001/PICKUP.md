@@ -45,23 +45,12 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.10 | UI-002 part 1 | Home `#home-start` cards (Deploy: VM file / upload; Build), `opUpload()` through the reviewed `create`, `opPublishedPath()` | `check_ui002a.py` 25/25, `verify_after.py` 97/97 ×3, node 180, `~/ui-review/review-001/chunk09/` |
 | 1.30.11 | UI-002 part 2 | *Recent labs* / *All labs* tabs, `last_deployed` recorded by the manager, no Continue block, card title width | `check_ui002b.py` 20/20, `verify_after.py` 98/98 ×3, python 709, node 182, `~/ui-review/review-001/chunk10/` |
 | 1.30.12 | UI-003 step A | `MAP-PARITY.md`: capability matrix from the code, approach chosen; live read-only check of 1.30.11 on the dev VM | `~/ui-review/review-001/live-1.30.11/` |
+| 1.30.13 | UI-003 step B | Manager keeps the full annotations document (`lab['annotations']`, `keep_document`, `map_document`), `GET`/`PUT …/map-document` | python 711 (unit/API only, no browser) |
 
 ## Next
 
-**UI-003 step B** (see `MAP-PARITY.md` §3 and §4): the manager stores the full annotations document.
-- `lab['annotations']` (text, private: add it to the keys `public_lab` leaves out in `main.py`).
-  Fill it wherever a drawing is made from an annotations text: `POST /api/labs/{id}/topology` (upload),
-  `/api/lab-definitions` and the VM import/sync (`vm_files.prepare_lab`, `discovery.update_sources`),
-  the builder's `opJobDone` re-registration. Where there is none, derive it on demand with
-  `layout.annotations(drawing)`.
-- New routes in `app/topology.py`: `GET /api/labs/{id}/map-document` → `{yaml, annotations, revision}`
-  (needs `definition_yaml`; 409 with a plain sentence otherwise) and `PUT` with `{annotations,
-  revision}`: size ≤ 1 MiB, JSON object, `parse_drawing(annotations, definition_yaml)` must succeed,
-  `operation_busy` guard, conflict on a stale revision, then store the text untouched and the derived
-  drawing with `placed=True`. `PUT /layout` (the old dialog) must keep working and must not leave a
-  stale document behind: either update the stored document from the drawing or drop it.
-- Tests: unknown keys, `groupId`/`parentId`, arrows and `trafficRateAnnotations` survive a save; the
-  drawing follows; stale revision; busy lab; nothing in `/api/state`.
+**UI-003 step B is done (1.30.13)**: see the handoff notes (12) for the contract of
+`GET`/`PUT /api/labs/{id}/map-document`.
 **Step C**: `lab-builder/src/main.tsx` map mode (hash `#map=<lab id>`): `mode: "view"`, unlock, command
 whitelist in `dispatchCommand`, no publish/revise/lifecycle, persist through the new route instead of
 the draft store; rebuild with `npm run build` in `clab-backup-ui/lab-builder` (Node 24, the manifest is

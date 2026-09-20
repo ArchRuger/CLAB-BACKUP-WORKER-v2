@@ -126,7 +126,8 @@ def prepare_lab(bundle, deployed_name, previous=None):
                 node['platform'] = inferred_platform
             node['endpoint_mode'] = saved.get('endpoint_mode', 'manual')
     if files.get('annotations') or not lab.get('drawing'):
-        lab['drawing'] = drawing
+        from .layout import keep_document
+        lab['drawing'] = drawing; keep_document(lab, files.get('annotations') or b'')
     lab.update(nodes=parsed['nodes'], deployment_name=deployed_name, container_prefix=parsed['prefix'],
                definition_yaml=files['definition'].decode('utf-8-sig'), updated=stamp(),
                source=PurePosixPath(bundle['manifest']['definition']['path']).name)

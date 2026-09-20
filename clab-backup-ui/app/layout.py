@@ -8,6 +8,31 @@ def revision(drawing):
     return hashlib.sha256(json.dumps(drawing, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
+# The full annotations document of a lab. The drawing is the manager's own, smaller picture of it (what the
+# Topology view draws); the document is what the map editor reads and writes, with everything the manager
+# does not draw kept as it came: group membership and nesting, line arrows, geo coordinates, unknown keys.
+# `annotations_for` ties the stored text to the drawing derived from it, so a drawing changed by another
+# path (the older Edit map dialog, a sync from the VM) is never served with a document that no longer fits.
+MAX_DOCUMENT = 1024 * 1024
+
+
+def keep_document(lab, raw):
+    """Remember the annotations text a drawing was just derived from. Call after lab['drawing'] is set."""
+    text = raw.decode('utf-8-sig') if isinstance(raw, (bytes, bytearray)) else str(raw or '')
+    if not text.strip() or len(text.encode()) > MAX_DOCUMENT or not lab.get('drawing'):
+        lab.pop('annotations', None); lab.pop('annotations_for', None); return
+    lab['annotations'] = text; lab['annotations_for'] = revision(lab['drawing'])
+
+
+def map_document(lab):
+    """The text the map editor opens: the stored document while it still belongs to the drawing, else one
+    written from the drawing (positions, texts, shapes, groups, link label offsets, viewer settings)."""
+    drawing = lab.get('drawing')
+    if not drawing: return ''
+    if lab.get('annotations') and lab.get('annotations_for') == revision(drawing): return lab['annotations']
+    return json.dumps(annotations(drawing), ensure_ascii=False, indent=2)
+
+
 def decorations(items):
     if len(items) > 2000 or len(json.dumps(items).encode()) > 1024 * 1024:
         raise ValueError('Use at most 2000 annotations and 1 MiB of annotation data.')

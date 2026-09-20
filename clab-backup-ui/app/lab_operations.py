@@ -19,7 +19,7 @@ from .discovery import PinnedHostKey, vm_password, parse_definition, stamp
 from .inventory import read_data
 from .topology import parse_drawing
 from .drawio_export import drawio
-from .layout import decorations, annotations, revision
+from .layout import MAX_DOCUMENT, annotations, decorations, keep_document, map_document, revision
 
 BUSY = ('queued', 'running')
 GIT_BUSY = ('queued', 'capturing', 'exporting', 'pushing')
@@ -407,6 +407,53 @@ class LabOperations:
                     raise HTTPException(500, 'Could not save the layout. Try again.')
             self.store.event('topology.layout', 'Diagram layout and annotations saved', lab_id=lab_id)
             return {'saved': True}
+
+        # The map editor (the lab builder in map mode) works on the full annotations document. Reading it
+        # changes nothing. Saving it is a map edit and nothing else: the topology text is only read, to
+        # derive the drawing again; no helper is called, nothing is deployed and nothing on the VM changes.
+        class MapDocument(BaseModel):
+            model_config = ConfigDict(extra="forbid")
+            annotations: str = Field(max_length=MAX_DOCUMENT)
+            revision: str = Field(min_length=1, max_length=64)
+
+        def map_lab(lab_id):
+            lab = self.store.lab(lab_id)
+            if not lab: raise HTTPException(404, 'Lab not found.')
+            if not lab.get('definition_yaml'):
+                raise HTTPException(409, 'This lab has no topology file in the manager, so its map opens in the simple editor. Add the topology under Advanced › Update topology file… to use the full map editor.')
+            if not lab.get('drawing'): raise HTTPException(404, 'Import a topology map first.')
+            return lab
+
+        @app.get('/api/labs/{lab_id}/map-document')
+        def read_map_document(lab_id: str):
+            with self.store.lock:
+                lab = map_lab(lab_id)
+                return dict(name=lab['name'], yaml=lab['definition_yaml'], annotations=map_document(lab), revision=revision(lab['drawing']))
+
+        @app.put('/api/labs/{lab_id}/map-document')
+        def save_map_document(lab_id: str, data: MapDocument):
+            if len(data.annotations.encode()) > MAX_DOCUMENT: raise HTTPException(400, 'The map is larger than 1 MiB.')
+            with self.store.lock:
+                self.guard(lab_id); lab = map_lab(lab_id)
+                if data.revision != revision(lab['drawing']): raise HTTPException(409, 'The map changed since it was opened. Reopen the map editor; your other changes were not saved.')
+                try:
+                    if not isinstance(json.loads(data.annotations), dict): raise ValueError('not an object')
+                    drawing = parse_drawing(data.annotations.encode(), lab['definition_yaml'].encode())
+                except (ValueError, TypeError, AttributeError, RecursionError) as exc:
+                    raise HTTPException(400, 'The manager cannot read this map: ' + str(exc)[:200])
+                # A map a person saved is theirs: discovery never replaces it with the VM's annotations file.
+                drawing['placed'] = True
+                previous = {k: lab.get(k) for k in ('drawing', 'annotations', 'annotations_for')}
+                lab['drawing'] = drawing; keep_document(lab, data.annotations)
+                try: self.store.save()
+                except OSError:
+                    for key, value in previous.items():
+                        if value is None: lab.pop(key, None)
+                        else: lab[key] = value
+                    raise HTTPException(500, 'Could not save the map. Try again.')
+                saved = revision(drawing)
+            self.store.event('topology.layout', 'Map saved from the map editor', lab_id=lab_id)
+            return {'saved': True, 'revision': saved}
 
         @app.post('/api/labs/{lab_id}/annotations')
         def export_annotations(lab_id: str, data: Layout):

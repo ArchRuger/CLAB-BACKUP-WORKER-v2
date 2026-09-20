@@ -1,3 +1,23 @@
+# UI review 001, step 12: the manager keeps the whole map document — 1.30.13
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.12 (`f4feb2c`,
+pushed). UI-003 step B of `docs/ui-review-001/MAP-PARITY.md`. Manager only; unit and API level. **No
+browser, VM or device was involved**; no page calls the new routes yet.
+
+## What was run
+
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. New in
+  `test_lab_operations.py`: a lab with only a drawing opens with a document written from it; a saved
+  document with group membership and nesting, a line arrow, rotation, geo coordinates, a rounded text
+  background, traffic-rate and alias entries, viewer settings and unknown keys comes back byte for
+  byte, also after a restart; the drawing follows (positions, decorations, label mode, `placed`); the
+  topology text is unchanged; no VM helper is called; none of it is in `/api/state`; a stale revision,
+  non-object or unreadable JSON, an empty node id, a request that carries a topology and a busy lab are
+  refused and change nothing; after a save through the older `…/layout` route the document is written
+  from the new drawing; a lab without a topology text answers 409 with the reason; *Import map…* keeps
+  the uploaded file; an empty or oversized text is not stored.
+- `node --test tests/*.js`: 182 of 182. `python3 deploy/verify-release.py`, `git diff --check`.
+
 # UI review 001, step 11: capability matrix, and a live read-only check of 1.30.11 — 1.30.12
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.11 (`ae73300`,

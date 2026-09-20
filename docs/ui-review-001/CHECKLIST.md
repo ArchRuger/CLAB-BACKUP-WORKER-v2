@@ -33,7 +33,7 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - ☑ Polling, visits, saves and favourites do not reorder *Recent labs*; the tab is kept for the session. 1.30.11
 - ☑ Lab card titles no longer break inside a word. 1.30.11
 
-## UI-003 — Edit map gets the visual builder's map-editing capabilities ◐ (matrix in 1.30.12; implementation open)
+## UI-003 — Edit map gets the visual builder's map-editing capabilities ◐ (matrix 1.30.12, document storage 1.30.13; editor integration open)
 
 - ☑ Capability matrix: installed builder versus Edit map, and the approach (`docs/ui-review-001/MAP-PARITY.md`). 1.30.12
 - ☐ Every map-editing capability of the matrix implemented and tested, or listed as incomplete.
