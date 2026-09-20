@@ -129,6 +129,10 @@ class HostOperationTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.host.plan(req)
         self.path.write_bytes(b'x'*(1024*1024+1))
         with self.assertRaises(ValueError):self.host.read(str(self.path))
+        # The lab builder tells a file that is not there from a VM it could not ask by this wording
+        # (builderAbsent in static/lab-builder-page.js): a missing topology, and a missing lab folder.
+        for gone in (self.root/'gone.clab.yml',self.root/'no-folder'/'gone.clab.yml'):
+            with self.assertRaisesRegex(ValueError,'no longer exists'):self.host.read(str(gone))
 
     def test_clone_and_optional_tools_are_bounded(self):
         req=self.request('clone',url='https://github.com/srl-labs/example',project='example');plan=self.host.plan(req)

@@ -87,7 +87,9 @@ async function mount(draft: BuilderDraft): Promise<void> {
       page.chooseTemplates().then((text) => {
         if (text === null) return;
         const t = page.templates(), merged = mergeCustomNodeTemplates(t.list as never, parseCustomNodeTemplatesExport(text));
-        page.saveTemplates(merged.customNodes as never, t.defaultName); pushTemplates();
+        // The page keeps the starred template by name; a flag inside an imported template would star a second one.
+        const list = (merged.customNodes as unknown as BuilderTemplate[]).map(({ setDefault: _s, ...rest }) => rest as BuilderTemplate);
+        page.saveTemplates(list, t.defaultName); pushTemplates();
         page.notify(`Device templates imported: ${merged.added} new, ${merged.replaced} replaced.`);
       }).catch((e) => page.notify(e instanceof Error ? e.message : String(e)));
     },

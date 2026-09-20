@@ -15,7 +15,7 @@ function opDialog(id,title,body){
 async function opTask(dialog,fn){
  const error=dialog?.querySelector('.form-error');if(error)error.textContent='';
  const buttons=dialog?[...dialog.querySelectorAll('button:not(:disabled)')]:[];buttons.forEach(b=>b.disabled=true);
- try{return await fn();}catch(e){if(error)error.textContent=e.message;else if(typeof showActionError==='function')showActionError(e.message);else notify(e.message);}finally{buttons.forEach(b=>b.disabled=false);}
+ try{return await fn();}catch(e){if(error){error.textContent=e.message;if(typeof error.scrollIntoView==='function')error.scrollIntoView({block:'nearest'});}else if(typeof showActionError==='function')showActionError(e.message);else notify(e.message);}finally{buttons.forEach(b=>b.disabled=false);}
 }
 function opPath(lab){return lab?.vm_project_path||lab?.vm_source?.files?.definition?.path||'';}
 function opName(lab){return lab?.deployment_name||lab?.name||'';}
@@ -144,6 +144,7 @@ async function opReview(request){
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
  $('op-confirm').onclick=()=>opTask(dialog,async()=>{
   const job=await json('/operations/confirm','POST',{token:value.token});dialog.close();
+  if(typeof opJobStarted==='function')opJobStarted(job);
   // The file has been chosen and the operation runs: the file dialogs are done, and the folder browser
   // must not stay open over the lab page that now reports how the operation goes.
   for(const id of ['op-editor','op-browser'])if($(id)?.open)$(id).close();
@@ -216,7 +217,7 @@ async function opShowJob(id){
    $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(job.result.published_path)));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
-  }catch(e){if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);}
+  }catch(e){if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
  };dialog.onclose=()=>{if(!follows)clearTimeout(opOutputTimer);};await poll();
 }
 async function opHistory(labId=''){
@@ -263,7 +264,7 @@ function opBuilderRoot(path,roots){
 }
 function opBuilderUrl(values){return '/static/lab-builder.html#'+new URLSearchParams(Object.fromEntries(Object.entries(values).filter(([,v])=>v)));}
 // On the builder page itself only the fragment changes, which loads nothing: the page has one editor per load.
-function opBuilderOpen(values){const url=opBuilderUrl(values),here=location.pathname==='/static/lab-builder.html';location.assign(url);if(here)location.reload();}
+function opBuilderOpen(values){if(location.pathname==='/static/lab-builder.html'&&typeof builderGo==='function')builderGo(Object.fromEntries(Object.entries(values).filter(([,v])=>v)));else location.assign(opBuilderUrl(values));}
 function openDeploy(){return opTask(null,()=>opBrowse());}
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open the CLI launcher',`<p>Your browser blocked the new tab. Use this button instead:</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open CLI launcher <span aria-hidden="true">↗</span></a>`);}
 function opTopologyEntries(entries){return entries.filter(entry=>entry.directory||/\.clab\.ya?ml$/i.test(entry.name));}

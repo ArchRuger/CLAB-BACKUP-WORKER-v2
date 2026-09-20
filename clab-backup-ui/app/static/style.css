@@ -2397,6 +2397,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .git-outline { border-right: 0; border-bottom: 1px solid var(--line); max-height: 220px; }
   .op-sections, .op-coordinates, .op-file-list { grid-template-columns: 1fr; }
   .operations-dialog { padding: 18px; }
+  #operation-review .dialog-actions { bottom: -18px; margin: 20px -18px 0; padding: 12px 18px 14px; }
   .debug-grid { grid-template-columns: 1fr; }
   .debug-input { flex-direction: column; align-items: stretch; }
   .debug-page .section-heading { align-items: flex-start; flex-direction: column; }

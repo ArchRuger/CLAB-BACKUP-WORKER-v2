@@ -50,10 +50,17 @@ link; resume only from states that write order can produce; recovery is a fresh 
 - [x] docs, CHANGELOG, VALIDATION, agent instructions; CI list and asset rebuild check
 - [x] branch pushed, pull request opened
 
+## Quality pass (branch `claude/lab-builder-quality-pass`)
+
+Findings, causes, evidence and what stayed open: `QA-FINDINGS.md` in this folder. Still open from it: an
+independent security review of the helper's `publish` / `revise` / `delete` (S-1), the custom-icon upload
+that does nothing (I-12), and a *Save as a new lab…* for a lab that is already on the VM (not built; a
+saved lab keeps its name).
+
 ## Open after this release
 
-- Deploy a builder-made lab with router images (cEOS, cJunosEvolved, vJunos-switch, XRv9k) and check the
-  interface patterns against the running devices.
+- Cisco XRv9k in a builder-made lab (no image on the dev VM). cEOS, cJunosEvolved and vJunos-switch were
+  deployed from a builder-made lab and every link was proven by LLDP on the devices (quality pass, VALIDATION).
 - Watch upstream for a published `lifecycleActionsAvailable` prop and a switch for Geo layout; both would
   retire a `data-testid` rule in `lab-builder.css`.
 - Not in this version by decision: startup-config files, Git destinations, image management, editable YAML.

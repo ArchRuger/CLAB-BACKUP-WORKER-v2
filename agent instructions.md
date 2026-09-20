@@ -1,3 +1,52 @@
+# Lab builder quality pass — 1.30.1
+
+Read docs/CHANGELOG.md "Changes in 1.30.1" and docs/lab-builder/QA-FINDINGS.md (every finding with its
+evidence, fix and what is still open). Frontend and manager only; the helpers changed by their lockstep
+version alone, and the independent security review of `publish` / `revise` that this pass asked for did
+**not** happen (the reviewer was stopped by the model's safety filter; see S-1 in the register). Facts to
+preserve, all in `app/static/lab-builder-page.js` unless another file is named.
+(1) **Never show as kept what is not.** `persist()` throws when `draftWrite` fails and then holds the
+editor's texts in `builderUnstored`; while that is set the pill is *Last change not kept in this browser*,
+Save is off, and Download / View YAML read `builderUnstored` first. `draftWrite` errors carry
+`code: 'storage' | 'conflict'` (main.tsx passes it to `problem()`; *Try to store it again* shows for
+storage only, and a successful retry reloads because the editor heard the edit fail). Revisions are
+tokens (`draftToken()`), compared for equality only.
+(2) **The topology text is the authority for the lab name.** `builderYamlName()`; a draft without `vm`
+takes the YAML's name in `persist()` (the id `new:<first name>` stays); `builderNameProblem()` blocks Save
+with the reason for an unusable name and for a changed name on a draft that has `vm`. `builderVmPath()`
+derives the path like the helper does.
+(3) **Every way a save can end reaches the draft.** `builderSave()` stores `saving:true` before the
+review; `opJobDone()` clears it (success, `already_published`, failure); `builderReconcile()` asks the VM
+once on the next visit. In `operations.js` `opShowJob` keeps polling after its dialog is closed **only on
+a page that defines `opJobDone`** (`follows`), and repeats a failed poll up to ten times everywhere.
+`builderSaveRefused()` is the only place a refusal is shown: a dialog, never a toast; when the VM's files
+differ from `draft.vm` it offers the rebase (`vm` := what `builderVmRead()` just returned, then
+`builderSave()` again, which is an ordinary reviewed `revise`). Do not add an automatic retry or an
+automatic rebase.
+(4) `builderVmRead()` keeps the helper's `sha256` values and `builderSaveRequest()` sends them as the
+revise base (`vm.hash`, `vm.layoutHash`); after the page's own save there are none and the texts are
+hashed. `builderOpenFromVm()` reuses any draft whose `vm.path` is the file (one draft per lab).
+(5) **main.tsx** refuses a draft whose YAML has a parse error (`yaml` `parseDocument`, first error,
+`code: 'unreadable'`) before it constructs the engine: the engine acknowledges edits to such a document
+and writes none. `importCustomNodes` uses the editor's own `parseCustomNodeTemplatesExport` /
+`mergeCustomNodeTemplates` from `@containerlab/clab-ui/session` and the page's `chooseTemplates()`.
+(6) `builderStart()` asks for state, capabilities and known images **before** the editor mounts (the
+editor takes its templates once, at mount), capped at five seconds so a draft still opens when the manager
+is away. `builderStore` is `localStorage` or an in-memory stand-in with a standing note; with the stand-in
+`builderGo()` must not reload.
+(7) Layout: `body.lab-builder` is a flex column (bar, note, `.builder-stage`, credit); `#root`, the
+welcome and the problem overlay are absolute inside the stage, so the note never covers the editor's
+toolbar. `lab-builder.html` loads `topology-render.js` for the Topology file dialog's preview.
+(8) `style.css`: `#operation-review .dialog-actions` is sticky with `bottom: -24px` (the sticky box is the
+dialog's content box, so the padding has to be compensated). `operations.js` closes `op-editor` and
+`op-browser` on confirm; `opJobHint()` is pure and its `hint` key exists only when there is one (older
+tests compare the banner object exactly).
+(9) The entry bundle is `/static/lab-builder/assets/main.js?v=<release>` with `immutable` caching and no
+content hash in its name: a change to `main.tsx` reaches browsers only with a new release number.
+(10) Tooling: `fixture_manager.py` marks a lab it deployed as running and drops it on destroy;
+`student_workflow.py` (40 checks) waits for that before it expects the refusal; the exploratory scripts
+and all screenshots of this pass are in `~/research/lab-builder/qa/` on the dev VM.
+
 # Lab builder — 1.30.0
 
 Read docs/LAB-BUILDER.md, docs/CHANGELOG.md "Changes in 1.30.0" and docs/lab-builder/PICKUP.md

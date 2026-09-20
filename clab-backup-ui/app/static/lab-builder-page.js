@@ -7,8 +7,11 @@ const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,
 let state={labs:[],jobs:[],operations:[]},activeId='',toastTimer,builderDraft=null,builderPending=null,builderMount=null,builderCaps=null,builderCapsError='',builderKnown={};
 // What the editor holds while this browser could not store it (null while everything is stored).
 let builderUnstored=null;
+// Set while the problem overlay is up: nothing the editor still does is stored over it (its keyboard
+// shortcuts work on the whole document, so the overlay alone does not stop them).
+let builderPaused=null;
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,6000);}
-async function api(path,options={}){let response;try{response=await fetch('/api'+path,options);}catch{throw Object.assign(new Error('The manager did not answer. Check that it is running and that this computer can reach it.'),{network:true});}if(!response.ok){const value=await response.json().catch(()=>({}));throw new Error(value.detail||'Request failed.');}return response;}
+async function api(path,options={}){let response;try{response=await fetch('/api'+path,options);}catch{throw Object.assign(new Error('The manager did not answer. Check that it is running and that this computer can reach it.'),{network:true});}if(!response.ok){const value=await response.json().catch(()=>({}));throw Object.assign(new Error(value.detail||'Request failed.'),{status:response.status});}return response;}
 async function json(path,method,data){return(await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
 async function refresh(){state=await(await api('/state')).json();}
 
@@ -78,7 +81,27 @@ function draftStatus(draft,unstored){
  const same=draft.vm.yaml===draft.yaml&&(draft.vm.annotations||'')===(draft.annotations||'');
  return same?{tone:'ok',text:'Saved on the VM',detail:draft.vm.path}:{tone:'warn',text:'Changes not saved to the VM yet',detail:draft.vm.path};
 }
-async function builderHash(text){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('');}
+// SHA-256 of a text. Browsers offer crypto.subtle to secure contexts only, and the manager is normally opened
+// as http://<VM address>, which is none: the plain implementation below is then the one that runs.
+function builderSha256(bytes){
+ const K=[],H=[];for(let n=2,i=0;i<64;n++){let prime=true;for(let d=2;d*d<=n;d++)if(n%d===0){prime=false;break;}if(!prime)continue;if(i<8)H[i]=Math.floor((Math.sqrt(n)%1)*4294967296);K[i++]=Math.floor((Math.cbrt(n)%1)*4294967296);}
+ const length=bytes.length,total=(length+9+63)&~63,data=new Uint8Array(total),view=new DataView(data.buffer),w=new Uint32Array(64);
+ data.set(bytes);data[length]=0x80;view.setUint32(total-8,Math.floor(length/536870912));view.setUint32(total-4,(length<<3)>>>0);
+ const rot=(x,n)=>(x>>>n)|(x<<(32-n));
+ for(let o=0;o<total;o+=64){
+  for(let i=0;i<16;i++)w[i]=view.getUint32(o+i*4);
+  for(let i=16;i<64;i++){const a=w[i-15],b=w[i-2];w[i]=(w[i-16]+(rot(a,7)^rot(a,18)^(a>>>3))+w[i-7]+(rot(b,17)^rot(b,19)^(b>>>10)))>>>0;}
+  let [a,b,c,d,e,f,g,h]=H;
+  for(let i=0;i<64;i++){const t1=(h+(rot(e,6)^rot(e,11)^rot(e,25))+((e&f)^(~e&g))+K[i]+w[i])>>>0,t2=((rot(a,2)^rot(a,13)^rot(a,22))+((a&b)^(a&c)^(b&c)))>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}
+  [a,b,c,d,e,f,g,h].forEach((v,i)=>{H[i]=(H[i]+v)>>>0;});
+ }
+ return H.map(v=>v.toString(16).padStart(8,'0')).join('');
+}
+async function builderHash(text){
+ const bytes=new TextEncoder().encode(text);
+ if(typeof crypto==='undefined'||!crypto.subtle)return builderSha256(bytes);
+ return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 // The request the reviewed save sends: a new lab folder, or a revision of the versions this draft opened.
 async function builderSaveRequest(draft,hash=builderHash){
  const layout=(draft.annotations||'').trim()?draft.annotations:undefined;
@@ -96,12 +119,15 @@ function builderMemoryStorage(){const m=new Map();return {get length(){return m.
 const builderStore=(()=>{try{const s=window.localStorage;s.getItem(BUILDER_PREFIX+'probe');return s;}catch{builderStorageNote='This browser does not let the page store drafts (private window or blocked site data). Your work lives in this tab only: download the draft before you close or reload it.';return builderMemoryStorage();}})();
 function builderTemplatesStored(){try{const v=JSON.parse(builderStore.getItem(BUILDER_PREFIX+'templates')||'null');if(v&&Array.isArray(v.list)&&v.list.length)return v;}catch{}return null;}
 // The topology file a draft is, or will be, on the VM: the same derivation as the VM helper's.
-function builderVmPath(draft){return draft.vm?draft.vm.path:draft.root+'/'+draft.name+'/'+draft.name+'.clab.yml';}
+function builderVmPath(draft){if(draft.vm)return draft.vm.path;const named=builderYamlName(draft.yaml),name=builderName(named)?named:draft.name;return draft.root+'/'+name+'/'+name+'.clab.yml';}
+// A draft that is not on the VM yet carries the name its topology has (Lab settings can rename it).
+function builderNamed(draft){const named=builderYamlName(draft.yaml);return !draft.vm&&builderName(named)&&named!==draft.name?{...draft,name:named}:draft;}
 // Why Save is off, in words ('' when it is on). The same text is the button's tooltip and the note under the bar.
 function builderBlocked(){
  if(!builderDraft)return '';
  if(builderUnstored)return 'Your last change is not stored in this browser yet, so it cannot be saved to the VM.';
  const name=builderNameProblem(builderDraft);if(name)return name;
+ if(!builderCaps&&!builderCapsError)return 'Checking whether saving to the VM is available…';
  if(builderCapsError)return 'Saving to the VM is not available right now: '+builderCapsError+' You can keep building; the draft stays in this browser and can be downloaded.';
  if(builderCaps&&!builderCaps.actions?.[builderDraft.vm?'revise':'publish']?.available)return "Saving to the VM is not available: the VM's helper programs are older than this manager. Ask an administrator to run start-manager.sh on the VM. You can still build and download a draft.";
  return '';
@@ -113,23 +139,22 @@ function builderNotice(){
 }
 function builderRenderBar(){
  const s=draftStatus(builderDraft,builderUnstored);$('builder-name').textContent=builderDraft?builderDraft.name:'';$('builder-status').textContent=s.text;$('builder-status').title=[s.text,s.detail].filter(Boolean).join(' · ');$('builder-status').className='pill '+s.tone;
- const blocked=builderBlocked(),can=!!builderDraft&&!!builderCaps&&!blocked;
+ const blocked=builderBlocked(),can=!!builderDraft&&!blocked;
  $('builder-save').disabled=!can;$('builder-save').title=blocked;$('builder-save').textContent=builderDraft?.vm?'Save changes to the VM…':'Save to the VM…';
  for(const id of ['builder-yaml','builder-download'])$(id).disabled=!builderDraft;
  const note=blocked||builderNotice()||builderStorageNote;$('builder-note-text').textContent=note;$('builder-note').hidden=!note||!!builderUnstored;$('builder-note-retry').hidden=!builderCapsError||note!==blocked;
 }
 function builderHint(){const hint=$('builder-hint');if(hint)hint.hidden=!builderMounted||!!document.querySelector('.react-flow__node');}
-function builderProblem(message,code){$('builder-problem-text').textContent=message;$('builder-problem-retry').hidden=code!=='storage';$('builder-problem').hidden=false;$('builder-problem-download').focus();}
+function builderProblem(message,code){builderPaused=builderPaused||Object.assign(new Error(message),{code});$('root').inert=true;$('builder-problem-text').textContent=message;$('builder-problem-retry').hidden=code!=='storage';$('builder-problem').hidden=false;$('builder-problem-download').focus();}
 // The editor's side of the page (see lab-builder/src/main.tsx).
 const builderPage={
  // Throws when the pair could not be stored; the editor then reports the edit as failed and the page
  // keeps what the editor holds (builderUnstored) so that Download draft still gives the newest work.
  persist(yaml,annotations){
   if(!builderDraft)return;setTimeout(builderHint,0);
+  if(builderPaused){builderUnstored={yaml,annotations};builderRenderBar();throw builderPaused;}
   if(!builderUnstored&&yaml===builderDraft.yaml&&annotations===(builderDraft.annotations||''))return;
-  // A draft that is not on the VM yet takes the name its topology carries (Lab settings can rename it).
-  const named=builderYamlName(yaml),name=!builderDraft.vm&&builderName(named)?named:builderDraft.name;
-  try{builderDraft=draftWrite(builderStore,{...builderDraft,name,yaml,annotations},builderDraft.revision);builderUnstored=null;}
+  try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,yaml,annotations}),builderDraft.revision);builderUnstored=null;}
   catch(e){builderUnstored={yaml,annotations};builderRenderBar();throw e;}
   document.title=builderDraft.name+' · Lab builder · Containerlab Node Manager';builderRenderBar();
  },
@@ -158,9 +183,13 @@ function builderGo(values){
  location.hash=new URLSearchParams(values).toString();
  // Without browser storage a reload would lose the draft; before an editor is mounted none is needed.
  const kept=builderStorageNote&&!builderMounted&&values.draft?draftRead(builderStore,values.draft):null;
- if(kept){document.querySelectorAll('dialog[open]').forEach(d=>d.close());builderUse(kept);}else location.reload();
+ if(kept){document.querySelectorAll('dialog[open]').forEach(d=>d.close());builderUse(kept);return;}
+ if(builderStorageNote&&builderMounted&&!confirm('This browser does not store drafts, and opening another lab reloads the page: the drafts of this tab are lost unless you downloaded them. Continue?'))return;
+ location.reload();
 }
-function builderUse(draft){builderDraft=draft;builderRenderBar();document.title=draft.name+' · Lab builder · Containerlab Node Manager';builderOpenEditor();}
+function builderUse(draft){builderDraft=builderNamed(draft);builderRenderBar();document.title=draft.name+' · Lab builder · Containerlab Node Manager';builderOpenEditor();}
+// The id of a new draft. A draft renamed in the editor keeps its first id, so that id can be taken by another name.
+function builderDraftId(name){const id='new:'+name;return draftRead(builderStore,id)?id+':'+draftToken():id;}
 function builderNewDialog(root){
  const roots=(builderCaps?.roots||[]).length?builderCaps.roots:[root],templates=builderPage.templates().list;
  const dialog=opDialog('builder-new','New lab',`<label>Lab name<input id="builder-new-name" maxlength="60" autocomplete="off" spellcheck="false"></label><p class="form-help">Letters, digits, dot, dash and underscore. The name becomes the lab folder on the VM and part of every device's container name.</p><label>Start from<select id="builder-new-starter">${BUILDER_STARTERS.map(s=>`<option value="${esc(s.id)}">${esc(s.label)}</option>`).join('')}</select></label><label>Device type for the starter<select id="builder-new-template">${templates.map((t,i)=>`<option value="${i}">${esc(t.name)} · ${esc(t.image||'')}</option>`).join('')}</select></label><p class="form-help">The image name is a suggestion taken from your labs or from the usual default. The builder does not check that the image is installed on the VM; you can change it on each device.</p><label>Lab folder on the VM<select id="builder-new-root">${roots.map(r=>`<option ${r===root?'selected':''}>${esc(r)}</option>`).join('')}</select></label><div class="dialog-actions"><button class="button secondary" id="builder-new-cancel">Cancel</button><button class="button primary" id="builder-new-create">Create draft</button></div>`);
@@ -168,7 +197,8 @@ function builderNewDialog(root){
  const create=()=>opTask(dialog,async()=>{
   const name=$('builder-new-name').value.trim();if(!builderName(name))throw new Error('Choose a lab name made of letters, digits, dot, dash or underscore (up to 60 characters).');
   if((state.labs||[]).some(l=>(l.deployment_name||l.name)===name))throw new Error('A lab named '+name+' is already in My labs. Choose another name.');
-  const id='new:'+name;if(draftRead(builderStore,id))throw new Error('This browser already has a draft named '+name+'. Open it from Drafts, or choose another name.');
+  if(draftList(builderStore).some(d=>d.name===name))throw new Error('This browser already has a draft named '+name+'. Open it from Drafts, or choose another name.');
+  const id=builderDraftId(name);
   const made=builderStarter($('builder-new-starter').value,name,templates[Number($('builder-new-template').value)]);
   draftWrite(builderStore,{id,name,root:$('builder-new-root').value,...made},undefined);builderGo({draft:id});
  });
@@ -182,7 +212,7 @@ async function builderImportDraft(text,root){
  try{name=(await json('/operations/parse-yaml','POST',{options:{text:value.yaml}})).name||name;}catch(e){if(!e.network)throw new Error('The topology in this draft cannot be read: '+e.message);}
  if(!builderName(name))throw new Error('The topology in this draft has no usable lab name.');
  if(value.annotations){try{JSON.parse(value.annotations);}catch{value.annotations='';note='The map layout in this file could not be read, so the devices are placed automatically.';}}
- return {draft:{id:'new:'+name,root,...value,name},note};
+ return {draft:{root,...value,name},note};
 }
 function builderDraftsDialog(){
  const drafts=draftList(builderStore);
@@ -194,30 +224,38 @@ function builderDraftsDialog(){
  $('builder-upload-file').onchange=e=>opTask(dialog,async()=>{
   const file=e.target.files[0];if(!file)return;if(file.size>1200*1024)throw new Error('This file is too large to be a lab draft.');
   const {draft,note}=await builderImportDraft(await file.text(),opBuilderRoot('',builderCaps?.roots));
-  if(draftRead(builderStore,draft.id)&&!confirm('Replace the draft '+draft.name+' that is already in this browser?'))return;
-  draftDelete(builderStore,draft.id);draftWrite(builderStore,draft,undefined);if(note)alert(note);builderGo({draft:draft.id});
+  const old=draftList(builderStore).filter(d=>d.name===draft.name&&!d.vm);
+  if(old.length&&!confirm('Replace the draft '+draft.name+' that is already in this browser?'))return;
+  for(const d of old)draftDelete(builderStore,d.id);const made=draftWrite(builderStore,{...draft,id:builderDraftId(draft.name)},undefined);if(note)alert(note);builderGo({draft:made.id});
  });
 }
 function builderYamlDialog(){if(!builderDraft)return;const dialog=opDialog('builder-yaml-dialog','Topology (YAML) · '+builderDraft.name,`<p class="form-help">This is what the editor has built. It is read-only here; the same text is shown again before anything is saved to the VM.</p><pre class="op-output builder-yaml" id="builder-yaml-text" tabindex="0"></pre>`);$('builder-yaml-text').textContent=(builderUnstored||builderDraft).yaml;return dialog;}
 // The newest work, also when this browser could not store it.
 function builderDownload(){if(!builderDraft)return;const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([draftExport({...builderDraft,...(builderUnstored||{})})],{type:'application/json'}));link.download=builderDraft.name+'.lab-draft.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
 // Storing again what the editor holds; the editor itself restarts from the stored draft.
-function builderStoreAgain(){if(!builderDraft||!builderUnstored)return;try{builderDraft=draftWrite(builderStore,{...builderDraft,...builderUnstored},builderDraft.revision);builderUnstored=null;location.reload();}catch(e){builderProblem(e.message,e.code);}}
+function builderStoreAgain(){if(!builderDraft||!builderUnstored)return;try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,...builderUnstored}),builderDraft.revision);builderUnstored=null;location.reload();}catch(e){builderProblem(e.message,e.code);}}
 function builderSame(a,b){return !!a&&!!b&&a.yaml===b.yaml&&(a.annotations||'')===(b.annotations||'');}
-// The topology and layout that are on the VM now; null when the file is not there or cannot be read.
+// The manager answers a missing file and an unreachable VM with the same status; the helper's wording for
+// a missing path is the difference (tests/test_lab_operations.py pins it).
+function builderAbsent(error){return !error.network&&/no longer exists/.test(error.message||'');}
+// The topology and layout that are on the VM now; null when the topology file is not there. Anything
+// else that goes wrong is thrown: "could not read" must never pass for "not there" or "no layout".
 async function builderVmRead(path){
- let source;try{source=await json('/operations/read','POST',{path});}catch{return null;}
- let layout=null;try{layout=await json('/operations/read','POST',{path:path+'.annotations.json'});}catch{}
+ let source,layout=null;
+ try{source=await json('/operations/read','POST',{path});}catch(e){if(builderAbsent(e))return null;throw e;}
+ try{layout=await json('/operations/read','POST',{path:path+'.annotations.json'});}catch(e){if(!builderAbsent(e))throw e;}
  return {yaml:source.text,annotations:layout?.text||'',hash:source.sha256||'',layoutHash:layout?.text?layout.sha256||'':''};
 }
-function builderMarkSaved(path,texts){builderDraft=draftWrite(builderStore,{...builderDraft,saving:undefined,vm:{path,yaml:texts.yaml,annotations:texts.annotations||''}},builderDraft.revision);builderRenderBar();}
+function builderMarkSaved(path,texts){builderDraft=draftWrite(builderStore,{...builderDraft,saving:undefined,vm:{path,yaml:texts.yaml,annotations:texts.annotations||'',...(texts.hash?{hash:texts.hash,layoutHash:texts.layoutHash||''}:{})}},builderDraft.revision);builderRenderBar();}
 // A save the VM refused. When the file on the VM is not the version this draft knows (an earlier save whose
 // answer never arrived, an edit on the VM, another computer), the way on is to look at the differences.
 async function builderSaveRefused(error){
- const path=builderVmPath(builderDraft),found=error.network?null:await builderVmRead(path);
+ const path=builderVmPath(builderDraft);let found=null;
+ if(!error.network)try{found=await builderVmRead(path);}catch{}
  if(found&&builderSame(found,builderDraft)){builderMarkSaved(path,found);notify('This lab is already on the VM with the same content.');return;}
- const differs=found&&!builderSame(found,builderDraft.vm);
- const dialog=opDialog('builder-save-problem','Not saved to the VM',`<p id="builder-save-problem-text"></p><p>Nothing on the VM was changed. Your draft is kept in this browser.</p>${differs?`<p>The VM has a different version of <code>${esc(path)}</code> than this draft started from. That can be an earlier save from this page whose answer never arrived, or a change made on the VM. You can look at the differences and decide, or open the VM version (this draft stays in Drafts).</p>`:''}<div class="dialog-actions"><button class="button secondary" id="builder-save-problem-close">Close</button>${differs?`<button class="button secondary" id="builder-save-problem-open">Open the VM version</button><button class="button primary" id="builder-save-problem-compare">Review the differences…</button>`:''}</div>`);
+ // Only a file that is this lab can become the draft's base: a folder that carries another lab's name is not.
+ const other=found&&builderYamlName(found.yaml)!==builderYamlName(builderDraft.yaml)?builderYamlName(found.yaml):'',differs=found&&!other&&!builderSame(found,builderDraft.vm);
+ const dialog=opDialog('builder-save-problem','Not saved to the VM',`<p id="builder-save-problem-text"></p><p>Nothing on the VM was changed. Your draft is kept in this browser.</p>${other?`<p>The file <code>${esc(path)}</code> on the VM belongs to a lab named ${esc(other)}. Give this draft another lab name in the editor's Lab settings (the gear button), then save.</p>`:''}${differs?`<p>The VM has a different version of <code>${esc(path)}</code> than this draft started from. That can be an earlier save from this page whose answer never arrived, or a change made on the VM. You can look at the differences and decide, or open the VM version (this draft stays in Drafts).</p>`:''}<div class="dialog-actions"><button class="button secondary" id="builder-save-problem-close">Close</button>${differs?`<button class="button secondary" id="builder-save-problem-open">Open the VM version</button><button class="button primary" id="builder-save-problem-compare">Review the differences…</button>`:''}</div>`);
  $('builder-save-problem-text').textContent=error.message;$('builder-save-problem-close').onclick=()=>dialog.close();
  if(!differs)return;
  $('builder-save-problem-open').onclick=()=>builderGo({path});
@@ -227,14 +265,18 @@ async function builderSaveRefused(error){
 }
 async function builderSave(){
  if(!builderDraft||builderBlocked())return;
+ if(builderPending?.job){notify('The previous save is still running on the VM. Its result will show here.');return;}
  const request=await builderSaveRequest(builderDraft);builderPending={yaml:builderDraft.yaml,annotations:builderDraft.annotations||'',action:request.action};
- // Remembered with the draft: if this page never hears the outcome, the next visit asks the VM.
- try{builderDraft=draftWrite(builderStore,{...builderDraft,saving:true},builderDraft.revision);}catch(e){builderPending=null;builderProblem(e.message,e.code);return;}
+ // Remembered with the draft (as hashes of what is sent): if this page never hears the outcome, the next
+ // visit asks the VM and recognises its own save, also after further edits.
+ try{builderDraft=draftWrite(builderStore,{...builderDraft,saving:{yaml:await builderHash(builderPending.yaml),annotations:builderPending.annotations?await builderHash(builderPending.annotations):''}},builderDraft.revision);}catch(e){builderPending=null;builderProblem(e.message,e.code);return;}
  try{await opReview(request);}catch(e){builderPending=null;await builderSaveRefused(e);}
 }
+// Called by operations.js when the review was confirmed and the job exists.
+function opJobStarted(job){if(builderPending&&job.action===builderPending.action)builderPending.job=job.id;}
 // Called by operations.js when a lab operation started from this page finishes.
 function opJobDone(job){
- if(!builderPending||!builderDraft||job.action!==builderPending.action)return;
+ if(!builderPending||!builderDraft||job.action!==builderPending.action||(builderPending.job&&job.id&&job.id!==builderPending.job))return;
  const saved=builderPending,done=job.status==='succeeded'&&(job.result?.published_path||job.result?.already_published),path=job.result?.published_path||builderVmPath(builderDraft);builderPending=null;
  try{if(done)builderMarkSaved(path,saved);else builderDraft=draftWrite(builderStore,{...builderDraft,saving:undefined},builderDraft.revision);}catch(e){builderProblem(e.message,e.code);}
  builderRenderBar();if(!done)return;
@@ -248,22 +290,33 @@ function opJobDone(job){
   await api('/lab-definitions',{method:'POST',body:form});await refresh();notify('My labs now shows the saved topology of '+lab.name+'.');
  });
 }
+// Called by operations.js when it gave up following a job (the manager did not answer for a while).
+function opJobLost(){if(!builderPending?.job)return;builderPending=null;opTask(null,builderReconcile);}
 // A save was started from this draft and this page never heard how it ended (closed tab, lost connection).
+// The marker stays until the VM could actually be asked.
 async function builderReconcile(){
  if(!builderDraft?.saving||builderPending)return;
- const path=builderVmPath(builderDraft),found=await builderVmRead(path);
- try{if(found&&builderSame(found,builderDraft))builderMarkSaved(path,found);else builderDraft=draftWrite(builderStore,{...builderDraft,saving:undefined},builderDraft.revision);}catch{}
+ const path=builderVmPath(builderDraft),sent=builderDraft.saving;let found;
+ try{found=await builderVmRead(path);}catch{return;}
+ const same=async()=>typeof sent==='object'&&sent.yaml===await builderHash(found.yaml)&&(sent.annotations||'')===(found.annotations?await builderHash(found.annotations):'');
+ try{
+  if(found&&builderSame(found,builderDraft))builderMarkSaved(path,found);
+  // what was sent is on the VM and the draft moved on since: a saved lab with newer changes here
+  else if(found&&await same())builderMarkSaved(path,found);
+  else builderDraft=draftWrite(builderStore,{...builderDraft,saving:undefined},builderDraft.revision);
+ }catch{}
  builderRenderBar();
 }
 async function builderOpenFromVm(path){
- const found=await builderVmRead(path);if(!found)await json('/operations/read','POST',{path});  // the second call carries the reason
+ const found=await builderVmRead(path);if(!found)throw new Error('This topology file is no longer on the VM: '+path);
  const parsed=await json('/operations/parse-yaml','POST',{options:{text:found.yaml}});
- // One draft per lab: the draft that was saved to this path from this browser, else the one opened from it.
- const existing=draftList(builderStore).find(d=>d.vm&&d.vm.path===path)||null;
- // Keep working on the local draft only while it still descends from the version that is on the VM.
- if(existing&&builderSame(existing.vm,found))return existing;
+ // One draft per lab: the drafts that were saved to this path from this browser, or opened from it (newest first).
+ const drafts=draftList(builderStore).filter(d=>d.vm&&d.vm.path===path),existing=drafts[0]||null;
+ // Keep working on the local draft only while it still descends from the version that is on the VM. Its
+ // base takes the hashes the VM gave now (the page's own save knows the texts only).
+ if(existing&&builderSame(existing.vm,found))return existing.vm.hash===found.hash?existing:draftWrite(builderStore,{...existing,vm:{path,...found}},existing.revision);
  if(existing&&!builderSame(existing,existing.vm)&&!confirm('The topology on the VM changed since your draft was made, and the draft has changes that are not on the VM.\n\nOK opens the VM version and discards the draft in this browser.\nCancel keeps your draft: you can download it, or save it and review the differences.'))return existing;
- if(existing)draftDelete(builderStore,existing.id);
+ for(const d of drafts)draftDelete(builderStore,d.id);draftDelete(builderStore,'vm:'+path);
  return draftWrite(builderStore,{id:'vm:'+path,name:parsed.name,root:path.slice(0,path.lastIndexOf('/')),yaml:found.yaml,annotations:found.annotations,vm:{path,...found}},undefined);
 }
 async function builderConnect(){
