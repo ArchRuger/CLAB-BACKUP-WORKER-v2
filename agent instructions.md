@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.16
+# UI review 001 (in progress) — 1.30.17
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -124,6 +124,12 @@ The same handle is the way to change anything else in the document from the page
 `mapEditor.applyAnnotations` **without** `mapApplying`, so `persist()` records it as one undo step.
 `MAP_ICONS` must stay a subset of the editor's `NODE_TYPE_SET` (a test checks the bundle). The form is
 `novalidate` so refusals are the page's sentences. `.map-editor .builder-bar` wraps.
+(16) **1.30.17, UI-003 row 10 and the per-row pass.** `#map-link-dialog`: `mapLinks(links, text)` takes the
+links from `GET /api/labs/{id}/topology` (topology order) and `mapApplyLinkOffset()` writes
+`edgeAnnotations` entries keyed like the editor's `buildEdgeKey` (`source|sourceEndpoint|target|targetEndpoint`,
+0–60); the canvas selection maps to a link by `Clab-Link<n>`. The link menu's `capture-source`,
+`capture-target` and `impair-edge` are hidden in `.map-editor`. `docs/ui-review-001/tools/check_ui003b.py`
+drives the matrix rows; rerun it and `check_ui003.py` after any editor upgrade or adapter change.
 
 # Lab builder quality pass — 1.30.1
 

@@ -72,6 +72,28 @@ function mapApplyLook(text,id,look){
  for(const key of MAP_LOOK_KEYS){if(clean[key]===undefined)delete entry[key];else entry[key]=clean[key];}
  return JSON.stringify(data,null,2);
 }
+// A link's own label distance: the editor keeps it in edgeAnnotations, found by the link's endpoints in the
+// topology's order (its buildEdgeKey), and clamps it to 0–60. Its own form for it is topology editing.
+function mapLinkKey(link){return [link.source,link.sourceEndpoint||'',link.target,link.targetEndpoint||''].join('|');}
+function mapLinkLabel(link){return link.source+':'+(link.sourceEndpoint||'?')+'  ↔  '+link.target+':'+(link.targetEndpoint||'?');}
+// links: the manager's drawing, [[{node,interface},{node,interface}], …] in the topology's order.
+function mapLinks(links,text){
+ let data;try{data=JSON.parse(text);}catch{data={};}
+ const stored=new Map((Array.isArray(data&&data.edgeAnnotations)?data.edgeAnnotations:[]).filter(e=>e&&typeof e==='object').map(e=>[mapLinkKey(e),e]));
+ return (links||[]).filter(pair=>Array.isArray(pair)&&pair.length===2&&pair.every(end=>end&&typeof end.node==='string')).map(pair=>{
+  const link={source:pair[0].node,sourceEndpoint:pair[0].interface||'',target:pair[1].node,targetEndpoint:pair[1].interface||''},entry=stored.get(mapLinkKey(link));
+  return {...link,own:!!entry&&entry.endpointLabelOffsetEnabled===true,offset:entry&&Number.isFinite(entry.endpointLabelOffset)?entry.endpointLabelOffset:20};
+ });
+}
+function mapApplyLinkOffset(text,link,own,offset){
+ const data=JSON.parse(text);if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('The map document is not readable.');
+ const value=String(offset??'').trim()===''?NaN:Number(offset);if(own&&(!Number.isInteger(value)||value<0||value>60))throw new Error('The distance is a whole number from 0 to 60.');
+ const list=Array.isArray(data.edgeAnnotations)?data.edgeAnnotations:[],key=mapLinkKey(link),at=list.findIndex(e=>e&&typeof e==='object'&&mapLinkKey(e)===key);
+ if(own){const entry={...(at>=0?list[at]:{source:link.source,sourceEndpoint:link.sourceEndpoint,target:link.target,targetEndpoint:link.targetEndpoint}),endpointLabelOffsetEnabled:true,endpointLabelOffset:value};if(at>=0)list[at]=entry;else list.push(entry);}
+ else if(at>=0){const {endpointLabelOffsetEnabled:_e,endpointLabelOffset:_o,...rest}=list[at];if(Object.keys(rest).every(k=>['id','source','target','sourceEndpoint','targetEndpoint'].includes(k)))list.splice(at,1);else list[at]=rest;}
+ if(list.length||Array.isArray(data.edgeAnnotations))data.edgeAnnotations=list;
+ return JSON.stringify(data,null,2);
+}
 function mapDirty(){return mapIsDirty(mapBaseline,mapCurrent);}
 async function mapTravel(delta){
  const next=mapHistoryStep(mapHistory,delta);if(!next||!mapEditor||mapApplying||mapSaving||mapPaused)return false;
@@ -86,7 +108,7 @@ function mapRenderBar(){
  $('map-save').disabled=!ready||mapSaving||!mapDirty();$('map-save').title=!ready?'':mapDirty()?'':'There is nothing to save.';
  $('map-download').disabled=!mapDoc;$('map-import').disabled=!ready||mapSaving;
  const steady=ready&&!mapSaving&&!mapApplying&&!!mapEditor;
- $('map-look').disabled=!steady;
+ $('map-look').disabled=!steady;$('map-link').disabled=!steady;
  $('map-undo').disabled=!steady||mapHistory.index<=0;$('map-redo').disabled=!steady||mapHistory.index>=mapHistory.entries.length-1;
  $('map-drawio').disabled=!ready;$('map-drawio').title=mapDirty()?'The export is made from the saved map: save first.':'';
 }
@@ -139,6 +161,24 @@ async function mapLookApply(){
  // An ordinary edit: the editor takes the document, persist() records the step, Undo takes it back.
  try{await mapEditor.applyAnnotations(next);notify('Look applied to '+$('map-look-device').value+'. Save map keeps it.');}catch(e){error.textContent='The look was not applied: '+e.message;}
 }
+let mapLinkList=[];
+function mapLinkFill(){const link=mapLinkList[Number($('map-link-select').value)]||mapLinkList[0];if(!link)return;$('map-link-own').checked=link.own;$('map-link-offset').value=link.offset;$('map-link-offset').disabled=!link.own;$('map-link-error').textContent='';}
+async function mapLinkOpen(){
+ let drawing;try{drawing=await(await api('/labs/'+encodeURIComponent(mapLab)+'/topology')).json();}catch(error){notify('The links could not be read: '+error.message);return;}
+ mapLinkList=mapLinks(drawing&&drawing.links,mapCurrent);if(!mapLinkList.length){notify('This lab has no links.');return;}
+ const select=$('map-link-select');select.replaceChildren(...mapLinkList.map((link,i)=>{const o=document.createElement('option');o.value=String(i);o.textContent=mapLinkLabel(link)+(link.own?'  ·  own distance '+link.offset:'');return o;}));
+ // The link selected on the canvas: the editor numbers links in the topology's order (Clab-Link<n>)
+ const picked=document.querySelector('.react-flow__edge.selected'),m=picked&&/Clab-Link(\d+)$/.exec(picked.getAttribute('data-testid')||picked.getAttribute('data-id')||'');
+ if(m&&mapLinkList[Number(m[1])])select.value=m[1];
+ mapLinkFill();$('map-link-dialog').showModal();
+}
+async function mapLinkApply(){
+ const error=$('map-link-error'),index=Number($('map-link-select').value),link=mapLinkList[index];error.textContent='';if(!link)return;
+ let next;try{next=mapApplyLinkOffset(mapCurrent,link,$('map-link-own').checked,$('map-link-offset').value);}catch(e){error.textContent=e.message;return;}
+ if(JSON.stringify(JSON.parse(next))===JSON.stringify(JSON.parse(mapCurrent))){notify('Nothing changed for this link.');return;}
+ try{await mapEditor.applyAnnotations(next);mapLinkList=mapLinks(mapLinkList.map(l=>[{node:l.source,interface:l.sourceEndpoint},{node:l.target,interface:l.targetEndpoint}]),mapCurrent);notify('Label distance applied to '+mapLinkLabel(link)+'. Save map keeps it.');}
+ catch(e){error.textContent='The distance was not applied: '+e.message;}
+}
 const labBuilderPage={
  // Called by the adapter after every settled edit, before the editor hears the answer. The first call is the
  // editor's own reading of the document and becomes the baseline; a changed topology text is refused.
@@ -180,6 +220,8 @@ if(typeof document!=='undefined'&&$('map-save')){
  $('map-leave-save').onclick=async()=>{$('map-leave').close();if(await mapSave())location.assign(mapBackUrl(mapLab));};
  $('map-import').onclick=()=>{$('map-import-error').textContent='';$('map-import-file').value='';$('map-import-dialog').showModal();};
  $('map-import-cancel').onclick=()=>$('map-import-dialog').close();$('map-import-confirm').onclick=()=>mapImport();
+ $('map-link').onclick=()=>mapLinkOpen();$('map-link-close').onclick=()=>$('map-link-dialog').close();$('map-link-select').onchange=mapLinkFill;$('map-link-own').onchange=()=>{$('map-link-offset').disabled=!$('map-link-own').checked;};
+ $('map-link-form').onsubmit=e=>{e.preventDefault();mapLinkApply();};
  $('map-look').onclick=mapLookOpen;$('map-look-close').onclick=()=>$('map-look-dialog').close();$('map-look-device').onchange=mapLookFill;
  $('map-look-form').onsubmit=e=>{e.preventDefault();mapLookApply();};
  $('map-look-color-default').onchange=()=>{$('map-look-color').disabled=$('map-look-color-default').checked;};

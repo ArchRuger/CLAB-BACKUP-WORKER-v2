@@ -1,3 +1,37 @@
+# UI review 001, step 16: link label distance and the per-row browser pass — 1.30.17
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.16 (`e429911`,
+pushed, CI green). Row 10 and step E.1 of `docs/ui-review-001/MAP-PARITY.md`. **Fixture only.**
+
+## What was run
+
+- `node --test tests/*.js`: 189 of 189. New in `test_map_editor_ui.js`: links read from the manager's
+  drawing in topology order with malformed ones skipped, an existing entry's distance shown, a new entry
+  added with the link's endpoints, an existing one updated in place with its other keys, turning it off
+  keeping an entry that carries something else and removing one that does not, nothing added when there
+  is nothing to turn off, and 61, -1, 2.5, a word and an empty value refused. `test_lab_builder_ui.js`:
+  the three newly hidden link-menu entries exist in the bundle.
+- `python -m unittest discover -s tests -t tests`: 711 tests, 1 skipped, OK. `verify-release.py`, `git diff --check`.
+- **Browser, fixture manager on fresh data**: `verify_after.py` 98 of 98 at three viewports, 0 console
+  errors, 0 page errors; `check_ui003.py` 34 of 34; new `docs/ui-review-001/tools/check_ui003b.py` 20 of
+  20: a rectangle, a line and a circle added from the pane menu; the rectangle resized by its
+  bottom-right handle; a group added and *Backup-Worker* dragged into it becoming its member; an
+  annotation copied, pasted and deleted by keyboard with no device lost; the link label mode and a grid
+  setting stored in `viewerSettings`; the radial layout moving the devices and Undo returning every one
+  of them; the SVG export downloading an `<svg>`; the link menu without capture or impairment entries;
+  a distance of 75 refused in words and 48 stored on the chosen link; then **Save map**: the stored
+  document equals the editor's byte for byte, the topology text is byte-identical, every write of the
+  run went to `…/map-document`; after reopening the shapes, the group and its member are there and
+  nothing is unsaved; the manager's drawing has the shapes, the group, the label mode and the link's
+  distance of 48. Screenshots inspected: `~/ui-review/review-001/chunk17/` on the VM.
+
+## Not driven one by one
+
+The remaining fields of the editor's text, shape and group panels (font family, italic, underline,
+alignment, colours, rotation, line arrows, corner radius, group level and label position), the rotate
+handle, duplicate (Ctrl+D) and zoom / pan. They go through the same panels and the same annotation
+commands as the fields that were driven.
+
 # UI review 001, step 15: the device look in Edit map — 1.30.16
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.15 (`f7927c1`,

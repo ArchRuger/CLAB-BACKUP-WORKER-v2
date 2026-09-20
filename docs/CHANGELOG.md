@@ -4,6 +4,27 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.17
+
+**UI review 001, step 16: link label distance in Edit map, and every map tool driven in a browser (UI-003,
+row 10 and the per-row pass).** Frontend only (the editor bundle is unchanged).
+
+- **Link labels…** in the map editor's bar: pick a link (the one selected on the canvas is preselected),
+  give it its own label distance from 0 to 60, or take that away again. It changes one entry of the
+  document's link annotations, found by the link's endpoints as the editor finds it; an entry that
+  carries anything else is kept, one that would be empty is removed. It is one Undo step, **Save map**
+  keeps it and the lab's Topology tab draws it. The label mode for all links stays the tag icon in the
+  editor's toolbar.
+- The editor's link menu no longer shows *capture* and *Link Impairments* in Edit map: they belong to a
+  running lab and did nothing here. *Packet capture…* on the lab page is unchanged.
+- With this release every row of the capability matrix was driven in a real browser, saved, reopened
+  and compared with the stored document: shapes (rectangle, circle, line) and resizing by handle, a group
+  and a device dragged into it, copy / paste / keyboard delete of annotations, a generated layout and
+  Undo taking all of it back, the link label mode, a grid setting, the SVG export, the device look and
+  the link label distance. What the manager's Topology tab does not draw (line arrows, rounded text
+  backgrounds, nested group levels) is stored and shown by the editor; that difference is documented in
+  [docs/ui-review-001/MAP-PARITY.md](ui-review-001/MAP-PARITY.md).
+
 ## Changes in 1.30.16
 
 **UI review 001, step 15: the device look is editable in Edit map (UI-003, row 9).** Frontend only (the

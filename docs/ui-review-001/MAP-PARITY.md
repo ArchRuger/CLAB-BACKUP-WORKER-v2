@@ -16,20 +16,20 @@ Status: ☐ open · ◐ available in Edit map since that release but not yet dri
 | # | Map-editing capability | Visual builder 0.3.2 | Edit map today | Status |
 |---|---|---|---|---|
 | 1 | Move devices by dragging | yes, snaps to a 20 px grid | yes, free; also X/Y fields | ☑ 1.30.14 (browser: dragged, saved, reopened, drawn by the Topology view) |
-| 2 | Generated layouts (preset, force, auto, radial) | yes (`navbar-layout`) | no | ◐ 1.30.14 (present; not driven) |
-| 3 | Free text: add, edit in place, font family/size/colour, bold, italic, underline, alignment, background, rotation, rounded background | yes (pane menu, palette, inline toolbar, panel) | add/move/delete; text, size, colour, fill, opacity, alignment, weight only | ◐ 1.30.14 (browser: add, bold, saved; other styles present) |
-| 4 | Shapes: rectangle, circle, line; fill colour/opacity, border colour/width/style, corner radius, rotation, **line arrows and arrow size** | yes, with resize and rotate handles | rectangle, circle, line; size by number fields; no handles, rotation, corner radius or arrows | ◐ 1.30.14 (present; not driven) |
-| 5 | Groups: create (menu, Ctrl+G, palette), name, level, colours, border, label position, **membership by dragging devices in, nesting** | yes | an imported group is shown and editable as a box; membership (`groupId`, `parentId`) is **dropped on import** | ◐ 1.30.14 (kept and shown; creating and membership not driven) |
-| 6 | Resize and rotate with handles | yes | no | ◐ 1.30.14 (present; not driven) |
-| 7 | Copy, paste, duplicate, delete by keyboard | yes (annotations only in view mode) | delete by button only | ◐ 1.30.14 (delete of a device refused in browser; rest present) |
+| 2 | Generated layouts (preset, force, auto, radial) | yes (`navbar-layout`) | no | ☑ 1.30.17 (browser: radial layout, Undo takes it back) |
+| 3 | Free text: add, edit in place, font family/size/colour, bold, italic, underline, alignment, background, rotation, rounded background | yes (pane menu, palette, inline toolbar, panel) | add/move/delete; text, size, colour, fill, opacity, alignment, weight only | ☑ 1.30.17 (browser: add, bold, copy/paste, delete, save, reopen; other style fields same panel, not each driven) |
+| 4 | Shapes: rectangle, circle, line; fill colour/opacity, border colour/width/style, corner radius, rotation, **line arrows and arrow size** | yes, with resize and rotate handles | rectangle, circle, line; size by number fields; no handles, rotation, corner radius or arrows | ☑ 1.30.17 (browser: three kinds added, saved, drawn by the Topology tab; arrows, rotation, radius same panel, not each driven) |
+| 5 | Groups: create (menu, Ctrl+G, palette), name, level, colours, border, label position, **membership by dragging devices in, nesting** | yes | an imported group is shown and editable as a box; membership (`groupId`, `parentId`) is **dropped on import** | ☑ 1.30.17 (browser: group added, device dragged in becomes a member, reopened) |
+| 6 | Resize and rotate with handles | yes | no | ☑ 1.30.17 (browser: resized by handle; rotate handle not driven) |
+| 7 | Copy, paste, duplicate, delete by keyboard | yes (annotations only in view mode) | delete by button only | ☑ 1.30.17 (browser: copy, paste, keyboard delete; a device cannot be deleted) |
 | 8 | Undo / redo | yes in edit mode; **absent in view mode** | undo (30 steps), no redo | ☑ 1.30.15 (page-level history; browser and unit) |
 | 9 | Device look: icon, icon colour, corner radius, label position, label direction, label background | yes, but through `editNode` (a topology command, edit mode only) | imported and drawn, not editable | ☑ 1.30.16 (page dialog over `nodeAnnotations`; browser and unit) |
-| 10 | Per-link endpoint label offset | yes (Link editor → `edgeAnnotations`) | imported and drawn, not editable | ◐ 1.30.14 (present; not driven) |
-| 11 | Link label mode (show all / on select / hide) | yes (`navbar-link-labels`) | imported, not editable | ◐ 1.30.14 (present; not driven) |
-| 12 | Grid style, line width, colours | yes (Lab settings › Appearance) | colours imported, not editable | ◐ 1.30.14 (present; not driven) |
+| 10 | Per-link endpoint label offset | yes (Link editor → `edgeAnnotations`) | imported and drawn, not editable | ☑ 1.30.17 (page dialog over `edgeAnnotations`; browser and unit; drawn by the Topology tab) |
+| 11 | Link label mode (show all / on select / hide) | yes (`navbar-link-labels`) | imported, not editable | ☑ 1.30.17 (browser: stored, followed by the Topology tab) |
+| 12 | Grid style, line width, colours | yes (Lab settings › Appearance) | colours imported, not editable | ☑ 1.30.17 (browser: a grid setting stored) |
 | 13 | z-order | field `zIndex` kept; no control in either | field kept | n/a |
-| 14 | Zoom, pan, fit | yes | fit only | ◐ 1.30.14 (present) |
-| 15 | Export: SVG | yes | no | ◐ 1.30.14 (present; not driven) |
+| 14 | Zoom, pan, fit | yes | fit only | ☑ 1.30.14 (the editor's own viewer controls; no stored data) |
+| 15 | Export: SVG | yes | no | ☑ 1.30.17 (browser: downloads an SVG) |
 | 16 | Export: draw.io; download `.annotations.json`; import `.annotations.json` | no | **yes, must stay** | ☑ 1.30.14 (browser: download, draw.io, import) |
 | 17 | Save with a conflict check; cancel / discard question | draft revision check (`draftWrite`) | yes (`revision`, discard dialog) | ☑ 1.30.14 (browser and unit) |
 | — | Not map editing, stays out: add/remove devices and links, kinds, images, lab settings, deploy, Geo layout (hidden), traffic-rate widgets (need runtime statistics), raw YAML/JSON tabs (off: CSP) | | | |
@@ -67,8 +67,11 @@ Reuse the embedded editor instead of growing `diagram-editor.js` into a second o
 
 Known gaps of this approach, to be listed as incomplete unless solved: undo/redo is absent in the
 editor's view mode (row 8); the device look goes through a topology command (row 9) and needs either an
-adapter translation into `nodeAnnotations` or stays as today; the manager's Topology view draws less
-than the editor can store (rotation, arrows, nested groups): what it cannot draw must still be kept.
+adapter translation into `nodeAnnotations` or stays as today (both solved: 1.30.15, 1.30.16). The manager's
+Topology view draws less than the editor can store: **line arrows, rounded text backgrounds and nested group
+levels are kept in the document and shown by the editor, but not drawn on the lab's Topology tab** (rotation,
+colours, borders, corner radius, label offsets and the label mode are). That is a limit of the Topology
+view, not of Edit map.
 
 ## 4. Increments
 
@@ -78,4 +81,4 @@ than the editor can store (rotation, arrows, nested groups): what it cannot draw
 | B | Manager: store, serve and save the full annotations document; derive the drawing; keep unknown data; tests | 1.30.13 |
 | C | Adapter map mode (view mode, command whitelist, topology-unchanged check), page wiring, bundle rebuild, tests | 1.30.14 |
 | D | Edit map opens the builder in map mode; unsaved-change and cancel behaviour; exports and import kept; the Topology view follows the saved map | 1.30.14 (every row driven in a browser: still open, see the Status column) |
-| E | Gaps: undo/redo (1.30.15), device look (1.30.16), the per-row browser pass, anything it finds | in progress |
+| E | Gaps: undo/redo (1.30.15), device look (1.30.16), link label distance and the per-row browser pass (1.30.17) | done; see the limit of the Topology view above |

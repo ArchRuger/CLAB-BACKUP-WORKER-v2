@@ -49,23 +49,23 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.14 | UI-003 steps C + D | Adapter map mode (`mapOnly`, `MAP_COMMANDS`), `map-editor.html` / `map-editor-page.js`, Edit map wired by `map_editor`, exports and import kept | `check_ui003.py` 27/27, `verify_after.py` 98/98 ×3, node 186, python 711, bundle `--check` OK, `~/ui-review/review-001/chunk13`, `chunk14` |
 | 1.30.15 | UI-003 row 8 | Page-level Undo / Redo (`mapHistory*`, `mapTravel`, adapter `attach` → `applyAnnotations`) | `check_ui003.py` 29/29, node 187, bundle `--check` OK |
 | 1.30.16 | UI-003 row 9 | *Device look…* dialog (`mapApplyLook` over `nodeAnnotations`, one undo step), bar wraps | `check_ui003.py` 34/34, `verify_after.py` 98/98 ×3, node 188, `~/ui-review/review-001/chunk16/` |
+| 1.30.17 | UI-003 row 10 + per-row pass | *Link labels…* dialog (`mapApplyLinkOffset`), link-menu runtime entries hidden, `check_ui003b.py` | `check_ui003b.py` 20/20, `check_ui003.py` 34/34, `verify_after.py` 98/98 ×3, node 189, `~/ui-review/review-001/chunk17/` |
 
 ## Next
 
-**UI-003 is the only open requirement, and it is not complete.** What remains (step E of `MAP-PARITY.md`):
+All eight requirements are delivered. What is left is optional or needs the maintainer:
 
-1. **Drive every ◐ row in a browser and save it**: extend `docs/ui-review-001/tools/check_ui003.py` (shape
-   with resize/rotate/arrows, group creation and dragging a device in, copy/paste/duplicate, a generated
-   layout, link label offset, link label mode, grid appearance, SVG export), each followed by save →
-   reopen → compare the stored document, then flip the row to ☑.
-2. **Row 8, undo / redo**: done in 1.30.15 as a page-level history (the maintainer's choice).
-3. **Row 9, device look**: done in 1.30.16 (a page dialog over `nodeAnnotations`).
-4. **The Topology view draws less than the editor stores** (rotation, line arrows, rounded text
-   background, nested levels): extend `parse_drawing` / `topology-render.js` where cheap, document the rest.
-5. **Live pass**: done for open / drag / save at 1.30.14 on the QA lab `qa-nos-105458`; repeat it for the
-   rows of item 1 after each bundle change (rebuild with `sudo bash deploy/start-manager.sh --manager-only`;
-   the immutable bundle only updates with the release number). Do not edit the maintainer's course maps
-   without asking.
+1. **The Topology tab does not draw line arrows, rounded text backgrounds and nested group levels** (the
+   document keeps them and the editor shows them). Drawing them means `parse_drawing` (`app/topology.py`)
+   reading `lineStartArrow` / `lineEndArrow` / `lineArrowSize` / `roundedBackground`, `topology-render.js`
+   and `app/telemetry_map.py` / `drawio_export.py` following. Ask before starting: it widens the
+   manager's drawing schema.
+2. **Live pass at the newest release**: the development manager runs 1.30.14. Rebuild it
+   (`sudo bash deploy/start-manager.sh --manager-only`) and repeat `check_ui003.py`-style steps on the QA lab
+   `qa-nos-105458` through `http://192.168.132.132:8081`; never edit the maintainer's course maps without asking.
+3. **A second pull request** for 1.30.10 onwards (the maintainer merged up to 1.30.9 as #41).
+4. Not exercised anywhere yet, by decision: a real review-and-upload to the Git host, a real upload
+   + `create`, a real folder move.
 
 ## Known limits and open points
 

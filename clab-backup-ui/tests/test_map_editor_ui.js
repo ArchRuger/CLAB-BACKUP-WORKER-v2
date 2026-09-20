@@ -103,3 +103,19 @@ test('the device look changes six keys of one device\'s entry and nothing else, 
  const code=fs.readdirSync(path.join(__dirname,'../app/static/lab-builder/assets')).filter(f=>f.endsWith('.js')).map(f=>fs.readFileSync(path.join(__dirname,'../app/static/lab-builder/assets',f),'utf8')).join('\n');
  for(const [icon] of vm.runInContext('MAP_ICONS',c))assert.ok(code.includes('"'+icon+'"'),'the bundled editor no longer knows the icon '+icon);
 });
+
+test('a link\'s own label distance is one edgeAnnotations entry found by the link\'s endpoints, 0 to 60, and removable',()=>{
+ const {context:c}=harness(),plain=v=>JSON.parse(JSON.stringify(v));
+ const links=[[{node:'r1',interface:'eth1'},{node:'r2',interface:'eth1'}],[{node:'r2',interface:'eth2'},{node:'r3',interface:'eth1'}],['bad'],[{node:'r1'}]];
+ const text=JSON.stringify({nodeAnnotations:[{id:'r1'}],edgeAnnotations:[{id:'e9',source:'r2',sourceEndpoint:'eth2',target:'r3',targetEndpoint:'eth1',endpointLabelOffsetEnabled:true,endpointLabelOffset:35,vendor:1}],somethingNew:[1]});
+ const list=plain(c.mapLinks(links,text));assert.equal(list.length,2,'malformed links are skipped');
+ assert.deepEqual(list[0],{source:'r1',sourceEndpoint:'eth1',target:'r2',targetEndpoint:'eth1',own:false,offset:20});assert.deepEqual([list[1].own,list[1].offset],[true,35]);
+ assert.equal(c.mapLinkLabel(list[0]),'r1:eth1  ↔  r2:eth1');
+ const added=JSON.parse(c.mapApplyLinkOffset(text,list[0],true,'48'));
+ assert.deepEqual(added.edgeAnnotations[1],{source:'r1',sourceEndpoint:'eth1',target:'r2',targetEndpoint:'eth1',endpointLabelOffsetEnabled:true,endpointLabelOffset:48});assert.deepEqual(added.edgeAnnotations[0].vendor,1);assert.deepEqual(added.somethingNew,[1]);assert.deepEqual(added.nodeAnnotations,[{id:'r1'}]);
+ const changed=JSON.parse(c.mapApplyLinkOffset(text,list[1],true,10));assert.deepEqual(changed.edgeAnnotations,[{id:'e9',source:'r2',sourceEndpoint:'eth2',target:'r3',targetEndpoint:'eth1',endpointLabelOffsetEnabled:true,endpointLabelOffset:10,vendor:1}],'an existing entry is updated in place with its other keys');
+ const off=JSON.parse(c.mapApplyLinkOffset(text,list[1],false,''));assert.deepEqual(off.edgeAnnotations,[{id:'e9',source:'r2',sourceEndpoint:'eth2',target:'r3',targetEndpoint:'eth1',vendor:1}],'turning it off keeps an entry that carries something else');
+ const gone=JSON.parse(c.mapApplyLinkOffset(JSON.stringify(added),list[0],false,''));assert.equal(gone.edgeAnnotations.length,1,'and removes one that carried nothing else');
+ assert.equal(c.mapApplyLinkOffset(JSON.stringify({nodeAnnotations:[]}),list[0],false,''),JSON.stringify({nodeAnnotations:[]},null,2),'nothing to turn off adds no key');
+ for(const bad of ['61','-1','2.5','x',''])assert.throws(()=>c.mapApplyLinkOffset(text,list[0],true,bad),/0 to 60/,bad);
+});

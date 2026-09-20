@@ -33,19 +33,22 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - ☑ Polling, visits, saves and favourites do not reorder *Recent labs*; the tab is kept for the session. 1.30.11
 - ☑ Lab card titles no longer break inside a word. 1.30.11
 
-## UI-003 — Edit map gets the visual builder's map-editing capabilities ◐ (matrix 1.30.12, document storage 1.30.13, editor in map mode 1.30.14; rows 8 and 9 and the per-row browser pass open)
+## UI-003 — Edit map gets the visual builder's map-editing capabilities ☑ (1.30.12 to 1.30.17)
 
 - ☑ Capability matrix: installed builder versus Edit map, and the approach (`docs/ui-review-001/MAP-PARITY.md`). 1.30.12
-- ◐ Every map-editing capability of the matrix implemented and tested, or listed as incomplete: see the
-  Status column of `MAP-PARITY.md` (1.30.14: the editor itself is in place; undo/redo and the device look are
-  open; most tools are present but not yet each driven and saved in a browser).
-- ◐ Positions and text with style survive save, close and reopen (browser, 1.30.14); the full document is
-  stored byte for byte (unit, 1.30.13). Shapes, groups and further edits: not yet driven in a browser.
-- ◐ The Topology view follows the saved map (positions, texts, shapes, groups); data it cannot draw
-  (rotation, arrows, nesting, unknown keys) is kept, not drawn. 1.30.14
+- ☑ Every map-editing capability of the matrix is implemented and was driven in a browser; what was not
+  driven field by field is listed in VALIDATION (1.30.17) and in the matrix. Undo / redo (1.30.15), the
+  device look (1.30.16) and the link label distance (1.30.17) are the page's own, because the editor only
+  offers them as topology editing or not at all in the mode Edit map uses.
+- ☑ Positions, text, shapes, groups, memberships, label and grid settings survive save, close, reopen
+  and further editing; the stored document equals the editor's byte for byte (1.30.13 unit, 1.30.17 browser).
+- ◐ The Topology tab draws the saved map (positions, device look, texts, shapes with rotation, groups,
+  label mode and distances); **line arrows, rounded text backgrounds and nested group levels are kept
+  but not drawn there**. Nothing is dropped.
 - ☑ Cancel / unsaved-change behaviour; no deployment, no topology or runtime change from a map edit
   (adapter whitelist, topology restore, page check, save route; browser: every write went to the map document). 1.30.14
 - ☑ Annotation import/download and draw.io export kept (in the editor's bar; Import map… on the lab page unchanged). 1.30.14
+- Kept on purpose: a lab without a topology text in the manager (imported from an inventory) opens the older simple dialog.
 
 ## UI-004 — Save progress options are explained ☑ 1.30.4
 
