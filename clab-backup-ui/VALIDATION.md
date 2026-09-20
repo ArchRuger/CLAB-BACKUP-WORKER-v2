@@ -1,3 +1,34 @@
+# UI review 001, step 8: the Devices tab lines up — 1.30.9
+
+Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.8 (`473a9bd`,
+pushed, CI green). Requirement UI-006 of `docs/ui-review-001/CHECKLIST.md`. **Fixture only: no live VM,
+lab or device was involved**, and the development manager running on the VM was not rebuilt.
+
+## What was run
+
+- Before: screenshots of the tab at 1366×768 and 853×480 and the measured positions
+  (`~/ui-review/review-001/chunk08/before-devices-*.png`): list 40 px right of the heading, rows of 58
+  and 68 px with the pill at different heights.
+- `node --test tests/*.js`: 177 of 177 (new: the stylesheet rules this layout depends on, and the
+  rail's own named-area grid left alone). `python -m unittest discover -s tests -t tests`: 708 tests,
+  1 skipped, OK. `python3 deploy/verify-release.py`, `git diff --check`.
+- **Browser, fixture manager**: `verify_after.py` 97 of 97 at three viewports, 0 console errors, 0 page
+  errors. `docs/ui-review-001/tools/check_ui006.py` 89 of 89, measuring the rendered layout at
+  1920×1080, 1366×768 and a 1280×720 laptop at 125 %, 150 % and 200 % zoom, each with the fixture's
+  states (Ready, Starting, Needs credentials, Needs attention, an unmapped device) and again with one
+  row given a 66-character name and a three-line reason: the list is flush with the heading on both
+  sides; identity, state, *Open CLI* and *Details* each start at one x in every row; name, state and
+  *Open CLI* share one line (three-column layouts); nothing overlaps, is clipped or leaves its row; no
+  sideways scrolling; search and *Technical view* have one height on one line; every state keeps its
+  label and reason. Then: search filters, the empty result spans the list, *Technical view* opens the
+  table, *Details* opens the panel, *Open CLI* opens the terminal tab, and the Topology rail is flush
+  with its heading. Screenshots inspected: `~/ui-review/review-001/chunk08/` on the VM.
+
+## Seen and left alone
+
+At 200 % zoom on a 1280×720 laptop (640 CSS pixels) the lab banner above the tabs is drawn far too tall
+and the top bar's brand overlaps the breadcrumb. Both predate this work and are outside UI-006.
+
 # UI review 001, step 7: the folder tree expands, collapses and keeps its state — 1.30.8
 
 Prepared on `claude/ui-review-001` on 2026-09-20 on the dev VM `clab-llm-dev2`, after 1.30.7 (`066a39e`,

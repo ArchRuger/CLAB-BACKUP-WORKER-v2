@@ -1,4 +1,4 @@
-# UI review 001 (in progress) — 1.30.8
+# UI review 001 (in progress) — 1.30.9
 
 The maintainer's UI review is implemented as a series of patch releases, one requirement chunk each, on
 `claude/ui-review-001`. **Read `docs/ui-review-001/PICKUP.md` first** (what is done, what is next, how
@@ -60,6 +60,12 @@ ArrowLeft on a focused `<summary>`) and `gitRevealFolder` (a selection). `gitPla
 `summary.current` = the folder the lab saves to, `summary.selected` = the browsed folder,
 `holds-current` = a closed branch with the destination inside. `draw()` restores the focused control
 and the outline's scroll position after each redraw. Children of a closed branch are not rendered.
+(8) **1.30.9, UI-006 — Devices tab, CSS only.** `.device-list` resets the `<ul>` indent (both lists).
+`#device-list` is the grid (`minmax(200px,1.1fr) minmax(240px,1.9fr) auto`), every `li` spans it and a
+`.device-row` is a `subgrid` of it (fallback: the row's own three columns); the first line of each cell
+is 32px high (`.node-name` inline-flex, the state cell's first grid row, `.node-actions`), so a new
+child of `deviceRow()` must fit one of the three cells. The rail keeps the 1.29.1 named-area grid. The
+single-column rule at 760px must keep resetting `#device-list` too.
 
 # Lab builder quality pass — 1.30.1
 

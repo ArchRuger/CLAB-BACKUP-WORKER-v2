@@ -41,24 +41,29 @@ Screenshots and reports: `~/ui-review/review-001/chunkNN/` on the dev VM (not in
 | 1.30.6 | UI-007 C | Mandatory review before an upload, enforced in `app/git_progress.py` (`Retry.reviewed`) and driven by `gitReviewJob` | `check_ui007c.py` 17/17, `verify_after.py` 97/97 ×3 on fresh fixture data, python 706, `~/ui-review/review-001/chunk05/` |
 | 1.30.7 | UI-008 part 1 | Planned folders kept by the manager (`git_folders`, tree `planned`, `plan: true`, `DELETE …/folders`); fixture helper made faithful | `check_ui008a.py` 17/17, `verify_after.py` 97/97 ×3, python 708, node 174, `~/ui-review/review-001/chunk06/` |
 | 1.30.8 | UI-008 part 2 | Tree expansion owned by the student (`gitPlacesState.expanded`, `.git-twist`), `current` vs `selected`, focus and scroll kept | `check_ui008b.py` 21/21, `verify_after.py` 97/97 ×3, node 176, `~/ui-review/review-001/chunk07/` |
+| 1.30.9 | UI-006 | Devices tab: list indent removed, one list grid with subgrid rows, aligned heading controls (CSS only) | `check_ui006.py` 89/89 at five sizes, `verify_after.py` 97/97 ×3, before/after in `~/ui-review/review-001/chunk08/` |
 
 ## Next
 
-Chunk 8 = **UI-006** (Devices tab). `#devices-view` in `index.html` (heading, `#search`,
-`#devices-technical`), rows by `deviceRow()` in `app.js` into `#device-list`; the same function draws
-the narrow rail on the Topology tab (`.device-rail`), where `.device-row` is a named-area grid with
-wrapper divs at `display: contents` (see the 1.29.1 notes: a new child needs a grid area). Goal: one
-responsive grid for the Devices tab so identity/platform, state/reason, Open CLI and Details line up
-across rows, long names and multi-line reasons do not move other columns, no clipping at laptop widths
-and zoom; do not hide status information or change readiness semantics. Screenshot the tab first at
-1366×768 and 1280×720 @150 % with the fixture's mixed states (ready, starting, needs credentials,
-unmapped). Then UI-002 (Home: Deploy / Build, Recent labs tab ordered by real deployment time — find
-what the manager records per lab before choosing the fallback) and UI-003 (map parity: start with the
-capability matrix `docs/ui-review-001/MAP-PARITY.md`).
+Chunk 9 = **UI-002 part 1** (Home: Deploy and Build as the two primary actions). Today: `#home` in
+`index.html` has a hero with a secondary *Deploy a new lab* button (`#home-deploy` → `openDeploy()` in
+`operations.js`, the VM file browser), the empty state has *Deploy a new lab*, *Build a lab visually…*
+(a link to `/static/lab-builder.html`) and *Import lab files…* (`openSetup()` in `management.js`, the
+upload dialog). Plan: two equal cards above the lab list on every Home (with and without labs): DEPLOY
+with *Choose a lab file on the VM…* (`openDeploy`) and *Upload lab files from this computer…*
+(`openSetup`), BUILD opening the builder directly; wording that says where the files are; disabled
+reasons as visible text when the VM is not connected (upload and Build do not need the VM — check).
+Chunk 10 = **UI-002 part 2**: lab list under a *Recent labs* tab ordered by the most recent deployment.
+First find what the manager really records (`lab['deployment']`, operations history in
+`state.operations` with `action` deploy/redeploy and `finished`, `lab.created`); never invent a time;
+labs without one go last in a stable order (name), and say so in this file. Keep favourites, card
+actions and *Continue where you left off* no more prominent than the two actions; the tab and the order
+must not change on the 4 s poll. Then UI-003 (map parity): start with the capability matrix
+`docs/ui-review-001/MAP-PARITY.md` from the bundled editor and `diagram-editor.js`.
 
 ## Known limits and open points
 
-- 1.30.2 to 1.30.8 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.7 (`gh run list --branch claude/ui-review-001`).
+- 1.30.2 to 1.30.9 were validated against the fixture manager only; CI was green for 1.30.2 to 1.30.8 (`gh run list --branch claude/ui-review-001`).
 - UI-007 C was never exercised against a real Git host: do one real save → review → upload on the dev VM when the development manager is rebuilt from this branch. The development manager running on the VM
   (`containerlab-node-manager-backup-ui-1`) is rebuilt with `sudo bash deploy/start-manager.sh
   --manager-only` (helpers must match the release); record here when that was last done: **not yet for
@@ -67,6 +72,8 @@ capability matrix `docs/ui-review-001/MAP-PARITY.md`).
 - The successful import confirmation was not exercised in a browser (the fixture VM refuses the preview).
 
 - Seen while fixing UI-008, not addressed: if the manager's `bind_lab` fails after the VM already retired the old registration (`destination` route), the lab keeps pointing at a registration that no longer exists. Pre-existing; needs a decision on recovery (re-register the source).
+
+- Seen at 200 % zoom (640 CSS px), predating this work: the lab banner is drawn far too tall and the top bar brand overlaps the breadcrumb.
 
 ## Unfinished work
 

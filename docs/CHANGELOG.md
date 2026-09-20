@@ -4,6 +4,24 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.9
+
+**UI review 001, step 8: the Devices tab lines up (UI-006).** Stylesheet only; no markup, script,
+status wording or readiness rule changed.
+
+- **Flush with its heading.** The device list kept the browser's default list indent, so every row
+  started 40 px to the right of the *Devices* heading while its right edge met the search controls. The
+  list now has no indent, on the Devices tab and on the Topology tab's device rail.
+- **One grid for the whole list.** Each row used to be a grid of its own; the rows are now subgrids of
+  one list grid, so the device name and platform, the state with its reason, *Open CLI* and *Details*
+  start at the same position in every row whatever a row contains. Every cell begins with a line as high
+  as the buttons: name, state pill and *Open CLI* share one line in every row, and a reason or a long
+  name only makes its own row taller. Long names wrap inside their column, the platform badge follows
+  them, a reason is kept to a readable width, and the action buttons never wrap apart on a wide window.
+- **Heading, search and Technical view** sit on one line with controls of one height, aligned with
+  the bottom of the heading text. Below 760 px the rows become a single column and the search field
+  fills the width.
+
 ## Changes in 1.30.8
 
 **UI review 001, step 7: the folder tree opens and closes by your own clicks (UI-008, part 2).**

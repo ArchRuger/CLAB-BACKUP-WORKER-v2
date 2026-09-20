@@ -57,12 +57,15 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 - ☑ Pointer and keyboard (click, Enter, Space, right/left arrow); the menu scrolls inside itself on a
   small window; same disabled states and reasons as before; *Edit map* stays on the map toolbar.
 
-## UI-006 — Devices tab is visually consistent ☐
+## UI-006 — Devices tab is visually consistent ☑ 1.30.9
 
-- ☐ Identity/platform, state/reason, Open CLI and Details align across rows; heading, search and
-  Technical view relate properly.
-- ☐ Long names and multi-line reasons do not overlap or shift other rows; every state stays readable.
-- ☐ Laptop widths and zoom: no clipped actions, no needless horizontal scrolling.
+- ☑ Identity/platform, state/reason, Open CLI and Details start at one position in every row (one list
+  grid, rows as subgrids); the list is flush with the heading; heading, search and Technical view share
+  a line and a height.
+- ☑ Long names and multi-line reasons wrap inside their own cell and only grow their own row; every
+  state keeps its label and reason (no wording or readiness change: stylesheet only).
+- ☑ Measured at 1920, 1366 and a 1280×720 laptop at 125/150/200 % zoom: no clipped action, no
+  overlap, no sideways scrolling; single column below 760px.
 
 ## UI-007 — Save location clean-up, review is mandatory ☑ (A + B 1.30.5, C 1.30.6)
 
@@ -98,6 +101,6 @@ Legend: ☐ open · ◐ partly delivered · ☑ delivered (with the release that
 ## Planned chunk order
 
 1. UI-001 (1.30.2, done) → 2. UI-005 (1.30.3, done) → 3. UI-004 (1.30.4, done) → 4. UI-007 A+B (1.30.5, done) → 5. UI-007 C (1.30.6, done) → 6. UI-008 root
-cause and fix (1.30.7, done) → 6b. UI-008 tree expansion and highlight (1.30.8, done) → 7. UI-006 → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
+cause and fix (1.30.7, done) → 6b. UI-008 tree expansion and highlight (1.30.8, done) → 7. UI-006 (1.30.9, done) → 8. UI-002 Home actions → 9. UI-002 Recent labs tab and order →
 10+. UI-003 matrix, then parity in increments. One patch release, one commit and one verified push
 per chunk.

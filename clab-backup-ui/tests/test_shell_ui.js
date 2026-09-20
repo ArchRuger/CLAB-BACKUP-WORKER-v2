@@ -219,3 +219,12 @@ test('index.html: Lab actions ends with an Advanced options group holding exactl
  assert.ok(outside.indexOf('class="menu-danger"')<outside.indexOf('lab-actions-advanced-toggle'),'the group is the last thing in the menu, after the destructive actions');
  assert.match(html,/id="map-edit" class="button secondary small">Edit map</,'Edit map stays on the map toolbar');assert.match(html,/id="tools-telemetry-settings"/);assert.match(html,/id="advanced-operation-history"/);assert.match(html,/role="menuitem" id="import-map"/);
 });
+
+test('style.css: the device lists carry no list indent and the Devices tab is one grid whose rows are subgrids, single column on a narrow window',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
+ assert.match(css,/\.device-list \{ display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; \}/,'a <ul> keeps 40px of padding otherwise: the rows then start to the right of their heading');
+ assert.match(css,/#device-list \{ grid-template-columns: minmax\(200px, 1\.1fr\) minmax\(240px, 1\.9fr\) auto;/);assert.match(css,/#device-list > li \{ grid-column: 1 \/ -1; \}/,'rows and the empty message span the grid');
+ assert.match(css,/@supports \(grid-template-columns: subgrid\) \{ #device-list \.device-row \{ grid-template-columns: subgrid; \} \}/);
+ assert.match(css,/\.device-row, #device-list, #device-list \.device-row \{ grid-template-columns: 1fr; \}/,'one column below 760px');
+ assert.match(css,/\.device-rail \.device-row \{ grid-template-columns: minmax\(0, 1fr\) auto; grid-template-areas: "name state" "platform platform" "reason reason" "actions actions";/,'the Topology rail keeps its own named-area grid');
+});
