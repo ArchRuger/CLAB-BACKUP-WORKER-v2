@@ -1,0 +1,128 @@
+{
+ "node": "vjunos-switch",
+ "driver": "app/restore_junos.py",
+ "token": "clabmgr-6ab074de",
+ "steps": [
+  {
+   "step": "A captured in both forms",
+   "ok": true,
+   "bytes": 2312
+  },
+  {
+   "step": "B is active: A statements missing and B-only statements present",
+   "ok": true,
+   "missing": 2,
+   "extra": 3
+  },
+  {
+   "step": "apply: replaced under the job token",
+   "ok": true,
+   "seconds": 22.3,
+   "diff_lines": 19
+  },
+  {
+   "step": "device shows entry 0 with our comment and \"rollback pending\"",
+   "ok": true,
+   "view": [
+    "0   2026-09-21 00:06:19 UTC by admin via cli commit confirmed, rollback in 3mins",
+    "clabmgr-6ab074de",
+    "rollback pending"
+   ]
+  },
+  {
+   "step": "driver.pending() returns our token",
+   "ok": true
+  },
+  {
+   "step": "confirm with another token is refused",
+   "ok": true,
+   "message": "A different change is waiting for confirmation on this node; it was left alone."
+  },
+  {
+   "step": "... and the change is still pending afterwards",
+   "ok": true
+  },
+  {
+   "step": "confirm (commit check) from a fresh connection",
+   "ok": true
+  },
+  {
+   "step": "nothing pending after the confirmation",
+   "ok": true
+  },
+  {
+   "step": "active configuration equals A (0 missing, 0 extra)",
+   "ok": true,
+   "missing": 0,
+   "extra": 0
+  },
+  {
+   "step": "A onto A is a no-op for the device",
+   "ok": true
+  },
+  {
+   "step": "... still armed and confirmed like any change",
+   "ok": true
+  },
+  {
+   "step": "a dropped exclusive session leaves nothing in the shared candidate",
+   "ok": true
+  },
+  {
+   "step": "... and nothing of it became active",
+   "ok": true
+  },
+  {
+   "step": "driver.blocked() is empty on a quiet node, so a restore may start",
+   "ok": true
+  },
+  {
+   "step": "driver.blocked() names the reason for the review step",
+   "ok": true
+  },
+  {
+   "step": "apply refuses while a foreign uncommitted edit exists",
+   "ok": true,
+   "message": "Someone has uncommitted configuration changes open on this node. The restore was not started, so their work is not lost."
+  },
+  {
+   "step": "the bystander's edit is still in the candidate, uncommitted",
+   "ok": true
+  },
+  {
+   "step": "... and was never activated",
+   "ok": true
+  },
+  {
+   "step": "driver.pending() reports a foreign pending change without an identity",
+   "ok": true
+  },
+  {
+   "step": "apply refuses while a foreign confirmation is pending",
+   "ok": true,
+   "message": "Another change is waiting for confirmation on this node; this restore was not started."
+  },
+  {
+   "step": "confirm refuses while a foreign confirmation is pending",
+   "ok": true,
+   "message": "A different change is waiting for confirmation on this node; it was left alone."
+  },
+  {
+   "step": "the foreign change is still pending, untouched",
+   "ok": true
+  },
+  {
+   "step": "after its own rollback the node is on A again, nothing pending",
+   "ok": true,
+   "missing": 0,
+   "extra": 0
+  },
+  {
+   "step": "the NOS never rebooted",
+   "ok": true,
+   "boot": "System booted: 2026-09-20 22:18:17 UTC"
+  }
+ ],
+ "ok": true,
+ "finished_utc": "2026-09-21T00:09:39Z"
+}

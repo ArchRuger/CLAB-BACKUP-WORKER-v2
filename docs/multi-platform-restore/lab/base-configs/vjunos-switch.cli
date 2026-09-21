@@ -1,0 +1,14 @@
+configure
+set interfaces ge-0/0/0 description "A to-cjunosevolved"
+set interfaces ge-0/0/0 unit 0 family inet address 10.0.23.1/31
+set interfaces ge-0/0/1 description "A to-xrv9k"
+set interfaces ge-0/0/1 unit 0 family inet address 10.0.34.0/31
+set interfaces lo0 unit 0 description "A loopback"
+set interfaces lo0 unit 0 family inet address 10.255.0.3/32
+set routing-options router-id 10.255.0.3
+set routing-options static route 192.0.2.3/32 discard
+set policy-options prefix-list RESTORE-A 10.255.0.0/24
+set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p
+set protocols ospf area 0.0.0.0 interface ge-0/0/1.0 interface-type p2p
+set protocols ospf area 0.0.0.0 interface lo0.0 passive
+commit and-quit

@@ -1,3 +1,60 @@
+# Multi-platform restore, part 1: Arista cEOS and the driver contract — 1.30.27
+
+*Replace running configuration* beyond Junos, on `claude/multi-platform-restore`, one patch release per
+image. **Read `docs/multi-platform-restore/PICKUP.md` first** (plan, lab, live facts per image, exact next
+action), then `docs/multi-platform-restore/README.md` (semantics, accepted limits, tools) and
+`evidence/MATRIX.md`. Cisco IOS XR is not restorable in this release. Facts to preserve.
+(1) **The contract.** `restore.py` knows no NOS command; a node's driver comes from
+`restore_drivers.for_platform()`, whose docstring is the contract (`validate_candidate`, `apply_candidate`
+→ `{diff, no_op, handle}`, `confirm(client, handle)`, `pending`, `capture`, `compare`, optional `blocked`,
+`cleanup`, `persist`, and `RESTORE_FORMAT`). A new platform is a new driver module plus a `restore` /
+`restore_format` / `restore_suffix` entry in `inventory.PLATFORMS`, proven live first; `SUPPORTED_KINDS`
+lists only what was proven. `test_restore_compare.py` checks that every registered driver has the whole contract.
+(2) **Replacement, never a merge.** EOS: a session starts as a copy of the running configuration, so the
+driver empties it (`rollback clean-config`) before `copy terminal: session-config`; without that a B-only
+statement survives. Any `% ` line in the load output is a rejection although EOS still prints "Copy
+completed successfully". Do not paste line by line (the candidate's `end` leaves the session; banners return
+no prompt). `terminal width 32767` makes cEOS close the channel in the driver's read loop: it is 500.
+(3) **Identity.** Every change is armed under the job's token (`clabmgr-` + 8 hex): the EOS session name,
+the Junos `commit confirmed N comment <token>` (printed under entry 0 of `show system commit`, before
+`rollback pending`; proven on both Junos images). `_settle` confirms by token only. Never reintroduce
+"something is pending, so it is ours": a node can roll ours back and hold somebody else's change a minute later.
+(4) **Junos confirmation is `commit check`**, followed by proof that `rollback pending` is gone. A plain
+`commit` activates another session's uncommitted edits (shown live on cJunosEvolved). The driver looks at
+the shared candidate from a plain session and **refuses** when somebody's edits are there; there is no
+fallback to shared `configure` + `rollback 0` (that destroyed their work). This cannot deadlock on our own
+crash: a dropped `configure exclusive` session leaves nothing behind (proven on both images by
+`tools/driver_junos_live.py`). Leaving configuration mode can ask `Exit with uncommitted changes? [yes,no]`:
+`leave_config` answers it. The root-authentication synthesis stays (`commit check` / `commit confirmed`
+reject a candidate without it on cJunosEvolved; a bare `commit` only warns).
+(5) **No assumed outcome.** `RestoreError` from a driver means "refused or rejected, candidate discarded,
+nothing changed"; `SessionLost` (a subclass: closed, stalled or overflowed session, or a commit answer with
+both success and an error) means "unknown", and the service reads the node back. `rolled_back` needs the
+pre-restore capture to be active again AND the change to have been seen armed; otherwise it is `failed`
+("not changed, checked") or `uncertain`. Reconnecting is retried for the whole window plus
+`recovery_grace` (90 s: Junos rolled back 35 s late); only connectivity-shaped errors are retried.
+`rollback_expected` is a label for stored jobs only. After a restart `RestoreService.start()` reads back
+every node that was `applying`/`confirming`, never re-applies, and recomputes the job.
+(6) **EOS leftovers.** A session that died before `commit timer` stays on the device as `pending`, and EOS
+keeps only five: `cleanup_shell` aborts the manager's own (`clabmgr-…`) and nobody else's, at the start of
+an apply and when a lost session is settled. EOS does not save on commit: `confirm` runs `write memory`
+and the target carries `persistence` (`saved` / `not_saved`).
+(7) **Artifacts.** EOS `.eoscfg` is the backup's own text (one capture: `runner.make_inventory` sets no
+`restore_command` when `restore == command`; pinned by `test_app.py` with real Ansible). A saved node
+without an artifact, with another format or with a candidate its driver's `validate_candidate` refuses is
+listed in the review with the reason and refused by `submit`; the backup text is never a candidate.
+(8) **Secrets.** `mask_line` cuts a line at its first secret keyword; EOS puts a type token before the hash,
+so masking "the next word" leaked it. Target keys starting with `_` (`_token`, `_handle`, `_deadline`) are
+private: `public_job` strips them.
+(9) **Comparison** keeps hierarchy for indented configurations and reports reordered ACLs; its exclusions
+are listed in the README and nowhere else. No driver → never "converged".
+(10) **The lab and tools are regression tooling**: `docs/multi-platform-restore/lab/` (one node per image,
+configuration A, drift B) and `tools/` (`nodecli.py`, `square_check.py`, `manager_restore.py`,
+`browser_restore.py`, `driver_junos_live.py`). Readbacks never go through the code under test. On this VM
+vJunos-switch answers SSH about ten minutes before its FPC forwards, and XRv9k holds interface
+configuration as `preconfigure` until its ports appear. Never probe a CLI with `?` + newline.
+`docs/multi-platform-restore/` is a history folder for `verify-release.py`.
+
 # Maintenance audit and its follow-ups — 1.30.26
 
 A documentation audit and bounded technical-debt cleanup on `claude/maintenance-audit`, one patch release

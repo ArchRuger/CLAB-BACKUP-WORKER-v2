@@ -1,0 +1,307 @@
+{
+ "attempt": "attempt5",
+ "minutes": 2,
+ "started_utc": "23:56:44.429",
+ "method": "device-truth-trigger",
+ "submit": {
+  "http": 200,
+  "id": "fa74b25674364cd2be5ea536deded4e6"
+ },
+ "blocked_at_rel_s": 4.036256916006096,
+ "armed_session_name": "clabmgr-edb2448e",
+ "device_poll_count_before_block": 35,
+ "ended_while_blocked": true,
+ "reverted_at_rel_s": 126.2370556310052,
+ "unblocked_early": true,
+ "device_log_while_blocked": [
+  {
+   "t": 4.042305844006478,
+   "utc": "23:56:48.472",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:59\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 4.264167931993143,
+   "utc": "23:56:48.694",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:59\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 7.397768729002564,
+   "utc": "23:56:51.827",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:56\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 10.535813149006572,
+   "utc": "23:56:54.965",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:53\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 13.666901146993041,
+   "utc": "23:56:58.096",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:50\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 16.792619157000445,
+   "utc": "23:57:01.222",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:47\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 19.91262810099579,
+   "utc": "23:57:04.342",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:44\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 23.06960820799577,
+   "utc": "23:57:07.499",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:40\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 26.197768258003634,
+   "utc": "23:57:10.627",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:37\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 29.332417968995287,
+   "utc": "23:57:13.762",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:34\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 32.46046700299485,
+   "utc": "23:57:16.890",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:31\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 35.592353465995984,
+   "utc": "23:57:20.022",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:28\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 38.71057813499647,
+   "utc": "23:57:23.140",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:25\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 41.83309692700277,
+   "utc": "23:57:26.262",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:22\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 44.96360800899856,
+   "utc": "23:57:29.393",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:18\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 48.08620842700475,
+   "utc": "23:57:32.516",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:15\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 51.20592815999407,
+   "utc": "23:57:35.635",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:12\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 54.33457943399844,
+   "utc": "23:57:38.764",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:09\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 57.45678142699762,
+   "utc": "23:57:41.886",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:06\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 60.574498481000774,
+   "utc": "23:57:45.004",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:03\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 63.69884394299879,
+   "utc": "23:57:48.128",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:01:00\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 66.81976727899746,
+   "utc": "23:57:51.249",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:57\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 69.94314429500082,
+   "utc": "23:57:54.373",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:54\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 73.06771974399453,
+   "utc": "23:57:57.497",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:50\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 76.19692719000159,
+   "utc": "23:58:00.626",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:47\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 79.32426429100451,
+   "utc": "23:58:03.754",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:44\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 82.4494191470003,
+   "utc": "23:58:06.879",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:41\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 85.62492278800346,
+   "utc": "23:58:10.054",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:38\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 88.75152230699314,
+   "utc": "23:58:13.181",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:35\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 91.87550814499264,
+   "utc": "23:58:16.305",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:32\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 94.99920925400511,
+   "utc": "23:58:19.429",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:28\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 98.11973900700104,
+   "utc": "23:58:22.549",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:25\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 101.23773570300546,
+   "utc": "23:58:25.667",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:22\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 104.35874153100303,
+   "utc": "23:58:28.788",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:19\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 107.4933766489994,
+   "utc": "23:58:31.923",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:16\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 110.62208645499777,
+   "utc": "23:58:35.051",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:13\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 113.74432976800017,
+   "utc": "23:58:38.174",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:10\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 116.86988747499709,
+   "utc": "23:58:41.299",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:07\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 119.99104208199424,
+   "utc": "23:58:44.420",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:03\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 123.10974707000423,
+   "utc": "23:58:47.539",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-edb2448e\nTime left until commit timer expiry: in 0:00:00\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted   admin vty8     2026-09-20 23:56:17             \n  clabmgr-edb2448e committed                2026-09-20 23:56:48 admin"
+  },
+  {
+   "t": 126.23703943399596,
+   "utc": "23:58:50.666",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State   User  Terminal Completed Time      Committed By\n- ---------------- ------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted admin vty8     2026-09-20 23:56:17"
+  },
+  {
+   "t": 129.34940684499452,
+   "utc": "23:58:53.779",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State   User  Terminal Completed Time      Committed By\n- ---------------- ------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted admin vty8     2026-09-20 23:56:17"
+  },
+  {
+   "t": 132.4821611780062,
+   "utc": "23:58:56.912",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State   User  Terminal Completed Time      Committed By\n- ---------------- ------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted admin vty8     2026-09-20 23:56:17"
+  }
+ ],
+ "rule_present_before_unblock": false,
+ "rule_present_after_unblock": false,
+ "timeline": [
+  {
+   "t": 4.155403213997488,
+   "utc": "23:56:48.585",
+   "job_status": "applying",
+   "target_status": "confirming",
+   "message": "Configuration loaded; reconnecting to confirm."
+  },
+  {
+   "t": 129.35894580300373,
+   "utc": "23:58:53.788",
+   "event": "BLOCK_REMOVED_EARLY_POST_REVERT"
+  },
+  {
+   "t": 134.89907977600524,
+   "utc": "23:58:59.328",
+   "job_status": "failed",
+   "target_status": "rolled_back",
+   "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active."
+  }
+ ],
+ "final_job": {
+  "id": "fa74b25674364cd2be5ea536deded4e6",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-20T23:56:44.432471+00:00",
+  "finished": "2026-09-20T23:58:59.076487+00:00",
+  "status": "failed",
+  "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+   "captured_at": "2026-09-20T23:27:24.637713+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "5c5da7de2fb341e3841c0dfd59002a39",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "rolled_back",
+    "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active.",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-edb2448e-session-config",
+     "-vlan 777",
+     "-   name B-ONLY",
+     " !",
+     " interface Ethernet1",
+     "-   description B changed",
+     "+   description A to-cjunosevolved",
+     "+!",
+     "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+     " !",
+     "-ip route 198.51.100.0/24 Null0"
+    ],
+    "no_op": false
+   }
+  ]
+ },
+ "device_sessions_after_unblock": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State   User  Terminal Completed Time      Committed By\n- ---------------- ------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af aborted admin vty8     2026-09-20 23:56:17",
+ "finished_utc": "23:58:59.445"
+}

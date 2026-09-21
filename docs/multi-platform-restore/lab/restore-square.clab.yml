@@ -1,0 +1,43 @@
+# Replace running configuration: the four-platform acceptance lab.
+# One node of each supported image, joined in a square; every edge is a routed /31 and OSPF area 0
+# carries the loopbacks, so no edge bridges and the square has no layer 2 loop.
+#
+#   ceos eth1 ------ et-0/0/0 cjunosevolved et-0/0/1 ------ ge-0/0/0 vjunos-switch
+#   ceos eth2 ------ Gi0/0/0/1 xrv9k Gi0/0/0/0 ------------ ge-0/0/1 vjunos-switch
+#
+#   ceos–cjunosevolved 10.0.12.0/31 (ceos .0)      cjunosevolved–vjunos-switch 10.0.23.0/31 (cjunosevolved .0)
+#   vjunos-switch–xrv9k 10.0.34.0/31 (vjunos .0)   xrv9k–ceos 10.0.41.0/31 (xrv9k .0)
+#   Loopbacks 10.255.0.1 ceos, .2 cjunosevolved, .3 vjunos-switch, .4 xrv9k
+#
+# The data plane is "configuration A" of the acceptance checks; see ../base-configs/ and the README.
+# Logins are the kinds' published defaults (containerlab.dev); nothing secret is kept here.
+name: restore-square
+mgmt:
+  network: clab
+  ipv4-subnet: 172.20.20.0/24
+topology:
+  defaults:
+    env:
+      TZ: UTC
+  nodes:
+    ceos:
+      kind: arista_ceos
+      image: n24l/ceos:4.35.0F
+      mgmt-ipv4: 172.20.20.101
+    cjunosevolved:
+      kind: juniper_cjunosevolved
+      image: n24l/cjunosevolved:26.2R1.7-EVO
+      mgmt-ipv4: 172.20.20.102
+    vjunos-switch:
+      kind: juniper_vjunosswitch
+      image: n24l/vjunos-switch:23.2R1.14
+      mgmt-ipv4: 172.20.20.103
+    xrv9k:
+      kind: cisco_xrv9k
+      image: n24l/cisco_xrv9k:24.3.1
+      mgmt-ipv4: 172.20.20.104
+  links:
+    - endpoints: ["ceos:eth1", "cjunosevolved:et-0/0/0"]
+    - endpoints: ["cjunosevolved:et-0/0/1", "vjunos-switch:ge-0/0/0"]
+    - endpoints: ["vjunos-switch:ge-0/0/1", "xrv9k:Gi0/0/0/0"]
+    - endpoints: ["xrv9k:Gi0/0/0/1", "ceos:eth2"]

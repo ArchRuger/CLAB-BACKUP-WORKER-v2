@@ -1,0 +1,12 @@
+{
+ "note": "Boot identity checkpoints collected across the whole live QA session (A7.1-A7.3, B1-B7). boot_id read via 'bash timeout 5 cat /proc/sys/kernel/random/boot_id' (device shell), Uptime via 'show version | include Uptime', agent uptime via 'show agent uptime | include ConfigAgent|Sysdb'. All checks: boot_id constant, Uptime and agent uptime strictly increasing, agent uptime never reset (no ConfigAgent/Sysdb restart) -> no reboot and no agent restart occurred at any point in this session.",
+ "checkpoints": [
+  {"when": "2026-09-20T23:30:53Z", "context": "baseline after evidence 10/11 (before A7 series)", "uptime": "1 hour and 14 minutes", "boot_id": "1d99c345-63a1-40f1-8409-9a96be20d66f", "config_agent": "0 1:14:03", "sysdb": "0 1:14:05"},
+  {"when": "2026-09-20T23:35:30Z", "context": "after A7.1 (repeat restore), A7.2 (no-op restore), A7.3 (restore from post-restore backup)", "uptime": "1 hour and 18 minutes", "boot_id": "1d99c345-63a1-40f1-8409-9a96be20d66f", "config_agent": "0 1:18:41", "sysdb": "0 1:18:43"},
+  {"when": "2026-09-20T23:41:04Z", "context": "after B1/B2 driver-level tests and B3 preflight-block test, drift-to-B for B4 attempt1", "uptime": "1 hour and 24 minutes", "boot_id": "1d99c345-63a1-40f1-8409-9a96be20d66f"},
+  {"when": "2026-09-21T00:00:11Z", "context": "after B4 attempt5 (armed -> rolled_back) and B4 recovery restore of A", "uptime": "1 hour and 42 minutes", "boot_id": "1d99c345-63a1-40f1-8409-9a96be20d66f"},
+  {"when": "2026-09-21T00:05:35Z", "context": "after B5 (manager restart during in-flight restore -> rolled_back) and B5 recovery restore of A", "uptime": "1 hour and 47 minutes", "boot_id": "1d99c345-63a1-40f1-8409-9a96be20d66f"},
+  {"when": "2026-09-21T00:10:28Z", "context": "final check, after B6/B7", "uptime": "1 hour and 53 minutes", "boot_id": "1d99c345-63a1-40f1-8409-9a96be20d66f", "config_agent": "0 1:53:38", "sysdb": "0 1:53:40"}
+ ],
+ "conclusion": "Uptime strictly increasing across every checkpoint (14->18->24->42->47->53 minutes over ~40 wall-clock minutes of testing). boot_id identical at every checkpoint (no container/NOS reboot, including through two device-side auto-revert events and one full manager container restart). ConfigAgent/Sysdb agent uptime tracks device Uptime with no reset (no EOS agent restart)."
+}

@@ -1,0 +1,172 @@
+{
+ "attempt": "attempt3",
+ "minutes": 2,
+ "started_utc": "23:47:54.231",
+ "submit": {
+  "http": 200,
+  "id": "d6eb6e8be691435bb84519b2232db32c"
+ },
+ "blocked_at_rel_s": 3.173886691001826,
+ "block_target_state_observed": "applying",
+ "ended_while_blocked": true,
+ "device_log_while_blocked": [
+  {
+   "t": 30.09375076199649,
+   "utc": "23:48:24.325",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 30.198293330991874,
+   "utc": "23:48:24.429",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 40.34507635899354,
+   "utc": "23:48:34.576",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 50.49636898300378,
+   "utc": "23:48:44.727",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 60.651228122995235,
+   "utc": "23:48:54.882",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 70.80287526699249,
+   "utc": "23:49:05.034",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 80.95534929599671,
+   "utc": "23:49:15.186",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 91.11038225800439,
+   "utc": "23:49:25.341",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 101.34130075099529,
+   "utc": "23:49:35.572",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 111.4867141690047,
+   "utc": "23:49:45.718",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 121.63045901799342,
+   "utc": "23:49:55.861",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 131.7908260760014,
+   "utc": "23:50:06.022",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 141.93199611999444,
+   "utc": "23:50:16.163",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 152.07385308400262,
+   "utc": "23:50:26.305",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 162.21883025899297,
+   "utc": "23:50:36.450",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 172.35992919000273,
+   "utc": "23:50:46.591",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin"
+  }
+ ],
+ "rule_present_before_unblock": true,
+ "rule_present_after_unblock": false,
+ "timeline": [
+  {
+   "t": 0.0949050420022104,
+   "utc": "23:47:54.326",
+   "job_status": "backing_up",
+   "target_status": "backing_up"
+  },
+  {
+   "t": 2.303952072004904,
+   "utc": "23:47:56.535",
+   "job_status": "applying",
+   "target_status": "backing_up"
+  },
+  {
+   "t": 2.3181318440038012,
+   "utc": "23:47:56.549",
+   "job_status": "applying",
+   "target_status": "applying"
+  },
+  {
+   "t": 3.173886691001826,
+   "utc": "23:47:57.405",
+   "event": "BLOCK_INSERTED",
+   "target_status_when_blocked": "applying"
+  },
+  {
+   "t": 123.74136127199745,
+   "utc": "23:49:57.972",
+   "job_status": "applying",
+   "target_status": "confirming",
+   "message": "The session to the device was lost during the change; checking what is active. The node did not return to its prompt in time."
+  },
+  {
+   "t": 173.46584257700306,
+   "utc": "23:50:47.697",
+   "job_status": "needs_attention",
+   "target_status": "uncertain",
+   "message": "The manager could not establish what this device is running (connectivity: NoValidConnectionsError). Check it before relying on it."
+  }
+ ],
+ "final_job": {
+  "id": "d6eb6e8be691435bb84519b2232db32c",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-20T23:47:54.234040+00:00",
+  "finished": "2026-09-20T23:50:47.540009+00:00",
+  "status": "needs_attention",
+  "message": "0/1 node(s) verified; 1 need attention (not verified, or their state could not be established). Review each node.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+   "captured_at": "2026-09-20T23:27:24.637713+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "f4a013ff99254488a65700bc510b4818",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "uncertain",
+    "message": "The manager could not establish what this device is running (connectivity: NoValidConnectionsError). Check it before relying on it."
+   }
+  ]
+ },
+ "device_sessions_after_unblock": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User  Terminal Completed Time      Committed By\n- ---------------- --------- ----- -------- ------------------- ------------\n  clabmgr-0d1359af pending   admin vty8                                     \n  clabmgr-6139ca3d committed                2026-09-20 23:35:15 admin",
+ "finished_utc": "23:50:47.826"
+}

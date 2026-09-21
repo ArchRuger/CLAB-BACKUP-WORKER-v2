@@ -1,8 +1,8 @@
 'use strict';
-// Apply a saved configuration to a running Junos node. The browser sends only a source
-// reference (a Git commit + path, a repository folder, or a backup job id) and the chosen node
-// names; the manager owns the SSH, the load-override + confirmed-commit mechanism and the
-// redaction. Every label here is the student's; the backend's own words stay under Details.
+// Apply a saved configuration to a running node (Junos, Arista EOS or Cisco IOS XR). The browser
+// sends only a source reference (a Git commit + path, a repository folder, or a backup job id) and
+// the chosen node names; the manager owns the SSH, the per-platform replace-and-confirm mechanism
+// and the redaction. Every label here is the student's; the backend's own words stay under Details.
 const restoreActiveJob = new Set(['queued', 'preflight', 'backing_up', 'applying', 'confirming', 'verifying']);
 const restoreJobLabels = {
  queued: 'Waiting to start', preflight: 'Checking the devices…', backing_up: 'Backing up current configurations…',
@@ -14,22 +14,31 @@ const restoreJobLabels = {
 const restoreTargetLabels = {
  pending: 'Waiting', backing_up: 'Backing up…', applying: 'Applying…', confirming: 'Confirming…',
  applied: 'Replaced', verified: 'Replaced and verified', applied_unverified: 'Replaced — not verified',
- verify_mismatch: 'Replaced — differences remain', rollback_expected: 'Rolled back — unchanged', failed: 'Not changed',
+ verify_mismatch: 'Replaced — differences remain', rollback_expected: 'Not confirmed — the device undoes it by itself',
+ rolled_back: 'Undone — previous configuration is back', uncertain: 'Unknown — check this device', failed: 'Not changed',
  ineligible: 'Skipped', interrupted: 'Interrupted — check this device'};
 const restoreGoodTarget = new Set(['applied', 'verified']);
-const restoreBadTarget = new Set(['failed', 'rollback_expected', 'ineligible', 'verify_mismatch']);
+const restoreBadTarget = new Set(['failed', 'ineligible', 'verify_mismatch', 'rolled_back']);
 const restoreReplacedTarget = new Set(['applied', 'verified', 'applied_unverified', 'verify_mismatch']);
-const restoreAttentionTarget = new Set(['applied_unverified', 'verify_mismatch', 'interrupted']);
-const restoreUnchangedTarget = new Set(['failed', 'rollback_expected', 'ineligible']);
+const restoreAttentionTarget = new Set(['applied_unverified', 'verify_mismatch', 'interrupted', 'uncertain', 'rollback_expected']);
+const restoreUnchangedTarget = new Set(['failed', 'ineligible', 'rolled_back']);
+// A containerlab kind shown as a short device-type label next to the node name; unknown kinds show nothing.
+const restorePlatformLabels = {
+ juniper_cjunosevolved: 'Junos Evolved', juniper_vjunosswitch: 'Junos', juniper_vqfx: 'Junos',
+ arista_ceos: 'EOS', cisco_xrv9k: 'IOS XR'};
+function restorePlatformLabel(kind) { return restorePlatformLabels[kind] || ''; }
 // Preflight reasons, matched by prefix; anything unknown is shown verbatim.
 const restoreReasons = [
  ['No running node in this lab matches this saved node', 'No running device in this lab has this name.'],
- ['Live restore is not supported for this platform', 'Only Junos devices can be updated this way for now.'],
+ ['Live restore is not supported for this platform', 'This kind of device cannot be updated this way yet.'],
  ['The saved platform does not match the running node', 'The saved configuration is for a different kind of device.'],
  ['The node is not currently running or discovery is stale', 'This device is not running, or the lab status is out of date.'],
  ['Assign NOS credentials to this node first', 'Add login credentials for this device first (Advanced › Credentials).'],
  ['Refresh VM discovery before restoring', 'Refresh the lab list (Manager ▾ › Refresh lab list), then try again.'],
- ['SSH probe failed', 'The device did not answer over SSH.']];
+ ['SSH probe failed', 'The device did not answer over SSH.'],
+ ['This saved configuration has no restore data for this node', 'This saved version was made before this kind of device could be restored. Save the lab again to get a restorable version.'],
+ ['The saved restore data for this node is not usable', 'The saved configuration for this device is incomplete or damaged, so it was not applied.'],
+ ['Another change is waiting for confirmation on this node', 'Someone else\'s configuration change is waiting for confirmation on this device. Try again when it has finished.']];
 let restoreWatch = null, restoreWatchTimer = null, restoreDialogJob = '', restoreLastJob = null, restorePaused = false;
 
 function restoreRequestId() {
@@ -39,7 +48,7 @@ function restoreRequestId() {
 function restoreBadge(status, labels) {
  const cls = ['succeeded', 'verified', 'applied'].includes(status) ? 'good'
   : restoreActiveJob.has(status) ? 'running'
-  : ['failed', 'preflight_failed', 'rollback_expected'].includes(status) ? 'bad' : 'warn';
+  : ['failed', 'preflight_failed', 'rolled_back'].includes(status) ? 'bad' : 'warn';
  return `<span class="badge ${cls}">${esc(labels[status] || status)}</span>`;
 }
 function restoreSourceLabel(source) {
@@ -116,9 +125,10 @@ async function restoreReview(labId, source, label) {
    ? (r.matches_saved ? 'Already matches — nothing to change'
      : r.pending_changes != null ? r.pending_changes + ' differences from the running configuration' : 'Ready to apply')
    : 'Skipped — ' + restoreReasonLabel(r.reason || 'Not eligible');
+  const platform = restorePlatformLabel(r.platform);
   return `<label class="checkbox-label restore-target ${r.eligible ? '' : 'disabled'}">
    <input type="checkbox" name="restore-node" value="${esc(r.name)}" ${r.eligible ? 'checked' : 'disabled'}>
-   <span><strong>${esc(r.short_name || r.name)}</strong> <small>${esc(detail)}</small></span></label>`;
+   <span><strong>${esc(r.short_name || r.name)}</strong>${platform ? ` <span class="caption">${esc(platform)}</span>` : ''} <small>${esc(detail)}</small></span></label>`;
  };
  const savedAt = review.source?.captured_at ? restoreWhen(review.source.captured_at) : '';
  dialog.innerHTML = `<div class="dialog-head"><h2>Replace running configuration</h2><button class="icon-button" data-op-close aria-label="Close">×</button></div>
@@ -129,7 +139,7 @@ async function restoreReview(labId, source, label) {
  ${skipped.length ? `<details class="caption"><summary>Details</summary><ul>${skipped.map(r => `<li><strong>${esc(r.short_name || r.name)}</strong>: ${esc(r.reason)}</li>`).join('')}</ul></details>` : ''}
  <ul class="restore-safety">
   <li>Each device's current configuration is backed up first. A device whose backup fails is left unchanged.</li>
-  <li>The devices are not rebooted. The new configuration is checked before it is activated and is undone on its own if the device cannot be reached within <span id="restore-minutes-text">${confirmDefault}</span> minutes.</li>
+  <li>The devices are not rebooted. The device itself checks the new configuration when it is activated, and the change is undone on its own if the device cannot be reached again within <span id="restore-minutes-text">${confirmDefault}</span> minutes.</li>
   <li>Devices that are skipped above are not touched.</li>
  </ul>
  <details class="restore-advanced"><summary>Advanced options</summary>
@@ -165,20 +175,27 @@ async function restoreShowJob(id, known) {
  restoreRenderJob(job);
  if (restoreActiveJob.has(job.status)) restoreStartWatch(job);
 }
+// One device's row in the job dialog; pulled out so it renders the same way in tests as in the dialog.
+function restoreTargetRow(t) {
+ const platform = restorePlatformLabel(t.platform);
+ return `<div class="restore-target-row">${restoreBadge(t.status, restoreTargetLabels)}
+  <strong>${esc(t.short_name || t.name)}</strong>${platform ? ` <span class="caption">${esc(platform)}</span>` : ''}
+  ${t.status === 'verify_mismatch' && (t.missing_statements || t.extra_statements)
+   ? `<p class="form-help">${esc(t.missing_statements || 0)} expected configuration lines are missing and ${esc(t.extra_statements || 0)} unexpected lines remain.</p>` : ''}
+  ${t.status === 'rollback_expected' ? '<p class="form-help">The change was not confirmed in time. The device is set to undo it by itself; the manager has not checked that yet.</p>' : ''}
+  ${t.status === 'rolled_back' ? '<p class="form-help">The device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous configuration is active.</p>' : ''}
+  ${t.status === 'uncertain' ? '<p class="form-help">The manager could not check this device after the change. Look at it before relying on it.</p>' : ''}
+  ${t.persistence === 'not_saved' ? '<p class="form-help">Replaced, but the device did not save it as its startup configuration; a device restart would lose it.</p>' : ''}
+  ${t.status === 'ineligible' && t.message ? `<p class="form-help">${esc(restoreReasonLabel(t.message))}</p>` : ''}
+  ${t.message ? `<details class="caption"><summary>Details</summary><p>${esc(t.message)}</p></details>` : ''}</div>`;
+}
 function restoreRenderJob(job) {
  if (restoreDialogJob !== job.id || !$('restore-job-dialog')?.open) return;
  restoreLastJob = job;
  const heading = $('restore-job-dialog').querySelector('h2'); if (heading) heading.textContent = restoreJobTitle(job);
- const target = t => `<div class="restore-target-row">${restoreBadge(t.status, restoreTargetLabels)}
-  <strong>${esc(t.short_name || t.name)}</strong>
-  ${t.status === 'verify_mismatch' && (t.missing_statements || t.extra_statements)
-   ? `<p class="form-help">${esc(t.missing_statements || 0)} expected configuration lines are missing and ${esc(t.extra_statements || 0)} unexpected lines remain.</p>` : ''}
-  ${t.status === 'rollback_expected' ? '<p class="form-help">The device did not answer in time, so it returned to its previous configuration.</p>' : ''}
-  ${t.status === 'ineligible' && t.message ? `<p class="form-help">${esc(restoreReasonLabel(t.message))}</p>` : ''}
-  ${t.message ? `<details class="caption"><summary>Details</summary><p>${esc(t.message)}</p></details>` : ''}</div>`;
  const backupLink = (id, label) => id ? `<dt>${label}</dt><dd><button type="button" class="link-button mono" data-restore-backup="${esc(id)}">${esc(id.slice(0, 12))}</button></dd>` : '';
  $('restore-job-detail').innerHTML = `<div class="git-job-summary">${restoreBadge(job.status, restoreJobLabels)}<p>${esc(restoreResultSentence(job))}</p></div>
-  <div class="restore-targets-status">${(job.targets || []).map(target).join('')}</div>
+  <div class="restore-targets-status">${(job.targets || []).map(restoreTargetRow).join('')}</div>
   <details class="restore-job-details"><summary>Details</summary><dl class="health-grid">
    ${backupLink(job.pre_backup_job_id, 'Backup taken before the change')}${backupLink(job.post_backup_job_id, 'Backup taken after the change')}
    <dt>Automatic undo window</dt><dd>${esc(job.confirm_minutes || 5)} minutes</dd>

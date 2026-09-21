@@ -1,0 +1,6 @@
+configure
+set interfaces ge-0/0/0 description "B changed"
+delete routing-options static route 192.0.2.3/32
+set policy-options prefix-list B-ONLY 198.51.100.0/24
+set vlans B-ONLY vlan-id 777
+commit and-quit

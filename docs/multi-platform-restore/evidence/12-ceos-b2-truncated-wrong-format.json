@@ -1,0 +1,29 @@
+{
+ "b2_truncated": {
+  "case": "b2_truncated",
+  "sessions_before": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       ",
+  "error_type": "RestoreError",
+  "error_message": "The saved configuration looks truncated; it does not end with \"end\".",
+  "reach_cli_called": false,
+  "sessions_after": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       ",
+  "sessions_unchanged": true
+ },
+ "b2_junos_looking": {
+  "case": "b2_junos_looking",
+  "sessions_before": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       ",
+  "error_type": "RestoreError",
+  "error_message": "The saved configuration does not look like an EOS running-configuration.",
+  "reach_cli_called": false,
+  "sessions_after": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       ",
+  "sessions_unchanged": true
+ },
+ "b2_empty": {
+  "case": "b2_empty",
+  "sessions_before": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       ",
+  "error_type": "RestoreError",
+  "error_message": "The saved configuration is empty.",
+  "reach_cli_called": false,
+  "sessions_after": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       ",
+  "sessions_unchanged": true
+ }
+}

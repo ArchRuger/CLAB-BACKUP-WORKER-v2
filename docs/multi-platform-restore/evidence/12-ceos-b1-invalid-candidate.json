@@ -1,0 +1,24 @@
+{
+ "b1a_bad_syntax": {
+  "case": "b1a_bad_syntax",
+  "candidate_path": "/tmp/claude-1000/-home-clabllm-projects-clab-manager/a286c708-b3d0-4ce8-85af-d1412fb8ae33/scratchpad/qa-ceos/candidate_B1a_bad_syntax.cfg",
+  "before_hash": "5dd29edf0cccd390703bd3c30dba74aaf0c29fa9ef2687f84bab0c1a518c9531",
+  "sessions_before": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       ",
+  "error_type": "RestoreError",
+  "error_message": "The node rejected the saved configuration while loading it.",
+  "after_hash": "5dd29edf0cccd390703bd3c30dba74aaf0c29fa9ef2687f84bab0c1a518c9531",
+  "hash_unchanged": true,
+  "sessions_after": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       "
+ },
+ "b1b_semantic_overlap": {
+  "case": "b1b_semantic_overlap",
+  "candidate_path": "/tmp/claude-1000/-home-clabllm-projects-clab-manager/a286c708-b3d0-4ce8-85af-d1412fb8ae33/scratchpad/qa-ceos/candidate_B1b_semantic_overlap.cfg",
+  "before_hash": "5dd29edf0cccd390703bd3c30dba74aaf0c29fa9ef2687f84bab0c1a518c9531",
+  "sessions_before": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       ",
+  "error_type": "RestoreError",
+  "error_message": "The node rejected the saved configuration while loading it.",
+  "after_hash": "5dd29edf0cccd390703bd3c30dba74aaf0c29fa9ef2687f84bab0c1a518c9531",
+  "hash_unchanged": true,
+  "sessions_after": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin       "
+ }
+}

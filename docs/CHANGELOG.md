@@ -4,6 +4,50 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.27
+
+**Replace running configuration works on Arista cEOS, no longer guesses at a rollback, and never confirms
+or destroys somebody else's work.** First release of the multi-platform restore stream; the platforms,
+semantics, live facts and the acceptance record are in
+[multi-platform-restore](multi-platform-restore/README.md). Cisco IOS XR is not restorable yet.
+
+- **Arista cEOS.** A saved EOS running-config can now be applied to a running node. The driver empties a
+  configuration session (`rollback clean-config`), loads the saved configuration into it
+  (`copy terminal: session-config`), shows the device's own session diff, activates with `commit timer`, and
+  after the manager reconnects confirms with `configure session <name> commit` and saves the startup
+  configuration (EOS does not save on commit; a node that could not save is reported as such). A session
+  starts as a copy of the running configuration, so without the emptying step a load would only merge and
+  leave later additions behind. cEOS 4.35.0F needs no change to its base configuration. EOS backups carry a
+  restore artifact (`.eoscfg`) since this release; it is the backup's own text, captured once.
+- **One contract for every platform.** `app/restore.py` knows no NOS command. A node's driver comes from
+  `app/restore_drivers.py`; the shared SSH shell is `app/restore_shell.py`; comparison lives in
+  `app/restore_compare.py` and keeps hierarchy for indented configurations, so a leftover statement, a
+  statement under another parent and a reordered ACL are all differences. Nothing is normalised away except
+  the exclusions listed in the README.
+- **No assumed rollback.** After activating, the manager keeps trying to reconnect and confirm for the whole
+  undo window (it used to try once). If it cannot confirm, it reads the node back: *undone* is reported only
+  when the configuration from before the restore is active again (`rolled_back`), otherwise the node is
+  reported as unknown (`uncertain`). A session that dies in the middle of the transaction is read back too
+  and is never reported as "not changed" on a guess. The same read-back runs after a manager restart for
+  every node that was mid-change, and the job then says what it found; nothing is re-applied.
+  `rollback_expected` remains only as the label of jobs stored by earlier releases.
+- **Only the manager's own change is confirmed.** Every change is armed under the job's token (a Junos
+  commit comment, the EOS session name). A pending change without it is somebody else's: the review refuses
+  such a node, the driver refuses to start on it, and nothing is confirmed because "something is pending".
+- **Junos: other people's work is preserved.** The confirmation is now `commit check`, which cancels the
+  pending rollback without committing the shared candidate; the plain `commit` used before activated another
+  session's uncommitted edit (shown live on cJunosEvolved). Before taking the exclusive lock the driver looks
+  at the shared candidate and refuses when somebody's uncommitted changes are there; the earlier fallback to
+  a shared session plus `rollback 0` discarded them.
+- **Saved versions that cannot be applied say why.** A node saved before its platform was restorable, an
+  artifact in another format, and an empty or truncated candidate are listed in the review with the reason
+  and are refused before any device is touched; they used to be left out without a word. The backup text is
+  never relabelled as a candidate.
+- **Secrets.** Review and mismatch samples are cut at the first secret keyword. The previous masking kept the
+  hash on EOS-style lines (`secret sha512 <hash>`, `password 7 <hash>`, `key-string 7 <hash>`).
+- The page shows the device type beside each device, the new outcomes, and the EOS "not saved" note; the
+  folder browser recognises `.eoscfg` artifacts. Wording that claimed a rollback had happened is gone.
+
 ## Changes in 1.30.26
 
 **Maintenance audit follow-up 4: a save with nothing new no longer asks for a review of nothing.** Manager

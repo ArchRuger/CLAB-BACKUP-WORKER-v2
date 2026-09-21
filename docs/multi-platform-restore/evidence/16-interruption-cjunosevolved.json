@@ -1,0 +1,67 @@
+{
+ "node": "cjunosevolved",
+ "manager_version": "1.30.27",
+ "job_status": "succeeded",
+ "timeline": [
+  {
+   "utc": "00:31:45",
+   "job": "backing_up",
+   "targets": {
+    "cjunosevolved": "backing_up"
+   }
+  },
+  {
+   "utc": "00:31:48",
+   "job": "applying",
+   "targets": {
+    "cjunosevolved": "applying"
+   }
+  },
+  {
+   "utc": "00:31:51",
+   "job": "applying",
+   "targets": {
+    "cjunosevolved": "confirming"
+   }
+  },
+  {
+   "utc": "00:31:53",
+   "job": "verifying",
+   "targets": {
+    "cjunosevolved": "applied"
+   }
+  },
+  {
+   "utc": "00:31:55",
+   "job": "succeeded",
+   "targets": {
+    "cjunosevolved": "verified"
+   }
+  }
+ ],
+ "window_utc": [
+  "00:31:38",
+  "00:32:15"
+ ],
+ "probe_interval_s": 0.2,
+ "probes": {
+  "management 172.20.20.102": {
+   "replies": 176,
+   "lost": 0,
+   "longest_gap_s": 0.24,
+   "longest_gap_started_utc": "00:31:39"
+  },
+  "ceos -> cjunosevolved et-0/0/0 10.0.12.1": {
+   "replies": 182,
+   "lost": 0,
+   "longest_gap_s": 0.26,
+   "longest_gap_started_utc": "00:31:38"
+  },
+  "ceos -> cjunosevolved loopback": {
+   "replies": 182,
+   "lost": 0,
+   "longest_gap_s": 0.21,
+   "longest_gap_started_utc": "00:31:54"
+  }
+ }
+}

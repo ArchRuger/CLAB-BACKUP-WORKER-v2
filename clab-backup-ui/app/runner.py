@@ -64,8 +64,10 @@ def make_inventory(lab, nodes, work, operation):
                      'ansible_host_key_checking':False,'ansible_paramiko_look_for_keys':False,
                      'ansible_connect_timeout':30,'ansible_command_timeout':300,
                      'backup_command':'show version' if operation=='test' else platform['command']}
-        # Junos backups also fetch a hierarchical restore-grade candidate (see backup.yml).
-        if operation=='backup' and platform.get('restore'):
+        # Junos backups also fetch a hierarchical restore-grade candidate (see backup.yml). Where the
+        # backup command already yields the loadable candidate (EOS), it is not run a second time:
+        # two captures seconds apart could disagree, and the artifact must equal what was saved.
+        if operation=='backup' and platform.get('restore') and platform['restore']!=platform['command']:
             variables['restore_command']=platform['restore']
         if node['platform']=='arista_ceos':
             variables.update(ansible_become=True, ansible_become_method='enable')
@@ -335,9 +337,10 @@ class Runner:
                                 # Best-effort: its absence only means "not restore-capable".
                                 rr=restore_results.get(f'node_{index}')
                                 rname=restore_filename(node)
-                                if rr and rr.get('status')=='ok' and rname:
+                                same=PLATFORMS[node['platform']].get('restore')==PLATFORMS[node['platform']]['command']
+                                if rname and (same or (rr and rr.get('status')=='ok')):
                                     try:
-                                        rtext=normalized(node['platform'],rr.get('stdout',''))
+                                        rtext=text if same else normalized(node['platform'],rr.get('stdout',''))
                                         self.store.atomic(history/rname,rtext.encode())
                                         self.store.atomic(latest/rname,rtext.encode())
                                         outcome.update(restore_file=rname,

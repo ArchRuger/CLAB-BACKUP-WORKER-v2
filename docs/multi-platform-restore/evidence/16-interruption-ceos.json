@@ -1,0 +1,67 @@
+{
+ "node": "ceos",
+ "manager_version": "1.30.27",
+ "job_status": "succeeded",
+ "timeline": [
+  {
+   "utc": "00:29:24",
+   "job": "backing_up",
+   "targets": {
+    "ceos": "backing_up"
+   }
+  },
+  {
+   "utc": "00:29:26",
+   "job": "applying",
+   "targets": {
+    "ceos": "applying"
+   }
+  },
+  {
+   "utc": "00:29:27",
+   "job": "applying",
+   "targets": {
+    "ceos": "confirming"
+   }
+  },
+  {
+   "utc": "00:29:28",
+   "job": "verifying",
+   "targets": {
+    "ceos": "applied"
+   }
+  },
+  {
+   "utc": "00:29:30",
+   "job": "succeeded",
+   "targets": {
+    "ceos": "verified"
+   }
+  }
+ ],
+ "window_utc": [
+  "00:29:18",
+  "00:29:50"
+ ],
+ "probe_interval_s": 0.2,
+ "probes": {
+  "management 172.20.20.101": {
+   "replies": 157,
+   "lost": 0,
+   "longest_gap_s": 0.21,
+   "longest_gap_started_utc": "00:29:50"
+  },
+  "ceos eth1 -> cjunosevolved 10.0.12.1": {
+   "replies": 162,
+   "lost": 0,
+   "longest_gap_s": 0.24,
+   "longest_gap_started_utc": "00:29:34"
+  },
+  "ceos -> vjunos-switch loopback": {
+   "replies": 162,
+   "lost": 0,
+   "longest_gap_s": 0.4,
+   "longest_gap_started_utc": "00:29:47"
+  }
+ }
+}

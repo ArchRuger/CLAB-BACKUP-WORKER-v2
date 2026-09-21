@@ -51,6 +51,7 @@ def create_app(data_dir=None):
     async def lifespan(app):
         print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
         runner.start()
+        restore.start()
         discovery.start()
         readiness_monitor.start()
         telemetry.start()

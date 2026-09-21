@@ -1,0 +1,6 @@
+configure
+set interfaces et-0/0/0 description "B changed"
+delete routing-options static route 192.0.2.2/32
+set policy-options prefix-list B-ONLY 198.51.100.0/24
+set routing-options static route 198.51.100.0/24 discard
+commit and-quit

@@ -178,7 +178,7 @@ repeats them on its status card, whose **More ▾** adds the rest.
 | **Save on this VM only** | Capture and commit without pushing. |
 | **Create checkpoint…** | Capture a named milestone in `checkpoints/<name>`. |
 | **Set baseline…** | Select a complete recorded capture for `baseline`; replacing one is reviewed explicitly. |
-| **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* diffs it against the lab's `latest/` (never against the running devices); *Apply to running lab…* replaces the running configuration of the selected Junos devices with that version (no reboot; backed up first) without changing where the lab saves. |
+| **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* diffs it against the lab's `latest/` (never against the running devices); *Apply to running lab…* replaces the running configuration of the selected devices (Junos or EOS) with that version (no reboot; backed up first) without changing where the lab saves. |
 | **Full history…** | Every commit of the lab's folder with its versions. |
 | **Upload saved progress** / **Review and upload…** | Publish a saved commit without recapturing devices, through the same review (a save reviewed before, whose upload failed, reads **Upload now**). |
 | **Update from the repository** | Update an eligible clean checkout using a fast-forward; no merge/rebase conflict resolution. |
@@ -337,14 +337,15 @@ the current topology as the topology used for that historical capture.
 
 ## Apply a saved configuration to a running node
 
-A saved Junos configuration can be applied to the running lab in two ways, both of
-which converge the running node to exactly the saved configuration without a reboot or
-a containerlab redeploy:
+A saved configuration (Junos or EOS today) can be applied to the running lab in two ways,
+both of which converge the running node to exactly the saved configuration without a
+reboot or a containerlab redeploy:
 
 - **From the saved versions (simplest).** On the **Progress** tab, every version whose
-  folder holds a saved Junos state (its `latest/` carries a restore-grade candidate)
-  offers **Apply to running lab…** — the lab's own *Latest*, and the *Instructor and
-  reference versions* kept in other folders of the same repository. **Browse the
+  folder holds a restorable saved state (its `latest/` carries a restore-grade candidate
+  for at least one supported device) offers **Apply to running lab…** — the lab's own
+  *Latest*, and the *Instructor and reference versions* kept in other folders of the same
+  repository. **Browse the
   repository…** (or *Save location › Change folder…*) reaches any other folder with the
   same button. The lab does **not** have to save to that folder — you can keep saving
   wherever you save and still apply Base, working, Final or Broken straight from their
@@ -357,30 +358,38 @@ flowchart TD
     A[Apply to running lab] --> B[Preflight: node running, reachable, platform, mapping]
     B --> C[Back up the current configuration first]
     C -->|backup failed| D[Do not change this node]
-    C -->|backup ok| E[Load the saved candidate: load override]
-    E --> F[commit check]
-    F --> G[commit confirmed with a rollback timer]
-    G --> H[Reconnect to prove management works]
-    H -->|reachable| I[commit to confirm]
-    H -->|unreachable| J[Node rolls back automatically]
-    I --> K[Capture again and compare to the saved state]
+    C -->|backup ok| E[Load the candidate as a complete replacement, inside the device's own transaction]
+    E --> F[Activate with a timed recovery: Junos commit confirmed, EOS commit timer]
+    F --> G[Reconnect to prove management works, retried for the whole undo window]
+    G -->|confirmed| H[Cancel the timer; EOS also saves it to startup]
+    G -->|cannot confirm in time| I[Read the device back: applied, undone or uncertain]
+    H --> J[Capture again and compare to the saved state]
 ```
 
 - **Complete replacement, not a merge.** Junos `show configuration | display set` output
   can only be *added* with `load set`, so it cannot remove a statement a student added
   that is not in the saved version. Every Junos backup therefore also captures a
   hierarchical restore-grade candidate (`show configuration`) and records it in the
-  snapshot manifest. The restore loads that candidate with `load override terminal`, so a
-  stale statement is removed, a changed statement is reset and a deleted desired statement
-  is put back.
+  snapshot manifest; the restore loads it with `load override terminal`, so a stale
+  statement is removed, a changed statement is reset and a deleted desired statement is
+  put back. EOS backups likewise capture the running-configuration as the restore
+  candidate; because an EOS configuration session starts as a copy of the running
+  configuration, the restore first empties it (`rollback clean-config`) before loading the
+  candidate, so the paste replaces rather than merges.
 - **Backed up first.** The manager captures a fresh backup of every target node before it
   changes anything and references that backup's job id in the restore result. If the
   pre-restore backup fails for a node, that node is not modified.
-- **Commit-confirmed safety.** The candidate is activated with `commit confirmed`. The
-  manager then reconnects over SSH to prove the node is still reachable and only then runs
-  a plain `commit` to make the change permanent. If management is lost, the node rolls
-  back to the pre-restore configuration on its own when the timer expires. The rollback
-  timer defaults to five minutes and is adjustable under *Advanced options* of the review.
+- **Timed, confirmed activation.** The candidate is activated inside the device's own
+  transaction with its own timed recovery (Junos `commit confirmed <minutes>`; EOS
+  `commit timer HH:MM:SS`). The manager then reconnects over SSH — retried for the whole
+  undo window, not just once — to prove the node is still reachable, and only then confirms
+  the change (Junos `commit`; EOS `configure session <name> commit`, followed by
+  `write memory` since EOS does not save a confirmed change to its startup configuration by
+  itself). If the manager cannot confirm in time it never assumes the device rolled back:
+  it reads the node back and reports whether the previous configuration is active (undone)
+  or that it could not tell (uncertain) — the same check a manager restart during a restore
+  also runs. The undo window defaults to five minutes and is adjustable under *Advanced
+  options* of the review.
 - **Root-authentication.** The `juniper_cjunosevolved` lab image boots without a
   `root-authentication` statement and rejects any later commit that still lacks it. When
   the saved configuration has no root-authentication, the restore synthesises one from the
@@ -389,20 +398,27 @@ flowchart TD
 - **Verified.** After confirming, the manager captures the node again, normalises it the
   same way a backup is normalised and compares it to the saved desired state, so the
   result shows that the stale statements are gone and the desired statements are present.
-- **Supported platforms.** Live restore covers `juniper_cjunosevolved` and
-  `juniper_vjunosswitch`. IOS-XR and EOS versions remain view/download only.
+- **Supported platforms.** Live restore covers Junos (`juniper_cjunosevolved`,
+  `juniper_vjunosswitch`) and Arista EOS (`arista_ceos`). Cisco IOS XR (`cisco_xrv9k`) is
+  not restorable yet: its saved nodes are listed in the review with the reason, not
+  silently left out.
 - **Management addresses travel with the saved state.** The candidate is the node's whole
   configuration, including its management interface address. When containerlab assigns
   management addresses dynamically, a redeploy can hand a node a different address; applying a
   state saved before that redeploy then moves the node off its address, the manager cannot
-  reconnect, and the node rolls back on its own (the *Rolled back — unchanged* outcome). Pin
-  `mgmt-ipv4` on the nodes of any topology whose saved states will be applied after a redeploy.
-- **Legacy snapshots.** A version saved before 1.28.0 has no restore-grade
-  artifact in its manifest; it is offered as view/download only and cannot be applied.
+  reconnect, and the device undoes the change on its own — the manager then reads it back
+  and reports that the previous configuration is active. Pin `mgmt-ipv4` on the nodes of
+  any topology whose saved states will be applied after a redeploy.
+- **Legacy snapshots.** A saved version made before a node's platform could be restored
+  (before 1.28.0 for Junos, before 1.30.27 for EOS) has no restore artifact for that node:
+  it is listed in the review as not applicable, with that reason, and its saved
+  configuration text is never relabelled as a restore candidate. The rest of the saved
+  version — the download, and any node whose platform was already restore-capable — is
+  unaffected.
 
 Captures retain their real format: Junos display-set output and IOS-XR/EOS running
-configuration text are not universally interchangeable startup files, and the display-set
-file stays the canonical human-readable and comparison form.
+configuration text are not universally interchangeable startup files, and each platform's
+capture stays its own canonical human-readable and comparison form.
 
 ## Upgrade and validation
 
