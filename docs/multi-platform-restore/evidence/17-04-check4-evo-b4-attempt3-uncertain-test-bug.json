@@ -1,0 +1,105 @@
+{
+ "node": "cjunosevolved",
+ "attempt": "check4-attempt3",
+ "minutes": 2,
+ "started_utc": "01:04:05.867",
+ "method": "connection-transition-trigger (manager-truth: apply TCP session closes before confirm reconnects)",
+ "submit": {
+  "http": 200,
+  "id": "4ca958019cb34bcb9b2230351160b455"
+ },
+ "reached_applying_at_rel_s": 3.200318895003875,
+ "reached_applying": true,
+ "blocked_at_rel_s": 6.990031016001012,
+ "saw_apply_connection_open": true,
+ "conn_poll_samples": 2,
+ "conn_log": [
+  {
+   "t": 3.202297819996602,
+   "event": "APPLY_CONNECTION_PORT",
+   "port": "E3DE"
+  },
+  {
+   "t": 6.996788645003107,
+   "event": "BLOCK_INSERTED_ON_NEW_PORT",
+   "new_ports": [
+    "DEBE"
+   ]
+  }
+ ],
+ "job_status_after_block": {
+  "job": "applying",
+  "target": "confirming",
+  "message": "Configuration loaded; reconnecting to confirm."
+ },
+ "ended_while_blocked": false,
+ "rule_present_before_unblock": true,
+ "rule_present_after_unblock": false,
+ "unblocked_at_rel_s": 217.25146849900193,
+ "timeline": [
+  {
+   "t": 7.001341704002698,
+   "utc": "01:04:12.868",
+   "job_status": "applying",
+   "target_status": "confirming",
+   "message": "Configuration loaded; reconnecting to confirm."
+  },
+  {
+   "t": 217.2541842100036,
+   "utc": "01:07:43.121",
+   "job_status": "needs_attention",
+   "target_status": "uncertain",
+   "message": "The manager could not establish what this device is running (connectivity: NoValidConnectionsError). Check it before relying on it."
+  }
+ ],
+ "final_job": {
+  "id": "4ca958019cb34bcb9b2230351160b455",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T01:04:06.730719+00:00",
+  "finished": "2026-09-21T01:07:42.917945+00:00",
+  "status": "needs_attention",
+  "message": "0/1 node(s) verified; 1 need attention (not verified, or their state could not be established). Review each node.",
+  "source": {
+   "type": "git",
+   "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+   "path": "restore-square/work/latest",
+   "captured_at": "2026-09-21T00:20:40.400494+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "274ed0ebad624778b1c3b8105b3b3b75",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "uncertain",
+    "message": "The manager could not establish what this device is running (connectivity: NoValidConnectionsError). Check it before relying on it.",
+    "diff_sample": [
+     "[edit interfaces et-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-ceos\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options static]",
+     "+    route 192.0.2.2/32 discard;",
+     "-    route 198.51.100.0/24 discard;",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present"
+   }
+  ]
+ },
+ "finished_utc": "01:07:43.124"
+}

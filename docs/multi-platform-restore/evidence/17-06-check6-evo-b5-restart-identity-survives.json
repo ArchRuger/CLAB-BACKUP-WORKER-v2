@@ -1,0 +1,153 @@
+{
+ "attempt": "check6-attempt1",
+ "minutes": 3,
+ "started_utc": "01:19:46.379",
+ "method": "connection-transition-trigger + manager restart (SSH left unblocked)",
+ "submit": {
+  "http": 200,
+  "id": "bf33a50f618c448a84015c7732a1b95e"
+ },
+ "reached_applying_at_rel_s": 3.5422115700057475,
+ "reached_applying": true,
+ "restart": {
+  "t": 7.89250837500731,
+  "utc": "01:19:54.271",
+  "returncode": 0,
+  "stdout": "containerlab-node-manager-backup-ui-1",
+  "stderr": ""
+ },
+ "restarted_at_rel_s": 7.480847468003049,
+ "saw_apply_connection_open": true,
+ "conn_log": [
+  {
+   "t": 3.5441307540022535,
+   "event": "APPLY_CONNECTION_PORT",
+   "port": "9696"
+  },
+  {
+   "t": 7.480847468003049,
+   "event": "RESTART_TRIGGERED_ON_NEW_PORT",
+   "new_ports": [
+    "E406"
+   ]
+  }
+ ],
+ "manager_version_after_restart": "1.30.27",
+ "manager_back_at_rel_s": 8.951011171011487,
+ "job_right_after_restart": {
+  "id": "bf33a50f618c448a84015c7732a1b95e",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T01:19:47.176649+00:00",
+  "finished": "2026-09-21T01:19:55.027084+00:00",
+  "status": "interrupted",
+  "message": "Manager restarted during a restore. Check the target nodes; a confirmed commit that was not confirmed rolls back on its own.",
+  "source": {
+   "type": "git",
+   "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+   "path": "restore-square/work/latest",
+   "captured_at": "2026-09-21T00:20:40.400494+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch"
+   ]
+  },
+  "confirm_minutes": 3,
+  "pre_backup_job_id": "27510db44510492b95c19f7cd8222425",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "interrupted",
+    "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now.",
+    "diff_sample": [
+     "[edit interfaces et-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-ceos\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options static]",
+     "+    route 192.0.2.2/32 discard;",
+     "-    route 198.51.100.0/24 discard;",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present"
+   }
+  ]
+ },
+ "timeline": [
+  {
+   "t": 8.95533290100866,
+   "utc": "01:19:55.334",
+   "job_status": "interrupted",
+   "target_status": "interrupted",
+   "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now."
+  },
+  {
+   "t": 9.95789593301015,
+   "utc": "01:19:56.337",
+   "job_status": "succeeded",
+   "target_status": "verified",
+   "message": "Checked after the manager restart: the saved configuration is active on this device and nothing is waiting for confirmation."
+  }
+ ],
+ "final_job": {
+  "id": "bf33a50f618c448a84015c7732a1b95e",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T01:19:47.176649+00:00",
+  "finished": "2026-09-21T01:19:56.209876+00:00",
+  "status": "succeeded",
+  "message": "Checked after a manager restart. All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+   "path": "restore-square/work/latest",
+   "captured_at": "2026-09-21T00:20:40.400494+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch"
+   ]
+  },
+  "confirm_minutes": 3,
+  "pre_backup_job_id": "27510db44510492b95c19f7cd8222425",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "verified",
+    "message": "Checked after the manager restart: the saved configuration is active on this device and nothing is waiting for confirmation.",
+    "diff_sample": [
+     "[edit interfaces et-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-ceos\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options static]",
+     "+    route 192.0.2.2/32 discard;",
+     "-    route 198.51.100.0/24 discard;",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present",
+    "persistence": "saved"
+   }
+  ]
+ },
+ "finished_utc": "01:19:56.338"
+}

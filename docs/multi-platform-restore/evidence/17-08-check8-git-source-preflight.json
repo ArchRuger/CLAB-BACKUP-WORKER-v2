@@ -1,0 +1,69 @@
+{
+ "manager_version": "1.30.27",
+ "lab": "restore-square",
+ "source": {
+  "type": "git",
+  "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+  "path": "restore-square/work/latest"
+ },
+ "requested": [],
+ "started_utc": "00:41:27",
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "git",
+    "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+    "path": "restore-square/work/latest",
+    "captured_at": "2026-09-21T00:20:40.400494+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 3,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0
+    }
+   ],
+   "eligible_count": 3
+  }
+ },
+ "finished_utc": "00:41:31"
+}

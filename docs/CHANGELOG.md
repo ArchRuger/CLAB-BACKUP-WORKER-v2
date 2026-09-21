@@ -4,6 +4,36 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.28
+
+**Replace running configuration: cJunosEvolved accepted through the product, and the evidence hardened after an
+independent audit.** Second release of the multi-platform restore stream
+([multi-platform-restore](multi-platform-restore/README.md)). Cisco IOS XR is not restorable in this release.
+
+- **Integrity for every source.** A Git version or folder was already checked file by file against its manifest. A
+  backup had no digest at all: the runner now records a SHA-256 when it stores a capture and its restore artifact, and a
+  stored file that no longer matches is refused before it is saved to Git or applied to a device. Backups taken before
+  this release carry no digest and are used as they are.
+- **The review looks at each device over one SSH connection** (pending change, other blockers, current configuration)
+  instead of three, and a refused connection is tried three times before anything has been sent. Rejected credentials
+  are never retried and are reported as such ("The device rejected the login"), in the review and at application time;
+  they used to read "did not answer".
+- **Clearer results.** A device that was not changed shows the reason beside its badge, not only under Details. A device
+  that undid the change is counted apart from devices that were never changed ("1 device undid the change; its previous
+  configuration is back"). The message of a job interrupted by a manager restart says what the manager is doing about
+  it, and the restart re-check reports `verified` only after a comparison.
+- **cJunosEvolved through the product:** management cut after arming (the manager waits for the device's own rollback,
+  which came up to 35 s late, and reports it as read back), a manager restart during the undo window (the pending change
+  is found under the job's own token, confirmed and verified), root-authentication synthesised from a backup that has
+  none, A onto A, a restore from a post-restore backup. The same for vJunos-switch except the restart case. On this image
+  a commit that REMOVES `root-authentication` is refused, bare `commit` included; a node that never had the statement
+  only warns (the evidence file says which observation is which).
+- **Acceptance tooling** under `docs/multi-platform-restore/tools/`: `readback.py` (the devices' own answer as booleans
+  and counts, with a whole-configuration comparison that shares no code with the application), build identity in every
+  evidence file, a browser tool without vacuous checks that reaches both source types of the page, `interruption.py`
+  and `persistence_check.py` (written, the latter not yet run). On cEOS `show version` Uptime is not a boot identity
+  (it was seen restarting from zero while the container and every agent kept running); the tools use the age of PID 1.
+
 ## Changes in 1.30.27
 
 **Replace running configuration works on Arista cEOS, no longer guesses at a rollback, and never confirms

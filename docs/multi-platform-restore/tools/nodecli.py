@@ -34,7 +34,7 @@ PROMPT = {
     'iosxr': re.compile(r'^RP/\d+/\w+/CPU\d+:[\w.\-]+(?:\([\w.\-]+\))?#\s*$'),
 }
 SETUP = {
-    'eos': ['enable', 'terminal length 0', 'terminal width 32767'],
+    'eos': ['enable', 'terminal length 0', 'terminal width 500'],   # 32767 made cEOS close the product driver's channel
     'junos': ['set cli screen-length 0', 'set cli screen-width 0', 'set cli complete-on-space off'],
     'iosxr': ['terminal length 0', 'terminal width 512'],
 }

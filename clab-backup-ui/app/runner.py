@@ -329,7 +329,9 @@ class Runner:
                                 log('backup.write',f'Writing history and latest: {name}',node=node['name'])
                                 self.store.atomic(history/name,text.encode())
                                 self.store.atomic(latest/name,text.encode())
-                                outcome.update(file=name,platform=node['platform'],
+                                # The digest of what was stored: a later reader (Git save, restore) refuses a capture that
+                                # no longer matches it. Captures taken before this field existed carry none.
+                                outcome.update(file=name,platform=node['platform'],sha256=hashlib.sha256(text.encode()).hexdigest(),
                                                short_name=short_name(node,lab['name'],text),
                                                captured_at=result.get('captured_at',now()),
                                                capture_time_source='NOS command completed',download_metadata_version=1)
@@ -343,7 +345,7 @@ class Runner:
                                         rtext=text if same else normalized(node['platform'],rr.get('stdout',''))
                                         self.store.atomic(history/rname,rtext.encode())
                                         self.store.atomic(latest/rname,rtext.encode())
-                                        outcome.update(restore_file=rname,
+                                        outcome.update(restore_file=rname,restore_sha256=hashlib.sha256(rtext.encode()).hexdigest(),
                                                        restore_format=PLATFORMS[node['platform']].get('restore_format',''))
                                         log('restore.capture',f'Stored restore-grade candidate: {rname} ({len(rtext.encode())} bytes)',node=node['name'])
                                     except (ValueError,OSError) as exc:

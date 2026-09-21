@@ -1,0 +1,112 @@
+{
+ "node": "vjunos-switch",
+ "attempt": "check5-attempt1",
+ "minutes": 2,
+ "started_utc": "01:13:03.798",
+ "method": "connection-transition-trigger (manager-truth: apply TCP session closes before confirm reconnects)",
+ "submit": {
+  "http": 200,
+  "id": "2e2ffb5af525467fabb7b27cc249c5b5"
+ },
+ "reached_applying_at_rel_s": 4.341308790986659,
+ "reached_applying": true,
+ "blocked_at_rel_s": 29.187422873990727,
+ "saw_apply_connection_open": true,
+ "conn_poll_samples": 2,
+ "conn_log": [
+  {
+   "t": 4.343249094992643,
+   "event": "APPLY_CONNECTION_PORT",
+   "port": "8010"
+  },
+  {
+   "t": 29.193702534990734,
+   "event": "BLOCK_INSERTED_ON_NEW_PORT",
+   "new_ports": [
+    "D1B8"
+   ]
+  }
+ ],
+ "job_status_after_block": {
+  "job": "applying",
+  "target": "confirming",
+  "message": "Configuration loaded; reconnecting to confirm."
+ },
+ "ended_while_blocked": false,
+ "rule_present_before_unblock": true,
+ "rule_present_after_unblock": false,
+ "unblocked_at_rel_s": 218.77675255299255,
+ "timeline": [
+  {
+   "t": 29.22932599298656,
+   "utc": "01:13:33.027",
+   "job_status": "applying",
+   "target_status": "confirming",
+   "message": "Configuration loaded; reconnecting to confirm."
+  },
+  {
+   "t": 220.7839164709876,
+   "utc": "01:16:44.582",
+   "job_status": "failed",
+   "target_status": "rolled_back",
+   "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active."
+  }
+ ],
+ "final_job": {
+  "id": "2e2ffb5af525467fabb7b27cc249c5b5",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T01:13:05.397066+00:00",
+  "finished": "2026-09-21T01:16:44.199567+00:00",
+  "status": "failed",
+  "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+  "source": {
+   "type": "git",
+   "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+   "path": "restore-square/work/latest",
+   "captured_at": "2026-09-21T00:20:40.400494+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "df93751bf49d40df81de636d06f11a0f",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "short_name": "vjunos-switch",
+    "platform": "juniper_vjunosswitch",
+    "status": "rolled_back",
+    "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active.",
+    "diff_sample": [
+     "[edit interfaces ge-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-cjunosevolved\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options]",
+     "+   static {",
+     "+       route 192.0.2.3/32 discard;",
+     "+   }",
+     "[edit]",
+     "-  vlans {",
+     "-      B-ONLY {",
+     "-          vlan-id 777;",
+     "-      }",
+     "-  }",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present"
+   }
+  ]
+ },
+ "finished_utc": "01:16:44.583"
+}

@@ -1,0 +1,749 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:f7e0f326a99abd1c9921329eb3880469a9e44fd1c45a3ea1915887955f32062d",
+  "container_started": "2026-09-21T01:47:43.592960123Z",
+  "git_head": "3c5d954d9ed1",
+  "git_dirty_files": 7
+ },
+ "viewport": "narrow",
+ "row": "Latest",
+ "via": "row",
+ "nodes": [
+  "cjunosevolved",
+  "vjunos-switch"
+ ],
+ "started_utc": "2026-09-21T02:16:36Z",
+ "runs": [
+  {
+   "label": "first",
+   "device_readback_before": {
+    "read_at_utc": "2026-09-21T02:16:47Z",
+    "nodes": {
+     "cjunosevolved": {
+      "a_value_present": false,
+      "a_statement_present": false,
+      "b_only_present": 3,
+      "b_only_markers": 3,
+      "configuration_lines": 25,
+      "pending_confirmation": false,
+      "boot": "System booted: 2026-09-20 22:23:45 UTC",
+      "up_seconds": null,
+      "active": "B"
+     },
+     "vjunos-switch": {
+      "a_value_present": false,
+      "a_statement_present": false,
+      "b_only_present": 3,
+      "b_only_markers": 3,
+      "configuration_lines": 27,
+      "pending_confirmation": false,
+      "boot": "System booted: 2026-09-20 22:18:17 UTC",
+      "up_seconds": null,
+      "active": "B"
+     }
+    }
+   },
+   "review_text": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: work \u00b7 CLAB-MNGR-DEV-LLM \u203a restore-square/work \u00b7 saved 28 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS Already matches \u2014 nothing to change\ncjunosevolved Junos Evolved 5 differences from the running configuration\nvjunos-switch Junos 5 differences from the running configuration\nxrv9k IOS XR Already matches \u2014 nothing to change\nEach device's current configuration is backed up first. A device whose backup fails is left unchanged.\nThe devices are not rebooted. The device itself checks the new configuration when it is activated, and the change is undone on its own if the device cannot be reached again within 5 minutes.\nDevices that are skipped above are not touched.\nAdvanced options\nI understand the running configuration on the selected devices will be replaced.\nCancel\nReplace configurations",
+   "review_devices": [
+    {
+     "name": "clab-restore-square-ceos",
+     "disabled": false,
+     "checked": true,
+     "text": "ceos EOS Already matches \u2014 nothing to change"
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "disabled": false,
+     "checked": true,
+     "text": "cjunosevolved Junos Evolved 5 differences from the running configuration"
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "disabled": false,
+     "checked": true,
+     "text": "vjunos-switch Junos 5 differences from the running configuration"
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "disabled": false,
+     "checked": true,
+     "text": "xrv9k IOS XR Already matches \u2014 nothing to change"
+    }
+   ],
+   "job_id": "c6386d73d1d34095aeafd8c24e1fe13d",
+   "submitted_source": {
+    "type": "folder",
+    "path": "restore-square/work/latest",
+    "folder": "restore-square/work",
+    "captured_at": "2026-09-21T01:48:31.488220+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "job_status_when_reopening": "backing_up",
+   "job_status_when_reloading": "backing_up",
+   "job": {
+    "id": "c6386d73d1d34095aeafd8c24e1fe13d",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-21T02:16:58.897342+00:00",
+    "finished": "2026-09-21T02:17:48.092539+00:00",
+    "status": "succeeded",
+    "message": "All 2 node(s) restored and verified against the saved state.",
+    "source": {
+     "type": "folder",
+     "path": "restore-square/work/latest",
+     "folder": "restore-square/work",
+     "captured_at": "2026-09-21T01:48:31.488220+00:00",
+     "lab_name": "restore-square",
+     "restore_capable_nodes": 4,
+     "saved_nodes": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ]
+    },
+    "confirm_minutes": 5,
+    "pre_backup_job_id": "76c60bd589cc43a79d43b7b1293e3b9c",
+    "post_backup_job_id": "b8b126df79714f3db98931085a5781b7",
+    "targets": [
+     {
+      "name": "clab-restore-square-cjunosevolved",
+      "short_name": "cjunosevolved",
+      "platform": "juniper_cjunosevolved",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state.",
+      "diff_sample": [
+       "[edit interfaces et-0/0/0]",
+       "-   description \"B changed\";",
+       "+   description \"A to-ceos\";",
+       "[edit policy-options]",
+       "-   prefix-list B-ONLY {",
+       "-       198.51.100.0/24;",
+       "-   }",
+       "[edit routing-options static]",
+       "+    route 192.0.2.2/32 discard;",
+       "-    route 198.51.100.0/24 discard;",
+       "[edit]"
+      ],
+      "no_op": false,
+      "root_authentication": "present",
+      "persistence": "saved",
+      "missing_statements": 0,
+      "extra_statements": 0
+     },
+     {
+      "name": "clab-restore-square-vjunos-switch",
+      "short_name": "vjunos-switch",
+      "platform": "juniper_vjunosswitch",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state.",
+      "diff_sample": [
+       "[edit interfaces ge-0/0/0]",
+       "-   description \"B changed\";",
+       "+   description \"A to-cjunosevolved\";",
+       "[edit policy-options]",
+       "-   prefix-list B-ONLY {",
+       "-       198.51.100.0/24;",
+       "-   }",
+       "[edit routing-options]",
+       "+   static {",
+       "+       route 192.0.2.3/32 discard;",
+       "+   }",
+       "[edit]",
+       "-  vlans {",
+       "-      B-ONLY {",
+       "-          vlan-id 777;",
+       "-      }",
+       "-  }",
+       "[edit]"
+      ],
+      "no_op": false,
+      "root_authentication": "present",
+      "persistence": "saved",
+      "missing_statements": 0,
+      "extra_statements": 0
+     }
+    ]
+   },
+   "final_text": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 2 devices.\n\nReplaced and verified cjunosevolved Junos Evolved\nDetails\nReplaced and verified vjunos-switch Junos\nDetails\nDetails\nBackup taken before the change\n76c60bd589cc\nBackup taken after the change\nb8b126df7971\nAutomatic undo window\n5 minutes\nStatus\nsucceeded\nMessage\nAll 2 node(s) restored and verified against the saved state.",
+   "final_badges": [
+    {
+     "device": "cjunosevolved",
+     "badge": "Replaced and verified",
+     "cls": "badge good",
+     "help": []
+    },
+    {
+     "device": "vjunos-switch",
+     "badge": "Replaced and verified",
+     "cls": "badge good",
+     "help": []
+    }
+   ],
+   "device_readback_after": {
+    "read_at_utc": "2026-09-21T02:17:49Z",
+    "nodes": {
+     "cjunosevolved": {
+      "a_value_present": true,
+      "a_statement_present": true,
+      "b_only_present": 0,
+      "b_only_markers": 3,
+      "configuration_lines": 24,
+      "pending_confirmation": false,
+      "boot": "System booted: 2026-09-20 22:23:45 UTC",
+      "up_seconds": null,
+      "compared_with_saved": {
+       "saved_file": "cjunosevolved.set",
+       "saved_statements": 23,
+       "active_statements": 23,
+       "missing": 0,
+       "extra": 0,
+       "tolerated_root_authentication": 0
+      },
+      "active": "A"
+     },
+     "vjunos-switch": {
+      "a_value_present": true,
+      "a_statement_present": true,
+      "b_only_present": 0,
+      "b_only_markers": 3,
+      "configuration_lines": 26,
+      "pending_confirmation": false,
+      "boot": "System booted: 2026-09-20 22:18:17 UTC",
+      "up_seconds": null,
+      "compared_with_saved": {
+       "saved_file": "vjunos-switch.set",
+       "saved_statements": 25,
+       "active_statements": 25,
+       "missing": 0,
+       "extra": 0,
+       "tolerated_root_authentication": 0
+      },
+      "active": "A"
+     }
+    }
+   }
+  },
+  {
+   "label": "again",
+   "device_readback_before": {
+    "read_at_utc": "2026-09-21T02:18:05Z",
+    "nodes": {
+     "cjunosevolved": {
+      "a_value_present": false,
+      "a_statement_present": false,
+      "b_only_present": 3,
+      "b_only_markers": 3,
+      "configuration_lines": 25,
+      "pending_confirmation": false,
+      "boot": "System booted: 2026-09-20 22:23:45 UTC",
+      "up_seconds": null,
+      "active": "B"
+     },
+     "vjunos-switch": {
+      "a_value_present": false,
+      "a_statement_present": false,
+      "b_only_present": 3,
+      "b_only_markers": 3,
+      "configuration_lines": 27,
+      "pending_confirmation": false,
+      "boot": "System booted: 2026-09-20 22:18:17 UTC",
+      "up_seconds": null,
+      "active": "B"
+     }
+    }
+   },
+   "review_text": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: work \u00b7 CLAB-MNGR-DEV-LLM \u203a restore-square/work \u00b7 saved 30 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS Already matches \u2014 nothing to change\ncjunosevolved Junos Evolved 5 differences from the running configuration\nvjunos-switch Junos 5 differences from the running configuration\nxrv9k IOS XR Already matches \u2014 nothing to change\nEach device's current configuration is backed up first. A device whose backup fails is left unchanged.\nThe devices are not rebooted. The device itself checks the new configuration when it is activated, and the change is undone on its own if the device cannot be reached again within 5 minutes.\nDevices that are skipped above are not touched.\nAdvanced options\nI understand the running configuration on the selected devices will be replaced.\nCancel\nReplace configurations",
+   "review_devices": [
+    {
+     "name": "clab-restore-square-ceos",
+     "disabled": false,
+     "checked": true,
+     "text": "ceos EOS Already matches \u2014 nothing to change"
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "disabled": false,
+     "checked": true,
+     "text": "cjunosevolved Junos Evolved 5 differences from the running configuration"
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "disabled": false,
+     "checked": true,
+     "text": "vjunos-switch Junos 5 differences from the running configuration"
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "disabled": false,
+     "checked": true,
+     "text": "xrv9k IOS XR Already matches \u2014 nothing to change"
+    }
+   ],
+   "job_id": "c4194e81e604431c99a192b839ce2356",
+   "submitted_source": {
+    "type": "folder",
+    "path": "restore-square/work/latest",
+    "folder": "restore-square/work",
+    "captured_at": "2026-09-21T01:48:31.488220+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "job_status_when_reopening": "backing_up",
+   "job_status_when_reloading": "backing_up",
+   "job": {
+    "id": "c4194e81e604431c99a192b839ce2356",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-21T02:18:17.027972+00:00",
+    "finished": "2026-09-21T02:19:05.860108+00:00",
+    "status": "succeeded",
+    "message": "All 2 node(s) restored and verified against the saved state.",
+    "source": {
+     "type": "folder",
+     "path": "restore-square/work/latest",
+     "folder": "restore-square/work",
+     "captured_at": "2026-09-21T01:48:31.488220+00:00",
+     "lab_name": "restore-square",
+     "restore_capable_nodes": 4,
+     "saved_nodes": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ]
+    },
+    "confirm_minutes": 5,
+    "pre_backup_job_id": "f42027745ac640418bbb3d7dce528ba5",
+    "post_backup_job_id": "54375cd3de104bb68e5bb897f3da5f1f",
+    "targets": [
+     {
+      "name": "clab-restore-square-cjunosevolved",
+      "short_name": "cjunosevolved",
+      "platform": "juniper_cjunosevolved",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state.",
+      "diff_sample": [
+       "[edit interfaces et-0/0/0]",
+       "-   description \"B changed\";",
+       "+   description \"A to-ceos\";",
+       "[edit policy-options]",
+       "-   prefix-list B-ONLY {",
+       "-       198.51.100.0/24;",
+       "-   }",
+       "[edit routing-options static]",
+       "+    route 192.0.2.2/32 discard;",
+       "-    route 198.51.100.0/24 discard;",
+       "[edit]"
+      ],
+      "no_op": false,
+      "root_authentication": "present",
+      "persistence": "saved",
+      "missing_statements": 0,
+      "extra_statements": 0
+     },
+     {
+      "name": "clab-restore-square-vjunos-switch",
+      "short_name": "vjunos-switch",
+      "platform": "juniper_vjunosswitch",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state.",
+      "diff_sample": [
+       "[edit interfaces ge-0/0/0]",
+       "-   description \"B changed\";",
+       "+   description \"A to-cjunosevolved\";",
+       "[edit policy-options]",
+       "-   prefix-list B-ONLY {",
+       "-       198.51.100.0/24;",
+       "-   }",
+       "[edit routing-options]",
+       "+   static {",
+       "+       route 192.0.2.3/32 discard;",
+       "+   }",
+       "[edit]",
+       "-  vlans {",
+       "-      B-ONLY {",
+       "-          vlan-id 777;",
+       "-      }",
+       "-  }",
+       "[edit]"
+      ],
+      "no_op": false,
+      "root_authentication": "present",
+      "persistence": "saved",
+      "missing_statements": 0,
+      "extra_statements": 0
+     }
+    ]
+   },
+   "final_text": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 2 devices.\n\nReplaced and verified cjunosevolved Junos Evolved\nDetails\nReplaced and verified vjunos-switch Junos\nDetails\nDetails\nBackup taken before the change\nf42027745ac6\nBackup taken after the change\n54375cd3de10\nAutomatic undo window\n5 minutes\nStatus\nsucceeded\nMessage\nAll 2 node(s) restored and verified against the saved state.",
+   "final_badges": [
+    {
+     "device": "cjunosevolved",
+     "badge": "Replaced and verified",
+     "cls": "badge good",
+     "help": []
+    },
+    {
+     "device": "vjunos-switch",
+     "badge": "Replaced and verified",
+     "cls": "badge good",
+     "help": []
+    }
+   ],
+   "device_readback_after": {
+    "read_at_utc": "2026-09-21T02:19:07Z",
+    "nodes": {
+     "cjunosevolved": {
+      "a_value_present": true,
+      "a_statement_present": true,
+      "b_only_present": 0,
+      "b_only_markers": 3,
+      "configuration_lines": 24,
+      "pending_confirmation": false,
+      "boot": "System booted: 2026-09-20 22:23:45 UTC",
+      "up_seconds": null,
+      "compared_with_saved": {
+       "saved_file": "cjunosevolved.set",
+       "saved_statements": 23,
+       "active_statements": 23,
+       "missing": 0,
+       "extra": 0,
+       "tolerated_root_authentication": 0
+      },
+      "active": "A"
+     },
+     "vjunos-switch": {
+      "a_value_present": true,
+      "a_statement_present": true,
+      "b_only_present": 0,
+      "b_only_markers": 3,
+      "configuration_lines": 26,
+      "pending_confirmation": false,
+      "boot": "System booted: 2026-09-20 22:18:17 UTC",
+      "up_seconds": null,
+      "compared_with_saved": {
+       "saved_file": "vjunos-switch.set",
+       "saved_statements": 25,
+       "active_statements": 25,
+       "missing": 0,
+       "extra": 0,
+       "tolerated_root_authentication": 0
+      },
+      "active": "A"
+     }
+    }
+   }
+  }
+ ],
+ "page_scroll_width_before_dialog": 431,
+ "note": "the Progress tab itself is 431px wide at this viewport, before any restore dialog",
+ "backup_between": {
+  "id": "3f72e1d0c869414188b07bbe86a00e4c",
+  "status": "succeeded",
+  "source": "manual"
+ },
+ "console_errors": [],
+ "checks": [
+  {
+   "check": "the page loads restore.js of the running release",
+   "ok": true,
+   "detail": "http://127.0.0.1:8081/static/restore.js?v=1.30.27"
+  },
+  {
+   "check": "first: the devices themselves say B is active before the restore",
+   "ok": true,
+   "detail": "{'cjunosevolved': 'B', 'vjunos-switch': 'B'}"
+  },
+  {
+   "check": "the Saved versions list has the row",
+   "ok": true,
+   "detail": "Latest"
+  },
+  {
+   "check": "the saved version offers \"Apply to running lab...\" (folder source)",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the review names the dialog, the lab and the source",
+   "ok": true,
+   "detail": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: work \u00b7 CLAB-MNGR-DEV-LLM \u203a restore-square/work \u00b7 saved 28 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS Already matches \u2014 nothing to change\ncjunosevolved Junos Evolved 5 differenc"
+  },
+  {
+   "check": "the review promises the backup, no reboot and the automatic undo",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "every chosen device is listed and can be selected",
+   "ok": true,
+   "detail": "[{'name': 'clab-restore-square-cjunosevolved', 'disabled': False, 'checked': True, 'text': 'cjunosevolved Junos Evolved 5 differences from the running configuration'}, {'name': 'clab-restore-square-vjunos-switch', 'disabled': False, 'checked': True, 'text': 'vjunos-switch Junos 5 differences from the running configuration'}]"
+  },
+  {
+   "check": "a device that cannot be restored is listed, disabled, with a reason",
+   "ok": null,
+   "detail": "[]"
+  },
+  {
+   "check": "opening the review adds no horizontal page scroll",
+   "ok": true,
+   "detail": "(431, 431)"
+  },
+  {
+   "check": "nothing inside the review overflows the viewport",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "check": "without the acknowledgement the page refuses and says why",
+   "ok": true,
+   "detail": "Tick the box to confirm that the running configuration will be replaced."
+  },
+  {
+   "check": "the review is still open after the refusal",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "Space ticks the acknowledgement",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the Replace button takes keyboard focus",
+   "ok": true,
+   "detail": "restore-run"
+  },
+  {
+   "check": "the page started a job and the job names the expected source type",
+   "ok": true,
+   "detail": "{'type': 'folder', 'path': 'restore-square/work/latest', 'folder': 'restore-square/work', 'captured_at': '2026-09-21T01:48:31.488220+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}"
+  },
+  {
+   "check": "progress shows one row per chosen device",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the running change is reopened from the lab banner",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "after a reload the page is back in the same lab",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the job ended",
+   "ok": true,
+   "detail": "succeeded"
+  },
+  {
+   "check": "the job says it really changed every chosen device (no_op false)",
+   "ok": true,
+   "detail": "[('clab-restore-square-cjunosevolved', False), ('clab-restore-square-vjunos-switch', False)]"
+  },
+  {
+   "check": "the result leads with the outcome and keeps the details collapsed",
+   "ok": true,
+   "detail": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 2 devices.\n\nReplaced and verified cjunosevolved Junos Evolved\nDetails\nReplaced and verified vjunos-switch Junos\nDetails\nDetai"
+  },
+  {
+   "check": "every chosen device ends as \"Replaced and verified\"",
+   "ok": true,
+   "detail": "[{'device': 'cjunosevolved', 'badge': 'Replaced and verified', 'cls': 'badge good', 'help': []}, {'device': 'vjunos-switch', 'badge': 'Replaced and verified', 'cls': 'badge good', 'help': []}]"
+  },
+  {
+   "check": "the result names both safety backups under Details",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "no \"undefined\" or raw markup in the result",
+   "ok": true,
+   "detail": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 2 devices.\n\nReplaced and verified cjunosevolved Junos Evolved\nDetails\nReplaced and verified vjunos-switch Junos\nDetails\nDetails\nBackup taken before the change\n76c60bd589cc\nBackup taken after the change\nb8b126df7971\nAutomatic "
+  },
+  {
+   "check": "first: the devices themselves say A is active and nothing is pending",
+   "ok": true,
+   "detail": "{'cjunosevolved': ('A', False), 'vjunos-switch': ('A', False)}"
+  },
+  {
+   "check": "first: independent whole-configuration comparison with the saved state: 0 missing, 0 extra",
+   "ok": true,
+   "detail": "{'cjunosevolved': {'saved_file': 'cjunosevolved.set', 'saved_statements': 23, 'active_statements': 23, 'missing': 0, 'extra': 0, 'tolerated_root_authentication': 0}, 'vjunos-switch': {'saved_file': 'vjunos-switch.set', 'saved_statements': 25, 'active_statements': 25, 'missing': 0, 'extra': 0, 'tolerated_root_authentication': 0}}"
+  },
+  {
+   "check": "first: the NOS boot identity of every chosen device is unchanged (no reboot)",
+   "ok": true,
+   "detail": "{'cjunosevolved': ('System booted: 2026-09-20 22:23:45 UTC', 'System booted: 2026-09-20 22:23:45 UTC'), 'vjunos-switch': ('System booted: 2026-09-20 22:18:17 UTC', 'System booted: 2026-09-20 22:18:17 UTC')}"
+  },
+  {
+   "check": "a backup taken from the page after the restore succeeds",
+   "ok": true,
+   "detail": "succeeded"
+  },
+  {
+   "check": "again: the devices themselves say B is active before the restore",
+   "ok": true,
+   "detail": "{'cjunosevolved': 'B', 'vjunos-switch': 'B'}"
+  },
+  {
+   "check": "the Saved versions list has the row",
+   "ok": true,
+   "detail": "Latest"
+  },
+  {
+   "check": "the saved version offers \"Apply to running lab...\" (folder source)",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the review names the dialog, the lab and the source",
+   "ok": true,
+   "detail": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: work \u00b7 CLAB-MNGR-DEV-LLM \u203a restore-square/work \u00b7 saved 30 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS Already matches \u2014 nothing to change\ncjunosevolved Junos Evolved 5 differenc"
+  },
+  {
+   "check": "the review promises the backup, no reboot and the automatic undo",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "every chosen device is listed and can be selected",
+   "ok": true,
+   "detail": "[{'name': 'clab-restore-square-cjunosevolved', 'disabled': False, 'checked': True, 'text': 'cjunosevolved Junos Evolved 5 differences from the running configuration'}, {'name': 'clab-restore-square-vjunos-switch', 'disabled': False, 'checked': True, 'text': 'vjunos-switch Junos 5 differences from the running configuration'}]"
+  },
+  {
+   "check": "a device that cannot be restored is listed, disabled, with a reason",
+   "ok": null,
+   "detail": "[]"
+  },
+  {
+   "check": "opening the review adds no horizontal page scroll",
+   "ok": true,
+   "detail": "(431, 431)"
+  },
+  {
+   "check": "nothing inside the review overflows the viewport",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "check": "without the acknowledgement the page refuses and says why",
+   "ok": true,
+   "detail": "Tick the box to confirm that the running configuration will be replaced."
+  },
+  {
+   "check": "the review is still open after the refusal",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "Space ticks the acknowledgement",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the Replace button takes keyboard focus",
+   "ok": true,
+   "detail": "restore-run"
+  },
+  {
+   "check": "the page started a job and the job names the expected source type",
+   "ok": true,
+   "detail": "{'type': 'folder', 'path': 'restore-square/work/latest', 'folder': 'restore-square/work', 'captured_at': '2026-09-21T01:48:31.488220+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}"
+  },
+  {
+   "check": "progress shows one row per chosen device",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the running change is reopened from the lab banner",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "after a reload the page is back in the same lab",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the job ended",
+   "ok": true,
+   "detail": "succeeded"
+  },
+  {
+   "check": "the job says it really changed every chosen device (no_op false)",
+   "ok": true,
+   "detail": "[('clab-restore-square-cjunosevolved', False), ('clab-restore-square-vjunos-switch', False)]"
+  },
+  {
+   "check": "the result leads with the outcome and keeps the details collapsed",
+   "ok": true,
+   "detail": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 2 devices.\n\nReplaced and verified cjunosevolved Junos Evolved\nDetails\nReplaced and verified vjunos-switch Junos\nDetails\nDetai"
+  },
+  {
+   "check": "every chosen device ends as \"Replaced and verified\"",
+   "ok": true,
+   "detail": "[{'device': 'cjunosevolved', 'badge': 'Replaced and verified', 'cls': 'badge good', 'help': []}, {'device': 'vjunos-switch', 'badge': 'Replaced and verified', 'cls': 'badge good', 'help': []}]"
+  },
+  {
+   "check": "the result names both safety backups under Details",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "no \"undefined\" or raw markup in the result",
+   "ok": true,
+   "detail": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 2 devices.\n\nReplaced and verified cjunosevolved Junos Evolved\nDetails\nReplaced and verified vjunos-switch Junos\nDetails\nDetails\nBackup taken before the change\nf42027745ac6\nBackup taken after the change\n54375cd3de10\nAutomatic "
+  },
+  {
+   "check": "again: the devices themselves say A is active and nothing is pending",
+   "ok": true,
+   "detail": "{'cjunosevolved': ('A', False), 'vjunos-switch': ('A', False)}"
+  },
+  {
+   "check": "again: independent whole-configuration comparison with the saved state: 0 missing, 0 extra",
+   "ok": true,
+   "detail": "{'cjunosevolved': {'saved_file': 'cjunosevolved.set', 'saved_statements': 23, 'active_statements': 23, 'missing': 0, 'extra': 0, 'tolerated_root_authentication': 0}, 'vjunos-switch': {'saved_file': 'vjunos-switch.set', 'saved_statements': 25, 'active_statements': 25, 'missing': 0, 'extra': 0, 'tolerated_root_authentication': 0}}"
+  },
+  {
+   "check": "again: the NOS boot identity of every chosen device is unchanged (no reboot)",
+   "ok": true,
+   "detail": "{'cjunosevolved': ('System booted: 2026-09-20 22:23:45 UTC', 'System booted: 2026-09-20 22:23:45 UTC'), 'vjunos-switch': ('System booted: 2026-09-20 22:18:17 UTC', 'System booted: 2026-09-20 22:18:17 UTC')}"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "no static asset failed to load",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "not_exercised": [
+  "a device that cannot be restored is listed, disabled, with a reason",
+  "a device that cannot be restored is listed, disabled, with a reason"
+ ],
+ "finished_utc": "2026-09-21T02:19:09Z"
+}

@@ -2,8 +2,10 @@
 """Driver-layer proof of app/restore_junos.py on a real Junos node of the restore-square lab.
 
 Calls the driver exactly as the manager does (a paramiko client per step, connected like
-app/node_services.connect), but reads every result back through tools/nodecli.py, which shares no
-code with the driver. Steps: capture A, drift to B, replace with A under a token, read the pending
+app/node_services.connect). What the device then runs is judged WITHOUT the driver: the active
+configuration is read through tools/nodecli.py and compared by tools/readback.py's own comparator
+(the driver's capture and the application's comparator are also run, as a cross-check of the product's
+own verdict, and must agree). Every step is timestamped. Steps: capture A, drift to B, replace with A under a token, read the pending
 view, confirm with a fresh connection, compare; then the two refusals that protect other people's
 work (an uncommitted edit in the shared candidate; a pending confirmation that is not ours).
 Writes a JSON evidence file without configuration text. The node ends on A with nothing pending.
@@ -24,6 +26,7 @@ from app import restore_junos as driver          # noqa: E402
 from app.restore_compare import compare_junos    # noqa: E402
 from app.restore_shell import RestoreError       # noqa: E402
 from nodecli import NODES, Session               # noqa: E402
+from readback import statements                  # noqa: E402  (independent comparator: no application code)
 
 node, out = sys.argv[1], sys.argv[2]
 DRIFT = ROOT / 'docs/multi-platform-restore/lab/drift' / f'{node}-B.cli'
@@ -34,7 +37,20 @@ steps = []
 
 def step(name, ok, **detail):
     print(('ok   ' if ok else 'FAIL ') + name, detail if not ok else '', flush=True)
-    steps.append({'step': name, 'ok': bool(ok), **detail})
+    steps.append({'utc': time.strftime('%H:%M:%S', time.gmtime()), 'step': name, 'ok': bool(ok), **detail})
+
+
+def independent():
+    """The active configuration as the device prints it to an ordinary CLI session: a set of statements."""
+    text = cli('show configuration | display set | no-more', timeout=180)[0]
+    return statements('\n'.join(text.split('\n')[1:-1]), 'junos')
+
+
+def differs_from_a():
+    """(missing, extra) against A by the independent comparator; the root-authentication the driver may add is tolerated."""
+    now = independent()
+    extra = {line for line in now - a_independent if not line.startswith('set system root-authentication ')}
+    return len(a_independent - now), len(extra)
 
 
 def client():
@@ -69,13 +85,17 @@ def booted():
 boot = booted()
 a_hier = call(driver.capture, display_set=False)
 a_set = call(driver.capture, display_set=True)
-step('A captured in both forms', bool(a_hier.strip()) and bool(a_set.strip()), bytes=len(a_hier))
+a_independent = independent()
+step('A captured in both forms, and independently through an ordinary CLI session', bool(a_hier.strip()) and bool(a_set.strip()) and len(a_independent) > 10,
+     bytes=len(a_hier), independent_statements=len(a_independent))
 s = Session(node, 240)
 for line in DRIFT.read_text().splitlines():
     s.run(line)
 s.close()
-missing, extra = compare_junos(a_set, call(driver.capture, display_set=True))
-step('B is active: A statements missing and B-only statements present', bool(missing) and bool(extra), missing=len(missing), extra=len(extra))
+missing, extra = differs_from_a()
+drift_lines = [l for l in DRIFT.read_text().splitlines() if l.startswith(('set ', 'delete '))]
+step('B is active (independent readback): exactly the drift file\'s changes', missing == 2 and extra == len(drift_lines) - 1,
+     missing=missing, extra=extra, drift_statements=len(drift_lines))   # a changed value and a deleted statement are missing; every `set` line is extra
 
 started = time.time()
 result = call(driver.apply_candidate, a_hier, 3, token=TOKEN)
@@ -93,8 +113,10 @@ step('... and the change is still pending afterwards', call(driver.pending) == T
 confirmed = call(driver.confirm, result['handle'])
 step('confirm (commit check) from a fresh connection', confirmed == {'confirmed': True})
 step('nothing pending after the confirmation', call(driver.pending) == '')
-missing, extra = compare_junos(a_set, call(driver.capture, display_set=True))
-step('active configuration equals A (0 missing, 0 extra)', not missing and not extra, missing=len(missing), extra=len(extra))
+missing, extra = differs_from_a()
+step('active configuration equals A by the independent readback and comparator (0 missing, 0 extra)', (missing, extra) == (0, 0), missing=missing, extra=extra)
+product_missing, product_extra = compare_junos(a_set, call(driver.capture, display_set=True))
+step('the product\'s own capture and comparator agree', not product_missing and not product_extra, missing=len(product_missing), extra=len(product_extra))
 again = call(driver.apply_candidate, a_hier, 3, token=TOKEN)
 step('A onto A is a no-op for the device', again['no_op'] is True)
 step('... still armed and confirmed like any change', call(driver.confirm, again['handle']) == {'confirmed': True} and call(driver.pending) == '')
@@ -140,11 +162,17 @@ print('waiting for the foreign 2-minute timer to roll back by itself ...', flush
 deadline = time.time() + 240
 while time.time() < deadline and call(driver.pending):
     time.sleep(15)
-missing, extra = compare_junos(a_set, call(driver.capture, display_set=True))
-step('after its own rollback the node is on A again, nothing pending', not missing and not extra and call(driver.pending) == '',
-     missing=len(missing), extra=len(extra))
-step('the NOS never rebooted', booted() == boot, boot=boot)
-record = {'node': node, 'driver': 'app/restore_junos.py', 'token': TOKEN, 'steps': steps, 'ok': all(s['ok'] for s in steps),
+missing, extra = differs_from_a()
+step('after its own rollback the node is on A again (independent readback), nothing pending', (missing, extra) == (0, 0) and call(driver.pending) == '',
+     missing=missing, extra=extra)
+boot_after = booted()
+step('the NOS never rebooted', boot_after == boot, boot_before=boot, boot_after=boot_after)
+import subprocess                                  # noqa: E402
+head = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--short=12', 'HEAD'], capture_output=True, text=True).stdout.strip()
+dirty = subprocess.run(['git', '-C', str(ROOT), 'status', '--porcelain', '--', 'clab-backup-ui/app/restore_junos.py', 'clab-backup-ui/app/restore_shell.py'],
+                       capture_output=True, text=True).stdout.strip()
+record = {'node': node, 'driver': 'app/restore_junos.py', 'driver_source': {'git_head': head, 'uncommitted_changes_to_the_driver': bool(dirty)},
+          'token': TOKEN, 'steps': steps, 'ok': all(s['ok'] for s in steps),
           'finished_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
 pathlib.Path(out).write_text(json.dumps(record, indent=1) + '\n')
 print('ALL OK' if record['ok'] else 'FAILURES', flush=True)

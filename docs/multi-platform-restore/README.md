@@ -17,14 +17,15 @@ atomicity across nodes, and a mixed result is reported per node.
 
 | | Junos (cJunosEvolved, vJunos-switch) | Arista cEOS | Cisco IOS XR (XRv9k) |
 |---|---|---|---|
-| Restore artifact | `show configuration` (hierarchical), `.jcfg`, format `junos-hierarchical` | `show running-config`, `.eoscfg`, format `eos-running-config` | NOT YET SUPPORTED in this record |
+| Restore artifact | `show configuration` (hierarchical), `.jcfg`, format `junos-hierarchical`: a second capture | `show running-config`, `.eoscfg`, format `eos-running-config`: the backup's own text, one capture | NOT YET SUPPORTED in this release |
 | Replacement | `configure exclusive`, `load override terminal` | `configure session <token>`, `rollback clean-config`, `copy terminal: session-config` | |
 | Review diff | `show \| compare` | `show session-config diffs` | |
 | Validation | `commit check` | the session commit itself; any `% ` line during the load rejects the candidate | |
 | Timed recovery | `commit confirmed <minutes> comment <token>` | `commit timer HH:MM:SS` | |
-| Confirmation (fresh connection) | `commit check` (confirms without committing the shared candidate), then `rollback pending` must be gone | `configure session <token> commit` | |
+| Confirmation | from a fresh connection: `commit check` (confirms without committing the shared candidate), then `rollback pending` must be gone | from a fresh connection: `configure session <token> commit` | |
 | Persistence | the commit is persistent | `write memory` after the confirmation (EOS does not autosave on commit); reported per node as saved / not saved | |
 | Pending-change detection and identity | entry 0 of `show system commit`: its comment line (the token) and `rollback pending` | `Session with pending commit timer: <name>` in `show configuration sessions detail` | |
+| What else blocks a restore | somebody's uncommitted edits in the shared candidate | nothing (sessions are isolated) | |
 | Base-configuration prerequisite | none | none on 4.35.0F (the stock containerlab startup configuration is enough) | |
 
 Limits that are known and accepted:
@@ -39,10 +40,13 @@ Limits that are known and accepted:
   session and other sessions are left alone.
 - While a change waits for confirmation, a `commit check` or `commit` by anybody confirms it (Junos),
   so do not use a node's CLI during the undo window of a restore.
+- The service looks at a node over one SSH connection and retries a refused connection three times before anything
+  is sent (IOS XR was seen turning away connections that follow each other too quickly).
 
 ## Outcomes the manager reports per node
 
-`verified` (replaced, confirmed, and a fresh capture equals the saved state), `verify_mismatch`
+`verified` (replaced, confirmed, and a fresh capture equals the saved state; after A onto A the device reports
+no change and the node is still `verified`), `verify_mismatch`
 (replaced, but differences remain: counted and sampled with secrets masked), `applied_unverified`
 (replaced, the follow-up capture did not run), `failed` (not changed: the driver refused or the node
 rejected the candidate and the candidate was discarded, or the node could not be reached before
@@ -84,6 +88,9 @@ Tools (all in [`tools/`](tools/); all but `manager_restore.py` need `clab-backup
 | `square_check.py` | Every edge pinged in both directions, loopback mesh, and each NOS's own boot identity (a container's uptime says nothing about a virtual router inside it). |
 | `manager_restore.py` | Drives the running manager's real API: preflight, restore, idempotent double submit, job timeline; writes a committable evidence file. |
 | `browser_restore.py` | The student's path in a real browser (Playwright) against the running manager and the real nodes: Saved versions, review, acknowledgement by keyboard, progress, reopen from the banner, reload, result; desktop and narrow viewports. |
+| `readback.py` | The devices' own answer, sanitized for Git: is A or B active (one marker per kind of drift), is anything awaiting confirmation, is a manager session left over, the NOS boot identity. Booleans only. `manager_restore.py --readback` and `browser_restore.py` embed it before and after a run, together with the identity of the build that was running. |
+| `interruption.py` | 0.2 s probes on management and data-plane paths around one manager restore that really changes configuration; lost probes and the longest gap. |
+| `persistence_check.py` | Restart the NOS the normal way (Junos `request system reboot`, IOS XR `reload`, cEOS `containerlab restart --node`), prove from the NOS that it restarted, wait for management and both edges, compare the configuration independently. A containerlab redeploy is not a restart. |
 | `driver_junos_live.py` | Driver-layer proof of `restore_junos.py` on a real Junos node: token identity, `commit check` confirmation, the refusals that protect other people's edits and pending changes, a dropped session, no reboot. |
 
 Rerun one platform: apply the drift file with `nodecli.py <node> --file lab/drift/<node>-B.cli`, take a

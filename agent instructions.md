@@ -1,3 +1,23 @@
+# Multi-platform restore, part 2: evidence audit and hardening — 1.30.28
+
+Continues the section below; **read `docs/multi-platform-restore/PICKUP.md` first.** Facts to preserve.
+(1) **Evidence rules** (from an independent audit that found every PASS of the previous release weaker than its wording):
+an evidence file names the build that produced it (`manager_restore.build_identity()`), carries the devices' own
+answer before and after (`tools/readback.py`: booleans, counts, boot identity, never configuration text) and, where it
+claims "equals the saved state", an independent whole-configuration comparison (`readback.py --saved`). A check that
+could not be exercised is "n/a", never a pass. A matrix cell cites a file that contains what the cell says.
+(2) **Integrity.** `runner.py` records `sha256` / `restore_sha256` with every stored capture; `captured_snapshot` refuses a
+stored file that no longer matches (Git saves and restores alike). Captures without the fields are legacy, not errors.
+(3) **One connection per review** (`RestoreService._probe`), three connect attempts before anything is sent (`_open`),
+never for `AuthenticationException`, which has its own reason (`BAD_LOGIN`) in the review and at application. IOS XR
+turns away rapid connections: do not go back to one connection per question.
+(4) The contract has optional `HOLDS_SESSION` / `release(token)` for a NOS where only the arming CLI session can confirm;
+the service side is in `_apply_one` and unit-tested with a fake driver. No driver uses it in this release.
+(5) On cEOS `show version` Uptime is not a boot identity; use the age of PID 1. On cJunosEvolved a commit that removes
+`root-authentication` is refused once the statement exists; the synthesis stays.
+(6) `restore.js`: a failed device shows `restoreNotChangedReason(message)` beside its badge; `rolled_back` is counted as
+"undid the change", not "not changed". Every string still goes through `esc()`.
+
 # Multi-platform restore, part 1: Arista cEOS and the driver contract — 1.30.27
 
 *Replace running configuration* beyond Junos, on `claude/multi-platform-restore`, one patch release per

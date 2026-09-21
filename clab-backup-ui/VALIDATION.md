@@ -1,3 +1,45 @@
+# Multi-platform restore, part 2: cJunosEvolved through the product, evidence audit — 1.30.28
+
+Prepared on `claude/multi-platform-restore` on 2026-09-21 after 1.30.27 (`3c5d954`, pushed, CI green) on the development
+VM, same four-node lab and images as below. **Unit, real-Ansible pipeline, live-device and real-browser evidence; an
+independent audit of the previous release's evidence.** The matrix (`docs/multi-platform-restore/evidence/MATRIX.md`)
+names one evidence file per cell and says where a row still rests on the manager's own report.
+
+- **Audit of the 1.30.27 evidence** (15 QA auditors, one per matrix claim, prompted to refute, plus an Opus completeness
+  critic; all read-only). Every audited PASS came back "partly": the facts held, the committed evidence was weaker than
+  the wording. Acted on: build identity inside every evidence file, the devices' own answers embedded (`readback.py`),
+  an independent whole-configuration comparison, non-vacuous browser checks, the matrix reworded, the backup-source
+  integrity gap closed, restart re-check tests with the job's own and a foreign token. Still owed and listed in the
+  matrix: rerun of the interruption measurements with the rewritten tool, persistence across a NOS restart.
+- **Unit.** `test_restore.py` 40 (new: tampered backup, tampered Git/folder file, one connection per review, bounded
+  connect retry, rejected credentials at review and application, held-session contract with a fake driver, restart
+  re-check with own/foreign token, rollback after a restart), `test_restore_junos.py` 22, `test_restore_eos.py` 31,
+  `test_restore_compare.py` 31, `test_app.py` 10 (runner digests pinned with real Ansible), `test_restore_ui.js` 6
+  (reason beside the badge, credentials reason, undone counted apart; the pinned result sentence was rewritten).
+- **Live, product, QA run on build `-wt2`** (`17-acceptance-final-build.md`, an independent QA agent): the commit-pinned
+  Git-version source for three nodes in one job; cEOS management loss after arming and manager restart rerun (the two
+  defects of the first run are gone: no orphaned session, job recomputed); cJunosEvolved and vJunos-switch management loss
+  after arming with the rollback time read from the device's own commit log; cJunosEvolved manager restart with SSH left
+  reachable: the pending change found under the job's token, confirmed, `verified`; wrong node mapping refused. Its
+  check 7 was blocked by a device fact (see the changelog) and then run by the lead from the evening's first backup:
+  `57-*`, `root_authentication: synthesized`, `verified`. QA disclosed that it twice let `square_check.py` default to
+  all four nodes, opening read-only sessions on a node assigned to somebody else; no configuration was touched.
+- **Live, lead, builds named inside the files** (`18-*`, `53-*`…`58-*`): disabled row with its reason in the real
+  browser; two nodes drifted, one restored, the other read back unchanged; the commit-pinned Git-version source from the
+  browser for three nodes; both Junos images at 390 px with restore → backup from the page → restore in one session;
+  Junos A onto A and restore from a post-restore backup; the three real `rolled_back` jobs rendered in the page. Each
+  with the devices saying B before and A after, 0 missing / 0 extra by the independent comparator, boot identity
+  unchanged. Those runs were made on later working-tree builds that already contained the IOS XR driver of the next
+  release; the files say which.
+- **Not run:** persistence across a NOS restart; the rewritten interruption tool; the failure matrix of QA wave two
+  (application-time unreachability, credentials live, Junos foreign-change refusals at the API, Save and lab-operation
+  contention, a real `verify_mismatch`, Junos commit-check rejection) was still running when this release was cut; nothing
+  for XRv9k in this release; no push to the Git host (the lab's saves are local commits).
+- **Full suites from a separate worktree that holds exactly this release** (the IOS XR driver of the next release is
+  not in it): 815 Python tests with 1 skipped (the opt-in EOS SSH fixture), 192 browser tests; `verify-release.py`,
+  `check_links.py` (88 files), `git diff --check`, and a scan of the committed evidence and tools for hashes, keys and
+  tokens (clean).
+
 # Multi-platform restore, part 1: Arista cEOS and the driver contract — 1.30.27
 
 Prepared on `claude/multi-platform-restore` on 2026-09-20/21 from `main` `e4f466a` (1.30.26) on the development VM

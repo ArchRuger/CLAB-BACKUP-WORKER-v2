@@ -32,6 +32,16 @@ The observations below stand; two of the original conclusions did not, and the s
   configuration need not be a superuser's. Recorded as a limitation in the README.
 - §6's "88 probes, 0 failures" came from a script whose output was not kept; read it as indicative.
 
+- **§2 needs a condition (added 2026-09-21 after the QA run `17-acceptance-final-build.md`).** "A plain `commit` of a
+  configuration without `root-authentication` succeeds" was observed twice on 2026-09-20 while the node had NEVER had the
+  statement (the state the lab image boots in). Once the statement had been committed (the synthesis of §2 put it there),
+  QA reproduced twice that a commit which REMOVES it is refused, bare `commit` included ("Missing mandatory statement").
+  Both observations stand; the rule on this image is about removing the statement, not about `commit` versus
+  `commit check`. For the driver nothing changes: a candidate without the statement cannot be committed with a
+  confirmation, so the synthesis is needed, and it was then exercised through the product from a backup taken before the
+  statement existed (`57-evo-root-authentication-synthesized-through-the-product.json`: `root_authentication:
+  synthesized`, `verified`).
+
 ## Summary verdict
 
 The replace-and-confirm mechanism works on this platform (§3, §5). Settled here: the login lands in

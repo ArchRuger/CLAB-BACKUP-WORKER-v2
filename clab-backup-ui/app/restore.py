@@ -48,6 +48,7 @@ PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'mess
 NO_ARTIFACT = 'This saved configuration has no restore data for this node.'
 UNUSABLE = 'The saved restore data for this node is not usable: '
 FOREIGN_PENDING = 'Another change is waiting for confirmation on this node.'
+BAD_LOGIN = 'The node rejected the login credentials.'
 # Target states that mean "a driver may have armed a change and nobody confirmed it".
 IN_FLIGHT = ('applying', 'confirming')
 # A configuration line is shown only up to its first secret keyword. What follows differs per NOS (a
@@ -104,14 +105,15 @@ class RestoreService:
         self.retry_interval = 10      # seconds between reconnect attempts inside the recovery window
         self.recovery_grace = 90      # seconds past the window before giving up: Junos was seen rolling back 35 s late
         self.window_seconds = lambda minutes: int(minutes) * 60
+        self.connect_pause = 3        # seconds between the attempts to open a connection
         self.unchecked = []           # (job id, node name) of changes a restart left in flight
         self.rechecks = {}            # job id -> nodes still to be read back after that restart
         with store.lock:
             for job in store.state.setdefault('restore_jobs', []):
                 if job['status'] in RESTORE_BUSY:
                     job.update(status='interrupted', finished=now(),
-                               message='Manager restarted during a restore. Check the target nodes; '
-                                       'a confirmed commit that was not confirmed rolls back on its own.')
+                               message='Manager restarted during a restore. It is checking the devices that were being '
+                                       'changed; a change it had not confirmed is undone by the device itself.')
                     for target in job.get('targets', []):
                         if target.get('status') in IN_FLIGHT:
                             self.unchecked.append((job['id'], target['name']))
@@ -328,26 +330,43 @@ class RestoreService:
             node = next(n for n in lab['nodes'] if n['name'] == row['name'])
             creds = effective_credentials(lab, node)
             try:
-                refusal = self._live_refusal(node, creds)
+                refusal, current = self._probe(node, creds, capture=True)
                 if refusal:
                     row.update(reachable=True, eligible=False, reason=refusal)
                     continue
-                current = self._capture(node, creds)
                 missing, extra, converged = compare_for(node['platform'], candidates[row['name']]['desired_set'], current)
                 row.update(reachable=True, matches_saved=converged,
                            pending_changes=len(missing) + len(extra))
+            except paramiko.AuthenticationException:
+                row.update(reachable=True, eligible=False, reason=BAD_LOGIN)
             except Exception as exc:
                 row.update(reachable=False, eligible=False,
                            reason=scrub(f'SSH probe failed: {type(exc).__name__}', self.store.state))
         return {'source': desc, 'targets': rows,
                 'eligible_count': sum(1 for r in rows if r['eligible'] and r['requested'])}
 
+    def _open(self, node, creds):
+        """A connected SSH client. A refused or silent connection is tried again a few times: nothing
+        has been sent yet, and IOS XR turns away connections that follow each other too quickly (seen
+        live). Rejected credentials are not retried."""
+        for attempt in range(3):
+            client = paramiko.SSHClient()
+            try:
+                self.connect(client, node, creds)
+                return client
+            except paramiko.AuthenticationException:
+                client.close()
+                raise
+            except (OSError, EOFError, paramiko.SSHException):
+                client.close()
+                if attempt == 2 or self.stopping.wait(self.connect_pause):
+                    raise
+
     def _session(self, node, creds, call):
         """Open one SSH connection to the node, run `call(client, driver, options)`, close it."""
         driver = drivers.for_platform(node['platform'])
-        client = paramiko.SSHClient()
+        client = self._open(node, creds)
         try:
-            self.connect(client, node, creds)
             return call(client, driver, drivers.options(driver, creds))
         finally:
             client.close()
@@ -355,17 +374,24 @@ class RestoreService:
     def _capture(self, node, creds):
         return self._session(node, creds, lambda client, driver, opts: driver.capture(client, **opts))
 
-    def _pending(self, node, creds):
-        return self._session(node, creds, lambda client, driver, opts: driver.pending(client, **opts))
+    def _probe(self, node, creds, capture=False):
+        """Look at a node over ONE connection. Returns (refusal, active configuration or None).
+
+        `refusal` says why a restore must not start on this node right now although it is reachable:
+        somebody's change awaits confirmation, or the driver names another blocker (Junos: uncommitted
+        edits in the shared candidate; IOS XR: an open configuration session). '' when nothing stands in
+        the way; then, with `capture`, the active configuration is read too. Connectivity errors propagate."""
+        def look(client, driver, opts):
+            if driver.pending(client, **opts):
+                return FOREIGN_PENDING, None
+            blocked = driver.blocked(client, **opts) if hasattr(driver, 'blocked') else ''
+            if blocked:
+                return blocked, None
+            return '', driver.capture(client, **opts) if capture else None
+        return self._session(node, creds, look)
 
     def _live_refusal(self, node, creds):
-        """Why a restore must not start on this node right now although it is reachable: somebody's
-        change awaits confirmation, or the driver names another blocker (Junos: uncommitted edits in
-        the shared candidate). '' when nothing stands in the way. Connectivity errors propagate."""
-        if self._pending(node, creds):
-            return FOREIGN_PENDING
-        return self._session(node, creds, lambda client, driver, opts:
-                             driver.blocked(client, **opts) if hasattr(driver, 'blocked') else '') or ''
+        return self._probe(node, creds)[0]
 
     # --- execution -------------------------------------------------------------
 
@@ -563,15 +589,14 @@ class RestoreService:
         # after a successful apply and confirms on it once a fresh connection has proven management.
         holds = getattr(driver, 'HOLDS_SESSION', False)
         result, lost = None, ''
-        client = paramiko.SSHClient()
         try:
-            try:
-                self.connect(client, node, creds)
-            except Exception as exc:
-                message = self._scrubbed(type(exc).__name__)
-                self.update_target(job_id, name, status='failed', message='Configuration was not changed. Connectivity: ' + message)
-                self.event('restore.node', 'Not changed: the node could not be reached. ' + message, lab_id, job_id, name, level='error')
-                return
+            client = self._open(node, creds)
+        except Exception as exc:
+            message = BAD_LOGIN if isinstance(exc, paramiko.AuthenticationException) else 'Connectivity: ' + self._scrubbed(type(exc).__name__)
+            self.update_target(job_id, name, status='failed', message='Configuration was not changed. ' + message)
+            self.event('restore.node', 'Not changed: the node could not be reached. ' + message, lab_id, job_id, name, level='error')
+            return
+        try:
             try:
                 result = driver.apply_candidate(client, cand['candidate'], confirm_minutes, token=token, **opts)
             except SessionLost as exc:

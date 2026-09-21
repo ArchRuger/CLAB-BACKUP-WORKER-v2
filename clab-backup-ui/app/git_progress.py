@@ -165,7 +165,11 @@ def captured_snapshot(store, backup, context=None):
             raise ValueError('Use nonempty configs up to 2 MiB each and 16 MiB per snapshot.')
         try: raw.decode('utf-8')
         except UnicodeError: raise ValueError('Captured configuration is not valid UTF-8 text.')
-        # Whole-device restore candidate captured beside the backup (Junos only for now).
+        # Integrity: the runner records a digest when it stores a capture (captures older than that carry
+        # none and are taken as they are). A stored file that no longer matches is never saved or applied.
+        if node.get('sha256') and hashlib.sha256(raw).hexdigest() != node['sha256']:
+            raise ValueError('A stored capture no longer matches the digest recorded when it was taken. Take a new backup.')
+        # Whole-device restore candidate captured beside the backup (restore-capable platforms).
         restore_raw = None
         rpath = stored_restore_path(store, backup, node)
         if rpath is not None:
@@ -175,6 +179,8 @@ def captured_snapshot(store, backup, context=None):
                 raise ValueError('Use nonempty configs up to 2 MiB each and 16 MiB per snapshot.')
             try: restore_raw.decode('utf-8')
             except UnicodeError: raise ValueError('Captured restore candidate is not valid UTF-8 text.')
+            if node.get('restore_sha256') and hashlib.sha256(restore_raw).hexdigest() != node['restore_sha256']:
+                raise ValueError('A stored restore candidate no longer matches the digest recorded when it was taken. Take a new backup.')
         label = component(short_name(node, backup.get('lab_name', '')))
         suffix = PLATFORMS[platform]['suffix']
         name = f'{label}.{suffix}'

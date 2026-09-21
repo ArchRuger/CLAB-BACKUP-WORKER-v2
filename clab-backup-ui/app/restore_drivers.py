@@ -12,7 +12,7 @@ node's kind to it. A driver provides:
 ``apply_candidate(client, candidate, confirm_minutes, **options) -> dict``
     Replace the whole active configuration with the candidate inside the NOS's own transaction and
     activate it with the NOS's own timed recovery (Junos ``commit confirmed``, EOS
-    ``commit timer``, IOS XR ``commit confirmed``). Returns ``diff`` (the device's own review
+    ``commit timer``, IOS XR ``commit replace confirmed``). Returns ``diff`` (the device's own review
     diff), ``no_op`` and ``handle``: whatever a later confirmation on a *fresh* connection needs.
 ``confirm(client, handle, **options) -> dict``
     Cancel the timed recovery and make the configuration persistent where the NOS does not do that

@@ -16,11 +16,11 @@ Sequence, proven live on ``juniper_cjunosevolved`` (26.2R1.7-EVO) and ``juniper_
    without touching them). Then ``configure exclusive``; there is no fallback to a shared session,
    because discarding the candidate there would destroy another operator's work.
 2. ``load override terminal`` with the candidate, ended by Ctrl-D.
-3. Ensure the mandatory ``system root-authentication`` exists. On cJunosEvolved a bare ``commit``
-   only warns about the missing statement, but ``commit check`` and ``commit confirmed`` reject it
-   ("Missing mandatory statement"), and the lab image ships without it; when the candidate lacks
-   it, synthesise one from the candidate's own superuser login password so the node stays reachable
-   and self-consistent.
+3. Ensure the mandatory ``system root-authentication`` exists. The cJunosEvolved lab image ships
+   without it, and ``commit check`` / ``commit confirmed`` reject a candidate that lacks it ("Missing
+   mandatory statement"; once the statement exists, even a bare ``commit`` that removes it is
+   refused). When the candidate lacks it, synthesise one from the candidate's own login password so
+   the node stays reachable and self-consistent.
 4. ``show | compare`` for the review diff, then ``commit check``.
 5. ``commit confirmed <minutes> comment <token>``: activates with an automatic rollback timer. The
    comment is the change's identity: ``show system commit`` prints it under entry 0, followed by
@@ -156,8 +156,7 @@ def _ensure_root_authentication(shell, candidate):
     After ``load override`` the candidate equals ``candidate``, so its own text is the reliable
     source (querying the device in configuration mode is not: the echoed command name itself
     contains "root-authentication"). ``commit check`` and ``commit confirmed`` reject a candidate
-    without the mandatory statement (a bare ``commit`` only warns), and the cJunosEvolved lab image
-    ships without it. Returns 'present', 'synthesized' (added from the first login
+    without the mandatory statement, and the cJunosEvolved lab image ships without it. Returns 'present', 'synthesized' (added from the first login
     encrypted-password of the candidate: the only login in a lab image, but in a multi-user
     configuration not necessarily a superuser's), or raises when neither is possible.
     """

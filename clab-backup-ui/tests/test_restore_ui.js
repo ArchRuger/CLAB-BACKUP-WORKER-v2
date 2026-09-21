@@ -43,6 +43,7 @@ test('restorePlatformLabel shows a short device-type label for known containerla
 test('restore words: preflight reasons, result sentence and titles are the student\'s, the backend text stays available',()=>{
  const c=ctx();
  assert.equal(c.restoreReasonLabel('SSH probe failed: TimeoutError'),'The device did not answer over SSH.');
+ assert.equal(c.restoreReasonLabel('The node rejected the login credentials.'),'The device rejected the login. Check its credentials (Advanced › Credentials).','a wrong password is not "did not answer"');
  assert.equal(c.restoreReasonLabel('Assign NOS credentials to this node first.'),'Add login credentials for this device first (Advanced › Credentials).');
  assert.equal(c.restoreReasonLabel('Live restore is not supported for this platform: cisco_iosv'),'This kind of device cannot be updated this way yet.','no platform is singled out any more');
  assert.equal(c.restoreReasonLabel('This saved configuration has no restore data for this node'),'This saved version was made before this kind of device could be restored. Save the lab again to get a restorable version.');
@@ -51,7 +52,8 @@ test('restore words: preflight reasons, result sentence and titles are the stude
  assert.equal(c.restoreReasonLabel('Something new'),'Something new');
  // rollback_expected and uncertain now count as "needs attention" (neither is a verified outcome);
  // rolled_back (checked, self-undone) counts as "not changed".
- assert.equal(c.restoreResultSentence({status:'partial',targets:[{status:'verified'},{status:'rolled_back'},{status:'uncertain'},{status:'rollback_expected'}]}),'Configuration replaced on 1 device. 2 devices need attention. 1 device was not changed.');
+ assert.equal(c.restoreResultSentence({status:'partial',targets:[{status:'verified'},{status:'rolled_back'},{status:'uncertain'},{status:'rollback_expected'}]}),'Configuration replaced on 1 device. 2 devices need attention. 1 device undid the change; its previous configuration is back.','an undone device was changed for a while: it is not counted as "not changed"');
+ assert.equal(c.restoreResultSentence({status:'partial',targets:[{status:'verified'},{status:'failed'},{status:'rolled_back'},{status:'rolled_back'}]}),'Configuration replaced on 1 device. 2 devices undid the change; their previous configuration is back. 1 device was not changed.');
  assert.equal(c.restoreResultSentence({status:'applying',targets:[{status:'applying'}]}),'');
  assert.equal(c.restoreJobTitle({status:'applying'}),'Applying saved configuration');assert.equal(c.restoreJobTitle({status:'succeeded'}),'Configuration replaced');assert.equal(c.restoreJobTitle({status:'preflight_failed'}),'Configuration not replaced');
  const tables=vm.runInContext('({job:restoreJobLabels,target:restoreTargetLabels})',c);
@@ -81,6 +83,14 @@ test('a job target row shows the device-type label, the new status help lines an
  assert.match(notSaved,/Replaced, but the device did not save it as its startup configuration; a device restart would lose it\./);
  const saved=c.restoreTargetRow({name:'ceos3',status:'verified',platform:'arista_ceos',persistence:'saved'});
  assert.doesNotMatch(saved,/did not save it as its startup configuration/);
+ // A device that was not changed says why beside its badge, not only under Details (actionable).
+ const refused=c.restoreTargetRow({name:'xrv9k',status:'failed',platform:'cisco_xrv9k',message:'Configuration was not changed: Another change on this node is already pending confirmation; this restore was not started.'});
+ assert.match(refused,/form-help">Another change on this node is already pending confirmation; this restore was not started\.<\/p>/);
+ const badLogin=c.restoreTargetRow({name:'ceos',status:'failed',platform:'arista_ceos',message:'Configuration was not changed. The node rejected the login credentials.'});
+ assert.match(badLogin,/form-help">The device rejected the login\. Check its credentials/);
+ const unreachable=c.restoreTargetRow({name:'ceos',status:'failed',platform:'arista_ceos',message:'Configuration was not changed. Connectivity: TimeoutError'});
+ assert.match(unreachable,/form-help">The device did not answer over SSH\.<\/p>/);
+ assert.doesNotMatch(c.restoreTargetRow({name:'x',status:'failed',platform:'arista_ceos',message:'Configuration was not changed: <b>x</b>'}),/<b>/,'escaped');
  const unknownKind=c.restoreTargetRow({name:'r1',status:'verified',platform:'linux'});
  assert.doesNotMatch(unknownKind,/<span class="caption">/,'an unknown kind shows no device-type label');
 });

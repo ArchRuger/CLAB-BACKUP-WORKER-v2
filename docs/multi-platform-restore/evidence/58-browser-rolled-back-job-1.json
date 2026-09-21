@@ -1,0 +1,111 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:f7e0f326a99abd1c9921329eb3880469a9e44fd1c45a3ea1915887955f32062d",
+  "container_started": "2026-09-21T01:47:43.592960123Z",
+  "git_head": "3c5d954d9ed1",
+  "git_dirty_files": 7
+ },
+ "viewport": "desktop",
+ "row": "Latest",
+ "via": "row",
+ "nodes": [],
+ "started_utc": "2026-09-21T02:22:18Z",
+ "runs": [
+  {
+   "label": "show-job",
+   "job_id": "35a8e1d7b5dd424da3635ea1a2db5c18",
+   "job": {
+    "id": "35a8e1d7b5dd424da3635ea1a2db5c18",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-21T00:46:50.611425+00:00",
+    "finished": "2026-09-21T00:49:04.996062+00:00",
+    "status": "failed",
+    "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+    "source": {
+     "type": "backup",
+     "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+     "captured_at": "2026-09-20T23:27:24.637713+00:00",
+     "lab_name": "restore-square",
+     "restore_capable_nodes": 3,
+     "saved_nodes": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ]
+    },
+    "confirm_minutes": 2,
+    "pre_backup_job_id": "39d91f8de2704ba8ab4adcc64c14e1a3",
+    "post_backup_job_id": "",
+    "targets": [
+     {
+      "name": "clab-restore-square-ceos",
+      "short_name": "ceos",
+      "platform": "arista_ceos",
+      "status": "rolled_back",
+      "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active.",
+      "diff_sample": [
+       "--- system:/running-config",
+       "+++ session:/clabmgr-4d945cb9-session-config",
+       "-vlan 777",
+       "-   name B-ONLY",
+       " !",
+       " interface Ethernet1",
+       "-   description B changed",
+       "+   description A to-cjunosevolved",
+       "+!",
+       "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+       " !",
+       "-ip route 198.51.100.0/24 Null0"
+      ],
+      "no_op": false
+     }
+    ]
+   },
+   "final_text": "Configuration not replaced\n\u00d7\nConfiguration not replaced\n\nConfiguration replaced on 0 devices. 1 device was not changed.\n\nUndone \u2014 previous configuration is back ceos EOS\n\nThe device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous configuration is active.\n\nDetails\nDetails\nBackup taken before the change\n39d91f8de270\nAutomatic undo window\n2 minutes\nStatus\nfailed\nMessage\nNo node was restored. Existing configurations were preserved by the safety backup.",
+   "final_badges": [
+    {
+     "device": "ceos",
+     "badge": "Undone \u2014 previous configuration is back",
+     "cls": "badge bad",
+     "help": [
+      "The device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous configuration is active."
+     ]
+    }
+   ]
+  }
+ ],
+ "console_errors": [],
+ "checks": [
+  {
+   "check": "the page loads restore.js of the running release",
+   "ok": true,
+   "detail": "http://127.0.0.1:8081/static/restore.js?v=1.30.27"
+  },
+  {
+   "check": "the result leads with the outcome and keeps the details collapsed",
+   "ok": true,
+   "detail": "Configuration not replaced\n\u00d7\nConfiguration not replaced\n\nConfiguration replaced on 0 devices. 1 device was not changed.\n\nUndone \u2014 previous configuration is back ceos EOS\n\nThe device could not be confi"
+  },
+  {
+   "check": "no \"undefined\" or raw markup in the result",
+   "ok": true,
+   "detail": "Configuration not replaced\n\u00d7\nConfiguration not replaced\n\nConfiguration replaced on 0 devices. 1 device was not changed.\n\nUndone \u2014 previous configuration is back ceos EOS\n\nThe device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous configuration is a"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "no static asset failed to load",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "not_exercised": [],
+ "finished_utc": "2026-09-21T02:22:18Z"
+}

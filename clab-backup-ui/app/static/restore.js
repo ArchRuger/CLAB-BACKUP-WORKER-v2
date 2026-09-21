@@ -35,6 +35,7 @@ const restoreReasons = [
  ['The node is not currently running or discovery is stale', 'This device is not running, or the lab status is out of date.'],
  ['Assign NOS credentials to this node first', 'Add login credentials for this device first (Advanced › Credentials).'],
  ['Refresh VM discovery before restoring', 'Refresh the lab list (Manager ▾ › Refresh lab list), then try again.'],
+ ['The node rejected the login credentials', 'The device rejected the login. Check its credentials (Advanced › Credentials).'],
  ['SSH probe failed', 'The device did not answer over SSH.'],
  ['This saved configuration has no restore data for this node', 'This saved version was made before this kind of device could be restored. Save the lab again to get a restorable version.'],
  ['The saved restore data for this node is not usable', 'The saved configuration for this device is incomplete or damaged, so it was not applied.'],
@@ -63,6 +64,11 @@ function restoreReasonLabel(reason) {
  const match = restoreReasons.find(([prefix]) => text.startsWith(prefix));
  return match ? match[1] : text;
 }
+// Why a device was not changed, shown beside it (not only under Details): the manager's sentence without its
+// fixed lead-in. Drivers and the service word these for the student; nothing of the device's output is in them.
+function restoreNotChangedReason(message) {
+ return String(message || '').replace(/^Configuration was not changed[.:]\s*/, '').replace(/^Connectivity: .*/, 'The device did not answer over SSH.');
+}
 function restoreWhen(value) {
  if (!value) return '';
  return typeof relativeTime === 'function' ? relativeTime(value) : utcDisplay(value);
@@ -73,10 +79,13 @@ function restoreResultSentence(job) {
  if (restoreActiveJob.has(job.status) || !targets.length) return '';
  const replaced = targets.filter(t => restoreReplacedTarget.has(t.status)).length;
  const attention = targets.filter(t => restoreAttentionTarget.has(t.status)).length;
- const unchanged = targets.filter(t => restoreUnchangedTarget.has(t.status)).length;
+ // A device that undid the change was changed for a while: it is not "not changed".
+ const undone = targets.filter(t => t.status === 'rolled_back').length;
+ const unchanged = targets.filter(t => restoreUnchangedTarget.has(t.status)).length - undone;
  const plural = n => n === 1 ? 'device' : 'devices';
  const parts = [`Configuration replaced on ${replaced} ${plural(replaced)}.`];
  if (attention) parts.push(`${attention} ${plural(attention)} need${attention === 1 ? 's' : ''} attention.`);
+ if (undone) parts.push(`${undone} ${plural(undone)} undid the change; ${undone === 1 ? 'its' : 'their'} previous configuration is back.`);
  if (unchanged) parts.push(`${unchanged} ${plural(unchanged)} ${unchanged === 1 ? 'was' : 'were'} not changed.`);
  return parts.join(' ');
 }
@@ -187,6 +196,7 @@ function restoreTargetRow(t) {
   ${t.status === 'uncertain' ? '<p class="form-help">The manager could not check this device after the change. Look at it before relying on it.</p>' : ''}
   ${t.persistence === 'not_saved' ? '<p class="form-help">Replaced, but the device did not save it as its startup configuration; a device restart would lose it.</p>' : ''}
   ${t.status === 'ineligible' && t.message ? `<p class="form-help">${esc(restoreReasonLabel(t.message))}</p>` : ''}
+  ${t.status === 'failed' && t.message ? `<p class="form-help">${esc(restoreReasonLabel(restoreNotChangedReason(t.message)))}</p>` : ''}
   ${t.message ? `<details class="caption"><summary>Details</summary><p>${esc(t.message)}</p></details>` : ''}</div>`;
 }
 function restoreRenderJob(job) {
