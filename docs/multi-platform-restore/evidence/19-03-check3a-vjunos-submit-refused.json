@@ -1,0 +1,9 @@
+{
+  "purpose": "check3(a) vjunos-switch: submit refused with 409 while a foreign commit confirmed is pending; no job or backup created",
+  "restore_jobs_count_before": 104,
+  "restore_jobs_count_after": 104,
+  "backup_jobs_count_before": 300,
+  "backup_jobs_count_after": 300,
+  "submit_http_status": 409,
+  "submit_body": {"detail": "Some selected nodes cannot be restored right now: clab-restore-square-vjunos-switch: Another change is waiting for confirmation on this node."}
+}

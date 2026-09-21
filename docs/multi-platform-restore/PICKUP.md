@@ -9,7 +9,7 @@ evidence is referenced here.
 
 1. Routing and environment preflight, the square lab, vJunos-switch baseline. **Done** (no code release: read-only baseline).
 2. cEOS 4.35.0F: prerequisites, capture and restore path, UI, positive and failure tests. **Done: release 1.30.27, commit `3c5d954`, pushed 2026-09-21, draft PR #47.** Owed on the final build and running as a QA agent: B4/B5 rerun, the saved-Git-version source, Evolved and vJunos-switch product-level B4/B5, the root-authentication synthesis through the product (evidence `17-*`).
-3. cJunosEvolved 26.2R1.7-EVO: find the real gap, same acceptance checks.
+3. cJunosEvolved 26.2R1.7-EVO: find the real gap, same acceptance checks. **Done: release 1.30.28, commit `af036c9`, pushed 2026-09-21** (built in a separate worktree so the XR files and the agents' in-flight files stayed out; the main checkout was then moved to it with `git update-ref` + `git reset`, markers with `set-release.py`). QA wave two (`19-*`) was still running and lands in the next release.
 4. XRv9k 24.3.1: implementation and the same acceptance checks.
 5. All-four integration, mixed-platform restore from the running UI, final regression.
 
@@ -302,7 +302,7 @@ cEOS boot identity = age of PID 1 (`show version` Uptime is not one).
 API, contention with Save and lab operations, a real `verify_mismatch`, Junos B1; plus `tools/failure_harness.py`),
 docs-auditor (guides for IOS XR).
 
-**Release plan:** 1.30.28 = chunk 3 (everything above that is not XR-specific, after QA wave two), 1.30.29 = chunk 4 (XR
+**Release plan (1.30.28 is done):** 1.30.28 = chunk 3 (everything above that is not XR-specific, after QA wave two), 1.30.29 = chunk 4 (XR
 driver + registration + inventory + CI + evidence `40-*`, `xr-live-facts.md`), 1.30.30 = chunk 5 (all-four, mixed,
 persistence, final matrix). Split by reverse-applying the XR-only hunks for the first commit.
 

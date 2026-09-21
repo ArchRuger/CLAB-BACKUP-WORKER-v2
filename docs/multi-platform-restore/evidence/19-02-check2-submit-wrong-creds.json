@@ -1,0 +1,173 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:845bcd0df1b99953d6d74c6125f4c4bd5104baf32336b577a12715c7b54164ab",
+  "container_started": "2026-09-21T02:23:08.730824071Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 3
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "folder",
+  "path": "restore-square/work/latest"
+ },
+ "requested": [
+  "clab-restore-square-ceos"
+ ],
+ "started_utc": "02:40:28",
+ "device_readback_before": {
+  "read_at_utc": "2026-09-21T02:40:28Z",
+  "nodes": {
+   "ceos": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 4,
+    "b_only_markers": 4,
+    "configuration_lines": 74,
+    "pending_confirmation": false,
+    "boot": "PID 1 up 15825 s",
+    "up_seconds": 15825,
+    "own_sessions_left_pending": 0,
+    "active": "B"
+   }
+  }
+ },
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "folder",
+    "path": "restore-square/work/latest",
+    "folder": "restore-square/work",
+    "captured_at": "2026-09-21T01:48:31.488220+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": false,
+     "reason": "The node rejected the login credentials.",
+     "requested": true,
+     "reachable": true
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    }
+   ],
+   "eligible_count": 0
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "cfff5e9de15442d69053d9f0a9786c12"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "02:40:30",
+   "job": "backing_up",
+   "targets": {
+    "ceos": "backing_up"
+   }
+  },
+  {
+   "utc": "02:40:32",
+   "job": "failed",
+   "targets": {
+    "ceos": "failed"
+   }
+  }
+ ],
+ "job": {
+  "id": "cfff5e9de15442d69053d9f0a9786c12",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T02:40:30.392944+00:00",
+  "finished": "2026-09-21T02:40:31.742258+00:00",
+  "status": "failed",
+  "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T01:48:31.488220+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "2d4db5d58f344dd6be14c180a0d996ce",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "failed",
+    "message": "Pre-restore backup failed for this node; it was not changed."
+   }
+  ]
+ },
+ "device_readback_after": {
+  "read_at_utc": "2026-09-21T02:40:32Z",
+  "nodes": {
+   "ceos": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 4,
+    "b_only_markers": 4,
+    "configuration_lines": 74,
+    "pending_confirmation": false,
+    "boot": "PID 1 up 15828 s",
+    "up_seconds": 15828,
+    "own_sessions_left_pending": 0,
+    "active": "B"
+   }
+  }
+ },
+ "finished_utc": "02:40:32"
+}

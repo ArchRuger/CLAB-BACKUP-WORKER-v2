@@ -1,0 +1,108 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:4ce4d6534f439fbe16df64c207ce2887994dc65ccf86e930dd1ca927de7b1e9c",
+  "container_started": "2026-09-21T01:44:04.207425623Z",
+  "git_head": "3c5d954d9ed1",
+  "git_dirty_files": 6
+ },
+ "viewport": "desktop",
+ "row": "Latest",
+ "via": "row",
+ "nodes": [],
+ "started_utc": "2026-09-21T01:44:49Z",
+ "runs": [
+  {
+   "label": "review-only",
+   "review_text": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: work \u00b7 CLAB-MNGR-DEV-LLM \u203a restore-square/work \u00b7 saved 3 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS Already matches \u2014 nothing to change\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch Junos Already matches \u2014 nothing to change\nxrv9k IOS XR Skipped \u2014 This saved version was made before this kind of device could be restored. Save the lab again to get a restorable version.\nDetails\nEach device's current configuration is backed up first. A device whose backup fails is left unchanged.\nThe devices are not rebooted. The device itself checks the new configuration when it is activated, and the change is undone on its own if the device cannot be reached again within 5 minutes.\nDevices that are skipped above are not touched.\nAdvanced options\nI understand the running configuration on the selected devices will be replaced.\nCancel\nReplace configurations",
+   "review_devices": [
+    {
+     "name": "clab-restore-square-ceos",
+     "disabled": false,
+     "checked": true,
+     "text": "ceos EOS Already matches \u2014 nothing to change"
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "disabled": false,
+     "checked": true,
+     "text": "cjunosevolved Junos Evolved Already matches \u2014 nothing to change"
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "disabled": false,
+     "checked": true,
+     "text": "vjunos-switch Junos Already matches \u2014 nothing to change"
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "disabled": true,
+     "checked": false,
+     "text": "xrv9k IOS XR Skipped \u2014 This saved version was made before this kind of device could be restored. Save the lab again to get a restorable version."
+    }
+   ]
+  }
+ ],
+ "page_scroll_width_before_dialog": 1366,
+ "console_errors": [],
+ "checks": [
+  {
+   "check": "the page loads restore.js of the running release",
+   "ok": true,
+   "detail": "http://127.0.0.1:8081/static/restore.js?v=1.30.27"
+  },
+  {
+   "check": "the Saved versions list has the row",
+   "ok": true,
+   "detail": "Latest"
+  },
+  {
+   "check": "the saved version offers \"Apply to running lab...\" (folder source)",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the review names the dialog, the lab and the source",
+   "ok": true,
+   "detail": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: work \u00b7 CLAB-MNGR-DEV-LLM \u203a restore-square/work \u00b7 saved 3 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS Already matches \u2014 nothing to change\ncjunosevolved Junos Evolved Already matc"
+  },
+  {
+   "check": "the review promises the backup, no reboot and the automatic undo",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "at least 1 device(s) that cannot be restored are listed, disabled, unticked, each with a reason",
+   "ok": true,
+   "detail": "['xrv9k IOS XR Skipped \u2014 This saved version was made before this kind of device could be restored. Save the lab again to get a restorable version.']"
+  },
+  {
+   "check": "with nothing eligible the Replace button is disabled",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "opening the review adds no horizontal page scroll",
+   "ok": true,
+   "detail": "(1366, 1366)"
+  },
+  {
+   "check": "nothing inside the review overflows the viewport",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "no static asset failed to load",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "not_exercised": [],
+ "finished_utc": "2026-09-21T01:44:55Z"
+}

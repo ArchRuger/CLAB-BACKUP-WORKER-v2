@@ -1,0 +1,16 @@
+configure
+interface GigabitEthernet0/0/0/0
+description B changed
+root
+router static
+address-family ipv4 unicast
+no 192.0.2.4/32 Null0
+root
+prefix-set B-ONLY
+198.51.100.0/24
+end-set
+interface Loopback777
+ipv4 address 198.51.100.77 255.255.255.255
+root
+commit
+end

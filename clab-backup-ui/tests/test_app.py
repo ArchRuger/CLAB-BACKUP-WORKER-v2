@@ -141,11 +141,16 @@ class AppTests(unittest.TestCase):
         folder=Path(self.tmp.name)/'backups'/lab['id']/'latest'
         count=subprocess.check_output(['git','-C',str(folder),'rev-list','--count','HEAD'],text=True).strip()
         self.assertEqual(count,'1')
+        # IOS XR's running-config is its own restore candidate: one capture, the artifact is the backup text
+        # under its own name, and it stays out of the download ZIP (two entries, asserted below).
+        outcome=next(n for n in state['jobs'][0]['nodes'] if n['name'].endswith('PE1'))
+        self.assertTrue(outcome['restore_file'].endswith('.xrcfg'),outcome)
+        self.assertEqual(outcome['restore_format'],'iosxr-running-config')
+        self.assertEqual((folder/outcome['restore_file']).read_bytes(),(folder/outcome['file']).read_bytes())
         # The runner records the digest of what it stored; readers refuse a capture that no longer matches it.
         import hashlib
-        outcome=next(n for n in state['jobs'][0]['nodes'] if n['name'].endswith('PE1'))
         self.assertEqual(outcome['sha256'],hashlib.sha256((folder/outcome['file']).read_bytes()).hexdigest())
-        self.assertNotIn('restore_file',outcome)   # IOS XR is not restore-capable yet
+        self.assertEqual(outcome['restore_sha256'],hashlib.sha256((folder/outcome['restore_file']).read_bytes()).hexdigest())
         response=self.client.get('/api/jobs/fixture1/download',headers=self.auth)
         self.assertEqual(response.status_code,200,response.text if response.status_code!=200 else '')
         with zipfile.ZipFile(io.BytesIO(response.content)) as z:

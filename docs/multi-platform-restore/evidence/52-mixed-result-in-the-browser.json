@@ -1,0 +1,195 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:f7e0f326a99abd1c9921329eb3880469a9e44fd1c45a3ea1915887955f32062d",
+  "container_started": "2026-09-21T01:47:43.592960123Z",
+  "git_head": "3c5d954d9ed1",
+  "git_dirty_files": 7
+ },
+ "viewport": "desktop",
+ "row": "Latest",
+ "via": "row",
+ "nodes": [],
+ "started_utc": "2026-09-21T02:13:00Z",
+ "runs": [
+  {
+   "label": "show-job",
+   "job_id": "a8a319243d864bc8a56eb490389a2e0a",
+   "job": {
+    "id": "a8a319243d864bc8a56eb490389a2e0a",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-21T02:09:35.897057+00:00",
+    "finished": "2026-09-21T02:10:29.292842+00:00",
+    "status": "partial",
+    "message": "3/4 node(s) restored and verified; 1 did not complete.",
+    "source": {
+     "type": "folder",
+     "path": "restore-square/work/latest",
+     "folder": "restore-square/work",
+     "captured_at": "2026-09-21T01:48:31.488220+00:00",
+     "lab_name": "restore-square",
+     "restore_capable_nodes": 4,
+     "saved_nodes": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ]
+    },
+    "confirm_minutes": 5,
+    "pre_backup_job_id": "e70bc79fd9cf4eb6a7e79a3eb1a857d1",
+    "post_backup_job_id": "eeed7d7c36b840d6a286a892f3c88670",
+    "targets": [
+     {
+      "name": "clab-restore-square-ceos",
+      "short_name": "ceos",
+      "platform": "arista_ceos",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state.",
+      "diff_sample": [
+       "--- system:/running-config",
+       "+++ session:/clabmgr-3dd1cb9c-session-config",
+       "-vlan 777",
+       "-   name B-ONLY",
+       " !",
+       " interface Ethernet1",
+       "-   description B changed",
+       "+   description A to-cjunosevolved",
+       "+!",
+       "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+       " !",
+       "-ip route 198.51.100.0/24 Null0"
+      ],
+      "no_op": false,
+      "persistence": "saved",
+      "missing_statements": 0,
+      "extra_statements": 0
+     },
+     {
+      "name": "clab-restore-square-cjunosevolved",
+      "short_name": "cjunosevolved",
+      "platform": "juniper_cjunosevolved",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state.",
+      "diff_sample": [
+       "[edit interfaces et-0/0/0]",
+       "-   description \"B changed\";",
+       "+   description \"A to-ceos\";",
+       "[edit policy-options]",
+       "-   prefix-list B-ONLY {",
+       "-       198.51.100.0/24;",
+       "-   }",
+       "[edit routing-options static]",
+       "+    route 192.0.2.2/32 discard;",
+       "-    route 198.51.100.0/24 discard;",
+       "[edit]"
+      ],
+      "no_op": false,
+      "root_authentication": "present",
+      "persistence": "saved",
+      "missing_statements": 0,
+      "extra_statements": 0
+     },
+     {
+      "name": "clab-restore-square-vjunos-switch",
+      "short_name": "vjunos-switch",
+      "platform": "juniper_vjunosswitch",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state.",
+      "diff_sample": [
+       "[edit interfaces ge-0/0/0]",
+       "-   description \"B changed\";",
+       "+   description \"A to-cjunosevolved\";",
+       "[edit policy-options]",
+       "-   prefix-list B-ONLY {",
+       "-       198.51.100.0/24;",
+       "-   }",
+       "[edit routing-options]",
+       "+   static {",
+       "+       route 192.0.2.3/32 discard;",
+       "+   }",
+       "[edit]",
+       "-  vlans {",
+       "-      B-ONLY {",
+       "-          vlan-id 777;",
+       "-      }",
+       "-  }",
+       "[edit]"
+      ],
+      "no_op": false,
+      "root_authentication": "present",
+      "persistence": "saved",
+      "missing_statements": 0,
+      "extra_statements": 0
+     },
+     {
+      "name": "clab-restore-square-xrv9k",
+      "short_name": "xrv9k",
+      "platform": "cisco_xrv9k",
+      "status": "failed",
+      "message": "Configuration was not changed: Another change on this node is already pending confirmation; this restore was not started."
+     }
+    ]
+   },
+   "final_text": "Configuration replaced \u2014 needs attention\n\u00d7\nConfiguration replaced on some devices\n\nConfiguration replaced on 3 devices. 1 device was not changed.\n\nReplaced and verified ceos EOS\nDetails\nReplaced and verified cjunosevolved Junos Evolved\nDetails\nReplaced and verified vjunos-switch Junos\nDetails\nNot changed xrv9k IOS XR\nDetails\nDetails\nBackup taken before the change\ne70bc79fd9cf\nBackup taken after the change\neeed7d7c36b8\nAutomatic undo window\n5 minutes\nStatus\npartial\nMessage\n3/4 node(s) restored and verified; 1 did not complete.",
+   "final_badges": [
+    {
+     "device": "ceos",
+     "badge": "Replaced and verified",
+     "cls": "badge good",
+     "help": []
+    },
+    {
+     "device": "cjunosevolved",
+     "badge": "Replaced and verified",
+     "cls": "badge good",
+     "help": []
+    },
+    {
+     "device": "vjunos-switch",
+     "badge": "Replaced and verified",
+     "cls": "badge good",
+     "help": []
+    },
+    {
+     "device": "xrv9k",
+     "badge": "Not changed",
+     "cls": "badge bad",
+     "help": []
+    }
+   ]
+  }
+ ],
+ "console_errors": [],
+ "checks": [
+  {
+   "check": "the page loads restore.js of the running release",
+   "ok": true,
+   "detail": "http://127.0.0.1:8081/static/restore.js?v=1.30.27"
+  },
+  {
+   "check": "the result leads with the outcome and keeps the details collapsed",
+   "ok": true,
+   "detail": "Configuration replaced \u2014 needs attention\n\u00d7\nConfiguration replaced on some devices\n\nConfiguration replaced on 3 devices. 1 device was not changed.\n\nReplaced and verified ceos EOS\nDetails\nReplaced and v"
+  },
+  {
+   "check": "no \"undefined\" or raw markup in the result",
+   "ok": true,
+   "detail": "Configuration replaced \u2014 needs attention\n\u00d7\nConfiguration replaced on some devices\n\nConfiguration replaced on 3 devices. 1 device was not changed.\n\nReplaced and verified ceos EOS\nDetails\nReplaced and verified cjunosevolved Junos Evolved\nDetails\nReplaced and verified vjunos-switch Junos\nDetails\nNot ch"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "no static asset failed to load",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "not_exercised": [],
+ "finished_utc": "2026-09-21T02:13:00Z"
+}

@@ -1,0 +1,205 @@
+{
+ "trigger": "armed-cut",
+ "node": "xrv9k",
+ "minutes": 2,
+ "started_utc": "03:07:57.976",
+ "method": "connection-identity (apply connection closes, then the confirm reconnect opens)",
+ "build": {
+  "image": "clab-backup:1.30.28 sha256:22c9a7af763ef4a98b218ae306c1f92f7170a6d30cf61820f9f8aaf994158858",
+  "container_started": "2026-09-21T03:07:00.430943057Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 4
+ },
+ "readback_before": {
+  "a_value_present": false,
+  "a_statement_present": false,
+  "b_only_present": 3,
+  "b_only_markers": 3,
+  "configuration_lines": 82,
+  "pending_confirmation": false,
+  "boot": "System uptime is 4 hours 43 minutes",
+  "up_seconds": 16980,
+  "compared_with_saved": {
+   "saved_file": "xrv9k.cfg",
+   "saved_statements": 51,
+   "active_statements": 53,
+   "missing": 3,
+   "extra": 5,
+   "tolerated_root_authentication": 0
+  },
+  "active": "B"
+ },
+ "submit": {
+  "http": 200,
+  "id": "8bc98648568b44c98eddbee8e0c47198"
+ },
+ "reached_applying": true,
+ "conn_log": [
+  {
+   "t": 3.955486202001339,
+   "event": "apply_connection_port",
+   "port": "ED30"
+  },
+  {
+   "t": 9.51189019701269,
+   "event": "blocked_on_new_port"
+  }
+ ],
+ "blocked_at_rel_s": 9.51189019701269,
+ "final_job_while_blocked": {
+  "id": "8bc98648568b44c98eddbee8e0c47198",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T03:08:00.568050+00:00",
+  "status": "applying",
+  "message": "Applying the saved configuration.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T02:54:30.970328+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "9f0aa381cbee4cf18403f7872024f756",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "confirming",
+    "message": "Configuration loaded; reconnecting to confirm.",
+    "diff_sample": [
+     "Mon Sep 21 03:08:03.926 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "-  interface Loopback777",
+     "-   ipv4 address 198.51.100.77 255.255.255.255",
+     "-  !",
+     "#  interface GigabitEthernet0/0/0/0",
+     "#   description B changed",
+     "#   description A to-vjunos-switch",
+     "#  !",
+     "-  prefix-set B-ONLY",
+     "+  router static",
+     "+   address-family ipv4 unicast",
+     "+    192.0.2.4/32 Null0",
+     "+   !",
+     "+  !",
+     "end"
+    ],
+    "no_op": false
+   }
+  ]
+ },
+ "rule_present_before_unblock": true,
+ "rule_present_after_unblock": false,
+ "unblocked_at_rel_s": 179.98833787400508,
+ "final_job": {
+  "id": "8bc98648568b44c98eddbee8e0c47198",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T03:08:00.568050+00:00",
+  "finished": "2026-09-21T03:11:02.674547+00:00",
+  "status": "failed",
+  "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T02:54:30.970328+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "9f0aa381cbee4cf18403f7872024f756",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "rolled_back",
+    "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active.",
+    "diff_sample": [
+     "Mon Sep 21 03:08:03.926 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "-  interface Loopback777",
+     "-   ipv4 address 198.51.100.77 255.255.255.255",
+     "-  !",
+     "#  interface GigabitEthernet0/0/0/0",
+     "#   description B changed",
+     "#   description A to-vjunos-switch",
+     "#  !",
+     "-  prefix-set B-ONLY",
+     "+  router static",
+     "+   address-family ipv4 unicast",
+     "+    192.0.2.4/32 Null0",
+     "+   !",
+     "+  !",
+     "end"
+    ],
+    "no_op": false
+   }
+  ]
+ },
+ "timeline": [
+  {
+   "t": 9.513760107001872,
+   "utc": "03:08:08.409",
+   "job_status": "applying",
+   "target_status": "confirming",
+   "message": "Configuration loaded; reconnecting to confirm."
+  },
+  {
+   "t": 179.99010937500861,
+   "utc": "03:10:58.885",
+   "job_status": "applying",
+   "target_status": "confirming",
+   "message": "Configuration loaded; reconnecting to confirm."
+  },
+  {
+   "t": 183.99975495200488,
+   "utc": "03:11:02.895",
+   "job_status": "failed",
+   "target_status": "rolled_back",
+   "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active."
+  }
+ ],
+ "finished_utc": "03:11:02.895",
+ "readback_after": {
+  "a_value_present": false,
+  "a_statement_present": false,
+  "b_only_present": 3,
+  "b_only_markers": 3,
+  "configuration_lines": 82,
+  "pending_confirmation": false,
+  "boot": "System uptime is 4 hours 46 minutes",
+  "up_seconds": 17160,
+  "compared_with_saved": {
+   "saved_file": "xrv9k.cfg",
+   "saved_statements": 51,
+   "active_statements": 53,
+   "missing": 3,
+   "extra": 5,
+   "tolerated_root_authentication": 0
+  },
+  "active": "B"
+ },
+ "iptables_clean_at_exit": true
+}

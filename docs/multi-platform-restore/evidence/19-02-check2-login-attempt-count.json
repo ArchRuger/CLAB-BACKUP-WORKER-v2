@@ -1,0 +1,20 @@
+{
+  "purpose": "Sanitized count of cEOS's own failed-login log (sudo lastb -F; no passwords/hashes) around the check-2 wrong-credentials submit, to confirm the manager did not hammer the device.",
+  "device": "ceos",
+  "source_address_all_entries": "172.20.20.1 (the manager host, host networking)",
+  "job_window": {
+    "job_id": "cfff5e9de15442d69053d9f0a9786c12",
+    "created_utc": "2026-09-21T02:40:30.392944+00:00",
+    "finished_utc": "2026-09-21T02:40:31.742258+00:00"
+  },
+  "failed_login_timestamps_utc": [
+    "02:38:47", "02:40:29", "02:40:30", "02:40:31",
+    "02:41:30", "02:41:56", "02:41:56", "02:41:57", "02:41:57", "02:41:58", "02:41:59"
+  ],
+  "attributed": {
+    "02:38:47": "earlier review-only preflight probe (restore.py preflight() -> _probe(), one live SSH connection)",
+    "02:40:29_02:40:30_02:40:31": "the check-2 submit-with-wrong-credentials job's own window: exactly 3 attempts, matching preflight() (1) + submit()'s own live-refusal probe (_live_refusal, restore.py:425) (1) + the mandatory pre-restore backup's single Ansible network_cli connection attempt (1); no repeated retrying within this job",
+    "02:41:30_through_02:41:59": "AFTER the job had already finished (02:40:31.7) and BEFORE the wrong credentials were reverted (~02:42): 6 further attempts, attributed to the manager's own background monitors (readiness / telemetry) which use whatever credentials are currently configured for the node and keep polling periodically regardless of any specific restore job; not part of the restore job's own retry behaviour and not evidence of the restore path hammering the device"
+  },
+  "conclusion": "The restore job itself made exactly 3 login attempts against the wrong credentials (preflight probe, submit-time live-refusal probe, one backup attempt) -- not a retry storm. Paramiko's own _open() (restore.py:352-363) does not retry paramiko.AuthenticationException (which BadAuthenticationType subclasses, confirmed live: paramiko 3.5.1, docs/multi-platform-restore/tools/failure_harness.py was not needed for this -- ad hoc paramiko.SSHClient.connect() against 172.20.20.101 with a wrong password reproducibly raised BadAuthenticationType, never a plain AuthenticationException, on this cEOS 4.35.0F build), so a single _apply_one() attempt would also not retry. The extra attempts outside the job's own window come from the manager's unrelated background polling of the (temporarily wrong) stored credential, which stopped as soon as the credentials were reverted."
+}

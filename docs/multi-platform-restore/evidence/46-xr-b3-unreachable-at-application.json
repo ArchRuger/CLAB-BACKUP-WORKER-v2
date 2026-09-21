@@ -1,0 +1,120 @@
+{
+ "trigger": "submit-cut",
+ "node": "xrv9k",
+ "minutes": 2,
+ "started_utc": "03:18:42.204",
+ "method": "block the first sign of the apply connection, once this target reaches applying (the mandatory pre-restore backup has already succeeded by then)",
+ "build": {
+  "image": "clab-backup:1.30.28 sha256:d3c53e30a679cfc6abd5255d31d903a8e32f69ff416e268109ff7adfdef84d9a",
+  "container_started": "2026-09-21T03:14:23.11144882Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 4
+ },
+ "readback_before": {
+  "a_value_present": false,
+  "a_statement_present": false,
+  "b_only_present": 3,
+  "b_only_markers": 3,
+  "configuration_lines": 82,
+  "pending_confirmation": false,
+  "boot": "System uptime is 4 hours 53 minutes",
+  "up_seconds": 17580,
+  "compared_with_saved": {
+   "saved_file": "xrv9k.cfg",
+   "saved_statements": 51,
+   "active_statements": 53,
+   "missing": 3,
+   "extra": 5,
+   "tolerated_root_authentication": 0
+  },
+  "active": "B"
+ },
+ "submit": {
+  "http": 200,
+  "id": "e2f42132c1b64ffd95b31883866aa2c6"
+ },
+ "reached_applying": true,
+ "reached_applying_at_rel_s": 4.0365775340033,
+ "blocked_at_rel_s": 4.0452440429944545,
+ "final_job": {
+  "id": "e2f42132c1b64ffd95b31883866aa2c6",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T03:18:44.794404+00:00",
+  "finished": "2026-09-21T03:19:03.241556+00:00",
+  "status": "failed",
+  "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T02:54:30.970328+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "65c0dbf6fffe479fa29902921ce22d55",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "failed",
+    "message": "Configuration was not changed. Connectivity: NoValidConnectionsError"
+   }
+  ]
+ },
+ "timeline": [
+  {
+   "t": 4.047351065004477,
+   "utc": "03:18:47.183",
+   "job_status": "applying",
+   "target_status": "applying",
+   "message": "Replacing the configuration; the device undoes it by itself unless the manager confirms."
+  },
+  {
+   "t": 21.085676193994004,
+   "utc": "03:19:04.221",
+   "job_status": "failed",
+   "target_status": "failed",
+   "message": "Configuration was not changed. Connectivity: NoValidConnectionsError"
+  },
+  {
+   "t": 21.110778169997502,
+   "utc": "03:19:04.246",
+   "job_status": "failed",
+   "target_status": "failed",
+   "message": "Configuration was not changed. Connectivity: NoValidConnectionsError"
+  }
+ ],
+ "rule_present_before_unblock": true,
+ "rule_present_after_unblock": false,
+ "finished_utc": "03:19:04.246",
+ "readback_after": {
+  "a_value_present": false,
+  "a_statement_present": false,
+  "b_only_present": 3,
+  "b_only_markers": 3,
+  "configuration_lines": 82,
+  "pending_confirmation": false,
+  "boot": "System uptime is 4 hours 54 minutes",
+  "up_seconds": 17640,
+  "compared_with_saved": {
+   "saved_file": "xrv9k.cfg",
+   "saved_statements": 51,
+   "active_statements": 53,
+   "missing": 3,
+   "extra": 5,
+   "tolerated_root_authentication": 0
+  },
+  "active": "B"
+ },
+ "iptables_clean_at_exit": true
+}

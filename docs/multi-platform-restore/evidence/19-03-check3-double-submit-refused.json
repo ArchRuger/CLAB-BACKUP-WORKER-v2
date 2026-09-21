@@ -1,0 +1,9 @@
+{
+  "purpose": "check3(c) double submit of a refused request (same request_id twice) both answer 409 and create nothing",
+  "platform_used": "vjunos-switch, while its foreign commit confirmed from check3(a) was still pending",
+  "request_id": "f40cc0af8be7434ebe6955c1784e68f9",
+  "submit_1": {"http": 409, "body": {"detail": "Some selected nodes cannot be restored right now: clab-restore-square-vjunos-switch: Another change is waiting for confirmation on this node."}},
+  "submit_2": {"http": 409, "body": {"detail": "Some selected nodes cannot be restored right now: clab-restore-square-vjunos-switch: Another change is waiting for confirmation on this node."}},
+  "restore_jobs_count_before": 104,
+  "restore_jobs_count_after_both_submits": 104
+}

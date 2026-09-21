@@ -46,11 +46,21 @@ class Session:
     def __init__(self, node, timeout=60):
         ip, user, password, self.family = NODES[node]
         self.node, self.timeout = node, timeout
-        self.client = paramiko.SSHClient()
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.client.connect(ip, username=os.environ.get('NODECLI_USER', user),
-                            password=os.environ.get('NODECLI_PASSWORD', password), timeout=10,
-                            banner_timeout=15, auth_timeout=15, look_for_keys=False, allow_agent=False)
+        for attempt in range(4):   # IOS XR turns away connections that follow each other too quickly
+            self.client = paramiko.SSHClient()
+            self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            try:
+                self.client.connect(ip, username=os.environ.get('NODECLI_USER', user),
+                                    password=os.environ.get('NODECLI_PASSWORD', password), timeout=10,
+                                    banner_timeout=15, auth_timeout=15, look_for_keys=False, allow_agent=False)
+                break
+            except paramiko.AuthenticationException:
+                raise
+            except (OSError, EOFError, paramiko.SSHException):
+                self.client.close()
+                if attempt == 3:
+                    raise
+                time.sleep(4)
         self.channel = self.client.invoke_shell(term='vt100', width=500, height=10000)
         self.channel.settimeout(1.0)
         self.log = []

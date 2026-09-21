@@ -178,7 +178,7 @@ repeats them on its status card, whose **More ▾** adds the rest.
 | **Save on this VM only** | Capture and commit without pushing. |
 | **Create checkpoint…** | Capture a named milestone in `checkpoints/<name>`. |
 | **Set baseline…** | Select a complete recorded capture for `baseline`; replacing one is reviewed explicitly. |
-| **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* diffs it against the lab's `latest/` (never against the running devices); *Apply to running lab…* replaces the running configuration of the selected devices (Junos or EOS) with that version (no reboot; backed up first) without changing where the lab saves. |
+| **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* diffs it against the lab's `latest/` (never against the running devices); *Apply to running lab…* replaces the running configuration of the selected devices (Junos, EOS or IOS XR) with that version (no reboot; backed up first) without changing where the lab saves. |
 | **Full history…** | Every commit of the lab's folder with its versions. |
 | **Upload saved progress** / **Review and upload…** | Publish a saved commit without recapturing devices, through the same review (a save reviewed before, whose upload failed, reads **Upload now**). |
 | **Update from the repository** | Update an eligible clean checkout using a fast-forward; no merge/rebase conflict resolution. |
@@ -337,7 +337,7 @@ the current topology as the topology used for that historical capture.
 
 ## Apply a saved configuration to a running node
 
-A saved configuration (Junos or EOS today) can be applied to the running lab in two ways,
+A saved configuration (Junos, EOS or IOS XR today) can be applied to the running lab in two ways,
 both of which converge the running node to exactly the saved configuration without a
 reboot or a containerlab redeploy:
 
@@ -359,9 +359,9 @@ flowchart TD
     B --> C[Back up the current configuration first]
     C -->|backup failed| D[Do not change this node]
     C -->|backup ok| E[Load the candidate as a complete replacement, inside the device's own transaction]
-    E --> F[Activate with a timed recovery: Junos commit confirmed, EOS commit timer]
+    E --> F[Activate with a timed recovery: Junos commit confirmed, EOS commit timer, IOS XR commit replace confirmed]
     F --> G[Reconnect to prove management works, retried for the whole undo window]
-    G -->|confirmed| H[Cancel the timer; EOS also saves it to startup]
+    G -->|confirmed| H[Cancel the timer; EOS also saves it to startup; IOS XR confirms on the session that armed it]
     G -->|cannot confirm in time| I[Read the device back: applied, undone or uncertain]
     H --> J[Capture again and compare to the saved state]
 ```
@@ -372,24 +372,30 @@ flowchart TD
   hierarchical restore-grade candidate (`show configuration`) and records it in the
   snapshot manifest; the restore loads it with `load override terminal`, so a stale
   statement is removed, a changed statement is reset and a deleted desired statement is
-  put back. EOS backups likewise capture the running-configuration as the restore
-  candidate; because an EOS configuration session starts as a copy of the running
-  configuration, the restore first empties it (`rollback clean-config`) before loading the
-  candidate, so the paste replaces rather than merges.
+  put back. EOS and IOS XR backups likewise capture the running-configuration as the
+  restore candidate (`.eoscfg`, `.xrcfg`); because an EOS configuration session starts as a
+  copy of the running configuration, the restore first empties it (`rollback clean-config`)
+  before loading the candidate, while IOS XR's own `commit replace confirmed` replaces the
+  whole configuration natively, in the same command that arms the timed recovery.
 - **Backed up first.** The manager captures a fresh backup of every target node before it
   changes anything and references that backup's job id in the restore result. If the
   pre-restore backup fails for a node, that node is not modified.
 - **Timed, confirmed activation.** The candidate is activated inside the device's own
   transaction with its own timed recovery (Junos `commit confirmed <minutes>`; EOS
-  `commit timer HH:MM:SS`). The manager then reconnects over SSH — retried for the whole
-  undo window, not just once — to prove the node is still reachable, and only then confirms
-  the change (Junos `commit`; EOS `configure session <name> commit`, followed by
-  `write memory` since EOS does not save a confirmed change to its startup configuration by
-  itself). If the manager cannot confirm in time it never assumes the device rolled back:
-  it reads the node back and reports whether the previous configuration is active (undone)
-  or that it could not tell (uncertain) — the same check a manager restart during a restore
-  also runs. The undo window defaults to five minutes and is adjustable under *Advanced
-  options* of the review.
+  `commit timer HH:MM:SS`; IOS XR `commit replace confirmed minutes <N>`, which replaces the
+  whole configuration and arms the timer in one native command). The manager then reconnects
+  over SSH — retried for the whole undo window, not just once — to prove the node is still
+  reachable, and only then confirms the change (Junos `commit`; EOS `configure session
+  <name> commit`, followed by `write memory` since EOS does not save a confirmed change to
+  its startup configuration by itself). On IOS XR only the CLI session that armed the change
+  can confirm it, so the manager keeps that session open instead of closing it, proves with
+  the fresh reconnect that management survived, and only then sends the confirming `commit`
+  on the kept session; IOS XR persists a confirmed commit immediately, with no EOS-style
+  separate save step. If the manager cannot confirm in time it never assumes the device
+  rolled back: it reads the node back and reports whether the previous configuration is
+  active (undone) or that it could not tell (uncertain) — the same check a manager restart
+  during a restore also runs. The undo window defaults to five minutes and is adjustable
+  under *Advanced options* of the review.
 - **Root-authentication.** The `juniper_cjunosevolved` lab image boots without a
   `root-authentication` statement and rejects any later commit that still lacks it. When
   the saved configuration has no root-authentication, the restore synthesises one from the
@@ -399,9 +405,13 @@ flowchart TD
   same way a backup is normalised and compares it to the saved desired state, so the
   result shows that the stale statements are gone and the desired statements are present.
 - **Supported platforms.** Live restore covers Junos (`juniper_cjunosevolved`,
-  `juniper_vjunosswitch`) and Arista EOS (`arista_ceos`). Cisco IOS XR (`cisco_xrv9k`) is
-  not restorable yet: its saved nodes are listed in the review with the reason, not
-  silently left out.
+  `juniper_vjunosswitch`), Arista EOS (`arista_ceos`) and Cisco IOS XR (`cisco_xrv9k`). A
+  device on any other platform, or one this manager does not recognise, has its saved nodes
+  listed in the review with the reason, not silently left out.
+- **IOS XR banner limit.** A saved configuration that defines a `banner` is refused before
+  the device is touched: pasting a banner's delimited body back in safely is not supported
+  yet. Remove the banner from the desired saved state, or restore a version saved before it
+  was added.
 - **Management addresses travel with the saved state.** The candidate is the node's whole
   configuration, including its management interface address. When containerlab assigns
   management addresses dynamically, a redeploy can hand a node a different address; applying a

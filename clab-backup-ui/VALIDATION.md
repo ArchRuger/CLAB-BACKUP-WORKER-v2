@@ -1,3 +1,43 @@
+# Multi-platform restore, part 3: Cisco IOS XR and the four-platform runs — 1.30.29
+
+Prepared on `claude/multi-platform-restore` on 2026-09-21 after 1.30.28 (`af036c9`, pushed, CI green), same VM, lab and
+images. **Unit, real-Ansible pipeline, live-device and real-browser evidence.** Every live file names the build that
+produced it; the four-column matrix is `docs/multi-platform-restore/evidence/MATRIX.md`.
+
+- **Driver, live at the driver layer on XRv9k 24.3.1** (`evidence/xr-live-facts.md`, a Sonnet builder on the node, three
+  passes): hierarchy navigation while entering a configuration (`!` is a comment, closers `end-set` / `end-policy` /
+  `endif`, never `exit` at the bare configuration prompt), `commit replace confirmed minutes N` with its raw warning
+  prompt, the preview command, the session-table shapes for nothing / an open session / a lock / an outstanding trial,
+  confirmation only from the arming session, an unconfirmed trial rolling back by itself, release of the kept session
+  (no-op: row gone at once; unconfirmed: previous configuration active 4.8 s later), a failing fresh connection keeping
+  the kept session usable, uptime unbroken throughout. Not proven and said so there: a commit-time-only semantic
+  rejection (the image accepted what was tried), banners (refused, not supported), persistence across a reload.
+- **Reviews.** Three independent Opus reviews of the driver: the first found the blocker that shaped the design (the
+  driver confirmed inline, before anything proved management); the second could not break "no early confirm, no foreign
+  confirm, no leaks" and found the lingering session row and the destroyed kept session; the third could not break the
+  fixes and asked for one negative test and two wordings. All findings were fixed; 63 driver tests.
+- **Unit.** `test_restore_iosxr.py` 63 (new, in CI), `test_restore.py` 42, `test_restore_compare.py` 32 (registry and
+  format agreement for all drivers), `test_app.py` 10 (the `.xrcfg` artifact with real Ansible, byte-identical to the
+  backup), 190 restore tests in all.
+- **Live, product, XRv9k** (lead; builds named in the files): A over B `verified` (`40-*`), the repeat cycle with A onto A
+  and an immediate third restore (`44-*`), the commit-pinned source from the browser at 390 px (`45-*`), management cut
+  at application time (`46-*`), management cut after arming → `rolled_back` by read-back (`41-*`), manager restart in
+  both orders (`42-*`, `43-*`), somebody's open session and a foreign pending change refused at the API (`47-*`).
+- **Live, all four:** one saved state restored to all four from the browser (`50-*`), a mixed run with one controlled
+  failure and its rendering (`51-*`, `52-*`), interruption measured with probes on management, both edges from the
+  neighbours' side and a transit path, for each restored node: 0 lost everywhere (`60-*`).
+- **Live, QA wave two on the three earlier platforms** (`19-acceptance-wave-two.md`, an independent QA agent): unreachable
+  at application time on all three, rejected credentials, foreign pending change and bystander's edit refused at the API
+  on both Junos images, contention with a Save and with a lab operation, a real `verify_mismatch`, a `commit check`
+  rejection at the driver layer on both Junos images: all PASS except one diagnosability defect (the login reason was
+  masked by the generic safety-backup failure), fixed and unit-tested since, not rerun live.
+- **Not run:** persistence across a controlled NOS restart (all four); `failure_harness.py armed-cut` and
+  `restart-confirming` were exercised on XRv9k only (the cEOS and Junos runs of those checks predate the tool and used
+  its scratch predecessors); no push to the Git host.
+- **Full suites from a clean worktree of the release commit:** 881 Python tests with 1 skipped (the opt-in EOS SSH
+  fixture), 192 browser tests; `verify-release.py`, `check_links.py` (90 files), `git diff --check`, and a scan of the
+  committed evidence and tools for hashes, keys and tokens (clean).
+
 # Multi-platform restore, part 2: cJunosEvolved through the product, evidence audit — 1.30.28
 
 Prepared on `claude/multi-platform-restore` on 2026-09-21 after 1.30.27 (`3c5d954`, pushed, CI green) on the development

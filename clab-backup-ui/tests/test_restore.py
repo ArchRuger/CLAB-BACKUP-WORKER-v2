@@ -32,6 +32,7 @@ class FakeRunner:
         self.post_config = post_config
         self.pre_config = pre_config
         self.fail_nodes = set(fail_nodes)
+        self.fail_message = 'capture failed'
         self.calls = []
 
     def submit(self, lab_id, operation='backup', source='manual', node_names=None,
@@ -46,7 +47,7 @@ class FakeRunner:
             if node_names and node['name'] not in node_names:
                 continue
             if node['name'] in self.fail_nodes:
-                nodes.append(dict(name=node['name'], status='failed', message='capture failed'))
+                nodes.append(dict(name=node['name'], status='failed', message=self.fail_message))
                 continue
             name = f'cfg-{index}.set'
             body = self.post_config if source == 'restore-post' else self.pre_config
@@ -319,6 +320,18 @@ class RestoreServiceTests(unittest.TestCase):
         ptx = next(t for t in job['targets'] if t['name'] == 'PTX1')
         self.assertEqual(ptx['status'], 'failed')
         self.assertIn('backup', ptx['message'].lower())
+
+    def test_a_failed_safety_backup_says_why_in_fixed_words_never_in_ansibles(self):
+        from app.restore import backup_failure
+        self.assertEqual(backup_failure('Failed to authenticate: Authentication failed. secret=hunter2'), ' (the device rejected the login)')
+        self.assertEqual(backup_failure('timed out waiting for 172.20.20.2'), ' (the device did not answer)')
+        self.assertEqual(backup_failure('something else entirely'), '')
+        self.runner.fail_nodes = {'PTX1'}
+        self.runner.fail_message = 'Failed to authenticate: Authentication failed. secret=hunter2'
+        job = self.run_execute(node_names=('PTX1',))
+        message = job['targets'][0]['message']
+        self.assertEqual(message, 'Pre-restore backup failed for this node (the device rejected the login); it was not changed.')
+        self.assertNotIn('hunter2', str(job))
 
     def test_verify_mismatch_when_stale_remains(self):
         self.runner.post_config = DESIRED_SET + 'set interfaces lo0 unit 0 family inet address 10.9.9.9/32\n'
@@ -727,6 +740,27 @@ class RestoreServiceTests(unittest.TestCase):
             confirm.assert_not_called()
             apply.assert_not_called()
             self.assertEqual(rechecked['status'], 'needs_attention')
+
+    def test_a_shutdown_inside_the_undo_window_leaves_the_node_in_flight_for_the_restart_recheck(self):
+        self.svc.retry_interval, self.svc.recovery_grace = 0, 3600
+        self.svc.window_seconds = lambda minutes: 3600
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+
+        def unreachable_then_shutdown(client):
+            self.svc.stopping.set()                      # the manager is told to stop while it keeps trying to reconnect
+            raise OSError('management is down')
+        with self.fake_apply(), patch('app.restore.junos.pending', side_effect=unreachable_then_shutdown), \
+                patch('app.restore.junos.confirm') as confirm, patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            self.svc.execute(job['id'])
+        stopped = self.svc.get_job(job['id'])
+        by_name = {t['name']: t['status'] for t in stopped['targets']}
+        self.assertEqual(by_name['PTX1'], 'confirming')         # not "uncertain": nothing was established, so nothing is claimed
+        self.assertEqual(by_name['SW1'], 'backing_up')          # never started: no new node is changed during a shutdown
+        self.assertEqual(stopped['status'], 'applying')
+        confirm.assert_not_called()
+        again = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        self.assertEqual(again.get_job(job['id'])['status'], 'interrupted')
+        self.assertEqual(again.unchecked, [(job['id'], 'PTX1')])  # only the node that was mid-change is read back
 
     def test_remove_lab_is_refused_while_a_restore_is_running(self):
         from app.lab_operations import RESTORE_BUSY

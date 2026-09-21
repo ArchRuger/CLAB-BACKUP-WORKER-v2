@@ -1,0 +1,137 @@
+{
+ "node": "vjunos-switch",
+ "build": {
+  "image": "clab-backup:1.30.28 sha256:d3c53e30a679cfc6abd5255d31d903a8e32f69ff416e268109ff7adfdef84d9a",
+  "container_started": "2026-09-21T03:14:23.11144882Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 4
+ },
+ "probe_interval_s": 0.2,
+ "device_readback_before": {
+  "read_at_utc": "2026-09-21T03:27:45Z",
+  "nodes": {
+   "vjunos-switch": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 27,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-20 22:18:17 UTC",
+    "up_seconds": null,
+    "active": "B"
+   }
+  }
+ },
+ "probes": {
+  "management 172.20.20.103": {
+   "kind": "linux 0.2 s",
+   "expected_about": 325,
+   "replies": 314,
+   "lost": 0,
+   "longest_gap_s": 0.21,
+   "longest_gap_started_utc": "03:28:51"
+  },
+  "edge: cjunosevolved -> vjunos-switch ge-0/0/0": {
+   "kind": "cli 1 s",
+   "sent": 75,
+   "replies": 75,
+   "lost": 0
+  },
+  "edge: xrv9k -> vjunos-switch ge-0/0/1": {
+   "kind": "cli 1 s",
+   "sent": 75,
+   "replies": 75,
+   "lost": 0
+  },
+  "transit through vjunos-switch: cjunosevolved -> xrv9k 10.0.34.1": {
+   "kind": "cli 1 s",
+   "sent": 75,
+   "replies": 75,
+   "lost": 0
+  }
+ },
+ "manager_version": "1.30.28",
+ "restore_seconds": 42.1,
+ "restore": {
+  "source": {
+   "type": "backup",
+   "backup_job_id": "61cfe431597141998ef43d6fd35087bc"
+  },
+  "job_status": "succeeded",
+  "timeline": [
+   {
+    "utc": "03:27:58",
+    "job": "backing_up",
+    "targets": {
+     "vjunos-switch": "backing_up"
+    }
+   },
+   {
+    "utc": "03:28:02",
+    "job": "applying",
+    "targets": {
+     "vjunos-switch": "applying"
+    }
+   },
+   {
+    "utc": "03:28:30",
+    "job": "applying",
+    "targets": {
+     "vjunos-switch": "confirming"
+    }
+   },
+   {
+    "utc": "03:28:34",
+    "job": "verifying",
+    "targets": {
+     "vjunos-switch": "applied"
+    }
+   },
+   {
+    "utc": "03:28:37",
+    "job": "succeeded",
+    "targets": {
+     "vjunos-switch": "verified"
+    }
+   }
+  ],
+  "preflight_pending_changes": 5,
+  "target_status": "verified",
+  "no_op": false,
+  "missing_statements": 0,
+  "extra_statements": 0
+ },
+ "device_readback_after": {
+  "read_at_utc": "2026-09-21T03:29:03Z",
+  "nodes": {
+   "vjunos-switch": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 26,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-20 22:18:17 UTC",
+    "up_seconds": null,
+    "compared_with_saved": {
+     "saved_file": "vjunos-switch.set",
+     "saved_statements": 25,
+     "active_statements": 25,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "A"
+   }
+  }
+ },
+ "summary": {
+  "b_was_active_before": true,
+  "a_is_active_after": true,
+  "nothing_pending_after": true,
+  "restore_changed_configuration": true,
+  "boot_before": "System booted: 2026-09-20 22:18:17 UTC",
+  "boot_after": "System booted: 2026-09-20 22:18:17 UTC"
+ }
+}

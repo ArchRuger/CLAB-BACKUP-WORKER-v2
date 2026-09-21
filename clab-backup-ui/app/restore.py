@@ -85,6 +85,17 @@ def compare_states(desired_set, actual_set):
     return missing, extra, not missing and not extra
 
 
+def backup_failure(message):
+    """Why a node's safety backup failed, as a fixed phrase. The backup job keeps Ansible's own (scrubbed)
+    words; a restore outcome carries controlled text only, so the reason is classified, never copied."""
+    text = str(message or '').lower()
+    if re.search(r'authenticat|permission denied|invalid/incorrect password|bad password', text):
+        return ' (the device rejected the login)'
+    if re.search(r'timed out|timeout|unreachable|refused|no route|connect', text):
+        return ' (the device did not answer)'
+    return ''
+
+
 def compare_for(platform, desired, actual):
     """(missing, extra, converged) in the comparable form of the node's platform."""
     driver = drivers.for_platform(platform)
@@ -528,14 +539,19 @@ class RestoreService:
             self.update(job_id, status='applying', message='Applying the saved configuration.')
             applied = []
             for name in live:
+                if self.stopping.is_set():
+                    return   # shutting down: leave the job in flight; the next start marks it interrupted and reads the nodes back
                 node = nodes.get(name)
                 if name not in backed_up:
-                    self.update_target(job_id, name, status='failed',
-                                       message='Pre-restore backup failed for this node; it was not changed.')
+                    outcome = next((n for n in backup.get('nodes', []) if n.get('name') == name), {})
+                    self.update_target(job_id, name, status='failed', message='Pre-restore backup failed for this node'
+                                       + backup_failure(outcome.get('message', '')) + '; it was not changed.')
                     continue
                 creds = effective_credentials(lab, node)
                 self._apply_one(job_id, lab_id, node, creds, candidates[name], confirm_minutes, applied, before.get(name))
 
+            if self.stopping.is_set():
+                return
             # 4. Post-restore backup + desired-state comparison for the applied nodes. A
             # failure to start it leaves the nodes applied-but-unverified, never "failed".
             if applied:
@@ -692,10 +708,16 @@ class RestoreService:
             except Exception as exc:
                 # Not a reachability problem: retrying for the whole window would only hide it.
                 return 'uncertain', {'why': 'internal error: ' + self._scrubbed(type(exc).__name__)}
-            if time.time() > deadline + self.recovery_grace or self.stopping.wait(self.retry_interval):
+            if time.time() > deadline + self.recovery_grace:
                 return 'uncertain', {'why': why}
+            if self.stopping.wait(self.retry_interval):
+                # The manager is shutting down inside the undo window. Say nothing about the node now:
+                # it stays marked as being changed, and the next start reads it back (`start()`).
+                return 'stopping', {}
 
     def _record_settled(self, job_id, lab_id, name, state, detail, armed, applied):
+        if state == 'stopping':
+            return
         if state == 'applied':
             self.update_target(job_id, name, status='applied', persistence=detail.get('persistence', ''),
                                message='Configuration replaced and the change confirmed.')
@@ -709,8 +731,12 @@ class RestoreService:
             self.event('restore.node', 'Not confirmed; the node rolled back and its previous configuration was read back.',
                        lab_id, job_id, name, level='error')
         elif state == 'unchanged':
+            # The session was lost inside the transaction and nobody saw the change armed: the saved
+            # configuration may have been active for a while before the device undid it. Say so.
             self.update_target(job_id, name, status='failed',
-                               message='Configuration was not changed. Checked: the configuration from before the restore is active.')
+                               message='Configuration was not changed. Checked: the configuration from before the restore is active. '
+                                       'The session to the device was lost during the change, so the saved configuration may have '
+                                       'been active for a short time before the device undid it.')
             self.event('restore.node', 'The change did not take place; the previous configuration was read back.',
                        lab_id, job_id, name, level='error')
         else:

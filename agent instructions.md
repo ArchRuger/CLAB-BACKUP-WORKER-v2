@@ -1,3 +1,32 @@
+# Multi-platform restore, part 3: Cisco IOS XR — 1.30.29
+
+Continues the two sections below; **read `docs/multi-platform-restore/PICKUP.md` first.** Facts to preserve.
+(1) **IOS XR lets only the CLI session that armed `commit replace confirmed` confirm it.** `restore_iosxr.py` sets
+`HOLDS_SESSION`: a successful `apply_candidate` keeps the client and channel under the job token (`_HELD`); the service
+does not close that client, proves management with a FRESH connection, and `confirm(fresh, handle)` first requires the
+fresh connection to answer and only then sends `commit` on the kept session. Never confirm inline, never before the
+fresh connection exists: that would leave no timed recovery when the restored configuration breaks management.
+(2) `release(token)` leaves configuration mode on the kept session before closing: `end`, and `yes` to IOS XR's raw
+"You are exiting after a 'commit confirm' …" prompt, which makes the node undo an unconfirmed change at once. It must
+never answer the different "Uncommitted changes found, commit them before exiting" prompt (left at its `[cancel]`
+default, pinned by a test). A session closed without `end` lingers in the node's session table for minutes and
+`blocked()` would then refuse the next restore. `confirm` releases only after its `commit` was attempted.
+(3) Entering a configuration: `!` lines are comments, not mode exits; `prefix-set` / `route-policy` / `if` need their own
+closers; `root` is refused inside them; never `exit` at the bare `(config)#`. The mode stack resets whenever the real
+prompt is bare. A candidate with a `banner` is refused in `validate_candidate` until delimiter bodies are handled and
+proven live. `show configuration changes diff` is the replace preview; `show commit changes diff` misleads.
+(4) `pending()` returns the job token when a trial is outstanding AND this process holds the arming session for that
+peer, `True` for a trial it does not hold, `''` otherwise; an open session or lock without a trial is `blocked()`, not
+"pending". A true no-op replace creates NO trial: the service settles it by read-back and releases.
+(5) IOS XR refuses rapid SSH connections: one connection per review and the bounded connect retry (previous section)
+are what keep the review reliable there; `tools/nodecli.py` retries too.
+(6) Service: a shutdown inside the undo window returns `'stopping'` from `_settle` and records nothing, so the target
+stays in flight and the next start reads it back; `backup_failure()` classifies a failed safety backup into fixed
+words and never copies Ansible's text.
+(7) `tools/failure_harness.py` (management cut at application / after arming, manager restart while confirming),
+`tools/mixed_failure.py` and `tools/interruption.py` are regression tooling; `square_check.py` defaults to all four
+nodes, so an operator who owns fewer passes `--nodes`.
+
 # Multi-platform restore, part 2: evidence audit and hardening — 1.30.28
 
 Continues the section below; **read `docs/multi-platform-restore/PICKUP.md` first.** Facts to preserve.

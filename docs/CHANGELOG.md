@@ -4,6 +4,33 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.29
+
+**Replace running configuration works on Cisco IOS XR (XRv9k), and with it on all four supported kinds.** Third
+release of the multi-platform restore stream ([multi-platform-restore](multi-platform-restore/README.md)).
+
+- **Cisco IOS XR.** A saved IOS XR running-config can be applied to a running node: `configure exclusive`, the saved
+  configuration entered into the empty target configuration, the device's own preview (`show configuration changes
+  diff`), then one native command that replaces the whole configuration and arms the timed recovery, `commit replace
+  confirmed minutes <N>`. A committed IOS XR configuration is persistent by itself. IOS XR backups carry an `.xrcfg`
+  artifact since this release (the backup's own text, one capture); earlier saves list the device with "made before
+  this kind of device could be restored".
+- **Only the session that armed the change can confirm it on IOS XR** (shown three ways on 24.3.1). The driver
+  therefore keeps that session, the manager proves with a fresh connection that management still works, and only then
+  the confirmation is sent on the kept session; the change is never confirmed before that proof. When the manager
+  gives up, leaving the kept session makes IOS XR undo the change at once; after a manager restart the kept session is
+  gone, the device undoes the change at its timer and the read-back reports it. The manager's own session never lingers
+  on the device (it used to block the next restore for minutes).
+- **Refusals on IOS XR:** somebody's open configuration session or exclusive lock ("A configuration session is open on
+  this node"), somebody's pending change, and a saved configuration that contains a `banner` (not supported yet) are
+  refused before anything is touched.
+- **For every platform:** when the safety backup of a device fails, the restore outcome says why in fixed words
+  ("the device rejected the login", "the device did not answer"); a session lost inside the transaction is reported
+  with what that means; a manager that is shut down inside the undo window leaves the device marked as being changed,
+  so the next start reads it back, instead of recording "unknown".
+- The guides describe all four kinds; the acceptance record has the four-column evidence matrix, the mixed
+  four-platform runs and the failure harness (`tools/failure_harness.py`, `tools/mixed_failure.py`).
+
 ## Changes in 1.30.28
 
 **Replace running configuration: cJunosEvolved accepted through the product, and the evidence hardened after an

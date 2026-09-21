@@ -276,15 +276,24 @@ class RegistryTests(unittest.TestCase):
     def test_for_platform_maps_ceos_to_the_eos_driver(self):
         self.assertIs(restore_drivers.for_platform('arista_ceos'), restore_eos)
 
-    def test_for_platform_xrv9k_today_and_the_flip(self):
-        # Today `cisco_xrv9k` has no registered driver (see docs/multi-platform-restore/PICKUP.md,
-        # chunk 4). Written so that once a driver is registered for it, this assertion flips to
-        # checking the new driver's contract instead of silently passing either way.
-        driver = restore_drivers.for_platform('cisco_xrv9k')
-        if driver is None:
-            self.assertIsNone(driver)
-        else:
-            self.assertIn('cisco_xrv9k', driver.SUPPORTED_KINDS)
+    def test_for_platform_maps_xrv9k_to_the_iosxr_driver(self):
+        from app import restore_iosxr
+        self.assertIs(restore_drivers.for_platform('cisco_xrv9k'), restore_iosxr)
+        # The one driver that keeps the arming session: only that CLI session can confirm on IOS XR.
+        self.assertTrue(restore_iosxr.HOLDS_SESSION)
+        self.assertTrue(callable(restore_iosxr.release))
+        self.assertFalse(getattr(restore_junos, 'HOLDS_SESSION', False))
+        self.assertFalse(getattr(restore_eos, 'HOLDS_SESSION', False))
+
+    def test_every_restore_format_in_the_platform_table_has_a_driver_that_loads_it(self):
+        from app.inventory import PLATFORMS
+        for kind, platform in PLATFORMS.items():
+            if not platform.get('restore_format'):
+                continue
+            driver = restore_drivers.for_platform(kind)
+            if driver is None:
+                continue   # a capture format without a proven driver (vQFX) is view and download only
+            self.assertEqual(driver.RESTORE_FORMAT, platform['restore_format'], kind)
 
     def test_for_platform_unknown_kind_is_none(self):
         self.assertIsNone(restore_drivers.for_platform('nokia_srlinux'))
@@ -292,8 +301,10 @@ class RegistryTests(unittest.TestCase):
 
     def test_supported_kinds_is_the_union(self):
         kinds = restore_drivers.supported_kinds()
-        self.assertEqual(set(kinds), set(restore_junos.SUPPORTED_KINDS) | set(restore_eos.SUPPORTED_KINDS))
-        self.assertEqual(len(kinds), len(restore_junos.SUPPORTED_KINDS) + len(restore_eos.SUPPORTED_KINDS))
+        from app import restore_iosxr
+        drivers = (restore_junos, restore_eos, restore_iosxr)
+        self.assertEqual(set(kinds), set().union(*(d.SUPPORTED_KINDS for d in drivers)))
+        self.assertEqual(len(kinds), sum(len(d.SUPPORTED_KINDS) for d in drivers))   # no kind claimed twice
 
     def test_every_registered_driver_exposes_the_whole_contract(self):
         for driver in restore_drivers.DRIVERS:
