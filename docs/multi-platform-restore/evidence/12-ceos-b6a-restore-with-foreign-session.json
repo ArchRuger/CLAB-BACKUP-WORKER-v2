@@ -1,0 +1,159 @@
+{
+ "manager_version": "1.30.27",
+ "lab": "restore-square",
+ "source": {
+  "type": "backup",
+  "backup_job_id": "64bb697ec6b140c8abe924c588f835a1"
+ },
+ "requested": [
+  "clab-restore-square-ceos"
+ ],
+ "started_utc": "00:05:47",
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "backup",
+    "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+    "captured_at": "2026-09-20T23:27:24.637713+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 3,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": false,
+     "reason": "Live restore is not supported for this platform yet.",
+     "requested": false
+    }
+   ],
+   "eligible_count": 1
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "3c45f494ad614344a1b5788448632dda"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "00:05:47",
+   "job": "backing_up",
+   "targets": {
+    "ceos": "backing_up"
+   }
+  },
+  {
+   "utc": "00:05:50",
+   "job": "applying",
+   "targets": {
+    "ceos": "applying"
+   }
+  },
+  {
+   "utc": "00:05:51",
+   "job": "applying",
+   "targets": {
+    "ceos": "confirming"
+   }
+  },
+  {
+   "utc": "00:05:52",
+   "job": "verifying",
+   "targets": {
+    "ceos": "applied"
+   }
+  },
+  {
+   "utc": "00:05:54",
+   "job": "succeeded",
+   "targets": {
+    "ceos": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "3c45f494ad614344a1b5788448632dda",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T00:05:47.825411+00:00",
+  "finished": "2026-09-21T00:05:54.330158+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+   "captured_at": "2026-09-20T23:27:24.637713+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 3,
+  "pre_backup_job_id": "dc895363d99046019be8f5a297fed3a5",
+  "post_backup_job_id": "c93533acc2e94f3f9537b63ea968db19",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "diff_sample": [],
+    "no_op": true,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ]
+ },
+ "finished_utc": "00:05:54"
+}

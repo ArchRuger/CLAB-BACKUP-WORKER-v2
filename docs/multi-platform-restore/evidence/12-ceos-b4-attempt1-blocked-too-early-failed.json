@@ -1,0 +1,100 @@
+{
+ "attempt": "attempt1",
+ "minutes": 2,
+ "started_utc": "23:40:52.373",
+ "submit": {
+  "http": 200,
+  "id": "22fc8c3f419c4155bc0c8e00707650eb"
+ },
+ "blocked_at_rel_s": 2.3220585200033383,
+ "block_target_state_observed": "applying",
+ "ended_while_blocked": true,
+ "device_log_while_blocked": [
+  {
+   "t": 12.402882177004358,
+   "utc": "23:41:04.776",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin"
+  },
+  {
+   "t": 12.508972085997812,
+   "utc": "23:41:04.882",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin"
+  }
+ ],
+ "rule_present_before_unblock": true,
+ "rule_present_after_unblock": false,
+ "timeline": [
+  {
+   "t": 0.059758828007034026,
+   "utc": "23:40:52.433",
+   "job_status": "backing_up",
+   "target_status": "backing_up"
+  },
+  {
+   "t": 2.3081669120001607,
+   "utc": "23:40:54.681",
+   "job_status": "applying",
+   "target_status": "backing_up"
+  },
+  {
+   "t": 2.3171848130004946,
+   "utc": "23:40:54.690",
+   "job_status": "applying",
+   "target_status": "applying"
+  },
+  {
+   "t": 2.3220585200033383,
+   "utc": "23:40:54.695",
+   "event": "BLOCK_INSERTED",
+   "target_status_when_blocked": "applying"
+  },
+  {
+   "t": 12.393748150003375,
+   "utc": "23:41:04.767",
+   "job_status": "applying",
+   "target_status": "failed"
+  },
+  {
+   "t": 12.402867358003277,
+   "utc": "23:41:04.776",
+   "job_status": "failed",
+   "target_status": "failed"
+  }
+ ],
+ "final_job": {
+  "id": "22fc8c3f419c4155bc0c8e00707650eb",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-20T23:40:52.375624+00:00",
+  "finished": "2026-09-20T23:41:04.761997+00:00",
+  "status": "failed",
+  "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+   "captured_at": "2026-09-20T23:27:24.637713+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "855bafad31d843f58bd73abf306a5591",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "failed",
+    "message": "Configuration was not changed. Connectivity: SSHException"
+   }
+  ]
+ },
+ "device_sessions_after_unblock": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-6139ca3d committed               2026-09-20 23:35:15 admin",
+ "finished_utc": "23:41:05.095"
+}

@@ -1,0 +1,31 @@
+configure
+interface Loopback0
+description A loopback
+ipv4 address 10.255.0.4 255.255.255.255
+interface GigabitEthernet0/0/0/0
+description A to-vjunos-switch
+ipv4 address 10.0.34.1 255.255.255.254
+no shutdown
+interface GigabitEthernet0/0/0/1
+description A to-ceos
+ipv4 address 10.0.41.0 255.255.255.254
+no shutdown
+prefix-set RESTORE-A
+10.255.0.0/24 le 32
+end-set
+router static
+address-family ipv4 unicast
+192.0.2.4/32 Null0
+root
+router ospf 1
+router-id 10.255.0.4
+area 0
+interface Loopback0
+passive enable
+interface GigabitEthernet0/0/0/0
+network point-to-point
+interface GigabitEthernet0/0/0/1
+network point-to-point
+root
+commit
+end

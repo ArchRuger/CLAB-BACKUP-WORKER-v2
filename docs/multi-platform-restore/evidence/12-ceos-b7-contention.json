@@ -1,0 +1,131 @@
+{
+ "case1_restore_submit": {
+  "http": 200,
+  "id": "2c6b8ae0f5f24d9687bcd5ba66b39fd2"
+ },
+ "case1_immediate_backup_attempt": {
+  "http": 400,
+  "body": {
+   "detail": "Wait for the lab operation to finish."
+  }
+ },
+ "case1_restore_final": {
+  "id": "2c6b8ae0f5f24d9687bcd5ba66b39fd2",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T00:09:48.753866+00:00",
+  "finished": "2026-09-21T00:09:55.118313+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+   "captured_at": "2026-09-20T23:27:24.637713+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "cf84aada8f224b9f93716d4547eb3370",
+  "post_backup_job_id": "3108050d7d374db6bb80e85d5246640a",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "diff_sample": [],
+    "no_op": true,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ]
+ },
+ "case2_backup_submit": {
+  "http": 200,
+  "id": "fd2261efb0bf498286ee5157c5c0938c"
+ },
+ "case2_immediate_restore_attempt": {
+  "http": 409,
+  "body": {
+   "detail": "Wait for the active backup, Git save, restore or lab operation to finish."
+  }
+ },
+ "case2_backup_final": {
+  "id": "fd2261efb0bf498286ee5157c5c0938c",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "operation": "backup",
+  "source": "manual",
+  "created": "2026-09-21T00:09:55.887632+00:00",
+  "status": "succeeded",
+  "message": "4/4 NOS sessions completed successfully",
+  "nodes": [
+   {
+    "name": "clab-restore-square-ceos",
+    "status": "succeeded",
+    "file": "clab-restore-square-ceos-d9b93278.cfg",
+    "platform": "arista_ceos",
+    "short_name": "ceos",
+    "captured_at": "2026-09-21T00:09:57.411191+00:00",
+    "capture_time_source": "NOS command completed",
+    "download_metadata_version": 1,
+    "restore_file": "clab-restore-square-ceos-d9b93278.eoscfg",
+    "restore_format": "eos-running-config",
+    "message": "Configuration saved",
+    "download_name": "CEOS_ceos_2026-09-21_00-09UTC.conf"
+   },
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "status": "succeeded",
+    "file": "clab-restore-square-cjunosevolved-c4a865f2.set",
+    "platform": "juniper_cjunosevolved",
+    "short_name": "cjunosevolved",
+    "captured_at": "2026-09-21T00:09:57.739626+00:00",
+    "capture_time_source": "NOS command completed",
+    "download_metadata_version": 1,
+    "restore_file": "clab-restore-square-cjunosevolved-c4a865f2.jcfg",
+    "restore_format": "junos-hierarchical",
+    "message": "Configuration saved",
+    "download_name": "cjunosevo_cjunosevolved_2026-09-21_00-09UTC.cfg"
+   },
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "status": "succeeded",
+    "file": "clab-restore-square-vjunos-switch-7964f017.set",
+    "platform": "juniper_vjunosswitch",
+    "short_name": "vjunos-switch",
+    "captured_at": "2026-09-21T00:09:57.534852+00:00",
+    "capture_time_source": "NOS command completed",
+    "download_metadata_version": 1,
+    "restore_file": "clab-restore-square-vjunos-switch-7964f017.jcfg",
+    "restore_format": "junos-hierarchical",
+    "message": "Configuration saved",
+    "download_name": "vJunos-switch_vjunos-switch_2026-09-21_00-09UTC.cfg"
+   },
+   {
+    "name": "clab-restore-square-xrv9k",
+    "status": "succeeded",
+    "file": "clab-restore-square-xrv9k-60be980c.cfg",
+    "platform": "cisco_xrv9k",
+    "short_name": "xrv9k",
+    "captured_at": "2026-09-21T00:09:57.817752+00:00",
+    "capture_time_source": "NOS command completed",
+    "download_metadata_version": 1,
+    "message": "Configuration saved",
+    "download_name": "IOS-XR_xrv9k_2026-09-21_00-09UTC.txt"
+   }
+  ],
+  "started": "2026-09-21T00:09:55.905019+00:00",
+  "finished": "2026-09-21T00:09:58.570301+00:00",
+  "archive_name": "restore-square_2026-09-21_00-09.zip",
+  "download_timezone": "UTC"
+ }
+}

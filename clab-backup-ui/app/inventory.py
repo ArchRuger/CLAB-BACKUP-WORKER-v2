@@ -7,7 +7,8 @@ import yaml
 # whole-device candidate: the hierarchical (curly-brace) configuration that
 # `load override terminal` can apply as a complete replacement. Display-set output can
 # only be merged with `load set`, so it cannot remove statements a snapshot dropped and
-# is unsuitable for a desired-state restore. Live restore is Junos-only for now.
+# is unsuitable for a desired-state restore. Which kinds can be restored is decided by the
+# drivers in restore_drivers.py; a `restore` command here only makes the capture restore-grade.
 JUNOS_DRIVER = {'os': 'junipernetworks.junos.junos', 'command': 'show configuration | display set | no-more', 'suffix': 'set',
                 'restore': 'show configuration | no-more', 'restore_format': 'junos-hierarchical', 'restore_suffix': 'jcfg'}
 JUNOS_SWITCHES = ('juniper_vqfx', 'juniper_vjunosswitch')
@@ -18,7 +19,10 @@ PLATFORMS = {
     'juniper_vqfx': {'label': 'Junos (vQFX)', **JUNOS_DRIVER},
     'juniper_vjunosswitch': {'label': 'Junos (vJunos-switch)', **JUNOS_DRIVER},
     'cisco_xrv9k': {'label': 'IOS-XR', 'os': 'cisco.iosxr.iosxr', 'command': 'show running-config', 'suffix': 'cfg'},
-    'arista_ceos': {'label': 'EOS', 'os': 'arista.eos.eos', 'command': 'show running-config', 'suffix': 'cfg'},
+    # EOS: the running-config itself is a complete, loadable candidate; the companion artifact is
+    # the same command kept under its own name and hash so a restore never relabels backup text.
+    'arista_ceos': {'label': 'EOS', 'os': 'arista.eos.eos', 'command': 'show running-config', 'suffix': 'cfg',
+                    'restore': 'show running-config', 'restore_format': 'eos-running-config', 'restore_suffix': 'eoscfg'},
 }
 # Default logins published on containerlab.dev for each supported kind. They are the
 # image vendors' documented lab defaults, not secrets: a node without a profile or an

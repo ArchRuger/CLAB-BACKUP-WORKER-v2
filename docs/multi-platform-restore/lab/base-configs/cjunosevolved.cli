@@ -1,0 +1,14 @@
+configure
+set interfaces et-0/0/0 description "A to-ceos"
+set interfaces et-0/0/0 unit 0 family inet address 10.0.12.1/31
+set interfaces et-0/0/1 description "A to-vjunos-switch"
+set interfaces et-0/0/1 unit 0 family inet address 10.0.23.0/31
+set interfaces lo0 unit 0 description "A loopback"
+set interfaces lo0 unit 0 family inet address 10.255.0.2/32
+set routing-options router-id 10.255.0.2
+set routing-options static route 192.0.2.2/32 discard
+set policy-options prefix-list RESTORE-A 10.255.0.0/24
+set protocols ospf area 0.0.0.0 interface et-0/0/0.0 interface-type p2p
+set protocols ospf area 0.0.0.0 interface et-0/0/1.0 interface-type p2p
+set protocols ospf area 0.0.0.0 interface lo0.0 passive
+commit and-quit

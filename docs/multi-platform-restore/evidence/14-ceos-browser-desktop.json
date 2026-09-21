@@ -1,0 +1,221 @@
+{
+ "manager_version": "1.30.27",
+ "viewport": "desktop",
+ "row": "Latest",
+ "nodes": [
+  "ceos"
+ ],
+ "started_utc": "2026-09-21T00:26:42Z",
+ "page_scroll_width_before_dialog": 1366,
+ "apply_rows": [
+  "View Apply to running lab\u2026",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  "",
+  ""
+ ],
+ "review_text": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: work \u00b7 CLAB-MNGR-DEV-LLM \u203a restore-square/work \u00b7 saved 6 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS 6 differences from the running configuration\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch Junos Already matches \u2014 nothing to change\nEach device's current configuration is backed up first. A device whose backup fails is left unchanged.\nThe devices are not rebooted. The device itself checks the new configuration when it is activated, and the change is undone on its own if the device cannot be reached again within 5 minutes.\nDevices that are skipped above are not touched.\nAdvanced options\nI understand the running configuration on the selected devices will be replaced.\nCancel\nReplace configurations",
+ "review_devices": [
+  {
+   "name": "clab-restore-square-ceos",
+   "disabled": false,
+   "checked": true,
+   "text": "ceos EOS 6 differences from the running configuration"
+  },
+  {
+   "name": "clab-restore-square-cjunosevolved",
+   "disabled": false,
+   "checked": true,
+   "text": "cjunosevolved Junos Evolved Already matches \u2014 nothing to change"
+  },
+  {
+   "name": "clab-restore-square-vjunos-switch",
+   "disabled": false,
+   "checked": true,
+   "text": "vjunos-switch Junos Already matches \u2014 nothing to change"
+  }
+ ],
+ "progress_first_text": "Applying saved configuration\n\u00d7\nWaiting to start\n\nWaiting ceos EOS\nDetails\nDetails\n\nYou can close this window. The change keeps running in the background; its result is shown in the lab header and under Advanced \u203a Action logs.",
+ "job": {
+  "id": "09f61228a3654a7093750534df5688fe",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T00:26:49.133167+00:00",
+  "finished": "2026-09-21T00:26:55.247863+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T00:20:40.400494+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch"
+   ]
+  },
+  "confirm_minutes": 5,
+  "pre_backup_job_id": "7466d538ce4544da9432dd2847d4201f",
+  "post_backup_job_id": "37f98f733df449d1813491c8b3271664",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-f32ecb30-session-config",
+     "-vlan 777",
+     "-   name B-ONLY",
+     " !",
+     " interface Ethernet1",
+     "-   description B changed",
+     "+   description A to-cjunosevolved",
+     "+!",
+     "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+     " !",
+     "-ip route 198.51.100.0/24 Null0"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ]
+ },
+ "final_text": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 1 device.\n\nReplaced and verified ceos EOS\nDetails\nDetails\nBackup taken before the change\n7466d538ce45\nBackup taken after the change\n37f98f733df4\nAutomatic undo window\n5 minutes\nStatus\nsucceeded\nMessage\nAll 1 node(s) restored and verified against the saved state.",
+ "final_badges": [
+  {
+   "device": "ceos",
+   "badge": "Replaced and verified",
+   "cls": "badge good"
+  }
+ ],
+ "console_errors": [],
+ "checks": [
+  {
+   "check": "the page loads restore.js of the running release",
+   "ok": true,
+   "detail": "http://127.0.0.1:8081/static/restore.js?v=1.30.27"
+  },
+  {
+   "check": "the saved version offers \"Apply to running lab...\"",
+   "ok": true,
+   "detail": "['View Apply to running lab\u2026', '', '', '', '', '', '', '', '', '', '', '']"
+  },
+  {
+   "check": "the review names the dialog, the lab and the source",
+   "ok": true,
+   "detail": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: work \u00b7 CLAB-MNGR-DEV-LLM \u203a restore-square/work \u00b7 saved 6 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS 6 differences from the running configuration\ncjunosevolved Junos Evolved Alr"
+  },
+  {
+   "check": "the review promises the backup, no reboot and the automatic undo",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "every chosen device is listed and can be selected",
+   "ok": true,
+   "detail": "[{'name': 'clab-restore-square-ceos', 'disabled': False, 'checked': True, 'text': 'ceos EOS 6 differences from the running configuration'}]"
+  },
+  {
+   "check": "a device that cannot be restored is listed, disabled, with a reason",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "opening the review adds no horizontal page scroll",
+   "ok": true,
+   "detail": "(1366, 1366)"
+  },
+  {
+   "check": "nothing inside the review overflows the viewport",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "check": "the review dialog fits the viewport width",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "without the acknowledgement the page refuses and says why",
+   "ok": true,
+   "detail": "Tick the box to confirm that the running configuration will be replaced."
+  },
+  {
+   "check": "the review is still open after the refusal",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "Space ticks the acknowledgement",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the Replace button takes keyboard focus",
+   "ok": true,
+   "detail": "restore-run"
+  },
+  {
+   "check": "progress shows one row per chosen device",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the running change can be reopened from the lab banner (or had already ended)",
+   "ok": true,
+   "detail": "backing_up"
+  },
+  {
+   "check": "after a reload the page is back in the same lab",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the job ended",
+   "ok": true,
+   "detail": "succeeded"
+  },
+  {
+   "check": "the result leads with the outcome, details stay collapsed",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "every chosen device ends as \"Replaced and verified\"",
+   "ok": true,
+   "detail": "[{'device': 'ceos', 'badge': 'Replaced and verified', 'cls': 'badge good'}]"
+  },
+  {
+   "check": "the result names both safety backups under Details",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "no \"undefined\" or raw markup in the result",
+   "ok": true,
+   "detail": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 1 device.\n\nReplaced and verified ceos EOS\nDetails\nDetails\nBackup taken before the change\n7466d538ce45\nBackup taken after the change\n37f98f733df4\nAutomatic undo window\n5 minutes\nStatus\nsucceeded\nMessage\nAll 1 node(s) restored "
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-21T00:26:56Z"
+}

@@ -147,6 +147,55 @@ class AppTests(unittest.TestCase):
             self.assertIn('manifest.json',z.namelist())
             self.assertEqual(len(z.namelist()),2)
             self.assertNotIn(b'test-secret',b''.join(z.read(n) for n in z.namelist()))
+    @unittest.skipIf(os.name=='nt', 'Ansible control-node tests require Linux')
+    def test_restore_artifacts_one_capture_when_the_backup_is_the_candidate(self):
+        lab=self.upload(); raw=self.app.state.store.lab(lab['id'])
+        for node in raw['nodes']: node['enabled']=node['name'].endswith(('PE2','SW1'))
+        self.app.state.store.save()
+        junos_node=next(n for n in raw['nodes'] if n['name'].endswith('PE2'))
+        eos_node=next(n for n in raw['nodes'] if n['name'].endswith('SW1'))
+        nodes=[junos_node,eos_node]
+        # Junos' restore command differs from its backup command and is fetched a second time;
+        # EOS' restore command equals its backup command, so it is never scheduled a second time.
+        backup_hosts=make_inventory(raw,nodes,Path(self.tmp.name),'backup')['all']['children']['targets']['hosts']
+        self.assertEqual(backup_hosts['node_0']['restore_command'],'show configuration | no-more')
+        self.assertNotIn('restore_command',backup_hosts['node_1'])
+        test_hosts=make_inventory(raw,nodes,Path(self.tmp.name),'test')['all']['children']['targets']['hosts']
+        self.assertNotIn('restore_command',test_hosts['node_0']); self.assertNotIn('restore_command',test_hosts['node_1'])
+        # Exercise real Ansible + production callback + archive pipeline for both tasks in backup.yml;
+        # only the NOS commands are replaced by local deterministic commands.
+        original_popen=subprocess.Popen
+        primary='import sys\nprint("set system host-name fixture-junos" if "{{ ansible_network_os }}"=="junipernetworks.junos.junos" else "! Command: show running-config\\nhostname fixture-eos\\nend")'
+        restore='print("system {\\n    host-name fixture-junos;\\n}")'
+        def local_popen(args,**kwargs):
+            if args[0] != 'ansible-playbook':
+                return original_popen(args,**kwargs)
+            inv=Path(args[2]); directory=inv.parent
+            play=directory/'offline.yml'
+            play.write_text(yaml.safe_dump([{'hosts':'targets','gather_facts':False,
+                'tasks':[{'name':'Fetch NOS configuration','ansible.builtin.command':{'argv':[sys.executable,'-c',primary]},'changed_when':False},
+                    {'name':'Fetch restore artifact','ansible.builtin.command':{'argv':[sys.executable,'-c',restore]},'changed_when':False,
+                     'failed_when':False,'ignore_errors':True,'when':'restore_command is defined and restore_command | length > 0'}]}]))
+            args=list(args);args[3]=str(play);args+=['-e','ansible_connection=local','-e','ansible_become=false']
+            return original_popen(args,**kwargs)
+        with patch('app.runner.subprocess.Popen',side_effect=local_popen):
+            job_id='fixture-restore'
+            self.app.state.store.state['jobs'].insert(0,{'id':job_id,'lab_id':lab['id'],'lab_name':lab['name'],'status':'queued','operation':'backup','nodes':[]})
+            self.app.state.runner.execute(job_id,copy.deepcopy(raw),nodes,'backup')
+        state=self.app.state.store.snapshot()
+        job=next(j for j in state['jobs'] if j['id']==job_id)
+        self.assertEqual(job['status'],'succeeded',job)
+        outcomes={o['name']:o for o in job['nodes']}
+        junos=outcomes[junos_node['name']]; eos=outcomes[eos_node['name']]
+        self.assertEqual(junos['status'],'succeeded',junos); self.assertEqual(eos['status'],'succeeded',eos)
+        folder=Path(self.tmp.name)/'backups'/lab['id']/'latest'
+        self.assertTrue(junos['restore_file'].endswith('.jcfg'),junos)
+        self.assertEqual(junos['restore_format'],'junos-hierarchical')
+        self.assertIn('host-name fixture-junos;',(folder/junos['restore_file']).read_text())
+        self.assertIn('set system host-name fixture-junos',(folder/junos['file']).read_text())
+        self.assertTrue(eos['restore_file'].endswith('.eoscfg'),eos)
+        self.assertEqual(eos['restore_format'],'eos-running-config')
+        self.assertEqual((folder/eos['restore_file']).read_bytes(),(folder/eos['file']).read_bytes())
     def test_persistence_and_empty_image(self):
         self.assertEqual(self.client.get('/api/state',headers=self.auth).json()['labs'],[])
         self.upload()

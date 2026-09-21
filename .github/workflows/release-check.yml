@@ -54,6 +54,8 @@ jobs:
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_host_git.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_restore.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_restore_junos.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_restore_eos.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_restore_compare.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_discovery_ssh.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_discovery_sftp.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_helper_timeout.py -v

@@ -1,0 +1,9 @@
+configure
+interface Ethernet1
+description B changed
+exit
+no ip prefix-list RESTORE-A
+ip route 198.51.100.0/24 Null0
+vlan 777
+name B-ONLY
+end

@@ -1,0 +1,172 @@
+{
+ "manager_version": "1.30.27",
+ "lab": "restore-square",
+ "source": {
+  "type": "backup",
+  "backup_job_id": "64bb697ec6b140c8abe924c588f835a1"
+ },
+ "requested": [
+  "clab-restore-square-ceos"
+ ],
+ "started_utc": "23:34:17",
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "backup",
+    "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+    "captured_at": "2026-09-20T23:27:24.637713+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 3,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 6
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": false,
+     "reason": "Live restore is not supported for this platform yet.",
+     "requested": false
+    }
+   ],
+   "eligible_count": 1
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "6ffdf6458bb84b63b6f76b83f173ce08"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "23:34:18",
+   "job": "backing_up",
+   "targets": {
+    "ceos": "backing_up"
+   }
+  },
+  {
+   "utc": "23:34:21",
+   "job": "applying",
+   "targets": {
+    "ceos": "applying"
+   }
+  },
+  {
+   "utc": "23:34:22",
+   "job": "applying",
+   "targets": {
+    "ceos": "confirming"
+   }
+  },
+  {
+   "utc": "23:34:23",
+   "job": "verifying",
+   "targets": {
+    "ceos": "applied"
+   }
+  },
+  {
+   "utc": "23:34:25",
+   "job": "succeeded",
+   "targets": {
+    "ceos": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "6ffdf6458bb84b63b6f76b83f173ce08",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-20T23:34:18.094615+00:00",
+  "finished": "2026-09-20T23:34:24.515761+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+   "captured_at": "2026-09-20T23:27:24.637713+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 3,
+  "pre_backup_job_id": "5516c69ad9e947d3ac367a9d1a6b7714",
+  "post_backup_job_id": "cb7ad3109e4b41de83b2cfe625fa738a",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-b96be396-session-config",
+     "-vlan 777",
+     "-   name B-ONLY",
+     " !",
+     " interface Ethernet1",
+     "-   description B changed",
+     "+   description A to-cjunosevolved",
+     "+!",
+     "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+     " !",
+     "-ip route 198.51.100.0/24 Null0"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ]
+ },
+ "finished_utc": "23:34:25"
+}

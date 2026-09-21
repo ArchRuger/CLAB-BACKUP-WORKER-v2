@@ -918,8 +918,8 @@ the vJunos-switch VM limitation is explained in [Part 2](#part-2). Consult the
 [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) kind guides
 for image and runtime requirements. Live SSH/backup of these images has not
 been verified here. Loading a saved version downloads files; **Apply to running
-lab…** (Progress tab) is offered for cJunosEvolved and vJunos-switch only, not for
-vQFX.
+lab…** (Progress tab) is offered for cJunosEvolved and vJunos-switch, not for
+vQFX (see LAB-OPERATIONS.md for the full list of restorable platforms).
 
 ## Map and right-click actions
 
@@ -1573,7 +1573,7 @@ This guide follows the current release; the release history is in the
 build notes are retained from the original build log. Manager procedures reflect password-only VM authentication,
 persistent storage, the student-centred Home / lab workspace layout, map editing and
 registered Git repository saves. Loading a saved version downloads files; applying one
-to running devices is offered for Junos only. Git-owner execution is not browser-user authentication.
+to running devices is offered for Junos and EOS devices; Cisco IOS XR is not restorable yet. Git-owner execution is not browser-user authentication.
 The source includes automated checks for release consistency, helper preflight,
 the installer, Git onboarding/registrations and APT source handling, plus the
 separate VM installation report described in [HEALTH-CHECK.md](HEALTH-CHECK.md). Earlier
@@ -1878,12 +1878,12 @@ saves, so a separate timestamp folder is unnecessary for each Save progress.
 | Upload now (Recent saves) | Retry the recorded local commit without recapturing devices. |
 | Update from the repository (Progress › More ▾) | Fast-forward an eligible clean checkout; resolve diverged history outside the app. |
 | Load a saved version… / View | View or download a saved version as a configuration ZIP. |
-| Apply to running lab… | Junos only: replaces the running configuration of the saved devices from any compatible folder, without changing the save location; the current configuration is backed up first. |
+| Apply to running lab… | Junos and EOS: replaces the running configuration of the saved devices from any compatible folder, without changing the save location; the current configuration is backed up first. Cisco IOS XR is not restorable yet. |
 
 **Load a saved version… downloads files.** It does not apply commands to running
 devices, change the repository branch, rewrite the original topology or redeploy the
 lab. **Apply to running lab…** is the only action that changes running devices; it is
-offered for Junos devices only and shows a *Replace running configuration* review
+offered for Junos and EOS devices and shows a *Replace running configuration* review
 before it runs. Older captures can have unknown topology provenance; match the
 intended devices and configuration format before using downloaded files outside the
 tool.

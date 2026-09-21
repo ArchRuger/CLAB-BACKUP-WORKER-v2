@@ -1,0 +1,61 @@
+{
+ "node": "vjunos-switch",
+ "manager_version": "1.30.27",
+ "job_status": "succeeded",
+ "timeline": [
+  {
+   "utc": "00:30:25",
+   "job": "backing_up",
+   "targets": {
+    "vjunos-switch": "backing_up"
+   }
+  },
+  {
+   "utc": "00:30:28",
+   "job": "applying",
+   "targets": {
+    "vjunos-switch": "applying"
+   }
+  },
+  {
+   "utc": "00:30:51",
+   "job": "applying",
+   "targets": {
+    "vjunos-switch": "confirming"
+   }
+  },
+  {
+   "utc": "00:30:54",
+   "job": "verifying",
+   "targets": {
+    "vjunos-switch": "applied"
+   }
+  },
+  {
+   "utc": "00:30:57",
+   "job": "succeeded",
+   "targets": {
+    "vjunos-switch": "verified"
+   }
+  }
+ ],
+ "window_utc": [
+  "00:30:17",
+  "00:31:17"
+ ],
+ "probe_interval_s": 0.2,
+ "probes": {
+  "management 172.20.20.103": {
+   "replies": 290,
+   "lost": 0,
+   "longest_gap_s": 0.21,
+   "longest_gap_started_utc": "00:31:16"
+  },
+  "ceos -> vjunos-switch loopback (two routed hops)": {
+   "replies": 300,
+   "lost": 0,
+   "longest_gap_s": 0.21,
+   "longest_gap_started_utc": "00:30:32"
+  }
+ }
+}

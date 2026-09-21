@@ -1,3 +1,70 @@
+# Multi-platform restore, part 1: Arista cEOS and the driver contract — 1.30.27
+
+Prepared on `claude/multi-platform-restore` on 2026-09-20/21 from `main` `e4f466a` (1.30.26) on the development VM
+`clab-llm-dev2` (28 vCPU, 67 GiB, KVM, containerlab 0.79.0). **Unit, real-Ansible pipeline, live-device and real-browser
+evidence.** The live lab is one node of each image in a routed square (`docs/multi-platform-restore/lab/`): cEOS
+`n24l/ceos:4.35.0F` (reports 4.35.0F-44178984.4350F), cJunosEvolved `n24l/cjunosevolved:26.2R1.7-EVO`, vJunos-switch
+`n24l/vjunos-switch:23.2R1.14`, XRv9k `n24l/cisco_xrv9k:24.3.1`; image IDs are in the pickup file. The full matrix with
+one evidence file per cell is `docs/multi-platform-restore/evidence/MATRIX.md`; what follows is what was run.
+
+- **Deployed and verified live.** `deploy/start-manager.sh --manager-only` took the VM from manager and helpers 1.30.17 to
+  the source release and then to this one (helpers verified through the gateway by the script); later builds of this working
+  tree were `docker compose build` + `up --force-recreate`. Live evidence names its build: `-wt1` (2026-09-20 23:30 UTC) or
+  `-wt2` (2026-09-21 00:20 UTC, everything in the changelog). `/api/state` and the `?v=` of `restore.js` answered 1.30.27.
+- **Before any change (manager 1.30.26):** vJunos-switch A→B→restore A through the API, 39 s, `verified`, independent
+  readback clean, boot time unchanged; cEOS and XRv9k nodes were silently absent from the review.
+- **Unit.** `test_restore.py` 34, `test_restore_junos.py` 22, `test_restore_eos.py` 31, `test_restore_compare.py` 31 (new),
+  `test_app.py` 10 (one new: the artifact pipeline with real `ansible-playbook`, Junos second capture and EOS single
+  capture, byte-identical artifact). Both new files and `test_restore_eos.py` are in the CI list. Rewritten, never
+  deleted: the legacy-snapshot test (now: listed with the reason, submit refused), the confirm-failure test (now
+  `uncertain`, not an assumed rollback), the Junos confirm test (now `commit check`, no plain `commit`), the restart test
+  (now also: read back, job recomputed). `test_restore_ui.js` 6, `test_git_places_ui.js` extended for `.eoscfg`.
+- **Full suites:** see the last bullet.
+- **Live, driver layer, both Junos images** (`tools/driver_junos_live.py`, 25 steps each, ALL OK:
+  `20-vjunos-driver-live.json`, `30-evo-driver-live.json`): replace under the job token; the device shows the token under
+  entry 0 with `rollback pending`; a foreign token is refused and leaves the change pending; `commit check` from a fresh
+  connection confirms and the marker disappears; zero differences from A; A onto A is a no-op for the device; a dropped
+  `configure exclusive` session leaves nothing in the shared candidate; a bystander's uncommitted edit makes the driver
+  refuse, stays in the candidate and is never activated; a foreign pending change is refused by apply and by confirm, is
+  left alone and rolls back by itself; the NOS boot time never changed.
+- **Live, cEOS exploration** (raw CLI): no base-configuration prerequisite on 4.35.0F; a session only merges unless it is
+  emptied first; `% Invalid input at line N` beside "Copy completed successfully"; an unconfirmed `commit timer 00:02:00`
+  reverted by itself at expiry with the uptime unbroken; `terminal width 32767` closes the channel in the driver's loop.
+- **Live, product, cEOS** (`12-ceos-acceptance.md`, an independent QA agent, build `-wt1`): repeat cycle, A onto A, restore
+  from a post-restore backup, boot identity (uptime, kernel boot id, agent uptimes); invalid and semantically rejected
+  candidates; truncated / wrong-format / empty candidates refused with nothing sent; unreachable at the review step;
+  **management cut after arming → EOS reverted by itself (observed through `docker exec … Cli`) → the manager read B back
+  and said `rolled_back`**, then a normal restore worked; **manager restarted mid-restore → the restart re-check settled the
+  node**; a foreign uncommitted session untouched; contention with a backup both ways. It found three defects, all fixed and
+  unit-tested, two re-proven live on `-wt2`: an SSH loss before `commit timer` left the manager's session `pending` on the
+  device (`13-ceos-orphan-cleanup-restore.json`: own orphan aborted, a foreign-named one kept); a submit was accepted while a
+  foreign timer was pending (`13-ceos-submit-refused-foreign-timer.json`: HTTP 409, nothing started); the job stayed
+  `interrupted` after the re-check (unit-tested; live rerun in the next bullet's QA run).
+- **Live, real browser** (`tools/browser_restore.py`, Playwright against the deployed manager and the real nodes, fresh
+  context, build `-wt2`, 22 checks each, all passed): cEOS at 1366 px and 390 px, vJunos-switch at 768 px, cJunosEvolved at
+  1366 px, each from the Saved versions row (folder source) of a real *Save progress* save (`9d5906d`, local commit, not
+  uploaded): asset stamp, review content, device-type labels, acknowledgement refused without the tick, Space and Enter by
+  keyboard, progress rows, reopen from the lab banner, reload mid-job, final badge, both backups under Details, no console
+  error; followed by an independent device readback. At 390 px the Progress tab is 431 px wide before any dialog (the lab
+  list; the project's own verification covers 1366 px and up); the restore dialogs fit and add nothing.
+- **Measured interruption** (`tools/interruption.py`, 0.2 s probes, `16-interruption-*.json`): 0 probes lost on management
+  and on the data plane for cEOS, cJunosEvolved and vJunos-switch during restores that changed configuration; longest gap
+  0.4 s. The drift did not change addressing on the probed path; a restore that does interrupts by that much.
+- **Reviews.** An independent Opus risk review of the service changes (nine findings; eight accepted and fixed with
+  tests, one rejected with a pinning test: *Remove lab* during a restore is already refused by `operation_busy`) and an
+  independent Opus review of the Evolved evidence (its blocker was already fixed; grace 90 s, the mixed commit answer and
+  the evidence file's wrong "fragile timer" conclusion came from it). The two reviews disagreed on discarding a bystander's
+  candidate; the dropped-session proof settled it for refusing. The UI change was verified by a QA agent that did not write it.
+- **Not run, said plainly:** no controlled device restart after a restore (persistence across a restart is unproven on
+  every platform; cEOS shows running == startup after each restore, which is the precondition only); nothing for XRv9k
+  beyond driver-layer exploration (not part of this release); no per-RE Junos device (the mixed commit answer is
+  hardening without live evidence); Junos root-shell login never occurred on these images; no push to the Git host.
+- **Full suites, run from a clean worktree of the release commit** (so the commit is proven self-contained; the
+  unfinished IOS XR driver of the next chunk is not in it): 809 Python tests with 1 skipped (the opt-in EOS SSH fixture),
+  192 browser tests. `verify-release.py` (runtime and documentation), `check_links.py` (87 files), `git diff --check`, and
+  a scan of the committed evidence and tools for hashes, keys and tokens (clean; the lab logins in `tools/nodecli.py` are
+  the kinds' published containerlab defaults, the same the application carries).
+
 # Maintenance audit follow-up 4: a save with nothing new — 1.30.26
 
 Prepared on `claude/maintenance-audit` on 2026-09-20 after 1.30.25 (`2dd62a5`, pushed). Manager only.

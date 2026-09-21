@@ -52,9 +52,10 @@ function gitTreeModel(files,folders,planned){
  // pending: a lab folder or a planned folder that holds no saved file yet. It is real as a destination,
  // not as a directory or a commit; the panel says so.
  for(const dir of nodes.values()){if(dir.planned&&!dir.count)dir.pending=true;if(!dir.registration)continue;dir.pending=!dir.count;for(const child of dir.dirs){if(child.name==='latest'||child.name==='baseline'||child.name==='checkpoints'){child.managed=child.name;if(child.name==='checkpoints')for(const grandchild of child.dirs)grandchild.managed='checkpoint';}}}
- // A folder holds an appliable saved state when its latest/ carries a Junos restore
- // artifact (.jcfg), whether or not the folder is still registered to a lab.
- for(const dir of nodes.values()){const latest=dir.dirs.find(child=>child.name==='latest');dir.restorable=!!(latest&&latest.files.some(file=>/\.jcfg$/i.test(file.name)));}
+ // A folder holds an appliable saved state when its latest/ carries a restore artifact for a
+ // supported platform (Junos .jcfg, Arista EOS .eoscfg, Cisco IOS XR .xrcfg), whether or not the
+ // folder is still registered to a lab.
+ for(const dir of nodes.values()){const latest=dir.dirs.find(child=>child.name==='latest');dir.restorable=!!(latest&&latest.files.some(file=>/\.(jcfg|eoscfg|xrcfg)$/i.test(file.name)));}
  return {root,nodes};
 }
 function gitOwningFolder(model,path){let best=null;for(const dir of model.nodes.values()){if(!dir.registration)continue;if(dir.path===path||dir.path===''||path.startsWith(dir.path+'/')){if(!best||dir.path.length>best.path.length)best=dir;}}return best;}
@@ -94,7 +95,7 @@ function gitPlacesMarkup(model,view){
   return `<details ${open?'open':''} class="${kids?'':'git-leaf'}"><summary data-git-place="${esc(node.path)}" class="${[node.path===dir.path?'selected':'',isCurrent?'current':'',holds?'holds-current':''].filter(Boolean).join(' ')}"${node.path===dir.path?' aria-current="true"':''}>${kids&&node.path!==''?`<button type="button" class="git-twist" data-git-twist="${esc(node.path)}" aria-expanded="${open?'true':'false'}" aria-label="${esc((open?'Collapse ':'Expand ')+label)}"></button>`:'<span class="git-twist-space" aria-hidden="true"></span>'}<i class="git-folder-icon ${node.registration?'lab':node.managed?'managed':''}${node.pending?' pending':''}"></i><span class="git-outline-name" title="${esc(label)}">${esc(label)}</span>${gitFolderTag(node,view.current)}${holds?'<b class="git-tag holds" title="The folder this lab saves to is inside">This lab is inside</b>':''}</summary>${open&&kids?`<div class="git-outline-children">${node.dirs.map(outline).join('')}</div>`:''}</details>`;};
  const rows=[...dir.dirs.map(child=>{const desc=child.managed?gitManagedFolders[child.managed]:child.registration?'Lab folder':child.pending?'Empty folder':'Folder';
    return `<tr class="row folder" data-git-place="${esc(child.path)}"><td><span class="name"><i class="git-folder-icon ${child.registration?'lab':child.managed?'managed':''}${child.pending?' pending':''}"></i>${esc(child.name)}</span></td><td class="desc">${esc(desc)} ${gitFolderTag(child,view.current,true)}${child.pending?' <b class="git-tag pending">not in the repository until the first save</b>':''}</td><td class="size">${child.pending?'':esc(gitSize(child.size))}</td></tr>`;}),
-  ...dir.files.map(file=>`<tr class="row"><td><span class="name"><i class="git-file-icon"></i>${esc(file.name)}</span></td><td class="desc">${esc(file.name==='manifest.json'?'Save details (which devices, when they were saved)':/\.(cfg|conf|txt|set)$/i.test(file.name)?'Device configuration':/\.jcfg$/i.test(file.name)?'Device configuration (can be applied to a running lab)':'File')}</td><td class="size">${esc(gitSize(file.size))}</td></tr>`)];
+  ...dir.files.map(file=>`<tr class="row"><td><span class="name"><i class="git-file-icon"></i>${esc(file.name)}</span></td><td class="desc">${esc(file.name==='manifest.json'?'Save details (which devices, when they were saved)':/\.(cfg|conf|txt|set)$/i.test(file.name)?'Device configuration':/\.(?:jcfg|eoscfg|xrcfg)$/i.test(file.name)?'Device configuration (can be applied to a running lab)':'File')}</td><td class="size">${esc(gitSize(file.size))}</td></tr>`)];
  const choice=gitFolderChoice(model,dir.path,view.current),creatable=gitCanCreateIn(model,dir.path,view.current);
  const savedAt=view.saved?.latest?view.saved.latest*1000:0;
  const saved=savedAt?'Last saved '+gitPlacesWhen(savedAt):own?'Not saved yet':'';
