@@ -1,0 +1,34 @@
+{
+  "note": "Direct HTTP checks (curl, correct Origin header) against the running manager, restore-square lab id 904a35a79dc341ce8a4638f83fc34185, complementing 17-08-check8-git-source-preflight.json and 17-08-check8-backup-source-preflight.json. No configuration text or secrets involved (node_names and error strings only).",
+  "checks": [
+    {
+      "description": "Preflight with a node name that is not in the saved Git version's manifest at all.",
+      "request": {"method": "POST", "path": "/api/labs/904a35a79dc341ce8a4638f83fc34185/restore/preflight",
+        "body": {"source": {"type": "git", "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337", "path": "restore-square/work/latest"},
+                 "node_names": ["clab-restore-square-does-not-exist"]}},
+      "http_status": 200,
+      "observed": "eligible_count 0; the three saved rows (ceos, cjunosevolved, vjunos-switch) are all returned with requested:false; the bogus name adds no row and is not rejected at preflight (preflight never queues anything)."
+    },
+    {
+      "description": "Submit with the same nonexistent node name -- expect nothing queued.",
+      "request": {"method": "POST", "path": "/api/labs/904a35a79dc341ce8a4638f83fc34185/restore",
+        "body": {"request_id": "<random hex32>", "source": {"type": "git", "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337", "path": "restore-square/work/latest"},
+                 "node_names": ["clab-restore-square-does-not-exist"], "confirm_minutes": 2, "acknowledge": true}},
+      "http_status": 400,
+      "response_body": {"detail": "Select at least one saved node to restore."},
+      "observed": "restore_jobs count on /api/state unchanged after this call (verified via count before/after)."
+    },
+    {
+      "description": "Submit explicitly requesting xrv9k (present in the backup source's saved_nodes but has no restore driver) -- expect refusal, nothing queued, nothing touched.",
+      "request": {"method": "POST", "path": "/api/labs/904a35a79dc341ce8a4638f83fc34185/restore",
+        "body": {"request_id": "<random hex32>", "source": {"type": "backup", "backup_job_id": "64bb697ec6b140c8abe924c588f835a1"},
+                 "node_names": ["clab-restore-square-xrv9k"], "confirm_minutes": 2, "acknowledge": true}},
+      "http_status": 409,
+      "response_body": {"detail": "Some selected nodes cannot be restored: clab-restore-square-xrv9k: Live restore is not supported for this platform yet."},
+      "observed": "restore_jobs count on /api/state unchanged after this call; xrv9k was never opened, no SSH probe, no backup job started (submit() refuses at the eligibility check, before any live probe or pre-restore backup)."
+    }
+  ],
+  "restore_jobs_count_before_all_three_checks": 69,
+  "restore_jobs_count_after_all_three_checks": 69,
+  "conclusion": "All three PASS: wrong/absent node names are refused with HTTP 400/409 and never queue a job; xrv9k is silently absent from the Git-version-source preflight (it is not part of that saved manifest) and explicitly ineligible with the documented reason from the backup source (see 17-08-check8-backup-source-preflight.json)."
+}

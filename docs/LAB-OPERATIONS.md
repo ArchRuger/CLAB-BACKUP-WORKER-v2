@@ -221,24 +221,28 @@ manager save after authentication or export errors. No extra Linux user is requi
 
 ## Apply a saved configuration to a running node
 
-A student who has saved a Junos or EOS configuration can put it back onto the running
-node without destroying the lab, editing startup files, redeploying containerlab or
-rebooting the router. On the **Progress** tab, every saved version — the lab's own
+A student who has saved a Junos, EOS or IOS XR configuration can put it back onto the
+running node without destroying the lab, editing startup files, redeploying containerlab
+or rebooting the router. On the **Progress** tab, every saved version — the lab's own
 *Latest*, *Checkpoints* and *Baseline*, and the *Instructor and reference versions* kept
 in other folders of the same repository — offers **Apply to running lab…** when it holds
 a restore-grade state for at least one supported device; the lab does not have to change
 its save location first. The review lists the source version, the devices, and for each
 whether it already matches the saved state, how many differences there are, or why it is
-skipped — including a device whose platform cannot be restored yet, or whose saved
-version predates its platform's restore support. The manager backs up the current
-configuration of every target first, loads the saved configuration as a complete
-replacement inside the device's own transaction (Junos `load override`; EOS a
-configuration session reset first), and activates it with a timed recovery that the
-device undoes on its own if management is lost; the manager then reconnects for the
-whole undo window to confirm the change — and, on EOS, saves it to startup, since EOS
-does not do that on commit — before it captures the node again and compares it to the
-saved state. Live restore is supported for Junos (`juniper_cjunosevolved`,
-`juniper_vjunosswitch`) and Arista EOS (`arista_ceos`); Cisco IOS XR (`cisco_xrv9k`) is
-not restorable yet. This uses the manager's direct SSH path to the node and is separate
-from Containerlab's Save configurations command. See
+skipped — including a device whose platform cannot be restored yet, whose saved version
+predates its platform's restore support, or an IOS XR device whose saved configuration
+defines a `banner` (pasting one back in safely is not supported yet). The manager backs
+up the current configuration of every target first, loads the saved configuration as a
+complete replacement inside the device's own transaction (Junos `load override`; EOS a
+configuration session reset first; IOS XR `commit replace`, which replaces the whole
+configuration natively), and activates it with a timed recovery that the device undoes on
+its own if management is lost. The manager then reconnects for the whole undo window to
+confirm the change; on IOS XR only the CLI session that armed the change can confirm it,
+so the manager keeps that session open and confirms on it once the reconnect has proved
+management survived. EOS also saves the confirmed change to startup, since it does not do
+that on commit; IOS XR persists a confirmed change immediately. The manager then captures
+the node again and compares it to the saved state. Live restore is supported for Junos
+(`juniper_cjunosevolved`, `juniper_vjunosswitch`), Arista EOS (`arista_ceos`) and Cisco
+IOS XR (`cisco_xrv9k`). This uses the manager's direct SSH path to the node and is
+separate from Containerlab's Save configurations command. See
 [GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node).

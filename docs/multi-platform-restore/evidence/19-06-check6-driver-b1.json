@@ -1,0 +1,130 @@
+[
+ {
+  "node": "cjunosevolved",
+  "tag": "b1a-syntax-error",
+  "started_utc": "02:59:09",
+  "readback_before": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 24,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-20 22:23:45 UTC",
+   "up_seconds": null,
+   "active": "A"
+  },
+  "restore_error": {
+   "type": "RestoreError",
+   "message": "The node rejected the saved configuration while loading it."
+  },
+  "exclusive_session_reacquired": true,
+  "readback_after": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 24,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-20 22:23:45 UTC",
+   "up_seconds": null,
+   "active": "A"
+  }
+ },
+ {
+  "node": "cjunosevolved",
+  "tag": "b1b-commit-check-fail-dup-ip",
+  "started_utc": "02:59:12",
+  "readback_before": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 24,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-20 22:23:45 UTC",
+   "up_seconds": null,
+   "active": "A"
+  },
+  "restore_error": {
+   "type": "RestoreError",
+   "message": "The node failed the configuration check for the saved configuration."
+  },
+  "exclusive_session_reacquired": true,
+  "readback_after": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 24,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-20 22:23:45 UTC",
+   "up_seconds": null,
+   "active": "A"
+  }
+ },
+ {
+  "node": "vjunos-switch",
+  "tag": "b1a-syntax-error",
+  "started_utc": "02:59:15",
+  "readback_before": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 26,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-20 22:18:17 UTC",
+   "up_seconds": null,
+   "active": "A"
+  },
+  "restore_error": {
+   "type": "RestoreError",
+   "message": "The node rejected the saved configuration while loading it."
+  },
+  "exclusive_session_reacquired": true,
+  "readback_after": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 26,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-20 22:18:17 UTC",
+   "up_seconds": null,
+   "active": "A"
+  }
+ },
+ {
+  "node": "vjunos-switch",
+  "tag": "b1b-commit-check-fail-dup-ip",
+  "started_utc": "02:59:22",
+  "readback_before": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 26,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-20 22:18:17 UTC",
+   "up_seconds": null,
+   "active": "A"
+  },
+  "restore_error": {
+   "type": "RestoreError",
+   "message": "The node failed the configuration check for the saved configuration."
+  },
+  "exclusive_session_reacquired": true,
+  "readback_after": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 26,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-20 22:18:17 UTC",
+   "up_seconds": null,
+   "active": "A"
+  }
+ }
+]

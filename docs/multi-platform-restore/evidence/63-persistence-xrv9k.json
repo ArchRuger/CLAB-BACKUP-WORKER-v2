@@ -1,0 +1,19 @@
+{
+ "node": "xrv9k",
+ "restart_command_accepted": true,
+ "back_with_both_edges": true,
+ "seconds_until_back": 824,
+ "boot_before": "Mon Sep 21 03:36:49.680 UTC\nSystem uptime is 5 hours 11 minutes",
+ "uptime_before_s": 18660,
+ "log": [
+  " COMPLETED SUCCESSFULLY [Done] Proceed with reload? [confirm] <confirmed> Reloading node 0/RP0/CPU0 RL: Reboot initiated with code 1, cause User initiated graceful reload reboot_timeout 30 shutdown delay 0 RL: Shutdown initiated Query the node to be reloaded IP of node to be reloaded 192.0.0.4 Cause: User initiated graceful reload VM IP addr sent for reload 192.0.0.4 sending stop hb Received ack from sdrmgr for reload request.Returncode:0 successful disconnection from service wd_disconnect_cb 619 CMP-WD disconnected successfully Invmgr successful disconnection from service RP/0/RP0/CPU0:xrv9k#"
+ ],
+ "boot_after": "Mon Sep 21 03:50:34.241 UTC\nSystem uptime is 12 minutes",
+ "uptime_after_s": 720,
+ "really_restarted": true,
+ "configuration_lines": 51,
+ "lines_lost": 0,
+ "lines_new": 0,
+ "order_changed": false,
+ "ok": true
+}

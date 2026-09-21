@@ -1,0 +1,213 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:4ce4d6534f439fbe16df64c207ce2887994dc65ccf86e930dd1ca927de7b1e9c",
+  "container_started": "2026-09-21T01:44:04.207425623Z",
+  "git_head": "3c5d954d9ed1",
+  "git_dirty_files": 6
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "backup",
+  "backup_job_id": "61cfe431597141998ef43d6fd35087bc"
+ },
+ "requested": [
+  "clab-restore-square-xrv9k"
+ ],
+ "started_utc": "01:45:13",
+ "device_readback_before": {
+  "read_at_utc": "2026-09-21T01:45:13Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 82,
+    "pending_confirmation": false,
+    "boot": "System uptime is 3 hours 20 minutes",
+    "up_seconds": 12000,
+    "active": "B"
+   }
+  }
+ },
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "backup",
+    "backup_job_id": "61cfe431597141998ef43d6fd35087bc",
+    "captured_at": "2026-09-21T01:45:10.878600+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": false,
+     "reason": "SSH probe failed: SSHException",
+     "requested": true,
+     "reachable": false
+    }
+   ],
+   "eligible_count": 0
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "a0b1e6a897514a928ec8f7f44a343415"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "01:45:14",
+   "job": "backing_up",
+   "targets": {
+    "xrv9k": "backing_up"
+   }
+  },
+  {
+   "utc": "01:45:17",
+   "job": "applying",
+   "targets": {
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "01:45:22",
+   "job": "applying",
+   "targets": {
+    "xrv9k": "confirming"
+   }
+  },
+  {
+   "utc": "01:45:25",
+   "job": "verifying",
+   "targets": {
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "01:45:27",
+   "job": "succeeded",
+   "targets": {
+    "xrv9k": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "a0b1e6a897514a928ec8f7f44a343415",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T01:45:14.788389+00:00",
+  "finished": "2026-09-21T01:45:27.551107+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "61cfe431597141998ef43d6fd35087bc",
+   "captured_at": "2026-09-21T01:45:10.878600+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 5,
+  "pre_backup_job_id": "7b197e9d7596490cabff50dbc6d15897",
+  "post_backup_job_id": "983a3e6f8dd2449f8ae71ec4c4c793fb",
+  "targets": [
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "diff_sample": [
+     "Mon Sep 21 01:45:18.316 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "-  interface Loopback777",
+     "-   ipv4 address 198.51.100.77 255.255.255.255",
+     "-  !",
+     "#  interface GigabitEthernet0/0/0/0",
+     "#   description B changed",
+     "#   description A to-vjunos-switch",
+     "#  !",
+     "-  prefix-set B-ONLY",
+     "+  router static",
+     "+   address-family ipv4 unicast",
+     "+    192.0.2.4/32 Null0",
+     "+   !",
+     "+  !",
+     "end"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ]
+ },
+ "device_readback_after": {
+  "read_at_utc": "2026-09-21T01:45:27Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 78,
+    "pending_confirmation": false,
+    "boot": "System uptime is 3 hours 20 minutes",
+    "up_seconds": 12000,
+    "active": "A"
+   }
+  }
+ },
+ "finished_utc": "01:45:28"
+}

@@ -1,0 +1,327 @@
+{
+ "manager_version": "1.30.28",
+ "build": {
+  "image": "clab-backup:1.30.28 sha256:d3c53e30a679cfc6abd5255d31d903a8e32f69ff416e268109ff7adfdef84d9a",
+  "container_started": "2026-09-21T03:14:23.11144882Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 4
+ },
+ "viewport": "narrow",
+ "row": "Latest",
+ "via": "view",
+ "nodes": [
+  "xrv9k"
+ ],
+ "started_utc": "2026-09-21T03:18:12Z",
+ "runs": [
+  {
+   "label": "first",
+   "device_readback_before": {
+    "read_at_utc": "2026-09-21T03:18:16Z",
+    "nodes": {
+     "xrv9k": {
+      "a_value_present": false,
+      "a_statement_present": false,
+      "b_only_present": 3,
+      "b_only_markers": 3,
+      "configuration_lines": 82,
+      "pending_confirmation": false,
+      "boot": "System uptime is 4 hours 53 minutes",
+      "up_seconds": 17580,
+      "active": "B"
+     }
+    }
+   },
+   "review_text": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: Latest \u00b7 saved 24 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS Already matches \u2014 nothing to change\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch Junos Already matches \u2014 nothing to change\nxrv9k IOS XR 8 differences from the running configuration\nEach device's current configuration is backed up first. A device whose backup fails is left unchanged.\nThe devices are not rebooted. The device itself checks the new configuration when it is activated, and the change is undone on its own if the device cannot be reached again within 5 minutes.\nDevices that are skipped above are not touched.\nAdvanced options\nI understand the running configuration on the selected devices will be replaced.\nCancel\nReplace configurations",
+   "review_devices": [
+    {
+     "name": "clab-restore-square-ceos",
+     "disabled": false,
+     "checked": true,
+     "text": "ceos EOS Already matches \u2014 nothing to change"
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "disabled": false,
+     "checked": true,
+     "text": "cjunosevolved Junos Evolved Already matches \u2014 nothing to change"
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "disabled": false,
+     "checked": true,
+     "text": "vjunos-switch Junos Already matches \u2014 nothing to change"
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "disabled": false,
+     "checked": true,
+     "text": "xrv9k IOS XR 8 differences from the running configuration"
+    }
+   ],
+   "job_id": "a44022e8fc034fd98f1fd52107a3ab9c",
+   "submitted_source": {
+    "type": "git",
+    "commit": "d41107250a7171886e5c12acfecca87f8fab03b5",
+    "path": "latest",
+    "captured_at": "2026-09-21T02:54:30.970328+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "job_status_when_reopening": "backing_up",
+   "job_status_when_reloading": "backing_up",
+   "job": {
+    "id": "a44022e8fc034fd98f1fd52107a3ab9c",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-21T03:18:24.404385+00:00",
+    "finished": "2026-09-21T03:18:37.418896+00:00",
+    "status": "succeeded",
+    "message": "All 1 node(s) restored and verified against the saved state.",
+    "source": {
+     "type": "git",
+     "commit": "d41107250a7171886e5c12acfecca87f8fab03b5",
+     "path": "latest",
+     "captured_at": "2026-09-21T02:54:30.970328+00:00",
+     "lab_name": "restore-square",
+     "restore_capable_nodes": 4,
+     "saved_nodes": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ]
+    },
+    "confirm_minutes": 5,
+    "pre_backup_job_id": "a30e2136bc564939a5bde6fe969274ec",
+    "post_backup_job_id": "e60333f83a484b21b2ae55daecc434de",
+    "targets": [
+     {
+      "name": "clab-restore-square-xrv9k",
+      "short_name": "xrv9k",
+      "platform": "cisco_xrv9k",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state.",
+      "diff_sample": [
+       "Mon Sep 21 03:18:27.900 UTC",
+       "!! Building configuration...",
+       "!! IOS XR Configuration 24.3.1",
+       "-  interface Loopback777",
+       "-   ipv4 address 198.51.100.77 255.255.255.255",
+       "-  !",
+       "#  interface GigabitEthernet0/0/0/0",
+       "#   description B changed",
+       "#   description A to-vjunos-switch",
+       "#  !",
+       "-  prefix-set B-ONLY",
+       "+  router static",
+       "+   address-family ipv4 unicast",
+       "+    192.0.2.4/32 Null0",
+       "+   !",
+       "+  !",
+       "end"
+      ],
+      "no_op": false,
+      "persistence": "saved",
+      "missing_statements": 0,
+      "extra_statements": 0
+     }
+    ]
+   },
+   "final_text": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 1 device.\n\nReplaced and verified xrv9k IOS XR\nDetails\nDetails\nBackup taken before the change\na30e2136bc56\nBackup taken after the change\ne60333f83a48\nAutomatic undo window\n5 minutes\nStatus\nsucceeded\nMessage\nAll 1 node(s) restored and verified against the saved state.",
+   "final_badges": [
+    {
+     "device": "xrv9k",
+     "badge": "Replaced and verified",
+     "cls": "badge good",
+     "help": []
+    }
+   ],
+   "device_readback_after": {
+    "read_at_utc": "2026-09-21T03:18:39Z",
+    "nodes": {
+     "xrv9k": {
+      "a_value_present": true,
+      "a_statement_present": true,
+      "b_only_present": 0,
+      "b_only_markers": 3,
+      "configuration_lines": 78,
+      "pending_confirmation": false,
+      "boot": "System uptime is 4 hours 53 minutes",
+      "up_seconds": 17580,
+      "compared_with_saved": {
+       "saved_file": "xrv9k.cfg",
+       "saved_statements": 51,
+       "active_statements": 51,
+       "missing": 0,
+       "extra": 0,
+       "tolerated_root_authentication": 0
+      },
+      "active": "A"
+     }
+    }
+   }
+  }
+ ],
+ "page_scroll_width_before_dialog": 431,
+ "note": "the Progress tab itself is 431px wide at this viewport, before any restore dialog",
+ "console_errors": [],
+ "checks": [
+  {
+   "check": "the page loads restore.js of the running release",
+   "ok": true,
+   "detail": "http://127.0.0.1:8081/static/restore.js?v=1.30.28"
+  },
+  {
+   "check": "first: the devices themselves say B is active before the restore",
+   "ok": true,
+   "detail": "{'xrv9k': 'B'}"
+  },
+  {
+   "check": "the Saved versions list has the row",
+   "ok": true,
+   "detail": "Latest"
+  },
+  {
+   "check": "the saved version's View dialog offers \"Apply to running lab...\" (commit-pinned Git version source)",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the review names the dialog, the lab and the source",
+   "ok": true,
+   "detail": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: Latest \u00b7 saved 24 minutes ago\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS Already matches \u2014 nothing to change\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch J"
+  },
+  {
+   "check": "the review promises the backup, no reboot and the automatic undo",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "every chosen device is listed and can be selected",
+   "ok": true,
+   "detail": "[{'name': 'clab-restore-square-xrv9k', 'disabled': False, 'checked': True, 'text': 'xrv9k IOS XR 8 differences from the running configuration'}]"
+  },
+  {
+   "check": "a device that cannot be restored is listed, disabled, with a reason",
+   "ok": null,
+   "detail": "[]"
+  },
+  {
+   "check": "opening the review adds no horizontal page scroll",
+   "ok": true,
+   "detail": "(431, 431)"
+  },
+  {
+   "check": "nothing inside the review overflows the viewport",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "check": "without the acknowledgement the page refuses and says why",
+   "ok": true,
+   "detail": "Tick the box to confirm that the running configuration will be replaced."
+  },
+  {
+   "check": "the review is still open after the refusal",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "Space ticks the acknowledgement",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the Replace button takes keyboard focus",
+   "ok": true,
+   "detail": "restore-run"
+  },
+  {
+   "check": "the page started a job and the job names the expected source type",
+   "ok": true,
+   "detail": "{'type': 'git', 'commit': 'd41107250a7171886e5c12acfecca87f8fab03b5', 'path': 'latest', 'captured_at': '2026-09-21T02:54:30.970328+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}"
+  },
+  {
+   "check": "progress shows one row per chosen device",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the running change is reopened from the lab banner",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "after a reload the page is back in the same lab",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "the job ended",
+   "ok": true,
+   "detail": "succeeded"
+  },
+  {
+   "check": "the job says it really changed every chosen device (no_op false)",
+   "ok": true,
+   "detail": "[('clab-restore-square-xrv9k', False)]"
+  },
+  {
+   "check": "the result leads with the outcome and keeps the details collapsed",
+   "ok": true,
+   "detail": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 1 device.\n\nReplaced and verified xrv9k IOS XR\nDetails\nDetails"
+  },
+  {
+   "check": "every chosen device ends as \"Replaced and verified\"",
+   "ok": true,
+   "detail": "[{'device': 'xrv9k', 'badge': 'Replaced and verified', 'cls': 'badge good', 'help': []}]"
+  },
+  {
+   "check": "the result names both safety backups under Details",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "check": "no \"undefined\" or raw markup in the result",
+   "ok": true,
+   "detail": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 1 device.\n\nReplaced and verified xrv9k IOS XR\nDetails\nDetails\nBackup taken before the change\na30e2136bc56\nBackup taken after the change\ne60333f83a48\nAutomatic undo window\n5 minutes\nStatus\nsucceeded\nMessage\nAll 1 node(s) resto"
+  },
+  {
+   "check": "first: the devices themselves say A is active and nothing is pending",
+   "ok": true,
+   "detail": "{'xrv9k': ('A', False)}"
+  },
+  {
+   "check": "first: independent whole-configuration comparison with the saved state: 0 missing, 0 extra",
+   "ok": true,
+   "detail": "{'xrv9k': {'saved_file': 'xrv9k.cfg', 'saved_statements': 51, 'active_statements': 51, 'missing': 0, 'extra': 0, 'tolerated_root_authentication': 0}}"
+  },
+  {
+   "check": "first: the NOS boot identity of every chosen device is unchanged (no reboot)",
+   "ok": true,
+   "detail": "{'xrv9k': ('System uptime is 4 hours 53 minutes', 'System uptime is 4 hours 53 minutes')}"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "no static asset failed to load",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "not_exercised": [
+  "a device that cannot be restored is listed, disabled, with a reason"
+ ],
+ "finished_utc": "2026-09-21T03:18:40Z"
+}

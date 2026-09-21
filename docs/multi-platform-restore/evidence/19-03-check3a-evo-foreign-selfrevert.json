@@ -1,0 +1,11 @@
+{
+  "purpose": "check3(a) cjunosevolved: a foreign commit confirmed 2 (harmless description on et-0/0/7) is untouched by review/submit and rolls back by itself",
+  "armed_utc": "2026-09-21T02:44:42Z",
+  "device_commit_log_comment": "QA-foreign-hold",
+  "review_result": "ineligible, reason 'Another change is waiting for confirmation on this node.'",
+  "submit_result": "HTTP 409, same reason, no restore job or backup created (counts unchanged: restore_jobs 104->104, jobs 300->300)",
+  "still_pending_after_submit_attempt": true,
+  "self_reverted_utc": "2026-09-21T02:46:45Z",
+  "self_revert_entry": "0   2026-09-21 02:46:45 UTC by root via other",
+  "readback_after": {"active": "A", "pending_confirmation": false, "compared_with_saved": {"missing": 0, "extra": 0}}
+}

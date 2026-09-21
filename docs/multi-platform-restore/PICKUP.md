@@ -8,10 +8,10 @@ evidence is referenced here.
 ## Plan (chunks)
 
 1. Routing and environment preflight, the square lab, vJunos-switch baseline. **Done** (no code release: read-only baseline).
-2. cEOS 4.35.0F: prerequisites, capture and restore path, UI, positive and failure tests. **In progress: release 1.30.27 markers moved, not committed yet.**
-3. cJunosEvolved 26.2R1.7-EVO: find the real gap, same acceptance checks.
-4. XRv9k 24.3.1: implementation and the same acceptance checks.
-5. All-four integration, mixed-platform restore from the running UI, final regression.
+2. cEOS 4.35.0F: prerequisites, capture and restore path, UI, positive and failure tests. **Done: release 1.30.27, commit `3c5d954`, pushed 2026-09-21, draft PR #47.** Owed on the final build and running as a QA agent: B4/B5 rerun, the saved-Git-version source, Evolved and vJunos-switch product-level B4/B5, the root-authentication synthesis through the product (evidence `17-*`).
+3. cJunosEvolved 26.2R1.7-EVO: find the real gap, same acceptance checks. **Done: release 1.30.28, commit `af036c9`, pushed 2026-09-21** (built in a separate worktree so the XR files and the agents' in-flight files stayed out; the main checkout was then moved to it with `git update-ref` + `git reset`, markers with `set-release.py`). QA wave two (`19-*`) was still running and lands in the next release.
+4. XRv9k 24.3.1: implementation and the same acceptance checks. **Done: release 1.30.29, commit `4d35a9b`, pushed 2026-09-21** (881 Python + 192 browser tests from a clean worktree of the commit).
+5. All-four integration, mixed-platform restore from the running UI, final regression. **Done: all-four and mixed runs in 1.30.29 (`50-*`…`52-*`, `60-*`); persistence across a normal NOS restart on all four, the released build confirmed and the closing record in release 1.30.30.**
 
 Each finished code chunk is one patch release (`deploy/set-release.py`), committed and pushed on
 `claude/multi-platform-restore` (branched from `main` at `e4f466a`, release 1.30.26).
@@ -224,10 +224,104 @@ Live driver-layer proof of the rewritten Junos driver on vJunos-switch: `tools/d
 - Baseline before any change: `test_restore*.py` 29 passed; `test_restore_ui.js` 4 passed (unit).
 - Live acceptance matrix: nothing run yet.
 
+## Evidence audit of 1.30.27 (2026-09-21, workflow `evidence-matrix-audit`, 15 QA auditors + an Opus critic)
+
+Every audited PASS came back "partly": the facts held, the committed evidence was weaker than the matrix wording.
+Themes, and what was done (tools changed in the working tree, **not yet exercised live**: the nodes and the manager were busy):
+- No evidence file named its build (`-wt1`/`-wt2` existed only in prose) → `manager_restore.build_identity()` (running
+  image id, container start, git head, dirty count) is embedded by `manager_restore.py`, `browser_restore.py`, `interruption.py`.
+- Independent readbacks lived only in raw transcripts, and "0 missing / 0 extra" was only ever computed by the manager →
+  `tools/readback.py` (booleans, counts, boot identity; `--saved DIR` recomputes the whole-configuration comparison with
+  its own comparator against the repository checkout) is embedded before/after by the three tools above.
+- `driver_junos_live.py` judged the device with the driver's own capture and the application's comparator → now through
+  `nodecli` + `readback.statements`, with the product's verdict as a cross-check; steps timestamped; both boot readings.
+- `interruption.py` threw the restore record away, had no boot identity, could not see loss before the first reply, and
+  every probe started at cEOS → rewritten: restore record inline, readback before/after, both edges of the restored
+  node from the neighbour's side, one transit path that crosses it (CLI pings at 1 s where the source is not cEOS).
+- `browser_restore.py`: vacuous checks (disabled-row over an empty set, reopen-or-ended, `collapsed[:0]`), graded "the
+  newest job" → tri-state checks ("n/a" is never a pass), the job id comes from the page's own POST, `--drift` makes the
+  run prove B before / A after / `no_op` false, `--via view` reaches the commit-pinned Git-version source (the row's View
+  dialog), `--expect-disabled N`, `--again` (backup from the page, then a second restore in the same session),
+  `--show-job ID` (renders a stored job: the real `rolled_back`/`uncertain` badges), static-asset failures are errors.
+- Product gap closed: the backup source had no integrity check at all → the runner records `sha256`/`restore_sha256`
+  when it stores a capture, `captured_snapshot` refuses a file that no longer matches (captures older than that carry
+  no digest and are taken as they are); tests for backup, folder and Git sources; pinned in the real-Ansible pipeline test.
+- Unit gap closed: restart re-check with the job's own token (confirms, verified, nothing re-applied) and with a
+  foreign/unknown pending change (never confirms, `uncertain`).
+- Overclaims to correct in MATRIX/README/VALIDATION with the next release: A7 "three cycles" without files for the two
+  Junos images; A4's backup-source cells citing files that do not name a source; A6's boot identity cited from files that
+  lack it; C2 "eligibility" (never exercised); `driver_junos_live.py`'s "independent" docstring; VALIDATION's browser
+  bullet reading as if the commit-pinned source had been exercised; README recovery paragraph not naming the platforms.
+
+**Live runs still owed for the three claimed platforms** (after the QA run `17-*` and with the new tools): per Junos image
+A7 through the product (restore over B, A onto A, post-restore backup as a source), B1 (a `commit check` rejection) at
+the driver layer, B3 at application time, wrong credentials at review and at application, B6 at the API (foreign pending →
+409, bystander's edit → ineligible + 409); once on any platform: Save-vs-restore and lab-operation-vs-restore contention,
+a real `verify_mismatch`, the real `rolled_back`/`uncertain` jobs rendered in the browser; browser: `--via view` per
+platform, 390 px for the Junos images, `--again`, a disabled row (`--expect-disabled`), "nonselected nodes unchanged"
+(drift two, restore one, read the other back on B).
+
+## State on 2026-09-21 about 02:30 UTC (working tree on top of `3c5d954`, nothing of it committed yet)
+
+**Deployed:** working-tree build of 1.30.27, image `sha256:845bcd0d…`, started 02:23 UTC (it contains a mid-rework snapshot of
+`restore_iosxr.py`: redeploy when the XR builder reports). Every evidence file from `18-*` on names its build.
+
+**XRv9k is integrated and works through the product.** Registered in `restore_drivers.DRIVERS`, `.xrcfg` artifact in
+`inventory.py` (one capture), CI line added, 179+ restore tests. Live: restore A over B `verified` in 13 s
+(`40-xr-restore-A-over-B.json`); all four from one saved state through the browser, 28 checks, reopen from the banner
+while running, independent 0/0 comparison on all four, no restart (`50-all-four-browser-desktop.json`); mixed run with
+one controlled failure: three verified, xrv9k "not changed" because a foreign trial was pending, job `partial`, the
+foreign change rolled back by itself, recovery verified (`51-*`), and what the page shows for it (`52-*`).
+Design fact: on IOS XR only the arming CLI session can confirm → `HOLDS_SESSION`/`release(token)` in the contract;
+the service keeps the client after a successful apply, proves management with a fresh connection, confirms on the
+kept session, always releases. Second Opus review of the driver: could not break "no early / no foreign confirm, no
+leaks"; found F1 (release leaves our session row → `blocked()` refuses the next restore for minutes), F2 (a failing
+fresh connection in `confirm` destroys the only session that can confirm), F3 (a test contradicting the no-op
+evidence), F4–F7 minor. **A builder is fixing these on node xrv9k (driver layer) right now.** Live fact for F1:
+`end` in the arming session with the trial outstanding asks "Do you wish to exit? [no]:" and, answered yes, rolls back at once.
+
+**Done for the three earlier platforms since the audit** (all with device readbacks embedded): disabled row in the
+browser, both reasons (`18-*`: unsupported platform on the older build, legacy save on the new one; the legacy save is
+local commit `b8534ad`); nonselected nodes unchanged (`53-*`); commit-pinned Git-version source from the browser
+(`54-*`); 390 px for both Junos images with restore → backup from the page → restore (`55-*`); Junos A7 through the
+product: A onto A `no_op` true, restore from a post-restore backup (`56-*`); root-authentication synthesised through
+the product from the evening's first backup (`57-*`); the three real `rolled_back` jobs rendered in the browser
+(`58-*`). QA run `17-*` on the earlier build: Git-version source via API, cEOS B4/B5, Evolved and vJunos-switch B4,
+Evolved B5 with identity surviving a manager restart — all PASS; its check 7 was blocked by a device fact now recorded
+in `evo-live-facts.md` (a commit that REMOVES root-authentication is refused; a node that never had it only warns).
+
+**Code since `3c5d954`:** digests for stored captures (`runner.py`, `git_progress.captured_snapshot`), one SSH
+connection per node for the review + bounded connect retry (IOS XR refuses rapid connections), rejected credentials
+as their own reason (backend + page), a failed device shows its reason beside the badge, undone devices counted apart
+in the result sentence, interrupted-job message, restart re-check tests, Junos docstrings, `test_restore_compare`
+registry tests for XR. Tools: `readback.py`, `interruption.py` (rewritten, **not rerun yet**), `browser_restore.py`
+(rewritten), `mixed_failure.py`, `persistence_check.py` (**not run yet**), build identity in every evidence file,
+cEOS boot identity = age of PID 1 (`show version` Uptime is not one).
+
+**Running:** builder (XR review fixes, node xrv9k), QA wave two (`19-*`: B3 at application, credentials, Junos B6 at the
+API, contention with Save and lab operations, a real `verify_mismatch`, Junos B1; plus `tools/failure_harness.py`),
+docs-auditor (guides for IOS XR).
+
+**Release plan (1.30.28 is done):** 1.30.28 = chunk 3 (everything above that is not XR-specific, after QA wave two), 1.30.29 = chunk 4 (XR
+driver + registration + inventory + CI + evidence `40-*`, `xr-live-facts.md`), 1.30.30 = chunk 5 (all-four, mixed,
+persistence, final matrix). Split by reverse-applying the XR-only hunks for the first commit.
+
 ## Exact next action
 
-Collect the workflow and the two agents' results; apply the Opus-decided Junos driver changes; integrate the UI
-track; add the new test files to `.github/workflows/release-check.yml`; full suites; write CHANGELOG / VALIDATION /
-handoff for 1.30.27; rebuild + redeploy; browser acceptance for cEOS (Playwright against the real manager);
-commit, push, PR, CI. Then chunk 3 (Evolved acceptance through the product) and chunk 4 (XR integration:
-add the driver to `restore_drivers.DRIVERS`, an `.xrcfg` artifact in `inventory.py`).
+The stream is complete; nothing is in flight. If it is picked up again:
+1. A new image or NOS version: rerun `tools/` on it first (`driver_junos_live.py` for Junos, the driver-layer scripts
+   named in `evidence/xr-live-facts.md` for IOS XR, then `manager_restore.py --readback --saved`, `browser_restore.py
+   --drift`, `failure_harness.py`, `interruption.py`, `persistence_check.py`) and add a column or a row to
+   `evidence/MATRIX.md` with files that contain what the cell says.
+2. Open points named in the matrix: a commit-time-only rejection on IOS XR could not be produced; IOS XR banners are
+   refused, not supported; the integrity checks have no live tamper test; the classified login reason after a failed
+   safety backup was not rerun live; `failure_harness.py armed-cut` / `restart-confirming` ran on XRv9k only.
+3. For the user: an unassigned credential profile `QA-wrong-password-ceos` that QA created on the lab (no API route
+   deletes a profile); the lab's Git saves are local commits in `~/labs/CLAB-MNGR-DEV-LLM` (`9d5906d`, `b8534ad`
+   legacy for xrv9k, `366c21f`, and QA's contention save), never uploaded; the `.claude/` routing files are the user's
+   own and uncommitted; the Progress tab is 431 px wide at a 390 px viewport (left alone on request).
+
+**Final state (2026-09-21 about 04:05 UTC):** lab `restore-square` deployed from
+`/srv/containerlab-node-manager/projects/restore-square/`, all four nodes on configuration A with nothing pending
+(`65-*`), every edge and the loopback mesh healthy (`64-*`), every NOS restarted once for the persistence check; the
+development manager runs the released build (see the closing release's validation section for the exact one).

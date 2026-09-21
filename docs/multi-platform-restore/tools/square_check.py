@@ -73,7 +73,8 @@ def check(node):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--json', help='also write the result here')
-    parser.add_argument('--nodes', nargs='*', default=sorted(NEIGHBOURS))
+    parser.add_argument('--nodes', nargs='*', default=sorted(NEIGHBOURS),
+                        help='default: all four. An operator who owns fewer nodes names them: the check opens a session on every node it is given')
     args = parser.parse_args()
     report = {'checked_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'nodes': {}}
     for node in args.nodes:

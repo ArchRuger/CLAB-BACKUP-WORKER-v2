@@ -4,6 +4,78 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.30
+
+**Replace running configuration: acceptance closed on all four kinds.** Fourth and closing release of the
+multi-platform restore stream ([multi-platform-restore](multi-platform-restore/README.md)). No change to the
+manager's behaviour: this release carries the last acceptance evidence and two fixes to the acceptance tools.
+
+- **A restored configuration survives a normal restart of the network operating system** on cEOS 4.35.0F,
+  cJunosEvolved 26.2R1.7-EVO, vJunos-switch 23.2R1.14 and XRv9k 24.3.1: after a confirmed restore from the page, each
+  NOS was restarted the way an operator would and came back with every statement of the restored configuration, nothing
+  lost and nothing new. On cEOS that is the effect of the save the manager performs after the confirmation.
+- The evidence matrix has no open row for the four images; what was not run or could not be produced (a commit-time-only
+  rejection on IOS XR, IOS XR banners, a live tamper test of the integrity checks) is named in it.
+- `tools/failure_harness.py` waits until a restart re-check has settled a job (an "interrupted" job is not the end any
+  more); `tools/square_check.py` says that it opens a session on every node it is given.
+
+## Changes in 1.30.29
+
+**Replace running configuration works on Cisco IOS XR (XRv9k), and with it on all four supported kinds.** Third
+release of the multi-platform restore stream ([multi-platform-restore](multi-platform-restore/README.md)).
+
+- **Cisco IOS XR.** A saved IOS XR running-config can be applied to a running node: `configure exclusive`, the saved
+  configuration entered into the empty target configuration, the device's own preview (`show configuration changes
+  diff`), then one native command that replaces the whole configuration and arms the timed recovery, `commit replace
+  confirmed minutes <N>`. A committed IOS XR configuration is persistent by itself. IOS XR backups carry an `.xrcfg`
+  artifact since this release (the backup's own text, one capture); earlier saves list the device with "made before
+  this kind of device could be restored".
+- **Only the session that armed the change can confirm it on IOS XR** (shown three ways on 24.3.1). The driver
+  therefore keeps that session, the manager proves with a fresh connection that management still works, and only then
+  the confirmation is sent on the kept session; the change is never confirmed before that proof. When the manager
+  gives up, leaving the kept session makes IOS XR undo the change at once; after a manager restart the kept session is
+  gone, the device undoes the change at its timer and the read-back reports it. The manager's own session never lingers
+  on the device (it used to block the next restore for minutes).
+- **Refusals on IOS XR:** somebody's open configuration session or exclusive lock ("A configuration session is open on
+  this node"), somebody's pending change, and a saved configuration that contains a `banner` (not supported yet) are
+  refused before anything is touched.
+- **For every platform:** when the safety backup of a device fails, the restore outcome says why in fixed words
+  ("the device rejected the login", "the device did not answer"); a session lost inside the transaction is reported
+  with what that means; a manager that is shut down inside the undo window leaves the device marked as being changed,
+  so the next start reads it back, instead of recording "unknown".
+- The guides describe all four kinds; the acceptance record has the four-column evidence matrix, the mixed
+  four-platform runs and the failure harness (`tools/failure_harness.py`, `tools/mixed_failure.py`).
+
+## Changes in 1.30.28
+
+**Replace running configuration: cJunosEvolved accepted through the product, and the evidence hardened after an
+independent audit.** Second release of the multi-platform restore stream
+([multi-platform-restore](multi-platform-restore/README.md)). Cisco IOS XR is not restorable in this release.
+
+- **Integrity for every source.** A Git version or folder was already checked file by file against its manifest. A
+  backup had no digest at all: the runner now records a SHA-256 when it stores a capture and its restore artifact, and a
+  stored file that no longer matches is refused before it is saved to Git or applied to a device. Backups taken before
+  this release carry no digest and are used as they are.
+- **The review looks at each device over one SSH connection** (pending change, other blockers, current configuration)
+  instead of three, and a refused connection is tried three times before anything has been sent. Rejected credentials
+  are never retried and are reported as such ("The device rejected the login"), in the review and at application time;
+  they used to read "did not answer".
+- **Clearer results.** A device that was not changed shows the reason beside its badge, not only under Details. A device
+  that undid the change is counted apart from devices that were never changed ("1 device undid the change; its previous
+  configuration is back"). The message of a job interrupted by a manager restart says what the manager is doing about
+  it, and the restart re-check reports `verified` only after a comparison.
+- **cJunosEvolved through the product:** management cut after arming (the manager waits for the device's own rollback,
+  which came up to 35 s late, and reports it as read back), a manager restart during the undo window (the pending change
+  is found under the job's own token, confirmed and verified), root-authentication synthesised from a backup that has
+  none, A onto A, a restore from a post-restore backup. The same for vJunos-switch except the restart case. On this image
+  a commit that REMOVES `root-authentication` is refused, bare `commit` included; a node that never had the statement
+  only warns (the evidence file says which observation is which).
+- **Acceptance tooling** under `docs/multi-platform-restore/tools/`: `readback.py` (the devices' own answer as booleans
+  and counts, with a whole-configuration comparison that shares no code with the application), build identity in every
+  evidence file, a browser tool without vacuous checks that reaches both source types of the page, `interruption.py`
+  and `persistence_check.py` (written, the latter not yet run). On cEOS `show version` Uptime is not a boot identity
+  (it was seen restarting from zero while the container and every agent kept running); the tools use the age of PID 1.
+
 ## Changes in 1.30.27
 
 **Replace running configuration works on Arista cEOS, no longer guesses at a rollback, and never confirms

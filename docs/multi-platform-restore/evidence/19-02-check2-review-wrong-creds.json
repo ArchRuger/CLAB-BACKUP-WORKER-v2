@@ -1,0 +1,79 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:845bcd0df1b99953d6d74c6125f4c4bd5104baf32336b577a12715c7b54164ab",
+  "container_started": "2026-09-21T02:23:08.730824071Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 3
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "folder",
+  "path": "restore-square/work/latest"
+ },
+ "requested": [
+  "clab-restore-square-ceos"
+ ],
+ "started_utc": "02:38:47",
+ "device_readback_before": null,
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "folder",
+    "path": "restore-square/work/latest",
+    "folder": "restore-square/work",
+    "captured_at": "2026-09-21T01:48:31.488220+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": false,
+     "reason": "The node rejected the login credentials.",
+     "requested": true,
+     "reachable": true
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    }
+   ],
+   "eligible_count": 0
+  }
+ },
+ "finished_utc": "02:38:47"
+}

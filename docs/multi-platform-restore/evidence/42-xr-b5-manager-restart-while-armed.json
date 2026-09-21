@@ -1,0 +1,156 @@
+{
+ "trigger": "restart-confirming",
+ "node": "xrv9k",
+ "minutes": 2,
+ "started_utc": "03:13:19.364",
+ "ssh_blocked": false,
+ "build": {
+  "image": "clab-backup:1.30.28 sha256:d3c53e30a679cfc6abd5255d31d903a8e32f69ff416e268109ff7adfdef84d9a",
+  "container_started": "2026-09-21T03:12:22.867987491Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 4
+ },
+ "readback_before": {
+  "error": "SSHException: Error reading SSH protocol banner"
+ },
+ "submit": {
+  "http": 200,
+  "id": "53fc692dd92d44e799e0d2eaec6f73a0"
+ },
+ "reached_confirming": true,
+ "reached_confirming_at_rel_s": 9.364692753006238,
+ "restart": {
+  "t": 9.364694608011632,
+  "utc": "03:13:30.025",
+  "returncode": 0,
+  "stdout": "containerlab-node-manager-backup-ui-1",
+  "stderr": ""
+ },
+ "manager_version_after_restart": "1.30.28",
+ "manager_back_at_rel_s": 11.649549718000344,
+ "job_right_after_restart": {
+  "id": "53fc692dd92d44e799e0d2eaec6f73a0",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T03:13:21.045522+00:00",
+  "finished": "2026-09-21T03:13:30.492211+00:00",
+  "status": "interrupted",
+  "message": "Manager restarted during a restore. It is checking the devices that were being changed; a change it had not confirmed is undone by the device itself.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T02:54:30.970328+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "380080b3ddeb4f9194743311ac56ba81",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "interrupted",
+    "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now.",
+    "diff_sample": [
+     "Mon Sep 21 03:13:24.087 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "-  interface Loopback777",
+     "-   ipv4 address 198.51.100.77 255.255.255.255",
+     "-  !",
+     "#  interface GigabitEthernet0/0/0/0",
+     "#   description B changed",
+     "#   description A to-vjunos-switch",
+     "#  !",
+     "-  prefix-set B-ONLY",
+     "+  router static",
+     "+   address-family ipv4 unicast",
+     "+    192.0.2.4/32 Null0",
+     "+   !",
+     "+  !",
+     "end"
+    ],
+    "no_op": false
+   }
+  ]
+ },
+ "final_job": {
+  "id": "53fc692dd92d44e799e0d2eaec6f73a0",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T03:13:21.045522+00:00",
+  "finished": "2026-09-21T03:13:30.492211+00:00",
+  "status": "interrupted",
+  "message": "Manager restarted during a restore. It is checking the devices that were being changed; a change it had not confirmed is undone by the device itself.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T02:54:30.970328+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "380080b3ddeb4f9194743311ac56ba81",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "interrupted",
+    "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now.",
+    "diff_sample": [
+     "Mon Sep 21 03:13:24.087 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "-  interface Loopback777",
+     "-   ipv4 address 198.51.100.77 255.255.255.255",
+     "-  !",
+     "#  interface GigabitEthernet0/0/0/0",
+     "#   description B changed",
+     "#   description A to-vjunos-switch",
+     "#  !",
+     "-  prefix-set B-ONLY",
+     "+  router static",
+     "+   address-family ipv4 unicast",
+     "+    192.0.2.4/32 Null0",
+     "+   !",
+     "+  !",
+     "end"
+    ],
+    "no_op": false
+   }
+  ]
+ },
+ "timeline": [
+  {
+   "t": 11.653532022013678,
+   "utc": "03:13:31.116",
+   "job_status": "interrupted",
+   "target_status": "interrupted",
+   "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now."
+  }
+ ],
+ "finished_utc": "03:13:31.116",
+ "readback_after": {
+  "error": "SSHException: Error reading SSH protocol banner"
+ },
+ "iptables_clean_at_exit": true,
+ "lead_note": "The harness stopped polling before the restart re-check had settled the node. Read from the manager afterwards (03:13:40 UTC): job 'succeeded', 'Checked after a manager restart. All 1 node(s) restored and verified against the saved state.'; target 'verified'. The device's commit list shows the arming commit at 03:13:24 and no rollback after it: the confirmation on the held session got through just before the restart took effect, and the re-check found A active with nothing pending (independent readback: A, nothing pending, uptime unbroken). The case where the restart comes BEFORE the confirmation is 43-*."
+}

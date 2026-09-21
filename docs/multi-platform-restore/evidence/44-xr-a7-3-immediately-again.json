@@ -1,0 +1,212 @@
+{
+ "manager_version": "1.30.28",
+ "build": {
+  "image": "clab-backup:1.30.28 sha256:d3c53e30a679cfc6abd5255d31d903a8e32f69ff416e268109ff7adfdef84d9a",
+  "container_started": "2026-09-21T03:14:23.11144882Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 4
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "folder",
+  "path": "restore-square/work/latest"
+ },
+ "requested": [
+  "clab-restore-square-xrv9k"
+ ],
+ "started_utc": "03:17:20",
+ "device_readback_before": {
+  "read_at_utc": "2026-09-21T03:17:20Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 78,
+    "pending_confirmation": false,
+    "boot": "System uptime is 4 hours 52 minutes",
+    "up_seconds": 17520,
+    "active": "A"
+   }
+  }
+ },
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "folder",
+    "path": "restore-square/work/latest",
+    "folder": "restore-square/work",
+    "captured_at": "2026-09-21T02:54:30.970328+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0
+    }
+   ],
+   "eligible_count": 1
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "4bef0081af1144c4809b31c53415f315"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "03:17:25",
+   "job": "backing_up",
+   "targets": {
+    "xrv9k": "backing_up"
+   }
+  },
+  {
+   "utc": "03:17:28",
+   "job": "applying",
+   "targets": {
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "03:17:30",
+   "job": "applying",
+   "targets": {
+    "xrv9k": "confirming"
+   }
+  },
+  {
+   "utc": "03:17:31",
+   "job": "verifying",
+   "targets": {
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "03:17:34",
+   "job": "succeeded",
+   "targets": {
+    "xrv9k": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "4bef0081af1144c4809b31c53415f315",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T03:17:25.605741+00:00",
+  "finished": "2026-09-21T03:17:33.875401+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T02:54:30.970328+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 5,
+  "pre_backup_job_id": "290e7653e7eb4736a28f7391a2f7cc76",
+  "post_backup_job_id": "7a17f945582b412ba8bcc81a13aa7d67",
+  "targets": [
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "diff_sample": [
+     "Mon Sep 21 03:17:29.053 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "end"
+    ],
+    "no_op": true,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ]
+ },
+ "device_readback_after": {
+  "read_at_utc": "2026-09-21T03:17:34Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 78,
+    "pending_confirmation": false,
+    "boot": "System uptime is 4 hours 52 minutes",
+    "up_seconds": 17520,
+    "compared_with_saved": {
+     "saved_file": "xrv9k.cfg",
+     "saved_statements": 51,
+     "active_statements": 51,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "A"
+   }
+  }
+ },
+ "finished_utc": "03:17:35"
+}

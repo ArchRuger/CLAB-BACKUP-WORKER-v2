@@ -1,0 +1,178 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:5649f0733f014ecebd0433a3e1b909cc46f517cafabbae431f1ba7ecd29af5d9",
+  "container_started": "2026-09-21T00:50:32.97426744Z",
+  "git_head": "3c5d954d9ed1",
+  "git_dirty_files": 5
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "git",
+  "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+  "path": "restore-square/work/latest"
+ },
+ "requested": [
+  "clab-restore-square-vjunos-switch"
+ ],
+ "started_utc": "01:17:34",
+ "device_readback_before": null,
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "git",
+    "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+    "path": "restore-square/work/latest",
+    "captured_at": "2026-09-21T00:20:40.400494+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 3,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 5
+    }
+   ],
+   "eligible_count": 1
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "dc7c43e7fa4d402db562b6e6738633a7"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "01:17:37",
+   "job": "backing_up",
+   "targets": {
+    "vjunos-switch": "backing_up"
+   }
+  },
+  {
+   "utc": "01:17:40",
+   "job": "applying",
+   "targets": {
+    "vjunos-switch": "applying"
+   }
+  },
+  {
+   "utc": "01:18:06",
+   "job": "applying",
+   "targets": {
+    "vjunos-switch": "confirming"
+   }
+  },
+  {
+   "utc": "01:18:09",
+   "job": "verifying",
+   "targets": {
+    "vjunos-switch": "applied"
+   }
+  },
+  {
+   "utc": "01:18:13",
+   "job": "succeeded",
+   "targets": {
+    "vjunos-switch": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "dc7c43e7fa4d402db562b6e6738633a7",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T01:17:37.766812+00:00",
+  "finished": "2026-09-21T01:18:12.718074+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+   "path": "restore-square/work/latest",
+   "captured_at": "2026-09-21T00:20:40.400494+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch"
+   ]
+  },
+  "confirm_minutes": 5,
+  "pre_backup_job_id": "e593eba1e87a4c758b181700735a69db",
+  "post_backup_job_id": "0895a3bd4f194a26ae59d5affd86873c",
+  "targets": [
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "short_name": "vjunos-switch",
+    "platform": "juniper_vjunosswitch",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "diff_sample": [
+     "[edit interfaces ge-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-cjunosevolved\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options]",
+     "+   static {",
+     "+       route 192.0.2.3/32 discard;",
+     "+   }",
+     "[edit]",
+     "-  vlans {",
+     "-      B-ONLY {",
+     "-          vlan-id 777;",
+     "-      }",
+     "-  }",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ]
+ },
+ "finished_utc": "01:18:13"
+}

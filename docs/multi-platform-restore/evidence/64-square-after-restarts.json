@@ -1,0 +1,60 @@
+{
+ "checked_at": "2026-09-21T03:59:14Z",
+ "nodes": {
+  "ceos": {
+   "boot": "Uptime: 22 minutes",
+   "edges": {
+    "cjunosevolved": "3/3",
+    "xrv9k": "3/3"
+   },
+   "loopbacks": {
+    "cjunosevolved": "3/3",
+    "vjunos-switch": "3/3",
+    "xrv9k": "3/3"
+   },
+   "boot_id": "1d99c345-63a1-40f1-8409-9a96be20d66f",
+   "agent_start": "ConfigAgent                      0    0:22:17\n   Sysdb                            0    0:22:19",
+   "ok": true
+  },
+  "cjunosevolved": {
+   "boot": "2026-09-21 03:55:37",
+   "edges": {
+    "ceos": "3/3",
+    "vjunos-switch": "3/3"
+   },
+   "loopbacks": {
+    "ceos": "3/3",
+    "vjunos-switch": "3/3",
+    "xrv9k": "3/3"
+   },
+   "ok": true
+  },
+  "vjunos-switch": {
+   "boot": "2026-09-21 03:38:23",
+   "edges": {
+    "cjunosevolved": "3/3",
+    "xrv9k": "3/3"
+   },
+   "loopbacks": {
+    "ceos": "3/3",
+    "cjunosevolved": "3/3",
+    "xrv9k": "3/3"
+   },
+   "ok": true
+  },
+  "xrv9k": {
+   "boot": "Mon Sep 21 03:59:38.569 UTC\nSystem uptime is 22 minutes",
+   "edges": {
+    "vjunos-switch": "3/3",
+    "ceos": "3/3"
+   },
+   "loopbacks": {
+    "ceos": "3/3",
+    "cjunosevolved": "3/3",
+    "vjunos-switch": "3/3"
+   },
+   "ok": true
+  }
+ },
+ "ok": true
+}

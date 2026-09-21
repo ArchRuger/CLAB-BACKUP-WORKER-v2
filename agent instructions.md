@@ -1,3 +1,63 @@
+# Multi-platform restore, part 4: acceptance closed — 1.30.30
+
+The stream's closing section; the three below hold the facts to preserve, `docs/multi-platform-restore/PICKUP.md` the
+log and `evidence/MATRIX.md` the record. (1) All four images are proven: replacement, recovery, persistence across a
+normal NOS restart, the page, mixed selections. A new image or NOS version is NOT covered by this record: rerun the
+tools in `docs/multi-platform-restore/tools/` on it before adding a kind or claiming a version (`SUPPORTED_KINDS` lists
+only what was proven). (2) Persistence on cEOS depends on the `write memory` the EOS driver runs after the confirmation;
+`persistence_check.py` is the regression test for it (`containerlab restart --node`, never `docker restart`, never a
+redeploy, which would inject the startup configuration and prove nothing). (3) The acceptance lab `restore-square` stays
+deployed on the development VM; its Git saves are local commits in the lab repository checkout and were never uploaded.
+
+# Multi-platform restore, part 3: Cisco IOS XR — 1.30.29
+
+Continues the two sections below; **read `docs/multi-platform-restore/PICKUP.md` first.** Facts to preserve.
+(1) **IOS XR lets only the CLI session that armed `commit replace confirmed` confirm it.** `restore_iosxr.py` sets
+`HOLDS_SESSION`: a successful `apply_candidate` keeps the client and channel under the job token (`_HELD`); the service
+does not close that client, proves management with a FRESH connection, and `confirm(fresh, handle)` first requires the
+fresh connection to answer and only then sends `commit` on the kept session. Never confirm inline, never before the
+fresh connection exists: that would leave no timed recovery when the restored configuration breaks management.
+(2) `release(token)` leaves configuration mode on the kept session before closing: `end`, and `yes` to IOS XR's raw
+"You are exiting after a 'commit confirm' …" prompt, which makes the node undo an unconfirmed change at once. It must
+never answer the different "Uncommitted changes found, commit them before exiting" prompt (left at its `[cancel]`
+default, pinned by a test). A session closed without `end` lingers in the node's session table for minutes and
+`blocked()` would then refuse the next restore. `confirm` releases only after its `commit` was attempted.
+(3) Entering a configuration: `!` lines are comments, not mode exits; `prefix-set` / `route-policy` / `if` need their own
+closers; `root` is refused inside them; never `exit` at the bare `(config)#`. The mode stack resets whenever the real
+prompt is bare. A candidate with a `banner` is refused in `validate_candidate` until delimiter bodies are handled and
+proven live. `show configuration changes diff` is the replace preview; `show commit changes diff` misleads.
+(4) `pending()` returns the job token when a trial is outstanding AND this process holds the arming session for that
+peer, `True` for a trial it does not hold, `''` otherwise; an open session or lock without a trial is `blocked()`, not
+"pending". A true no-op replace creates NO trial: the service settles it by read-back and releases.
+(5) IOS XR refuses rapid SSH connections: one connection per review and the bounded connect retry (previous section)
+are what keep the review reliable there; `tools/nodecli.py` retries too.
+(6) Service: a shutdown inside the undo window returns `'stopping'` from `_settle` and records nothing, so the target
+stays in flight and the next start reads it back; `backup_failure()` classifies a failed safety backup into fixed
+words and never copies Ansible's text.
+(7) `tools/failure_harness.py` (management cut at application / after arming, manager restart while confirming),
+`tools/mixed_failure.py` and `tools/interruption.py` are regression tooling; `square_check.py` defaults to all four
+nodes, so an operator who owns fewer passes `--nodes`.
+
+# Multi-platform restore, part 2: evidence audit and hardening — 1.30.28
+
+Continues the section below; **read `docs/multi-platform-restore/PICKUP.md` first.** Facts to preserve.
+(1) **Evidence rules** (from an independent audit that found every PASS of the previous release weaker than its wording):
+an evidence file names the build that produced it (`manager_restore.build_identity()`), carries the devices' own
+answer before and after (`tools/readback.py`: booleans, counts, boot identity, never configuration text) and, where it
+claims "equals the saved state", an independent whole-configuration comparison (`readback.py --saved`). A check that
+could not be exercised is "n/a", never a pass. A matrix cell cites a file that contains what the cell says.
+(2) **Integrity.** `runner.py` records `sha256` / `restore_sha256` with every stored capture; `captured_snapshot` refuses a
+stored file that no longer matches (Git saves and restores alike). Captures without the fields are legacy, not errors.
+(3) **One connection per review** (`RestoreService._probe`), three connect attempts before anything is sent (`_open`),
+never for `AuthenticationException`, which has its own reason (`BAD_LOGIN`) in the review and at application. IOS XR
+turns away rapid connections: do not go back to one connection per question.
+(4) The contract has optional `HOLDS_SESSION` / `release(token)` for a NOS where only the arming CLI session can confirm;
+the service side is in `_apply_one` and unit-tested with a fake driver. No driver uses it in this release.
+(5) On cEOS `show version` Uptime is not a boot identity; use the age of PID 1. On cJunosEvolved a commit that removes
+`root-authentication` is refused once the statement exists; the synthesis stays.
+(6) `restore.js`: a failed device shows `restoreNotChangedReason(message)` beside its badge; `rolled_back` is counted as
+"undid the change", not "not changed". Every string still goes through `esc()`.
+
 # Multi-platform restore, part 1: Arista cEOS and the driver contract — 1.30.27
 
 *Replace running configuration* beyond Junos, on `claude/multi-platform-restore`, one patch release per

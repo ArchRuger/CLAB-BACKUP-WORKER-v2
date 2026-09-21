@@ -1,0 +1,111 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:f7e0f326a99abd1c9921329eb3880469a9e44fd1c45a3ea1915887955f32062d",
+  "container_started": "2026-09-21T01:47:43.592960123Z",
+  "git_head": "3c5d954d9ed1",
+  "git_dirty_files": 7
+ },
+ "viewport": "desktop",
+ "row": "Latest",
+ "via": "row",
+ "nodes": [],
+ "started_utc": "2026-09-21T02:22:19Z",
+ "runs": [
+  {
+   "label": "show-job",
+   "job_id": "354e400871c94649afdb29538ccd1a56",
+   "job": {
+    "id": "354e400871c94649afdb29538ccd1a56",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-21T01:08:54.883826+00:00",
+    "finished": "2026-09-21T01:11:51.670673+00:00",
+    "status": "failed",
+    "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+    "source": {
+     "type": "git",
+     "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+     "path": "restore-square/work/latest",
+     "captured_at": "2026-09-21T00:20:40.400494+00:00",
+     "lab_name": "restore-square",
+     "restore_capable_nodes": 3,
+     "saved_nodes": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch"
+     ]
+    },
+    "confirm_minutes": 2,
+    "pre_backup_job_id": "9a54e83753b34bdeb7562ef7c77b7ee8",
+    "post_backup_job_id": "",
+    "targets": [
+     {
+      "name": "clab-restore-square-cjunosevolved",
+      "short_name": "cjunosevolved",
+      "platform": "juniper_cjunosevolved",
+      "status": "rolled_back",
+      "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active.",
+      "diff_sample": [
+       "[edit interfaces et-0/0/0]",
+       "-   description \"B changed\";",
+       "+   description \"A to-ceos\";",
+       "[edit policy-options]",
+       "-   prefix-list B-ONLY {",
+       "-       198.51.100.0/24;",
+       "-   }",
+       "[edit routing-options static]",
+       "+    route 192.0.2.2/32 discard;",
+       "-    route 198.51.100.0/24 discard;",
+       "[edit]"
+      ],
+      "no_op": false,
+      "root_authentication": "present"
+     }
+    ]
+   },
+   "final_text": "Configuration not replaced\n\u00d7\nConfiguration not replaced\n\nConfiguration replaced on 0 devices. 1 device was not changed.\n\nUndone \u2014 previous configuration is back cjunosevolved Junos Evolved\n\nThe device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous configuration is active.\n\nDetails\nDetails\nBackup taken before the change\n9a54e83753b3\nAutomatic undo window\n2 minutes\nStatus\nfailed\nMessage\nNo node was restored. Existing configurations were preserved by the safety backup.",
+   "final_badges": [
+    {
+     "device": "cjunosevolved",
+     "badge": "Undone \u2014 previous configuration is back",
+     "cls": "badge bad",
+     "help": [
+      "The device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous configuration is active."
+     ]
+    }
+   ]
+  }
+ ],
+ "console_errors": [],
+ "checks": [
+  {
+   "check": "the page loads restore.js of the running release",
+   "ok": true,
+   "detail": "http://127.0.0.1:8081/static/restore.js?v=1.30.27"
+  },
+  {
+   "check": "the result leads with the outcome and keeps the details collapsed",
+   "ok": true,
+   "detail": "Configuration not replaced\n\u00d7\nConfiguration not replaced\n\nConfiguration replaced on 0 devices. 1 device was not changed.\n\nUndone \u2014 previous configuration is back cjunosevolved Junos Evolved\n\nThe device"
+  },
+  {
+   "check": "no \"undefined\" or raw markup in the result",
+   "ok": true,
+   "detail": "Configuration not replaced\n\u00d7\nConfiguration not replaced\n\nConfiguration replaced on 0 devices. 1 device was not changed.\n\nUndone \u2014 previous configuration is back cjunosevolved Junos Evolved\n\nThe device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "no static asset failed to load",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "not_exercised": [],
+ "finished_utc": "2026-09-21T02:22:19Z"
+}

@@ -1,0 +1,141 @@
+{
+ "node": "xrv9k",
+ "build": {
+  "image": "clab-backup:1.30.28 sha256:d3c53e30a679cfc6abd5255d31d903a8e32f69ff416e268109ff7adfdef84d9a",
+  "container_started": "2026-09-21T03:14:23.11144882Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 4
+ },
+ "probe_interval_s": 0.2,
+ "device_readback_before": {
+  "read_at_utc": "2026-09-21T03:22:45Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 82,
+    "pending_confirmation": false,
+    "boot": "System uptime is 4 hours 57 minutes",
+    "up_seconds": 17820,
+    "active": "B"
+   }
+  }
+ },
+ "probes": {
+  "management 172.20.20.104": {
+   "kind": "linux 0.2 s",
+   "expected_about": 193,
+   "replies": 187,
+   "lost": 0,
+   "longest_gap_s": 0.21,
+   "longest_gap_started_utc": "03:23:24"
+  },
+  "edge: vjunos-switch -> xrv9k Gi0/0/0/0": {
+   "kind": "cli 1 s",
+   "sent": 75,
+   "replies": 75,
+   "lost": 0
+  },
+  "edge: ceos -> xrv9k Gi0/0/0/1": {
+   "kind": "linux 0.2 s",
+   "expected_about": 377,
+   "replies": 375,
+   "lost": 0,
+   "longest_gap_s": 0.22,
+   "longest_gap_started_utc": "03:23:00"
+  },
+  "transit through xrv9k: ceos -> vjunos-switch 10.0.34.0": {
+   "kind": "linux 0.2 s",
+   "expected_about": 377,
+   "replies": 376,
+   "lost": 0,
+   "longest_gap_s": 0.21,
+   "longest_gap_started_utc": "03:23:53"
+  }
+ },
+ "manager_version": "1.30.28",
+ "restore_seconds": 15.8,
+ "restore": {
+  "source": {
+   "type": "backup",
+   "backup_job_id": "61cfe431597141998ef43d6fd35087bc"
+  },
+  "job_status": "succeeded",
+  "timeline": [
+   {
+    "utc": "03:22:57",
+    "job": "backing_up",
+    "targets": {
+     "xrv9k": "backing_up"
+    }
+   },
+   {
+    "utc": "03:23:00",
+    "job": "applying",
+    "targets": {
+     "xrv9k": "applying"
+    }
+   },
+   {
+    "utc": "03:23:05",
+    "job": "applying",
+    "targets": {
+     "xrv9k": "confirming"
+    }
+   },
+   {
+    "utc": "03:23:07",
+    "job": "verifying",
+    "targets": {
+     "xrv9k": "applied"
+    }
+   },
+   {
+    "utc": "03:23:10",
+    "job": "succeeded",
+    "targets": {
+     "xrv9k": "verified"
+    }
+   }
+  ],
+  "preflight_pending_changes": 8,
+  "target_status": "verified",
+  "no_op": false,
+  "missing_statements": 0,
+  "extra_statements": 0
+ },
+ "device_readback_after": {
+  "read_at_utc": "2026-09-21T03:24:02Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 78,
+    "pending_confirmation": false,
+    "boot": "System uptime is 4 hours 59 minutes",
+    "up_seconds": 17940,
+    "compared_with_saved": {
+     "saved_file": "xrv9k.cfg",
+     "saved_statements": 51,
+     "active_statements": 51,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "A"
+   }
+  }
+ },
+ "summary": {
+  "b_was_active_before": true,
+  "a_is_active_after": true,
+  "nothing_pending_after": true,
+  "restore_changed_configuration": true,
+  "boot_before": "System uptime is 4 hours 57 minutes",
+  "boot_after": "System uptime is 4 hours 59 minutes"
+ }
+}

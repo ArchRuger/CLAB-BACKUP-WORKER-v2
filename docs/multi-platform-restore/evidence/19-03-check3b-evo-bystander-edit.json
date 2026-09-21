@@ -1,0 +1,9 @@
+{
+  "purpose": "check3(b) cjunosevolved: a bystander's uncommitted edit in the shared candidate blocks review and submit, and is never touched",
+  "bystander_edit": "set system location building QA-BYSTANDER (left uncommitted, plain configure session, answered yes to the exit prompt)",
+  "review_result": "ineligible, reason 'Someone has uncommitted configuration changes open on this node. The restore was not started, so their work is not lost.'",
+  "submit_result": "HTTP 409, same reason, no restore job created (restore_jobs count 104 -> 104)",
+  "edit_still_present_after_submit_attempt": "show | compare from a fresh plain session still showed '+ location building QA-BYSTANDER' unchanged",
+  "active_configuration_during_test": "A (0 missing / 0 extra vs saved) -- the edit was never activated",
+  "cleanup": "configure; rollback 0; exit -- verified show | compare empty afterwards"
+}

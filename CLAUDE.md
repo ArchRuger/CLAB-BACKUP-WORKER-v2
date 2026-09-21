@@ -244,7 +244,9 @@ One line each; the handoff section named in the routing table has the reasoning 
   `restore_drivers.py`; `restore.py` knows no NOS command. Every driver replaces the whole configuration
   inside the NOS's own transaction with the NOS's own timed recovery armed (Junos hierarchical candidate,
   `load override`, `commit check`, `commit confirmed`; EOS emptied session, `copy terminal: session-config`,
-  `commit timer`), and the manager confirms from a fresh connection. A paste or merge is never a restore.
+  `commit timer`; IOS XR `commit replace confirmed`), and the manager confirms only after a fresh connection
+  proved management (on IOS XR the confirmation itself must go over the kept arming session: never confirm
+  inline). A paste or merge is never a restore.
   The pre-restore backup is mandatory; never fake the timed recovery; never confirm a pending change that
   is not the manager's own; an unconfirmed change is reported `rolled_back` only after the previous
   configuration was read back, otherwise `uncertain`; snapshots without a restore artifact are view and
@@ -296,7 +298,7 @@ Sections are headings of `agent instructions.md`, named by their release.
 |---|---|---|---|
 | Home, menus, Devices tab, shell, status vocabulary | 1.30.17 items 1, 2, 8–10; 1.29.1; 1.29.0 | `docs/LAB-OPERATIONS.md`, `docs/redesign/DESIGN-SPEC-ADDENDUM.md` | `test_home_ui.js`, `test_shell_ui.js`, `test_status_ui.js`, `verify_after.py`, `check_ui00{1,2a,2b,5,6}.py` |
 | Save progress, folders, upload review | 1.30.17 items 3–7; 1.29.0; 1.28.0 (2), (5); 1.27.0; 1.15.3, 1.15.2 (top level); 1.15.1, 1.15.0 (under the old title) | `docs/GIT-PROGRESS.md`, `docs/GIT-SETUP.md` | `test_git_progress.py`, `test_host_git.py`, `test_git_*_ui.js`, `check_ui004.py`, `check_ui007*.py`, `check_ui008*.py` |
-| Apply to running lab (restore), all platforms | 1.30.27 and later (multi-platform); 1.28.0; 1.29.0 (live facts) | `docs/GIT-PROGRESS.md`, `docs/LAB-OPERATIONS.md`, `docs/multi-platform-restore/README.md` (support matrix, live facts, how to rerun) | `test_restore*.py`, `test_restore_ui.js`, `docs/multi-platform-restore/tools/` (`nodecli.py`, `square_check.py`, `manager_restore.py`) |
+| Apply to running lab (restore), all platforms | 1.30.29, 1.30.28, 1.30.27 (multi-platform); 1.28.0; 1.29.0 (live facts) | `docs/GIT-PROGRESS.md`, `docs/LAB-OPERATIONS.md`, `docs/multi-platform-restore/README.md` (support matrix, live facts, how to rerun) | `test_restore*.py`, `test_restore_ui.js`, `docs/multi-platform-restore/tools/` (`nodecli.py`, `square_check.py`, `manager_restore.py`) |
 | Topology tab, Edit map, map document, drawing, exports | 1.30.17 items 11–16; 1.29.1; 1.29.0; 1.26.0 (1); 1.25.0 (1); 1.14.0, 1.6.x and 1.5.0 addenda | `docs/ui-review-001/MAP-PARITY.md`, `docs/LAB-OPERATIONS.md` | `test_map_editor_ui.js`, `test_lab_builder_ui.js`, `test_lab_operations.py` (map document), `test_topology.py`, `test_topology_ui.js`, `test_topology_menu_ui.js`, `test_diagram_editor*`, `check_ui003.py`, `check_ui003b.py` |
 | Lab builder, `publish` / `revise` | 1.30.1; 1.30.0 | `docs/LAB-BUILDER.md`, `docs/lab-builder/QA-FINDINGS.md` | `test_lab_operations.py` (helper and manager side), `test_lab_builder_ui.js`, `student_workflow.py`, `node build.mjs --check` |
 | Lab operations, topology browser, upload, destroy, the operations helper | 1.30.17 items 9–10; 1.30.1 (3), (8); 1.30.0 (4)–(5); 1.26.0 (2)–(3); 1.22.0 (4); 1.19.4 (`create` file modes); 1.12.x and 1.11.0 addenda | `docs/LAB-OPERATIONS.md` | `test_lab_operations.py`, `test_operations_ssh.py`, `test_operations_ui.js` |

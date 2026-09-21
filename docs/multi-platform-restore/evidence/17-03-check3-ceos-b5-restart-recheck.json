@@ -1,0 +1,390 @@
+{
+ "minutes": 2,
+ "started_utc": "00:50:26.668",
+ "method": "device-truth-trigger + manager restart",
+ "submit": {
+  "http": 200,
+  "id": "5e21cb8a08324bf795aa0fc6398ea8c5"
+ },
+ "blocked_at_rel_s": 4.281344488001196,
+ "armed_session_name": "clabmgr-1ee85b4a",
+ "job_before_restart": {
+  "id": "5e21cb8a08324bf795aa0fc6398ea8c5",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T00:50:27.130816+00:00",
+  "status": "applying",
+  "message": "Applying the saved configuration.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+   "captured_at": "2026-09-20T23:27:24.637713+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "aad77801f87b451683fe761567d440a7",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "confirming",
+    "message": "Configuration loaded; reconnecting to confirm.",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-1ee85b4a-session-config",
+     "-vlan 777",
+     "-   name B-ONLY",
+     " !",
+     " interface Ethernet1",
+     "-   description B changed",
+     "+   description A to-cjunosevolved",
+     "+!",
+     "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+     " !",
+     "-ip route 198.51.100.0/24 Null0"
+    ],
+    "no_op": false
+   }
+  ]
+ },
+ "restart": {
+  "t": 5.291573940005037,
+  "utc": "00:50:33.031",
+  "returncode": 0,
+  "stdout": "containerlab-node-manager-backup-ui-1",
+  "stderr": ""
+ },
+ "manager_version_after_restart": "1.30.27",
+ "manager_back_at_rel_s": 7.412885837999056,
+ "job_right_after_restart": {
+  "id": "5e21cb8a08324bf795aa0fc6398ea8c5",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T00:50:27.130816+00:00",
+  "finished": "2026-09-21T00:50:33.489298+00:00",
+  "status": "interrupted",
+  "message": "Manager restarted during a restore. Check the target nodes; a confirmed commit that was not confirmed rolls back on its own.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+   "captured_at": "2026-09-20T23:27:24.637713+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "aad77801f87b451683fe761567d440a7",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "interrupted",
+    "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now.",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-1ee85b4a-session-config",
+     "-vlan 777",
+     "-   name B-ONLY",
+     " !",
+     " interface Ethernet1",
+     "-   description B changed",
+     "+   description A to-cjunosevolved",
+     "+!",
+     "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+     " !",
+     "-ip route 198.51.100.0/24 Null0"
+    ],
+    "no_op": false
+   }
+  ]
+ },
+ "reverted_at_rel_s": 125.8740511060023,
+ "device_log_while_blocked": [
+  {
+   "t": 7.416727485993761,
+   "utc": "00:50:34.084",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:56\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 7.646868597003049,
+   "utc": "00:50:34.315",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:56\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 10.752507907003746,
+   "utc": "00:50:37.420",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:53\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 13.873273302000598,
+   "utc": "00:50:40.541",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:50\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 16.97622210100235,
+   "utc": "00:50:43.644",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:47\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 20.088782687002094,
+   "utc": "00:50:46.756",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:44\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 23.210728346995893,
+   "utc": "00:50:49.878",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:40\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 26.32658757599711,
+   "utc": "00:50:52.994",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:37\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 29.430384352992405,
+   "utc": "00:50:56.098",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:34\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 32.537315862995456,
+   "utc": "00:50:59.205",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:31\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 35.64385598100489,
+   "utc": "00:51:02.311",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:28\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 38.74324580999382,
+   "utc": "00:51:05.411",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:25\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 41.85232595799607,
+   "utc": "00:51:08.520",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:22\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 44.959090043994365,
+   "utc": "00:51:11.627",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:19\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 48.06856574899575,
+   "utc": "00:51:14.736",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:16\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 51.1601286209916,
+   "utc": "00:51:17.828",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:13\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 54.26546198299911,
+   "utc": "00:51:20.933",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:09\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 57.37259844900109,
+   "utc": "00:51:24.040",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:06\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 60.47421298699919,
+   "utc": "00:51:27.142",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:03\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 63.578400195998256,
+   "utc": "00:51:30.246",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:01:00\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 66.67330391200085,
+   "utc": "00:51:33.341",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:57\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 69.78482924899436,
+   "utc": "00:51:36.452",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:54\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 72.89907342899824,
+   "utc": "00:51:39.567",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:51\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 76.01627350899798,
+   "utc": "00:51:42.684",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:48\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 79.12812453099468,
+   "utc": "00:51:45.796",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:45\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 82.2383069369971,
+   "utc": "00:51:48.906",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:41\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 85.34520437799802,
+   "utc": "00:51:52.013",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:38\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 88.45051781099755,
+   "utc": "00:51:55.118",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:35\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 91.55603581000469,
+   "utc": "00:51:58.224",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:32\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 94.66446420599823,
+   "utc": "00:52:01.332",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:29\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 97.76537808899593,
+   "utc": "00:52:04.433",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:26\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 100.87446120000095,
+   "utc": "00:52:07.542",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:23\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 103.98223585600499,
+   "utc": "00:52:10.650",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:20\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 107.08236384599877,
+   "utc": "00:52:13.750",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:17\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 110.1794621010049,
+   "utc": "00:52:16.847",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:14\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 113.28738186399278,
+   "utc": "00:52:19.955",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:10\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 116.41813813199406,
+   "utc": "00:52:23.086",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:07\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 119.56766719800362,
+   "utc": "00:52:26.235",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:04\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 122.72947107200162,
+   "utc": "00:52:29.397",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\nSession with pending commit timer: clabmgr-1ee85b4a\nTime left until commit timer expiry: in 0:00:01\n\n  Name             State     User Terminal Completed Time      Committed By\n- ---------------- --------- ---- -------- ------------------- ------------\n  clabmgr-1ee85b4a committed               2026-09-21 00:50:30 admin"
+  },
+  {
+   "t": 125.8740511060023,
+   "utc": "00:52:32.542",
+   "sessions": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name State User Terminal Completed Time Committed By\n- ---- ----- ---- -------- -------------- ------------"
+  }
+ ],
+ "rule_present_before_unblock": true,
+ "rule_present_after_unblock": false,
+ "unblocked_at_rel_s": 128.91542525299883,
+ "timeline": [
+  {
+   "t": 128.9178954329982,
+   "utc": "00:52:35.586",
+   "job_status": "interrupted",
+   "target_status": "interrupted",
+   "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now."
+  },
+  {
+   "t": 146.58843642099237,
+   "utc": "00:52:53.256",
+   "job_status": "failed",
+   "target_status": "rolled_back",
+   "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active."
+  }
+ ],
+ "final_job": {
+  "id": "5e21cb8a08324bf795aa0fc6398ea8c5",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T00:50:27.130816+00:00",
+  "finished": "2026-09-21T00:52:52.547710+00:00",
+  "status": "failed",
+  "message": "Checked after a manager restart. No node was restored. Existing configurations were preserved by the safety backup.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "64bb697ec6b140c8abe924c588f835a1",
+   "captured_at": "2026-09-20T23:27:24.637713+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 3,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "aad77801f87b451683fe761567d440a7",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "rolled_back",
+    "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active.",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-1ee85b4a-session-config",
+     "-vlan 777",
+     "-   name B-ONLY",
+     " !",
+     " interface Ethernet1",
+     "-   description B changed",
+     "+   description A to-cjunosevolved",
+     "+!",
+     "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+     " !",
+     "-ip route 198.51.100.0/24 Null0"
+    ],
+    "no_op": false
+   }
+  ]
+ },
+ "device_sessions_after_unblock": "Maximum number of completed sessions: 1\nMaximum number of pending sessions: 5\nMerge on commit is disabled\nAutosave to startup-config on commit is disabled\n\n  Name State User Terminal Completed Time Committed By\n- ---- ----- ---- -------- -------------- ------------",
+ "finished_utc": "00:52:53.421"
+}

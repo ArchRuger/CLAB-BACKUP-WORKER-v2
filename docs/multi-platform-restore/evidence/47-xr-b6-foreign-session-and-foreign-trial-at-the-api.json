@@ -1,0 +1,60 @@
+{
+ "build": {
+  "image": "clab-backup:1.30.28 sha256:d3c53e30a679cfc6abd5255d31d903a8e32f69ff416e268109ff7adfdef84d9a",
+  "container_started": "2026-09-21T03:14:23.11144882Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 4
+ },
+ "node": "xrv9k",
+ "cases": [
+  {
+   "case": "an open configuration session with uncommitted edits",
+   "review": {
+    "eligible": false,
+    "reason": "A configuration session is open on this node; the restore was not started so that nobody's work is lost."
+   },
+   "submit_http": 409,
+   "submit_detail": "Some selected nodes cannot be restored right now: clab-restore-square-xrv9k: A configuration session is open on this node; the restore was not started so that nobody's work is lost.",
+   "double_submit_http": 409,
+   "jobs_created": 0,
+   "backup_started": false
+  },
+  {
+   "case": "a foreign commit confirmed awaiting confirmation",
+   "review": {
+    "eligible": false,
+    "reason": "Another change is waiting for confirmation on this node."
+   },
+   "submit_http": 409,
+   "submit_detail": "Some selected nodes cannot be restored right now: clab-restore-square-xrv9k: Another change is waiting for confirmation on this node.",
+   "double_submit_http": 409,
+   "jobs_created": 0,
+   "backup_started": false
+  }
+ ],
+ "device_while_foreign_pending": {
+  "read_at_utc": "2026-09-21T03:19:41Z",
+  "nodes": {
+   "xrv9k": {
+    "active": "unreadable",
+    "error": "SSHException"
+   }
+  }
+ },
+ "device_after_foreign_window": {
+  "read_at_utc": "2026-09-21T03:22:03Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 82,
+    "pending_confirmation": false,
+    "boot": "System uptime is 4 hours 57 minutes",
+    "up_seconds": 17820,
+    "active": "B"
+   }
+  }
+ }
+}

@@ -12,7 +12,7 @@ node's kind to it. A driver provides:
 ``apply_candidate(client, candidate, confirm_minutes, **options) -> dict``
     Replace the whole active configuration with the candidate inside the NOS's own transaction and
     activate it with the NOS's own timed recovery (Junos ``commit confirmed``, EOS
-    ``commit timer``, IOS XR ``commit confirmed``). Returns ``diff`` (the device's own review
+    ``commit timer``, IOS XR ``commit replace confirmed``). Returns ``diff`` (the device's own review
     diff), ``no_op`` and ``handle``: whatever a later confirmation on a *fresh* connection needs.
 ``confirm(client, handle, **options) -> dict``
     Cancel the timed recovery and make the configuration persistent where the NOS does not do that
@@ -25,10 +25,13 @@ node's kind to it. A driver provides:
     successful ``apply_candidate`` the driver then owns the connection it was given and keeps it,
     under the job token, in the manager's memory; the service does not close it. ``confirm`` still
     receives a *fresh* connection, which is the proof that management survived, and only then sends
-    the confirmation on the held session. ``release(token)`` closes a held session without
-    confirming, and the service always calls it when the node is settled, so an unconfirmed change
-    is left to the node's own timer. A manager restart loses held sessions: the node rolls back and
-    the read-back reports it. A driver must never confirm before the fresh connection exists.
+    the confirmation on the held session. ``release(token)`` ends a held session without
+    confirming, and the service always calls it when the node is settled. It leaves the node's
+    configuration mode cleanly first, so no session of the manager lingers and blocks the next
+    restore; on IOS XR leaving the arming session while its change is still unconfirmed makes the
+    node undo the change at once instead of at the timer's expiry, which is what giving up means.
+    A manager restart loses held sessions: the node rolls back at its timer and the read-back
+    reports it. A driver must never confirm before the fresh connection exists.
 ``blocked(client, **options) -> str`` (optional)
     A student-readable reason why a restore must not start now although nothing is pending (Junos:
     somebody's uncommitted edits in the shared candidate), or ''. Asked at the review step; the
@@ -46,9 +49,9 @@ node's kind to it. A driver provides:
 
 Drivers reach a node only over the manager's direct node-SSH path. No host helper is involved.
 """
-from . import restore_eos, restore_junos
+from . import restore_eos, restore_iosxr, restore_junos
 
-DRIVERS = (restore_junos, restore_eos)
+DRIVERS = (restore_junos, restore_eos, restore_iosxr)
 
 
 def for_platform(platform):

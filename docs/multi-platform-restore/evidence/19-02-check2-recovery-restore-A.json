@@ -1,0 +1,222 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:845bcd0df1b99953d6d74c6125f4c4bd5104baf32336b577a12715c7b54164ab",
+  "container_started": "2026-09-21T02:23:08.730824071Z",
+  "git_head": "af036c9e5e72",
+  "git_dirty_files": 3
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "folder",
+  "path": "restore-square/work/latest"
+ },
+ "requested": [
+  "clab-restore-square-ceos"
+ ],
+ "started_utc": "02:43:25",
+ "device_readback_before": {
+  "read_at_utc": "2026-09-21T02:43:25Z",
+  "nodes": {
+   "ceos": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 4,
+    "b_only_markers": 4,
+    "configuration_lines": 74,
+    "pending_confirmation": false,
+    "boot": "PID 1 up 16001 s",
+    "up_seconds": 16001,
+    "own_sessions_left_pending": 0,
+    "active": "B"
+   }
+  }
+ },
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "folder",
+    "path": "restore-square/work/latest",
+    "folder": "restore-square/work",
+    "captured_at": "2026-09-21T01:48:31.488220+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 6
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    }
+   ],
+   "eligible_count": 1
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "d00e8f31f8234b1cb2f5b7959a47c398"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "02:43:27",
+   "job": "backing_up",
+   "targets": {
+    "ceos": "backing_up"
+   }
+  },
+  {
+   "utc": "02:43:29",
+   "job": "applying",
+   "targets": {
+    "ceos": "applying"
+   }
+  },
+  {
+   "utc": "02:43:30",
+   "job": "applying",
+   "targets": {
+    "ceos": "confirming"
+   }
+  },
+  {
+   "utc": "02:43:31",
+   "job": "verifying",
+   "targets": {
+    "ceos": "applied"
+   }
+  },
+  {
+   "utc": "02:43:33",
+   "job": "succeeded",
+   "targets": {
+    "ceos": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "d00e8f31f8234b1cb2f5b7959a47c398",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T02:43:27.597559+00:00",
+  "finished": "2026-09-21T02:43:33.278086+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T01:48:31.488220+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "381b9f24b19549cbb59862f9341f0dec",
+  "post_backup_job_id": "d2be59883f2844cfab7669458dcb0108",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-c73dcef0-session-config",
+     "-vlan 777",
+     "-   name B-ONLY",
+     " !",
+     " interface Ethernet1",
+     "-   description B changed",
+     "+   description A to-cjunosevolved",
+     "+!",
+     "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+     " !",
+     "-ip route 198.51.100.0/24 Null0"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ]
+ },
+ "device_readback_after": {
+  "read_at_utc": "2026-09-21T02:43:33Z",
+  "nodes": {
+   "ceos": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 4,
+    "configuration_lines": 72,
+    "pending_confirmation": false,
+    "boot": "PID 1 up 16009 s",
+    "up_seconds": 16009,
+    "own_sessions_left_pending": 0,
+    "compared_with_saved": {
+     "saved_file": "ceos.cfg",
+     "saved_statements": 47,
+     "active_statements": 47,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "A"
+   }
+  }
+ },
+ "finished_utc": "02:43:34"
+}

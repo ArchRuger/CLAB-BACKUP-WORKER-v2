@@ -1,3 +1,114 @@
+# Multi-platform restore, part 4: persistence and the closing record — 1.30.30
+
+Prepared on `claude/multi-platform-restore` on 2026-09-21 after 1.30.29 (`4d35a9b`, pushed, CI green). **Live-device and
+real-browser evidence on the released 1.30.29 build; no application code changed in this release** (acceptance tools and
+records only), so the unit totals are those of 1.30.29 plus nothing.
+
+- **The released build, installed and confirmed.** `deploy/start-manager.sh --manager-only` installed 1.30.29 (helpers
+  refreshed and verified through the gateway; `/api/state` 1.30.29, no helper update required, `restore.js?v=1.30.29`).
+  On it: all four nodes drifted and restored from the browser, 28 checks, the evidence names image `clab-backup:1.30.29`,
+  commit `4d35a9b` and zero uncommitted application files (`61-*`).
+- **Persistence (`63-persistence-<node>.json`, `tools/persistence_check.py`).** With that browser restore as the last
+  configuration change on every node, each NOS was restarted the normal way, in parallel: cEOS `containerlab restart
+  --node ceos` (the container is the NOS; links kept), cJunosEvolved and vJunos-switch `request system reboot`, XRv9k
+  `reload` ("User initiated graceful reload"). For each: the restart proven from the NOS itself (uptime fell),
+  management and both square edges back (XRv9k after 824 s, the others after about 1300 s because each waits for its
+  rebooting neighbours), and the configuration compared by the tool's own comparator: 47 / 23 / 25 / 51 statements,
+  0 lost, 0 new, order unchanged. No containerlab redeploy was used.
+- **Afterwards:** `square_check.py` healthy on all four edges both ways and the loopback mesh (`64-*`); a real all-four
+  restore through the manager, B before and A after by the devices, 0 missing / 0 extra on all four (`65-*`).
+- **Still not proven, named in the matrix:** a commit-time-only rejection on IOS XR (the image accepted what was tried),
+  IOS XR banners (refused, not supported), a live tamper test of the integrity checks (unit-tested), the classified
+  login reason after a failed safety backup (unit-tested after QA found the generic wording live). cEOS `failure_harness`
+  subcommands `armed-cut` / `restart-confirming` ran on XRv9k only; the cEOS and Junos runs of those checks used the
+  tool's scratch predecessors.
+- **Full suites from a clean worktree of the release commit:** 881 Python tests with 1 skipped (the opt-in EOS SSH
+  fixture), 192 browser tests; `verify-release.py`, `check_links.py` (90 files), `git diff --check`. After the push this
+  build was installed with `start-manager.sh --manager-only` and one more restore was run on it; that run is reported in
+  the pull request, not here, because a release section is not rewritten after its commit.
+
+# Multi-platform restore, part 3: Cisco IOS XR and the four-platform runs — 1.30.29
+
+Prepared on `claude/multi-platform-restore` on 2026-09-21 after 1.30.28 (`af036c9`, pushed, CI green), same VM, lab and
+images. **Unit, real-Ansible pipeline, live-device and real-browser evidence.** Every live file names the build that
+produced it; the four-column matrix is `docs/multi-platform-restore/evidence/MATRIX.md`.
+
+- **Driver, live at the driver layer on XRv9k 24.3.1** (`evidence/xr-live-facts.md`, a Sonnet builder on the node, three
+  passes): hierarchy navigation while entering a configuration (`!` is a comment, closers `end-set` / `end-policy` /
+  `endif`, never `exit` at the bare configuration prompt), `commit replace confirmed minutes N` with its raw warning
+  prompt, the preview command, the session-table shapes for nothing / an open session / a lock / an outstanding trial,
+  confirmation only from the arming session, an unconfirmed trial rolling back by itself, release of the kept session
+  (no-op: row gone at once; unconfirmed: previous configuration active 4.8 s later), a failing fresh connection keeping
+  the kept session usable, uptime unbroken throughout. Not proven and said so there: a commit-time-only semantic
+  rejection (the image accepted what was tried), banners (refused, not supported), persistence across a reload.
+- **Reviews.** Three independent Opus reviews of the driver: the first found the blocker that shaped the design (the
+  driver confirmed inline, before anything proved management); the second could not break "no early confirm, no foreign
+  confirm, no leaks" and found the lingering session row and the destroyed kept session; the third could not break the
+  fixes and asked for one negative test and two wordings. All findings were fixed; 63 driver tests.
+- **Unit.** `test_restore_iosxr.py` 63 (new, in CI), `test_restore.py` 42, `test_restore_compare.py` 32 (registry and
+  format agreement for all drivers), `test_app.py` 10 (the `.xrcfg` artifact with real Ansible, byte-identical to the
+  backup), 190 restore tests in all.
+- **Live, product, XRv9k** (lead; builds named in the files): A over B `verified` (`40-*`), the repeat cycle with A onto A
+  and an immediate third restore (`44-*`), the commit-pinned source from the browser at 390 px (`45-*`), management cut
+  at application time (`46-*`), management cut after arming → `rolled_back` by read-back (`41-*`), manager restart in
+  both orders (`42-*`, `43-*`), somebody's open session and a foreign pending change refused at the API (`47-*`).
+- **Live, all four:** one saved state restored to all four from the browser (`50-*`), a mixed run with one controlled
+  failure and its rendering (`51-*`, `52-*`), interruption measured with probes on management, both edges from the
+  neighbours' side and a transit path, for each restored node: 0 lost everywhere (`60-*`).
+- **Live, QA wave two on the three earlier platforms** (`19-acceptance-wave-two.md`, an independent QA agent): unreachable
+  at application time on all three, rejected credentials, foreign pending change and bystander's edit refused at the API
+  on both Junos images, contention with a Save and with a lab operation, a real `verify_mismatch`, a `commit check`
+  rejection at the driver layer on both Junos images: all PASS except one diagnosability defect (the login reason was
+  masked by the generic safety-backup failure), fixed and unit-tested since, not rerun live.
+- **Not run:** persistence across a controlled NOS restart (all four); `failure_harness.py armed-cut` and
+  `restart-confirming` were exercised on XRv9k only (the cEOS and Junos runs of those checks predate the tool and used
+  its scratch predecessors); no push to the Git host.
+- **Full suites from a clean worktree of the release commit:** 881 Python tests with 1 skipped (the opt-in EOS SSH
+  fixture), 192 browser tests; `verify-release.py`, `check_links.py` (90 files), `git diff --check`, and a scan of the
+  committed evidence and tools for hashes, keys and tokens (clean).
+
+# Multi-platform restore, part 2: cJunosEvolved through the product, evidence audit — 1.30.28
+
+Prepared on `claude/multi-platform-restore` on 2026-09-21 after 1.30.27 (`3c5d954`, pushed, CI green) on the development
+VM, same four-node lab and images as below. **Unit, real-Ansible pipeline, live-device and real-browser evidence; an
+independent audit of the previous release's evidence.** The matrix (`docs/multi-platform-restore/evidence/MATRIX.md`)
+names one evidence file per cell and says where a row still rests on the manager's own report.
+
+- **Audit of the 1.30.27 evidence** (15 QA auditors, one per matrix claim, prompted to refute, plus an Opus completeness
+  critic; all read-only). Every audited PASS came back "partly": the facts held, the committed evidence was weaker than
+  the wording. Acted on: build identity inside every evidence file, the devices' own answers embedded (`readback.py`),
+  an independent whole-configuration comparison, non-vacuous browser checks, the matrix reworded, the backup-source
+  integrity gap closed, restart re-check tests with the job's own and a foreign token. Still owed and listed in the
+  matrix: rerun of the interruption measurements with the rewritten tool, persistence across a NOS restart.
+- **Unit.** `test_restore.py` 40 (new: tampered backup, tampered Git/folder file, one connection per review, bounded
+  connect retry, rejected credentials at review and application, held-session contract with a fake driver, restart
+  re-check with own/foreign token, rollback after a restart), `test_restore_junos.py` 22, `test_restore_eos.py` 31,
+  `test_restore_compare.py` 31, `test_app.py` 10 (runner digests pinned with real Ansible), `test_restore_ui.js` 6
+  (reason beside the badge, credentials reason, undone counted apart; the pinned result sentence was rewritten).
+- **Live, product, QA run on build `-wt2`** (`17-acceptance-final-build.md`, an independent QA agent): the commit-pinned
+  Git-version source for three nodes in one job; cEOS management loss after arming and manager restart rerun (the two
+  defects of the first run are gone: no orphaned session, job recomputed); cJunosEvolved and vJunos-switch management loss
+  after arming with the rollback time read from the device's own commit log; cJunosEvolved manager restart with SSH left
+  reachable: the pending change found under the job's token, confirmed, `verified`; wrong node mapping refused. Its
+  check 7 was blocked by a device fact (see the changelog) and then run by the lead from the evening's first backup:
+  `57-*`, `root_authentication: synthesized`, `verified`. QA disclosed that it twice let `square_check.py` default to
+  all four nodes, opening read-only sessions on a node assigned to somebody else; no configuration was touched.
+- **Live, lead, builds named inside the files** (`18-*`, `53-*`…`58-*`): disabled row with its reason in the real
+  browser; two nodes drifted, one restored, the other read back unchanged; the commit-pinned Git-version source from the
+  browser for three nodes; both Junos images at 390 px with restore → backup from the page → restore in one session;
+  Junos A onto A and restore from a post-restore backup; the three real `rolled_back` jobs rendered in the page. Each
+  with the devices saying B before and A after, 0 missing / 0 extra by the independent comparator, boot identity
+  unchanged. Those runs were made on later working-tree builds that already contained the IOS XR driver of the next
+  release; the files say which.
+- **Not run:** persistence across a NOS restart; the rewritten interruption tool; the failure matrix of QA wave two
+  (application-time unreachability, credentials live, Junos foreign-change refusals at the API, Save and lab-operation
+  contention, a real `verify_mismatch`, Junos commit-check rejection) was still running when this release was cut; nothing
+  for XRv9k in this release; no push to the Git host (the lab's saves are local commits).
+- **Full suites from a separate worktree that holds exactly this release** (the IOS XR driver of the next release is
+  not in it): 815 Python tests with 1 skipped (the opt-in EOS SSH fixture), 192 browser tests; `verify-release.py`,
+  `check_links.py` (88 files), `git diff --check`, and a scan of the committed evidence and tools for hashes, keys and
+  tokens (clean).
+
 # Multi-platform restore, part 1: Arista cEOS and the driver contract — 1.30.27
 
 Prepared on `claude/multi-platform-restore` on 2026-09-20/21 from `main` `e4f466a` (1.30.26) on the development VM

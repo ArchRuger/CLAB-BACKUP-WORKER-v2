@@ -1,0 +1,110 @@
+{
+ "first_submit": {
+  "http": 200,
+  "id": "1aaa0943bb834c8684a67a4f98db6321"
+ },
+ "busy_observed_at_rel_s": 1.243835950997891,
+ "busy_target_status": "backing_up",
+ "operation_preview": {
+  "http": 409,
+  "body": {
+   "detail": "Wait for the current lab operation to finish."
+  }
+ },
+ "second_restore_submit": {
+  "http": 409,
+  "body": {
+   "detail": "Wait for the active backup, Git save, restore or lab operation to finish."
+  }
+ },
+ "timeline": [
+  {
+   "t": 1.25251354300417,
+   "utc": "02:55:55",
+   "job": "backing_up",
+   "target": "backing_up",
+   "message": "Capturing current configuration."
+  },
+  {
+   "t": 4.25951071199961,
+   "utc": "02:55:58",
+   "job": "applying",
+   "target": "applying",
+   "message": "Replacing the configuration; the device undoes it by itself unless the manager confirms."
+  },
+  {
+   "t": 7.267849764000857,
+   "utc": "02:56:01",
+   "job": "applying",
+   "target": "confirming",
+   "message": "Configuration loaded; reconnecting to confirm."
+  },
+  {
+   "t": 8.291452784003923,
+   "utc": "02:56:02",
+   "job": "verifying",
+   "target": "applied",
+   "message": "Configuration replaced and the change confirmed."
+  },
+  {
+   "t": 11.298333664992242,
+   "utc": "02:56:05",
+   "job": "succeeded",
+   "target": "verified",
+   "message": "Configuration replaced and verified against the saved desired state."
+  }
+ ],
+ "final_job": {
+  "id": "1aaa0943bb834c8684a67a4f98db6321",
+  "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+  "lab_name": "restore-square",
+  "created": "2026-09-21T02:55:55.741978+00:00",
+  "finished": "2026-09-21T02:56:05.154908+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "folder",
+   "path": "restore-square/work/latest",
+   "folder": "restore-square/work",
+   "captured_at": "2026-09-21T02:54:30.970328+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "53c0ce48ba0848a4a47fe30a75d558df",
+  "post_backup_job_id": "ca02aa547a8a4781a7789991b6c49a4c",
+  "targets": [
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "diff_sample": [
+     "[edit interfaces et-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-ceos\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options static]",
+     "+    route 192.0.2.2/32 discard;",
+     "-    route 198.51.100.0/24 discard;",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ]
+ }
+}

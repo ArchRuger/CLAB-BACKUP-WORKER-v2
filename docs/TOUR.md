@@ -50,7 +50,7 @@ and, under *Advanced*, the connection and credential settings.
 last saved, and the saved versions you can return to: *Latest*, your *Checkpoints*,
 the *Baseline*, and the *Instructor and reference versions* kept in other folders of
 the same repository. Every version can be viewed, compared with your latest save or —
-for Junos and EOS labs — applied to the running devices without changing where the lab saves.
+for Junos, EOS and IOS XR labs — applied to the running devices without changing where the lab saves.
 
 ![Progress](images/ui/30-progress.png)
 

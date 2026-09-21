@@ -4,6 +4,7 @@ The Junos driver and the SSH transport are faked; the driver itself is covered b
 test_restore_junos.py.
 """
 import copy
+import hashlib
 import time
 import unittest
 import uuid
@@ -31,6 +32,7 @@ class FakeRunner:
         self.post_config = post_config
         self.pre_config = pre_config
         self.fail_nodes = set(fail_nodes)
+        self.fail_message = 'capture failed'
         self.calls = []
 
     def submit(self, lab_id, operation='backup', source='manual', node_names=None,
@@ -45,7 +47,7 @@ class FakeRunner:
             if node_names and node['name'] not in node_names:
                 continue
             if node['name'] in self.fail_nodes:
-                nodes.append(dict(name=node['name'], status='failed', message='capture failed'))
+                nodes.append(dict(name=node['name'], status='failed', message=self.fail_message))
                 continue
             name = f'cfg-{index}.set'
             body = self.post_config if source == 'restore-post' else self.pre_config
@@ -54,6 +56,8 @@ class FakeRunner:
             (folder / rname).write_text(DESIRED_HIER, encoding='utf-8')
             nodes.append(dict(name=node['name'], status='succeeded', file=name, restore_file=rname,
                               restore_format='junos-hierarchical', platform=node['platform'],
+                              sha256=hashlib.sha256(body.encode()).hexdigest(),
+                              restore_sha256=hashlib.sha256(DESIRED_HIER.encode()).hexdigest(),
                               short_name=node['name'], captured_at='2026-09-16T00:00:00+00:00'))
         status = 'succeeded' if all(n['status'] == 'succeeded' for n in nodes) else 'partial' if any(
             n['status'] == 'succeeded' for n in nodes) else 'failed'
@@ -92,7 +96,7 @@ class RestoreServiceTests(unittest.TestCase):
         self.git = object()  # not used by backup-source tests
         self.svc = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
         # The recovery window is real time in production; the tests give every node one look.
-        self.svc.retry_interval = self.svc.recovery_grace = 0
+        self.svc.retry_interval = self.svc.recovery_grace = self.svc.connect_pause = 0
         self.svc.window_seconds = lambda minutes: 0
         patch.object(self.svc.pool, 'submit').start()
         # Nothing awaits confirmation unless a test arms it (run_execute does).
@@ -121,6 +125,8 @@ class RestoreServiceTests(unittest.TestCase):
             (folder / f's-{index}.jcfg').write_text(DESIRED_HIER, encoding='utf-8')
             nodes.append(dict(name=node['name'], status='succeeded', file=f's-{index}.set',
                               restore_file=f's-{index}.jcfg', restore_format='junos-hierarchical',
+                              sha256=hashlib.sha256(DESIRED_SET.encode()).hexdigest(),
+                              restore_sha256=hashlib.sha256(DESIRED_HIER.encode()).hexdigest(),
                               platform=node['platform'], short_name=node['name']))
         job = dict(id=job_id, lab_id='lab1', lab_name='clabllm-dev', operation='backup',
                    status='succeeded', created='2026-09-15T00:00:00+00:00', finished='2026-09-15T00:01:00+00:00',
@@ -314,6 +320,18 @@ class RestoreServiceTests(unittest.TestCase):
         ptx = next(t for t in job['targets'] if t['name'] == 'PTX1')
         self.assertEqual(ptx['status'], 'failed')
         self.assertIn('backup', ptx['message'].lower())
+
+    def test_a_failed_safety_backup_says_why_in_fixed_words_never_in_ansibles(self):
+        from app.restore import backup_failure
+        self.assertEqual(backup_failure('Failed to authenticate: Authentication failed. secret=hunter2'), ' (the device rejected the login)')
+        self.assertEqual(backup_failure('timed out waiting for 172.20.20.2'), ' (the device did not answer)')
+        self.assertEqual(backup_failure('something else entirely'), '')
+        self.runner.fail_nodes = {'PTX1'}
+        self.runner.fail_message = 'Failed to authenticate: Authentication failed. secret=hunter2'
+        job = self.run_execute(node_names=('PTX1',))
+        message = job['targets'][0]['message']
+        self.assertEqual(message, 'Pre-restore backup failed for this node (the device rejected the login); it was not changed.')
+        self.assertNotIn('hunter2', str(job))
 
     def test_verify_mismatch_when_stale_remains(self):
         self.runner.post_config = DESIRED_SET + 'set interfaces lo0 unit 0 family inet address 10.9.9.9/32\n'
@@ -529,6 +547,50 @@ class RestoreServiceTests(unittest.TestCase):
             job = self.svc.submit('lab1', self.source(), ['PTX1'], 5, uuid.uuid4().hex)
         self.assertEqual(job['status'], 'queued')
 
+    def test_the_review_looks_at_a_node_over_one_connection(self):
+        # IOS XR turns away connections that follow each other too quickly: pending, blocked and the
+        # capture share one SSH connection per node.
+        opened = []
+        svc = RestoreService(self.store, self.runner, self.git, connector=lambda client, node, creds: opened.append(node['name']))
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            result = svc.preflight('lab1', self.source(), None)
+        self.assertTrue(all(row['eligible'] for row in result['targets']))
+        self.assertEqual(sorted(opened), ['PTX1', 'SW1'])
+
+    def test_a_refused_connection_is_tried_again_but_rejected_credentials_are_not(self):
+        import paramiko
+        attempts = []
+
+        def flaky(client, node, creds):
+            attempts.append(node['name'])
+            if len(attempts) < 3:
+                raise paramiko.SSHException('Error reading SSH protocol banner')
+        svc = RestoreService(self.store, self.runner, self.git, connector=flaky)
+        svc.connect_pause = 0
+        with patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            result = svc.preflight('lab1', self.source(), {'PTX1'})
+        self.assertTrue(next(r for r in result['targets'] if r['name'] == 'PTX1')['eligible'])
+        self.assertEqual(attempts, ['PTX1'] * 3)
+        attempts.clear()
+
+        def denied(client, node, creds):
+            attempts.append(node['name'])
+            raise paramiko.AuthenticationException('Authentication failed.')
+        svc = RestoreService(self.store, self.runner, self.git, connector=denied)
+        svc.connect_pause = 0
+        result = svc.preflight('lab1', self.source(), {'PTX1'})
+        row = next(r for r in result['targets'] if r['name'] == 'PTX1')
+        self.assertFalse(row['eligible'])
+        self.assertEqual(row['reason'], 'The node rejected the login credentials.')   # not "did not answer"
+        self.assertEqual(attempts, ['PTX1'])                      # no hammering with a wrong password
+        # At application time (the login worked at the review and was changed since) the node is "not changed", and says why.
+        job = self.svc.submit('lab1', self.source(), ['PTX1'], 5, uuid.uuid4().hex)
+        self.svc.connect = denied
+        self.svc.execute(job['id'])
+        target = self.svc.get_job(job['id'])['targets'][0]
+        self.assertEqual(target['status'], 'failed')
+        self.assertIn('rejected the login credentials', target['message'])
+
     def test_preflight_refuses_a_node_where_somebody_is_editing(self):
         reason = 'Someone has uncommitted configuration changes open on this node.'
         with patch('app.restore.junos.blocked', return_value=reason) as blocked, \
@@ -538,9 +600,45 @@ class RestoreServiceTests(unittest.TestCase):
         self.assertEqual(blocked.call_count, 2)
         capture.assert_not_called()
 
-    def test_truncated_candidate_is_refused_before_any_device_is_touched(self):
+    def test_a_stored_capture_that_no_longer_matches_its_digest_is_refused_before_any_device_is_touched(self):
+        # Integrity of the backup source: the runner recorded a digest when it stored the artifact.
         folder = self.store.root / 'backups' / 'lab1' / 'history' / self.backup['id']
-        (folder / 's-0.jcfg').write_text('system {\n    host-name FINAL;\n', encoding='utf-8')
+        (folder / 's-0.jcfg').write_text(DESIRED_HIER.replace('FINAL', 'TAMPERED'), encoding='utf-8')
+        with patch('app.restore.junos.capture') as capture, patch('app.restore.junos.apply_candidate') as apply:
+            for call in (lambda: self.svc.preflight('lab1', self.source(), None),
+                         lambda: self.svc.submit('lab1', self.source(), ['PTX1'], 5, uuid.uuid4().hex)):
+                with self.assertRaises(Exception) as refused:
+                    call()
+                self.assertEqual(refused.exception.status_code, 400)
+                self.assertIn('no longer matches the digest', refused.exception.detail)
+        capture.assert_not_called(); apply.assert_not_called()
+        self.assertEqual(self.store.state['restore_jobs'], [])
+
+    def test_a_tampered_file_in_a_saved_git_folder_is_refused_before_any_device_is_touched(self):
+        # Integrity of the Git and folder sources: size and sha256 of every file against the manifest.
+        import base64
+        git = self._fake_git_folder()
+        svc = RestoreService(self.store, self.runner, git, connector=fake_connect)
+        snapshot = git.invoke({'mode': 'read-version'})['snapshot']
+        snapshot['files']['PTX1.jcfg'] = base64.b64encode(DESIRED_HIER.replace('FINAL', 'TAMPERED').encode()).decode()
+        with patch('app.restore.junos.capture') as capture:
+            for source in ({'type': 'folder', 'path': 'labs/BGP-LAB/Broken/latest'}, {'type': 'git', 'commit': 'a' * 40, 'path': 'latest'}):
+                with self.assertRaises(Exception) as refused:
+                    svc.preflight('lab1', source, None)
+                self.assertEqual(refused.exception.status_code, 409)
+                self.assertIn('integrity check failed', refused.exception.detail)
+        capture.assert_not_called()
+
+    def test_truncated_candidate_is_refused_before_any_device_is_touched(self):
+        # A capture that was stored truncated (its digest matches what was stored): the driver's own
+        # completeness check is what refuses it.
+        folder = self.store.root / 'backups' / 'lab1' / 'history' / self.backup['id']
+        truncated = 'system {\n    host-name FINAL;\n'
+        (folder / 's-0.jcfg').write_text(truncated, encoding='utf-8')
+        for job in self.store.state['jobs']:
+            if job['id'] == self.backup['id']:
+                job['nodes'][0]['restore_sha256'] = hashlib.sha256(truncated.encode()).hexdigest()
+        self.store.save()
         with patch('app.restore.junos.capture') as capture:
             result = self.svc.preflight('lab1', self.source(), None)
         row = next(r for r in result['targets'] if r['name'] == 'PTX1')
@@ -604,6 +702,65 @@ class RestoreServiceTests(unittest.TestCase):
         self.assertEqual(rechecked['targets'][0]['status'], 'rolled_back')
         self.assertEqual(rechecked['status'], 'failed')
         confirm.assert_not_called()
+
+    def _restarted_mid_change(self, token='clabmgr-1a2b3c4d'):
+        """A job whose node was armed (handle stored) when the manager went down; returns (job id, new service)."""
+        job = self.svc.submit('lab1', self.source(), ['PTX1'], 5, uuid.uuid4().hex)
+        self.svc.update(job['id'], status='applying')
+        for target in self.store.state['restore_jobs'][-1]['targets']:
+            target.update(status='confirming', _token=token, _handle={'token': token})
+        self.store.save()
+        again = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        again.retry_interval = again.recovery_grace = 0
+        again.rechecks[job['id']] = 1
+        for target in again.get_job(job['id'])['targets']:
+            target['_deadline'] = 1          # the undo window is long over (0 would read as "unset"): one look, no waiting
+        return job['id'], again
+
+    def test_restart_recheck_confirms_a_pending_change_only_under_the_jobs_own_token(self):
+        job_id, again = self._restarted_mid_change()
+        with patch('app.restore.junos.pending', return_value='clabmgr-1a2b3c4d'), \
+                patch('app.restore.junos.confirm', return_value={'confirmed': True}) as confirm, \
+                patch('app.restore.junos.apply_candidate') as apply, patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            again._recheck_interrupted(job_id, 'PTX1')
+        rechecked = again.get_job(job_id)
+        self.assertEqual(rechecked['targets'][0]['status'], 'verified')
+        self.assertEqual(confirm.call_args.args[1]['token'], 'clabmgr-1a2b3c4d')
+        apply.assert_not_called()                                   # nothing is ever re-applied
+        self.assertEqual(rechecked['status'], 'succeeded')
+
+    def test_restart_recheck_never_confirms_somebody_elses_pending_change(self):
+        for foreign in ('clabmgr-ffffffff', True):
+            job_id, again = self._restarted_mid_change()
+            with patch('app.restore.junos.pending', return_value=foreign), patch('app.restore.junos.confirm') as confirm, \
+                    patch('app.restore.junos.apply_candidate') as apply, patch('app.restore.junos.capture', return_value=DESIRED_SET):
+                again._recheck_interrupted(job_id, 'PTX1')
+            rechecked = again.get_job(job_id)
+            self.assertEqual(rechecked['targets'][0]['status'], 'uncertain', foreign)
+            confirm.assert_not_called()
+            apply.assert_not_called()
+            self.assertEqual(rechecked['status'], 'needs_attention')
+
+    def test_a_shutdown_inside_the_undo_window_leaves_the_node_in_flight_for_the_restart_recheck(self):
+        self.svc.retry_interval, self.svc.recovery_grace = 0, 3600
+        self.svc.window_seconds = lambda minutes: 3600
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+
+        def unreachable_then_shutdown(client):
+            self.svc.stopping.set()                      # the manager is told to stop while it keeps trying to reconnect
+            raise OSError('management is down')
+        with self.fake_apply(), patch('app.restore.junos.pending', side_effect=unreachable_then_shutdown), \
+                patch('app.restore.junos.confirm') as confirm, patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            self.svc.execute(job['id'])
+        stopped = self.svc.get_job(job['id'])
+        by_name = {t['name']: t['status'] for t in stopped['targets']}
+        self.assertEqual(by_name['PTX1'], 'confirming')         # not "uncertain": nothing was established, so nothing is claimed
+        self.assertEqual(by_name['SW1'], 'backing_up')          # never started: no new node is changed during a shutdown
+        self.assertEqual(stopped['status'], 'applying')
+        confirm.assert_not_called()
+        again = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        self.assertEqual(again.get_job(job['id'])['status'], 'interrupted')
+        self.assertEqual(again.unchecked, [(job['id'], 'PTX1')])  # only the node that was mid-change is read back
 
     def test_remove_lab_is_refused_while_a_restore_is_running(self):
         from app.lab_operations import RESTORE_BUSY

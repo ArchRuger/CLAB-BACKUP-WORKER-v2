@@ -15,11 +15,18 @@ Stdlib only; the manager is addressed at --url (default http://127.0.0.1:8081) w
 """
 import argparse
 import json
+import pathlib
+import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
 import uuid
+
+ROOT = pathlib.Path(__file__).resolve().parents[3]
+TOOLS = pathlib.Path(__file__).resolve().parent
+VENV_PYTHON = ROOT / 'clab-backup-ui/.venv/bin/python'
+CONTAINER = 'containerlab-node-manager-backup-ui-1'
 
 LAB = 'restore-square'
 ENDED = ('succeeded', 'partial', 'needs_attention', 'failed', 'preflight_failed', 'interrupted')
@@ -58,6 +65,33 @@ def stamp():
     return time.strftime('%H:%M:%S', time.gmtime())
 
 
+def build_identity():
+    """Which build produced this evidence: the running container's image, and the checkout it was built from.
+    A release number alone does not say that; several working-tree builds carry the same one."""
+    def out(*command):
+        try:
+            return subprocess.run(command, capture_output=True, text=True, timeout=20).stdout.strip()
+        except Exception:
+            return ''
+    return {'image': out('docker', 'inspect', '--format', '{{.Config.Image}} {{.Image}}', CONTAINER),
+            'container_started': out('docker', 'inspect', '--format', '{{.State.StartedAt}}', CONTAINER),
+            'git_head': out('git', '-C', str(ROOT), 'rev-parse', '--short=12', 'HEAD'),
+            'git_dirty_files': len([l for l in out('git', '-C', str(ROOT), 'status', '--porcelain', '--', 'clab-backup-ui/app').splitlines() if l.strip()])}
+
+
+def readback(nodes, saved=None):
+    """The devices' own answer (tools/readback.py: booleans, counts and boot identity only), or None without
+    the venv. `saved` is a saved folder of the repository checkout for the whole-configuration comparison."""
+    if not nodes or not VENV_PYTHON.exists():
+        return None
+    done = subprocess.run([str(VENV_PYTHON), str(TOOLS / 'readback.py'), *nodes, *(['--saved', str(saved)] if saved else [])],
+                          capture_output=True, text=True, timeout=900)
+    try:
+        return json.loads(done.stdout)
+    except ValueError:
+        return {'error': 'readback produced no JSON'}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--url', default='http://127.0.0.1:8081')
@@ -67,6 +101,9 @@ def main():
     parser.add_argument('--minutes', type=int, default=5)
     parser.add_argument('--evidence')
     parser.add_argument('--preflight-only', action='store_true')
+    parser.add_argument('--readback', action='store_true', help='ask the devices themselves before and after (tools/readback.py)')
+    parser.add_argument('--saved', help='with --readback: a saved folder of the repository checkout holding the same state, for an '
+                                        'independent whole-configuration comparison after the restore')
     args = parser.parse_args()
     manager = Manager(args.url)
     version, lab = manager.lab()
@@ -79,7 +116,8 @@ def main():
               {'type': 'folder', 'path': args.folder} if args.folder else
               {'type': 'git', 'commit': args.commit, 'path': args.path})
     names = ['clab-%s-%s' % (LAB, n) for n in args.nodes]
-    record = {'manager_version': version, 'lab': LAB, 'source': source, 'requested': names, 'started_utc': stamp()}
+    record = {'manager_version': version, 'build': build_identity(), 'lab': LAB, 'source': source, 'requested': names,
+              'started_utc': stamp(), 'device_readback_before': readback(args.nodes) if args.readback else None}
     code, preflight = manager.call(f'/labs/{lab["id"]}/restore/preflight', {'source': source, 'node_names': names or None})
     record['preflight'] = {'http': code, 'body': preflight}
     print('preflight', code, [(t['name'].split(LAB + '-')[-1], t['eligible'], t.get('pending_changes'), t.get('reason'))
@@ -107,6 +145,8 @@ def main():
             record.update(timeline=timeline, job=job)
         else:
             print('submit refused', code, job)
+    if args.readback and not args.preflight_only:
+        record['device_readback_after'] = readback(args.nodes, args.saved)
     record['finished_utc'] = stamp()
     if args.evidence:
         with open(args.evidence, 'w') as handle:

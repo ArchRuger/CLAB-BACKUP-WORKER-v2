@@ -18,9 +18,10 @@ PLATFORMS = {
     'juniper_cjunosevolved': {'label': 'Junos', **JUNOS_DRIVER},
     'juniper_vqfx': {'label': 'Junos (vQFX)', **JUNOS_DRIVER},
     'juniper_vjunosswitch': {'label': 'Junos (vJunos-switch)', **JUNOS_DRIVER},
-    'cisco_xrv9k': {'label': 'IOS-XR', 'os': 'cisco.iosxr.iosxr', 'command': 'show running-config', 'suffix': 'cfg'},
-    # EOS: the running-config itself is a complete, loadable candidate; the companion artifact is
-    # the same command kept under its own name and hash so a restore never relabels backup text.
+    # IOS XR and EOS: the running-config itself is a complete, loadable candidate; the companion artifact
+    # is the same capture kept under its own name and hash so a restore never relabels backup text.
+    'cisco_xrv9k': {'label': 'IOS-XR', 'os': 'cisco.iosxr.iosxr', 'command': 'show running-config', 'suffix': 'cfg',
+                    'restore': 'show running-config', 'restore_format': 'iosxr-running-config', 'restore_suffix': 'xrcfg'},
     'arista_ceos': {'label': 'EOS', 'os': 'arista.eos.eos', 'command': 'show running-config', 'suffix': 'cfg',
                     'restore': 'show running-config', 'restore_format': 'eos-running-config', 'restore_suffix': 'eoscfg'},
 }

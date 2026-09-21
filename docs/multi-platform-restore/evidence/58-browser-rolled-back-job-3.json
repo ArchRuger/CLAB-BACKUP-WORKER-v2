@@ -1,0 +1,118 @@
+{
+ "manager_version": "1.30.27",
+ "build": {
+  "image": "clab-backup:1.30.27 sha256:f7e0f326a99abd1c9921329eb3880469a9e44fd1c45a3ea1915887955f32062d",
+  "container_started": "2026-09-21T01:47:43.592960123Z",
+  "git_head": "3c5d954d9ed1",
+  "git_dirty_files": 7
+ },
+ "viewport": "desktop",
+ "row": "Latest",
+ "via": "row",
+ "nodes": [],
+ "started_utc": "2026-09-21T02:22:19Z",
+ "runs": [
+  {
+   "label": "show-job",
+   "job_id": "2e2ffb5af525467fabb7b27cc249c5b5",
+   "job": {
+    "id": "2e2ffb5af525467fabb7b27cc249c5b5",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-21T01:13:05.397066+00:00",
+    "finished": "2026-09-21T01:16:44.199567+00:00",
+    "status": "failed",
+    "message": "No node was restored. Existing configurations were preserved by the safety backup.",
+    "source": {
+     "type": "git",
+     "commit": "9d5906d05a06fc39a7d268fc7899a04c61e65337",
+     "path": "restore-square/work/latest",
+     "captured_at": "2026-09-21T00:20:40.400494+00:00",
+     "lab_name": "restore-square",
+     "restore_capable_nodes": 3,
+     "saved_nodes": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch"
+     ]
+    },
+    "confirm_minutes": 2,
+    "pre_backup_job_id": "df93751bf49d40df81de636d06f11a0f",
+    "post_backup_job_id": "",
+    "targets": [
+     {
+      "name": "clab-restore-square-vjunos-switch",
+      "short_name": "vjunos-switch",
+      "platform": "juniper_vjunosswitch",
+      "status": "rolled_back",
+      "message": "The change was not confirmed in time and the device undid it. Checked: the configuration from before the restore is active.",
+      "diff_sample": [
+       "[edit interfaces ge-0/0/0]",
+       "-   description \"B changed\";",
+       "+   description \"A to-cjunosevolved\";",
+       "[edit policy-options]",
+       "-   prefix-list B-ONLY {",
+       "-       198.51.100.0/24;",
+       "-   }",
+       "[edit routing-options]",
+       "+   static {",
+       "+       route 192.0.2.3/32 discard;",
+       "+   }",
+       "[edit]",
+       "-  vlans {",
+       "-      B-ONLY {",
+       "-          vlan-id 777;",
+       "-      }",
+       "-  }",
+       "[edit]"
+      ],
+      "no_op": false,
+      "root_authentication": "present"
+     }
+    ]
+   },
+   "final_text": "Configuration not replaced\n\u00d7\nConfiguration not replaced\n\nConfiguration replaced on 0 devices. 1 device was not changed.\n\nUndone \u2014 previous configuration is back vjunos-switch Junos\n\nThe device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous configuration is active.\n\nDetails\nDetails\nBackup taken before the change\ndf93751bf49d\nAutomatic undo window\n2 minutes\nStatus\nfailed\nMessage\nNo node was restored. Existing configurations were preserved by the safety backup.",
+   "final_badges": [
+    {
+     "device": "vjunos-switch",
+     "badge": "Undone \u2014 previous configuration is back",
+     "cls": "badge bad",
+     "help": [
+      "The device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous configuration is active."
+     ]
+    }
+   ]
+  }
+ ],
+ "console_errors": [],
+ "checks": [
+  {
+   "check": "the page loads restore.js of the running release",
+   "ok": true,
+   "detail": "http://127.0.0.1:8081/static/restore.js?v=1.30.27"
+  },
+  {
+   "check": "the result leads with the outcome and keeps the details collapsed",
+   "ok": true,
+   "detail": "Configuration not replaced\n\u00d7\nConfiguration not replaced\n\nConfiguration replaced on 0 devices. 1 device was not changed.\n\nUndone \u2014 previous configuration is back vjunos-switch Junos\n\nThe device could n"
+  },
+  {
+   "check": "no \"undefined\" or raw markup in the result",
+   "ok": true,
+   "detail": "Configuration not replaced\n\u00d7\nConfiguration not replaced\n\nConfiguration replaced on 0 devices. 1 device was not changed.\n\nUndone \u2014 previous configuration is back vjunos-switch Junos\n\nThe device could not be confirmed in time, so it undid the change by itself. The manager checked: the previous configu"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "no static asset failed to load",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "not_exercised": [],
+ "finished_utc": "2026-09-21T02:22:20Z"
+}
