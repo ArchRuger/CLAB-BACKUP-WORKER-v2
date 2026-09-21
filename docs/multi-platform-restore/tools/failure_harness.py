@@ -198,7 +198,10 @@ def drain_job(manager, job_id, name, timeline, t0, deadline_s):
             timeline.append({'t': time.monotonic() - t0, 'utc': stamp(), 'job_status': view[0],
                              'target_status': view[1], 'message': target.get('message', '')})
             last = view
-        if job.get('status') in mr.ENDED:
+        # After a manager restart a job is "interrupted" only until the restart re-check has read its nodes back
+        # and recomputed it, which can take the whole undo window plus the grace: that is not the end yet.
+        settling = job.get('status') == 'interrupted' and any(t.get('status') == 'interrupted' for t in job['targets'])
+        if job.get('status') in mr.ENDED and not settling:
             return job
         time.sleep(1)
     _, job = try_call(manager, '/restore/jobs/' + job_id, timeout=5)
@@ -384,7 +387,7 @@ def restart_confirming(args, manager):
     record['job_right_after_restart'] = right_after
 
     timeline = []
-    record['final_job'] = drain_job(manager, job_id, name, timeline, t0, 240)
+    record['final_job'] = drain_job(manager, job_id, name, timeline, t0, args.minutes * 60 + 90 + 120)
     record['timeline'] = timeline
     if args.ssh_blocked:
         record['rule_present_before_unblock'] = rule_present(node['ip'])

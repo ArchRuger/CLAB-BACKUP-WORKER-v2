@@ -1,3 +1,14 @@
+# Multi-platform restore, part 4: acceptance closed — 1.30.30
+
+The stream's closing section; the three below hold the facts to preserve, `docs/multi-platform-restore/PICKUP.md` the
+log and `evidence/MATRIX.md` the record. (1) All four images are proven: replacement, recovery, persistence across a
+normal NOS restart, the page, mixed selections. A new image or NOS version is NOT covered by this record: rerun the
+tools in `docs/multi-platform-restore/tools/` on it before adding a kind or claiming a version (`SUPPORTED_KINDS` lists
+only what was proven). (2) Persistence on cEOS depends on the `write memory` the EOS driver runs after the confirmation;
+`persistence_check.py` is the regression test for it (`containerlab restart --node`, never `docker restart`, never a
+redeploy, which would inject the startup configuration and prove nothing). (3) The acceptance lab `restore-square` stays
+deployed on the development VM; its Git saves are local commits in the lab repository checkout and were never uploaded.
+
 # Multi-platform restore, part 3: Cisco IOS XR — 1.30.29
 
 Continues the two sections below; **read `docs/multi-platform-restore/PICKUP.md` first.** Facts to preserve.

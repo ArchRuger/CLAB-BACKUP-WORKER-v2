@@ -1,0 +1,19 @@
+{
+ "node": "ceos",
+ "restart_command_accepted": true,
+ "back_with_both_edges": true,
+ "seconds_until_back": 1295,
+ "boot_before": "1d99c345-63a1-40f1-8409-9a96be20d66f | Uptime: 2 hours and 39 minutes",
+ "uptime_before_s": 19205,
+ "log": [
+  "containerlab restart exit 0"
+ ],
+ "boot_after": "1d99c345-63a1-40f1-8409-9a96be20d66f | Uptime: 21 minutes",
+ "uptime_after_s": 1293,
+ "really_restarted": true,
+ "configuration_lines": 47,
+ "lines_lost": 0,
+ "lines_new": 0,
+ "order_changed": false,
+ "ok": true
+}

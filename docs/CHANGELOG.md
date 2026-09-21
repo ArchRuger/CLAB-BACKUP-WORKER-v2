@@ -4,6 +4,21 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.30
+
+**Replace running configuration: acceptance closed on all four kinds.** Fourth and closing release of the
+multi-platform restore stream ([multi-platform-restore](multi-platform-restore/README.md)). No change to the
+manager's behaviour: this release carries the last acceptance evidence and two fixes to the acceptance tools.
+
+- **A restored configuration survives a normal restart of the network operating system** on cEOS 4.35.0F,
+  cJunosEvolved 26.2R1.7-EVO, vJunos-switch 23.2R1.14 and XRv9k 24.3.1: after a confirmed restore from the page, each
+  NOS was restarted the way an operator would and came back with every statement of the restored configuration, nothing
+  lost and nothing new. On cEOS that is the effect of the save the manager performs after the confirmation.
+- The evidence matrix has no open row for the four images; what was not run or could not be produced (a commit-time-only
+  rejection on IOS XR, IOS XR banners, a live tamper test of the integrity checks) is named in it.
+- `tools/failure_harness.py` waits until a restart re-check has settled a job (an "interrupted" job is not the end any
+  more); `tools/square_check.py` says that it opens a session on every node it is given.
+
 ## Changes in 1.30.29
 
 **Replace running configuration works on Cisco IOS XR (XRv9k), and with it on all four supported kinds.** Third

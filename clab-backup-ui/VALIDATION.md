@@ -1,3 +1,32 @@
+# Multi-platform restore, part 4: persistence and the closing record — 1.30.30
+
+Prepared on `claude/multi-platform-restore` on 2026-09-21 after 1.30.29 (`4d35a9b`, pushed, CI green). **Live-device and
+real-browser evidence on the released 1.30.29 build; no application code changed in this release** (acceptance tools and
+records only), so the unit totals are those of 1.30.29 plus nothing.
+
+- **The released build, installed and confirmed.** `deploy/start-manager.sh --manager-only` installed 1.30.29 (helpers
+  refreshed and verified through the gateway; `/api/state` 1.30.29, no helper update required, `restore.js?v=1.30.29`).
+  On it: all four nodes drifted and restored from the browser, 28 checks, the evidence names image `clab-backup:1.30.29`,
+  commit `4d35a9b` and zero uncommitted application files (`61-*`).
+- **Persistence (`63-persistence-<node>.json`, `tools/persistence_check.py`).** With that browser restore as the last
+  configuration change on every node, each NOS was restarted the normal way, in parallel: cEOS `containerlab restart
+  --node ceos` (the container is the NOS; links kept), cJunosEvolved and vJunos-switch `request system reboot`, XRv9k
+  `reload` ("User initiated graceful reload"). For each: the restart proven from the NOS itself (uptime fell),
+  management and both square edges back (XRv9k after 824 s, the others after about 1300 s because each waits for its
+  rebooting neighbours), and the configuration compared by the tool's own comparator: 47 / 23 / 25 / 51 statements,
+  0 lost, 0 new, order unchanged. No containerlab redeploy was used.
+- **Afterwards:** `square_check.py` healthy on all four edges both ways and the loopback mesh (`64-*`); a real all-four
+  restore through the manager, B before and A after by the devices, 0 missing / 0 extra on all four (`65-*`).
+- **Still not proven, named in the matrix:** a commit-time-only rejection on IOS XR (the image accepted what was tried),
+  IOS XR banners (refused, not supported), a live tamper test of the integrity checks (unit-tested), the classified
+  login reason after a failed safety backup (unit-tested after QA found the generic wording live). cEOS `failure_harness`
+  subcommands `armed-cut` / `restart-confirming` ran on XRv9k only; the cEOS and Junos runs of those checks used the
+  tool's scratch predecessors.
+- **Full suites from a clean worktree of the release commit:** 881 Python tests with 1 skipped (the opt-in EOS SSH
+  fixture), 192 browser tests; `verify-release.py`, `check_links.py` (90 files), `git diff --check`. After the push this
+  build was installed with `start-manager.sh --manager-only` and one more restore was run on it; that run is reported in
+  the pull request, not here, because a release section is not rewritten after its commit.
+
 # Multi-platform restore, part 3: Cisco IOS XR and the four-platform runs — 1.30.29
 
 Prepared on `claude/multi-platform-restore` on 2026-09-21 after 1.30.28 (`af036c9`, pushed, CI green), same VM, lab and

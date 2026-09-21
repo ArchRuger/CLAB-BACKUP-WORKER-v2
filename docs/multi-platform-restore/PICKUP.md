@@ -10,8 +10,8 @@ evidence is referenced here.
 1. Routing and environment preflight, the square lab, vJunos-switch baseline. **Done** (no code release: read-only baseline).
 2. cEOS 4.35.0F: prerequisites, capture and restore path, UI, positive and failure tests. **Done: release 1.30.27, commit `3c5d954`, pushed 2026-09-21, draft PR #47.** Owed on the final build and running as a QA agent: B4/B5 rerun, the saved-Git-version source, Evolved and vJunos-switch product-level B4/B5, the root-authentication synthesis through the product (evidence `17-*`).
 3. cJunosEvolved 26.2R1.7-EVO: find the real gap, same acceptance checks. **Done: release 1.30.28, commit `af036c9`, pushed 2026-09-21** (built in a separate worktree so the XR files and the agents' in-flight files stayed out; the main checkout was then moved to it with `git update-ref` + `git reset`, markers with `set-release.py`). QA wave two (`19-*`) was still running and lands in the next release.
-4. XRv9k 24.3.1: implementation and the same acceptance checks.
-5. All-four integration, mixed-platform restore from the running UI, final regression.
+4. XRv9k 24.3.1: implementation and the same acceptance checks. **Done: release 1.30.29, commit `4d35a9b`, pushed 2026-09-21** (881 Python + 192 browser tests from a clean worktree of the commit).
+5. All-four integration, mixed-platform restore from the running UI, final regression. **Done: all-four and mixed runs in 1.30.29 (`50-*`…`52-*`, `60-*`); persistence across a normal NOS restart on all four, the released build confirmed and the closing record in release 1.30.30.**
 
 Each finished code chunk is one patch release (`deploy/set-release.py`), committed and pushed on
 `claude/multi-platform-restore` (branched from `main` at `e4f466a`, release 1.30.26).
@@ -308,21 +308,20 @@ persistence, final matrix). Split by reverse-applying the XR-only hunks for the 
 
 ## Exact next action
 
-1. CI for `3c5d954` is green (push and pull-request runs, 2026-09-21). Collect the QA agent's
-   `evidence/17-acceptance-final-build.md`; fix what it finds (next patch release) and update `evidence/MATRIX.md`.
-   Prepared in the working tree for the XR release, not committed: `inventory.py` XR artifact (`.xrcfg`, one capture)
-   pinned in `test_app.py`; `tools/persistence_check.py` (restart the NOS the normal way, compare, prove the restart).
-2. Chunk 4, XRv9k: a builder is reworking `app/restore_iosxr.py` onto the held-session contract (`HOLDS_SESSION`,
-   `release(token)`; the service side is already in `restore.py` and tested) with the Opus review's findings. Then the
-   lead's integration: `inventory.py` (`restore`/`restore_format: iosxr-running-config`/`restore_suffix: xrcfg`; the
-   backup text is the artifact, one capture), `restore_drivers.DRIVERS`, the CI line for `test_restore_iosxr.py`,
-   `restore.js` needs nothing (labels and `.xrcfg` are there), guides and README's XR column; Opus re-review; QA matrix
-   on xrv9k through the product; re-link the lab's Git save with all four nodes (`PUT /api/labs/<id>/git`, after
-   dismissing the un-uploaded save) and make a new local save.
-3. Chunk 5: all four from one saved state through the browser; a mixed selection with one controlled failure;
-   persistence across a controlled NOS restart on all four, in parallel (Junos `request system reboot`, XR `reload`,
-   cEOS: `sudo containerlab restart -t <topology> --node ceos`, which containerlab 0.79 describes as a node restart
-   with a seamless data plane; verify the links afterwards; never `docker restart` a clab node); final regression; leave the square
-   healthy and the manager on the final build.
-4. The user's `.claude/` routing files are uncommitted on purpose (their own configuration). The square lab's Git
-   save (`9d5906d` in `~/labs/CLAB-MNGR-DEV-LLM`, one commit ahead of origin) is local and was deliberately not uploaded.
+The stream is complete; nothing is in flight. If it is picked up again:
+1. A new image or NOS version: rerun `tools/` on it first (`driver_junos_live.py` for Junos, the driver-layer scripts
+   named in `evidence/xr-live-facts.md` for IOS XR, then `manager_restore.py --readback --saved`, `browser_restore.py
+   --drift`, `failure_harness.py`, `interruption.py`, `persistence_check.py`) and add a column or a row to
+   `evidence/MATRIX.md` with files that contain what the cell says.
+2. Open points named in the matrix: a commit-time-only rejection on IOS XR could not be produced; IOS XR banners are
+   refused, not supported; the integrity checks have no live tamper test; the classified login reason after a failed
+   safety backup was not rerun live; `failure_harness.py armed-cut` / `restart-confirming` ran on XRv9k only.
+3. For the user: an unassigned credential profile `QA-wrong-password-ceos` that QA created on the lab (no API route
+   deletes a profile); the lab's Git saves are local commits in `~/labs/CLAB-MNGR-DEV-LLM` (`9d5906d`, `b8534ad`
+   legacy for xrv9k, `366c21f`, and QA's contention save), never uploaded; the `.claude/` routing files are the user's
+   own and uncommitted; the Progress tab is 431 px wide at a 390 px viewport (left alone on request).
+
+**Final state (2026-09-21 about 04:05 UTC):** lab `restore-square` deployed from
+`/srv/containerlab-node-manager/projects/restore-square/`, all four nodes on configuration A with nothing pending
+(`65-*`), every edge and the loopback mesh healthy (`64-*`), every NOS restarted once for the persistence check; the
+development manager runs the released build (see the closing release's validation section for the exact one).

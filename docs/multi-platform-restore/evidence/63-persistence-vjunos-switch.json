@@ -1,0 +1,19 @@
+{
+ "node": "vjunos-switch",
+ "restart_command_accepted": true,
+ "back_with_both_edges": true,
+ "seconds_until_back": 1303,
+ "boot_before": "System booted: 2026-09-20 22:18:17 UTC",
+ "uptime_before_s": 19111,
+ "log": [
+  "request system reboot Reboot the system ? [yes,no] (no) <answered yes> yes \u0007*** FINAL System shutdown message from admin@vjunos-switch ***\u0007 System going down IMMEDIATELY Shutdown NOW! [pid 48107] admin@vjunos-switch> "
+ ],
+ "boot_after": "System booted: 2026-09-21 03:38:23 UTC",
+ "uptime_after_s": 1209,
+ "really_restarted": true,
+ "configuration_lines": 25,
+ "lines_lost": 0,
+ "lines_new": 0,
+ "order_changed": false,
+ "ok": true
+}
