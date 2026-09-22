@@ -1,0 +1,956 @@
+{
+ "scenario": "Scenario B: build your own lab and keep it in Git",
+ "manager_base": "http://127.0.0.1:8081",
+ "started_utc": "2026-09-22T18:41:59Z",
+ "finished_utc": "2026-09-22T18:57:02Z",
+ "steps": [
+  {
+   "step": 1,
+   "title": "Start a new lab in the builder",
+   "actions": [
+    "Home: click \"Open the lab builder\" (#home-build) in the Build box",
+    "Click \"New lab\u2026\"",
+    "Fill name='my-first-lab', starter=\"Two devices, one link\", device type='Arista cEOS \u00b7 n24l/ceos:4.35.0F', folder='/srv/containerlab-node-manager/projects'",
+    "Click \"Create draft\""
+   ],
+   "observed": {
+    "template_options": [
+     "Arista cEOS \u00b7 n24l/ceos:4.35.0F",
+     "Juniper cJunosEvolved \u00b7 cjunosevolved:26.2R1.7-EVO",
+     "Juniper vJunos-switch \u00b7 vrnetlab/juniper_vjunos-switch:23.2R1.14",
+     "Cisco XRv9k \u00b7 vrnetlab/cisco_xrv9k:24.3.1",
+     "Linux host \u00b7 ghcr.io/srl-labs/network-multitool:latest"
+    ],
+    "ceos_template_text": "Arista cEOS \u00b7 n24l/ceos:4.35.0F",
+    "root_options": [
+     "/etc/containerlab",
+     "/srv/containerlab-node-manager/projects"
+    ],
+    "node_count": 2,
+    "edge_count": 1,
+    "node_names": [
+     "ceos1",
+     "ceos2"
+    ],
+    "builder_status": "Draft \u00b7 kept in this browser only \u00b7 not on the VM yet"
+   },
+   "screenshots": [
+    {
+     "file": "b1-new-lab-dialog-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b1-new-lab-dialog-el.png",
+     "element": "New lab (filled)",
+     "callouts": [
+      {
+       "label": "New lab (filled)",
+       "box": {
+        "x": 123,
+        "y": 210.109375,
+        "width": 1120,
+        "height": 479.78125
+       }
+      }
+     ]
+    },
+    {
+     "file": "b1-editor-two-nodes-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b1-editor-two-nodes-el.png",
+     "element": "Editor: two devices, one link",
+     "callouts": [
+      {
+       "label": "Editor: two devices, one link",
+       "box": {
+        "x": 0,
+        "y": 52,
+        "width": 1366,
+        "height": 826
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 2,
+   "title": "Draw and check the topology",
+   "actions": [
+    "Edit Node on the first device: renamed to r1, Management IPv4 172.20.20.21, Image/Version reasserted to n24l/ceos / 4.35.0F, Apply",
+    "Edit Node on the second device: renamed to r2, Management IPv4 172.20.20.22, Image/Version reasserted, Apply",
+    "Right-click empty canvas -> \"Add Text\" -> typed \"My first lab: r1 eth1 - r2 eth1\"",
+    "Click \"View YAML\""
+   ],
+   "observed": {
+    "r1_image_before_reassert": "n24l/ceos",
+    "r1_version_before_reassert": "4.35.0F",
+    "r2_image_before_reassert": "n24l/ceos",
+    "r2_version_before_reassert": "4.35.0F",
+    "canvas_context_menu": [
+     "Add Node",
+     "Add Group",
+     "Add Text",
+     "Add Shape",
+     "Add Traffic Rate",
+     "Open Palette"
+    ],
+    "annotation_tool_found": true,
+    "yaml_text": "name: my-first-lab\ntopology:\n  nodes:\n    r1:\n      kind: arista_ceos\n      image: n24l/ceos:4.35.0F\n      mgmt-ipv4: 172.20.20.21\n    r2:\n      kind: arista_ceos\n      image: n24l/ceos:4.35.0F\n      mgmt-ipv4: 172.20.20.22\n  links:\n    - endpoints: [ \"r1:eth1\", \"r2:eth1\" ]\n",
+    "both_images_n24l_ceos_4_35_0F": true
+   },
+   "screenshots": [
+    {
+     "file": "b2-node-editor-r1-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b2-node-editor-r1-el.png",
+     "element": "Node Editor: r1",
+     "callouts": [
+      {
+       "label": "Node Editor: r1",
+       "box": {
+        "x": 867,
+        "y": 99,
+        "width": 499,
+        "height": 779
+       }
+      }
+     ]
+    },
+    {
+     "file": "b2-canvas-finished-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b2-canvas-finished-el.png",
+     "element": "Finished canvas: r1, r2, note",
+     "callouts": [
+      {
+       "label": "Finished canvas: r1, r2, note",
+       "box": {
+        "x": 0,
+        "y": 51,
+        "width": 1366,
+        "height": 826
+       }
+      }
+     ]
+    },
+    {
+     "file": "b2-view-yaml-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b2-view-yaml-el.png",
+     "element": "View YAML",
+     "callouts": [
+      {
+       "label": "View YAML",
+       "box": {
+        "x": 123,
+        "y": 238.78125,
+        "width": 1120,
+        "height": 422.421875
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": [
+    "Both nodes were already placed side by side by the \"pair\" starter (left/right); no further dragging was needed to satisfy \"arrange side by side\"."
+   ]
+  },
+  {
+   "step": 3,
+   "title": "Save to the VM and deploy",
+   "actions": [
+    "Click \"Save to the VM\u2026\"",
+    "Confirm the save review",
+    "Click \"Deploy or add this lab\u2026\"",
+    "Click \"Deploy lab\"",
+    "Confirm with \"Start lab\" (job result shown on the builder page itself)",
+    "Home -> open the my-first-lab lab card (the builder page does not navigate there itself)"
+   ],
+   "observed": {
+    "save_review_title": "Save my-first-lab to the VM?",
+    "save_review_path": "/srv/containerlab-node-manager/projects/my-first-lab/my-first-lab.clab.yml",
+    "save_job_banner": "\u2714 Save lab to the VM succeeded\nmy-first-lab \u00b7 Operation completed\nExit code 0",
+    "builder_status_after_save": "Saved on the VM",
+    "topology_file_path": "/srv/containerlab-node-manager/projects/my-first-lab/my-first-lab.clab.yml",
+    "start_review_title": "Start my-first-lab?",
+    "deploy_job_banner": "\u2714 Save lab to the VM succeeded\nmy-first-lab \u00b7 Operation completed\nExit code 0",
+    "lab_id": "d2eba4e95b164d4c8ddf67e5448fbbf7",
+    "vm_folder_listing": [
+     "clab-my-first-lab",
+     "my-first-lab.clab.yml",
+     "my-first-lab.clab.yml.annotations.json"
+    ],
+    "annotations_file": "my-first-lab.clab.yml.annotations.json"
+   },
+   "screenshots": [
+    {
+     "file": "b3-save-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b3-save-review-el.png",
+     "element": "Save my-first-lab to the VM?",
+     "callouts": [
+      {
+       "label": "Save my-first-lab to the VM?",
+       "box": {
+        "x": 123,
+        "y": 109.78125,
+        "width": 1120,
+        "height": 680.4375
+       }
+      }
+     ]
+    },
+    {
+     "file": "b3-save-result-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b3-save-result-el.png",
+     "element": "Save result: Deploy or add this lab\u2026",
+     "callouts": [
+      {
+       "label": "Save result: Deploy or add this lab\u2026",
+       "box": {
+        "x": 123,
+        "y": 278.359375,
+        "width": 1120,
+        "height": 343.28125
+       }
+      }
+     ]
+    },
+    {
+     "file": "b3-topology-file-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b3-topology-file-el.png",
+     "element": "Topology file",
+     "callouts": [
+      {
+       "label": "Topology file",
+       "box": {
+        "x": 123,
+        "y": 115.90625,
+        "width": 1120,
+        "height": 668.1875
+       }
+      }
+     ]
+    },
+    {
+     "file": "b3-start-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b3-start-review-el.png",
+     "element": "Start my-first-lab?",
+     "callouts": [
+      {
+       "label": "Start my-first-lab?",
+       "box": {
+        "x": 123,
+        "y": 261.9375,
+        "width": 1120,
+        "height": 376.109375
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {
+    "ls_la_output": "total 20\ndrwxrwsr-x 3 root clab_admins 4096 Sep 22 18:42 .\ndrwxrwsr-x 4 root clab_admins 4096 Sep 22 18:42 ..\ndrwxr-sr-x 5 root clab_admins 4096 Sep 22 18:42 clab-my-first-lab\n-rw-rw-r-- 1 root clab_admins  275 Sep 22 18:42 my-first-lab.clab.yml\n-rw-rw-r-- 1 root clab_admins  871 Sep 22 18:42 my-first-lab.clab.yml.annotations.json\n"
+   },
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 4,
+   "title": "Bring the link up",
+   "actions": [
+    "Polled the Devices tab until both rows read Ready (40.7s since confirm)",
+    "r1 CLI: enable/configure terminal/ip routing/interface Ethernet1/no switchport/ip address 10.0.0.1/30/end/write memory",
+    "r2 CLI: same commands with ip address 10.0.0.2/30",
+    "r1 CLI: ping 10.0.0.2"
+   ],
+   "observed": {
+    "deploy_to_ready_seconds": 40.7,
+    "devices_pills_ready": [
+     "Ready",
+     "Ready"
+    ],
+    "ping_ok": true
+   },
+   "screenshots": [
+    {
+     "file": "b4-devices-ready-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b4-devices-ready-el.png",
+     "element": "Devices tab (Ready)",
+     "callouts": [
+      {
+       "label": "Devices tab (Ready)",
+       "box": {
+        "x": 24,
+        "y": 201.890625,
+        "width": 1318,
+        "height": 666.109375
+       }
+      }
+     ]
+    },
+    {
+     "file": "b4-r1-ping-terminal-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b4-r1-ping-terminal-el.png",
+     "element": "r1 CLI: ping 10.0.0.2",
+     "callouts": [
+      {
+       "label": "r1 CLI: ping 10.0.0.2",
+       "box": {
+        "x": 24,
+        "y": 148.5,
+        "width": 1318,
+        "height": 731.5
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {
+    "r1_ping_10_0_0_2": "enable\r\nr1#ping 10.0.0.2 repeat 3\r\nPING 10.0.0.2 (10.0.0.2) 72(100) bytes of data.\r\n80 bytes from 10.0.0.2: icmp_seq=1 ttl=64 time=0.093 ms\r\n80 bytes from 10.0.0.2: icmp_seq=2 ttl=64 time=0.006 ms\r\n80 bytes from 10.0.0.2: icmp_seq=3 ttl=64 time=0.004 ms\r\n\r\n--- 10.0.0.2 ping statistics ---\r\n3 packets transmitted, 3 received, 0% packet loss, time 0ms\r\nrtt min/avg/max/mdev = 0.004/0.034/0.093/0.041 ms, ipg/ewma 0.069/0.072 ms\r\nr1#",
+    "r1_show_ip_interface_brief": "enable\r\nr1#show ip interface brief\r\n                                                                               Address\r\nInterface         IP Address            Status       Protocol           MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ---------- -------\r\nEthernet1         10.0.0.1/30           up           up                1500           \r\nManagement0       172.20.20.21/24       up           up                1500           \r\n\r\nr1#",
+    "r2_show_ip_interface_brief": "enable\r\nr2#show ip interface brief\r\n                                                                               Address\r\nInterface         IP Address            Status       Protocol           MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ---------- -------\r\nEthernet1         10.0.0.2/30           up           up                1500           \r\nManagement0       172.20.20.22/24       up           up                1500           \r\n\r\nr2#"
+   },
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 5,
+   "title": "Create the student's own repository on GitHub",
+   "actions": [
+    "gh repo create pruger-dev/my-network-labs --private --add-readme --description My containerlab labs"
+   ],
+   "observed": {
+    "repo_url": "https://github.com/pruger-dev/my-network-labs",
+    "repo_visibility": "PRIVATE",
+    "repo_default_branch": "main"
+   },
+   "screenshots": [],
+   "device_evidence": {},
+   "remote_evidence": {
+    "gh_repo_create_output": "HTTP 422: Repository creation failed. (https://api.github.com/user/repos)\nname already exists on this account\n",
+    "gh_repo_create_returncode": 1,
+    "gh_repo_view_output": "{\"defaultBranchRef\":{\"name\":\"main\"},\"url\":\"https://github.com/pruger-dev/my-network-labs\",\"visibility\":\"PRIVATE\"}\n"
+   },
+   "result": "PASS",
+   "notes": [
+    "pruger-dev/my-network-labs already existed from an earlier attempt at this scenario run (the authenticated gh account has no delete_repo scope, so a prior attempt's repository could not be cleaned up between runs); reused it. It was still pristine (only the auto-added README, never pushed to by this scenario) at this point.",
+    "Clarification added when step 10 was re-executed (see step 10's own notes): the HTTP 422 recorded above for this step happened because pruger-dev/my-network-labs already existed from earlier attempts made earlier in this authoring session; the repository creation itself (HTTP 201, a genuinely new empty repository) was exercised in one of those earlier attempts, not in the run that produced this evidence file. An independent QA replay of this scenario, using a repository name that has never existed, will see the create call itself succeed."
+   ]
+  },
+  {
+   "step": 6,
+   "title": "Connect the repository and save progress",
+   "actions": [
+    "Open the Progress tab",
+    "Click \"Connect a repository by URL\"",
+    "Click \"Connect repository\" and wait for the clone/check/register",
+    "Click \"Save progress\"",
+    "Click \"Upload these changes\""
+   ],
+   "observed": {
+    "unconnected_card_heading": "Folders in this repository",
+    "destination_line": "my-first-lab saves to my-network-labs \u203a my-first-lab \u203a latest/",
+    "review_before_uploading_text": "Review before uploading\n\u00d7\n\nWhat this save changed compared with the previous one. Configuration files may contain passwords or keys.\n\nThis save is on the lab VM only. Nothing is uploaded to github.com unless you choose Upload these changes.\n\nDetails\nr1.cfg added\nr1.eoscfg added\nr2.cfg added\nr2.eoscfg added\nOpen the full saved version\nNot now \u2014 keep it on the VM\nUpload these changes",
+    "save_job_status": "synced",
+    "progress_status_after_save": "Saved to Git just now"
+   },
+   "screenshots": [
+    {
+     "file": "b6-connect-dialog-filled-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b6-connect-dialog-filled-el.png",
+     "element": "Connect a repository by URL (filled)",
+     "callouts": [
+      {
+       "label": "Connect a repository by URL (filled)",
+       "box": {
+        "x": 123,
+        "y": 237.375,
+        "width": 1120,
+        "height": 425.234375
+       }
+      }
+     ]
+    },
+    {
+     "file": "b6-connected-card-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b6-connected-card-el.png",
+     "element": "Connected save location",
+     "callouts": [
+      {
+       "label": "Connected save location",
+       "box": {
+        "x": 24,
+        "y": 0.453125,
+        "width": 1318,
+        "height": 1053.296875
+       }
+      }
+     ]
+    },
+    {
+     "file": "b6-save-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b6-save-review-el.png",
+     "element": "Review before uploading",
+     "callouts": [
+      {
+       "label": "Review before uploading",
+       "box": {
+        "x": 27.3125,
+        "y": 211.109375,
+        "width": 1311.359375,
+        "height": 477.78125
+       }
+      }
+     ]
+    },
+    {
+     "file": "b6-save-job-result-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b6-save-job-result-el.png",
+     "element": "Save job result",
+     "callouts": [
+      {
+       "label": "Save job result",
+       "box": {
+        "x": 123,
+        "y": 318.75,
+        "width": 1120,
+        "height": 262.5
+       }
+      }
+     ]
+    },
+    {
+     "file": "b6-progress-after-save-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b6-progress-after-save-el.png",
+     "element": "Progress tab after save",
+     "callouts": [
+      {
+       "label": "Progress tab after save",
+       "box": {
+        "x": 24,
+        "y": 201.890625,
+        "width": 1318,
+        "height": 80.09375
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {
+    "tree_paths_after_first_save": {
+     "my-first-lab/latest/manifest.json": true,
+     "my-first-lab/latest/r1.cfg": true,
+     "my-first-lab/latest/r2.cfg": true,
+     "my-first-lab/latest/r1.eoscfg": true,
+     "my-first-lab/latest/r2.eoscfg": true
+    },
+    "no_topology_file_uploaded_by_save": true,
+    "unexpected_topology_paths": []
+   },
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 7,
+   "title": "Publish the topology files (owner terminal, lab VM)",
+   "actions": [
+    "$ cd /home/clabllm/labs/my-network-labs && mkdir -p my-first-lab && cp /srv/containerlab-node-manager/projects/my-first-lab/my-first-lab.clab.yml* my-first-lab/",
+    "$ cat > my-first-lab/README.md   # 5-line description written above",
+    "$ git add my-first-lab",
+    "$ git commit -m \"my-first-lab: topology and map\"",
+    "$ git push",
+    "$ git status -sb"
+   ],
+   "observed": {
+    "git_status_clean": "## main...origin/main"
+   },
+   "screenshots": [
+    {
+     "file": "b7-terminal-git-push.png",
+     "element": "rendered transcript (not a live terminal)",
+     "callouts": []
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {
+    "transcript": [
+     [
+      "cd /home/clabllm/labs/my-network-labs && mkdir -p my-first-lab && cp /srv/containerlab-node-manager/projects/my-first-lab/my-first-lab.clab.yml* my-first-lab/",
+      ""
+     ],
+     [
+      "cat > my-first-lab/README.md   # 5-line description written above",
+      ""
+     ],
+     [
+      "git add my-first-lab",
+      ""
+     ],
+     [
+      "git commit -m \"my-first-lab: topology and map\"",
+      "[main 127bfe8] my-first-lab: topology and map\n 3 files changed, 65 insertions(+)\n create mode 100644 my-first-lab/README.md\n create mode 100644 my-first-lab/my-first-lab.clab.yml\n create mode 100644 my-first-lab/my-first-lab.clab.yml.annotations.json\n"
+     ],
+     [
+      "git push",
+      "To https://github.com/pruger-dev/my-network-labs.git\n   a6121e5..127bfe8  main -> main\n"
+     ],
+     [
+      "git status -sb",
+      "## main...origin/main\n"
+     ]
+    ]
+   },
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 8,
+   "title": "Check GitHub, then browse the same tree in the manager",
+   "actions": [
+    "Saved versions -> \"Browse the repository\u2026\""
+   ],
+   "observed": {
+    "browse_listing_text": "my-network-labs\n\u203a\nmy-first-lab\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this folder\u2019s latest save (my-first-lab/latest) to the running devices. They are not rebooted.\n\nmy-network-labs\nmy-first-lab\nThis lab\nlatest\nName\tWhat it is\tSize\n\nlatest\n\tMost recent save\t5.3 KB\n\nmy-first-lab.clab.yml\n\tFile\t275 B\n\nmy-first-lab.clab.yml.annotations.json\n\tFile\t871 B\n\nREADME.md\n\tFile\t367 B\nLast saved just now\nDetails\nThis lab already saves here."
+   },
+   "screenshots": [
+    {
+     "file": "b8-browse-repository-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b8-browse-repository-el.png",
+     "element": "Folders in this repository",
+     "callouts": [
+      {
+       "label": "Folders in this repository",
+       "box": {
+        "x": 66,
+        "y": -0.40625,
+        "width": 1234,
+        "height": 532.625
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {
+    "expect_files_present": {
+     "my-first-lab/my-first-lab.clab.yml": true,
+     "my-first-lab/README.md": true,
+     "my-first-lab/latest/manifest.json": true
+    },
+    "annotations_file_present": [
+     "my-first-lab/my-first-lab.clab.yml.annotations.json"
+    ]
+   },
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 9,
+   "title": "Change, save, and checkpoint again",
+   "actions": [
+    "r2 CLI: added Loopback0 10.255.0.2/32, write memory",
+    "Save progress -> Review before uploading -> Upload these changes",
+    "Save progress menu -> \"Create checkpoint\u2026\"",
+    "Review before uploading -> Upload these changes"
+   ],
+   "observed": {
+    "second_save_review_text": "Review before uploading\n\u00d7\n\nWhat this save changed compared with the previous one. Configuration files may contain passwords or keys.\n\nThis save is on the lab VM only. Nothing is uploaded to github.com unless you choose Upload these changes.\n\nDetails\nr2.cfg changed\nr2.eoscfg changed\nOpen the full saved version\nNot now \u2014 keep it on the VM\nUpload these changes",
+    "review_shows_r2_changed_not_r1": true,
+    "second_save_job_status": "synced",
+    "checkpoint_job_status": "synced",
+    "saved_versions_text": "Browse the repository\u2026\nFull history\u2026\nLatest\nLatest\nmy-network-labs \u203a my-first-lab \u203a latest\nSaved just now \u00b7 5 files\nView\nApply to running lab\u2026\nCheckpoints\nlink-up\nSaved just now \u00b7 5 files\nView\nCompare with my latest save\nApply to running lab\u2026"
+   },
+   "screenshots": [
+    {
+     "file": "b9-second-save-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b9-second-save-review-el.png",
+     "element": "Review before uploading (r2 changed)",
+     "callouts": [
+      {
+       "label": "Review before uploading (r2 changed)",
+       "box": {
+        "x": 27.3125,
+        "y": 267.109375,
+        "width": 1311.359375,
+        "height": 365.78125
+       }
+      }
+     ]
+    },
+    {
+     "file": "b9-checkpoint-dialog-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b9-checkpoint-dialog-el.png",
+     "element": "Create checkpoint (link-up)",
+     "callouts": [
+      {
+       "label": "Create checkpoint (link-up)",
+       "box": {
+        "x": 333,
+        "y": 216.03125,
+        "width": 700,
+        "height": 467.921875
+       }
+      }
+     ]
+    },
+    {
+     "file": "b9-saved-versions-with-checkpoint-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b9-saved-versions-with-checkpoint-el.png",
+     "element": "Saved versions (Latest + link-up)",
+     "callouts": [
+      {
+       "label": "Saved versions (Latest + link-up)",
+       "box": {
+        "x": 24,
+        "y": 297.984375,
+        "width": 1318,
+        "height": 309.59375
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {
+    "latest_r2_has_loopback0": true,
+    "checkpoint_link_up_exists": true,
+    "no_nested_latest_latest": true,
+    "last_three_commits": [
+     "Save my-first-lab progress",
+     "Manager-Operation: 45b1b88e8391285adedd1e0544ed43ff",
+     "Save my-first-lab progress",
+     "Manager-Operation: 2a69b63062c5368c3bdf84ad8ed7c804",
+     "my-first-lab: topology and map"
+    ]
+   },
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 10,
+   "title": "Prove it: destroy, remove, and rebuild from Git",
+   "actions": [
+    "Lab actions -> \"Destroy lab\u2026\"",
+    "Waited for the lab to read Not running: 'Stopped'",
+    "Lab actions -> \"Remove from this manager\u2026\"",
+    "Unticked \"Don't offer this lab for import again\", clicked \"Remove lab\"",
+    "(authoring-only) sudo mv /srv/containerlab-node-manager/projects/my-first-lab /srv/containerlab-node-manager/projects-archive-2026-09-22/my-first-lab.original \u2014 not a guide step; removes the only other thing this validation could accidentally deploy from",
+    "Home -> \"Choose a file on the lab VM\u2026\"",
+    "Open /srv/containerlab-node-manager/projects",
+    "Open my-network-labs (a direct child of /srv/containerlab-node-manager/projects, scoped)",
+    "Open my-first-lab (a direct child of my-network-labs, scoped \u2014 NOT the top-level my-first-lab folder, which was archived away above anyway)",
+    "Select my-first-lab.clab.yml",
+    "Deploy lab -> Start lab (from the cloned copy)",
+    "Open the Topology tab (redeployed lab)",
+    "Progress -> \"Connect a repository by URL\" (same URL and folder)",
+    "Saved versions -> Latest -> \"Apply to running lab\u2026\""
+   ],
+   "observed": {
+    "vm_project_path_before_redo": "/srv/containerlab-node-manager/projects/my-first-lab/my-first-lab.clab.yml",
+    "destroy_review_title": "Destroy my-first-lab?",
+    "lab_state_after_destroy": "Stopped",
+    "docker_containers_after_remove": [],
+    "cloned_topology_path_field": "/srv/containerlab-node-manager/projects/my-network-labs/my-first-lab/my-first-lab.clab.yml",
+    "cloned_topology_path_contains_expected_fragment": true,
+    "vm_project_path_after_redeploy": "/srv/containerlab-node-manager/projects/my-network-labs/my-first-lab/my-first-lab.clab.yml",
+    "redeploy_to_ready_seconds": 46.8,
+    "devices_pills_ready_after_redeploy": [
+     "Ready",
+     "Ready"
+    ],
+    "reconnect_result": "connected",
+    "apply_latest_seconds": 12.0,
+    "apply_latest_status": "succeeded",
+    "addresses_and_loopback_restored": true,
+    "ping_ok_final": true,
+    "console_errors_seen": []
+   },
+   "screenshots": [
+    {
+     "file": "b10-destroy-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b10-destroy-review-el.png",
+     "element": "Destroy my-first-lab?",
+     "callouts": [
+      {
+       "label": "Destroy my-first-lab?",
+       "box": {
+        "x": 123,
+        "y": 228.796875,
+        "width": 1120,
+        "height": 442.390625
+       }
+      }
+     ]
+    },
+    {
+     "file": "b10-remove-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b10-remove-review-el.png",
+     "element": "Remove this lab from the manager?",
+     "callouts": [
+      {
+       "label": "Remove this lab from the manager?",
+       "box": {
+        "x": 343,
+        "y": 291.375,
+        "width": 680,
+        "height": 317.25
+       }
+      }
+     ]
+    },
+    {
+     "file": "b10-terminal-clone.png",
+     "element": "rendered transcript (not a live terminal)",
+     "callouts": []
+    },
+    {
+     "file": "b10-redeploy-topology-file-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b10-redeploy-topology-file-el.png",
+     "element": "Topology file (cloned)",
+     "callouts": [
+      {
+       "label": "Topology file (cloned)",
+       "box": {
+        "x": 123,
+        "y": 115.90625,
+        "width": 1120,
+        "height": 668.1875
+       }
+      }
+     ]
+    },
+    {
+     "file": "b10-redeploy-start-review-el.png",
+     "element": "Deploy lab (cloned copy)",
+     "callouts": [
+      {
+       "label": "Deploy lab (cloned copy)",
+       "box": {
+        "x": 123,
+        "y": 261.9375,
+        "width": 1120,
+        "height": 376.109375
+       }
+      }
+     ]
+    },
+    {
+     "file": "b10-redeployed-topology-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b10-redeployed-topology-el.png",
+     "element": "Topology (redeployed, saved map)",
+     "callouts": [
+      {
+       "label": "Topology (redeployed, saved map)",
+       "box": {
+        "x": 24,
+        "y": 201.890625,
+        "width": 1318,
+        "height": 666.109375
+       }
+      }
+     ]
+    },
+    {
+     "file": "b10-reconnect-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b10-reconnect-el.png",
+     "element": "Progress tab after reconnecting",
+     "callouts": [
+      {
+       "label": "Progress tab after reconnecting",
+       "box": {
+        "x": 24,
+        "y": 0.265625,
+        "width": 1318,
+        "height": 1105.890625
+       }
+      }
+     ]
+    },
+    {
+     "file": "b10-apply-latest-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b10-apply-latest-review-el.png",
+     "element": "Replace running configuration (Latest)",
+     "callouts": [
+      {
+       "label": "Replace running configuration (Latest)",
+       "box": {
+        "x": 123,
+        "y": 188.6875,
+        "width": 1120,
+        "height": 522.609375
+       }
+      }
+     ]
+    },
+    {
+     "file": "b10-apply-latest-result-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "b10-apply-latest-result-el.png",
+     "element": "Restore result (Latest)",
+     "callouts": [
+      {
+       "label": "Restore result (Latest)",
+       "box": {
+        "x": 123,
+        "y": 280.671875,
+        "width": 1120,
+        "height": 338.640625
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {
+    "r1_show_ip_interface_brief_final": "enable\r\nr1#show ip interface brief\r\n                                                                               Address\r\nInterface         IP Address            Status       Protocol           MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ---------- -------\r\nEthernet1         10.0.0.1/30           up           up                1500           \r\nManagement0       172.20.20.21/24       up           up                1500           \r\n\r\nr1#",
+    "r2_show_ip_interface_brief_final": "enable\r\nr2#show ip interface brief\r\n                                                                                Address\r\nInterface         IP Address            Status       Protocol            MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ----------- -------\r\nEthernet1         10.0.0.2/30           up           up                 1500           \r\nLoopback0         10.255.0.2/32         up           up                65535           \r\nManagement0       172.20.20.22/24       up           up                 1500           \r\n\r\nr2#",
+    "r1_ping_10_0_0_2_final": "enable\r\nr1#ping 10.0.0.2 repeat 3\r\nPING 10.0.0.2 (10.0.0.2) 72(100) bytes of data.\r\n80 bytes from 10.0.0.2: icmp_seq=1 ttl=64 time=0.093 ms\r\n80 bytes from 10.0.0.2: icmp_seq=2 ttl=64 time=0.006 ms\r\n80 bytes from 10.0.0.2: icmp_seq=3 ttl=64 time=0.006 ms\r\n\r\n--- 10.0.0.2 ping statistics ---\r\n3 packets transmitted, 3 received, 0% packet loss, time 0ms\r\nrtt min/avg/max/mdev = 0.006/0.035/0.093/0.041 ms, ipg/ewma 0.071/0.072 ms\r\nr1#"
+   },
+   "remote_evidence": {
+    "archived_original_folder": {
+     "from": "/srv/containerlab-node-manager/projects/my-first-lab",
+     "to": "/srv/containerlab-node-manager/projects-archive-2026-09-22/my-first-lab.original",
+     "rc": 0
+    },
+    "clone_transcript": [
+     [
+      "sudo mkdir -p /srv/containerlab-node-manager/projects-archive-2026-09-22",
+      ""
+     ],
+     [
+      "sudo mv /srv/containerlab-node-manager/projects/my-first-lab /srv/containerlab-node-manager/projects-archive-2026-09-22/my-first-lab.original",
+      ""
+     ],
+     [
+      "git clone https://github.com/pruger-dev/my-network-labs.git /srv/containerlab-node-manager/projects/my-network-labs",
+      "# already cloned in an earlier attempt made earlier in this authoring session; not re-run"
+     ],
+     [
+      "git -C /srv/containerlab-node-manager/projects/my-network-labs log --oneline -3",
+      "77108a9 Save my-first-lab progress\n11aadc0 Save my-first-lab progress\n127bfe8 my-first-lab: topology and map\n"
+     ],
+     [
+      "ls -la /srv/containerlab-node-manager/projects/my-network-labs/my-first-lab",
+      "total 28\ndrwxrwsr-x 4 clabllm clab_admins 4096 Sep 22 18:44 .\ndrwxrwsr-x 4 clabllm clab_admins 4096 Sep 22 18:44 ..\ndrwxrwsr-x 3 clabllm clab_admins 4096 Sep 22 18:44 checkpoints\ndrwxrwsr-x 2 clabllm clab_admins 4096 Sep 22 18:44 latest\n-rw-rw-r-- 1 clabllm clab_admins  275 Sep 22 18:44 my-first-lab.clab.yml\n-rw-rw-r-- 1 clabllm clab_admins  871 Sep 22 18:44 my-first-lab.clab.yml.annotations.json\n-rw-rw-r-- 1 clabllm clab_admins  367 Sep 22 18:44 README.md\n"
+     ]
+    ],
+    "binding_folder_via_api": "my-first-lab"
+   },
+   "result": "PASS",
+   "notes": [
+    "Step 10 was re-executed on its own (--from-step 10) after an earlier run deployed the WRONG topology file: the tree-navigation locator matched the first folder anywhere in the tree named \"my-first-lab\" (the original, top-level one), not the one nested inside my-network-labs, because it searched the whole #op-file-tree by text instead of the direct children of the folder just opened. This run replaces steps 1-9's untouched evidence with a fixed, re-verified step 10: navigation is now scoped to direct children at each level (see open_tree_folder()), and the topology file path is asserted before Deploy lab and the deployed lab's vm_project_path is asserted via the API after Start lab.",
+    "/srv/containerlab-node-manager/projects/my-network-labs already existed from an earlier attempt at this scenario validation; reused rather than re-cloned. A first-time student only ever runs this clone once, so this is a redo artefact, not a guide divergence."
+   ]
+  }
+ ]
+}

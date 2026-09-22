@@ -11,6 +11,7 @@ spec.json format -- a JSON list of objects:
       "out": "a02-topology-file.png",
       "src": "raw/a02-topology-file.png",
       "crop": [x, y, w, h],           // optional; raw-image pixels
+                                        // OR a list of such boxes (below)
       "scale": 0.5,                    // optional; default 1.0
       "callouts": [                    // optional
         {
@@ -21,7 +22,10 @@ spec.json format -- a JSON list of objects:
                                         // top-right, bottom-left,
                                         // bottom-right, center
         }
-      ]
+      ],
+      "badge": 30                      // optional; pins the badge diameter
+                                        // in output px instead of the
+                                        // automatic size below
     }
 
 All paths ("src", "out") are relative to the screenshots/ directory itself.
@@ -29,13 +33,27 @@ All paths ("src", "out") are relative to the screenshots/ directory itself.
 source PNG named by "src" (the raw captures are taken at
 device_scale_factor 2, so this is already twice the CSS pixel size — give
 crop and callout coordinates in the file's own pixel grid, not CSS pixels).
-The callout badge itself is always drawn at a fixed ~34 px diameter in the
-*output* image, independent of "scale", so numbers stay legible even when a
-screenshot is shrunk.
+The callout badge is drawn after cropping and scaling, sized as a fraction
+of the composed image's own (output) width — about 26-40px, clamped at
+both ends — rather than a fixed raw-pixel size: the guide always shrinks a
+wide screenshot down to its ~6.9in text column, so a fixed-raw-pixel badge
+on a wide crop becomes a near-invisible dot once printed. Set "badge" on an
+entry to override the automatic size for that one figure.
 
 "label" is carried through only for --list and for the guide author's own
 reference (e.g. cross-checking a figure caption); this tool never draws the
 label text on the image, only the numbered circle described above.
+
+"crop" can instead be a list of [x, y, w, h] boxes from the same source,
+e.g. [[44, 0, 2240, 230], [44, 1120, 2240, 220]]: each is cropped
+independently and they are stacked vertically (all must share one width) in
+list order, with a thin divider between them, into a single output image.
+This drops whatever sits between the regions — typically a large YAML/log
+box between a field row and a dialog's button row — without a second output
+file or hand-editing anything. A callout's "x"/"y" must fall inside exactly
+one of the regions; it is then placed at that region's position in the
+stacked image, so coordinates are still given in the one raw source's own
+pixel grid, never in stacked-output coordinates.
 
 Determinism: composing the same spec + raw image twice produces pixel
 identical output (same PIL/Pillow version, no random state, no embedded
@@ -52,12 +70,23 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_SCREENSHOTS_DIR = HERE.parent / "screenshots"
 
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-BADGE_DIAMETER = 34
+# The badge is sized relative to the OUTPUT image (after crop + scale), not
+# fixed in raw pixels: the guide always shrinks a wide screenshot down to
+# the ~6.9in text column, so a badge that is a fixed raw-pixel size becomes
+# a near-invisible dot on a wide crop (a 34px badge on a 2732px-wide image
+# prints at well under 2mm). Sizing it as a fraction of the composed
+# image's own width keeps it at roughly the same *printed* size (about
+# 2.5-3mm, ~26-30px in a typical <=1600px-wide output) regardless of how
+# wide the source crop was. `BADGE_MIN`/`BADGE_MAX` keep it sane at the
+# extremes (a small already-tight crop, or a deliberately huge overview).
+BADGE_DIAMETER_RATIO = 0.018
+BADGE_MIN = 26
+BADGE_MAX = 40
 BADGE_FILL = (192, 90, 28, 255)      # matches the .step .n accent colour (#c05a1c)
 BADGE_OUTLINE = (255, 255, 255, 255)
 BADGE_OUTLINE_WIDTH = 2
 BADGE_TEXT_FILL = (255, 255, 255, 255)
-BADGE_MARGIN = 4                     # gap between the anchor point and the badge edge
+BADGE_MARGIN_RATIO = 0.15            # gap between the anchor point and the badge edge
 
 ANCHOR_DIRECTIONS = {
     "top-left": (-1, -1),
@@ -103,8 +132,53 @@ def compose_entry(entry, screenshots_dir, index):
         image = im.convert("RGBA")
 
     crop_x, crop_y = 0, 0
+    regions = None  # set for a multi-region crop; used to map callouts below
     crop = entry.get("crop")
-    if crop is not None:
+    if crop is not None and isinstance(crop[0], (list, tuple)):
+        # Multi-region crop: several [x, y, w, h] boxes from the same source,
+        # stacked vertically with a thin divider, dropping whatever sits
+        # between them (e.g. a tall YAML box between a field row and a
+        # dialog's button row) without a second output file. All regions
+        # must share one width, since they come from the same fixed-width
+        # dialog.
+        GAP = 14
+        DIVIDER = (210, 210, 210, 255)
+        pieces = []
+        regions = []  # (region_x, region_y, region_w, region_h, stacked_y)
+        widths = set()
+        stacked_y = 0
+        for region in crop:
+            if len(region) != 4:
+                raise SpecError(f"{label}: each crop region must be [x, y, w, h]")
+            rx, ry, rw, rh = region
+            box = (rx, ry, rx + rw, ry + rh)
+            if box[0] < 0 or box[1] < 0 or box[2] > image.width or box[3] > image.height:
+                raise SpecError(
+                    f"{label}: crop region {list(region)} is outside the source "
+                    f"image ({image.width}x{image.height})"
+                )
+            pieces.append(image.crop(box))
+            widths.add(box[2] - box[0])
+            regions.append((rx, ry, rw, rh, stacked_y))
+            stacked_y += rh + GAP
+        if len(widths) != 1:
+            raise SpecError(
+                f"{label}: multi-region crop pieces must share one width, got {sorted(widths)}"
+            )
+        width = pieces[0].width
+        total_height = stacked_y - GAP
+        stacked = Image.new("RGBA", (width, total_height), (255, 255, 255, 255))
+        y_cursor = 0
+        for i, piece in enumerate(pieces):
+            stacked.paste(piece, (0, y_cursor))
+            y_cursor += piece.height
+            if i < len(pieces) - 1:
+                divider_draw = ImageDraw.Draw(stacked)
+                mid = y_cursor + GAP // 2
+                divider_draw.line([(0, mid), (width, mid)], fill=DIVIDER, width=1)
+                y_cursor += GAP
+        image = stacked
+    elif crop is not None:
         if len(crop) != 4:
             raise SpecError(f"{label}: 'crop' must be [x, y, w, h]")
         crop_x, crop_y, crop_w, crop_h = crop
@@ -121,12 +195,23 @@ def compose_entry(entry, screenshots_dir, index):
         new_size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
         image = image.resize(new_size, Image.LANCZOS)
 
-    draw = ImageDraw.Draw(image)
-    font_size = int(BADGE_DIAMETER * 0.55)
-    font = ImageFont.truetype(FONT_PATH, font_size)
-    radius = BADGE_DIAMETER / 2
+    callouts = entry.get("callouts", [])
+    if callouts:
+        # One badge size per composed image: computed from the OUTPUT
+        # width (post crop+scale) unless the entry pins an exact diameter
+        # with "badge" (raw output px) for a figure that needs hand tuning.
+        badge_diameter = entry.get("badge")
+        if badge_diameter is None:
+            badge_diameter = max(
+                BADGE_MIN, min(BADGE_MAX, round(image.width * BADGE_DIAMETER_RATIO))
+            )
+        draw = ImageDraw.Draw(image)
+        font_size = max(10, int(badge_diameter * 0.55))
+        font = ImageFont.truetype(FONT_PATH, font_size)
+        radius = badge_diameter / 2
+        margin = max(3, round(badge_diameter * BADGE_MARGIN_RATIO))
 
-    for callout in entry.get("callouts", []):
+    for callout in callouts:
         if "n" not in callout or "x" not in callout or "y" not in callout:
             raise SpecError(f"{label}: each callout needs 'n', 'x' and 'y'")
         anchor = callout.get("anchor", "top-left")
@@ -137,10 +222,25 @@ def compose_entry(entry, screenshots_dir, index):
         dx, dy = ANCHOR_DIRECTIONS[anchor]
 
         raw_x, raw_y = callout["x"], callout["y"]
-        final_x = (raw_x - crop_x) * scale
-        final_y = (raw_y - crop_y) * scale
+        if regions is not None:
+            match = None
+            for rx, ry, rw, rh, stacked_y in regions:
+                if rx <= raw_x <= rx + rw and ry <= raw_y <= ry + rh:
+                    match = (rx, ry, stacked_y)
+                    break
+            if match is None:
+                raise SpecError(
+                    f"{label}: callout {callout['n']} at ({raw_x}, {raw_y}) is not "
+                    f"inside any crop region"
+                )
+            rx, ry, stacked_y = match
+            final_x = (raw_x - rx) * scale
+            final_y = (stacked_y + (raw_y - ry)) * scale
+        else:
+            final_x = (raw_x - crop_x) * scale
+            final_y = (raw_y - crop_y) * scale
 
-        offset = radius + BADGE_MARGIN
+        offset = radius + margin
         center_x = final_x + dx * offset
         center_y = final_y + dy * offset
 

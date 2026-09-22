@@ -29,6 +29,13 @@ How the instructor's saved states were made (once, on the development VM, releas
 
 ## `my-first-lab/` — the personal lab of Scenario B
 
-The files the student produces in Scenario B, kept here as the expected result: the topology and map
-the lab builder saved to the VM, the README the student writes, and the tree the repository holds at
-the end of the scenario. They are filled in when Scenario B is executed.
+What the student produces in Scenario B, kept here as the expected result:
+
+| File | Where it came from |
+|---|---|
+| `my-first-lab.clab.yml`, `my-first-lab.clab.yml.annotations.json` | Written to `/srv/containerlab-node-manager/projects/my-first-lab/` by the lab builder's **Save to the VM…** (two cEOS routers `r1`, `r2`, image `n24l/ceos:4.35.0F`, management addresses 172.20.20.21/.22 set in the Node Editor, one link, one text note). |
+| `README.md` | The five-line README the student writes on the lab VM in step B7 before publishing the topology with Git. |
+| `remote-tree.txt` | The repository tree of `pruger-dev/my-network-labs` after step B8: the topology, the map and the README next to `latest/` (the checkpoint `link-up` is added in step B9). |
+
+The saved configurations themselves (`my-first-lab/latest`, `my-first-lab/checkpoints/link-up`) live in the student's
+repository and are not copied here; Scenario A's reference states show what such a folder holds.

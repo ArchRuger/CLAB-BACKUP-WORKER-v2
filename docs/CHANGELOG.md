@@ -4,6 +4,35 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.35
+
+**Student quick start delivered: the illustrated PDF guide, validated end to end.** Closing release of the stream
+([docs/student-quick-start/PICKUP.md](student-quick-start/PICKUP.md)); no change to the manager's behaviour.
+`docs/student-quick-start/Containerlab_Node_Manager_Student_Quick_Start.pdf` (20 pages, US Letter) walks a first-time
+student through two workflows on the real manager — Scenario A, an instructor's lab (`link-basics`), and Scenario B, a
+personal lab built in the lab builder and kept in Git together with its saved configurations — with real screenshots,
+numbered steps (Action / Expected result / If not), a "what is saved where" table, troubleshooting and checklists. It
+ships with its editable Markdown source, the one-command build (`build.sh`, WeasyPrint, apt-only toolchain), the
+screenshot composition spec, the example materials (`examples/`), the walkthrough and reset tools (`tools/`), the
+evidence of both executed scenarios and of the independent replays (`evidence/`), and `VALIDATION.md` with the SHA-256
+of the inspected PDF. Two independent agent replays of both scenarios, from the documented starting states and using
+only the PDF, passed every step; an Opus review of the text was applied (the guide now says plainly that the lab VM's
+GitHub login is the student's account and that the Git steps run on the lab VM).
+
+## Changes in 1.30.34
+
+**Student quick start, part 2: Scenario B executed and recorded.** Second checkpoint of the illustrated student guide
+([docs/student-quick-start/PICKUP.md](student-quick-start/PICKUP.md)); no change to the manager's behaviour. The personal-lab
+walkthrough (lab builder → Save to the VM… → deploy → configure → a new private repository connected by URL → Save
+progress → the owner-side Git step that publishes the topology and map → a second save and a checkpoint → destroy,
+remove, clone the repository into the trusted lab folder, redeploy from that clone and apply the saved Latest) ran on the
+development VM through the real pages, with device readbacks and remote trees as evidence. The guide's Scenario B text is
+reconciled with that run; all figures are composed; the PDF is delivered with the next checkpoint.
+
+- Observed and documented for students: the lab builder's *Start lab* leaves the builder page where it is (go back to
+  My labs); the Node Editor can drop an image's registry prefix when the Network tab was edited (check *View YAML*);
+  the redeploy from a clone must pick the file under the repository folder, whose path the *Topology file* dialog shows.
+
 ## Changes in 1.30.33
 
 **Student quick start, part 1: Scenario A executed and recorded; a Git-identity fix in the helper.** First checkpoint

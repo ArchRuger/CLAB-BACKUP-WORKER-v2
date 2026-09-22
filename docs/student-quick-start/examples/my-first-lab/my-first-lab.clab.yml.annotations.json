@@ -1,0 +1,44 @@
+{
+  "freeTextAnnotations": [
+    {
+      "id": "freeText_1790102534822",
+      "text": "My first lab: r1 eth1 - r2 eth1",
+      "position": {
+        "x": 568.5,
+        "y": 245.75
+      },
+      "fontSize": 14,
+      "fontColor": "#333333",
+      "fontWeight": "normal",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    }
+  ],
+  "freeShapeAnnotations": [],
+  "trafficRateAnnotations": [],
+  "groupStyleAnnotations": [],
+  "networkNodeAnnotations": [],
+  "nodeAnnotations": [
+    {
+      "id": "r1",
+      "position": {
+        "x": 260,
+        "y": 120
+      },
+      "icon": "switch"
+    },
+    {
+      "id": "r2",
+      "position": {
+        "x": 520,
+        "y": 120
+      },
+      "icon": "switch"
+    }
+  ],
+  "edgeAnnotations": [],
+  "aliasEndpointAnnotations": [],
+  "viewerSettings": {}
+}

@@ -53,7 +53,7 @@ attr_list, md_in_html, fenced_code), `toc` (`anchorlink=False`,
 `permalink=False`, `toc_depth="2-3"` — the `[TOC]` marker in the Markdown is
 replaced with a linked list built from the `##`/`###` headings only), and
 `sane_lists`. A Markdown paragraph holding only an image
-(`![caption](screenshots/x.png)`) is turned into `<figure><img>` +
+(an exclamation mark, the caption in square brackets, then the image path in parentheses) is turned into `<figure><img>` +
 `<figcaption>` from the alt text; a hand-written `<figure>…</figure>` block
 in the Markdown passes through unchanged (via `md_in_html`). The HTML is
 wrapped with `source/style.css` and rendered with WeasyPrint to
@@ -184,7 +184,7 @@ not resolve, any placeholder text or U+FFFD is found; 0 otherwise.
   independently through `pypdf` rather than trusting the PDF's own visual
   rendering.
 - A Markdown link to a heading that does not exist
-  (`[text](#no-such-heading)`) does not raise or fail `write_pdf()` —
+  (link text in square brackets, then `#` and a heading id that does not exist, in parentheses) does not raise or fail `write_pdf()` —
   WeasyPrint silently drops the link (no PDF link annotation at all, so
   `inspect_pdf.py` has nothing to see afterwards) and only reports it
   through its own `weasyprint` logger, which has a `NullHandler` by default

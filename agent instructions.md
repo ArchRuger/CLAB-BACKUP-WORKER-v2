@@ -1,3 +1,25 @@
+# Student quick start delivered — 1.30.35
+
+The guide is delivered and validated (`docs/student-quick-start/VALIDATION.md` names the inspected PDF's SHA-256 and both
+replays). Preserve: (1) the PDF is a build product of `source/guide.md` + `screenshots/spec.json` + `source/style.css`:
+change the source and run `build.sh`, never edit the PDF; a change to a documented step needs a replay of that step on the
+real manager (tools in `tools/`, resets `reset_scenario_a.sh` / `reset_scenario_b.sh`); (2) the guide states the release
+it was *tested* with (its byline), which is not moved by `set-release.py`; keep it true or replay; (3) the example
+repositories under `pruger-dev` (`netlab-course` template, `netlab-course-student`, `my-network-labs`, the `*-qa*` replay
+copies) and the archived VM state (`/srv/containerlab-node-manager/data.pre-quickstart-2026-09-22`, `projects-archive-2026-09-22/`,
+`/etc/clab-manager/git.json.*`) are described in `docs/student-quick-start/PICKUP.md` with the way back.
+
+# Student quick start, part 2 — 1.30.34
+
+Scenario B is executed and recorded (`docs/student-quick-start/evidence/scenario-b.md`); the guide's two scenarios are
+reconciled with their runs. Preserve: (1) the fresh-checkout proof of B10 deploys the topology from
+`/srv/containerlab-node-manager/projects/my-network-labs/my-first-lab/` (the clone), never from the original lab folder;
+`capture_scenario_b.py` asserts the *Topology file* path and the lab's `vm_project_path`; (2) the three student-facing
+facts in the 1.30.34 CHANGELOG entry (builder page stays after *Start lab*; Node Editor image fallback; pick the file under
+the repository folder) are real behaviour of the shipped editor and pages, not defects fixed here; (3) the guide names
+the instructor's rows as the manager labels them (*Starting state*, *Final state (instructor)*, *Troubleshooting scenario
+01*). Read `docs/student-quick-start/PICKUP.md` for the exact next action (PDF build, inspection, QA replay, Opus review).
+
 # Student quick start, part 1 — 1.30.33
 
 Read `docs/student-quick-start/PICKUP.md` first: it holds the environment changes made to the development VM to obtain a

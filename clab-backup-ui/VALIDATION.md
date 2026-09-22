@@ -1,3 +1,47 @@
+# Student quick start delivered: the PDF, its inspection and two independent replays — 1.30.35
+
+Prepared on `claude/student-quick-start` on 2026-09-22 after 1.30.34 (`2ef98a2`, CI green). **No application code
+changed in this release** (guide source, screenshots, tools, evidence and records only), so the unit totals are those of
+1.30.33; `deploy/verify-release.py`, `check_links.py`, `git diff --check` and `test_release_consistency.py` were run again.
+
+- **Build under test for the final replay:** `deploy/start-manager.sh --manager-only` built and started
+  `clab-backup:1.30.35` from this working tree (`/api/state` 1.30.35, helpers 1.30.35) on `clab-llm-dev2`.
+- **The delivered PDF** (`docs/student-quick-start/Containerlab_Node_Manager_Student_Quick_Start.pdf`, 20 pages, SHA-256
+  `9f42d9399acb32378f58c6ea40ef3e1f260da844f70329cc5f335255a540d394`) was inspected page by page by the lead on its
+  `pdftoppm` renders and checked by `tools/inspect_pdf.py` (fonts embedded, bookmarks, links, no placeholders). It differs
+  from the file of the final replay (`e53aa7b9…`, kept under `evidence/qa/`) by two added sentences only.
+- **Independent replays** of both scenarios by a QA agent following only the PDF (an agent simulation, not a human
+  study): replay 1 on the draft (all 21 steps PASS, one wording gap fixed), replay 2 on the final file (all 21 steps PASS, one
+  reload hint added afterwards) — see
+  `docs/student-quick-start/VALIDATION.md` for the step tables, the remote commit ids and the device readbacks.
+- **Opus review** of the guide text applied (account convention, status texts, timings, length).
+
+# Student quick start, part 2: Scenario B on the live manager — 1.30.34
+
+Prepared on `claude/student-quick-start` on 2026-09-22 after 1.30.33 (`cf7bc5d`, CI green on the push and pull-request
+runs). **No application code changed in this release** (guide, evidence, tools and records only), so the unit totals are
+those of 1.30.33; `deploy/verify-release.py`, `check_links.py` and `git diff --check` were run again.
+
+- **Build under test:** `deploy/start-manager.sh --manager-only` built and started `clab-backup:1.30.33` from the committed
+  `cf7bc5d` (`/api/state` 1.30.33, helpers 1.30.33) on `clab-llm-dev2`; containerlab 0.79; `n24l/ceos:4.35.0F`.
+- **Live Scenario B**, `docs/student-quick-start/tools/capture_scenario_b.py` through the real pages: lab builder (New lab,
+  Node Editor with image `n24l/ceos` 4.35.0F and management addresses, a text note, View YAML), *Save to the VM…*
+  (`/srv/containerlab-node-manager/projects/my-first-lab/`), deploy (both Ready in 41 s), link addressed over the real
+  terminal page and pinged, the private repository `pruger-dev/my-network-labs` connected by URL (folder `my-first-lab`),
+  first *Save progress* uploaded (remote `my-first-lab/latest/*`, no topology file), the owner-side Git step
+  (`cd ~/labs/my-network-labs`, copy of the topology and map, README, `git add/commit/push`, clean tree; remote holds
+  them next to `latest/`; the manager's *Browse the repository…* lists the same), a second save (only `r2.cfg`/`r2.eoscfg`
+  changed) and the checkpoint `link-up` (no `latest/latest`), then *Destroy lab…*, *Remove from this manager…*, a clone of
+  the repository into the trusted lab folder, redeploy **from that clone** (the *Topology file* path and the lab's
+  `vm_project_path` both under `projects/my-network-labs/`; the original folder had been moved aside for this validation),
+  reconnect by URL (registration reused), *Apply to running lab…* of Latest (both verified, 12 s), addresses, loopback and
+  ping read back over direct SSH. Step 10 was re-executed once because the first run had deployed the original folder
+  (the tree locator matched the wrong `my-first-lab`); the evidence says so. The repository creation itself (`gh repo
+  create`) happened in an earlier attempt of the same session; the final run found it existing (HTTP 422) — the
+  independent QA replay of the next checkpoint uses a fresh repository name. Evidence:
+  `docs/student-quick-start/evidence/scenario-b.{md,json}`, `screenshots/raw/b*.png`, `examples/my-first-lab/`.
+- **Not done in this release:** the composed PDF's page-by-page inspection, the independent QA replay, the Opus review.
+
 # Student quick start, part 1: Scenario A on the live manager; helper identity fix — 1.30.33
 
 Prepared on `claude/student-quick-start` (from `main` `132122b`, 1.30.32) on 2026-09-22. What was actually run:

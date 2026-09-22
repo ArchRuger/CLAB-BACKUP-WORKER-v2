@@ -8,7 +8,7 @@ configurations in Git). Read this file first; keep it current before a compactio
 
 | Path | What |
 |---|---|
-| `Containerlab_Node_Manager_Student_Quick_Start.pdf` | The student guide (built, inspected page by page). |
+| `Containerlab_Node_Manager_Student_Quick_Start.pdf` | The student guide (20 pages; inspected page by page; replayed twice by an independent QA agent; SHA-256 in `VALIDATION.md`). |
 | `source/guide.md`, `source/style.css`, `build.py`, `build.sh`, `BUILD.md` | Editable source and the one-command build (Markdown → HTML → WeasyPrint). |
 | `screenshots/` (`raw/` captures, `spec.json` crops and callouts, composed PNGs) | Illustrations, all from the real manager and the exercised examples. |
 | `examples/` | The instructor package (`link-basics`) and the personal lab (`my-first-lab`) with a nonsecret preparation README. |
@@ -57,8 +57,31 @@ force off, agent teams off) overrides the user file; the routing files under `.c
   environment prepared as above; helper defect found and fixed while connecting the course repository; instructor states
   recorded with `deploy/scaffold-lab.py`; Scenario A capture, PDF pipeline and guide draft started in parallel.
 
+- 2026-09-22 17:58 UTC: **checkpoint 1 = release 1.30.33, commit `cf7bc5d`, PR #51** (Scenario A executed and recorded,
+  pipeline, guide draft with A reconciled, helper fix). Manager image rebuilt and running at 1.30.33 with `link-basics`
+  Ready and connected. Scenario B capture started (`tools/capture_scenario_b.py`).
+
+- 2026-09-22 18:45–19:40 UTC: Scenario B executed (`tools/capture_scenario_b.py`); B10 re-executed from the real clone
+  after the first run deployed the original folder; guide reconciled for B; **checkpoint 2 = release 1.30.34**.
+
+- 2026-09-22 19:40–20:40 UTC: Opus review applied (account convention, status texts, timings); layout trimmed to 20
+  pages; QA replay 1 on the draft (21/21 PASS); manager rebuilt at 1.30.35; every page of the final build inspected;
+  QA replay 2 on the delivered file (21/21 PASS, one reload hint added afterwards); **checkpoint 3 = release 1.30.35**.
+  The VM was then reset to the guide's starting state for a demonstration (see below).
+
+## State left on the VM for a demonstration
+
+My labs empty, VM connected, VM Git registry empty, `link-basics` staged under `/srv/containerlab-node-manager/projects/`,
+`pruger-dev/netlab-course-student` reset to the template content (its earlier `link-basics/work` saves removed with an
+ordinary commit, history kept), `pruger-dev/my-network-labs` renamed to `my-network-labs-authoring` so that step B5 can
+create `my-network-labs` afresh. The replay repositories `netlab-course-qa`, `netlab-course-qa2`, `my-network-labs-qa`,
+`my-network-labs-qa2` stay as evidence. To demonstrate: open the manager and follow the PDF; to reset again:
+`tools/reset_scenario_a.sh netlab-course-student` and `tools/reset_scenario_b.sh my-network-labs` (rename or delete a
+`my-network-labs` that a demo created first).
+
 ## Exact next action
 
-Scenario A capture is running (`tools/capture_scenario_a.py`). When it lands: reconcile `source/guide.md` with
-`evidence/scenario-a.md`, then execute Scenario B the same way, then compose screenshots, build, inspect, QA replay,
-Opus review, release records (+0.0.1 per chunk with `deploy/set-release.py`), commit, push, PR.
+The stream is complete (PR #51 merged 1.30.33; PR #52 carries 1.30.34 and 1.30.35). If it is picked up again: a change to `source/guide.md`, `screenshots/spec.json` or
+`source/style.css` needs `bash docs/student-quick-start/build.sh`, a look at `build/pages/`, and — when a step's action or
+expected result changed — a replay of that step on the real manager (`evidence/qa/final_*.py` are the replay drivers;
+the reset tools bring the VM back to the starting states). Then update `VALIDATION.md` with the new SHA-256.

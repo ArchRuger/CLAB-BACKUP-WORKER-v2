@@ -4,7 +4,7 @@
 
 @page {
   size: Letter portrait;
-  margin: 0.8in;
+  margin: 0.7in;
   @top-center {
     content: string(doctitle);
     font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
@@ -35,8 +35,8 @@ html, body {
 
 body {
   font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
-  font-size: 10.5pt;
-  line-height: 1.45;
+  font-size: 10pt;
+  line-height: 1.35;
   color: #1a1a1a;
   hyphens: none;
 }
@@ -122,7 +122,7 @@ blockquote p:last-child {
 
 code, pre, kbd, samp {
   font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
-  font-size: 9pt;
+  font-size: 8.5pt;
 }
 
 code {
@@ -190,6 +190,15 @@ td code, th code {
   overflow-wrap: anywhere;
 }
 
+/* The two wide reference tables ("What is saved where", "Troubleshooting")
+   under ## Reference are denser than the intro/given-box tables; `~` picks
+   every table sibling after that heading in document order (headings and
+   tables are flat body-level siblings here, not nested sections), without
+   touching the earlier tables or needing a class in guide.md. */
+h2#reference ~ table {
+  font-size: 8.5pt;
+}
+
 /* ---------------------------------------------------------------------
    Images and figures
    ------------------------------------------------------------------ */
@@ -200,7 +209,7 @@ img {
 }
 
 figure {
-  margin: 0.9em 0;
+  margin: 4pt 0;
   break-inside: avoid;
   text-align: center;
 }
@@ -209,10 +218,18 @@ figure img {
   display: block;
   margin: 0 auto 0.4em auto;
   border: 1px solid #d7dde5;
+  /* A figure taller than about a third of a Letter page (11in - 1.4in
+     margins = 9.6in usable) is scaled down instead of pushing the rest of
+     the step to its own near-empty page. WeasyPrint has no vh/vw units, so
+     this is a fixed inch value rather than a page-relative one; width
+     stays auto so the image's aspect ratio is preserved and the smaller of
+     this and img{max-width:100%} above wins. */
+  max-height: 3.4in;
+  width: auto;
 }
 
 figcaption {
-  font-size: 9pt;
+  font-size: 8.5pt;
   color: #444444;
   font-style: italic;
   text-align: center;
@@ -263,7 +280,11 @@ figcaption {
   border-radius: 4px;
   padding: 0.7em 1em;
   margin: 0 0 1em 0;
-  break-inside: avoid;
+  /* Letting this box break (like .step below) means a tall "What you have
+     been given" table shares the title page with the guide title instead
+     of being pushed whole to page 2 and leaving the title page mostly
+     blank; the title line itself stays glued to what follows it. */
+  break-inside: auto;
 }
 
 /* The box's title ("What you have been given") is written by hand as the
@@ -274,6 +295,8 @@ figcaption {
   font-weight: bold;
   color: #10233d;
   margin-bottom: 0.5em;
+  break-inside: avoid;
+  break-after: avoid;
 }
 
 .given p:last-child {
@@ -286,9 +309,24 @@ figcaption {
   border-left: 4px solid #c05a1c;
   background: #fbfaf8;
   border-radius: 4px;
-  padding: 0.6em 1em 0.6em 1em;
+  padding: 6pt 10pt;
   margin: 0 0 0.9em 0;
+  /* A step's own action/expected-result text plus its figure(s) can be
+     taller than one page's remaining room; forcing the whole block to stay
+     together then pushes it whole to the next page, leaving the previous
+     page mostly blank (the figure itself still keeps break-inside: avoid,
+     so it is never split, and the step's own first line is pinned below so
+     the badge and title never separate from at least the start of the
+     step). */
+  break-inside: auto;
+}
+
+/* The badge + title line (e.g. <span class="n">A3</span> **Wait for...**)
+   stays whole and stays with whatever follows it, so a break inside .step
+   never leaves just the numbered badge alone at the bottom of a page. */
+.step > p:first-child {
   break-inside: avoid;
+  break-after: avoid;
 }
 
 .step p:last-child {
