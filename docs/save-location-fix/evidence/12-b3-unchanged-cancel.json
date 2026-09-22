@@ -1,0 +1,163 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:20:02Z",
+ "steps": {
+  "unchanged": {
+   "dialog_opened": "none",
+   "dialog_text": "",
+   "before_newest_job_id": "3e7c707988acc5e21fd7a1d29071f26f",
+   "newest_job": {
+    "id": "f08a85c913125a61cd0deca1a3099f49",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:20:04.601726+00:00",
+    "finished": "2026-09-22T14:20:08.009096+00:00",
+    "status": "unchanged",
+    "message": "Nothing changed since the last save, which was uploaded.",
+    "backup_job_id": "2bbc91d2d5fb4ca881042ab315062b0c",
+    "commit": "8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c",
+    "pushed": true,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true
+   }
+  },
+  "cancelled": {
+   "review_excerpt": "Review before uploading\n\u00d7\n\nWhat this save changed compared with the previous one. Configuration files may contain passwords or keys.\n\nThis save is on the lab VM only. Nothing is uploaded to github.com unless you choose Upload these changes.\n\nDetails\nceos.cfg changed\nceos.eoscfg changed\nOpen the full saved version\nNot now \u2014 keep it on the VM\nUpload these changes",
+   "job_after_cancel": {
+    "id": "ee140374bf8d5c9bba354b2772a8704a",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:20:37.585079+00:00",
+    "finished": "2026-09-22T14:20:41.111514+00:00",
+    "status": "review_pending",
+    "message": "Saved in the VM repository; not pushed.",
+    "backup_job_id": "6cc1c1a050f84ad0a175b3a31afcf88c",
+    "commit": "26a2504306680dd7f4e7dcdf23968d2f148e1596",
+    "pushed": false,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true
+   },
+   "origin_before": "8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c",
+   "origin_after": "8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c",
+   "local_after": "26a2504306680dd7f4e7dcdf23968d2f148e1596"
+  },
+  "recent_saves_upload_button_label": "Review and upload\u2026",
+  "completed_from_recent": {
+   "retry_response": {
+    "id": "ee140374bf8d5c9bba354b2772a8704a",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:20:37.585079+00:00",
+    "finished": "2026-09-22T14:20:41.111514+00:00",
+    "status": "queued",
+    "message": "Retry queued; the saved capture will be reused.",
+    "backup_job_id": "6cc1c1a050f84ad0a175b3a31afcf88c",
+    "commit": "26a2504306680dd7f4e7dcdf23968d2f148e1596",
+    "pushed": false,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:20:45.922544+00:00"
+   },
+   "final_job": {
+    "id": "ee140374bf8d5c9bba354b2772a8704a",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:20:37.585079+00:00",
+    "finished": "2026-09-22T14:20:48.604214+00:00",
+    "status": "synced",
+    "message": "Saved commit is included in the verified remote history.",
+    "backup_job_id": "6cc1c1a050f84ad0a175b3a31afcf88c",
+    "commit": "26a2504306680dd7f4e7dcdf23968d2f148e1596",
+    "pushed": true,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:20:45.922544+00:00"
+   }
+  },
+  "final_git": {
+   "local": "26a2504306680dd7f4e7dcdf23968d2f148e1596",
+   "origin": "26a2504306680dd7f4e7dcdf23968d2f148e1596",
+   "in_sync": true
+  }
+ },
+ "checks": [
+  {
+   "check": "unchanged save: newest job status is \"unchanged\" or no new job/dialog appeared",
+   "ok": true,
+   "detail": "{'dialog_opened': 'none', 'dialog_text': '', 'before_newest_job_id': '3e7c707988acc5e21fd7a1d29071f26f', 'newest_job': {'id': 'f08a85c913125a61cd0deca1a3099f49', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:20:04.601726+00:00', 'finished': '2026-09-22T14:20:08.009096+00:00', 'status': 'unchanged', 'message': 'Nothing changed since the last save, which was uploaded.', 'backup_job_id': '2bbc91d2d5fb4ca881042ab315062b0c', 'commit': '8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': [], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True}}"
+  },
+  {
+   "check": "unchanged save produced no new local commit",
+   "ok": true,
+   "detail": "('8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c', '8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c')"
+  },
+  {
+   "check": "cancelled review: job status is review_pending (or committed, not pushed)",
+   "ok": true,
+   "detail": "{'id': 'ee140374bf8d5c9bba354b2772a8704a', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:20:37.585079+00:00', 'finished': '2026-09-22T14:20:41.111514+00:00', 'status': 'review_pending', 'message': 'Saved in the VM repository; not pushed.', 'backup_job_id': '6cc1c1a050f84ad0a175b3a31afcf88c', 'commit': '26a2504306680dd7f4e7dcdf23968d2f148e1596', 'pushed': False, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True}"
+  },
+  {
+   "check": "origin/main unchanged after cancelling the review (nothing pushed)",
+   "ok": true,
+   "detail": "('8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c', '8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c')"
+  },
+  {
+   "check": "local checkout HAS the new commit (saved on the VM) even though it was not pushed",
+   "ok": true,
+   "detail": "('8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c', '26a2504306680dd7f4e7dcdf23968d2f148e1596')"
+  },
+  {
+   "check": "Recent saves row for the pending job offers \"Review and upload\u2026\"",
+   "ok": true,
+   "detail": "Review and upload\u2026"
+  },
+  {
+   "check": "completing from Recent saves pushes the commit (synced)",
+   "ok": true,
+   "detail": "{'id': 'ee140374bf8d5c9bba354b2772a8704a', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:20:37.585079+00:00', 'finished': '2026-09-22T14:20:48.604214+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': '6cc1c1a050f84ad0a175b3a31afcf88c', 'commit': '26a2504306680dd7f4e7dcdf23968d2f148e1596', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T14:20:45.922544+00:00'}"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "local HEAD == origin/main after the completed upload",
+   "ok": true,
+   "detail": "('26a2504306680dd7f4e7dcdf23968d2f148e1596', '26a2504306680dd7f4e7dcdf23968d2f148e1596')"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:20:50Z"
+}

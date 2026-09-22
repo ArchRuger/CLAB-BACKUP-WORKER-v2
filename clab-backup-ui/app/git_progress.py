@@ -64,7 +64,7 @@ SNAP_PART = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}')
 def version_label(path):
     """A human label for a saved-version folder: '<lab folder> · latest', or a checkpoint."""
     parts = [p for p in str(path or '').split('/') if p]
-    if not parts: return str(path or '')
+    if not parts: return 'repository root'
     if parts[-1] in ('latest', 'baseline'):
         folder, state = '/'.join(parts[:-1]), parts[-1]
     elif len(parts) >= 2 and parts[-2] == 'checkpoints':
@@ -74,20 +74,68 @@ def version_label(path):
     return (folder + ' · ' + state) if folder else state
 
 
-def resolve_version_path(binding, value):
-    """Accept a bare snapshot name (relative to the connected folder) or a full repo-relative
-    snapshot folder, and return the path the helper reads (it re-validates with allowed_repo_version)."""
-    value = (value or '').strip('/')
-    parts = value.split('/') if value else []
-    if not parts:
-        raise HTTPException(400, 'Choose a saved version.')
+def _exact_snapshot_path(value):
+    """Segment-validate a repository-relative path (no `.`, `..` or `.git` segment); '' is the
+    repository root and passes through unchanged."""
+    if not value:
+        return ''
+    parts = value.split('/')
     if any(not SNAP_PART.fullmatch(part) or part in ('.', '..') or part.lower() == '.git' for part in parts):
         raise HTTPException(400, 'Choose a safe saved version path.')
-    if not (parts[-1] in ('latest', 'baseline') or (len(parts) >= 2 and parts[-2] == 'checkpoints')):
-        raise HTTPException(400, 'Choose latest, baseline or a named checkpoint version.')
-    # A bare form saves into the connected folder; a full repo path passes through unchanged.
-    bare = value in ('latest', 'baseline') or (len(parts) == 2 and parts[0] == 'checkpoints')
-    return repo_path(binding, value) if bare else value
+    return value
+
+
+def resolve_version_path(binding, value):
+    """Three wire shapes (rule 5): (a) a value starting with '/' is an exact repository-relative
+    path -- strip exactly one leading slash ('/' alone is the repository root, '' after
+    stripping); (b) a bare 'latest', 'baseline' or 'checkpoints/<name>' keeps its pre-upgrade
+    meaning, the lab's own folder (`repo_path`) -- compatibility for a page or tool built before
+    this release, so a tab opened before the upgrade is not silently redirected to a root-level
+    folder; (c) any other bare path (e.g. 'labs/x/latest', 'Final') is exact, the same as (a) once
+    the leading slash is accounted for. Empty raises 400."""
+    if not value:
+        raise HTTPException(400, 'Choose a saved version.')
+    if value.startswith('/'):
+        return _exact_snapshot_path(value[1:])
+    if value in ('latest', 'baseline') or re.fullmatch(r'checkpoints/[A-Za-z0-9][A-Za-z0-9_-]{0,99}', value):
+        return repo_path(binding, value)
+    return _exact_snapshot_path(value)
+
+
+RESERVED_SNAPSHOT_NAMES = ('latest', 'baseline', 'checkpoints')
+
+
+def base_folder(value):
+    """Refuse a lab folder (a registration prefix) that is itself one of the snapshot folders Save
+    progress writes inside a lab folder (rule 1): `latest`, `baseline`, `checkpoints` or
+    `checkpoints/<name>`. Raises ValueError naming the parent lab folder those saves belong to;
+    returns `value` unchanged when it is a safe lab folder."""
+    parts = value.split('/') if value else []
+    if not parts: return value
+    is_checkpoint = len(parts) >= 2 and parts[-2] == 'checkpoints'
+    if parts[-1] in RESERVED_SNAPSHOT_NAMES or is_checkpoint:
+        parent = '/'.join(parts[:-2] if is_checkpoint else parts[:-1])
+        where = (parent + '/latest') if parent else "the repository root's latest"
+        raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab '
+                         'folder. Choose the folder above them: its saves go to ' + where + '.')
+    return value
+
+
+def snapshot_conflict(files, prefix):
+    """The saved-configuration folder (holds manifest.json at HEAD) that `prefix` would sit at or
+    below (rule 2): `prefix` itself or any ancestor, the repository root included. Checking the
+    root as an ancestor only makes sense for a non-empty `prefix` (an empty prefix is the
+    repository root itself, never "below" anything), so an empty `prefix` is never a conflict here.
+    Returns the conflicting folder's exact path, or '' when there is none."""
+    if not prefix: return ''
+    files_at = {f.get('path') for f in files if isinstance(f, dict)}
+    parts = prefix.split('/')
+    for depth in range(len(parts), -1, -1):
+        ancestor = '/'.join(parts[:depth])
+        candidate = ancestor + '/manifest.json' if ancestor else 'manifest.json'
+        if candidate in files_at:
+            return ancestor
+    return ''
 
 
 def pending_progress(state, lab_id=None):
@@ -514,7 +562,25 @@ class GitProgress:
             value = value.strip().strip('/')
             if value and (len(value) > 500 or '\\' in value or any(not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', part) or part.lower() == '.git' or part in ('.', '..') for part in value.split('/'))):
                 raise HTTPException(400, 'Use folder names with letters, numbers, dashes or underscores; use / to nest. No leading slash, no .. and no .git parts.')
+            try: base_folder(value)
+            except ValueError as exc: raise HTTPException(400, str(exc))
             return value
+
+        def refuse_snapshot_conflict(binding, prefix):
+            """Rule 2: a lab folder cannot sit at, or below, an existing snapshot folder. `browse`
+            can cap the tree at MAX_TREE and report `truncated`; this check only sees what came
+            back, so a conflict below the cap is refused here and one beyond it is not caught this
+            early. That is not a hole: the helper's `publish` independently refuses to write into a
+            destination that already holds files outside its own manifest, so a snapshot folder the
+            browser never listed is still refused, just later, at save time rather than at folder
+            selection."""
+            if not prefix: return
+            seen = call({'mode': 'browse'}, binding)
+            conflict = snapshot_conflict(seen.get('files', []), prefix)
+            if conflict:
+                raise HTTPException(409, conflict + ' is a saved configuration (it holds manifest.json). '
+                                    'Choose the folder above it or a folder beside it.')
+            return seen
 
         # Folders made or chosen through the manager, per checkout. Git has no empty folders and the VM
         # registry only knows the folder a lab saves to now (a move retires the previous registration, and
@@ -639,11 +705,12 @@ class GitProgress:
         def folder(binding_id: str, data: Folder):
             prefix = folder_value(data.prefix)
             repo, binding = catalog_binding(binding_id)
+            seen = refuse_snapshot_conflict(binding, prefix)
             if data.plan:
                 # A folder to save into later: nothing is registered or written on the VM. The repository is
                 # read once so a name that exists (committed, a lab folder, or planned) is refused as a duplicate.
                 if not prefix: raise HTTPException(400, 'Enter a folder name.')
-                seen = call({'mode': 'browse'}, binding)
+                seen = seen or call({'mode': 'browse'}, binding)
                 taken = {f.get('prefix') for f in seen.get('folders', []) if isinstance(f, dict)} | set(planned_folders(repo['path']))
                 if prefix in taken or any(str(f.get('path', '')).startswith(prefix + '/') for f in seen.get('files', []) if isinstance(f, dict)):
                     raise HTTPException(409, 'A folder named ' + prefix + ' already exists in this repository. Pick it in the list instead.')
@@ -681,6 +748,7 @@ class GitProgress:
                 name = lab['name']; node_names = list(binding['node_names']); review = binding.get('review_before_push', False)
                 source = binding['repository'].get('prefix', '')
             if prefix == source: raise HTTPException(409, 'This lab already saves to that folder.')
+            refuse_snapshot_conflict(binding, prefix)
             catalog = repositories()
             with self.store.lock: labs = bound_labs()
             for repo in catalog['repositories']:

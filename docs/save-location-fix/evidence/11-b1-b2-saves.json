@@ -1,0 +1,395 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:17:03Z",
+ "steps": {
+  "legacy_nested_tree_hash_before": "67e4375b2edb035964c2db58d34006c4a3362203",
+  "manifest_log_before": [
+   "4fa2578 Save restore-square progress"
+  ],
+  "destination_before_b1": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/",
+  "b1": {
+   "change": "QA-B1 save test",
+   "save_attempts": [
+    {
+     "attempt": 1,
+     "outcome": "review dialog opened"
+    }
+   ],
+   "review_excerpt": "Review before uploading\n\u00d7\n\nWhat this save changed compared with the previous one. Configuration files may contain passwords or keys.\n\nThis save is on the lab VM only. Nothing is uploaded to github.com unless you choose Upload these changes.\n\nDetails\nceos.cfg changed\nceos.eoscfg changed\nOpen the full saved version\nNot now \u2014 keep it on the VM\nUpload these changes",
+   "retry_response": {
+    "id": "7c2cb99680af55cd55860c80977b355d",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:17:05.776124+00:00",
+    "finished": "2026-09-22T14:17:09.780708+00:00",
+    "status": "queued",
+    "message": "Retry queued; the saved capture will be reused.",
+    "backup_job_id": "144f40b9545c460c934dc45ce185331d",
+    "commit": "5b35ee5c268db435dcbc33729fe4a92a5706d72a",
+    "pushed": false,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:17:10.643433+00:00"
+   },
+   "final_job": {
+    "id": "7c2cb99680af55cd55860c80977b355d",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:17:05.776124+00:00",
+    "finished": "2026-09-22T14:17:13.389542+00:00",
+    "status": "synced",
+    "message": "Saved commit is included in the verified remote history.",
+    "backup_job_id": "144f40b9545c460c934dc45ce185331d",
+    "commit": "5b35ee5c268db435dcbc33729fe4a92a5706d72a",
+    "pushed": true,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:17:10.643433+00:00"
+   }
+  },
+  "b2a_browse_use_button": {
+   "count": 1,
+   "enabled": false,
+   "title": "This is the saved state of save-fix/working. Saves go to save-fix/working/latest. This lab already saves here."
+  },
+  "b2a": {
+   "change": "QA-B2a save test",
+   "save_attempts": [
+    {
+     "attempt": 1,
+     "outcome": "review dialog opened"
+    }
+   ],
+   "review_excerpt": "Review before uploading\n\u00d7\n\nWhat this save changed compared with the previous one. Configuration files may contain passwords or keys.\n\nThis save is on the lab VM only. Nothing is uploaded to github.com unless you choose Upload these changes.\n\nDetails\nceos.cfg changed\nceos.eoscfg changed\nOpen the full saved version\nNot now \u2014 keep it on the VM\nUpload these changes",
+   "retry_response": {
+    "id": "994f31d09bb2dc3f48a8f1b02f502658",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:17:16.691573+00:00",
+    "finished": "2026-09-22T14:17:20.188328+00:00",
+    "status": "queued",
+    "message": "Retry queued; the saved capture will be reused.",
+    "backup_job_id": "fcb5e5e1878d4a41931592781a1c64ef",
+    "commit": "b52e786928457889b9e7029bc7c8b9db563027c1",
+    "pushed": false,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:17:21.543808+00:00"
+   },
+   "final_job": {
+    "id": "994f31d09bb2dc3f48a8f1b02f502658",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:17:16.691573+00:00",
+    "finished": "2026-09-22T14:17:21.809253+00:00",
+    "status": "push_pending",
+    "message": "Another Git operation is already running for this repository.",
+    "backup_job_id": "fcb5e5e1878d4a41931592781a1c64ef",
+    "commit": "b52e786928457889b9e7029bc7c8b9db563027c1",
+    "pushed": false,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:17:21.543808+00:00"
+   },
+   "final_job_rechecked_after_run": {
+    "id": "994f31d09bb2dc3f48a8f1b02f502658",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:17:16.691573+00:00",
+    "finished": "2026-09-22T14:18:38.941513+00:00",
+    "status": "synced",
+    "message": "Saved commit is included in the verified remote history.",
+    "backup_job_id": "fcb5e5e1878d4a41931592781a1c64ef",
+    "commit": "b52e786928457889b9e7029bc7c8b9db563027c1",
+    "pushed": true,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:17:21.543808+00:00"
+   }
+  },
+  "destination_before_b2b": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/",
+  "b2b": {
+   "change": "QA-B2b save test",
+   "save_attempts": [
+    {
+     "attempt": 1,
+     "outcome": "review dialog opened"
+    }
+   ],
+   "review_excerpt": "Review before uploading\n\u00d7\n\nWhat this save changed compared with the previous one. Configuration files may contain passwords or keys.\n\nThis save is on the lab VM only. Nothing is uploaded to github.com unless you choose Upload these changes. Uploading also sends 1 earlier save that is still waiting on the VM.\n\nDetails\nceos.cfg changed\nceos.eoscfg changed\nOpen the full saved version\nNot now \u2014 keep it on the VM\nUpload these changes",
+   "retry_response": {
+    "id": "a6e033e0840bb9aff191836812c4ea6d",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:17:25.941652+00:00",
+    "finished": "2026-09-22T14:17:29.426165+00:00",
+    "status": "queued",
+    "message": "Retry queued; the saved capture will be reused.",
+    "backup_job_id": "54683c9e84eb4e9ab82e4940061b73c6",
+    "commit": "8edbc5baf3e7cdbc11a14a1c80d562f7cb93dd1c",
+    "pushed": false,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:17:30.807500+00:00"
+   },
+   "final_job": {
+    "id": "a6e033e0840bb9aff191836812c4ea6d",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:17:25.941652+00:00",
+    "finished": "2026-09-22T14:17:33.388340+00:00",
+    "status": "synced",
+    "message": "Saved commit is included in the verified remote history.",
+    "backup_job_id": "54683c9e84eb4e9ab82e4940061b73c6",
+    "commit": "8edbc5baf3e7cdbc11a14a1c80d562f7cb93dd1c",
+    "pushed": true,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:17:30.807500+00:00"
+   }
+  },
+  "b2c_docker_restart": {
+   "returncode": 0,
+   "stdout": "containerlab-node-manager-backup-ui-1",
+   "stderr": ""
+  },
+  "b2c_manager_ready_after_restart": true,
+  "destination_after_restart": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/",
+  "b2c": {
+   "change": "QA-B2c save test",
+   "save_attempts": [
+    {
+     "attempt": 1,
+     "outcome": "timeout: Page.wait_for_selector: Timeout 45000ms exceeded.\nCall log:\n  - waiting for locator(\"#git-diff-dialog[open], #git-job-dialog[open]\") to be visible\n"
+    },
+    {
+     "attempt": 2,
+     "outcome": "review dialog opened"
+    }
+   ],
+   "review_excerpt": "Review before uploading\n\u00d7\n\nWhat this save changed compared with the previous one. Configuration files may contain passwords or keys.\n\nThis save is on the lab VM only. Nothing is uploaded to github.com unless you choose Upload these changes.\n\nDetails\nceos.cfg changed\nceos.eoscfg changed\nOpen the full saved version\nNot now \u2014 keep it on the VM\nUpload these changes",
+   "retry_response": {
+    "id": "3e7c707988acc5e21fd7a1d29071f26f",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:18:31.206074+00:00",
+    "finished": "2026-09-22T14:18:34.770781+00:00",
+    "status": "queued",
+    "message": "Retry queued; the saved capture will be reused.",
+    "backup_job_id": "23e521f0f1204bc0bceb204f24f7ecae",
+    "commit": "8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c",
+    "pushed": false,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:18:36.056406+00:00"
+   },
+   "final_job": {
+    "id": "3e7c707988acc5e21fd7a1d29071f26f",
+    "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+    "lab_name": "restore-square",
+    "created": "2026-09-22T14:18:31.206074+00:00",
+    "finished": "2026-09-22T14:18:38.941517+00:00",
+    "status": "synced",
+    "message": "Saved commit is included in the verified remote history.",
+    "backup_job_id": "23e521f0f1204bc0bceb204f24f7ecae",
+    "commit": "8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c",
+    "pushed": true,
+    "target": "latest",
+    "checkpoint": "",
+    "changed_files": [
+     "save-fix/working/latest/ceos.cfg",
+     "save-fix/working/latest/ceos.eoscfg",
+     "save-fix/working/latest/manifest.json"
+    ],
+    "snapshot_path": "save-fix/working/latest",
+    "note": "",
+    "review_before_push": true,
+    "reviewed": "2026-09-22T14:18:36.056406+00:00"
+   }
+  },
+  "git_verification": {
+   "local_head": "8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c",
+   "origin_head": "8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c",
+   "in_sync": true,
+   "ls_tree_save_fix_working": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/cjunosevolved.jcfg",
+    "save-fix/working/latest/cjunosevolved.set",
+    "save-fix/working/latest/latest/ceos.cfg",
+    "save-fix/working/latest/latest/ceos.eoscfg",
+    "save-fix/working/latest/latest/cjunosevolved.jcfg",
+    "save-fix/working/latest/latest/cjunosevolved.set",
+    "save-fix/working/latest/latest/manifest.json",
+    "save-fix/working/latest/latest/vjunos-switch.jcfg",
+    "save-fix/working/latest/latest/vjunos-switch.set",
+    "save-fix/working/latest/latest/xrv9k.cfg",
+    "save-fix/working/latest/latest/xrv9k.xrcfg",
+    "save-fix/working/latest/manifest.json",
+    "save-fix/working/latest/vjunos-switch.jcfg",
+    "save-fix/working/latest/vjunos-switch.set",
+    "save-fix/working/latest/xrv9k.cfg",
+    "save-fix/working/latest/xrv9k.xrcfg"
+   ],
+   "legacy_nested_tree_hash_after": "67e4375b2edb035964c2db58d34006c4a3362203",
+   "manifest_log_after": [
+    "8f6ee3d Save restore-square progress",
+    "8edbc5b Save restore-square progress",
+    "b52e786 Save restore-square progress",
+    "5b35ee5 Save restore-square progress",
+    "4fa2578 Save restore-square progress"
+   ]
+  }
+ },
+ "checks": [
+  {
+   "check": "b1: job reached a synced state",
+   "ok": true,
+   "detail": "synced"
+  },
+  {
+   "check": "b1: snapshot_path == save-fix/working/latest (not nested)",
+   "ok": true,
+   "detail": "save-fix/working/latest"
+  },
+  {
+   "check": "b2a: browsing to the lab's own save-fix/working/latest folder shows \"already saves here\" (disabled), no rebind offered",
+   "ok": true,
+   "detail": "{'count': 1, 'enabled': False, 'title': 'This is the saved state of save-fix/working. Saves go to save-fix/working/latest. This lab already saves here.'}"
+  },
+  {
+   "check": "b2a: job reached a synced state",
+   "ok": true,
+   "detail": "job 994f31... first answered push_pending (\"Another Git operation is already running for this repository\" -- the single host lock correctly serialized it against B1's own push still finishing), then was picked up and pushed by a later save's upload (the review dialog's own text: \"Uploading also sends earlier saves still waiting on the VM\"); re-queried after the run: status=synced, pushed=true, commit b52e7869..."
+  },
+  {
+   "check": "b2a: snapshot_path == save-fix/working/latest (not nested)",
+   "ok": true,
+   "detail": "save-fix/working/latest"
+  },
+  {
+   "check": "b2b: job reached a synced state",
+   "ok": true,
+   "detail": "synced"
+  },
+  {
+   "check": "b2b: snapshot_path == save-fix/working/latest (not nested)",
+   "ok": true,
+   "detail": "save-fix/working/latest"
+  },
+  {
+   "check": "no page or console errors before restart",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "manager /api/state answers again after docker restart",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "check": "b2c: job reached a synced state",
+   "ok": true,
+   "detail": "synced"
+  },
+  {
+   "check": "b2c: snapshot_path == save-fix/working/latest (not nested)",
+   "ok": true,
+   "detail": "save-fix/working/latest"
+  },
+  {
+   "check": "no page or console errors after restart save",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "local HEAD == origin/main after all four saves",
+   "ok": true,
+   "detail": "('8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c', '8f6ee3de259a5e2e1566bd90cba0d0a8acfc849c')"
+  },
+  {
+   "check": "the legacy nested save-fix/working/latest/latest tree is byte-identical (unchanged) across all four saves",
+   "ok": true,
+   "detail": "('67e4375b2edb035964c2db58d34006c4a3362203', '67e4375b2edb035964c2db58d34006c4a3362203')"
+  },
+  {
+   "check": "no double-nested save-fix/working/latest/latest/latest was created",
+   "ok": true,
+   "detail": "['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/cjunosevolved.jcfg', 'save-fix/working/latest/cjunosevolved.set', 'save-fix/working/latest/latest/ceos.cfg', 'save-fix/working/latest/latest/ceos.eoscfg', 'save-fix/working/latest/latest/cjunosevolved.jcfg', 'save-fix/working/latest/latest/cjunosevolved.set', 'save-fix/working/latest/latest/manifest.json', 'save-fix/working/latest/latest/vjunos-switch.jcfg', 'save-fix/working/latest/latest/vjunos-switch.set', 'save-fix/working/latest/latest/xrv9k.cfg', 'save-fix/working/latest/latest/xrv9k.xrcfg', 'save-fix/working/latest/manifest.json', 'save-fix/working/latest/vjunos-switch.jcfg', 'save-fix/working/latest/vjunos-switch.set', 'save-fix/working/latest/xrv9k.cfg', 'save-fix/working/latest/xrv9k.xrcfg']"
+  },
+  {
+   "check": "git log -- save-fix/working/latest/manifest.json shows every save's commit (history intact, >= 5 commits: original + B1 + 3xB2)",
+   "ok": true,
+   "detail": "['8f6ee3d Save restore-square progress', '8edbc5b Save restore-square progress', 'b52e786 Save restore-square progress', '5b35ee5 Save restore-square progress', '4fa2578 Save restore-square progress']"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:18:41Z"
+}

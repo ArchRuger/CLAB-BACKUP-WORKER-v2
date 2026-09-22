@@ -475,6 +475,96 @@ class HostGitPlacesTests(HostGitTests):
         self.assertTrue(by_path['latest']['connected'])
         self.assertFalse(by_path['bgp/latest']['connected'])
 
+    def commit_snapshot(self, folder, text):
+        """A snapshot folder written by somebody else (an instructor's clone, a plain git user): the
+        manifest and its file committed under `folder` ('' = the repository root)."""
+        snap = self.capture(text)
+        target = self.repo / folder if folder else self.repo
+        target.mkdir(parents=True, exist_ok=True)
+        (target / 'PE1.cfg').write_bytes(base64.b64decode(snap['files']['PE1.cfg']))
+        (target / 'manifest.json').write_text(json.dumps(snap['manifest'], indent=2) + '\n')
+        self.raw('add', '-A', '--', folder or '.'); self.raw('commit', '-m', 'instructor snapshot ' + (folder or 'root'))
+        return self.raw('rev-parse', 'HEAD')
+
+    def test_base_prefix_refuses_the_snapshot_folder_names(self):
+        # A lab folder is where Save progress writes latest/, baseline/ and checkpoints/<name>: those
+        # names cannot be a lab folder, or the next save nests working/latest/latest.
+        for bad in ('working/latest', 'latest', 'x/baseline', 'x/checkpoints', 'x/checkpoints/one'):
+            with self.assertRaisesRegex(ValueError, 'Save progress writes', msg=bad): host_git.base_prefix(bad)
+        with self.assertRaisesRegex(ValueError, 'working/latest'): host_git.base_prefix('working/latest')
+        with self.assertRaisesRegex(ValueError, 'repository root'): host_git.base_prefix('latest')
+        for good in ('course/latest/working', 'Week-01/BGP/Final-State', 'checkpoints-2026', ''):
+            self.assertEqual(host_git.base_prefix(good), good)
+        config = {'repositories': [dict(self.binding, prefix='bgp', uid=1000, gid=1000, revision='r-bgp')]}
+        req = {'binding_id': self.binding['id'], 'revision': 'r-bgp'}
+        with self.assertRaisesRegex(ValueError, 'Save progress writes'): host_git.plan_prefix(config, dict(req, prefix='working/latest'), self.account)
+        with patch.object(host_git, 'ENGINEER', self.base / 'missing-engineer.json'):
+            with self.assertRaisesRegex(ValueError, 'Save progress writes'):
+                host_git.plan_connect(config, {'url': 'https://github.com/Owner/Other-Lab', 'prefix': 'working/latest'}, self.account)
+        # A registration an older release made at `x/latest` stays selectable and repairable: the rule
+        # applies to a new lab folder only (so a legacy binding can be re-selected, repaired and moved on).
+        legacy = dict(self.binding, id='legacy', prefix='working/latest', uid=1000, gid=1000, revision='r-legacy')
+        config['repositories'].append(legacy)
+        self.assertIs(host_git.plan_prefix(config, {'binding_id': 'legacy', 'revision': 'r-legacy', 'prefix': 'working/latest'}, self.account)[0], legacy)
+        self.assertIs(host_git.plan_prefix(config, dict(req, prefix='working/latest'), self.account)[0], legacy)
+        with patch.object(host_git, 'ENGINEER', self.base / 'missing-engineer.json'):
+            url = str(self.remote)
+            for b in config['repositories']: b['push_url'] = 'https://github.com/Owner/Course-Labs.git'
+            self.assertIs(host_git.plan_connect(config, {'url': 'https://github.com/Owner/Course-Labs', 'prefix': 'working/latest'}, self.account)[0], legacy)
+        # Moving that lab one level up (its documented recovery) is an ordinary, allowed registration.
+        self.assertEqual(host_git.plan_prefix(config, {'binding_id': 'legacy', 'revision': 'r-legacy', 'prefix': 'working', 'retire': True}, self.account)[1]['prefix'], 'working')
+
+    def test_read_version_and_history_reach_any_manifest_folder(self):
+        self.publish(push=False)  # this lab's own latest/
+        final = self.commit_snapshot('Final', 'final state\n')
+        self.commit_snapshot('Final/latest', 'legacy layout under Final\n')
+        self.commit_snapshot('course/lab/reference/solution', 'nested solution\n')
+        head = self.commit_snapshot('', 'root snapshot\n')
+        (self.repo / 'notes').mkdir(); (self.repo / 'notes' / 'PE1.jcfg').write_text('no manifest here\n')
+        self.raw('add', 'notes'); self.raw('commit', '-m', 'a restore-looking file without a manifest'); head = self.raw('rev-parse', 'HEAD')
+        read = lambda path, commit=head: base64.b64decode(self.worker.dispatch(self.request('read-version', commit=commit, path=path))['snapshot']['files']['PE1.cfg']).decode()
+        # Exact paths, nothing substituted: Final and Final/latest are two different snapshots.
+        self.assertEqual(read('Final'), 'final state\n'); self.assertEqual(read('Final/latest'), 'legacy layout under Final\n')
+        self.assertEqual(read('course/lab/reference/solution'), 'nested solution\n')
+        self.assertEqual(read(''), 'root snapshot\n'); self.assertEqual(read('/'), 'root snapshot\n')
+        self.assertEqual(read('Final', final), 'final state\n')
+        self.assertEqual(read('/Final'), 'final state\n')  # the browser's wire form carries one leading slash
+        hist = self.worker.dispatch(self.request('history'))
+        by_path = {v['path']: v['connected'] for v in hist['versions']}
+        self.assertEqual(by_path, {'latest': True, 'Final': False, 'Final/latest': False, 'course/lab/reference/solution': False, '': False})
+        self.assertEqual([v['path'] for v in hist['versions']][0], 'latest')
+        # A folder without a manifest is not a snapshot, whatever its files are called; unsafe paths stay refused.
+        with self.assertRaisesRegex(ValueError, 'manifest.json'): self.worker.dispatch(self.request('read-version', commit=head, path='notes'))
+        for bad in ('Final/../etc', '.git/config', 'Final/.git'):
+            with self.assertRaisesRegex(ValueError, 'snapshot path|traversal', msg=bad): self.worker.dispatch(self.request('read-version', commit=head, path=bad))
+        # The cap bounds the other folders, never this lab's own rows.
+        with patch.object(self.worker, 'run', side_effect=lambda *a, **k: '\n'.join(f'aaa/{i:04d}/manifest.json' for i in range(520)) + '\nlatest/manifest.json' if a[:1] == ('ls-tree',) else GitRepository.run(self.worker, *a, **k)):
+            capped = self.worker.dispatch(self.request('history'))['versions']
+        self.assertEqual(len(capped), 501); self.assertEqual(capped[0]['path'], 'latest'); self.assertTrue(capped[0]['connected'])
+        (self.repo / 'Final' / 'manifest.json').write_text('{not json')
+        self.raw('commit', '-am', 'corrupt manifest'); head = self.raw('rev-parse', 'HEAD')
+        with self.assertRaisesRegex(ValueError, 'manifest is invalid'): self.worker.dispatch(self.request('read-version', commit=head, path='Final'))
+
+    def test_publish_ignores_a_nested_legacy_folder_but_not_foreign_files(self):
+        self.publish(push=False)
+        nested = self.commit_snapshot('latest/latest', 'nested by the old bug\n')
+        before = self.raw('ls-tree', '-r', '--name-only', 'HEAD', '--', 'latest/latest')
+        req, result = self.publish(self.capture('second save\n'))
+        self.assertEqual(result['status'], 'committed', result)
+        self.assertEqual(sorted(result['changed_files']), ['latest/PE1.cfg', 'latest/manifest.json'])
+        self.assertEqual(self.raw('ls-tree', '-r', '--name-only', 'HEAD', '--', 'latest/latest'), before)
+        self.assertEqual(self.raw('rev-parse', 'HEAD:latest/latest'), self.raw('rev-parse', nested + ':latest/latest'))
+        (self.repo / 'latest' / 'stray.txt').write_text('somebody else\n'); self.raw('add', 'latest/stray.txt'); self.raw('commit', '-m', 'stray')
+        req, result = self.publish(self.capture('third save\n'))
+        self.assertEqual(result['status'], 'needs_attention'); self.assertIn('outside its manager manifest', result['message'])
+        # A destination that holds only somebody's subdirectory and no manifest is not adopted either.
+        other_binding, other = self.sibling('notes')
+        (self.repo / 'notes' / 'latest' / 'lesson').mkdir(parents=True); (self.repo / 'notes' / 'latest' / 'lesson' / 'a.txt').write_text('x\n')
+        self.raw('add', 'notes'); self.raw('commit', '-m', 'notes')
+        result = other.dispatch({'mode': 'publish', 'binding_id': other_binding['id'], 'revision': other_binding['revision'], 'operation_id': uuid.uuid4().hex,
+                                 'expected_head': self.raw('rev-parse', 'HEAD'), 'target': 'latest', 'push': False, 'snapshot': self.capture()})
+        self.assertEqual(result['status'], 'needs_attention'); self.assertIn('not an empty manager snapshot folder', result['message'])
+
     def test_register_validates_the_checkout_like_the_wizard(self):
         binding = {'id': uuid.uuid4().hex, 'label': 'repo / bgp', 'owner': 'ben', 'path': str(self.repo), 'home': str(self.home),
                    'remote': 'origin', 'branch': '', 'push_url': '', 'prefix': 'bgp', 'revision': ''}

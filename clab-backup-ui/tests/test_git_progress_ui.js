@@ -1,5 +1,8 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../app/static/git-progress.js'),'utf8');
+// Objects returned from the vm context are not reference-equal to a literal built in this realm even
+// when they have the same shape, so deepStrictEqual on them needs a structural comparison instead.
+const same=(actual,expected)=>assert.equal(JSON.stringify(actual),JSON.stringify(expected));
 function makeContext(){
  const storage=new Map();let sequence=0;
  const context=vm.createContext({$:()=>null,state:{labs:[],jobs:[],git_jobs:[]},activeId:'lab',
@@ -102,15 +105,25 @@ test('historical baseline and checkpoint commits open their recorded target inst
   {id:'checkpoint-save',lab_id:'lab',commit:'checkpoint-commit',target:'checkpoint',checkpoint:'bgp-working',changed_files:['checkpoints/bgp-working/r1.cfg'],created:'2026-09-11T13:00:00Z'}];
  await context.gitOpenCommit('lab',{commit:'baseline-commit'},[]);
  await context.gitOpenCommit('lab',{commit:'checkpoint-commit'},[]);
- assert.equal(opened[0].version.path,'baseline');assert.equal(opened[1].version.path,'checkpoints/bgp-working');
+ assert.equal(opened[0].version.path,'/baseline');assert.equal(opened[1].version.path,'/checkpoints/bgp-working');
 });
 test('unchanged saves sharing HEAD do not replace the actual historical commit target',async()=>{
  const context=makeContext(),opened=[];
  context.gitViewVersion=async(id,version)=>opened.push(version.path);
  context.state.git_jobs=[{id:'baseline-save',lab_id:'lab',commit:'shared-head',target:'baseline',changed_files:['baseline/r1.cfg'],created:'2026-09-11T12:00:00Z'},
   {id:'unchanged-latest',lab_id:'lab',commit:'shared-head',target:'latest',changed_files:[],created:'2026-09-11T13:00:00Z'}];
- await context.gitOpenCommit('lab',{commit:'shared-head'},[]);assert.equal(opened[0],'baseline');
- context.state.git_jobs.shift();await context.gitOpenCommit('lab',{commit:'shared-head'},[]);assert.equal(opened[1],'latest');
+ await context.gitOpenCommit('lab',{commit:'shared-head'},[]);assert.equal(opened[0],'/baseline');
+ context.state.git_jobs.shift();await context.gitOpenCommit('lab',{commit:'shared-head'},[]);assert.equal(opened[1],'/latest');
+});
+test('gitOpenCommit fast path sends the job\'s own snapshot_path with the wire\'s leading slash when present, else the binding prefix joined with its target',async()=>{
+ const context=makeContext(),opened=[];
+ context.gitViewVersion=async(id,version)=>opened.push(version.path);
+ vm.runInContext("gitContexts.set('lab',{binding:{repository:{prefix:'course/lab-a'}}})",context);
+ context.state.git_jobs=[{id:'with-path',lab_id:'lab',commit:'c1',target:'checkpoint',checkpoint:'day-1',changed_files:['x.cfg'],snapshot_path:'course/lab-a/checkpoints/day-1'},
+  {id:'no-path',lab_id:'lab',commit:'c2',target:'baseline',changed_files:['y.cfg']}];
+ await context.gitOpenCommit('lab',{commit:'c1'},[]);
+ await context.gitOpenCommit('lab',{commit:'c2'},[]);
+ assert.deepEqual(opened,['/course/lab-a/checkpoints/day-1','/course/lab-a/baseline'],'the job\'s own recorded path is preferred and never doubles the leading slash; a job saved before that field existed falls back to the binding\'s prefix');
 });
 test('one-click save captures fresh configurations and delegates review preference to server',async()=>{
  const context=makeContext(),calls=[];
@@ -222,23 +235,152 @@ test('the disabled reason of Save progress is visible text and an unbound lab ke
  context.busy=()=>false;assert.equal(context.gitSaveReason({binding_id:'b'},null),'');
 });
 
-test('saved versions list the course layout reference states one level below the lab folder',()=>{
+test('saved versions list every snapshot folder below the lab folder\'s parent, any depth, from its exact path; a folder without manifest.json is never listed',()=>{
  // Live finding (release 1.29 validation): scaffold-lab.py creates <slug>/reference/{start,solution}/latest beside
  // <slug>/work; only direct siblings with a latest/ were shown, so the reference states never appeared.
+ // Chunk 2 (save-location-fix): a folder is a saved configuration when it holds manifest.json, whatever
+ // its name or depth — not by carrying a latest/ child, and not by any restore-artifact extension.
  const context=makeContext();
- const node=(path,dirs=[],extra={})=>({path,name:path.split('/').pop(),dirs,count:0,restorable:false,registration:null,...extra});
- const latest=count=>({path:'latest',name:'latest',dirs:[],count});
- const work=node('bgp/work',[latest(5),{path:'bgp/work/checkpoints',name:'checkpoints',dirs:[node('bgp/work/checkpoints/day-1',[latest(2)],{count:2})]}],{restorable:true,registration:{id:'b1',lab:{id:'lab',name:'BGP'}}});
- const start=node('bgp/reference/start',[latest(5)],{restorable:true}),solution=node('bgp/reference/solution',[latest(5)],{restorable:true});
- const reference=node('bgp/reference',[start,solution]);
- const flat=node('bgp/final-state',[latest(5)],{restorable:true});
- const otherLab=node('bgp/reference/other',[latest(3)],{registration:{id:'b2',lab:{id:'other-lab',name:'OSPF'}}});reference.dirs.push(otherLab);
- const bgp=node('bgp',[work,reference,flat]);
- const model={nodes:new Map([bgp,work,reference,start,solution,otherLab,flat].map(n=>[n.path,n]))};
+ const node=(path,dirs=[],extra={})=>({path,name:path.split('/').pop(),dirs,count:0,snapshot:false,registration:null,...extra});
+ const own=node('bgp/work',[
+  node('bgp/work/latest',[],{count:5,snapshot:true}),
+  node('bgp/work/checkpoints',[node('bgp/work/checkpoints/day-1',[],{count:2,snapshot:true})]),
+ ],{count:7,registration:{id:'b1',lab:{id:'lab',name:'BGP'}}});
+ // A legacy parent convenience: "start" itself is not a snapshot, only its latest/ child is.
+ const startLatest=node('bgp/reference/start/latest',[],{count:5,snapshot:true});
+ // A folder that is itself a snapshot, any name, any depth.
+ const solution=node('bgp/reference/solution',[],{count:5,snapshot:true});
+ const flat=node('bgp/final-state',[],{count:5,snapshot:true});
+ // Inside another lab's registered folder: grouped under that lab's name, not "reference".
+ const otherLatest=node('bgp/reference/other/latest',[],{count:3,snapshot:true});
+ const otherReg=node('bgp/reference/other',[otherLatest],{count:3,registration:{id:'b2',lab:{id:'other-lab',name:'OSPF'}}});
+ // Outside the lab folder's parent entirely: neither "reference" nor "others" — a third, collapsed group.
+ const elsewhere=node('zzz/vault',[],{count:1,snapshot:true});
+ // A folder with ordinary files but no manifest.json: never a saved version, at any depth.
+ const decoy=node('bgp/notes',[],{count:2,snapshot:false});
+ const model={nodes:new Map([own,startLatest,solution,flat,otherReg,otherLatest,elsewhere,decoy].map(n=>[n.path,n]))};
  const context2=context;context2.gitRepository=()=>({prefix:'bgp/work',label:'Course'});context2.gitRepoName=()=>'Course';context2.gitLabJobs=()=>[];
  const groups=context2.gitVersionGroups('lab',{binding:{}},model,{head:'abc'},null);
- assert.deepEqual(Array.from(groups.reference,r=>r.caption),['bgp/reference/start','bgp/reference/solution','bgp/final-state']);
- assert.ok(groups.reference.every(r=>r.apply&&r.apply.folder===r.caption),'reference rows apply straight from their folder');
- assert.deepEqual(Array.from(groups.others,r=>r.name+' '+r.caption),['OSPF bgp/reference/other']);
+ same(groups.latest[0].view,{commit:'abc',path:'/bgp/work/latest'});same(groups.latest[0].apply,{path:'/bgp/work/latest'});
+ same(groups.checkpoints[0].apply,{path:'/bgp/work/checkpoints/day-1'});
+ assert.equal(groups.baseline.length,0);
+ same([...groups.reference.map(r=>r.caption)].sort(),['bgp/final-state','bgp/reference/solution','bgp/reference/start/latest']);
+ assert.ok(groups.reference.every(r=>r.apply&&r.apply.path==='/'+r.caption),'reference rows apply from their exact snapshot path, with the wire\'s leading slash, never a substituted one');
+ assert.deepEqual(Array.from(groups.others,r=>r.name+' '+r.caption),['OSPF bgp/reference/other/latest']);
+ assert.deepEqual(Array.from(groups.elsewhere,r=>r.caption),['zzz/vault']);
+ assert.ok(![...groups.reference,...groups.others,...groups.elsewhere].some(r=>r.caption==='bgp/notes'),'a folder without manifest.json is never a saved version, however deep it is scanned');
  assert.equal(groups.latest.length,1);assert.deepEqual(Array.from(groups.checkpoints,r=>r.name),['day-1']);
+});
+test('a top-level lab folder does not absorb the whole repository into "reference": only nearby top-level folders count, everything deeper is "elsewhere"',()=>{
+ const context=makeContext();
+ const node=(path,extra={})=>({path,name:path.split('/').pop(),dirs:[],count:0,snapshot:false,registration:null,...extra});
+ const own=node('bgp',{count:0,registration:{id:'b1',lab:{id:'lab',name:'BGP'}}});
+ const final=node('Final',{count:1,snapshot:true});
+ const refSolution=node('ref/solution/latest',{count:1,snapshot:true});
+ const deep=node('deep/a/b/c',{count:1,snapshot:true});
+ const model={nodes:new Map([own,final,refSolution,deep].map(n=>[n.path,n]))};
+ context.gitRepository=()=>({prefix:'bgp'});context.gitRepoName=()=>'Course';context.gitLabJobs=()=>[];
+ const groups=context.gitVersionGroups('lab',{binding:{}},model,{head:'h'},null);
+ same([...groups.reference.map(r=>r.caption)].sort(),['Final','ref/solution/latest'],'Final (depth 1) and ref/solution/latest (depth 2 once its legacy latest/ convenience is discounted) stay nearby reference versions');
+ same(groups.elsewhere.map(r=>r.caption),['deep/a/b/c'],'anything deeper than the cap is elsewhere, never silently absorbed as "reference"');
+});
+test('a lab registered at the repository root does not claim every snapshot elsewhere in the repository as its own',()=>{
+ const context=makeContext();
+ const node=(path,extra={})=>({path,name:path.split('/').pop(),dirs:[],count:0,snapshot:false,registration:null,...extra});
+ const own=node('bgp',{count:3,registration:{id:'b1',lab:{id:'lab',name:'BGP'}}});
+ const rootLab=node('',{count:0,registration:{id:'root-reg',lab:{id:'root-lab',name:'Root course'}}});
+ const stray=node('other/place',{count:1,snapshot:true});
+ const model={nodes:new Map([own,rootLab,stray].map(n=>[n.path,n]))};
+ context.gitRepository=()=>({prefix:'bgp'});context.gitRepoName=()=>'Course';context.gitLabJobs=()=>[];
+ const groups=context.gitVersionGroups('lab',{binding:{}},model,{head:'h'},null);
+ assert.equal(groups.others.length,0,'the root registration is skipped when attributing a foreign snapshot elsewhere in the repository');
+ assert.ok(groups.reference.some(r=>r.caption==='other/place'),'the snapshot is still listed, just not claimed by the root registration');
+});
+test('a snapshot at the repository root is viewed, compared and downloaded with "/" on the wire, never an empty path; the history fallback root does too',()=>{
+ const context=makeContext();
+ const node=(path,extra={})=>({path,name:path.split('/').pop()||'',dirs:[],count:0,snapshot:false,registration:null,...extra});
+ const own=node('bgp',{count:0,registration:{id:'b1',lab:{id:'lab',name:'BGP'}}});
+ const root=node('',{count:1,snapshot:true});
+ const model={nodes:new Map([own,root].map(n=>[n.path,n]))};
+ context.gitRepository=()=>({prefix:'bgp'});context.gitRepoName=()=>'Course';context.gitLabJobs=()=>[];
+ const groups=context.gitVersionGroups('lab',{binding:{}},model,{head:'h'},null);
+ same(groups.elsewhere[0].view,{commit:'h',path:'/'});same(groups.elsewhere[0].apply,{path:'/'});
+ const fromHistory=context.gitVersionGroups('lab',{binding:{}},null,null,{versions:[{path:'',commit:'h2',connected:false,label:'Root'}]});
+ same(fromHistory.reference[0].view,{commit:'h2',path:'/'});
+});
+test('gitSnapshotPath is the exact repository-relative path, with the wire\'s one leading slash: a lab folder prefix joined with the name, or the bare name at the repository root',()=>{
+ const context=makeContext();
+ assert.equal(context.gitSnapshotPath({repository:{prefix:'course/lab-a'}},'latest'),'/course/lab-a/latest');
+ assert.equal(context.gitSnapshotPath({repository:{prefix:'course/lab-a'}},'checkpoints/day-1'),'/course/lab-a/checkpoints/day-1');
+ assert.equal(context.gitSnapshotPath({repository:{prefix:''}},'latest'),'/latest');
+ assert.equal(context.gitSnapshotPath(null,'baseline'),'/baseline');
+});
+test('gitOpenCommit offers exact snapshot paths for the registered lab folder, never bare names, each with the wire\'s leading slash but shown to the student without it',async()=>{
+ const context=makeContext();
+ vm.runInContext("gitContexts.set('lab',{binding:{repository:{prefix:'course/lab-a'}}})",context);
+ let dialogHtml='';
+ context.$=()=>({onclick:null,value:''});
+ context.opDialog=(id,title,html)=>{dialogHtml=html;return {querySelector:()=>({onclick:null})};};
+ await context.gitOpenCommit('lab',{commit:'old-commit',message:'old save'},[{path:'course/lab-a/reference/one'}]);
+ const values=[...dialogHtml.matchAll(/<option value="([^"]*)"/g)].map(m=>m[1]);
+ assert.deepEqual(values.slice().sort(),['/course/lab-a/baseline','/course/lab-a/latest','/course/lab-a/reference/one'].sort());
+ const labels=[...dialogHtml.matchAll(/<option value="[^"]*">([^<]*)</g)].map(m=>m[1]);
+ assert.ok(labels.every(label=>!label.startsWith('/')),'the option text shown to the student never carries the leading slash');
+});
+test('gitReviewJob\'s "Open the full saved version" opens the job\'s own snapshot path when known, else the binding prefix joined with the target',async()=>{
+ const context=makeContext(),elements=new Map(),opened=[];
+ const element=()=>({onclick:null,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;}});
+ context.$=id=>elements.get(id)||null;context.opTask=async(dialog,fn)=>fn();
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());return {};};
+ context.json=async endpoint=>endpoint.endsWith('/compare')?{files:[]}:{};
+ context.gitViewVersion=async(id,version)=>opened.push(version);
+ vm.runInContext("gitContexts.set('lab',{binding:{repository:{prefix:'course/lab-a'}}})",context);
+ await context.gitReviewJob({id:'j1',lab_id:'lab',status:'review_pending',commit:'c1',target:'checkpoint',checkpoint:'day-1',snapshot_path:'course/lab-a/checkpoints/day-1'});
+ await elements.get('git-review-files').onclick();
+ await context.gitReviewJob({id:'j2',lab_id:'lab',status:'synced',pushed:true,commit:'c2',target:'latest'});
+ await elements.get('git-review-files').onclick();
+ assert.deepEqual(opened.map(v=>v.path),['/course/lab-a/checkpoints/day-1','/course/lab-a/latest']);
+});
+test('the Full history… dialog opens a saved version with the wire\'s leading slash added to the raw path; the repository root is opened as "/"',async()=>{
+ const context=makeContext(),opened=[];
+ context.opTask=async(dialog,fn)=>fn();
+ context.gitViewVersion=async(id,version)=>opened.push(version);
+ const versionButtons=[{dataset:{gitVersion:'0'},onclick:null},{dataset:{gitVersion:'1'},onclick:null}];
+ context.api=async()=>({json:async()=>({versions:[{path:'course/lab-a/latest',commit:'c1',connected:true,label:'Latest'},{path:'',commit:'c2',connected:false,label:'Root'}],commits:[]})});
+ context.opDialog=()=>({querySelectorAll:sel=>sel==='[data-git-version]'?versionButtons:[]});
+ await context.gitHistory('lab');
+ await versionButtons[0].onclick();
+ await versionButtons[1].onclick();
+ assert.deepEqual(opened.map(v=>v.path),['/course/lab-a/latest','/']);
+ assert.equal(opened[0].label,'Latest');assert.equal(opened[0].commit,'c1');
+});
+test('gitViewVersion falls back to a slash-free label when no friendly name is given, e.g. opened from the review dialog',async()=>{
+ const context=makeContext();let html='';
+ context.json=async()=>({files:[]});
+ context.opDialog=(id,title,markup)=>{html=markup;return {querySelector:()=>({onclick:null})};};
+ context.$=()=>({onclick:null});
+ await context.gitViewVersion('lab',{commit:'c'.repeat(40),path:'/course/lab-a/checkpoints/day-1'});
+ assert.match(html,/<p class="op-path">course\/lab-a\/checkpoints\/day-1<\/p>/);
+ await context.gitViewVersion('lab',{commit:'c'.repeat(40),path:'/'});
+ assert.match(html,/<p class="op-path">the repository root<\/p>/);
+});
+test('gitLegacyDestinationNotice warns when a lab folder is itself shaped like the snapshot it holds, and says nothing for an ordinary folder',()=>{
+ const context=makeContext();
+ assert.equal(context.gitLegacyDestinationNotice({repository:{prefix:'JunOS-TEST-2/working/latest'}}),
+  'This lab saves to JunOS-TEST-2/working/latest, a folder named like a saved state, so its saves go to JunOS-TEST-2/working/latest/latest. To save into JunOS-TEST-2/working/latest again, open Change folder…, pick JunOS-TEST-2/working and choose Save this lab here without moving the files.');
+ assert.equal(context.gitLegacyDestinationNotice({repository:{prefix:'course/lab-a/checkpoints/day-1'}}),
+  'This lab saves to course/lab-a/checkpoints/day-1, a folder named like a saved state, so its saves go to course/lab-a/checkpoints/day-1/latest. To save into course/lab-a/latest again, open Change folder…, pick course/lab-a and choose Save this lab here without moving the files.');
+ assert.equal(context.gitLegacyDestinationNotice({repository:{prefix:'latest'}}),
+  'This lab saves to latest, a folder named like a saved state, so its saves go to latest/latest. To save into the top of the repository/latest again, open Change folder…, pick the top of the repository and choose Save this lab here without moving the files.','an empty parent reads as words, not a bare slash');
+ assert.equal(context.gitLegacyDestinationNotice({repository:{prefix:'bgp/work'}}),'','an ordinary lab folder gets no notice');
+ assert.equal(context.gitLegacyDestinationNotice({repository:{prefix:''}}),'');
+ assert.equal(context.gitLegacyDestinationNotice(null),'');
+});
+test('a legacy binding shows the notice on the Save location card right under the destination line; an ordinary binding shows nothing',()=>{
+ const context=makeContext(),container={innerHTML:'',querySelectorAll:()=>[]};
+ context.$=id=>id==='git-repository-content'?container:null;context.state.labs=[{id:'lab',name:'BGP'}];
+ context.gitRenderRepository('lab',{binding:{binding_id:'repo',node_names:['r1'],repository:{label:'x',path:'/home/ben/labs/Course-Labs',remote:'origin',branch:'main',prefix:'JunOS-TEST-2/working/latest',push_url:'https://github.com/ben/Course-Labs.git',owner:'ben'}},supported_nodes:[{name:'r1',platform:'arista_ceos'}]},{repositories:[]});
+ assert.match(container.innerHTML,/<\/p><p class="op-notice" id="git-legacy-notice">This lab saves to JunOS-TEST-2\/working\/latest, a folder named like a saved state/);
+ context.gitRenderRepository('lab',{binding:{binding_id:'repo',node_names:['r1'],repository:{label:'x',path:'/p',branch:'main',prefix:'bgp',owner:'ben'}},supported_nodes:[]},{repositories:[]});
+ assert.doesNotMatch(container.innerHTML,/git-legacy-notice/,'an ordinary lab folder never shows the notice');
 });

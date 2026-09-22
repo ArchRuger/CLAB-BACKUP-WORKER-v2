@@ -1,0 +1,131 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:14:26Z",
+ "steps": {
+  "initial_destination_line": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working/latest \u203a latest/",
+  "legacy_notice_text": "This lab saves to save-fix/working/latest, a folder named like a saved state, so its saves go to save-fix/working/latest/latest. To save into save-fix/working/latest again, open Change folder\u2026, pick save-fix/working and choose Save this lab here without moving the files.",
+  "working_use_button": {
+   "count": 1,
+   "enabled": true,
+   "title": ""
+  },
+  "working_destination_request_body": "{\"prefix\":\"save-fix/working\",\"move_files\":false}",
+  "working_destination_response": {
+   "status": 200,
+   "body": {
+    "saved": true,
+    "binding": {
+     "binding_id": "a777c74c755141cea40b4cbe4721d83a",
+     "revision": "0fb2bf160765a5389ba931d3fd700d9db7640dddb3b93e236bc6b109b8018fb9",
+     "repository": {
+      "id": "a777c74c755141cea40b4cbe4721d83a",
+      "label": "CLAB-MNGR-DEV-LLM / save-fix/working",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "save-fix/working",
+      "revision": "0fb2bf160765a5389ba931d3fd700d9db7640dddb3b93e236bc6b109b8018fb9"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "job": null
+   }
+  },
+  "new_binding_prefix": "save-fix/working",
+  "new_destination_line": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/",
+  "latest_use_button": {
+   "count": 1,
+   "enabled": false,
+   "title": "This is the saved state of save-fix/working. Saves go to save-fix/working/latest. This lab already saves here."
+  },
+  "payload_would_be": {
+   "prefix": "save-fix/working",
+   "move_files": false
+  },
+  "api_reserved_name_check": {
+   "request": {
+    "prefix": "save-fix/working/latest"
+   },
+   "status": 400,
+   "body": {
+    "detail": "latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. Choose the folder above them: its saves go to save-fix/working/latest."
+   }
+  },
+  "api_below_manifest_check": {
+   "request": {
+    "prefix": "save-fix/Final/sub"
+   },
+   "status": 409,
+   "body": {
+    "detail": "save-fix/Final is a saved configuration (it holds manifest.json). Choose the folder above it or a folder beside it."
+   }
+  }
+ },
+ "checks": [
+  {
+   "check": "legacy notice is shown while bound to save-fix/working/latest",
+   "ok": true,
+   "detail": "This lab saves to save-fix/working/latest, a folder named like a saved state, so its saves go to save-fix/working/latest/latest. To save into save-fix/working/latest again, open Change folder\u2026, pick save-fix/working and choose Save this lab here without moving the files."
+  },
+  {
+   "check": "legacy notice names the reserved-name reason and the recovery (\"Save this lab here without moving\")",
+   "ok": true,
+   "detail": "This lab saves to save-fix/working/latest, a folder named like a saved state, so its saves go to save-fix/working/latest/latest. To save into save-fix/working/latest again, open Change folder\u2026, pick save-fix/working and choose Save this lab here without moving the files."
+  },
+  {
+   "check": "save-fix/working (the parent, not a reserved name) offers an enabled \"Save this lab here\"",
+   "ok": true,
+   "detail": "{'count': 1, 'enabled': True, 'title': ''}"
+  },
+  {
+   "check": "POST .../git/destination for save-fix/working returned 200",
+   "ok": true,
+   "detail": "200"
+  },
+  {
+   "check": "the binding prefix became exactly save-fix/working (no move of files)",
+   "ok": true,
+   "detail": "save-fix/working"
+  },
+  {
+   "check": "the legacy notice is gone now that the binding is save-fix/working",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "check": "selecting save-fix/working/latest itself resolves the choice to its parent save-fix/working (title names it; button is disabled here only because the lab already saves to that resolved parent)",
+   "ok": true,
+   "detail": "{'count': 1, 'enabled': False, 'title': 'This is the saved state of save-fix/working. Saves go to save-fix/working/latest. This lab already saves here.'}"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "POST .../git/destination {\"prefix\":\"save-fix/working/latest\"} is 400 (reserved name)",
+   "ok": true,
+   "detail": "(400, {'detail': 'latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. Choose the folder above them: its saves go to save-fix/working/latest.'})"
+  },
+  {
+   "check": "POST .../git/destination {\"prefix\":\"save-fix/Final/sub\"} is 409 (at/below a manifest folder)",
+   "ok": true,
+   "detail": "(409, {'detail': 'save-fix/Final is a saved configuration (it holds manifest.json). Choose the folder above it or a folder beside it.'})"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:14:32Z",
+ "note_on_check_correction": "the tool as first run asserted the button would be ENABLED when browsing to save-fix/working/latest; it is correctly DISABLED here because by this point in the same run the lab was already bound to the resolved parent save-fix/working (the immediately preceding step), so \"Save this lab here\" is disabled with reason \"already saves here\" -- the title still names the resolved parent (save-fix/working, not save-fix/working/latest), which is the actual proof rule 3 requires. This is a QA script interpretation fix, not a re-run: no new request was sent, the raw captured title/response above is exactly what the live run produced."
+}

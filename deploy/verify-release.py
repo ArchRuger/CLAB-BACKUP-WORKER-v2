@@ -44,7 +44,7 @@ DOC_ROOTS = ('README.md', 'docs', 'deploy', 'clab-backup-ui/README.md', 'clab-ba
              'clab-backup-ui/app/static/vm-connection.html', 'clab-backup-ui/app/static/capture-setup.html')
 # Release history: may name any release.
 HISTORY_FILES = ('docs/CHANGELOG.md', 'clab-backup-ui/VALIDATION.md', 'agent instructions.md')
-HISTORY_DIRS = ('docs/archive/', 'docs/redesign/', 'docs/ui-review-001/', 'docs/multi-platform-restore/')
+HISTORY_DIRS = ('docs/archive/', 'docs/redesign/', 'docs/ui-review-001/', 'docs/multi-platform-restore/', 'docs/save-location-fix/')
 # Where the current release must be named first, and how.
 LEADS = {
     'README.md': r'Current release: \*\*(\d+\.\d+\.\d+)\*\*',

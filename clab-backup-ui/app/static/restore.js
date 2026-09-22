@@ -52,10 +52,18 @@ function restoreBadge(status, labels) {
   : ['failed', 'preflight_failed', 'rolled_back'].includes(status) ? 'bad' : 'warn';
  return `<span class="badge ${cls}">${esc(labels[status] || status)}</span>`;
 }
+// The student-facing name of an exact snapshot path: without its wire-form leading slash, without a
+// trailing /latest (the legacy parent convenience), and in words for the repository root (sent as '/'
+// on the wire, '' once the leading slash is stripped).
+function restoreDisplayFolder(path) {
+ const value = String(path || '').replace(/^\/+/, '');
+ if (value === '') return 'the repository root';
+ return value.replace(/\/latest$/, '');
+}
 function restoreSourceLabel(source) {
  if (!source) return 'Saved configuration';
  if (source.type === 'git') return 'Saved version · ' + (String(source.commit || '').slice(0, 10) || source.path || '');
- if (source.type === 'folder') return 'Saved version · ' + String(source.path || '').replace(/\/latest$/, '');
+ if (source.type === 'folder') return 'Saved version · ' + restoreDisplayFolder(source.path);
  if (source.type === 'backup') return 'Backup · ' + String(source.backup_job_id || '').slice(0, 10);
  return 'Saved configuration';
 }
@@ -103,16 +111,21 @@ async function restoreFromVersion(labId, source, label) {
  await restoreReview(labId, source, label);
 }
 
-// Entry point from the folder browser and the Saved versions list: apply a folder's latest saved
-// state to the running lab directly, without pointing the lab at that folder first.
-async function restoreFromFolder(labId, folderPrefix, tree) {
- const prefix = String(folderPrefix || '').replace(/\/+$/, '');
- if (!prefix) { notify('Choose a saved folder to apply.'); return; }
- const name = prefix.split('/').filter(Boolean).pop() || prefix;
- const repoName = tree && tree.repository ? gitRepoName(tree.repository) : '';
- const friendly = typeof savedVersionName === 'function' ? savedVersionName(prefix) : name;
- await restoreReview(labId, { type: 'folder', path: prefix + '/latest' },
-  friendly + ' · ' + (repoName ? repoName + ' › ' : '') + prefix);
+// Entry point from the folder browser and the Saved versions list: apply the exact snapshot folder
+// to the running lab directly, without pointing the lab at that folder first. snapshotPath is the
+// exact repository-relative snapshot folder (never appended with /latest), with or without its
+// wire-form leading slash; '' or '/' is the repository root. Exactly one leading slash is sent on
+// the wire ('/' for the root); nothing is chosen when snapshotPath is null/undefined.
+async function restoreFromFolder(labId, snapshotPath, tree) {
+ if (snapshotPath == null) { notify('Choose a saved folder to apply.'); return; }
+ const bare = String(snapshotPath).replace(/^\/+/, '').replace(/\/+$/, '');
+ const wire = '/' + bare;
+ const displayFolder = restoreDisplayFolder(wire);
+ const repoName = tree && tree.repository && typeof gitRepoName === 'function' ? gitRepoName(tree.repository) : '';
+ const friendly = typeof savedVersionName === 'function' ? savedVersionName(displayFolder) : displayFolder;
+ // The label is for the student: it never shows the wire form's leading slash.
+ const where = repoName ? repoName + (bare ? ' › ' + bare : '') : bare;
+ await restoreReview(labId, { type: 'folder', path: wire }, friendly + ' · ' + where);
 }
 
 async function restoreReview(labId, source, label) {
@@ -140,9 +153,14 @@ async function restoreReview(labId, source, label) {
    <span><strong>${esc(r.short_name || r.name)}</strong>${platform ? ` <span class="caption">${esc(platform)}</span>` : ''} <small>${esc(detail)}</small></span></label>`;
  };
  const savedAt = review.source?.captured_at ? restoreWhen(review.source.captured_at) : '';
+ // Review-to-submit consistency (rule 6): a folder source pins the commit the preflight read at HEAD
+ // (or the one it was asked to read), so the submitted request applies exactly what was reviewed.
+ const submitSource = source.type === 'folder' ? { type: 'folder', path: source.path, commit: review.source?.commit } : source;
+ const commitLabel = (source.type === 'folder' || source.type === 'git') && review.source?.commit
+  ? ` <span class="caption mono">· ${esc(String(review.source.commit).slice(0, 10))}</span>` : '';
  dialog.innerHTML = `<div class="dialog-head"><h2>Replace running configuration</h2><button class="icon-button" data-op-close aria-label="Close">×</button></div>
  <p>Lab: <strong>${esc((state.labs || []).find(l => l.id === labId)?.name || '')}</strong></p>
- <p>Source: <strong>${esc(label || restoreSourceLabel(review.source))}</strong>${savedAt ? ` <span class="caption" title="${esc(utcDisplay(review.source.captured_at))}">· saved ${esc(savedAt)}</span>` : ''}</p>
+ <p>Source: <strong>${esc(label || restoreSourceLabel(review.source))}</strong>${savedAt ? ` <span class="caption" title="${esc(utcDisplay(review.source.captured_at))}">· saved ${esc(savedAt)}</span>` : ''}${commitLabel}</p>
  <p>Current configurations are backed up first. The devices are not rebooted.</p>
  <fieldset class="restore-targets"><legend>Devices</legend>${rows.map(targetRow).join('') || '<p>None of the devices in this saved configuration are running in this lab.</p>'}</fieldset>
  ${skipped.length ? `<details class="caption"><summary>Details</summary><ul>${skipped.map(r => `<li><strong>${esc(r.short_name || r.name)}</strong>: ${esc(r.reason)}</li>`).join('')}</ul></details>` : ''}
@@ -168,7 +186,7 @@ async function restoreReview(labId, source, label) {
   if (!$('restore-ack').checked) throw new Error('Tick the box to confirm that the running configuration will be replaced.');
   const minutes = Math.min(60, Math.max(2, parseInt($('restore-confirm-minutes').value, 10) || confirmDefault));
   const job = await json('/labs/' + encodeURIComponent(labId) + '/restore', 'POST',
-   { request_id: requestId, source, node_names: chosen, confirm_minutes: minutes, acknowledge: true });
+   { request_id: requestId, source: submitSource, node_names: chosen, confirm_minutes: minutes, acknowledge: true });
   dialog.close();
   await restoreShowJob(job.id, job); await refresh();
  });

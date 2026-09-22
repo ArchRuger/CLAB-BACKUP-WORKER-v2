@@ -1,0 +1,96 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "manager_version": "1.30.30",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "result": "PASS (bug reproduced): a repository folder that holds manifest.json directly (no name pattern, at any depth) is never offered as an apply source and is never listed in Saved versions or /git/history, while a folder whose only content is a child literally named 'latest' (the legacy, name-shaped layout) is fully appliable, exactly as described in docs/save-location-fix/PICKUP.md 'Findings'.",
+ "setup": {
+  "second_checkout": "gh repo clone pruger-dev/CLAB-MNGR-DEV-LLM <scratchpad>/second-checkout; git config user.name 'instructor snapshots'; git config user.email 'instructor-snapshots@example.invalid' (throwaway identity, this clone only)",
+  "source_snapshot_copied": "save-fix/working/latest/ (the FIRST, complete, non-nested save from Reproduction 1 step b: manifest.json + the 8 device files -- ceos.cfg, ceos.eoscfg, cjunosevolved.jcfg, cjunosevolved.set, vjunos-switch.jcfg, vjunos-switch.set, xrv9k.cfg, xrv9k.xrcfg; the nested latest/latest/ subfolder created by the Reproduction 1 bug was deliberately excluded from every copy below)",
+  "destinations": ["save-fix/Final (direct manifest, no latest child)", "save-fix/course/lab/reference/solution (same, four levels deep)", "save-fix/Broken/latest (legacy control: a lab-folder-shaped parent whose latest/ child holds the files)"],
+  "commit": {"sha": "f79b4e0cb6c126b579958f0766cb0b50eab3297f", "message": "instructor snapshots: reference copies of restore-square's Latest save", "author": "instructor snapshots <instructor-snapshots@example.invalid>"},
+  "pushed_to": "origin main (https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git), confirmed with git ls-remote origin main",
+  "manager_update": {
+   "request": "POST /api/labs/904a35a79dc341ce8a4638f83fc34185/git/update {}",
+   "response": {"status": "updated", "head": "f79b4e0cb6c126b579958f0766cb0b50eab3297f", "message": "Updated from remote using fast-forward only."},
+   "note": "the manager's own operator checkout (~/labs/CLAB-MNGR-DEV-LLM) fast-forwarded from 94944cf to f79b4e0"
+  }
+ },
+ "browser_checks": {
+  "tool": "docs/save-location-fix/tools/repro_apply_manifest.py",
+  "saved_versions_card": {
+   "screenshot": "01-a-saved-versions.png",
+   "text": "Latest: CLAB-MNGR-DEV-LLM › save-fix/working/latest › latest · Saved 15 minutes ago · 9 files [View] [Apply to running lab…]. Checkpoints: none. Other labs in this repository (11, collapsed).",
+   "finding": "neither save-fix/Final, save-fix/course/lab/reference/solution, nor save-fix/Broken appear anywhere in the Saved versions card -- only this lab's own registered nested snapshot is listed"
+  },
+  "save-fix/Final": {
+   "screenshot": "01-b-final-no-apply.png",
+   "apply_button_present": false,
+   "listing": "ceos.cfg, ceos.eoscfg (can be applied to a running lab), cjunosevolved.jcfg (can be applied to a running lab), cjunosevolved.set, manifest.json (Save details), vjunos-switch.jcfg (can be applied to a running lab), vjunos-switch.set, xrv9k.cfg, xrv9k.xrcfg (can be applied to a running lab)",
+   "note": "the folder browser correctly recognises and labels the individual restore-format files inside this folder ('can be applied to a running lab'), yet offers no way to apply the folder itself: only 'New folder…' and 'Save this lab here' are in the action bar"
+  },
+  "save-fix/course/lab/reference/solution": {
+   "screenshot": "01-d-deep-solution-no-apply.png",
+   "apply_button_present": false,
+   "note": "same defect at four levels of nesting; not a shallow-path special case"
+  },
+  "save-fix/Broken": {
+   "screenshot": "01-c-broken-has-apply.png",
+   "apply_button_present": true,
+   "listing": "latest (Folder, 10 KB)",
+   "note": "save-fix/Broken itself holds no manifest.json -- only a child folder named exactly 'latest' -- and the browser offers 'Apply to running lab…' with caption 'Applies this folder's latest save to the running devices. They are not rebooted.' This is the legacy, name-shaped convenience path; it works precisely because the child is literally named 'latest', which is what the reported defect requires and Final/solution do not have."
+  }
+ },
+ "api_checks": {
+  "history": {
+   "request": "GET /api/labs/904a35a79dc341ce8a4638f83fc34185/git/history",
+   "total_versions_returned": 57,
+   "save-fix_versions_present": [
+    {"path": "save-fix/working/latest/latest", "connected": true},
+    {"path": "save-fix/Broken/latest", "connected": false},
+    {"path": "save-fix/working/latest", "connected": false}
+   ],
+   "save-fix_paths_absent": ["save-fix/Final", "save-fix/course/lab/reference/solution"],
+   "finding": "history lists every folder whose own name is (or whose child is named) 'latest'; a folder that holds manifest.json directly under any other name, at any depth, is invisible to it"
+  },
+  "version_at_head": {
+   "head_commit": "f79b4e0cb6c126b579958f0766cb0b50eab3297f",
+   "save-fix/Final": {
+    "request": "POST /api/labs/904a35a79dc341ce8a4638f83fc34185/git/version {\"commit\": \"f79b4e0c...\", \"path\": \"save-fix/Final\"}",
+    "http_status": 400,
+    "body": {"detail": "Choose latest, baseline or a named checkpoint version."}
+   },
+   "save-fix/Broken/latest": {
+    "request": "POST /api/labs/904a35a79dc341ce8a4638f83fc34185/git/version {\"commit\": \"f79b4e0c...\", \"path\": \"save-fix/Broken/latest\"}",
+    "http_status": 200,
+    "body_summary": "full manifest returned (schema 2, 4 files, backup_job_id dc0b9926d69547148144b5f5dc164747, all four platforms present with restore_capable true)"
+   }
+  },
+  "restore_preflight": {
+   "save-fix/Final": {
+    "request": "POST /api/labs/904a35a79dc341ce8a4638f83fc34185/restore/preflight {\"source\": {\"type\": \"folder\", \"path\": \"save-fix/Final\"}}",
+    "http_status": 409,
+    "body": {"detail": "Select a listed snapshot path and exact commit."}
+   },
+   "save-fix/Broken/latest": {
+    "request": "POST /api/labs/904a35a79dc341ce8a4638f83fc34185/restore/preflight {\"source\": {\"type\": \"folder\", \"path\": \"save-fix/Broken/latest\"}}",
+    "http_status": 200,
+    "body": {
+     "eligible_count": 4,
+     "targets": [
+      {"name": "clab-restore-square-ceos", "eligible": true},
+      {"name": "clab-restore-square-cjunosevolved", "eligible": true},
+      {"name": "clab-restore-square-vjunos-switch", "eligible": true},
+      {"name": "clab-restore-square-xrv9k", "eligible": true}
+     ]
+    },
+    "note": "preflight only -- NO restore was submitted (no POST to /api/labs/<lab>/restore was made from this reproduction, per the assignment)"
+   }
+  }
+ },
+ "final_repository_state": {
+  "operator_checkout": {"path": "~/labs/CLAB-MNGR-DEV-LLM", "head": "f79b4e0cb6c126b579958f0766cb0b50eab3297f", "vs_origin": "in sync (git status -sb: '## main...origin/main', no ahead/behind)"},
+  "second_checkout": {"path": "<scratchpad>/second-checkout", "head": "f79b4e0cb6c126b579958f0766cb0b50eab3297f", "vs_origin": "in sync"},
+  "origin_main": "f79b4e0cb6c126b579958f0766cb0b50eab3297f (git ls-remote origin main)"
+ }
+}

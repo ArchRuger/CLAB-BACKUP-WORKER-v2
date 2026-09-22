@@ -1,0 +1,152 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:43:16Z",
+ "steps": {
+  "final_tree_before": "7f0a08397a8191bf8451176088e92f1577c8a8e5",
+  "l10_evpn_files_before": [
+   "l10-evpn/work/latest/P.jcfg",
+   "l10-evpn/work/latest/P.set",
+   "l10-evpn/work/latest/PE1.jcfg",
+   "l10-evpn/work/latest/PE1.set",
+   "l10-evpn/work/latest/PE2.jcfg",
+   "l10-evpn/work/latest/PE2.set",
+   "l10-evpn/work/latest/PE3.jcfg",
+   "l10-evpn/work/latest/PE3.set",
+   "l10-evpn/work/latest/manifest.json"
+  ],
+  "l10_evpn_binding_before": {
+   "binding_id": "4b00e8b5877d47d49ee884724805903f",
+   "revision": "0714b4ddfad0183437bedfdca7fa4065fa82d8c26e539c594a70825ab0816ee7",
+   "repository": {
+    "id": "4b00e8b5877d47d49ee884724805903f",
+    "label": "CLAB-MNGR-DEV-LLM / l10-evpn/work",
+    "owner": "clabllm",
+    "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+    "remote": "origin",
+    "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+    "branch": "main",
+    "prefix": "l10-evpn/work",
+    "revision": "0714b4ddfad0183437bedfdca7fa4065fa82d8c26e539c594a70825ab0816ee7"
+   },
+   "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+   "node_names": [
+    "clab-l10-evpn-PE1",
+    "clab-l10-evpn-PE2",
+    "clab-l10-evpn-PE3",
+    "clab-l10-evpn-P"
+   ],
+   "review_before_push": false
+  },
+  "save_attempts": [
+   {
+    "attempt": 1,
+    "outcome": "review dialog opened"
+   }
+  ],
+  "final_job": {
+   "id": "74a02361cac6deb91982be1ec1bb68d5",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:43:18.829068+00:00",
+   "finished": "2026-09-22T14:43:26.411681+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "b57cd355dd5a4a158866e091cd35dae0",
+   "commit": "d493f686a11de834a1f2633ba2e71f7678b52a89",
+   "pushed": true,
+   "target": "latest",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/latest",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:43:23.696042+00:00"
+  },
+  "l10_evpn_binding_after": {
+   "binding_id": "4b00e8b5877d47d49ee884724805903f",
+   "revision": "0714b4ddfad0183437bedfdca7fa4065fa82d8c26e539c594a70825ab0816ee7",
+   "repository": {
+    "id": "4b00e8b5877d47d49ee884724805903f",
+    "label": "CLAB-MNGR-DEV-LLM / l10-evpn/work",
+    "owner": "clabllm",
+    "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+    "remote": "origin",
+    "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+    "branch": "main",
+    "prefix": "l10-evpn/work",
+    "revision": "0714b4ddfad0183437bedfdca7fa4065fa82d8c26e539c594a70825ab0816ee7"
+   },
+   "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+   "node_names": [
+    "clab-l10-evpn-PE1",
+    "clab-l10-evpn-PE2",
+    "clab-l10-evpn-PE3",
+    "clab-l10-evpn-P"
+   ],
+   "review_before_push": false
+  },
+  "final_tree_after": "7f0a08397a8191bf8451176088e92f1577c8a8e5",
+  "l10_evpn_files_after": [
+   "l10-evpn/work/latest/P.jcfg",
+   "l10-evpn/work/latest/P.set",
+   "l10-evpn/work/latest/PE1.jcfg",
+   "l10-evpn/work/latest/PE1.set",
+   "l10-evpn/work/latest/PE2.jcfg",
+   "l10-evpn/work/latest/PE2.set",
+   "l10-evpn/work/latest/PE3.jcfg",
+   "l10-evpn/work/latest/PE3.set",
+   "l10-evpn/work/latest/manifest.json"
+  ],
+  "final_git": {
+   "local": "d493f686a11de834a1f2633ba2e71f7678b52a89",
+   "origin": "d493f686a11de834a1f2633ba2e71f7678b52a89",
+   "in_sync": true
+  }
+ },
+ "checks": [
+  {
+   "check": "B8 save reached synced",
+   "ok": true,
+   "detail": "{'id': '74a02361cac6deb91982be1ec1bb68d5', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:43:18.829068+00:00', 'finished': '2026-09-22T14:43:26.411681+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': 'b57cd355dd5a4a158866e091cd35dae0', 'commit': 'd493f686a11de834a1f2633ba2e71f7678b52a89', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T14:43:23.696042+00:00'}"
+  },
+  {
+   "check": "B8 snapshot_path is save-fix/working/latest",
+   "ok": true,
+   "detail": "{'id': '74a02361cac6deb91982be1ec1bb68d5', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:43:18.829068+00:00', 'finished': '2026-09-22T14:43:26.411681+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': 'b57cd355dd5a4a158866e091cd35dae0', 'commit': 'd493f686a11de834a1f2633ba2e71f7678b52a89', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T14:43:23.696042+00:00'}"
+  },
+  {
+   "check": "l10-evpn binding unchanged",
+   "ok": true,
+   "detail": "({'binding_id': '4b00e8b5877d47d49ee884724805903f', 'revision': '0714b4ddfad0183437bedfdca7fa4065fa82d8c26e539c594a70825ab0816ee7', 'repository': {'id': '4b00e8b5877d47d49ee884724805903f', 'label': 'CLAB-MNGR-DEV-LLM / l10-evpn/work', 'owner': 'clabllm', 'path': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM', 'remote': 'origin', 'push_url': 'https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git', 'branch': 'main', 'prefix': 'l10-evpn/work', 'revision': '0714b4ddfad0183437bedfdca7fa4065fa82d8c26e539c594a70825ab0816ee7'}, 'host_identity': 'e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b', 'node_names': ['clab-l10-evpn-PE1', 'clab-l10-evpn-PE2', 'clab-l10-evpn-PE3', 'clab-l10-evpn-P'], 'review_before_push': False}, {'binding_id': '4b00e8b5877d47d49ee884724805903f', 'revision': '0714b4ddfad0183437bedfdca7fa4065fa82d8c26e539c594a70825ab0816ee7', 'repository': {'id': '4b00e8b5877d47d49ee884724805903f', 'label': 'CLAB-MNGR-DEV-LLM / l10-evpn/work', 'owner': 'clabllm', 'path': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM', 'remote': 'origin', 'push_url': 'https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git', 'branch': 'main', 'prefix': 'l10-evpn/work', 'revision': '0714b4ddfad0183437bedfdc"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "save-fix/Final blobs unchanged",
+   "ok": true,
+   "detail": "('7f0a08397a8191bf8451176088e92f1577c8a8e5', '7f0a08397a8191bf8451176088e92f1577c8a8e5')"
+  },
+  {
+   "check": "l10-evpn/work files unchanged",
+   "ok": true,
+   "detail": "(9, 9)"
+  },
+  {
+   "check": "local HEAD == origin/main at the end of B8",
+   "ok": true,
+   "detail": "{'local': 'd493f686a11de834a1f2633ba2e71f7678b52a89', 'origin': 'd493f686a11de834a1f2633ba2e71f7678b52a89', 'in_sync': True}"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:43:29Z"
+}

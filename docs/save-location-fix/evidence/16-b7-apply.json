@@ -1,0 +1,98 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:36:28Z",
+ "steps": {
+  "entry1_folder_browser_final": {
+   "source_line": "Source: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/Final \u00b7 saved 1 hour ago \u00b7 b302cb04cb",
+   "eligible_rows": [
+    "ceos EOS 1 differences from the running configuration",
+    "cjunosevolved Junos Evolved Already matches \u2014 nothing to change",
+    "vjunos-switch Junos Already matches \u2014 nothing to change",
+    "xrv9k IOS XR Already matches \u2014 nothing to change"
+   ],
+   "dialog_excerpt": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/Final \u00b7 saved 1 hour ago \u00b7 b302cb04cb\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS 1 differences from the running configuration\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch Junos Already matches \u2014 nothing to change\nxrv9k IOS XR Already matches \u2014 nothing to change\nEach device's current configuration i"
+  },
+  "entry2_save_location_browser": {
+   "source_line": "Source: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/Final \u00b7 saved 1 hour ago \u00b7 b302cb04cb",
+   "eligible_rows": [
+    "ceos EOS 1 differences from the running configuration",
+    "cjunosevolved Junos Evolved Already matches \u2014 nothing to change",
+    "vjunos-switch Junos Already matches \u2014 nothing to change",
+    "xrv9k IOS XR Already matches \u2014 nothing to change"
+   ],
+   "dialog_excerpt": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/Final \u00b7 saved 1 hour ago \u00b7 b302cb04cb\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS 1 differences from the running configuration\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch Junos Already matches \u2014 nothing to change\nxrv9k IOS XR Already matches \u2014 nothing to change\nEach device's current configuration i"
+  },
+  "entry3_saved_versions_solution": {
+   "source_line": "Source: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/course/lab/reference/solution \u00b7 saved 1 hour ago \u00b7 b302cb04cb",
+   "eligible_rows": [
+    "ceos EOS 1 differences from the running configuration",
+    "cjunosevolved Junos Evolved Already matches \u2014 nothing to change",
+    "vjunos-switch Junos Already matches \u2014 nothing to change",
+    "xrv9k IOS XR Already matches \u2014 nothing to change"
+   ],
+   "dialog_excerpt": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/course/lab/reference/solution \u00b7 saved 1 hour ago \u00b7 b302cb04cb\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS 1 differences from the running configuration\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch Junos Already matches \u2014 nothing to change\nxrv9k IOS XR Already matches \u2014 nothing to change\nEach device's"
+  },
+  "entry4_commit_button_text": "QA checkpoint A\n13 minutes ago \u00b7 7865961503",
+  "entry4_jumped_straight_to_version": true,
+  "entry4_version_dialog_text": "Saved version\n\u00d7\n\nsave-fix/working/checkpoints/qa-cp-a\n\nDetails\nApply to running lab\u2026\nCompare with my latest save\nDownload (ZIP)\n\nThis saved version can be applied to the running lab. The current configuration is backed up first and the devices are not rebooted.\n\nTechnical details\nceos.cfg\nceos.eoscfg\ncjunosevolved.set\ncjunosevolved.jcfg\nvjunos-switch.set\nvjunos-switch.jcfg\nxrv9k.cfg\nxrv9k.xrcfg",
+  "entry4_history_version": {
+   "source_line": "Source: save-fix/working/checkpoints/qa-cp-a \u00b7 saved 13 minutes ago \u00b7 7865961503",
+   "eligible_rows": [
+    "ceos EOS 2 differences from the running configuration",
+    "cjunosevolved Junos Evolved Already matches \u2014 nothing to change",
+    "vjunos-switch Junos Already matches \u2014 nothing to change",
+    "xrv9k IOS XR Already matches \u2014 nothing to change"
+   ],
+   "dialog_excerpt": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: save-fix/working/checkpoints/qa-cp-a \u00b7 saved 13 minutes ago \u00b7 7865961503\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS 2 differences from the running configuration\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch Junos Already matches \u2014 nothing to change\nxrv9k IOS XR Already matches \u2014 nothing to change\nEach device's current configuration is backed up first. A "
+  },
+  "keyboard_after_tab_active_tag": "BUTTON",
+  "keyboard_arrowdown_active_text": "save-fix"
+ },
+ "checks": [
+  {
+   "check": "entry1_folder_browser_final: review opened with a Source line naming the folder and a 10-char commit",
+   "ok": true,
+   "detail": "Source: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/Final \u00b7 saved 1 hour ago \u00b7 b302cb04cb"
+  },
+  {
+   "check": "entry2_save_location_browser: review opened with a Source line naming the folder and a 10-char commit",
+   "ok": true,
+   "detail": "Source: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/Final \u00b7 saved 1 hour ago \u00b7 b302cb04cb"
+  },
+  {
+   "check": "Saved versions has a row for the nested solution folder",
+   "ok": true,
+   "detail": "14"
+  },
+  {
+   "check": "entry3_saved_versions_solution: review opened with a Source line naming the folder and a 10-char commit",
+   "ok": true,
+   "detail": "Source: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/course/lab/reference/solution \u00b7 saved 1 hour ago \u00b7 b302cb04cb"
+  },
+  {
+   "check": "entry4: the historical version view offers \"Apply to running lab...\" when restorable",
+   "ok": true,
+   "detail": "1"
+  },
+  {
+   "check": "entry4_history_version: review opened with a Source line naming the folder and a 10-char commit",
+   "ok": true,
+   "detail": "Source: save-fix/working/checkpoints/qa-cp-a \u00b7 saved 13 minutes ago \u00b7 7865961503"
+  },
+  {
+   "check": "no page or console errors across the four preflight entry points",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "keyboard Tab moves focus within the folder browser",
+   "ok": true,
+   "detail": "BUTTON"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:36:58Z"
+}

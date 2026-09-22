@@ -1,3 +1,74 @@
+# Save location fix, part 1: stable Latest destination and manifest-based Apply — 1.30.31
+
+Prepared on `claude/save-location-fix` (branched from `main` `6c3e8b3`, release 1.30.30) on 2026-09-22. The routing
+preflight, the environment and the reviews are in `docs/save-location-fix/PICKUP.md`; the acceptance record is
+`docs/save-location-fix/MATRIX.md`; evidence files under `docs/save-location-fix/evidence/`.
+
+- **Live reproduction on the released 1.30.30 (real browser, API, registry, helper journal, Git).** Both defects
+  reproduced through the product by a QA agent before any code changed: a lab re-choosing `save-fix/working/latest`
+  after its folder registration was retired, whose next two saves and a direct API save all landed in
+  `save-fix/working/latest/latest` (`00-repro-nested-latest.*`, local == `origin/main`, blob ids compared); and
+  instructor snapshots pushed from a second checkout to `save-fix/Final`, `save-fix/course/lab/reference/solution`
+  and `save-fix/Broken/latest`, synced with *Update from the repository*: no Apply button and `400`/`409` on the direct
+  manifest folders, Apply and `200` on the legacy `Broken/latest` (`01-repro-apply-manifest.*`).
+- **Unit and static (this checkout, before the deployment):** every new regression was run failing first on the
+  unmodified code, then green. Python 899 tests, 1 skipped (the opt-in EOS SSH fixture); browser 209 tests;
+  `node --check` on every script; `git diff --check`; `verify-release.py`; `check_links.py` (90 files); the stdlib
+  deploy-script suites (`test_git_onboard.py` 43, `test_git_registrations.py`, `test_install_manager.py`,
+  `test_check_git.py`) with the system Python. New claims: helper (`test_host_git.py`: reserved names refused only
+  for a new lab folder, a legacy `x/latest` registration re-selectable and movable up, `Final`/nested/root/legacy
+  `Final/latest` read by exact path, a `.jcfg` without manifest not a snapshot, corrupt manifest refused, the 500-row
+  cap never drops the lab's own rows, a nested legacy folder ignored by `publish` while a foreign file and a
+  directory-only destination are refused); manager (`test_git_progress.py`, `test_restore.py`: 400 on reserved
+  names, 409 at or below a manifest folder, the three shapes of `resolve_version_path`, root `/`, the reviewed
+  commit applied at submit, unknown commit 409, malformed manifest 409); browser (`test_git_places_ui.js`,
+  `test_git_progress_ui.js`, `test_restore_ui.js`: the wire form, `gitFolderChoice` resolving `working/latest` to
+  its parent and refusing below a snapshot, `gitApplySource`, the grouping and its bound for a top-level lab folder,
+  `gitOpenCommit`'s fast path, the legacy notice, `restoreReview` submitting the reviewed commit).
+- **Fixture browser (real app on a scratch data directory, headless Chromium):** `docs/redesign/tools/verify_after.py`
+  98/98 checks at 1920×1080, 1440×900 and 1366×768 with zero console and page errors (the fixture's restore probe hook
+  was brought back in line with the service's `_probe`, a drift since 1.30.27 that made the review wait on real SSH
+  timeouts); `docs/ui-review-001/tools/check_ui004.py`, `check_ui007ab.py`, `check_ui008a.py`, `check_ui008b.py`
+  each green on a fresh fixture (a tool run twice on the same mutated fixture data fails on its own leftovers, as
+  before).
+- **Two independent Opus reviews** (`risk-reviewer` on the helper, `clab-ui-reviewer` on the whole change) before the
+  deployment; every should-fix finding was fixed and pinned by a test (the list is in the pickup file, "Reviews").
+- **Deployed:** `deploy/start-manager.sh --manager-only` built and started `clab-backup:1.30.31` (image
+  `d356c1d9253d`) from this working tree with the three helpers refreshed; `/api/state` 1.30.31, assets
+  `?v=1.30.31`, the helper list answers 1.30.31, the lab's legacy binding at `save-fix/working/latest` reads `ready`,
+  `/git/history` lists `save-fix/Final`, the nested solution folder and both `working/latest` layers, and
+  `/git/version` reads `/save-fix/Final`.
+- **Real Git, real browser and one live device on that build (section B of the matrix, all PASS, by an independent
+  QA agent; `evidence/10-*` to `17-*`, tools `docs/save-location-fix/tools/b*_*.py` and `qa_lib.py`).** B0: the legacy
+  notice on the Save location card, the recovery through the page (pick `save-fix/working`, *Save this lab here*
+  without moving files → prefix `save-fix/working`), selecting `save-fix/working/latest` itself resolving to the
+  parent, and the API refusing `…/latest` (400) and `save-fix/Final/sub` (409). B1–B2: four Latest saves with a
+  changed description each time, including after browsing the existing `latest` folder, a page reload and a real
+  `docker restart` of the manager: every one wrote `save-fix/working/latest` in place (the original snapshot's
+  manifest blob changed, `save-fix/working/latest/latest` untouched), local == `origin/main` after each upload, every
+  commit in `git log -- save-fix/working/latest/manifest.json`. B3: a save without a change ended `unchanged` with no
+  commit; a cancelled review pushed nothing (`origin` unchanged, job `review_pending`); the same save uploaded from
+  *Recent saves › Review and upload…*. B4: checkpoints `qa-cp-a` and `qa-cp-b` byte-identical after a later Latest
+  save (tree hashes), Set baseline…, Compare, Full history…, View and the ZIP download of `/save-fix/Final` and of a
+  checkpoint (manifest plus the nine files). B5: a wrong-credentials profile on cEOS → `capture_incomplete`, HEAD
+  unchanged; `gh auth switch` to an account without push rights → `push_pending` with the local commit kept, retry
+  after switching back → `synced`, no second commit, no nesting. B6: `save-fix/Final`, the nested solution folder,
+  `save-fix/Broken` (legacy parent, caption naming `…/latest`) and `save-fix/Broken/latest` listed by the folder
+  browser, the Saved versions groups and `/git/history` without any rebinding. B7: the review opened from the folder
+  browser, the Save location browser, a Saved versions row and a historical version view, each naming the exact path
+  and the 10-character commit; one real restore of `/save-fix/Final` onto cEOS after drifting it to configuration B:
+  `succeeded`, `verified`, 0 missing / 0 extra by the manager and, independently, `readback.py` found none of the
+  four B-only markers and the active configuration identical to the saved one; the dialog reopened from the banner
+  and after a page refresh while the job ran; keyboard access of the outline; the Progress tab at 390 px; a stale
+  review (a new commit to `save-fix/Final` pushed from the second checkout and synced between review and
+  confirmation) applied the reviewed older commit, and a submit naming a commit outside the branch was refused with
+  409 before any device was contacted. B8: the next save after that restore wrote `save-fix/working/latest` again,
+  `save-fix/Final` unchanged, the lab `l10-evpn`'s binding and files unchanged.
+  Observed and benign: twice a save's upload found *Another Git operation is already running for this repository*
+  (the previous upload still held the single host lock) and ended `push_pending`; the next upload carried the commit
+  and marked it `synced`, as the review dialog says it does. Not run in this release: the four-image live matrix
+  (section C), which is the next chunk.
+
 # Multi-platform restore, part 4: persistence and the closing record — 1.30.30
 
 Prepared on `claude/multi-platform-restore` on 2026-09-21 after 1.30.29 (`4d35a9b`, pushed, CI green). **Live-device and

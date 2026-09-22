@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.30.30'
+VERSION = '1.30.31'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -49,6 +49,34 @@ def relpath(value, empty=False):
     if any(not PATH_PART.fullmatch(p) or p.lower() == '.git' or p in ('.', '..') for p in parts):
         raise ValueError('Use literal repository paths without traversal or hidden Git paths.')
     return '/'.join(parts)
+
+
+RESERVED = ('latest', 'baseline', 'checkpoints')
+
+
+def base_prefix(value):
+    """A lab folder (registration prefix): the folder Save progress writes `latest`, `baseline` and
+    `checkpoints/<name>` into. Those names cannot be a lab folder themselves, or the next save would
+    nest a second snapshot folder inside the first (`working/latest/latest`)."""
+    prefix = relpath(value, empty=True)
+    parts = prefix.split('/') if prefix else []
+    if parts and (parts[-1] in RESERVED or (len(parts) >= 2 and parts[-2] == 'checkpoints')):
+        parent = '/'.join(parts[:-2] if parts[-2:-1] == ['checkpoints'] else parts[:-1])
+        raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. '
+                         'Choose the folder above them: its saves go to ' + (parent + '/latest' if parent else 'latest at the repository root') + '.')
+    return prefix
+
+
+def snapshot_folder(value):
+    """A snapshot folder: any safe repository folder, `''` (or `/`) for the repository root. Whether it
+    is a snapshot is decided by its manifest, which read_version then validates."""
+    if value in ('', '/'): return ''
+    if isinstance(value, str) and value.startswith('/'): value = value[1:]
+    return relpath(value)
+
+
+def snapshot_file(folder, name):
+    return folder + '/' + name if folder else name
 
 
 def checked_url(value, allow_local=False):
@@ -575,9 +603,11 @@ class GitRepository:
                             old_names.add(artifact)
                 directory = no_links(self.root / folder, False)
                 if directory.exists():
-                    existing = {p.name for p in directory.iterdir()}
+                    # Only files: the export owns `<folder>/<name>` entries and never a subdirectory, so a
+                    # legacy nested `latest/latest` folder does not block saving into the snapshot around it.
+                    entries = list(directory.iterdir()); existing = {p.name for p in entries if not p.is_dir()}
                     if existing - (old_names | {'manifest.json'}): raise ValueError('The destination contains files outside its manager manifest; preserve or move them first.')
-                    if not old and existing: raise ValueError('The destination is not an empty manager snapshot folder.')
+                    if not old and entries: raise ValueError('The destination is not an empty manager snapshot folder.')
                 removed = old_devices - set(files)
                 if removed and not req.get('allow_removed'): raise ValueError('This capture removes previously saved devices. Review the new device scope before allowing removal.')
                 if old and content_digest(old) == content_digest(manifest): continue
@@ -618,39 +648,41 @@ class GitRepository:
             parts = line.split('\0', 2)
             if len(parts) == 3: commits.append({'commit': parts[0], 'time': int(parts[1]), 'message': parts[2][:500]})
         head = self.run('rev-parse', 'HEAD'); versions = []
-        # Every saved snapshot folder committed anywhere in this checkout, each identified by
-        # its full repository path, so a student can load base/final/broken/work states and see
-        # which one they are picking rather than an unlabelled "latest".
+        # Every snapshot folder committed anywhere in this checkout (a folder holding manifest.json,
+        # whatever its name or depth: Final, Broken/latest, course/lab/reference/solution, the root),
+        # each identified by its exact repository path; `connected` marks this lab's own three kinds.
         connected = {self.scope('latest'), self.scope('baseline')}
         checkpoints = self.scope('checkpoints') + '/'
         for path in self.run('ls-tree', '-r', '--name-only', head, limit=MAX_TOTAL).splitlines():
-            if not path.endswith('/manifest.json'): continue
-            folder = path.rsplit('/', 1)[0]
-            if not self.allowed_repo_version(folder): continue
+            if path != 'manifest.json' and not path.endswith('/manifest.json'): continue
+            folder = path.rsplit('/', 1)[0] if '/' in path else ''
+            try: snapshot_folder(folder)
+            except ValueError: continue
             here = folder in connected or (folder.startswith(checkpoints) and '/' not in folder[len(checkpoints):])
+            # The cap bounds the other folders; this lab's own snapshots are always listed.
+            if not here and sum(1 for v in versions if not v['connected']) >= 500: continue
             versions.append({'name': folder, 'path': folder, 'commit': head, 'connected': here})
-            if len(versions) >= 500: break
         versions.sort(key=lambda version: (not version['connected'], version['path']))
         return {'commits': commits, 'versions': versions}
 
     def allowed_repo_version(self, folder):
-        """A snapshot folder anywhere in this checkout: any path ending in latest/baseline or
-        checkpoints/<name>. relpath() rejects traversal and .git; the manifest must still exist
-        and pass the integrity check. Lets a lab apply a saved state from a sibling folder without
-        first rebinding to it."""
-        relpath(folder)
-        parts = folder.split('/')
-        if parts[-1] in ('latest', 'baseline'):
-            return True
-        return len(parts) >= 2 and parts[-2] == 'checkpoints' and bool(SLUG.fullmatch(parts[-1]))
+        """A snapshot folder anywhere in this checkout: any safe repository folder ('' or '/' is the
+        root). Its name decides nothing; the manifest must exist at the commit and pass the integrity
+        check. Lets a lab apply a saved state from any folder without first rebinding to it."""
+        try: snapshot_folder(folder)
+        except ValueError: return False
+        return True
 
     def read_version(self, req):
         self.validate(); commit = req.get('commit'); folder = req.get('path')
         if not isinstance(commit, str) or not HEX.fullmatch(commit) or not isinstance(folder, str) or not self.allowed_repo_version(folder):
             raise ValueError('Select a listed snapshot path and exact commit.')
+        folder = snapshot_folder(folder)
         code, _ = self.run('merge-base', '--is-ancestor', commit, 'HEAD', check=False)
         if code: raise ValueError('The selected commit is outside this repository branch history.')
-        raw = self.run('show', commit + ':' + folder + '/manifest.json', limit=MAX_FILE)
+        code, raw = self.run('show', commit + ':' + snapshot_file(folder, 'manifest.json'), check=False, limit=MAX_FILE)
+        if code: raise ValueError('This folder holds no saved configuration (manifest.json) at the selected commit.')
+        raw = raw.decode('utf8', errors='replace')
         try: manifest = json.loads(raw)
         except Exception: raise ValueError('The saved version manifest is invalid.') from None
         files = {}; total = 0
@@ -660,7 +692,7 @@ class GitRepository:
             nonlocal total
             name = relpath(name)
             if '/' in name or name == 'manifest.json': raise ValueError('Invalid saved snapshot filename.')
-            code, content = self.run('show', commit + ':' + folder + '/' + name, check=False, limit=MAX_FILE)
+            code, content = self.run('show', commit + ':' + snapshot_file(folder, name), check=False, limit=MAX_FILE)
             total += len(content)
             if code or total > MAX_TOTAL: raise ValueError('The saved snapshot is missing files or exceeds its limit.')
             files[name] = base64.b64encode(content).decode()
@@ -682,7 +714,7 @@ class GitRepository:
         commit, folder = journal['commit'], journal['snapshot_path']
         after = self.read_version({'commit': commit, 'path': folder})['snapshot']['files']
         parent = self.run('rev-parse', commit + '^')
-        code, _ = self.run('cat-file', '-e', parent + ':' + folder + '/manifest.json', check=False)
+        code, _ = self.run('cat-file', '-e', parent + ':' + snapshot_file(folder, 'manifest.json'), check=False)
         before = {} if code else self.read_version({'commit': parent, 'path': folder})['snapshot']['files']
         result = []; size = 0
         for name in sorted(set(before) | set(after)):
@@ -946,6 +978,9 @@ def plan_prefix(config, req, lookup=None):
     if prefix == source['prefix']: return source, None
     existing = next((b for b in config['repositories'] if b['path'] == source['path'] and b['prefix'] == prefix), None)
     if existing: return existing, None
+    # A registration that already exists (a legacy `x/latest` one included) stays selectable and
+    # repairable; only a new lab folder must not be a snapshot folder name.
+    base_prefix(prefix)
     check_overlap(config, source['path'], prefix, ignore=source if req.get('retire') is True else None)
     label = req.get('label') or (Path(source['path']).name + (' / ' + prefix if prefix else ''))
     binding = account_binding(source['owner'], source['path'], source['remote'], prefix, label, lookup)
@@ -961,7 +996,9 @@ def plan_connect(config, req, lookup=None):
         path = known[0]['path']; remote = known[0]['remote']
         existing = next((b for b in known if b['prefix'] == prefix), None)
         if existing: return existing, None, url
+        base_prefix(prefix)
     else:
+        base_prefix(prefix)
         path = str(Path((lookup or account_lookup)(owner).pw_dir) / 'labs' / repository_name(url)); remote = 'origin'
         if any(b['path'] == path for b in config['repositories']):
             raise ValueError('The VM folder for this repository name already holds another registered repository. Choose a repository with a different name.')

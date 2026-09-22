@@ -123,22 +123,23 @@ class FakeGit:
         return next((r for r in self.registrations if r['id'] == request.get('binding_id')), self.registrations[0])
 
     def snapshot(self, folder):
-        raw = self.files.get(folder + '/manifest.json')
+        join = lambda name: folder + '/' + name if folder else name
+        raw = self.files.get(join('manifest.json'))
         if not raw:
-            raise ValueError('No saved version at this path.')
+            raise ValueError('This folder holds no saved configuration (manifest.json) at the selected commit.')
         manifest, files = json.loads(raw), {}
         for entry in manifest['files']:
             for key in ('path', 'restore_artifact'):
                 if entry.get(key):
-                    files[entry[key]] = base64.b64encode(self.files[folder + '/' + entry[key]]).decode('ascii')
+                    files[entry[key]] = base64.b64encode(self.files[join(entry[key])]).decode('ascii')
         return {'snapshot': {'manifest': manifest, 'files': files}}
 
     def versions(self, reg):
         prefix, out = reg['prefix'], []
         for path in sorted(self.files):
-            if not path.endswith('/manifest.json'):
+            if path != 'manifest.json' and not path.endswith('/manifest.json'):
                 continue
-            folder = path.rsplit('/', 1)[0]
+            folder = path.rsplit('/', 1)[0] if '/' in path else ''
             checkpoints = prefix + '/checkpoints/'
             connected = folder in (prefix + '/latest', prefix + '/baseline') or (folder.startswith(checkpoints) and '/' not in folder[len(checkpoints):])
             out.append(dict(name=folder, path=folder, commit=self.head, connected=connected))
@@ -160,7 +161,7 @@ class FakeGit:
         if mode == 'history':
             return {'commits': list(self.commits), 'versions': self.versions(reg)}
         if mode == 'read-version':
-            return self.snapshot(str(request.get('path', '')).strip('/'))
+            return self.snapshot(str(request.get('path', '')).strip('/'))  # '' or '/' = the repository root
         if mode == 'compare':
             return {'files': []}
         if mode == 'publish':
@@ -179,6 +180,11 @@ class FakeGit:
             return {'status': 'synced', 'commit': self.head, 'pushed': True, 'synced_operations': [request.get('operation_id', '')], 'message': 'Saved to Git.'}
         if mode == 'register-prefix':
             prefix = request.get('prefix', '')
+            # Like app/host_git.py base_prefix: latest, baseline and checkpoints/<name> are the snapshot
+            # folders Save progress writes inside a lab folder, never a lab folder themselves.
+            parts = prefix.split('/') if prefix else []
+            if parts and (parts[-1] in ('latest', 'baseline', 'checkpoints') or (len(parts) >= 2 and parts[-2] == 'checkpoints')):
+                raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. Choose the folder above them.')
             existing = next((r for r in self.registrations if r['prefix'] == prefix and r['path'] == reg['path']), None)
             # Like app/host_git.py: lab folders of one checkout cannot overlap unless the source registration
             # is being retired, and a retire removes it (an empty folder the lab leaves is then known to nobody
@@ -200,6 +206,9 @@ class FakeGit:
             return dict(new)  # the helper answers with the registration itself (host_git.register_prefix)
         if mode == 'connect':
             url, prefix = str(request.get('url', '')), request.get('prefix', '')
+            parts = prefix.split('/') if prefix else []
+            if parts and (parts[-1] in ('latest', 'baseline', 'checkpoints') or (len(parts) >= 2 and parts[-2] == 'checkpoints')):
+                raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. Choose the folder above them.')
             name = url.rstrip('/').split('/')[-1].removesuffix('.git') or 'repo'
             new = dict(id='reg-' + hashlib.sha1((url + prefix).encode()).hexdigest()[:8], label=f"{name} / {prefix or 'top level'}", owner='clabllm',
                        path=f'/home/clabllm/labs/{name}', remote='origin', push_url=url, branch='main', prefix=prefix, revision='rev-' + hashlib.sha1(url.encode()).hexdigest()[:6])
@@ -404,6 +413,12 @@ def build(data_dir, port):
         text = config_text(node, 'solution').decode()
         return text + ('set system services ssh\n' if index == 1 else '')
     app.state.restore._capture = fake_capture
+
+    def fake_probe(node, creds, capture=False):
+        # The service looks at a node over one connection (_probe): nothing pending, no blocker, and
+        # the active configuration when asked for. The third Junos device raises like a dead SSH.
+        return '', (fake_capture(node, creds) if capture else None)
+    app.state.restore._probe = fake_probe
 
     # Discovery: keep the seeded snapshot fresh instead of inspecting a VM.
     def fresh_refresh(wait=False):

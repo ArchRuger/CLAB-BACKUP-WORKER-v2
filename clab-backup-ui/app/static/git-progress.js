@@ -27,6 +27,23 @@ function gitRepoName(repo){return String(repo?.path||'').split('/').filter(Boole
 function gitDestination(binding){const repo=gitRepository(binding);return [[gitRepoName(repo)||binding?.binding_id,repo.prefix?repo.prefix.replace(/\/$/,''):'','latest/'].filter(Boolean).join(' › '),repo.branch].filter(Boolean).join(' · ');}
 // "Course-Labs › bgp" in words for the status card and the Recent saves rows.
 function gitFolderWords(binding){const repo=gitRepository(binding),name=gitRepoName(repo)||binding?.binding_id||'the repository';return repo.prefix?name+' › '+repo.prefix.replace(/\/$/,''):name+' (whole repository)';}
+// The exact repository-relative path of a snapshot name ("latest", "baseline", "checkpoints/<name>")
+// inside a lab folder: the lab folder's prefix joined with it, or the bare name at the repository root.
+// Every exact snapshot path the browser sends carries one leading slash on the wire ('/' = the
+// repository root itself); the manager treats a leading slash as "exact repository path".
+function gitSnapshotPath(binding,name){const prefix=(gitRepository(binding).prefix||'').replace(/\/$/,'');return '/'+(prefix?prefix+'/'+name:name);}
+// The pure sentence for a lab folder whose own name looks like a snapshot Save progress writes
+// (latest, baseline, checkpoints/<name>): a legacy destination that nests a second one inside it.
+// '' when the prefix is not shaped like that.
+function gitLegacyDestinationNotice(binding){
+ const prefix=(gitRepository(binding).prefix||'').replace(/\/$/,'');
+ if(!prefix)return '';
+ const parts=prefix.split('/'),last=parts[parts.length-1],last2=parts.length>1?parts[parts.length-2]:'';
+ const reservedLen=last2==='checkpoints'?2:['latest','baseline','checkpoints'].includes(last)?1:0;
+ if(!reservedLen)return '';
+ const parent=parts.slice(0,-reservedLen).join('/'),parentWords=parent||'the top of the repository';
+ return `This lab saves to ${prefix}, a folder named like a saved state, so its saves go to ${prefix}/latest. To save into ${parentWords}/latest again, open Change folder…, pick ${parentWords} and choose Save this lab here without moving the files.`;
+}
 function gitTargetPath(job){if(job.target==='move')return 'latest';return job.target==='checkpoint'?'checkpoints/'+job.checkpoint:job.target||'latest';}
 function gitTargetLabel(job){if(job.target==='move')return 'Folder move → '+((job.snapshot_path||'').replace(/\/?latest$/,'')||'repository root');return job.target==='checkpoint'?'checkpoints/'+(job.checkpoint||''):job.target||'latest';}
 // Student sentence, pill and "Saved as" for one save job.
@@ -197,8 +214,9 @@ function gitRenderRepository(id,context,catalog,extras={}){
   <details class="caption"><summary>Registration details</summary><p id="git-binding-destination" class="op-path"></p><p>Git runs on the VM as the registered account with the login configured there. This app never asks for a Git password.</p></details>
   <p class="form-error" role="alert"></p><div class="actions"><button type="submit" class="button primary" ${supported.length?'':'disabled'}>${activeBinding?'Save settings':'Connect save location'}</button></div></form>`:'';
  const technical=activeBinding?`<details class="caption git-location-tech"><summary>Git repo details</summary>${repo.push_url?`<p class="op-path">Verified push destination: <code>${esc(repo.push_url)}</code></p>`:''}<p class="op-path">Branch ${esc(repo.branch||'')} · VM account ${esc(repo.owner||'')} · ${esc(repo.path||'')}</p></details>`:'';
+ const legacyNotice=activeBinding?gitLegacyDestinationNotice(binding):'';
  $('git-repository-content').innerHTML=activeBinding
-  ?`<section class="card git-save-location" id="git-save-location" aria-labelledby="git-save-location-title"><h2 id="git-save-location-title">Save location</h2><p class="git-destination-line"><span>${esc(labName)} saves to</span><code>${esc(repoName)}</code>${repo.prefix?`<span aria-hidden="true">›</span><code>${esc(repo.prefix)}</code>`:''}<span aria-hidden="true">›</span><code>latest/</code></p><p class="form-help">Each save includes ${selected.size} ${selected.size===1?'device':'devices'}.</p><div class="actions"><button type="button" class="button secondary" data-git-repo-action="switch">Use a different repository…</button><button type="button" class="button secondary" data-git-repo-action="connect">Connect by URL…</button></div><p class="form-help">Connected the wrong repository? Choose <strong>Use a different repository</strong>. Nothing is deleted, and files already saved stay where they are. To stop saving here, <button type="button" class="text-button git-inline-action" data-git-repo-action="unlink">disconnect this lab</button>.</p>${technical}${form}</section>`
+  ?`<section class="card git-save-location" id="git-save-location" aria-labelledby="git-save-location-title"><h2 id="git-save-location-title">Save location</h2><p class="git-destination-line"><span>${esc(labName)} saves to</span><code>${esc(repoName)}</code>${repo.prefix?`<span aria-hidden="true">›</span><code>${esc(repo.prefix)}</code>`:''}<span aria-hidden="true">›</span><code>latest/</code></p>${legacyNotice?`<p class="op-notice" id="git-legacy-notice">${esc(legacyNotice)}</p>`:''}<p class="form-help">Each save includes ${selected.size} ${selected.size===1?'device':'devices'}.</p><div class="actions"><button type="button" class="button secondary" data-git-repo-action="switch">Use a different repository…</button><button type="button" class="button secondary" data-git-repo-action="connect">Connect by URL…</button></div><p class="form-help">Connected the wrong repository? Choose <strong>Use a different repository</strong>. Nothing is deleted, and files already saved stay where they are. To stop saving here, <button type="button" class="text-button git-inline-action" data-git-repo-action="unlink">disconnect this lab</button>.</p>${technical}${form}</section>`
   :repositories.length
   ?`<section class="card git-save-location" id="git-save-location" aria-labelledby="git-save-location-title"><h2 id="git-save-location-title">Choose a save location</h2><p>Your progress is saved as versions in a Git repository on the lab VM. Pick the repository and folder for this lab, then choose the devices to include.</p>${form}</section>`
   :`<section class="card git-save-location" id="git-save-location" aria-label="Save location"><div class="blank-state"><h3>Choose where to save your progress</h3><p>Connect a GitHub repository by pasting its HTTPS URL. The VM's Git login is used — you won't be asked for a password.</p><div class="actions git-blank-actions"><button type="button" class="button primary" data-git-repo-action="connect">Connect a repository by URL</button><button type="button" class="button secondary" data-git-repo-action="refresh">Check again</button></div><details><summary>Administrator setup (terminal)</summary><p>On the VM, run this as your normal account (no sudo). It sets up the checkout and Git login. Then click Check again.</p><pre class="git-setup-command">bash deploy/setup-git.sh</pre></details></div></section>`;
@@ -227,47 +245,59 @@ function gitRenderRepository(id,context,catalog,extras={}){
  if(folder&&typeof folder.addEventListener==='function')folder.addEventListener('toggle',()=>{if(folder.open)gitFolderCollapsed.delete(id);else gitFolderCollapsed.add(id);});
  if(requested&&activeBinding){const settings=$('git-save-settings');if(settings&&typeof settings.scrollIntoView==='function')settings.scrollIntoView({block:'start',behavior:'smooth'});}
 }
-// Saved versions: rows come from the repository tree the folder browser already reads (folders with a
-// latest/ save), grouped for the student; the History dialog keeps the commit list.
+// The registered folder that owns a path: the deepest registration at or above it (a root
+// registration owns everything unless a deeper one exists). Kept local to this file — git-progress.js
+// loads before git-places.js, so its own gitOwningFolder is not yet defined when this runs standalone
+// (see tests/test_git_progress_ui.js); the logic mirrors it exactly.
+// A registration at the repository root ('') is skipped here unless path itself is the root: without
+// this, a lab registered at the root would claim every other snapshot in the repository as its own
+// (the reported defect), hiding them from "reference" and "elsewhere".
+function gitVersionsOwner(model,path){let best=null;for(const dir of model.nodes.values()){if(!dir.registration)continue;if(dir.path===path||(dir.path!==''&&path.startsWith(dir.path+'/'))){if(!best||dir.path.length>best.path.length)best=dir;}}return best;}
+// Saved versions: rows come from the repository tree the folder browser already reads, grouped for
+// the student from every snapshot folder (one that holds manifest.json, whatever its name or depth) —
+// the History dialog keeps the commit list. Every row names its exact repository-relative path.
 function gitVersionGroups(id,context,model,tree,history){
  const binding=context.binding,repo=gitRepository(binding),prefix=(repo.prefix||'').replace(/\/$/,''),head=tree?.head||history?.versions?.[0]?.commit||'',repoName=gitRepoName(repo),jobs=gitLabJobs(id,context);
- const groups={latest:[],checkpoints:[],baseline:[],reference:[],others:[]};
+ const groups={latest:[],checkpoints:[],baseline:[],reference:[],others:[],elsewhere:[]};
  const done=j=>['synced','committed','review_pending','unchanged','push_pending'].includes(j.status);
  const noteFor=(target,name)=>jobs.find(j=>j.target===target&&(!name||j.checkpoint===name)&&j.note&&done(j))?.note||'';
  const whenFor=(target,name)=>{const job=jobs.find(j=>j.target===target&&(!name||j.checkpoint===name)&&done(j));return job?job.finished||job.created:'';};
  const epoch=value=>typeof value==='number'?value*1000:'';
  if(model){
   const dir=model.nodes.get(prefix),latest=dir?.dirs.find(d=>d.name==='latest');
-  if(latest&&latest.count)groups.latest.push({name:'Latest',caption:`${repoName} › ${prefix||'(whole repository)'} › latest`,when:epoch(tree?.saved?.latest)||whenFor('latest'),note:noteFor('latest'),count:latest.count,view:{commit:head,path:'latest'},compare:false,apply:dir.restorable?(prefix?{folder:prefix}:{version:{type:'git',commit:head,path:'latest'}}):null});
+  if(latest&&latest.count)groups.latest.push({name:'Latest',caption:`${repoName} › ${prefix||'(whole repository)'} › latest`,when:epoch(tree?.saved?.latest)||whenFor('latest'),note:noteFor('latest'),count:latest.count,view:{commit:head,path:gitSnapshotPath(binding,'latest')},compare:false,apply:latest.snapshot?{path:gitSnapshotPath(binding,'latest')}:null});
   const checkpoints=dir?.dirs.find(d=>d.name==='checkpoints');
-  for(const cp of checkpoints?.dirs||[])if(cp.count)groups.checkpoints.push({name:cp.name,caption:'',when:whenFor('checkpoint',cp.name)||0,note:noteFor('checkpoint',cp.name),count:cp.count,view:{commit:head,path:'checkpoints/'+cp.name},compare:true,apply:null});
+  for(const cp of checkpoints?.dirs||[])if(cp.count)groups.checkpoints.push({name:cp.name,caption:'',when:whenFor('checkpoint',cp.name)||0,note:noteFor('checkpoint',cp.name),count:cp.count,view:{commit:head,path:gitSnapshotPath(binding,'checkpoints/'+cp.name)},compare:true,apply:cp.snapshot?{path:gitSnapshotPath(binding,'checkpoints/'+cp.name)}:null});
   const baseline=dir?.dirs.find(d=>d.name==='baseline');
-  if(baseline&&baseline.count)groups.baseline.push({name:'Baseline',caption:'',when:epoch(tree?.saved?.baseline)||whenFor('baseline'),count:baseline.count,view:{commit:head,path:'baseline'},compare:true,apply:null});
-  const parentPath=prefix.includes('/')?prefix.slice(0,prefix.lastIndexOf('/')):'',parent=model.nodes.get(parentPath);
-  const seen=new Set([prefix]);
-  const rowFor=child=>{const latestDir=child.dirs.find(d=>d.name==='latest');return {name:typeof savedVersionName==='function'?savedVersionName(child.path):child.name,caption:child.path,when:'',count:latestDir?latestDir.count:0,view:{commit:head,path:child.path+'/latest'},compare:true,apply:child.restorable?{folder:child.path}:null};};
-  // Siblings of the lab folder are instructor/reference versions; a sibling without its own latest/
-  // (the course layout's `reference/` holder: reference/start, reference/solution, …) contributes the
-  // saved folders one level below it.
-  const hasLatest=node=>node.dirs.some(d=>d.name==='latest'&&d.count);
-  const candidates=[];
-  for(const child of parent?.dirs||[]){
-   if(seen.has(child.path))continue;
-   if(hasLatest(child))candidates.push(child);
-   else for(const grand of child.dirs)if(!seen.has(grand.path)&&hasLatest(grand))candidates.push(grand);
-  }
-  for(const child of candidates){
-   seen.add(child.path);
-   const row=rowFor(child),other=child.registration?.lab;
-   if(other&&other.id!==id){row.name=other.name;groups.others.push(row);}else groups.reference.push(row);
-  }
+  if(baseline&&baseline.count)groups.baseline.push({name:'Baseline',caption:'',when:epoch(tree?.saved?.baseline)||whenFor('baseline'),count:baseline.count,view:{commit:head,path:gitSnapshotPath(binding,'baseline')},compare:true,apply:baseline.snapshot?{path:gitSnapshotPath(binding,'baseline')}:null});
+  const parentPath=prefix.includes('/')?prefix.slice(0,prefix.lastIndexOf('/')):'';
+  const withinOwn=path=>path===prefix||path.startsWith(prefix+'/');
+  // "At or below the lab folder's parent, any depth" only means something when the lab folder has a
+  // parent. A top-level lab folder (prefix with no parent, parentPath '') has no folder to be "below
+  // ", so without a cap every snapshot in the repository would count as reference (the reported
+  // defect): only nearby top-level folders — within two segments once the legacy latest/ convenience
+  // is discounted — count; anything deeper is "elsewhere".
+  const belowParent=path=>{
+   if(parentPath!=='')return path===parentPath||path.startsWith(parentPath+'/');
+   const depth=path.replace(/\/latest$/,'').split('/').filter(Boolean).length;
+   return depth>0&&depth<=2;
+  };
+  // Every path sent to the wire (view, apply) carries the leading slash; the display caption never does.
+  const rowFor=node=>{const display=node.path===''?'':node.path.replace(/\/latest$/,''),name=node.path===''?'Repository root':(typeof savedVersionName==='function'?savedVersionName(display):node.name),wire='/'+node.path;return {name,caption:node.path,when:'',count:node.count,view:{commit:head,path:wire},compare:true,apply:{path:wire}};};
+  // Every other snapshot folder in the repository: at or below the lab folder's parent, any depth, is
+  // "reference"; inside another lab's registered folder is "others" (named by that lab); the rest,
+  // wherever they are, is a third, collapsed "elsewhere" group. Nothing here substitutes a latest/
+  // child for its parent: a folder and its latest/ child that are both snapshots give two rows.
   for(const node of model.nodes.values()){
-   if(seen.has(node.path)||!node.registration?.lab||node.registration.lab.id===id||!node.dirs.some(d=>d.name==='latest'&&d.count))continue;seen.add(node.path);
-   const row=rowFor(node);row.name=node.registration.lab.name;groups.others.push(row);
+   if(!node.snapshot||withinOwn(node.path))continue;
+   const owner=gitVersionsOwner(model,node.path),foreignLab=owner?.registration?.lab;
+   if(foreignLab&&foreignLab.id!==id){const row=rowFor(node);row.name=foreignLab.name;groups.others.push(row);}
+   else if(belowParent(node.path))groups.reference.push(rowFor(node));
+   else groups.elsewhere.push(rowFor(node));
   }
  }else if(history){
   for(const version of history.versions||[]){
-   const row={name:version.label||version.path,caption:version.path,when:'',count:0,view:{commit:version.commit,path:version.path},compare:true,apply:null},leaf=String(version.path||'').split('/').pop();
+   const row={name:version.label||version.path,caption:version.path,when:'',count:0,view:{commit:version.commit,path:'/'+(version.path||'')},compare:true,apply:null},leaf=String(version.path||'').split('/').pop();
    if(version.connected){if(leaf==='latest'){row.name='Latest';row.compare=false;groups.latest.push(row);}else if(leaf==='baseline'){row.name='Baseline';groups.baseline.push(row);}else{row.name=leaf;groups.checkpoints.push(row);}}
    else groups.reference.push(row);
   }
@@ -298,17 +328,15 @@ function gitRenderVersions(id,context,model,tree,history){
   +section('Checkpoints',groups.checkpoints,'','No checkpoints yet. Create a checkpoint when you reach an important milestone.')
   +section('Baseline',groups.baseline,'The reference version set for this lab.','')
   +section('Instructor and reference versions',groups.reference,'Versions your instructor put in the repository appear here. Apply one to load it onto your running devices; the current configuration is backed up first.','')
-  +section('Other labs in this repository',groups.others,'','',true);
+  +section('Other labs in this repository',groups.others,'','',true)
+  +section('Elsewhere in this repository',groups.elsewhere,'','',true);
  gitVersionsMarkup(el,html);
  if(typeof el.querySelectorAll==='function')for(const button of el.querySelectorAll('[data-git-repo-action]'))button.onclick=()=>gitRunAction(button.dataset.gitRepoAction,id);
 }
 function gitVersionAction(kind,row,id=activeId){
  if(kind==='view')return opTask(null,()=>gitViewVersion(id,{commit:row.view.commit,path:row.view.path,label:row.name}));
  if(kind==='compare')return opTask(null,()=>gitCompareVersion(id,row.view,row.name));
- if(kind==='apply'&&row.apply){
-  if(row.apply.folder&&typeof restoreFromFolder==='function')return opTask(null,()=>restoreFromFolder(id,row.apply.folder,gitVersionTree||{repository:gitRepository(gitContexts.get(id)?.binding)}));
-  if(row.apply.version&&typeof restoreFromVersion==='function')return opTask(null,()=>restoreFromVersion(id,row.apply.version,row.name));
- }
+ if(kind==='apply'&&row.apply&&typeof restoreFromFolder==='function')return opTask(null,()=>restoreFromFolder(id,row.apply.path,gitVersionTree||{repository:gitRepository(gitContexts.get(id)?.binding)}));
  return undefined;
 }
 // Recent saves: one expandable row per job in student words; the job dialog keeps the live poll,
@@ -521,7 +549,7 @@ async function gitReviewJob(job){
  const waiting=gitPendingStates.has(job.status),decide=waiting&&gitNeedsReview(job),context=gitContexts.get(job.lab_id),host=(typeof statusHost==='function'&&statusHost(gitRepository(context?.binding).push_url))||'the online repository';
  const others=decide?gitLabJobs(job.lab_id,context).filter(item=>item.id!==job.id&&item.commit&&!item.pushed&&gitPendingStates.has(item.status)).length:0;
  const dialog=opDialog('git-diff-dialog',decide?'Review before uploading':'Review this save',`<p>What this save changed compared with the previous one. Configuration files may contain passwords or keys.</p>${decide?`<p class="op-notice" id="git-review-decision">This save is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${others?` Uploading also sends ${others} earlier ${others===1?'save':'saves'} that ${others===1?'is':'are'} still waiting on the VM.`:''}</p>`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${gitDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?'<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button><button class="button primary" id="git-review-push">Upload these changes</button>':waiting?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
- $('git-review-files').onclick=()=>opTask(dialog,()=>gitViewVersion(job.lab_id,{commit:job.commit,path:gitTargetPath(job)}));
+ $('git-review-files').onclick=()=>opTask(dialog,()=>gitViewVersion(job.lab_id,{commit:job.commit,path:job.snapshot_path?'/'+job.snapshot_path:gitSnapshotPath(context?.binding,gitTargetPath(job))}));
  if($('git-review-cancel'))$('git-review-cancel').onclick=()=>{dialog.close();notify('Not uploaded. The save stays on the lab VM; upload it from Progress › Recent saves when you are ready.');};
  $('git-review-push')?.addEventListener('click',()=>opTask(dialog,async()=>{const next=await json('/git/jobs/'+encodeURIComponent(job.id)+'/retry','POST',{push:true,reviewed:true});dialog.close();gitRememberJob(next);await gitShowJob(next.id,next);await refresh();}));
 }
@@ -574,16 +602,19 @@ async function gitHistory(id=activeId){
  const data=await(await api('/labs/'+encodeURIComponent(id)+'/git/history')).json();
  const versions=data.versions||[],commits=data.commits||[];
  const dialog=opDialog('git-history-dialog','Saved versions & history',`<p>Every saved version of this lab and of the other labs in this repository. Open one to view, download or compare it, or apply it to the running lab (the current configuration is backed up first and nothing reboots).</p><h3>Saved versions</h3><div class="op-history">${versions.map((version,index)=>`<button class="button secondary" data-git-version="${index}"><strong>${esc(version.label||version.name||version.path)}</strong><small>${esc(version.path)}${version.connected?' · this lab':''}</small></button>`).join('')||'<p>Nothing saved yet.</p>'}</div><h3>Save history</h3><div class="op-history">${commits.map((commit,index)=>`<button class="button secondary" data-git-commit="${index}"><strong>${esc(commit.message)}</strong><small>${esc(commit.time?gitWhen(commit.time*1000):'')} · <span class="mono">${esc((commit.commit||'').slice(0,10))}</span></small></button>`).join('')||'<p>No save history yet.</p>'}</div>`);
- for(const button of dialog.querySelectorAll('[data-git-version]'))button.onclick=()=>opTask(dialog,()=>gitViewVersion(id,versions[Number(button.dataset.gitVersion)]));
+ for(const button of dialog.querySelectorAll('[data-git-version]'))button.onclick=()=>opTask(dialog,()=>{const version=versions[Number(button.dataset.gitVersion)];return gitViewVersion(id,{...version,path:'/'+(version.path||'')});});
  for(const button of dialog.querySelectorAll('[data-git-commit]'))button.onclick=()=>opTask(dialog,()=>gitOpenCommit(id,commits[Number(button.dataset.gitCommit)],versions));
 }
 async function gitOpenCommit(id,commit,versions){
  const matching=gitLabJobs(id).filter(job=>job.commit===commit.commit&&['latest','baseline','checkpoint'].includes(job.target));
  // An unchanged save can reuse HEAD without producing the selected commit.
  const known=matching.find(job=>Array.isArray(job.changed_files)&&job.changed_files.length)||matching.find(job=>job.target==='latest');
- if(known)return gitViewVersion(id,{commit:commit.commit,path:gitTargetPath(known)});
- const paths=[...new Set(['latest','baseline',...versions.map(version=>version.path)])];
- const dialog=opDialog('git-commit-dialog','Which saved version?',`<p>${esc(commit.message||'Older save')}</p><p class="op-path">${esc(commit.commit)}</p><label for="git-commit-path">Which folder was saved at this point?</label><select id="git-commit-path">${paths.map(folder=>`<option value="${esc(folder)}">${esc(folder)}</option>`).join('')}</select><p class="form-help">Only folders that already existed at this save can be opened.</p><button class="button primary" id="git-commit-view">Open this version</button>`);
+ const binding=gitContexts.get(id)?.binding;
+ // The job's own recorded snapshot path (exact) is preferred; only a job saved before that field
+ // existed falls back to the binding's current prefix joined with its target.
+ if(known)return gitViewVersion(id,{commit:commit.commit,path:known.snapshot_path?'/'+known.snapshot_path:gitSnapshotPath(binding,gitTargetPath(known))});
+ const paths=[...new Set([gitSnapshotPath(binding,'latest'),gitSnapshotPath(binding,'baseline'),...versions.map(version=>'/'+version.path)])];
+ const dialog=opDialog('git-commit-dialog','Which saved version?',`<p>${esc(commit.message||'Older save')}</p><p class="op-path">${esc(commit.commit)}</p><label for="git-commit-path">Which folder was saved at this point?</label><select id="git-commit-path">${paths.map(folder=>`<option value="${esc(folder)}">${esc(folder.replace(/^\//,''))}</option>`).join('')}</select><p class="form-help">Only folders that already existed at this save can be opened.</p><button class="button primary" id="git-commit-view">Open this version</button>`);
  $('git-commit-view').onclick=()=>opTask(dialog,()=>gitViewVersion(id,{commit:commit.commit,path:$('git-commit-path').value}));
 }
 async function gitCompareVersion(id,request,label){
@@ -592,7 +623,9 @@ async function gitCompareVersion(id,request,label){
 }
 async function gitViewVersion(id,version){
  const request={commit:version.commit,path:version.path},data=await json('/labs/'+encodeURIComponent(id)+'/git/version','POST',request);
- const files=data.files||[],name=version.label||version.name||version.path;
+ // A caller without a friendly label (e.g. the review dialog's "Open the full saved version") falls
+ // back to the exact path; it is never shown with its wire-form leading slash.
+ const files=data.files||[],name=version.label||version.name||String(version.path||'').replace(/^\/+/,'')||'the repository root';
  const restoreBtn=data.restore_supported&&typeof restoreFromVersion==='function'?'<button class="button danger" id="git-version-restore">Apply to running lab…</button>':'';
  const restoreNote=data.restore_supported
   ?'<p class="form-help">This saved version can be applied to the running lab. The current configuration is backed up first and the devices are not rebooted.</p>'

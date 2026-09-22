@@ -230,25 +230,40 @@ class RestoreService:
             desc = {'type': 'backup', 'backup_job_id': backup['id'],
                     'captured_at': manifest.get('captured_at', ''), 'lab_name': manifest.get('lab_name', '')}
         elif stype == 'folder':
-            # Apply a saved state directly from any folder of the connected repository at its
-            # current commit, without first pointing the lab at that folder. `path` is the full
-            # repo-relative snapshot folder, e.g. labs/BGP-LAB/Broken/latest.
+            # Apply a saved state directly from any snapshot folder of the connected repository,
+            # without first pointing the lab at it (rule 6). `path` is the exact repository-relative
+            # snapshot folder ('/' for the repository root). Preflight without a commit reads HEAD
+            # and returns it as `source.commit`; a submit that carries `commit` reads that exact
+            # commit, so the bytes the student reviewed are the bytes applied (the helper refuses a
+            # commit outside the branch history, surfaced here as 409).
             with self.store.lock:
                 binding = self.git.binding(lab_id)
-            path = (source.get('path') or '').strip('/')
-            if not path:
+            raw_path = source.get('path')
+            if not raw_path:
                 raise HTTPException(400, 'Choose a saved folder to apply.')
+            path = resolve_version_path(binding, raw_path)
+            given_commit = source.get('commit') or ''
+            if given_commit and not re.fullmatch(r'[0-9a-f]{40,64}', given_commit):
+                raise HTTPException(400, 'Choose a saved commit.')
             try:
-                status = self.git.invoke({'mode': 'status'}, binding)
-                if not status.get('ready'):
-                    raise ValueError(status.get('problem') or 'Repository needs attention before applying a saved state.')
-                result = self.git.invoke({'mode': 'read-version', 'commit': status.get('head', ''), 'path': path}, binding)
+                if given_commit:
+                    commit = given_commit
+                else:
+                    status = self.git.invoke({'mode': 'status'}, binding)
+                    if not status.get('ready'):
+                        raise ValueError(status.get('problem') or 'Repository needs attention before applying a saved state.')
+                    commit = status.get('head', '')
+                result = self.git.invoke({'mode': 'read-version', 'commit': commit, 'path': path}, binding)
                 manifest, files = decoded_snapshot(result)
             except ValueError as exc:
                 raise HTTPException(409, str(exc))
             text = {name: raw.decode('utf-8') for name, raw in files.items()}
-            folder = path[:-len('/latest')] if path.endswith('/latest') else path
-            desc = {'type': 'folder', 'path': path, 'folder': folder,
+            folder = '' if not path else (path[:-len('/latest')] if path.endswith('/latest') else path)
+            # desc['path'] is the normalised wire form ('/' + exact path, '/' for the repository
+            # root) whatever shape the request came in as (a bare compatibility name, an exact
+            # path, a leading slash already); desc['folder'] stays the display folder, without a
+            # leading slash and without a trailing '/latest'.
+            desc = {'type': 'folder', 'path': '/' + path, 'folder': folder, 'commit': commit,
                     'captured_at': manifest.get('captured_at', ''), 'lab_name': manifest.get('lab_name', '')}
         else:
             raise HTTPException(400, 'Choose a saved Git version, a saved folder or a saved capture as the restore source.')

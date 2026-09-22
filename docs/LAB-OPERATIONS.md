@@ -223,11 +223,12 @@ manager save after authentication or export errors. No extra Linux user is requi
 
 A student who has saved a Junos, EOS or IOS XR configuration can put it back onto the
 running node without destroying the lab, editing startup files, redeploying containerlab
-or rebooting the router. On the **Progress** tab, every saved version — the lab's own
-*Latest*, *Checkpoints* and *Baseline*, and the *Instructor and reference versions* kept
-in other folders of the same repository — offers **Apply to running lab…** when it holds
-a restore-grade state for at least one supported device; the lab does not have to change
-its save location first. The review lists the source version, the devices, and for each
+or rebooting the router. On the **Progress** tab, every saved configuration — any repository
+folder that holds a manager-written `manifest.json`, whatever its name or depth: the lab's
+own *Latest*, *Checkpoints* and *Baseline*, the *Instructor and reference versions* kept in
+other folders of the same repository, folders such as `Final` or `Broken` fetched with
+*Update from the repository* — offers **Apply to running lab…**; the lab does not have to
+change its save location first, and applying never changes where it saves. The review lists the source version, the devices, and for each
 whether it already matches the saved state, how many differences there are, or why it is
 skipped — including a device whose platform cannot be restored yet, whose saved version
 predates its platform's restore support, or an IOS XR device whose saved configuration

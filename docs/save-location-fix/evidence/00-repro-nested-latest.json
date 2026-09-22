@@ -1,0 +1,142 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "manager_version": "1.30.30",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "repository": "CLAB-MNGR-DEV-LLM (checkout /home/clabllm/labs/CLAB-MNGR-DEV-LLM, remote pruger-dev/CLAB-MNGR-DEV-LLM, branch main)",
+ "operator_session_utc_start": "2026-09-22T13:04:00Z",
+ "operator_session_utc_end": "2026-09-22T13:20:00Z",
+ "result": "PASS (bug reproduced): saving into a folder that literally names a reserved snapshot child ('.../working/latest') is accepted as a destination, and the next Save Latest nests a second 'latest' inside it, on the real running 1.30.30 build, through the real browser UI and pushed to the real GitHub repository.",
+ "steps": {
+  "a_change_destination_to_save-fix/working": {
+   "method": "API (curl, same-origin headers), equivalent to the browser's own gitApplyDestination request",
+   "request": {"url": "POST /api/labs/904a35a79dc341ce8a4638f83fc34185/git/destination", "body": {"prefix": "save-fix/working", "move_files": false}},
+   "precondition": "a prior pending 'committed' job (id 70789a7131e8427f87f6bcb3a4da700d) blocked the destination change until dismissed via POST /api/git/jobs/70789a7131e8427f87f6bcb3a4da700d/dismiss {\"acknowledge\": true}; the checkout also had 4 unpushed local commits from prior QA work that had to be pushed (git push origin main, 69c91fc..d411072) before the manager's register() would accept a new destination (it requires local HEAD == verified remote HEAD)",
+   "response": {"saved": true, "binding_id": "6ea219554263445f8f5cd9a7f57b3578", "repository_prefix": "save-fix/working"}
+  },
+  "b_save_latest_first_time": {
+   "method": "REAL BROWSER (Playwright, Chromium, docs/save-location-fix/tools/repro_nested_latest.py), Progress tab, Save progress button, mandatory review dialog, Upload these changes",
+   "screenshots": ["00-b1-before-save.png", "00-b2-review-dialog.png", "00-b3-job-result.png"],
+   "note": "one transient device-read miss occurred first (job 39aceddf2fe9975494eac97b6e52ad80, status capture_incomplete, no commit, latest unchanged -- an environment flake unrelated to either reported bug: all four node readiness flags read Ready again within the retry window) before the save that is recorded below succeeded",
+   "review_dialog_said": "This save is on the lab VM only. Nothing is uploaded to github.com unless you choose Upload these changes.",
+   "upload_request": "POST /api/git/jobs/<job>/retry {\"push\": true, \"reviewed\": true}",
+   "job": {
+    "id": "7e98c025264aad61c1e7a56ab87928d0",
+    "status": "synced",
+    "message": "Saved commit is included in the verified remote history.",
+    "commit": "4fa25780a050f5886c2366244051f1783345185c",
+    "pushed": true,
+    "snapshot_path": "save-fix/working/latest",
+    "changed_files": ["save-fix/working/latest/ceos.cfg", "save-fix/working/latest/ceos.eoscfg", "save-fix/working/latest/cjunosevolved.set", "save-fix/working/latest/cjunosevolved.jcfg", "save-fix/working/latest/vjunos-switch.set", "save-fix/working/latest/vjunos-switch.jcfg", "save-fix/working/latest/xrv9k.cfg", "save-fix/working/latest/xrv9k.xrcfg", "save-fix/working/latest/manifest.json"]
+   },
+   "helper_journal": {
+    "path": "~/labs/CLAB-MNGR-DEV-LLM/.git/clab-manager/journals/7e98c025264aad61c1e7a56ab87928d0.json",
+    "snapshot_path": "save-fix/working/latest",
+    "status": "synced",
+    "changed_files_count": 9
+   },
+   "binding_repository_prefix_after": "save-fix/working",
+   "git_verification": {
+    "local_head": "4fa25780a050f5886c2366244051f1783345185c",
+    "origin_main_head": "4fa25780a050f5886c2366244051f1783345185c (fetched and matched)",
+    "ls_tree_save-fix_local": ["save-fix/working/latest/ceos.cfg", "save-fix/working/latest/ceos.eoscfg", "save-fix/working/latest/cjunosevolved.jcfg", "save-fix/working/latest/cjunosevolved.set", "save-fix/working/latest/manifest.json", "save-fix/working/latest/vjunos-switch.jcfg", "save-fix/working/latest/vjunos-switch.set", "save-fix/working/latest/xrv9k.cfg", "save-fix/working/latest/xrv9k.xrcfg"],
+    "ls_tree_save-fix_origin_main": "identical to local"
+   }
+  },
+  "c_move_away_without_moving_files": {
+   "method": "REAL BROWSER same-origin fetch from the page context (page.evaluate), same request shape as the page's own gitApplyDestination call",
+   "request": {"url": "POST /api/labs/904a35a79dc341ce8a4638f83fc34185/git/destination", "body": {"prefix": "save-fix/elsewhere", "move_files": false}},
+   "response_status": 200,
+   "effect": "retires the save-fix/working registration (nothing was saved under save-fix/elsewhere; the file move was never offered because 0 files existed there)",
+   "binding_repository_prefix_after": "save-fix/elsewhere",
+   "registry_check": "GET /api/labs/<lab>/git -> binding.repository.prefix == save-fix/elsewhere (confirmed by direct curl immediately after)"
+  },
+  "d_change_folder_browse_to_nested_latest": {
+   "method": "REAL BROWSER (Playwright): Progress tab -> Save location -> Change folder... (folder browser panel #git-places-panel) -> clicked into save-fix -> working -> latest in the folder outline/listing",
+   "screenshots": ["00-d1-places-panel.png", "00-d2-save-here-enabled.png (folder save-fix/working/latest selected, its own files listed: ceos.cfg, ceos.eoscfg, cjunosevolved.jcfg/.set, manifest.json, vjunos-switch.jcfg/.set, xrv9k.cfg/.xrcfg)", "00-d3-confirm-dialog.png", "00-d4-destination-line.png"],
+   "use_button_state": "ENABLED (the reported defect): selecting a folder that holds manifest.json (a saved configuration, and whose own name is the reserved word 'latest') left the primary 'Save this lab here' button enabled with no refusal reason, because gitFolderChoice only tags a child 'managed' (reserved) when its parent folder is a CURRENTLY registered lab folder -- save-fix/working's registration had just been retired in step c, so its 'latest' child is treated as an ordinary, unregistered folder",
+   "confirm_dialog_text": "restore-square will keep its progress in CLAB-MNGR-DEV-LLM › save-fix/working/latest from now on. Nothing is saved under the current folder yet, so there is nothing to move.",
+   "confirm_request": "POST /api/labs/904a35a79dc341ce8a4638f83fc34185/git/destination {\"prefix\": \"save-fix/working/latest\", \"move_files\": false} (move box was not ticked; the dialog offered no move checkbox at all since 0 files existed under save-fix/elsewhere)",
+   "destination_line_after": "restore-square saves to CLAB-MNGR-DEV-LLM › save-fix/working/latest › latest/ (read from the Progress tab's #git-save-location .git-destination-line; the script's own poll-based re-check of this text raced the UI in this automated run and is annotated FAIL in the run log even though the request/response and every independent check below confirm the destination really changed -- see 'script_timing_note' below)",
+   "script_timing_note": "in the automated run, reading .git-destination-line immediately after the confirm click briefly still showed the previous 'save-fix/elsewhere' text (the card re-renders asynchronously); the confirm DIALOG's own text (00-d3/00-d4 screenshots) already states the literal new destination before the click, and the subsequent registry read, the next save's job, and its helper journal (below) all independently confirm the binding became exactly save-fix/working/latest, unresolved",
+   "registry_check_after": "sudo cat /etc/clab-manager/git.json -> the only save-fix entry is prefix \"save-fix/working/latest\", id 303d9949077e4aaf89a62ed2c4fc0868 (the prior save-fix/working and save-fix/elsewhere registrations were retired, as expected: one active registration per lab)"
+  },
+  "e_save_latest_again_creates_nested_latest": {
+   "method": "REAL BROWSER (Playwright), Save progress button, review dialog, Upload these changes",
+   "screenshots": ["00-e1-review-dialog.png", "00-e2-job-result.png (banner: 'Saving to CLAB-MNGR-DEV-LLM › save-fix/working/latest', dialog: 'Progress saved to Git')"],
+   "job": {
+    "id": "cfd2de958d1739fbeee82a6957fdc8a7",
+    "status": "synced",
+    "message": "Saved commit is included in the verified remote history.",
+    "commit": "94944cf6c3f9e134ba9041327cdb3a5218db065f",
+    "pushed": true,
+    "snapshot_path": "save-fix/working/latest/latest",
+    "changed_files": ["save-fix/working/latest/latest/ceos.cfg", "save-fix/working/latest/latest/ceos.eoscfg", "save-fix/working/latest/latest/cjunosevolved.set", "save-fix/working/latest/latest/cjunosevolved.jcfg", "save-fix/working/latest/latest/vjunos-switch.set", "save-fix/working/latest/latest/vjunos-switch.jcfg", "save-fix/working/latest/latest/xrv9k.cfg", "save-fix/working/latest/latest/xrv9k.xrcfg", "save-fix/working/latest/latest/manifest.json"]
+   },
+   "helper_journal": {
+    "path": "~/labs/CLAB-MNGR-DEV-LLM/.git/clab-manager/journals/cfd2de958d1739fbeee82a6957fdc8a7.json",
+    "snapshot_path": "save-fix/working/latest/latest",
+    "status": "synced",
+    "changed_files_count": 9
+   },
+   "git_verification": {
+    "local_head_before_push_of_this_step": "4fa25780a050f5886c2366244051f1783345185c",
+    "commit_created": "94944cf6c3f9e134ba9041327cdb3a5218db065f",
+    "local_head_after_fetch": "94944cf6c3f9e134ba9041327cdb3a5218db065f",
+    "origin_main_after_fetch": "94944cf6c3f9e134ba9041327cdb3a5218db065f (identical -- pushed and verified)",
+    "ls_tree_save-fix_local_and_origin_identical": true,
+    "ls_tree_save-fix": [
+     "save-fix/working/latest/ceos.cfg", "save-fix/working/latest/ceos.eoscfg", "save-fix/working/latest/cjunosevolved.jcfg", "save-fix/working/latest/cjunosevolved.set",
+     "save-fix/working/latest/latest/ceos.cfg", "save-fix/working/latest/latest/ceos.eoscfg", "save-fix/working/latest/latest/cjunosevolved.jcfg", "save-fix/working/latest/latest/cjunosevolved.set",
+     "save-fix/working/latest/latest/manifest.json (NEW -- the nested manifest; the bug)",
+     "save-fix/working/latest/latest/vjunos-switch.jcfg", "save-fix/working/latest/latest/vjunos-switch.set", "save-fix/working/latest/latest/xrv9k.cfg", "save-fix/working/latest/latest/xrv9k.xrcfg",
+     "save-fix/working/latest/manifest.json (UNCHANGED -- the parent's own manifest, same blob as step b)",
+     "save-fix/working/latest/vjunos-switch.jcfg", "save-fix/working/latest/vjunos-switch.set", "save-fix/working/latest/xrv9k.cfg", "save-fix/working/latest/xrv9k.xrcfg"
+    ],
+    "manifest_blob_comparison": {
+     "save-fix/working/latest/manifest.json": {"blob": "b0baf92d21eac884f504b782b2a51b15e07b6ef6", "only_commit_that_wrote_it": "4fa25780a050f5886c2366244051f1783345185c (step b)", "note": "same blob still at HEAD after step e: proven unchanged with git log -- save-fix/working/latest/manifest.json returning only 4fa2578, and git ls-tree HEAD confirming the same blob id"},
+     "save-fix/working/latest/latest/manifest.json": {"blob": "c99db46951c72d8f648a6b61cfe1f920ea112e02", "created_by_commit": "94944cf6c3f9e134ba9041327cdb3a5218db065f (step e)", "note": "did not exist before step e; new blob, new path"}
+    }
+   }
+  },
+  "f_reload_and_save_again_stays_nested": {
+   "method": "REAL BROWSER (Playwright): page reload, Save progress button once more (device configuration unchanged since step e, so the manager itself reports 'unchanged' -- no new commit -- and opens no review dialog since there is nothing to review; outcome read back from the lab's own git job list via the same-origin API, not assumed)",
+   "screenshot": "00-f1-reload-save-job.png",
+   "job": {
+    "id": "e586740b07be8572dde361ad3bcaa742",
+    "status": "unchanged",
+    "message": "Nothing changed since the last save, which was uploaded.",
+    "commit": "94944cf6c3f9e134ba9041327cdb3a5218db065f",
+    "pushed": true,
+    "snapshot_path": "save-fix/working/latest/latest",
+    "changed_files": []
+   },
+   "direct_api_save": {
+    "method": "curl-equivalent (page.evaluate fetch, same-origin) POST /api/labs/904a35a79dc341ce8a4638f83fc34185/git/save with a fresh random 32-hex request_id, body {\"target\": \"latest\", \"push\": false, \"note\": \"API direct save, repro step f\", \"request_id\": \"745fe1dae18581ecc48a3611cef0f13d\"}",
+    "job": {
+     "id": "745fe1dae18581ecc48a3611cef0f13d",
+     "status": "unchanged",
+     "message": "Nothing changed since the last save, which was uploaded.",
+     "snapshot_path": "save-fix/working/latest/latest",
+     "changed_files": []
+    },
+    "helper_journal": {"snapshot_path": "save-fix/working/latest/latest", "status": "unchanged", "changed_files_count": 0},
+    "cleanup": "this job was dismissed with POST /api/git/jobs/745fe1dae18581ecc48a3611cef0f13d/dismiss {\"acknowledge\": true} so no pending save is left outstanding"
+   },
+   "conclusion": "the resolved snapshot_path for this lab's saves stays the nested save-fix/working/latest/latest across a page reload and a fresh, independently-issued API request; the bug is stable, not a one-off race"
+  }
+ },
+ "final_state": {
+  "lab_binding_prefix": "save-fix/working/latest",
+  "note_per_instructions": "left bound here deliberately: this legacy nested state is wanted for testing the fix",
+  "repository_local_vs_origin": "in sync: local HEAD 94944cf6c3f9e134ba9041327cdb3a5218db065f == origin/main 94944cf6c3f9e134ba9041327cdb3a5218db065f (git fetch confirmed)"
+ },
+ "tooling": "docs/save-location-fix/tools/repro_nested_latest.py (Playwright script, rerunnable with --skip-bc and/or --only-f to resume after a partial run); run in three phases in this session because of one environment flake (a transient device-read miss during the very first Save Latest, unrelated to either reported bug) and two script-side dialog-timing bugs that were found and fixed in the committed tool (a <details open> attribute check that used a truthiness test instead of an existence test, and a rigid wait for a review dialog that does not open when a save is reported 'unchanged')",
+ "checks_summary": {
+  "step_b_playwright_checks": "5 ok, 0 failed (see run log excerpt below)",
+  "step_c_playwright_check": "1 ok",
+  "step_d_playwright_checks": "1 ok (Save this lab here enabled on the reserved-name snapshot folder), 1 FAIL (destination-line text read too early -- script timing artifact, contradicted by the dialog text, the registry and the next job; not re-run to avoid a second live round-trip through the same four devices)",
+  "step_e_playwright_check": "1 ok (nested snapshot_path confirmed)",
+  "step_f_playwright_checks": "3 ok, 0 failed"
+ }
+}

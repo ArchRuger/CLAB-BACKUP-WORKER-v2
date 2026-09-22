@@ -1,0 +1,170 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:31:56Z",
+ "steps": {
+  "binding_before": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/",
+  "browser_final": {
+   "listing_excerpt": "CLAB-MNGR-DEV-LLM\n\u203a\nsave-fix\n\u203a\nFinal\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this saved configuration to the running devices. They are not rebooted. Folders cannot be created inside another lab\u2019s folder.\n\nCLAB-MNGR-DEV-LLM\nARISTA-LAB-TEST\nbgp-core\nclab-llm-dev2\nJunOS-TEST\nJunOS-TEST-2\nl01-ethernet\nl02-switching\nl03-addressing\nl04-packet\nl05-isis\nl06-mpls\nl07-bgp\nl08-isp-bgp\nl09-l3vpn\nl10-evpn\nlabs\nrestore-square\nsave-fix\nBroken\ncourse\nelsewhere\nFinal\nworking\nThis lab\nbaseline\ncheckpoints\nlatest\nWeek-01\nName\tWhat it is\tSize\n\nceos.cfg\n\tDevice configuration\t969 B\n\nceos.eoscf",
+   "apply_button_count": 1
+  },
+  "browser_broken": {
+   "listing_excerpt": "CLAB-MNGR-DEV-LLM\n\u203a\nsave-fix\n\u203a\nBroken\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this folder\u2019s latest save (save-fix/Broken/latest) to the running devices. They are not rebooted.\n\nCLAB-MNGR-DEV-LLM\nARISTA-LAB-TEST\nbgp-core\nclab-llm-dev2\nJunOS-TEST\nJunOS-TEST-2\nl01-ethernet\nl02-switching\nl03-addressing\nl04-packet\nl05-isis\nl06-mpls\nl07-bgp\nl08-isp-bgp\nl09-l3vpn\nl10-evpn\nlabs\nrestore-square\nsave-fix\nBroken\nlatest\ncourse\nelsewhere\nFinal\nworking\nThis lab\nbaseline\ncheckpoints\nlatest\nWeek-01\nName\tWhat it is\tSize\n\nlatest\n\tFolder\t10 KB\nLast saved 1 minute ago\nDetails\nThis lab saves t",
+   "apply_button_count": 1,
+   "apply_caption": "Load this saved configuration onto the running lab (no reboot)"
+  },
+  "browser_broken_latest": {
+   "listing_excerpt": "CLAB-MNGR-DEV-LLM\n\u203a\nsave-fix\n\u203a\nBroken\n\u203a\nlatest\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this saved configuration to the running devices. They are not rebooted. Folders cannot be created inside another lab\u2019s folder.\n\nCLAB-MNGR-DEV-LLM\nARISTA-LAB-TEST\nbgp-core\nclab-llm-dev2\nJunOS-TEST\nJunOS-TEST-2\nl01-ethernet\nl02-switching\nl03-addressing\nl04-packet\nl05-isis\nl06-mpls\nl07-bgp\nl08-isp-bgp\nl09-l3vpn\nl10-evpn\nlabs\nrestore-square\nsave-fix\nBroken\nlatest\ncourse\nelsewhere\nFinal\nworking\nThis lab\nbaseline\ncheckpoints\nlatest\nWeek-01\nName\tWhat it is\tSize\n\nceos.cfg\n\tDevice configuration\t"
+  },
+  "browser_solution": {
+   "listing_excerpt": "CLAB-MNGR-DEV-LLM\n\u203a\nsave-fix\n\u203a\ncourse\n\u203a\nlab\n\u203a\nreference\n\u203a\nsolution\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this saved configuration to the running devices. They are not rebooted. Folders cannot be created inside another lab\u2019s folder.\n\nCLAB-MNGR-DEV-LLM\nARISTA-LAB-TEST\nbgp-core\nclab-llm-dev2\nJunOS-TEST\nJunOS-TEST-2\nl01-ethernet\nl02-switching\nl03-addressing\nl04-packet\nl05-isis\nl06-mpls\nl07-bgp\nl08-isp-bgp\nl09-l3vpn\nl10-evpn\nlabs\nrestore-square\nsave-fix\nBroken\nlatest\ncourse\nlab\nreference\nsolution\nelsewhere\nFinal\nworking\nThis lab\nbaseline\ncheckpoints\nlatest\nWeek-01\nName\tWhat "
+  },
+  "saved_versions_text": "Browse the repository\u2026\nFull history\u2026\nLatest\nLatest\nCLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest\nSaved 1 minute ago \u00b7 18 files\nView\nApply to running lab\u2026\nCheckpoints\nqa-cp-a\nQA checkpoint A\nSaved 1 minute ago \u00b7 9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nqa-cp-b\nQA checkpoint B\nSaved 1 minute ago \u00b7 9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nBaseline\n\nThe reference version set for this lab.\n\nBaseline\nSaved 5 minutes ago \u00b7 9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nInstructor and reference versions\n\nVersions your instructor put in the repository appear here. Apply one to load it onto your running devices; the current configuration is backed up first.\n\nBroken\nsave-fix/Broken/latest\n9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nFinal state (instructor)\nsave-fix/Final\n9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nFinal state (instructor)\nsave-fix/course/lab/reference/solution\n9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nOther labs in this repository (12)\nElsewhere in this repository (42)",
+  "saved_versions_rows": {
+   "Final": {
+    "caption": "save-fix/Final",
+    "group_heading": "Instructor and reference versions"
+   },
+   "Broken": {
+    "caption": "save-fix/Broken/latest",
+    "group_heading": "Instructor and reference versions"
+   },
+   "solution": {
+    "caption": "save-fix/course/lab/reference/solution",
+    "group_heading": "Instructor and reference versions"
+   }
+  },
+  "history_paths_sample": [
+   "save-fix/working/baseline",
+   "save-fix/working/checkpoints/qa-cp-a",
+   "save-fix/working/checkpoints/qa-cp-b",
+   "save-fix/working/latest",
+   "ARISTA-LAB-TEST/latest",
+   "bgp-core/reference/broken-01/latest",
+   "bgp-core/reference/solution/latest",
+   "bgp-core/reference/start/latest",
+   "bgp-core/work/latest",
+   "clab-llm-dev2/reference/solution/latest",
+   "clab-llm-dev2/reference/start/latest",
+   "clab-llm-dev2/work/checkpoints/release-129-live-validation",
+   "clab-llm-dev2/work/latest",
+   "l01-ethernet/reference/broken-01/latest",
+   "l01-ethernet/reference/solution/latest",
+   "l01-ethernet/reference/start/latest",
+   "l01-ethernet/work/latest",
+   "l02-switching/reference/broken-01/latest",
+   "l02-switching/reference/solution/latest",
+   "l02-switching/reference/start/latest",
+   "l02-switching/work/latest",
+   "l03-addressing/reference/broken-01/latest",
+   "l03-addressing/reference/solution/latest",
+   "l03-addressing/reference/start/latest",
+   "l03-addressing/work/latest",
+   "l04-packet/reference/broken-01/latest",
+   "l04-packet/reference/solution/latest",
+   "l04-packet/reference/start/latest",
+   "l04-packet/work/latest",
+   "l05-isis/reference/broken-01/latest",
+   "l05-isis/reference/solution/latest",
+   "l05-isis/reference/start/latest",
+   "l05-isis/work/latest",
+   "l06-mpls/reference/broken-01/latest",
+   "l06-mpls/reference/solution/latest",
+   "l06-mpls/reference/start/latest",
+   "l06-mpls/work/latest",
+   "l07-bgp/reference/broken-01/latest",
+   "l07-bgp/reference/solution/latest",
+   "l07-bgp/reference/start/latest",
+   "l07-bgp/work/latest",
+   "l08-isp-bgp/reference/broken-01/latest",
+   "l08-isp-bgp/reference/solution/latest",
+   "l08-isp-bgp/reference/start/latest",
+   "l08-isp-bgp/work/latest",
+   "l09-l3vpn/reference/broken-01/latest",
+   "l09-l3vpn/reference/solution/latest",
+   "l09-l3vpn/reference/start/latest",
+   "l09-l3vpn/work/latest",
+   "l10-evpn/reference/broken-01/latest",
+   "l10-evpn/reference/solution/latest",
+   "l10-evpn/reference/start/latest",
+   "l10-evpn/work/latest",
+   "labs/BGP-LAB/reference/broken-01/latest",
+   "labs/BGP-LAB/reference/solution/latest",
+   "labs/BGP-LAB/reference/start/latest",
+   "labs/BGP-LAB/work/latest",
+   "restore-square/work/latest",
+   "save-fix/Broken/latest",
+   "save-fix/Final",
+   "save-fix/course/lab/reference/solution",
+   "save-fix/working/latest/latest"
+  ],
+  "history_total": 62,
+  "binding_after": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/"
+ },
+ "checks": [
+  {
+   "check": "folder browser reaches save-fix/Final and lists its files",
+   "ok": true,
+   "detail": "CLAB-MNGR-DEV-LLM\n\u203a\nsave-fix\n\u203a\nFinal\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this saved configuration to the running devices. They are not rebooted. Folders cannot be created inside another lab\u2019s folder.\n\nCLAB-MNGR-DEV-LLM\nARISTA-LAB-TEST\nbgp-core\nclab-llm-dev2\nJunOS-TEST\nJunOS"
+  },
+  {
+   "check": "folder browser at save-fix/Broken (legacy parent) offers Apply to running lab\u2026",
+   "ok": true,
+   "detail": "1"
+  },
+  {
+   "check": "folder browser reaches save-fix/Broken/latest directly too",
+   "ok": true,
+   "detail": "CLAB-MNGR-DEV-LLM\n\u203a\nsave-fix\n\u203a\nBroken\n\u203a\nlatest\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this saved configuration to the running devices. They are not rebooted. Folders cannot be created inside another lab\u2019s folder.\n\nCLAB-MNGR-DEV-LLM\nARISTA-LAB-TEST\nbgp-core\nclab-llm-dev2\nJunOS-"
+  },
+  {
+   "check": "folder browser reaches the deep save-fix/course/lab/reference/solution folder",
+   "ok": true,
+   "detail": "CLAB-MNGR-DEV-LLM\n\u203a\nsave-fix\n\u203a\ncourse\n\u203a\nlab\n\u203a\nreference\n\u203a\nsolution\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this saved configuration to the running devices. They are not rebooted. Folders cannot be created inside another lab\u2019s folder.\n\nCLAB-MNGR-DEV-LLM\nARISTA-LAB-TEST\nbgp-core\n"
+  },
+  {
+   "check": "Saved versions lists a Final row with caption save-fix/Final in \"Instructor and reference versions\"",
+   "ok": true,
+   "detail": "{'caption': 'save-fix/Final', 'group_heading': 'Instructor and reference versions'}"
+  },
+  {
+   "check": "Saved versions lists a Broken row whose caption names .../latest (legacy parent convenience)",
+   "ok": true,
+   "detail": "{'caption': 'save-fix/Broken/latest', 'group_heading': 'Instructor and reference versions'}"
+  },
+  {
+   "check": "Saved versions lists the deep solution row with its exact caption path",
+   "ok": true,
+   "detail": "{'caption': 'save-fix/course/lab/reference/solution', 'group_heading': 'Instructor and reference versions'}"
+  },
+  {
+   "check": "/git/history lists save-fix/Final",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "/git/history lists save-fix/Broken/latest",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "/git/history lists save-fix/course/lab/reference/solution",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "lab binding unchanged by browsing (still save-fix/working, no rebind)",
+   "ok": true,
+   "detail": "('restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/', 'restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/')"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:32:02Z"
+}
