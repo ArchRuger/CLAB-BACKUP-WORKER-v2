@@ -1,0 +1,42 @@
+{
+ "build": "clab-backup:1.30.31 (image 3dfc4912c163), commit 8ea56e0",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "binding_prefix_before": "save-fix/working",
+ "binding_prefix_after": "save-fix/working",
+ "square_a_save_commit": "4d7c9045fb5002aa5746ea3ca6cc5b50526e8410",
+ "final_seed_commit": "245df9d014e65f173d34d591b1228dd981070716",
+ "final_tree_hash_before_restore": "9ba68dcc67bcbe1d0658d5bfeebeb65ac68448fe",
+ "final_tree_hash_after_restore": "9ba68dcc67bcbe1d0658d5bfeebeb65ac68448fe",
+ "repo_head_after_all_steps": "245df9d014e65f173d34d591b1228dd981070716",
+ "local_checkout_head_equals_origin_main": true,
+ "restore_job_id": "7edff056f123435e89901b0909272c17",
+ "restore_job_status": "succeeded",
+ "pre_restore_backup_job_id": "ab51353ce4184f4692908062f017073d",
+ "post_restore_backup_job_id": "190f587e403d4b09af91ad6d89ea8e41",
+ "per_node_status": {
+  "ceos": "verified",
+  "cjunosevolved": "verified",
+  "vjunos-switch": "verified",
+  "xrv9k": "verified"
+ },
+ "final_normal_backup_job_ids": [
+  "0fe0781b3eb84b89b45ead1751ad1e98",
+  "32b038c3908e42a9b3279cc4f4207d52"
+ ],
+ "final_normal_backup_status": "succeeded (both runs, all four nodes succeeded each time)",
+ "square_check_before_load": null,
+ "square_check_after_load_A": {
+  "ok": true,
+  "note": "docs/save-location-fix/evidence/30-c6-square-A-before.json"
+ },
+ "square_check_after_drift_B": {
+  "ok": true,
+  "note": "docs/save-location-fix/evidence/30-c6-square-B-drifted.json -- B's changes (descriptions, unused prefix-lists/static routes/VLAN) do not touch IP addressing or OSPF, so the square stayed healthy; recorded honestly rather than assumed"
+ },
+ "square_check_after_restore_to_Final": {
+  "ok": true,
+  "note": "docs/save-location-fix/evidence/30-c6-square-A-after.json"
+ },
+ "gh_account": "pruger-dev"
+}

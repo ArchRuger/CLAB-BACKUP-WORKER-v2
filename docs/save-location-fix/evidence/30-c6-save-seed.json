@@ -1,0 +1,254 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31 (3dfc4912c163), commit 8ea56e0",
+ "started_utc": "2026-09-22T15:52:15Z",
+ "steps": {
+  "binding_before": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/",
+  "save_square_a_attempts": [
+   {
+    "attempt": 1,
+    "outcome": "review dialog opened"
+   }
+  ],
+  "save_square_a_job": {
+   "id": "b3b53cbcd8d829c63180d7abcaf93976",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T15:52:16.796818+00:00",
+   "finished": "2026-09-22T15:52:24.409960+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "ef9e58e417214ad4bbaa859c28bf9cb2",
+   "commit": "4d7c9045fb5002aa5746ea3ca6cc5b50526e8410",
+   "pushed": true,
+   "target": "latest",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/cjunosevolved.set",
+    "save-fix/working/latest/cjunosevolved.jcfg",
+    "save-fix/working/latest/vjunos-switch.set",
+    "save-fix/working/latest/vjunos-switch.jcfg",
+    "save-fix/working/latest/xrv9k.cfg",
+    "save-fix/working/latest/xrv9k.xrcfg",
+    "save-fix/working/latest/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/latest",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T15:52:21.700398+00:00"
+  },
+  "square_a_files_extracted": [
+   "save-fix/working/latest/ceos.cfg",
+   "save-fix/working/latest/ceos.eoscfg",
+   "save-fix/working/latest/cjunosevolved.jcfg",
+   "save-fix/working/latest/cjunosevolved.set",
+   "save-fix/working/latest/manifest.json",
+   "save-fix/working/latest/vjunos-switch.jcfg",
+   "save-fix/working/latest/vjunos-switch.set",
+   "save-fix/working/latest/xrv9k.cfg",
+   "save-fix/working/latest/xrv9k.xrcfg"
+  ],
+  "checksum_report_before_push": {
+   "ceos.cfg": {
+    "expected_sha256": "eb7e652ecad173097f58c4d6cdd6073a612ee326776ffdaf8fea319a620c4cdf",
+    "actual_sha256": "eb7e652ecad173097f58c4d6cdd6073a612ee326776ffdaf8fea319a620c4cdf",
+    "expected_size": 1529,
+    "actual_size": 1529,
+    "match": true
+   },
+   "cjunosevolved.set": {
+    "expected_sha256": "049da592c7482c5e879f8d6bb58c270c4d6ff383ee71feac0a12c6c2861640e2",
+    "actual_sha256": "049da592c7482c5e879f8d6bb58c270c4d6ff383ee71feac0a12c6c2861640e2",
+    "expected_size": 1400,
+    "actual_size": 1400,
+    "match": true
+   },
+   "vjunos-switch.set": {
+    "expected_sha256": "d635c1d91f640a2b4016a6fd5d4fa8fe77cad612c94d319b0a6101bbedc0b74e",
+    "actual_sha256": "d635c1d91f640a2b4016a6fd5d4fa8fe77cad612c94d319b0a6101bbedc0b74e",
+    "expected_size": 1619,
+    "actual_size": 1619,
+    "match": true
+   },
+   "xrv9k.cfg": {
+    "expected_sha256": "f6311f103a160aeb981af1eb740509bc2577e3bcd42998d37b6c4de5ae2b8b57",
+    "actual_sha256": "f6311f103a160aeb981af1eb740509bc2577e3bcd42998d37b6c4de5ae2b8b57",
+    "expected_size": 1507,
+    "actual_size": 1507,
+    "match": true
+   }
+  },
+  "final_seed": {
+   "commit": "245df9d014e65f173d34d591b1228dd981070716",
+   "files": [
+    "ceos.cfg",
+    "ceos.eoscfg",
+    "cjunosevolved.jcfg",
+    "cjunosevolved.set",
+    "manifest.json",
+    "vjunos-switch.jcfg",
+    "vjunos-switch.set",
+    "xrv9k.cfg",
+    "xrv9k.xrcfg"
+   ]
+  },
+  "update_from_repository_response": {
+   "status": "updated",
+   "head": "245df9d014e65f173d34d591b1228dd981070716",
+   "message": "Updated from remote using fast-forward only."
+  },
+  "binding_after_update": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/",
+  "history_head": "4d7c9045fb5002aa5746ea3ca6cc5b50526e8410",
+  "history_paths": [
+   "save-fix/working/baseline",
+   "save-fix/working/checkpoints/qa-cp-a",
+   "save-fix/working/checkpoints/qa-cp-b",
+   "save-fix/working/checkpoints/state-B",
+   "save-fix/working/latest",
+   "ARISTA-LAB-TEST/latest",
+   "bgp-core/reference/broken-01/latest",
+   "bgp-core/reference/solution/latest",
+   "bgp-core/reference/start/latest",
+   "bgp-core/work/latest",
+   "clab-llm-dev2/reference/solution/latest",
+   "clab-llm-dev2/reference/start/latest",
+   "clab-llm-dev2/work/checkpoints/release-129-live-validation",
+   "clab-llm-dev2/work/latest",
+   "l01-ethernet/reference/broken-01/latest",
+   "l01-ethernet/reference/solution/latest",
+   "l01-ethernet/reference/start/latest",
+   "l01-ethernet/work/latest",
+   "l02-switching/reference/broken-01/latest",
+   "l02-switching/reference/solution/latest",
+   "l02-switching/reference/start/latest",
+   "l02-switching/work/latest",
+   "l03-addressing/reference/broken-01/latest",
+   "l03-addressing/reference/solution/latest",
+   "l03-addressing/reference/start/latest",
+   "l03-addressing/work/latest",
+   "l04-packet/reference/broken-01/latest",
+   "l04-packet/reference/solution/latest",
+   "l04-packet/reference/start/latest",
+   "l04-packet/work/latest",
+   "l05-isis/reference/broken-01/latest",
+   "l05-isis/reference/solution/latest",
+   "l05-isis/reference/start/latest",
+   "l05-isis/work/latest",
+   "l06-mpls/reference/broken-01/latest",
+   "l06-mpls/reference/solution/latest",
+   "l06-mpls/reference/start/latest",
+   "l06-mpls/work/latest",
+   "l07-bgp/reference/broken-01/latest",
+   "l07-bgp/reference/solution/latest",
+   "l07-bgp/reference/start/latest",
+   "l07-bgp/work/latest",
+   "l08-isp-bgp/reference/broken-01/latest",
+   "l08-isp-bgp/reference/solution/latest",
+   "l08-isp-bgp/reference/start/latest",
+   "l08-isp-bgp/work/latest",
+   "l09-l3vpn/reference/broken-01/latest",
+   "l09-l3vpn/reference/solution/latest",
+   "l09-l3vpn/reference/start/latest",
+   "l09-l3vpn/work/latest",
+   "l10-evpn/reference/broken-01/latest",
+   "l10-evpn/reference/solution/latest",
+   "l10-evpn/reference/start/latest",
+   "l10-evpn/work/latest",
+   "labs/BGP-LAB/reference/broken-01/latest",
+   "labs/BGP-LAB/reference/solution/latest",
+   "labs/BGP-LAB/reference/start/latest",
+   "labs/BGP-LAB/work/latest",
+   "restore-square/work/latest",
+   "save-fix/Bad",
+   "save-fix/Broken",
+   "save-fix/Final",
+   "save-fix/Legacy/latest",
+   "save-fix/Missing",
+   "save-fix/course/lab/reference/solution",
+   "save-fix/working/latest/latest"
+  ],
+  "version_read_status": 200,
+  "version_read_manifest_files": [
+   "ceos.cfg",
+   "cjunosevolved.set",
+   "vjunos-switch.set",
+   "xrv9k.cfg"
+  ],
+  "history_head_corrected_note": "history_head above used a wrong fallback (commits[0], scoped to latest/baseline/checkpoints only); the per-row commit field for save-fix/Final is the true evidence and is recorded here",
+  "history_final_row": {
+   "name": "save-fix/Final",
+   "path": "save-fix/Final",
+   "commit": "245df9d014e65f173d34d591b1228dd981070716",
+   "connected": false,
+   "label": "save-fix/Final"
+  }
+ },
+ "square_a_commit": "4d7c9045fb5002aa5746ea3ca6cc5b50526e8410",
+ "final_git": {
+  "local": "245df9d014e65f173d34d591b1228dd981070716",
+  "origin": "245df9d014e65f173d34d591b1228dd981070716"
+ },
+ "checks": [
+  {
+   "check": "bound to save-fix/working before the save",
+   "ok": true,
+   "detail": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/"
+  },
+  {
+   "check": "Save progress (square A on all four) reached synced at save-fix/working/latest",
+   "ok": true,
+   "detail": "{'id': 'b3b53cbcd8d829c63180d7abcaf93976', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T15:52:16.796818+00:00', 'finished': '2026-09-22T15:52:24.409960+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': 'ef9e58e417214ad4bbaa859c28bf9cb2', 'commit': '4d7c9045fb5002aa5746ea3ca6cc5b50526e8410', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/cjunosevolved.set', 'save-fix/working/latest/cjunosevolved.jcfg', 'save-fix/working/latest/vjunos-switch.set', 'save-fix/working/latest/vjunos-switch.jcfg', 'save-fix/working/latest/xrv9k.cfg', 'save-fix/working/latest/xrv9k.xrcfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T15:52:21.700398+00:00'}"
+  },
+  {
+   "check": "no page/console errors during the save",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "every extracted square-A file matches manifest.json sha256 and size before push",
+   "ok": true,
+   "detail": "{'ceos.cfg': {'expected_sha256': 'eb7e652ecad173097f58c4d6cdd6073a612ee326776ffdaf8fea319a620c4cdf', 'actual_sha256': 'eb7e652ecad173097f58c4d6cdd6073a612ee326776ffdaf8fea319a620c4cdf', 'expected_size': 1529, 'actual_size': 1529, 'match': True}, 'cjunosevolved.set': {'expected_sha256': '049da592c7482c5e879f8d6bb58c270c4d6ff383ee71feac0a12c6c2861640e2', 'actual_sha256': '049da592c7482c5e879f8d6bb58c270c4d6ff383ee71feac0a12c6c2861640e2', 'expected_size': 1400, 'actual_size': 1400, 'match': True}, 'vjunos-switch.set': {'expected_sha256': 'd635c1d91f640a2b4016a6fd5d4fa8fe77cad612c94d319b0a6101bbedc0b74e', 'actual_sha256': 'd635c1d91f640a2b4016a6fd5d4fa8fe77cad612c94d319b0a6101bbedc0b74e', 'expected_size': 1619, 'actual_size': 1619, 'match': True}, 'xrv9k.cfg': {'expected_sha256': 'f6311f103a160aeb981af1eb740509bc2577e3bcd42998d37b6c4de5ae2b8b57', 'actual_sha256': 'f6311f103a160aeb981af1eb740509bc2577e3bcd42998d37b6c4de5ae2b8b57', 'expected_size': 1507, 'actual_size': 1507, 'match': True}}"
+  },
+  {
+   "check": "save-fix/Final replaced with square A files and pushed",
+   "ok": true,
+   "detail": "('245df9d014e65f173d34d591b1228dd981070716', ['ceos.cfg', 'ceos.eoscfg', 'cjunosevolved.jcfg', 'cjunosevolved.set', 'manifest.json', 'vjunos-switch.jcfg', 'vjunos-switch.set', 'xrv9k.cfg', 'xrv9k.xrcfg'])"
+  },
+  {
+   "check": "second checkout local HEAD == origin/main after the push",
+   "ok": true,
+   "detail": "{'local': '245df9d014e65f173d34d591b1228dd981070716', 'origin': '245df9d014e65f173d34d591b1228dd981070716'}"
+  },
+  {
+   "check": "binding still save-fix/working after Update from the repository (no nesting)",
+   "ok": true,
+   "detail": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/"
+  },
+  {
+   "check": "/git/history lists save-fix/Final",
+   "ok": true,
+   "detail": "['save-fix/working/baseline', 'save-fix/working/checkpoints/qa-cp-a', 'save-fix/working/checkpoints/qa-cp-b', 'save-fix/working/checkpoints/state-B', 'save-fix/working/latest', 'ARISTA-LAB-TEST/latest', 'bgp-core/reference/broken-01/latest', 'bgp-core/reference/solution/latest', 'bgp-core/reference/start/latest', 'bgp-core/work/latest', 'clab-llm-dev2/reference/solution/latest', 'clab-llm-dev2/reference/start/latest', 'clab-llm-dev2/work/checkpoints/release-129-live-validation', 'clab-llm-dev2/work/latest', 'l01-ethernet/reference/broken-01/latest', 'l01-ethernet/reference/solution/latest', 'l01-ethernet/reference/start/latest', 'l01-ethernet/work/latest', 'l02-switching/reference/broken-01/latest', 'l02-switching/reference/solution/latest', 'l02-switching/reference/start/latest', 'l02-switching/work/latest', 'l03-addressing/reference/broken-01/latest', 'l03-addressing/reference/solution/latest', 'l03-addressing/reference/start/latest', 'l03-addressing/work/latest', 'l04-packet/reference/broken-01/latest', 'l04-packet/reference/solution/latest', 'l04-packet/reference/start/latest', 'l04-packet/work/latest', 'l05-isis/reference/broken-01/latest', 'l05-isis/reference/solution/latest'"
+  },
+  {
+   "check": "/save-fix/Final reads at the new commit through the product's own version call",
+   "ok": true,
+   "detail": "200"
+  },
+  {
+   "check": "no page/console errors during update/verify",
+   "ok": true,
+   "detail": null
+  },
+  {
+   "check": "/git/history's save-fix/Final row commit == the pushed commit",
+   "ok": true,
+   "detail": "('245df9d014e65f173d34d591b1228dd981070716', '245df9d014e65f173d34d591b1228dd981070716')"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T15:52:33Z"
+}

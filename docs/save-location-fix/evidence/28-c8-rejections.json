@@ -1,0 +1,209 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31 (3dfc4912c163)",
+ "started_utc": "2026-09-22T15:43:49Z",
+ "steps": {
+  "update_response": {
+   "status": "updated",
+   "head": "2e2d19d829d3eb5d37b17725b4b1e2b531f36f49",
+   "message": "Updated from remote using fast-forward only."
+  },
+  "bad_listing": "CLAB-MNGR-DEV-LLM\n\u203a\nsave-fix\n\u203a\nBad\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this saved configuration to the running devices. They are not rebooted. Folders cannot be created inside another lab\u2019s folder.\n\nCLAB-MNGR-DEV-LLM\nARISTA-LAB-TEST\nbgp-core\nclab-llm-dev2\nJunOS-TEST\nJunOS-TEST-2\nl01-ethernet\nl02-switching\nl03-addressing\nl04-packet\nl05-isis\nl06-mpls\nl07-bgp\nl08-isp-bgp\nl09-l3vpn\nl10-evpn\nlabs\nrestore-square\nsave-fix\nBad\nBroken\ncourse\nelsewhere\nFinal\nLegacy\nMissing\nworkin",
+  "bad_apply_button_count": 1,
+  "bad_dialog_text": "Replace running configuration\n\u00d7\n\nThe saved configuration cannot be applied right now.\n\nThe saved version manifest is invalid.\n\nClose",
+  "bad_targets_rendered": false,
+  "bad_http_statuses": [
+   [
+    "http://127.0.0.1:8081/api/labs/904a35a79dc341ce8a4638f83fc34185/restore/preflight",
+    409
+   ]
+  ],
+  "bad_restore_jobs_before": 138,
+  "bad_restore_jobs_after": 138,
+  "missing_listing": "CLAB-MNGR-DEV-LLM\n\u203a\nsave-fix\n\u203a\nMissing\nApply to running lab\u2026\nNew folder\u2026\nSave this lab here\n\nApplies this saved configuration to the running devices. They are not rebooted. Folders cannot be created inside another lab\u2019s folder.\n\nCLAB-MNGR-DEV-LLM\nARISTA-LAB-TEST\nbgp-core\nclab-llm-dev2\nJunOS-TEST\nJunOS-TEST-2\nl01-ethernet\nl02-switching\nl03-addressing\nl04-packet\nl05-isis\nl06-mpls\nl07-bgp\nl08-isp-bgp\nl09-l3vpn\nl10-evpn\nlabs\nrestore-square\nsave-fix\nBad\nBroken\ncourse\nelsewhere\nFinal\nLegacy\nMissing\nwo",
+  "missing_apply_button_count": 1,
+  "missing_dialog_text": "Replace running configuration\n\u00d7\n\nThe saved configuration cannot be applied right now.\n\nThe saved snapshot is missing files or exceeds its limit.\n\nClose",
+  "missing_targets_rendered": false,
+  "missing_http_statuses": [
+   [
+    "http://127.0.0.1:8081/api/labs/904a35a79dc341ce8a4638f83fc34185/restore/preflight",
+    409
+   ]
+  ],
+  "missing_restore_jobs_before": 138,
+  "missing_restore_jobs_after": 138,
+  "invalid_commit_response": {
+   "status": 409,
+   "body": {
+    "detail": "The selected commit is outside this repository branch history."
+   }
+  },
+  "reviewed_commit_short": "2e2d19d829",
+  "old_head": "2e2d19d829d3eb5d37b17725b4b1e2b531f36f49",
+  "new_head": "6a5dbc3d5bdb0373cbc5166644eb71b8be53afbf",
+  "update_response_2": {
+   "status": "updated",
+   "head": "6a5dbc3d5bdb0373cbc5166644eb71b8be53afbf",
+   "message": "Updated from remote using fast-forward only."
+  },
+  "review_still_open_after_update": true,
+  "stale_submit_response": {
+   "id": "24fb770e484b4bcaadf5a6a5ca25cd40",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T15:44:15.442352+00:00",
+   "status": "queued",
+   "message": "Restore queued.",
+   "source": {
+    "type": "folder",
+    "path": "/save-fix/Final",
+    "folder": "save-fix/Final",
+    "commit": "2e2d19d829d3eb5d37b17725b4b1e2b531f36f49",
+    "captured_at": "2026-09-22T14:59:06.097597+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "",
+   "post_backup_job_id": "",
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "status": "pending",
+     "message": "Waiting to restore."
+    }
+   ]
+  },
+  "stale_final_job": {
+   "id": "24fb770e484b4bcaadf5a6a5ca25cd40",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T15:44:15.442352+00:00",
+   "finished": "2026-09-22T15:44:21.014156+00:00",
+   "status": "succeeded",
+   "message": "All 1 node(s) restored and verified against the saved state.",
+   "source": {
+    "type": "folder",
+    "path": "/save-fix/Final",
+    "folder": "save-fix/Final",
+    "commit": "2e2d19d829d3eb5d37b17725b4b1e2b531f36f49",
+    "captured_at": "2026-09-22T14:59:06.097597+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "814e97587e17467dbaa34048556a657e",
+   "post_backup_job_id": "75791d5949384f30abed0a2bd62d9a6c",
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "diff_sample": [],
+     "no_op": true,
+     "persistence": "saved",
+     "missing_statements": 0,
+     "extra_statements": 0
+    }
+   ]
+  },
+  "job_source_commit": "2e2d19d829d3eb5d37b17725b4b1e2b531f36f49"
+ },
+ "removed_artifact": "ceos.eoscfg",
+ "seed_commit": "2e2d19d829d3eb5d37b17725b4b1e2b531f36f49",
+ "classify_end": {
+  "ceos": "A"
+ },
+ "checks": [
+  {
+   "check": "Update from the repository reached the seed commit",
+   "ok": true,
+   "detail": "({'status': 'updated', 'head': '2e2d19d829d3eb5d37b17725b4b1e2b531f36f49', 'message': 'Updated from remote using fast-forward only.'}, '2e2d19d829d3eb5d37b17725b4b1e2b531f36f49')"
+  },
+  {
+   "check": "bad: save-fix/Bad review refuses before any node is offered (no .restore-targets)",
+   "ok": true,
+   "detail": "Replace running configuration\n\u00d7\n\nThe saved configuration cannot be applied right now.\n\nThe saved version manifest is invalid.\n\nClose"
+  },
+  {
+   "check": "bad: no new restore job was created (no device contacted)",
+   "ok": true,
+   "detail": "(138, 138)"
+  },
+  {
+   "check": "missing: save-fix/Missing review refuses before any node is offered (no .restore-targets)",
+   "ok": true,
+   "detail": "Replace running configuration\n\u00d7\n\nThe saved configuration cannot be applied right now.\n\nThe saved snapshot is missing files or exceeds its limit.\n\nClose"
+  },
+  {
+   "check": "missing: no new restore job was created (no device contacted)",
+   "ok": true,
+   "detail": "(138, 138)"
+  },
+  {
+   "check": "a restore with a commit id not in the branch history is refused with 409",
+   "ok": true,
+   "detail": "{'status': 409, 'body': {'detail': 'The selected commit is outside this repository branch history.'}}"
+  },
+  {
+   "check": "invalid-commit request created no restore job (no device contacted)",
+   "ok": true,
+   "detail": "(138, 138)"
+  },
+  {
+   "check": "second checkout pushed a new commit changing only save-fix/Final/ceos.cfg",
+   "ok": true,
+   "detail": "('2e2d19d829d3eb5d37b17725b4b1e2b531f36f49', '6a5dbc3d5bdb0373cbc5166644eb71b8be53afbf')"
+  },
+  {
+   "check": "Update from the repository reached the new commit (review dialog stays open, unaffected)",
+   "ok": true,
+   "detail": "({'status': 'updated', 'head': '6a5dbc3d5bdb0373cbc5166644eb71b8be53afbf', 'message': 'Updated from remote using fast-forward only.'}, '6a5dbc3d5bdb0373cbc5166644eb71b8be53afbf')"
+  },
+  {
+   "check": "the already-open review is still open after Update from the repository",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "stale review submitted (job id returned)",
+   "ok": true,
+   "detail": "{'id': '24fb770e484b4bcaadf5a6a5ca25cd40', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T15:44:15.442352+00:00', 'status': 'queued', 'message': 'Restore queued.', 'source': {'type': 'folder', 'path': '/save-fix/Final', 'folder': 'save-fix/Final', 'commit': '2e2d19d829d3eb5d37b17725b4b1e2b531f36f49', 'captured_at': '2026-09-22T14:59:06.097597+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}, 'confirm_minutes': 5, 'pre_backup_job_id': '', 'post_backup_job_id': '', 'targets': [{'name': 'clab-restore-square-ceos', 'short_name': 'ceos', 'platform': 'arista_ceos', 'status': 'pending', 'message': 'Waiting to restore.'}]}"
+  },
+  {
+   "check": "stale-review job reached a final status",
+   "ok": true,
+   "detail": "{'id': '24fb770e484b4bcaadf5a6a5ca25cd40', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T15:44:15.442352+00:00', 'finished': '2026-09-22T15:44:21.014156+00:00', 'status': 'succeeded', 'message': 'All 1 node(s) restored and verified against the saved state.', 'source': {'type': 'folder', 'path': '/save-fix/Final', 'folder': 'save-fix/Final', 'commit': '2e2d19d829d3eb5d37b17725b4b1e2b531f36f49', 'captured_at': '2026-09-22T14:59:06.097597+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}, 'confirm_minutes': 5, 'pre_backup_job_id': '814e97587e17467dbaa34048556a657e', 'post_backup_job_id': '75791d5949384f30abed0a2bd62d9a6c', 'targets': [{'name': 'clab-restore-square-ceos', 'short_name': 'ceos', 'platform': 'arista_ceos', 'status': 'verified', 'message': 'Configuration replaced and verified against the saved desired state.', 'diff_sample': [], 'no_op': True, 'persistence': 'saved', 'missing_statements': 0, 'extra_statements': 0}]}"
+  },
+  {
+   "check": "the job's source commit is the REVIEWED (older) commit, not the new HEAD from Update",
+   "ok": true,
+   "detail": "('2e2d19d829d3eb5d37b17725b4b1e2b531f36f49', '2e2d19d829', '6a5dbc3d5bdb0373cbc5166644eb71b8be53afbf')"
+  },
+  {
+   "check": "no page or console errors across C8",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T15:44:23Z"
+}

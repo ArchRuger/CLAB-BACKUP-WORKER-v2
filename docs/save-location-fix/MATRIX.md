@@ -33,11 +33,11 @@ evidence of earlier releases does not count.
 
 | # | Check | ceos | cjunosevolved | vjunos-switch | xrv9k | Evidence |
 |---|---|---|---|---|---|---|
-| C1 | State A captured through normal saves; `Final`, `Broken`, Latest distinguishable | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
-| C2 | Apply from direct `Final/manifest.json` through the UI; independent readback proves the values | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
-| C3 | Apply from direct `Broken/manifest.json` | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
-| C4 | Apply from `working/latest/manifest.json` (never `latest/latest`) | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
-| C5 | Across the matrix: nested folder, legacy parent convenience, checkpoint/baseline, historical commit | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
-| C6 | Pre-restore backup, management reachability, data plane, per-node status, no reboot, binding and source unchanged, follow-up backup | NOT RUN | NOT RUN | NOT RUN | NOT RUN | |
-| C7 | Mixed four-device selection; one controlled per-node failure; recovery | NOT RUN | | | | |
-| C8 | Invalid source and stale review rejected before any device mutation | NOT RUN | | | | |
+| C1 | State A captured through normal saves; `Final`, `Broken`, Latest distinguishable | PASS | PASS | PASS | PASS | `evidence/20-c-preparation.md` (`clab-backup:1.30.31` (`3dfc4912c163`) / `8ea56e0`) |
+| C2 | Apply from direct `Final/manifest.json` through the UI; independent readback proves the values | PASS | PASS | PASS | PASS | `evidence/21-c2-final.md` (`clab-backup:1.30.31` (`3dfc4912c163`) / `8ea56e0`) |
+| C3 | Apply from direct `Broken/manifest.json` | PASS | PASS | PASS | PASS | `evidence/22-c3-broken.md` (`clab-backup:1.30.31` (`3dfc4912c163`) / `8ea56e0`) |
+| C4 | Apply from `working/latest/manifest.json` (never `latest/latest`) | PASS | PASS | PASS | PASS | `evidence/23-c4-latest.md` (`clab-backup:1.30.31` (`3dfc4912c163`) / `8ea56e0`) |
+| C5 | Across the matrix: nested folder, legacy parent convenience, checkpoint/baseline, historical commit | PASS | PASS | PASS | PASS | `evidence/24-c5-*.md` (`clab-backup:1.30.31` (`3dfc4912c163`) / `8ea56e0`) |
+| C6 | Pre-restore backup, management reachability, data plane, per-node status, no reboot, binding and source unchanged, follow-up backup | PASS (data plane: see `30-c6-dataplane.md`) | PASS (same) | PASS (same) | PASS (same) | `evidence/26-c6-summary.md`, `30-c6-dataplane.md` (`clab-backup:1.30.31` (`3dfc4912c163`) / `8ea56e0`) |
+| C7 | Mixed four-device selection; one controlled per-node failure; recovery | PASS (three verified, xrv9k refused for a foreign pending change, `partial`, recovered) | | | | `evidence/27-c7-mixed.md` (`clab-backup:1.30.31` (`3dfc4912c163`) / `8ea56e0`) |
+| C8 | Invalid source and stale review rejected before any device mutation | PASS (14/14: unknown commit 409, corrupt manifest 409, missing artifact refused, stale review applies the reviewed commit) | | | | `evidence/28-c8-rejections.md` (`clab-backup:1.30.31` (`3dfc4912c163`) / `8ea56e0`) |

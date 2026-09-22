@@ -1,0 +1,34 @@
+{
+ "id": "32b038c3908e42a9b3279cc4f4207d52",
+ "status": "succeeded",
+ "nodes": [
+  {
+   "name": "clab-restore-square-ceos",
+   "status": "succeeded",
+   "file": "clab-restore-square-ceos-d9b93278.cfg",
+   "restore_file": "clab-restore-square-ceos-d9b93278.eoscfg",
+   "restore_format": "eos-running-config"
+  },
+  {
+   "name": "clab-restore-square-cjunosevolved",
+   "status": "succeeded",
+   "file": "clab-restore-square-cjunosevolved-c4a865f2.set",
+   "restore_file": "clab-restore-square-cjunosevolved-c4a865f2.jcfg",
+   "restore_format": "junos-hierarchical"
+  },
+  {
+   "name": "clab-restore-square-vjunos-switch",
+   "status": "succeeded",
+   "file": "clab-restore-square-vjunos-switch-7964f017.set",
+   "restore_file": "clab-restore-square-vjunos-switch-7964f017.jcfg",
+   "restore_format": "junos-hierarchical"
+  },
+  {
+   "name": "clab-restore-square-xrv9k",
+   "status": "succeeded",
+   "file": "clab-restore-square-xrv9k-60be980c.cfg",
+   "restore_file": "clab-restore-square-xrv9k-60be980c.xrcfg",
+   "restore_format": "iosxr-running-config"
+  }
+ ]
+}

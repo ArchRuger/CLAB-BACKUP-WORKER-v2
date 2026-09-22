@@ -4,6 +4,22 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.32
+
+**Save location fix: live acceptance closed on the four images.** Second and closing release of the save-location
+stream ([save-location-fix](save-location-fix/PICKUP.md)). No change to the manager's behaviour: this release carries
+the four-image acceptance record and the QA tools that produced it.
+
+- **Apply from `Final`, `Broken`, `working/latest`, a nested reference folder, the legacy `…/latest` layout, a
+  checkpoint, the baseline and a historical commit**, each through the page onto cEOS 4.35.0F, cJunosEvolved
+  26.2R1.7-EVO, vJunos-switch 23.2R1.14 and XRv9k 24.3.1 at once, with three deliberately different saved states so
+  that reading the wrong folder could not pass: every node read back independently on the selected state, the lab's
+  save location and the source folders untouched, no reboot, a normal backup afterwards.
+- A mixed four-device apply with one node refused for somebody else's pending change ends `partial` and recovers; a
+  corrupt manifest, a manifest whose file is missing, a commit outside the branch and a stale review are refused
+  before any device is contacted.
+- The evidence names its build and commit (`docs/save-location-fix/MATRIX.md`, `evidence/`).
+
 ## Changes in 1.30.31
 
 **Saving as Latest updates the same `latest/` in place, and Apply to running lab… is offered for any folder that

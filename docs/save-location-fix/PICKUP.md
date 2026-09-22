@@ -143,9 +143,10 @@ cannot *move* its files one level up (the parent snapshot exists), which is why 
 
 ## Exact next action
 
-Chunks 1 and 2 are code-complete and proven on `clab-backup:1.30.31` (matrix A and B, all PASS).
-Next: commit and push 1.30.31 on `claude/save-location-fix`, open the pull request, watch CI; then chunk 3
-(matrix C: the four-image live acceptance from `Final`, `Broken`, `working/latest`, the nested folder, the
-legacy parent, a checkpoint/baseline and a historical commit; mixed selection; one controlled failure) as
-release 1.30.32 with the closing records. The lab is bound to `save-fix/working` (recovered in B0); cEOS carries
-configuration A plus one reversible description; the other three nodes are on A.
+The stream is complete: 1.30.31 (`8ea56e0`, PR #49, CI green) carries the code; 1.30.32 carries the four-image
+acceptance record (matrix C, all PASS, including the data-plane closure `30-c6-dataplane.md`). If it is picked up
+again: (1) a new image or release reruns `tools/c1_prepare.py` and `tools/c_apply.py` on the lab, then adds a row
+with evidence; (2) the documented limits in "Reviews" are the open points; (3) for the user: the lab repository
+`pruger-dev/CLAB-MNGR-DEV-LLM` now holds the QA fixture folders `save-fix/{working,Final,Broken,Legacy,course,Bad,Missing}`
+and a few QA checkpoints; the unassigned credential profile `QA-wrong-password-ceos` still exists; the lab is bound to
+`save-fix/working`, all four nodes on the real square configuration A with the mesh healthy.

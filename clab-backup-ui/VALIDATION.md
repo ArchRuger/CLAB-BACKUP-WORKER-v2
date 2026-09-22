@@ -1,3 +1,40 @@
+# Save location fix, part 2: the four-image live acceptance — 1.30.32
+
+Prepared on `claude/save-location-fix` on 2026-09-22 after 1.30.31 (`8ea56e0`, pushed, CI green on the push and the
+pull-request runs). **Live-device and real-browser evidence on the build of that commit; no application code changed
+in this release** (records and QA tools only), so the unit totals are those of 1.30.31.
+
+- **Build under test:** `deploy/start-manager.sh --manager-only` built and started `clab-backup:1.30.31`, image
+  `3dfc4912c163`, from the committed `8ea56e0` (helpers 1.30.31, `/api/state` 1.30.31). Lab `restore-square`, one node
+  per image; image ids and NOS versions read from the devices are in `evidence/20-c-preparation.md`.
+- **Section C of the matrix, all PASS on all four nodes, by an independent QA agent** (`evidence/20-*` to `29-*`,
+  tools `docs/save-location-fix/tools/c_*.py`). Three distinguishable states were built through the product's own saves
+  (A = the acceptance baseline; B = each node's drift file: a changed value, a removed A statement, a B-only stanza;
+  C = A plus a node-specific marker), then pushed from a second checkout into `save-fix/Final` (A),
+  `save-fix/Broken` (B, direct manifest), `save-fix/Legacy/latest` (A, legacy layout) and
+  `save-fix/course/lab/reference/solution` (A), with the checkpoint `state-B` and the baseline (B) made through the
+  page, and discovered with *Update from the repository*. Every apply went through the real review dialog (exact
+  path and commit shown) onto all four nodes at once, and every node was read back independently (markers and the
+  whole-configuration comparison against the repository checkout, boot identity unchanged): C2 `/save-fix/Final` from
+  the folder browser (B → A), C3 `/save-fix/Broken` from the Saved versions row (A → B), C4 `/save-fix/working/latest`
+  from the Latest row (B → C; the page sent `/save-fix/working/latest`), C5 the nested folder from the Save location
+  browser (A), the legacy parent `save-fix/Legacy` whose caption names `…/latest` (A), the checkpoint (B), the
+  baseline (a real `no_op` on every node) and a historical commit from *Full history…* → View → Apply (A). C6: every
+  job's pre- and post-restore backup ids, every node reachable on every row, no reboot in 32 checks, the binding
+  `save-fix/working` and the source folders' tree hashes unchanged, one normal backup at the end (`succeeded`).
+  C7: `/save-fix/Final` onto all four while a foreign `commit confirmed` trial sat on XRv9k: three verified, XRv9k
+  refused with its reason, job `partial`, the foreign change rolled back by itself, the recovery apply verified.
+  C8: 14/14 refusals before any device was contacted (a commit outside the branch, a corrupt `manifest.json`, a
+  manifest whose artifact is missing, and a stale review that applied the reviewed commit, not the new HEAD).
+- **Data plane.** The square had been redeployed after a host reboot and ran the bare containerlab startup
+  configuration, so the OSPF mesh check (`square_check.py`) was not applicable during the C rows and is recorded so in
+  `26-c6-summary.md`. Closed afterwards on the same build (`30-c6-dataplane.md`, `30-c6-square-*.json`): the real square configuration A (routed /31 edges, loopbacks, OSPF area 0) was loaded on the four nodes and `square_check.py` reported every edge both ways and the full loopback mesh; it was saved through the page, pushed byte-exactly into `save-fix/Final` from the second checkout and synced; all four nodes were drifted to B and `/save-fix/Final` applied from the folder browser (job `7edff056…`, four targets `verified`, no reboot, whole-configuration readback equal to the checkout); `square_check.py` was healthy again after the apply, and a normal backup succeeded. The drift files change descriptions, prefix lists and VLANs and never the addressing, so the mesh stayed up during B as well, which the record says.
+- **Corrections QA made to its own tooling during the run, kept in the evidence:** a byte-stripping extractor that
+  briefly corrupted the fixture folders (caught by the product's manifest-checksum refusal before any device was
+  touched, then fixed and the folders recommitted with verified checksums) and a double-counted Junos
+  `root-authentication` tolerance in the readback comparison (fixed, the two affected rows re-run live).
+- **Not run:** nothing of the matrix. Sections A and B are the 1.30.31 record above.
+
 # Save location fix, part 1: stable Latest destination and manifest-based Apply — 1.30.31
 
 Prepared on `claude/save-location-fix` (branched from `main` `6c3e8b3`, release 1.30.30) on 2026-09-22. The routing

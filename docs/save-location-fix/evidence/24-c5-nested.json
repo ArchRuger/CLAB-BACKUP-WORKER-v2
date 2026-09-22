@@ -1,0 +1,476 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31 (3dfc4912c163)",
+ "entry": "folder",
+ "path_or_match": "save-fix/course/lab/reference/solution",
+ "nodes": [
+  "ceos",
+  "cjunosevolved",
+  "vjunos-switch",
+  "xrv9k"
+ ],
+ "started_utc": "2026-09-22T15:23:44Z",
+ "steps": {
+  "binding_before": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/",
+  "entry_apply_button_count": 1,
+  "review_source_line": "Source: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/course/lab/reference/solution \u00b7 saved 25 minutes ago \u00b7 7c6fb16b92",
+  "review_eligible_rows": [
+   "ceos EOS 1 differences from the running configuration",
+   "cjunosevolved Junos Evolved 1 differences from the running configuration",
+   "vjunos-switch Junos 1 differences from the running configuration",
+   "xrv9k IOS XR 1 differences from the running configuration"
+  ],
+  "review_dialog_text": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/course/lab/reference/solution \u00b7 saved 25 minutes ago \u00b7 7c6fb16b92\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS 1 differences from the running configuration\ncjunosevolved Junos Evolved 1 differences from the running configuration\nvjunos-switch Junos 1 differences from the running configuration\nxrv9k IOS XR 1 differences from the running configuration\nEach device's current configuration is backed up first. A device whose backup fails is left unchanged.\nThe devices are not rebooted. The device itself checks the new configuration when it is activated, and the change is undone on its own if the device cannot be reached again within 5 minutes.\nDevices that are skipped above are not touched.\nAdvanced options\nI understand the running configuration on the selected devices will be replaced.\nCancel\nReplace configurations",
+  "checked_devices_before_submit": [
+   "clab-restore-square-ceos",
+   "clab-restore-square-cjunosevolved",
+   "clab-restore-square-vjunos-switch",
+   "clab-restore-square-xrv9k"
+  ],
+  "submit_response": {
+   "id": "ccb81fe08dae46538dd1ded331c4e084",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T15:24:00.264416+00:00",
+   "status": "queued",
+   "message": "Restore queued.",
+   "source": {
+    "type": "folder",
+    "path": "/save-fix/course/lab/reference/solution",
+    "folder": "save-fix/course/lab/reference/solution",
+    "commit": "7c6fb16b928b62a96313880e43f5fb0d54bf8aef",
+    "captured_at": "2026-09-22T14:59:06.097597+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "",
+   "post_backup_job_id": "",
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "status": "pending",
+     "message": "Waiting to restore."
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "status": "pending",
+     "message": "Waiting to restore."
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "status": "pending",
+     "message": "Waiting to restore."
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "status": "pending",
+     "message": "Waiting to restore."
+    }
+   ]
+  },
+  "source_sent": {
+   "type": "folder",
+   "path": "/save-fix/course/lab/reference/solution",
+   "folder": "save-fix/course/lab/reference/solution",
+   "commit": "7c6fb16b928b62a96313880e43f5fb0d54bf8aef",
+   "captured_at": "2026-09-22T14:59:06.097597+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "final_job": {
+   "id": "ccb81fe08dae46538dd1ded331c4e084",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T15:24:00.264416+00:00",
+   "finished": "2026-09-22T15:24:48.364794+00:00",
+   "status": "succeeded",
+   "message": "All 4 node(s) restored and verified against the saved state.",
+   "source": {
+    "type": "folder",
+    "path": "/save-fix/course/lab/reference/solution",
+    "folder": "save-fix/course/lab/reference/solution",
+    "commit": "7c6fb16b928b62a96313880e43f5fb0d54bf8aef",
+    "captured_at": "2026-09-22T14:59:06.097597+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "91ee29391c2d4c6fbcddb68f151dc7a1",
+   "post_backup_job_id": "d141b7f16d9a404987f1ccca00e15209",
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "diff_sample": [
+      "--- system:/running-config",
+      "+++ session:/clabmgr-c481dd80-session-config",
+      "interface Ethernet3",
+      "-   description SAVEFIX-C-ceos"
+     ],
+     "no_op": false,
+     "persistence": "saved",
+     "missing_statements": 0,
+     "extra_statements": 0
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "diff_sample": [
+      "[edit interfaces]",
+      "-   et-0/0/1 {",
+      "-       description SAVEFIX-C-cjunosevolved;",
+      "-   }",
+      "[edit]"
+     ],
+     "no_op": false,
+     "root_authentication": "synthesized",
+     "persistence": "saved",
+     "missing_statements": 0,
+     "extra_statements": 0
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "diff_sample": [
+      "[edit interfaces]",
+      "-   ge-0/0/1 {",
+      "-       description SAVEFIX-C-vjunos-switch;",
+      "-   }",
+      "[edit]"
+     ],
+     "no_op": false,
+     "root_authentication": "present",
+     "persistence": "saved",
+     "missing_statements": 0,
+     "extra_statements": 0
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "diff_sample": [
+      "Tue Sep 22 15:24:38.888 UTC",
+      "!! Building configuration...",
+      "!! IOS XR Configuration 24.3.1",
+      "-  interface GigabitEthernet0/0/0/1",
+      "-   description SAVEFIX-C-xrv9k",
+      "-  !",
+      "end"
+     ],
+     "no_op": false,
+     "persistence": "saved",
+     "missing_statements": 0,
+     "extra_statements": 0
+    }
+   ]
+  },
+  "page_shows_restore_status_after": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 4 devices.\n\nReplaced and verified ceos EOS\nDetails\nReplaced and verified cjunosevolved Junos Evolved\nDetails\nReplaced and verified vjunos-switch Junos\nDetails\nReplaced and verified xrv9k IOS XR\nDetails\nDetails",
+  "binding_after": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/"
+ },
+ "classify_before": {
+  "ceos": "C",
+  "cjunosevolved": "C",
+  "vjunos-switch": "C",
+  "xrv9k": "C"
+ },
+ "boot_before": {
+  "ceos": {
+   "boot": "PID 1 up 9140 s",
+   "up_seconds": 9140
+  },
+  "cjunosevolved": {
+   "boot": "System booted: 2026-09-22 12:58:58 UTC",
+   "up_seconds": null
+  },
+  "vjunos-switch": {
+   "boot": "System booted: 2026-09-22 12:53:06 UTC",
+   "up_seconds": null
+  },
+  "xrv9k": {
+   "boot": "System uptime is 2 hours 23 minutes",
+   "up_seconds": 8580
+  }
+ },
+ "classify_after": {
+  "ceos": "A",
+  "cjunosevolved": "A",
+  "vjunos-switch": "A",
+  "xrv9k": "A"
+ },
+ "boot_after": {
+  "ceos": {
+   "boot": "PID 1 up 9204 s",
+   "up_seconds": 9204
+  },
+  "cjunosevolved": {
+   "boot": "System booted: 2026-09-22 12:58:58 UTC",
+   "up_seconds": null
+  },
+  "vjunos-switch": {
+   "boot": "System booted: 2026-09-22 12:53:06 UTC",
+   "up_seconds": null
+  },
+  "xrv9k": {
+   "boot": "System uptime is 2 hours 24 minutes",
+   "up_seconds": 8640
+  }
+ },
+ "boot_same": {
+  "ceos": true,
+  "cjunosevolved": true,
+  "vjunos-switch": true,
+  "xrv9k": true
+ },
+ "readback_saved_comparison": {
+  "read_at_utc": "2026-09-22T15:24:54Z",
+  "nodes": {
+   "ceos": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 0,
+    "b_only_markers": 4,
+    "configuration_lines": 51,
+    "pending_confirmation": false,
+    "boot": "PID 1 up 9207 s",
+    "up_seconds": 9207,
+    "own_sessions_left_pending": 0,
+    "compared_with_saved": {
+     "saved_file": "ceos.cfg",
+     "saved_statements": 28,
+     "active_statements": 28,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "mixed"
+   },
+   "cjunosevolved": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 11,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-22 12:58:58 UTC",
+    "up_seconds": null,
+    "compared_with_saved": {
+     "saved_file": "cjunosevolved.set",
+     "saved_statements": 9,
+     "active_statements": 10,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 1
+    },
+    "active": "mixed"
+   },
+   "vjunos-switch": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 14,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-22 12:53:06 UTC",
+    "up_seconds": null,
+    "compared_with_saved": {
+     "saved_file": "vjunos-switch.set",
+     "saved_statements": 13,
+     "active_statements": 13,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "mixed"
+   },
+   "xrv9k": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 51,
+    "pending_confirmation": false,
+    "boot": "System uptime is 2 hours 24 minutes",
+    "up_seconds": 8640,
+    "compared_with_saved": {
+     "saved_file": "xrv9k.cfg",
+     "saved_statements": 32,
+     "active_statements": 32,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "mixed"
+   }
+  }
+ },
+ "targets_summary": [
+  {
+   "name": "clab-restore-square-ceos",
+   "platform": "arista_ceos",
+   "status": "verified",
+   "message": "Configuration replaced and verified against the saved desired state.",
+   "no_op": false,
+   "persistence": "saved"
+  },
+  {
+   "name": "clab-restore-square-cjunosevolved",
+   "platform": "juniper_cjunosevolved",
+   "status": "verified",
+   "message": "Configuration replaced and verified against the saved desired state.",
+   "no_op": false,
+   "persistence": "saved"
+  },
+  {
+   "name": "clab-restore-square-vjunos-switch",
+   "platform": "juniper_vjunosswitch",
+   "status": "verified",
+   "message": "Configuration replaced and verified against the saved desired state.",
+   "no_op": false,
+   "persistence": "saved"
+  },
+  {
+   "name": "clab-restore-square-xrv9k",
+   "platform": "cisco_xrv9k",
+   "status": "verified",
+   "message": "Configuration replaced and verified against the saved desired state.",
+   "no_op": false,
+   "persistence": "saved"
+  }
+ ],
+ "pre_backup_job_id": "91ee29391c2d4c6fbcddb68f151dc7a1",
+ "post_backup_job_id": "d141b7f16d9a404987f1ccca00e15209",
+ "checks": [
+  {
+   "check": "c5-nested: review shows a Source line with folder and 10-char commit",
+   "ok": true,
+   "detail": "Source: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/course/lab/reference/solution \u00b7 saved 25 minutes ago \u00b7 7c6fb16b92"
+  },
+  {
+   "check": "c5-nested: exactly the requested nodes are checked before submit",
+   "ok": true,
+   "detail": "['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']"
+  },
+  {
+   "check": "c5-nested: restore submitted (job id returned)",
+   "ok": true,
+   "detail": "{'id': 'ccb81fe08dae46538dd1ded331c4e084', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T15:24:00.264416+00:00', 'status': 'queued', 'message': 'Restore queued.', 'source': {'type': 'folder', 'path': '/save-fix/course/lab/reference/solution', 'folder': 'save-fix/course/lab/reference/solution', 'commit': '7c6fb16b928b62a96313880e43f5fb0d54bf8aef', 'captured_at': '2026-09-22T14:59:06.097597+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}, 'confirm_minutes': 5, 'pre_backup_job_id': '', 'post_backup_job_id': '', 'targets': [{'name': 'clab-restore-square-ceos', 'short_name': 'ceos', 'platform': 'arista_ceos', 'status': 'pending', 'message': 'Waiting to restore.'}, {'name': 'clab-restore-square-cjunosevolved', 'short_name': 'cjunosevolved', 'platform': 'juniper_cjunosevolved', 'status': 'pending', 'message': 'Waiting to restore.'}, {'name': 'clab-restore-square-vjunos-switch', 'short_name': 'vjunos-switch', 'platform': 'juniper_vjunosswitch', 'status': 'pending', 'message'"
+  },
+  {
+   "check": "c5-nested: restore job reached a final status",
+   "ok": true,
+   "detail": "{'id': 'ccb81fe08dae46538dd1ded331c4e084', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T15:24:00.264416+00:00', 'finished': '2026-09-22T15:24:48.364794+00:00', 'status': 'succeeded', 'message': 'All 4 node(s) restored and verified against the saved state.', 'source': {'type': 'folder', 'path': '/save-fix/course/lab/reference/solution', 'folder': 'save-fix/course/lab/reference/solution', 'commit': '7c6fb16b928b62a96313880e43f5fb0d54bf8aef', 'captured_at': '2026-09-22T14:59:06.097597+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}, 'confirm_minutes': 5, 'pre_backup_job_id': '91ee29391c2d4c6fbcddb68f151dc7a1', 'post_backup_job_id': 'd141b7f16d9a404987f1ccca00e15209', 'targets': [{'name': 'clab-restore-square-ceos', 'short_name': 'ceos', 'platform': 'arista_ceos', 'status': 'verified', 'message': 'Configuration replaced and verified against the saved desired state.', 'diff_sample': ['--- system:/running-config', '+++ session:/clabmgr-c481dd80-session-config', 'interface"
+  },
+  {
+   "check": "c5-nested: lab binding unchanged by the restore (still save-fix/working)",
+   "ok": true,
+   "detail": "('restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/', 'restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/')"
+  },
+  {
+   "check": "c5-nested: no page/console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "c5-nested: ceos independently reads state A after the restore (c_lib marker)",
+   "ok": true,
+   "detail": "('ceos', 'A')"
+  },
+  {
+   "check": "c5-nested: cjunosevolved independently reads state A after the restore (c_lib marker)",
+   "ok": true,
+   "detail": "('cjunosevolved', 'A')"
+  },
+  {
+   "check": "c5-nested: vjunos-switch independently reads state A after the restore (c_lib marker)",
+   "ok": true,
+   "detail": "('vjunos-switch', 'A')"
+  },
+  {
+   "check": "c5-nested: xrv9k independently reads state A after the restore (c_lib marker)",
+   "ok": true,
+   "detail": "('xrv9k', 'A')"
+  },
+  {
+   "check": "c5-nested: ceos boot identity unchanged (no reboot)",
+   "ok": true,
+   "detail": "({'boot': 'PID 1 up 9140 s', 'up_seconds': 9140}, {'boot': 'PID 1 up 9204 s', 'up_seconds': 9204})"
+  },
+  {
+   "check": "c5-nested: cjunosevolved boot identity unchanged (no reboot)",
+   "ok": true,
+   "detail": "({'boot': 'System booted: 2026-09-22 12:58:58 UTC', 'up_seconds': None}, {'boot': 'System booted: 2026-09-22 12:58:58 UTC', 'up_seconds': None})"
+  },
+  {
+   "check": "c5-nested: vjunos-switch boot identity unchanged (no reboot)",
+   "ok": true,
+   "detail": "({'boot': 'System booted: 2026-09-22 12:53:06 UTC', 'up_seconds': None}, {'boot': 'System booted: 2026-09-22 12:53:06 UTC', 'up_seconds': None})"
+  },
+  {
+   "check": "c5-nested: xrv9k boot identity unchanged (no reboot)",
+   "ok": true,
+   "detail": "({'boot': 'System uptime is 2 hours 23 minutes', 'up_seconds': 8580}, {'boot': 'System uptime is 2 hours 24 minutes', 'up_seconds': 8640})"
+  },
+  {
+   "check": "c5-nested: ceos whole configuration matches /tmp/claude-1000/-home-clabllm-projects-clab-manager/fbe79636-ea01-4c1c-8b25-b28ed1918326/scratchpad/CLAB-MNGR-DEV-LLM-secondary/save-fix/course/lab/reference/solution (readback.py --saved, missing=0, extra beyond the documented root-authentication exclusion=0)",
+   "ok": true,
+   "detail": "{'saved_file': 'ceos.cfg', 'saved_statements': 28, 'active_statements': 28, 'missing': 0, 'extra': 0, 'tolerated_root_authentication': 0}"
+  },
+  {
+   "check": "c5-nested: cjunosevolved whole configuration matches /tmp/claude-1000/-home-clabllm-projects-clab-manager/fbe79636-ea01-4c1c-8b25-b28ed1918326/scratchpad/CLAB-MNGR-DEV-LLM-secondary/save-fix/course/lab/reference/solution (readback.py --saved, missing=0, extra beyond the documented root-authentication exclusion=0)",
+   "ok": true,
+   "detail": "{'saved_file': 'cjunosevolved.set', 'saved_statements': 9, 'active_statements': 10, 'missing': 0, 'extra': 0, 'tolerated_root_authentication': 1}"
+  },
+  {
+   "check": "c5-nested: vjunos-switch whole configuration matches /tmp/claude-1000/-home-clabllm-projects-clab-manager/fbe79636-ea01-4c1c-8b25-b28ed1918326/scratchpad/CLAB-MNGR-DEV-LLM-secondary/save-fix/course/lab/reference/solution (readback.py --saved, missing=0, extra beyond the documented root-authentication exclusion=0)",
+   "ok": true,
+   "detail": "{'saved_file': 'vjunos-switch.set', 'saved_statements': 13, 'active_statements': 13, 'missing': 0, 'extra': 0, 'tolerated_root_authentication': 0}"
+  },
+  {
+   "check": "c5-nested: xrv9k whole configuration matches /tmp/claude-1000/-home-clabllm-projects-clab-manager/fbe79636-ea01-4c1c-8b25-b28ed1918326/scratchpad/CLAB-MNGR-DEV-LLM-secondary/save-fix/course/lab/reference/solution (readback.py --saved, missing=0, extra beyond the documented root-authentication exclusion=0)",
+   "ok": true,
+   "detail": "{'saved_file': 'xrv9k.cfg', 'saved_statements': 32, 'active_statements': 32, 'missing': 0, 'extra': 0, 'tolerated_root_authentication': 0}"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T15:24:56Z"
+}
