@@ -3,6 +3,48 @@
 What was actually executed for the guide, by whom (an agent, never a human study), on which build, with the evidence
 paths. Newest chunk first. The final section names the exact PDF (SHA-256) that was inspected page by page.
 
+## Chunk 3 — the delivered PDF, its inspection and the independent replays (release 1.30.35, 2026-09-22)
+
+- **Delivered file:** `Containerlab_Node_Manager_Student_Quick_Start.pdf`, 20 pages, US Letter,
+  **SHA-256 `9f42d9399acb32378f58c6ea40ef3e1f260da844f70329cc5f335255a540d394`**, built with `build.sh` from
+  `source/guide.md` (byline "tested with manager release 1.30.35"), `source/style.css` and `screenshots/spec.json`
+  (24 composed figures from the raw captures of the two executed scenarios). `tools/inspect_pdf.py`: all five fonts
+  embedded (DejaVu Sans/Bold/Oblique, Mono/Mono-Oblique), nine bookmarks, every table-of-contents link resolves, no
+  placeholder text, no U+FFFD, no empty page.
+- **Page-by-page inspection** (the lead, on the `pdftoppm` renders of this exact file, every one of the 20 pages):
+  screenshots and callouts legible, no text over images, no clipped table, captions with their figures, running
+  headers and "Page N of 20" on every page, scenario sections start on a new page; the only white space is the end
+  of the two pages before a scenario break and the end of the last page. Fixes applied during the inspection before
+  the final build: the given-box table header, three captions, and four recrops (a fragment of the canvas note, a
+  too-wide terminal, two dialogs with a stray top edge).
+- **Independent review** (Opus `clab-ui-reviewer`, read-only, on the draft): four blocking findings, all one root
+  cause — the guide named the author's GitHub account where it meant the student's; resolved by stating in "What you
+  have been given" that the lab VM's GitHub login is the student's account (`pruger-dev` in the guide, "read your own
+  account name"), plus the lab-VM terminal row; ten should-fix items (exact status texts, timings, the "5 files" count,
+  the `.cfg`/`.eoscfg`/`manifest.json` wording, the byline) and the length cuts — all applied.
+- **Replay 1** (Sonnet `clab-ui-qa`, an agent simulation of the student, NOT a human study), on the draft PDF
+  `1b9656058c87a8bc50c1f3234dc4f755628d2899cb48e8c5b0d61f502a2f9878`, from the reset starting states
+  (`tools/reset_scenario_a.sh netlab-course-qa`, `tools/reset_scenario_b.sh my-network-labs-qa`), fresh browser
+  contexts, using only the PDF (repository names substituted: `netlab-course-qa`, `my-network-labs-qa`): **A1–A11 and
+  B1–B10 all PASS**; one should-fix (B7's `~/labs/<repo>` checkout is created by B6 — a sentence was added), cosmetic:
+  the reference rows' order, the builder opening in the same tab (both worded now). Remote evidence: `netlab-course-qa`
+  commits `135e811`, `37f2452`, `e2353ce`; `my-network-labs-qa` `ae0bc47`, `be0a10c`, `6aa091a`, `43f02d6`; no
+  `latest/latest`; checkpoints distinct from Latest; the B10 redeploy path contained `my-network-labs-qa`. Files:
+  `evidence/qa/qa-replay-a.md`, `qa-replay-b.md`, `qa-replay.json`, `qa-a*/qa-b*.png`.
+- **Replay 2 (final acceptance)** on the delivered file (`e53aa7…`), from the reset starting states with the
+  repositories `netlab-course-qa2` and `my-network-labs-qa2`, on the manager image `clab-backup:1.30.35`:
+  **A1–A11 and B1–B10 all PASS** (Scenario A about 12 minutes, Scenario B about 16 minutes of agent time). No blocking
+  finding. One should-fix: at B8 the manager's *Browse the repository…* showed the tree from before the terminal push
+  of B7 until the page was reloaded; two cosmetic notes (the Progress tab's own *Create checkpoint…* button works as
+  well as the header menu; a ping sent within a second of "Configuration replaced" can still succeed before the fault
+  shows). Remote evidence and screenshots: `evidence/qa/final-replay-a.md`, `final-replay-b.md`, `final-replay.json`,
+  `final-a*/final-b*.png`; the replayed file is kept as `evidence/qa/guide-under-test.pdf`.
+- **Delta between the replayed file and the delivered file:** after replay 2 two sentences were added and nothing else
+  changed — B8 now says to reload the page if the listing still shows only `latest/`, and A10 says "after a few
+  seconds" before the ping fails. The three affected pages (10, 16, 17) were re-rendered and inspected; the page count
+  and every other page are unchanged (`build.sh` reports the new SHA-256 above). No step, control or expected result
+  changed, so the replay was not repeated for the two sentences.
+
 ## Chunk 2 — Scenario B executed and recorded (release 1.30.34, 2026-09-22)
 
 - **Build under test:** manager image `clab-backup:1.30.33` (commit `cf7bc5d`) on `clab-llm-dev2`, helpers 1.30.33.

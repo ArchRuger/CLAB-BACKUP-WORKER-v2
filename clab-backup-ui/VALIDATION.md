@@ -1,3 +1,21 @@
+# Student quick start delivered: the PDF, its inspection and two independent replays — 1.30.35
+
+Prepared on `claude/student-quick-start` on 2026-09-22 after 1.30.34 (`2ef98a2`, CI green). **No application code
+changed in this release** (guide source, screenshots, tools, evidence and records only), so the unit totals are those of
+1.30.33; `deploy/verify-release.py`, `check_links.py`, `git diff --check` and `test_release_consistency.py` were run again.
+
+- **Build under test for the final replay:** `deploy/start-manager.sh --manager-only` built and started
+  `clab-backup:1.30.35` from this working tree (`/api/state` 1.30.35, helpers 1.30.35) on `clab-llm-dev2`.
+- **The delivered PDF** (`docs/student-quick-start/Containerlab_Node_Manager_Student_Quick_Start.pdf`, 20 pages, SHA-256
+  `9f42d9399acb32378f58c6ea40ef3e1f260da844f70329cc5f335255a540d394`) was inspected page by page by the lead on its
+  `pdftoppm` renders and checked by `tools/inspect_pdf.py` (fonts embedded, bookmarks, links, no placeholders). It differs
+  from the file of the final replay (`e53aa7b9…`, kept under `evidence/qa/`) by two added sentences only.
+- **Independent replays** of both scenarios by a QA agent following only the PDF (an agent simulation, not a human
+  study): replay 1 on the draft (all 21 steps PASS, one wording gap fixed), replay 2 on the final file (all 21 steps PASS, one
+  reload hint added afterwards) — see
+  `docs/student-quick-start/VALIDATION.md` for the step tables, the remote commit ids and the device readbacks.
+- **Opus review** of the guide text applied (account convention, status texts, timings, length).
+
 # Student quick start, part 2: Scenario B on the live manager — 1.30.34
 
 Prepared on `claude/student-quick-start` on 2026-09-22 after 1.30.33 (`cf7bc5d`, CI green on the push and pull-request

@@ -1,11 +1,11 @@
 # Containerlab Node Manager — Student Quick Start
 
-Guide revision 1 · tested with manager release 1.30.32 · September 2026
+Guide revision 1 · tested with manager release 1.30.35 · September 2026
 
 This guide walks you through the manager from the browser: deploying a lab, working on its
-devices from the command line, and saving your progress to Git so nothing is lost even after
-the lab itself is destroyed. Pick the path that matches what you were given and follow it step
-by step; each step says what to do and what you should see.
+devices from the command line, and saving your device configurations to Git so they are not lost
+even after the lab itself is destroyed. Pick the path that matches what you were given and follow
+it step by step; each step says what to do and what you should see.
 
 | Your starting point | Follow |
 |---|---|
@@ -20,12 +20,14 @@ by step; each step says what to do and what you should see.
 
 **What you have been given**
 
-| | |
+| Item | What it is |
 |---|---|
 | Manager address | `http://192.168.132.132:8081` — open it in a browser; there is no sign-in |
+| Your GitHub account | The one the lab VM is signed in to; in this guide it is `pruger-dev` — wherever you see `pruger-dev` in an address, read your own account name |
+| A terminal on the lab VM | A shell as your ordinary VM account (in this guide `clabllm`), used only in the few steps marked *Where to run it: on the lab VM* |
 | Instructor materials | The `link-basics` lab is already staged on the lab VM, with its starting point, finished version and a broken version saved in the course repository (Scenario A) |
 | Course repository | `https://github.com/pruger-dev/netlab-course` — the instructor's copy; you read it, you never push to it |
-| Your own repository | Scenario A: your own copy of the course repository, made from its template before you begin. Scenario B: a brand-new, empty repository you create in step B5 |
+| Your own repository | Scenario A: made on GitHub from the course repository with **Use this template › Create a new repository** (name it, private is fine) before you begin — `https://github.com/pruger-dev/netlab-course-student.git` (your account, your copy's name). Scenario B: a brand-new, empty repository you create in step B5 |
 
 </aside>
 
@@ -37,8 +39,7 @@ you deliberately move it — keeping track of which place you are looking at is 
 guide teaches.
 
 A few Git words come up along the way. A **repository** is a project's saved history, kept on
-GitHub and also as a folder copy elsewhere; a **folder** inside it groups related files, the same
-as a folder on your computer; a **commit** is one saved snapshot of some files with a short
+GitHub and also as a copy elsewhere; a **commit** is one saved snapshot of some files with a short
 message; to **push** — this guide also calls it **upload** — is to send your commits to the copy
 on GitHub; and to **clone** is to copy a whole repository from GitHub onto another machine. Each
 word is used again later without repeating its definition.
@@ -49,10 +50,11 @@ In this scenario you deploy a lab your instructor already prepared, look at it f
 line, make a small change, save your work to Git, and practice recovering from a fault — all
 using `link-basics`, two routers, `r1` and `r2`, joined by one link.
 
-> **Save progress saves device configurations, their restore artifacts and a manifest into your
-> repository folder. It does not save the topology file, the map or a README.** For `link-basics`
-> the topology file is already staged on the lab VM and included in the course repository, so you
-> never need to save it yourself in this scenario.
+> **Save progress saves, for each device, two files — the readable configuration (`.cfg`) and the
+> copy Apply to running lab… uses (`.eoscfg`) — plus a `manifest.json` that lists them. It does
+> not save the topology file, the map or a README.** For `link-basics` the topology file is
+> already staged on the lab VM and included in the course repository, so you never need to save
+> it yourself in this scenario.
 
 <div class="step" markdown="1">
 <span class="n">A1</span> **Open the manager**
@@ -69,8 +71,8 @@ list. Before anything is deployed the list reads **No labs yet**.
 <span class="n">A2</span> **Deploy the lab**
 
 **Action** In the Deploy box, click **Choose a file on the lab VM…**. The **Deploy a new lab**
-dialog opens on the lab folders on the VM; open the `link-basics` folder and click
-**◇ link-basics.clab.yml**.
+dialog opens on the lab folders on the VM; open `/srv/containerlab-node-manager/projects`, then
+the `link-basics` folder inside it, and click **◇ link-basics.clab.yml**.
 
 **Expected result** A **Topology file** dialog opens showing the file location on the VM and a
 read-only preview of the topology (YAML), with buttons **Preview topology**, **Edit visually…**,
@@ -97,15 +99,14 @@ it is staged on the lab VM — the browser only shows lab folders the manager tr
 **Expected result** A running container is not yet a router that accepts a login. Right after you
 confirm, the header reads **Starting lab** and **0 of 2 devices ready**, and each device's row
 reads **Unavailable** for a moment, then **Starting**, then **Ready** once the manager can log in
-and get an answer from it. This usually takes one to two minutes; on a lightly loaded VM it can
-take under a minute. Wait until the header reads **2 of 2 devices ready**.
+and get an answer from it — about a minute on this VM; up to a few minutes on a slower one. Wait
+until the header reads **2 of 2 devices ready**.
 
 **If not** A pill reading **Needs credentials** means the device is up but the manager could not
 log in — check the login with your instructor. **Needs attention** after several failed attempts
 offers **Test login now** to retry once the problem is fixed.
 
-<figure><img src="screenshots/a03-devices-starting.png"><figcaption>Figure A.3a — Just after confirming: 0 of 2 devices ready.</figcaption></figure>
-<figure><img src="screenshots/a03-devices-ready.png"><figcaption>Figure A.3b — Both devices read Ready.</figcaption></figure>
+<figure><img src="screenshots/a03-devices-ready.png"><figcaption>Figure A.3 — Both devices read Ready.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
@@ -125,23 +126,25 @@ r1>show ip interface brief
 lists only `Management0` — `Ethernet1` has no address yet, so EOS does not list it there. That is
 expected: the lab starts with the link wired but nothing configured on it.
 
-<figure><img src="screenshots/a04-terminal-show.png"><figcaption>Figure A.4 — <code>r1</code>'s terminal after the three show commands.</figcaption></figure>
+<figure><img src="screenshots/a04-terminal-show.png"><figcaption>Figure A.4 — <code>r1</code>'s terminal after the show commands.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
 <span class="n">A5</span> **Connect your repository**
 
-**Action** Open the **Progress** tab. With nothing connected yet it shows **Choose where to save
-your progress**; click **Connect a repository by URL**. Paste
-`https://github.com/pruger-dev/netlab-course-student.git`, set the folder to
-`link-basics/work`, tick the acknowledgement that complete device configurations will be saved
-and uploaded, and click **Connect repository**.
+**Action** Make sure you already have your own copy of the course repository — made on GitHub with
+**Use this template › Create a new repository** before you begin. Open the **Progress** tab: with
+nothing connected yet it shows **Choose where to save your progress**; click **Connect a
+repository by URL**. Paste `https://github.com/pruger-dev/netlab-course-student.git` (your own
+copy's address, not the instructor's), set the folder to `link-basics/work`, tick the
+acknowledgement that complete device configurations will be saved and uploaded, and click
+**Connect repository**.
 
 **Expected result** The destination line reads exactly "link-basics saves to
 netlab-course-student › link-basics/work › latest/". **Saved versions** now also shows a group,
 **Instructor and reference versions** — "Versions your instructor put in the repository appear
 here. Apply one to load it onto your running devices; the current configuration is backed up
-first." — listing three rows, each with 5 files and **View**, **Compare with my latest save** and
+first." — listing three rows (in any order), each with 5 files and **View**, **Compare with my latest save** and
 **Apply to running lab…**: **Starting state** (`link-basics/reference/start/latest`), **Final
 state (instructor)** (`link-basics/reference/solution/latest`) and **Troubleshooting scenario 01**
 (`link-basics/reference/broken-01/latest`).
@@ -163,15 +166,15 @@ GitHub first — the URL above must point at your copy, not the instructor's.
 reading "Source: Starting state · netlab-course-student › link-basics/reference/start/latest ·
 saved … · &lt;commit&gt;". Each device is listed, for example "r1 EOS 6 differences from the
 running configuration". Tick "I understand the running configuration on the selected devices will
-be replaced." and click **Replace configurations**.
+be replaced." and click **Replace configurations** — if a device cannot be reached again within
+five minutes, it undoes the change on its own.
 
 **Expected result** Within about a dozen seconds each device reports "Configuration replaced and
 verified against the saved desired state." Go back to `r1`'s terminal tab from A4 (still open) and
 run `ping 10.0.0.2` — it succeeds, since `start` addresses the link `10.0.0.1/30` on `r1` and
 `10.0.0.2/30` on `r2`.
 
-<figure><img src="screenshots/a06-apply-review.png"><figcaption>Figure A.6a — Replace running configuration, reviewing Starting state.</figcaption></figure>
-<figure><img src="screenshots/a06-apply-result.png"><figcaption>Figure A.6b — Both devices replaced and verified.</figcaption></figure>
+<figure><img src="screenshots/a06-apply-review.png"><figcaption>Figure A.6 — Replace running configuration, reviewing Starting state.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
@@ -214,12 +217,11 @@ sends it to your repository at once; **Not now — keep it on the VM** leaves it
 **Recent saves** instead. Click **Upload these changes**.
 
 **Expected result** The Progress tab reads **Saved to Git just now**, and the **Latest** row reads
-"netlab-course-student › link-basics/work › latest · Saved just now · 5 files". On GitHub,
-`link-basics/work/latest/` now holds `manifest.json`, `r1.cfg`, `r2.cfg`, `r1.eoscfg` and
-`r2.eoscfg`.
+"netlab-course-student › link-basics/work › latest · Saved just now · 5 files" — the four device
+files reviewed above, plus the `manifest.json` that lists them. On GitHub,
+`link-basics/work/latest/` now holds exactly those five files.
 
-<figure><img src="screenshots/a08-review-before-upload.png"><figcaption>Figure A.8a — Review before uploading, everything added.</figcaption></figure>
-<figure><img src="screenshots/a08-saved-to-git.png"><figcaption>Figure A.8b — Saved to Git just now.</figcaption></figure>
+<figure><img src="screenshots/a08-review-before-upload.png"><figcaption>Figure A.8 — Review before uploading, everything added.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
@@ -249,13 +251,14 @@ the checkpoint captured `r2` before its loopback existed.
 **Action** Find **Troubleshooting scenario 01** and click its **Apply to running lab…**, then
 confirm with **Replace configurations**.
 
-**Expected result** Both devices are replaced. On `r1`'s CLI, `ping 10.0.0.2` now fails, and
-`show interfaces status` shows `Et1` as `notconnect` — the fault is on `r2` (its `Ethernet1` is
-administratively shut down), so `r1` sees the link go down too.
+**Expected result** Both devices are replaced. On `r1`'s CLI, after a few seconds, the ping fails and `r1` shows its
+`Ethernet1` as `notconnect`: the link is down at `r2`'s end. See if you can spot why before you
+move on.
 
-**Action** Recover by applying your own saved progress: find **Latest** under **Saved versions**
-and click its **Apply to running lab…**, then **Replace configurations** again. Its source line
-names your own folder: "Source: work · netlab-course-student › link-basics/work/latest · …".
+**Action** Recover by applying your own saved progress — this undoes the fault (the instructor's
+broken state shut down `r2`'s `Ethernet1`): find **Latest** under **Saved versions** and click its
+**Apply to running lab…**, then **Replace configurations** again. Its source line names your own
+folder: "Source: work · netlab-course-student › link-basics/work/latest · …".
 
 **Expected result** `ping 10.0.0.2` from `r1` succeeds again and both loopbacks are back. The
 *Save location* card still shows the lab saving to `link-basics/work` — applying a saved version
@@ -263,8 +266,7 @@ never changes where the lab saves. Curious what changed since your checkpoint? T
 `loopback-added` row's **Compare with my latest save** opens a dialog titled **Compared with your
 latest save**.
 
-<figure><img src="screenshots/a10-broken-apply-result.png"><figcaption>Figure A.10a — Troubleshooting scenario 01 applied; the link is down.</figcaption></figure>
-<figure><img src="screenshots/a10-latest-apply-result.png"><figcaption>Figure A.10b — Your own Latest applied; the link is restored.</figcaption></figure>
+<figure><img src="screenshots/a10-latest-apply-result.png"><figcaption>Figure A.10 — Your own Latest applied; the link is restored.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
@@ -277,11 +279,10 @@ ready · Last saved N minutes ago · Deployed N minutes ago", with an **Open lab
 the Progress tab still lists **Latest** and your `loopback-added` checkpoint, exactly as you left
 them.
 
-**Action** Open **Lab actions ▾** to see everything you can do with this lab: **Start stopped
-devices** (or **Stop devices** and **Restart devices** while it runs), **Sync topology from VM**,
-**Packet capture…**, **Lab files…**, **All lab operations…**, **Redeploy lab…**, **Redeploy and
-clear the lab folder…**, **Destroy lab…**, **Remove from this manager…**, and **Advanced options**
-folding out **Import map…**, **Edit map**, **Telemetry settings…** and **Operation history…**.
+**Action** Open **Lab actions ▾** to see everything you can do with this lab — among the everyday
+actions are **Stop devices**, **Redeploy lab…**, **Destroy lab…** and **Remove from this
+manager…**; the rest of the menu is in the figure below.
+
 Open **Destroy lab…** to see its review — "The running devices are removed from the VM.
 Configuration changes you have not saved are lost. Your saved progress, checkpoints and backups
 remain." with a **Save progress first** option — then click **Cancel**; there is no need to
@@ -289,8 +290,7 @@ destroy this lab now. **Remove from this manager…** is even less drastic: "Not
 changes: the running devices and the topology files stay. Progress you saved to Git stays in the
 repository."
 
-<figure><img src="screenshots/a11-home-card.png"><figcaption>Figure A.11a — The lab card on Home, next time you open the manager.</figcaption></figure>
-<figure><img src="screenshots/a11-lab-actions.png"><figcaption>Figure A.11b — The Lab actions ▾ menu.</figcaption></figure>
+<figure><img src="screenshots/a11-lab-actions.png"><figcaption>Figure A.11 — The Lab actions ▾ menu.</figcaption></figure>
 </div>
 
 **Checklist**
@@ -309,16 +309,17 @@ In this scenario you draw your own two-router lab in the visual builder, deploy 
 and set up your own repository so your work survives even after the lab is destroyed and removed
 from the manager. The devices are `r1` and `r2`, joined by one link, both Arista cEOS.
 
-> **Save progress saves device configurations, their restore artifacts and a manifest into your
-> repository folder. It does not save the topology file, the map or a README.** A lab definition
-> and its saved device configurations are two different things — this scenario ends with both of
-> them safely in Git, and step B7 is exactly the extra step that gets the topology and map there.
+> **Save progress saves, for each device, two files — the readable configuration (`.cfg`) and the
+> copy Apply to running lab… uses (`.eoscfg`) — plus a `manifest.json` that lists them. It does
+> not save the topology file, the map or a README.** A lab definition and its saved device
+> configurations are two different things — this scenario ends with both of them safely in Git,
+> and step B7 is exactly the extra step that gets the topology and map there.
 
 <div class="step" markdown="1">
 <span class="n">B1</span> **Start a new lab in the builder**
 
-**Action** From Home, click **Open the lab builder** in the Build box. The builder shows **Build a
-lab** with **New lab…** and **Open a draft…**; click **New lab…**. Fill in **Lab name**
+**Action** From Home, click **Open the lab builder** in the Build box. The builder page opens in the
+same tab and shows **Build a lab** with **New lab…** and **Open a draft…**; click **New lab…**. Fill in **Lab name**
 (`my-first-lab` — letters, digits, dot, dash and underscore only), **Start from** (**Two devices,
 one link**), **Device type for the starter** (**Arista cEOS · n24l/ceos:4.35.0F** — the image shown
 is only a suggestion, taken from labs already in My labs or a default) and **Lab folder on the VM**
@@ -343,7 +344,7 @@ recommended because it applies again after a redeploy.
 
 Changing something on the Network tab can reset the image back to its suggested name, so glance at
 the Basic tab again before you click **Apply**, and confirm with **View YAML** that each device
-still reads `image: n24l/ceos:4.35.0F`. While you are there, right-click empty canvas and choose
+reads the image your VM has (here `n24l/ceos:4.35.0F`). While you are there, right-click empty canvas and choose
 **Add Text** to note what the lab is, for example "My first lab: r1 eth1 - r2 eth1".
 
 **Expected result** **View YAML** shows the topology: `name: my-first-lab`, both nodes with `kind:
@@ -351,7 +352,7 @@ arista_ceos`, `image: n24l/ceos:4.35.0F` and their management addresses, and one
 `r1:eth1`–`r2:eth1`.
 
 <figure><img src="screenshots/b02-node-editor.png"><figcaption>Figure B.2a — The Node Editor, setting r1's name, image and version.</figcaption></figure>
-<figure><img src="screenshots/b02-builder-topology.png"><figcaption>Figure B.2b — Finished canvas: r1, r2 and the note.</figcaption></figure>
+<figure><img src="screenshots/b02-builder-topology.png"><figcaption>Figure B.2b — Finished canvas: r1 and r2 joined by one link.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
@@ -368,18 +369,16 @@ to **Saved on the VM**.
 lab**. A review titled **Start my-first-lab?** opens; confirm with **Start lab**.
 
 **Expected result** The builder page itself does not navigate anywhere next — click **← My labs**
-at the top left and open the `my-first-lab` card from Home to continue. On the lab VM, the project
-folder now holds `my-first-lab.clab.yml`, `my-first-lab.clab.yml.annotations.json` and the
-generated `clab-my-first-lab` folder.
+at the top left and open the `my-first-lab` card from Home to continue.
 
-<figure><img src="screenshots/b03-save-review.png"><figcaption>Figure B.3 — Save my-first-lab to the VM?, reviewing the YAML.</figcaption></figure>
+<figure><img src="screenshots/b03-save-review.png"><figcaption>Figure B.3 — The review before the lab folder is written to the VM.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
 <span class="n">B4</span> **Bring the link up**
 
-**Action** Wait for both devices to read **Ready** — around 40 seconds on this VM. Open a CLI on
-`r1` and run:
+**Action** Wait for both devices to read **Ready** — about a minute on this VM; up to a few
+minutes on a slower one. Open a CLI on `r1` and run:
 
 ```
 r1>enable
@@ -406,9 +405,11 @@ run `ping 10.0.0.2`.
 
 **Where to run it** On your computer.
 
-**Action** On GitHub, choose **New repository**. Name it `my-network-labs`, set it **Private**,
-tick **Add a README file**, and click **Create repository**. From a terminal with GitHub's
-command-line tool installed, the same repository can be created with:
+**Action** On GitHub, choose **New repository**. This is created under the same GitHub account the
+lab VM is signed in to — `pruger-dev` in this guide's example, your own account for you. Name it
+`my-network-labs`, set it **Private**, tick **Add a README file**, and click **Create repository**.
+From a terminal with GitHub's command-line tool installed, the same repository can be created
+with:
 
 ```
 $ gh repo create my-network-labs --private --add-readme
@@ -423,7 +424,7 @@ Copy its **Code → HTTPS** address for the next step.
 <span class="n">B6</span> **Connect the repository and save your progress**
 
 **Action** In the manager, open `my-first-lab` → **Progress** tab → **Connect a repository by
-URL**. Paste `https://github.com/pruger-dev/my-network-labs.git`, set the folder to
+URL**. Paste `https://github.com/pruger-dev/my-network-labs.git` (your account), set the folder to
 `my-first-lab`, tick the acknowledgement that complete device configurations will be saved and
 uploaded, and click **Connect repository**.
 
@@ -438,8 +439,7 @@ my-first-lab › latest/".
 holds `manifest.json`, `r1.cfg`, `r2.cfg`, `r1.eoscfg` and `r2.eoscfg` — and no topology file: that
 still only exists on the lab VM until the next step.
 
-<figure><img src="screenshots/b06-connect-dialog.png"><figcaption>Figure B.6a — Connecting <code>my-network-labs</code> with folder <code>my-first-lab</code>.</figcaption></figure>
-<figure><img src="screenshots/b06-saved-to-git.png"><figcaption>Figure B.6b — The first Save progress, uploaded.</figcaption></figure>
+<figure><img src="screenshots/b06-connect-dialog.png"><figcaption>Figure B.6 — Connecting <code>my-network-labs</code> with folder <code>my-first-lab</code>.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
@@ -448,7 +448,9 @@ still only exists on the lab VM until the next step.
 **Where to run it** On the lab VM, as your ordinary account.
 
 **Action** **Save progress** only uploads device configurations — the topology file and its map
-are still only on the lab VM. Publish them into the same checkout the manager just used:
+are still only on the lab VM. The folder `~/labs/my-network-labs` was created on the lab VM when
+you connected the repository in B6; the manager keeps its own copy of your repository there.
+Publish the topology files into that same checkout:
 
 ```
 $ cd ~/labs/my-network-labs
@@ -495,7 +497,8 @@ map, the README you wrote, and the `latest/` folder your save uploaded. Back in 
 same tree is one click away: **Progress › Saved versions › Browse the repository…** opens the
 repository browser on the lab's own folder and lists `README.md`, `my-first-lab.clab.yml`,
 `my-first-lab.clab.yml.annotations.json` and `latest/` side by side — the in-product view of
-exactly what GitHub holds.
+exactly what GitHub holds. If the listing still shows only `latest/`, reload the page: the manager read the
+repository before your push in B7 and shows the newer tree once it looks again.
 
 <figure><img src="screenshots/b08-remote-tree.png"><figcaption>Figure B.8 — Browsing the repository from the Progress tab.</figcaption></figure>
 </div>
@@ -545,6 +548,9 @@ $ git clone https://github.com/pruger-dev/my-network-labs.git /srv/containerlab-
 
 **Expected result** `Cloning into '/srv/containerlab-node-manager/projects/my-network-labs'...`
 
+**If not** If the lab VM refuses to write into that folder, ask your instructor to add your VM
+account to the lab-folder group.
+
 **Action** Back in the manager, from Home click **Choose a file on the lab VM…**, open
 `/srv/containerlab-node-manager/projects` → `my-network-labs` → `my-first-lab` (the folder inside
 the clone) → click **◇ my-first-lab.clab.yml**. In the **Topology file** dialog, check that **File
@@ -555,8 +561,8 @@ level and looks the same; picking that one instead would deploy the old copy, no
 rebuilt from Git. Click **Deploy lab**, then confirm the **Start my-first-lab?** review with
 **Start lab**.
 
-**Expected result** Both devices read **Ready** after about 45 seconds, and the Topology tab shows
-the same map as before — the annotations file came from Git along with the topology.
+**Expected result** Both devices read **Ready**, and the Topology tab shows the same map as
+before — the annotations file came from Git along with the topology.
 
 **Action** Open the **Progress** tab and **Connect a repository by URL** again, with the same
 HTTPS URL and folder `my-first-lab`.
@@ -573,8 +579,7 @@ verified against the saved desired state." On `r1`'s CLI, `ping 10.0.0.2` succee
 interface brief` on `r2` lists `Loopback0 10.255.0.2/32` — the lab is rebuilt entirely from what
 Git kept.
 
-<figure><img src="screenshots/b10-fresh-deploy.png"><figcaption>Figure B.10a — The Topology file dialog, confirming the path runs through my-network-labs.</figcaption></figure>
-<figure><img src="screenshots/b10-apply-result.png"><figcaption>Figure B.10b — Latest applied; both devices replaced and verified.</figcaption></figure>
+<figure><img src="screenshots/b10-fresh-deploy.png"><figcaption>Figure B.10 — The Topology file dialog, confirming the path runs through my-network-labs.</figcaption></figure>
 </div>
 
 **Checklist**
@@ -597,7 +602,7 @@ Git kept.
 | A drawn but unsaved topology | This browser's storage | The lab builder, as you edit | Not applicable — no lab is deployed yet | Not applicable |
 | The topology file and its map | A lab folder on the lab VM | **Save to the VM…** / **Deploy lab** / **Write a new topology…** | Yes | Yes — Destroy removes the running devices and the generated lab folder, not the original topology file |
 | A device's running configuration | The device itself | Commands you type; `write memory` on EOS | Only if written to startup | No — Destroy removes the containers |
-| A local progress save ("Saved on the VM") | The registered checkout on the lab VM | **Save progress**, then **Not now — keep it on the VM** | Yes | Yes |
+| A local progress save (status **Saved on this VM — not uploaded**) | The registered checkout on the lab VM | **Save progress**, then **Not now — keep it on the VM** | Yes | Yes |
 | An uploaded **Latest** | Your online repository | **Upload these changes** / **Upload now** | Yes | Yes |
 | A named checkpoint | Your online repository (and locally until uploaded) | **Create checkpoint…** | Yes | Yes |
 | The result of **Apply to running lab…** | The running devices | **Apply to running lab…**, confirmed with **Replace configurations** | Yes — on EOS the manager runs `write memory` for you once the change is confirmed | No — Destroy removes the containers; redeploy and apply again |
@@ -617,7 +622,7 @@ added back by deploying its topology file again.
 | Symptom | Next step | Ask your instructor if… |
 |---|---|---|
 | A device stays on **Starting** for several minutes | Wait — cEOS and similar network operating systems take up to a couple of minutes to boot and answer a login | It never reaches **Ready** |
-| A device shows **Needs credentials** | The device is up, but the manager could not log in with the configured credentials | You do not know the intended login for this lab |
+| A device shows **Needs credentials** | Ask your instructor for the login this lab expects, enter it, then click **Test login now** in the device panel | You do not know the intended login for this lab |
 | A save reads **Saved on this VM — not uploaded** | Open it under **Recent saves** and click **Review and upload…**, then **Upload these changes** | The upload keeps failing after several tries |
 | An upload or sync is rejected | Check you are connecting your own copy of the repository, not a read-only one, and that the acknowledgement was ticked | The rejection names a permission or repository problem you cannot resolve |
 | No **Apply to running lab…** button, or a device is listed as skipped in the review | Read the reason shown next to that device — a platform this manager cannot restore yet, or a saved version made before this device's platform supported it | The reason is not one of these |
@@ -625,10 +630,7 @@ added back by deploying its topology file again.
 
 ### Next session in 60 seconds
 
-- Open the manager at `http://192.168.132.132:8081`.
-- Open your lab from Home and click **Start lab** if it is not already running.
-- Wait for every device to read **Ready**.
-- Check the **Progress** tab: does it still say **Saved to Git**, or is something waiting under
-  **Recent saves**?
+- Open the manager, open your lab from Home, click **Start lab** if needed, and wait for **Ready**.
+- Check the **Progress** tab for anything waiting under **Recent saves**.
 - Pick up where you left off, or apply a saved version to jump to a specific point.
-- End the session with **Save progress**, and **Upload these changes** if you want it kept online.
+- End the session with **Save progress** and **Upload these changes**.

@@ -1,0 +1,86 @@
+{
+  "pdf_sha256": "e53aa7b9af2f2542a7dd40b7e0b056dca1612586f3ff509f2b7bf03a2a1d475d",
+  "pdf_path": "docs/student-quick-start/evidence/qa/guide-under-test.pdf",
+  "manager": "http://127.0.0.1:8081",
+  "manager_release": "1.30.35",
+  "agent_simulation": true,
+  "scenarios": {
+    "A": {
+      "repo": "https://github.com/pruger-dev/netlab-course-qa2.git",
+      "start": "19:57:08",
+      "end": "20:09:02",
+      "lab_left_running": true,
+      "steps": [
+        {"step": "A1", "result": "pass"},
+        {"step": "A2", "result": "pass"},
+        {"step": "A3", "result": "pass"},
+        {"step": "A4", "result": "pass"},
+        {"step": "A5", "result": "pass"},
+        {"step": "A6", "result": "pass"},
+        {"step": "A7", "result": "pass"},
+        {"step": "A8", "result": "pass"},
+        {"step": "A9", "result": "pass", "finding": "cosmetic: used the Progress-tab Create checkpoint… button instead of the header Save progress ▾ menu named by the PDF; both are believed to reach the same dialog"},
+        {"step": "A10", "result": "pass", "finding": "cosmetic: an immediate ping right after Configuration replaced can transiently succeed before Ethernet1's notconnect state takes effect; a few seconds later it fails as documented"},
+        {"step": "A11", "result": "pass"}
+      ],
+      "findings": {"blocking": [], "should_fix": [], "cosmetic": [
+        "A9: alternate checkpoint-menu entry point not exercised via the header ▾ route",
+        "A10: brief ping race immediately after a fault-injecting Replace configurations"
+      ]}
+    },
+    "B": {
+      "repo": "https://github.com/pruger-dev/my-network-labs-qa2.git",
+      "start": "20:09:20",
+      "end": "20:25:41",
+      "lab_left_running": true,
+      "steps": [
+        {"step": "B1", "result": "pass"},
+        {"step": "B2", "result": "pass"},
+        {"step": "B3", "result": "pass"},
+        {"step": "B4", "result": "pass"},
+        {"step": "B5", "result": "pass"},
+        {"step": "B6", "result": "pass"},
+        {"step": "B7", "result": "pass"},
+        {"step": "B8", "result": "pass_with_finding", "finding": "should_fix: Browse the repository… showed a stale (pre-push) tree right after B7's out-of-band VM git push; a page reload showed the correct four items"},
+        {"step": "B9", "result": "pass"},
+        {"step": "B10", "result": "pass"}
+      ],
+      "findings": {"blocking": [], "should_fix": [
+        "B8: in-product repository browser can show a stale file listing until the page is reloaded after a direct VM git push, undocumented by the guide"
+      ], "cosmetic": []}
+    }
+  },
+  "remote_evidence": {
+    "netlab-course-qa2": {
+      "commits": ["3c50a3ef Initial commit", "0fe285fc Save link-basics progress"],
+      "paths_confirmed": [
+        "link-basics/work/latest/{manifest.json,r1.cfg,r1.eoscfg,r2.cfg,r2.eoscfg}",
+        "link-basics/work/checkpoints/loopback-added/{manifest.json,r1.cfg,r1.eoscfg,r2.cfg,r2.eoscfg}"
+      ],
+      "no_nested_latest_latest": true
+    },
+    "my-network-labs-qa2": {
+      "private": true,
+      "default_branch": "main",
+      "paths_confirmed": [
+        "my-first-lab/latest/{manifest.json,r1.cfg,r1.eoscfg,r2.cfg,r2.eoscfg}",
+        "my-first-lab/checkpoints/link-up/{manifest.json,r1.cfg,r1.eoscfg,r2.cfg,r2.eoscfg}",
+        "my-first-lab/{README.md,my-first-lab.clab.yml,my-first-lab.clab.yml.annotations.json}"
+      ],
+      "no_nested_latest_latest": true
+    }
+  },
+  "labs_left_running_at_end": ["link-basics", "my-first-lab"],
+  "verification_methods": {
+    "code_inspection": false,
+    "unit_tests": false,
+    "browser_checks": true,
+    "live_device_checks": true,
+    "remote_api_checks": "gh api (read-only), repos pruger-dev/netlab-course-qa2 and pruger-dev/my-network-labs-qa2"
+  },
+  "limitations": [
+    "Agent simulation, not a human student session",
+    "Browser tooling (Playwright/Chromium) was available throughout; no coverage gap to record",
+    "B8 finding observed once via one reload cycle; staleness window not exhaustively bounded"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "pdf_sha256": "1b9656058c87a8bc50c1f3234dc4f755628d2899cb48e8c5b0d61f502a2f9878",
+  "simulation": "agent",
+  "manager_url_used": "http://127.0.0.1:8081",
+  "substitutions": {
+    "scenario_a_repo": "https://github.com/pruger-dev/netlab-course-qa.git",
+    "scenario_b_repo": "my-network-labs-qa"
+  },
+  "scenario_a": {
+    "steps": [
+      {"step": "A1", "action": "Open the manager", "result": "PASS", "screenshots": ["qa-a1-home.png"]},
+      {"step": "A2", "action": "Deploy the lab", "result": "PASS", "screenshots": ["qa-a2-topology-dialog.png", "qa-a2b-start-review.png"]},
+      {"step": "A3", "action": "Wait for devices ready", "result": "PASS", "timing_s": 35, "screenshots": ["qa-a3a-starting.png", "qa-a3b-ready.png"]},
+      {"step": "A4", "action": "Look around from the CLI", "result": "PASS", "screenshots": ["qa-a4-terminal-shows.png"]},
+      {"step": "A5", "action": "Connect your repository", "result": "PASS", "finding": "cosmetic: instructor/reference row order reversed vs guide prose", "screenshots": ["qa-a5c-progress-connected.png"]},
+      {"step": "A6", "action": "Load the starting configuration", "result": "PASS", "screenshots": ["qa-a6a-review.png", "qa-a6b-replaced.png"]},
+      {"step": "A7", "action": "Make a change on r1", "result": "PASS", "screenshots": ["qa-a7-loopback.png"]},
+      {"step": "A8", "action": "Save your progress", "result": "PASS", "remote_commit": "135e811", "screenshots": ["qa-a8a-review.png", "qa-a8b-uploaded.png"]},
+      {"step": "A9", "action": "Checkpoint, then r2's loopback", "result": "PASS", "remote_commits": ["37f2452", "e2353ce"], "screenshots": ["qa-a9c-checkpoint-uploaded.png", "qa-a9g-second-save-uploaded.png"]},
+      {"step": "A10", "action": "Break it, then recover", "result": "PASS", "independent_verification": "ssh eos.py on 172.20.20.11/.12", "screenshots": ["qa-a10c-r1-broken.png", "qa-a10f-r1-recovered.png"]},
+      {"step": "A11", "action": "Next time you open this lab", "result": "PASS", "screenshots": ["qa-a11a-home-reopened.png", "qa-a11c-lab-actions-menu.png", "qa-a11d-destroy-review.png", "qa-a11e-remove-review.png"]}
+    ],
+    "findings": {
+      "blocking": [],
+      "should_fix": [],
+      "cosmetic": [
+        "Page 6 (A5): instructor/reference version rows render in reverse order vs the guide's listed order (all rows/actions present and correct)."
+      ]
+    },
+    "remote_repo": "https://github.com/pruger-dev/netlab-course-qa"
+  },
+  "scenario_b": {
+    "steps": [
+      {"step": "B1", "action": "Start a new lab in the builder", "result": "PASS", "screenshots": ["qa-b1a-new-lab-filled.png", "qa-b1b-draft-created.png"]},
+      {"step": "B2", "action": "Draw and check the topology", "result": "PASS", "finding": "cosmetic: guide's Network-tab image-reset caution did not reproduce", "screenshots": ["qa-b2k-view-yaml.png", "qa-b2j-canvas-final.png"]},
+      {"step": "B3", "action": "Save to the VM and deploy", "result": "PASS", "screenshots": ["qa-b3a-save-review.png", "qa-b3f-deployed.png"]},
+      {"step": "B4", "action": "Bring the link up", "result": "PASS", "timing_s": 15, "screenshots": ["qa-b4a-r1-configured.png", "qa-b4b-ping.png"]},
+      {"step": "B5", "action": "Create your own repository on GitHub", "result": "PASS", "command": "gh repo create my-network-labs-qa --private --add-readme"},
+      {"step": "B6", "action": "Connect the repository and save progress", "result": "PASS", "remote_commit": "ae0bc47", "screenshots": ["qa-b6a-connect-dialog.png", "qa-b6d-uploaded.png"]},
+      {"step": "B7", "action": "Publish the topology files", "result": "GAP_THEN_PASS", "finding": "should_fix: guide's `cd ~/labs/my-network-labs` assumes a checkout the guide never told the student to create; it exists because connecting a repository in B6 auto-registers a checkout under ~/labs/<repo> on the VM", "remote_commit": "be0a10c"},
+      {"step": "B8", "action": "Check GitHub", "result": "PASS", "screenshots": ["qa-b8a-browse-repo.png"]},
+      {"step": "B9", "action": "Change, save, and checkpoint again", "result": "PASS", "remote_commits": ["6aa091a", "43f02d6"], "screenshots": ["qa-b9b-review.png", "qa-b9e-checkpoint-uploaded.png"]},
+      {"step": "B10", "action": "Destroy, remove, and rebuild from Git", "result": "PASS", "timing_s_redeploy": 15, "timing_s_apply": 12, "independent_verification": "ssh eos.py on 172.20.20.21/.22", "screenshots": ["qa-b10g-topology-dialog.png", "qa-b10m-applied.png", "qa-b10o-r2-loopback.png"]}
+    ],
+    "findings": {
+      "blocking": [],
+      "should_fix": [
+        "Page 20 (B7): missing step / undocumented mechanism — the guide never tells the student that connecting a repository (B6) auto-registers a VM-side checkout at ~/labs/<repository-name>, which B7's `cd ~/labs/my-network-labs` silently depends on."
+      ],
+      "cosmetic": [
+        "Page 15/16 (B2): 'changing the Network tab can reset the image' caution did not reproduce in this run.",
+        "Node Editor tab labels are CSS upper-cased but accessible text is title-case (automation-only detail)."
+      ]
+    },
+    "remote_repo": "https://github.com/pruger-dev/my-network-labs-qa"
+  },
+  "final_state": {
+    "link_basics": "Running, 2 of 2 devices ready",
+    "my_first_lab": "Running, 2 of 2 devices ready"
+  }
+}

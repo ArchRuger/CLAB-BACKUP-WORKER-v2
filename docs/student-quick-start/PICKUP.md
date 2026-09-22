@@ -8,7 +8,7 @@ configurations in Git). Read this file first; keep it current before a compactio
 
 | Path | What |
 |---|---|
-| `Containerlab_Node_Manager_Student_Quick_Start.pdf` | The student guide. **At 1.30.34 this is a draft build (26 pages, not yet inspected page by page, not yet QA-replayed); the final PDF is delivered with the last checkpoint.** |
+| `Containerlab_Node_Manager_Student_Quick_Start.pdf` | The student guide (20 pages; inspected page by page; replayed twice by an independent QA agent; SHA-256 in `VALIDATION.md`). |
 | `source/guide.md`, `source/style.css`, `build.py`, `build.sh`, `BUILD.md` | Editable source and the one-command build (Markdown → HTML → WeasyPrint). |
 | `screenshots/` (`raw/` captures, `spec.json` crops and callouts, composed PNGs) | Illustrations, all from the real manager and the exercised examples. |
 | `examples/` | The instructor package (`link-basics`) and the personal lab (`my-first-lab`) with a nonsecret preparation README. |
@@ -64,9 +64,24 @@ force off, agent teams off) overrides the user file; the routing files under `.c
 - 2026-09-22 18:45–19:40 UTC: Scenario B executed (`tools/capture_scenario_b.py`); B10 re-executed from the real clone
   after the first run deployed the original folder; guide reconciled for B; **checkpoint 2 = release 1.30.34**.
 
+- 2026-09-22 19:40–20:40 UTC: Opus review applied (account convention, status texts, timings); layout trimmed to 20
+  pages; QA replay 1 on the draft (21/21 PASS); manager rebuilt at 1.30.35; every page of the final build inspected;
+  QA replay 2 on the delivered file (21/21 PASS, one reload hint added afterwards); **checkpoint 3 = release 1.30.35**.
+  The VM was then reset to the guide's starting state for a demonstration (see below).
+
+## State left on the VM for a demonstration
+
+My labs empty, VM connected, VM Git registry empty, `link-basics` staged under `/srv/containerlab-node-manager/projects/`,
+`pruger-dev/netlab-course-student` reset to the template content (its earlier `link-basics/work` saves removed with an
+ordinary commit, history kept), `pruger-dev/my-network-labs` renamed to `my-network-labs-authoring` so that step B5 can
+create `my-network-labs` afresh. The replay repositories `netlab-course-qa`, `netlab-course-qa2`, `my-network-labs-qa`,
+`my-network-labs-qa2` stay as evidence. To demonstrate: open the manager and follow the PDF; to reset again:
+`tools/reset_scenario_a.sh netlab-course-student` and `tools/reset_scenario_b.sh my-network-labs` (rename or delete a
+`my-network-labs` that a demo created first).
+
 ## Exact next action
 
-Chunk 3: build the PDF (`build.sh`), bring it to the page target (trim figures, tighten layout), inspect every page;
-independent QA replay of both scenarios from the documented starting states (`tools/reset_scenario_a.sh <fresh-repo>`;
-for B a fresh repository name and a fresh browser profile) using only the PDF; Opus completeness review; fixes; final
-build; page-by-page inspection of the delivered PDF with its SHA-256 recorded in VALIDATION.md; release 1.30.35.
+The stream is complete (PR #51). If it is picked up again: a change to `source/guide.md`, `screenshots/spec.json` or
+`source/style.css` needs `bash docs/student-quick-start/build.sh`, a look at `build/pages/`, and — when a step's action or
+expected result changed — a replay of that step on the real manager (`evidence/qa/final_*.py` are the replay drivers;
+the reset tools bring the VM back to the starting states). Then update `VALIDATION.md` with the new SHA-256.

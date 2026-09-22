@@ -11,6 +11,7 @@
   {
     "out": "a02-topology-file.png",
     "src": "raw/a2-topology-file-dialog.png",
+    "crop": [[0, 0, 2240, 230], [0, 1120, 2240, 220]],
     "callouts": [
       {"n": 1, "x": 1138, "y": 1195, "label": "Deploy lab", "anchor": "top-left"}
     ]
@@ -18,6 +19,7 @@
   {
     "out": "a02-start-review.png",
     "src": "raw/a2-start-review-dialog.png",
+    "crop": [0, 14, 2240, 742],
     "callouts": [
       {"n": 1, "x": 1995, "y": 580, "label": "Start lab", "anchor": "top-left"}
     ]
@@ -40,7 +42,7 @@
   {
     "out": "a04-terminal-show.png",
     "src": "raw/a4-r1-terminal-el.png",
-    "crop": [0, 0, 2636, 880]
+    "crop": [[0, 0, 1500, 90], [0, 665, 1500, 170]]
   },
   {
     "out": "a05-connect-dialog.png",
@@ -65,6 +67,7 @@
   {
     "out": "a06-apply-review.png",
     "src": "raw/a6-apply-start-review-el.png",
+    "crop": [[0, 0, 2240, 895], [0, 920, 2240, 128]],
     "callouts": [
       {"n": 1, "x": 44, "y": 212, "label": "Source line", "anchor": "top-left"},
       {"n": 2, "x": 44, "y": 853, "label": "Acknowledgement", "anchor": "top-left"},
@@ -78,7 +81,7 @@
   {
     "out": "a07-terminal-loopback.png",
     "src": "raw/a7-r1-loopback-terminal-el.png",
-    "crop": [0, 0, 2636, 600]
+    "crop": [0, 0, 1500, 590]
   },
   {
     "out": "a08-review-before-upload.png",
@@ -110,7 +113,8 @@
   },
   {
     "out": "a10-latest-apply-result.png",
-    "src": "raw/a10-apply-latest-result-el.png"
+    "src": "raw/a10-apply-latest-result-el.png",
+    "crop": [0, 14, 2240, 666]
   },
   {
     "out": "a11-home-card.png",
@@ -147,11 +151,12 @@
   {
     "out": "b02-builder-topology.png",
     "src": "raw/b2-canvas-finished-el.png",
-    "crop": [0, 0, 1650, 1652]
+    "crop": [200, 740, 1300, 320]
   },
   {
     "out": "b03-save-review.png",
     "src": "raw/b3-save-review-el.png",
+    "crop": [[0, 0, 2240, 230], [0, 1130, 2240, 210]],
     "callouts": [
       {"n": 1, "x": 1990, "y": 1195, "label": "Save lab", "anchor": "top-left"}
     ]
@@ -159,7 +164,7 @@
   {
     "out": "b04-devices-ready.png",
     "src": "raw/b4-r1-ping-terminal-el.png",
-    "crop": [0, 0, 2636, 430]
+    "crop": [0, 0, 1300, 430]
   },
   {
     "out": "b06-connect-dialog.png",
@@ -179,7 +184,8 @@
   },
   {
     "out": "b07-terminal-git-push.png",
-    "src": "raw/b7-terminal-git-push.png"
+    "src": "raw/b7-terminal-git-push.png",
+    "crop": [0, 0, 2064, 720]
   },
   {
     "out": "b08-remote-tree.png",
@@ -198,6 +204,7 @@
   {
     "out": "b10-fresh-deploy.png",
     "src": "raw/b10-redeploy-topology-file-el.png",
+    "crop": [[0, 0, 2240, 230], [0, 1120, 2240, 220]],
     "callouts": [
       {"n": 1, "x": 44, "y": 150, "label": "File location on the VM", "anchor": "top-left"},
       {"n": 2, "x": 1290, "y": 1200, "label": "Deploy lab", "anchor": "top-left"}
