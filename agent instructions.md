@@ -1,3 +1,14 @@
+# Save location fix, part 2: acceptance closed — 1.30.32
+
+The stream's closing section; the 1.30.31 section below holds the contract facts to preserve, `docs/save-location-fix/PICKUP.md`
+the log and `MATRIX.md` the record. (1) All four images are proven through the page from every source kind (a direct
+manifest folder at any depth, the legacy `…/latest` layout, the lab's own Latest, a checkpoint, the baseline, a historical
+commit); the evidence names build `3dfc4912c163` of commit `8ea56e0`. (2) The lab `restore-square` stays deployed on the
+development VM, bound to `save-fix/working`; the `save-fix/*` folders in the lab repository are QA fixtures (pushed to the
+test repository), not course content. (3) The QA drivers under `docs/save-location-fix/tools/` are the way to rerun this
+acceptance on another image or release (`c1_prepare.py` builds the states, `c_apply.py` drives one apply through the page
+and reads the nodes back).
+
 # Save location fix, part 1: stable Latest destination and manifest-based Apply — 1.30.31
 
 Read `docs/save-location-fix/PICKUP.md` first (the path contract, the reviews, the environment) and `MATRIX.md` there

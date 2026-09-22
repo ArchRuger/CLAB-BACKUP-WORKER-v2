@@ -1,0 +1,368 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31 (3dfc4912c163)",
+ "started_utc": "2026-09-22T15:05:11Z",
+ "steps": {
+  "save_a_job": {
+   "id": "a9920ebac799be5777fdeede77d2d675",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:59:02.693222+00:00",
+   "finished": "2026-09-22T15:03:24.576659+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "5f2637ee0ad047a89295f2328e18557a",
+   "commit": "967f8945464abbed87ce49830f531ba200ff2e91",
+   "pushed": true,
+   "target": "latest",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/cjunosevolved.jcfg",
+    "save-fix/working/latest/vjunos-switch.jcfg",
+    "save-fix/working/latest/xrv9k.cfg",
+    "save-fix/working/latest/xrv9k.xrcfg",
+    "save-fix/working/latest/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/latest",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:59:09.075195+00:00"
+  },
+  "save_b_latest_job": {
+   "id": "82749caa55519b546a2769f26630ba59",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:59:26.175517+00:00",
+   "finished": "2026-09-22T15:03:24.576661+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "51365d2c9fe74139bac04d5e576afbd2",
+   "commit": "0f6aa6bd9928e07f052155c4e7361f5262ec5b6c",
+   "pushed": true,
+   "target": "latest",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/cjunosevolved.set",
+    "save-fix/working/latest/cjunosevolved.jcfg",
+    "save-fix/working/latest/vjunos-switch.set",
+    "save-fix/working/latest/vjunos-switch.jcfg",
+    "save-fix/working/latest/xrv9k.cfg",
+    "save-fix/working/latest/xrv9k.xrcfg",
+    "save-fix/working/latest/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/latest",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:59:31.043367+00:00"
+  },
+  "checkpoint_state_b_job": {
+   "id": "2700120b3335231856cc3047ecc5fd5a",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:59:40.323649+00:00",
+   "finished": "2026-09-22T15:03:24.576663+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "e250e6849c5c44e39b484b09c6099836",
+   "commit": "76b832d873f259964bbd6cbfc6e57e2f88cdc1ab",
+   "pushed": true,
+   "target": "checkpoint",
+   "checkpoint": "state-B",
+   "changed_files": [
+    "save-fix/working/checkpoints/state-B/ceos.cfg",
+    "save-fix/working/checkpoints/state-B/ceos.eoscfg",
+    "save-fix/working/checkpoints/state-B/cjunosevolved.set",
+    "save-fix/working/checkpoints/state-B/cjunosevolved.jcfg",
+    "save-fix/working/checkpoints/state-B/vjunos-switch.set",
+    "save-fix/working/checkpoints/state-B/vjunos-switch.jcfg",
+    "save-fix/working/checkpoints/state-B/xrv9k.cfg",
+    "save-fix/working/checkpoints/state-B/xrv9k.xrcfg",
+    "save-fix/working/checkpoints/state-B/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/checkpoints/state-B",
+   "note": "QA section C: configuration B, all four nodes",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:59:46.393434+00:00"
+  },
+  "save_c_job": {
+   "id": "0ef716150b3740e3d78248f5e0d50171",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T15:00:11.639745+00:00",
+   "finished": "2026-09-22T15:03:24.576664+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "059c4a81299b444ab7da3bdbf91b40e9",
+   "commit": "aa0d546765a2b1dd5d0bd1bd578d7ebc408b5020",
+   "pushed": true,
+   "target": "latest",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/cjunosevolved.set",
+    "save-fix/working/latest/cjunosevolved.jcfg",
+    "save-fix/working/latest/vjunos-switch.set",
+    "save-fix/working/latest/vjunos-switch.jcfg",
+    "save-fix/working/latest/xrv9k.cfg",
+    "save-fix/working/latest/xrv9k.xrcfg",
+    "save-fix/working/latest/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/latest",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T15:00:16.508645+00:00"
+  },
+  "baseline_reused_existing": true,
+  "baseline_job": {
+   "id": "e000587d2eb9bee7ef441569f9b8886b",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T15:03:16.399599+00:00",
+   "finished": "2026-09-22T15:03:24.576666+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "e250e6849c5c44e39b484b09c6099836",
+   "commit": "cbed31b1a7ace1c437e0947b9f2012a008db1c6c",
+   "pushed": true,
+   "target": "baseline",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/baseline/ceos.cfg",
+    "save-fix/working/baseline/ceos.eoscfg",
+    "save-fix/working/baseline/cjunosevolved.set",
+    "save-fix/working/baseline/cjunosevolved.jcfg",
+    "save-fix/working/baseline/vjunos-switch.set",
+    "save-fix/working/baseline/vjunos-switch.jcfg",
+    "save-fix/working/baseline/xrv9k.cfg",
+    "save-fix/working/baseline/xrv9k.xrcfg",
+    "save-fix/working/baseline/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/baseline",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T15:03:20.435053+00:00"
+  },
+  "baseline_vs_checkpoint_tree": {
+   "baseline_tree": "b58d70f18e0523a61eb80caf19eac8500e607cba",
+   "checkpoint_tree": "b58d70f18e0523a61eb80caf19eac8500e607cba"
+  },
+  "state_a_files_extracted": [
+   "save-fix/working/latest/ceos.cfg",
+   "save-fix/working/latest/ceos.eoscfg",
+   "save-fix/working/latest/cjunosevolved.jcfg",
+   "save-fix/working/latest/cjunosevolved.set",
+   "save-fix/working/latest/manifest.json",
+   "save-fix/working/latest/vjunos-switch.jcfg",
+   "save-fix/working/latest/vjunos-switch.set",
+   "save-fix/working/latest/xrv9k.cfg",
+   "save-fix/working/latest/xrv9k.xrcfg"
+  ],
+  "seed_a_folders": {
+   "save-fix/Final": {
+    "commit": "ca8938bc29ce662d0df164cd340a29c26f12f6e6",
+    "files": [
+     "ceos.cfg",
+     "ceos.eoscfg",
+     "cjunosevolved.jcfg",
+     "cjunosevolved.set",
+     "manifest.json",
+     "vjunos-switch.jcfg",
+     "vjunos-switch.set",
+     "xrv9k.cfg",
+     "xrv9k.xrcfg"
+    ]
+   },
+   "save-fix/course/lab/reference/solution": {
+    "commit": "68867d6e5bb8b039d3947804b17d73466be78412",
+    "files": [
+     "ceos.cfg",
+     "ceos.eoscfg",
+     "cjunosevolved.jcfg",
+     "cjunosevolved.set",
+     "manifest.json",
+     "vjunos-switch.jcfg",
+     "vjunos-switch.set",
+     "xrv9k.cfg",
+     "xrv9k.xrcfg"
+    ]
+   },
+   "save-fix/Legacy/latest": {
+    "commit": "64c8fa075a653951519eeacae2098f91f7d2adaa",
+    "files": [
+     "ceos.cfg",
+     "ceos.eoscfg",
+     "cjunosevolved.jcfg",
+     "cjunosevolved.set",
+     "manifest.json",
+     "vjunos-switch.jcfg",
+     "vjunos-switch.set",
+     "xrv9k.cfg",
+     "xrv9k.xrcfg"
+    ]
+   }
+  },
+  "seed_broken": {
+   "commit": "9885f430dd87181b69daa126d091dff8e2ee2b37",
+   "files": [
+    "ceos.cfg",
+    "ceos.eoscfg",
+    "cjunosevolved.jcfg",
+    "cjunosevolved.set",
+    "manifest.json",
+    "vjunos-switch.jcfg",
+    "vjunos-switch.set",
+    "xrv9k.cfg",
+    "xrv9k.xrcfg"
+   ]
+  },
+  "update_from_repository_response": {
+   "status": "updated",
+   "head": "9885f430dd87181b69daa126d091dff8e2ee2b37",
+   "message": "Updated from remote using fast-forward only."
+  },
+  "saved_versions_text_after_update": "Browse the repository\u2026\nFull history\u2026\nLatest\nLatest\nCLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest\nSaved 5 minutes ago \u00b7 18 files\nView\nApply to running lab\u2026\nCheckpoints\nqa-cp-a\nQA checkpoint A\nSaved 2 minutes ago \u00b7 9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nqa-cp-b\nQA checkpoint B\nSaved 2 minutes ago \u00b7 9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nstate-B\nQA section C: configuration B, all four nodes\nSaved 2 minutes ago \u00b7 9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nBaseline\n\nThe reference version set for this lab.\n\nBaseline\nSaved 2 minutes ago \u00b7 9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nInstructor and reference versions\n\nVersions your instructor put in the repository appear here. Apply one to load it onto your running devices; the current configuration is backed up first.\n\nBroken\nsave-fix/Broken\n9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nFinal state (instructor)\nsave-fix/Final\n9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nLegacy\nsave-fix/Legacy/latest\n9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nFinal state (instructor)\nsave-fix/course/lab/reference/solution\n9 files\nView\nCompare with my latest save\nApply to running lab\u2026\nOther labs in this repository (12)\nElsewhere in this repository (42)",
+  "binding_after_update": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/",
+  "history_total": 64,
+  "history_paths_matched": {
+   "save-fix/Final": true,
+   "save-fix/Broken": true,
+   "save-fix/course/lab/reference/solution": true,
+   "save-fix/Legacy/latest": true,
+   "save-fix/working/checkpoints/state-B": true,
+   "save-fix/working/baseline": true,
+   "save-fix/working/latest": true
+  }
+ },
+ "note": "resumed after c1_prepare.py crashed selecting the baseline dropdown option by its visible text (relative time only); the four product-side saves before that point are re-derived here from GET /api/labs/<id>/git, not repeated",
+ "state_a_commit": "967f8945464abbed87ce49830f531ba200ff2e91",
+ "state_c_commit": "aa0d546765a2b1dd5d0bd1bd578d7ebc408b5020",
+ "checkpoint_state_b_commit": "76b832d873f259964bbd6cbfc6e57e2f88cdc1ab",
+ "classify_before_resume": {
+  "ceos": "C",
+  "cjunosevolved": "C",
+  "vjunos-switch": "C",
+  "xrv9k": "C"
+ },
+ "baseline_job_id": "e000587d2eb9bee7ef441569f9b8886b",
+ "final_git": {
+  "local": "9885f430dd87181b69daa126d091dff8e2ee2b37",
+  "origin": "9885f430dd87181b69daa126d091dff8e2ee2b37"
+ },
+ "classify_end": {
+  "ceos": "C",
+  "cjunosevolved": "C",
+  "vjunos-switch": "C",
+  "xrv9k": "C"
+ },
+ "checks": [
+  {
+   "check": "state A save found synced at working/latest (re-derived from job history)",
+   "ok": true,
+   "detail": "a9920ebac799be5777fdeede77d2d675"
+  },
+  {
+   "check": "state B save found synced at working/latest, self-healed after the transient push_pending (commit 0f6aa6bd matches the run log)",
+   "ok": true,
+   "detail": "{'id': '82749caa55519b546a2769f26630ba59', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:59:26.175517+00:00', 'finished': '2026-09-22T15:03:24.576661+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': '51365d2c9fe74139bac04d5e576afbd2', 'commit': '0f6aa6bd9928e07f052155c4e7361f5262ec5b6c', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/cjunosevolved.set', 'save-fix/working/latest/cjunosevolved.jcfg', 'save-fix/working/latest/vjunos-switch.set', 'save-fix/working/latest/vjunos-switch.jcfg', 'save-fix/working/latest/xrv9k.cfg', 'save-fix/working/latest/xrv9k.xrcfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T14:59:31.043367+00:00'}"
+  },
+  {
+   "check": "checkpoint state-B found synced at working/checkpoints/state-B",
+   "ok": true,
+   "detail": "2700120b3335231856cc3047ecc5fd5a"
+  },
+  {
+   "check": "state C save found synced at working/latest (current)",
+   "ok": true,
+   "detail": "0ef716150b3740e3d78248f5e0d50171"
+  },
+  {
+   "check": "all four nodes read C when this resume run starts (state C was already saved)",
+   "ok": true,
+   "detail": "{'ceos': 'C', 'cjunosevolved': 'C', 'vjunos-switch': 'C', 'xrv9k': 'C'}"
+  },
+  {
+   "check": "baseline set from the state-B checkpoint job id, reached synced",
+   "ok": true,
+   "detail": "{'id': 'e000587d2eb9bee7ef441569f9b8886b', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T15:03:16.399599+00:00', 'finished': '2026-09-22T15:03:24.576666+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': 'e250e6849c5c44e39b484b09c6099836', 'commit': 'cbed31b1a7ace1c437e0947b9f2012a008db1c6c', 'pushed': True, 'target': 'baseline', 'checkpoint': '', 'changed_files': ['save-fix/working/baseline/ceos.cfg', 'save-fix/working/baseline/ceos.eoscfg', 'save-fix/working/baseline/cjunosevolved.set', 'save-fix/working/baseline/cjunosevolved.jcfg', 'save-fix/working/baseline/vjunos-switch.set', 'save-fix/working/baseline/vjunos-switch.jcfg', 'save-fix/working/baseline/xrv9k.cfg', 'save-fix/working/baseline/xrv9k.xrcfg', 'save-fix/working/baseline/manifest.json'], 'snapshot_path': 'save-fix/working/baseline', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T15:03:20.435053+00:00'}"
+  },
+  {
+   "check": "no page/console errors while setting the baseline",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "baseline snapshot (save-fix/working/baseline) is byte-identical to the state-B checkpoint (same backup capture)",
+   "ok": true,
+   "detail": "('b58d70f18e0523a61eb80caf19eac8500e607cba', 'b58d70f18e0523a61eb80caf19eac8500e607cba')"
+  },
+  {
+   "check": "save-fix/Final, .../solution and Legacy/latest seeded with state A files (9 each)",
+   "ok": true,
+   "detail": "{'save-fix/Final': {'commit': 'ca8938bc29ce662d0df164cd340a29c26f12f6e6', 'files': ['ceos.cfg', 'ceos.eoscfg', 'cjunosevolved.jcfg', 'cjunosevolved.set', 'manifest.json', 'vjunos-switch.jcfg', 'vjunos-switch.set', 'xrv9k.cfg', 'xrv9k.xrcfg']}, 'save-fix/course/lab/reference/solution': {'commit': '68867d6e5bb8b039d3947804b17d73466be78412', 'files': ['ceos.cfg', 'ceos.eoscfg', 'cjunosevolved.jcfg', 'cjunosevolved.set', 'manifest.json', 'vjunos-switch.jcfg', 'vjunos-switch.set', 'xrv9k.cfg', 'xrv9k.xrcfg']}, 'save-fix/Legacy/latest': {'commit': '64c8fa075a653951519eeacae2098f91f7d2adaa', 'files': ['ceos.cfg', 'ceos.eoscfg', 'cjunosevolved.jcfg', 'cjunosevolved.set', 'manifest.json', 'vjunos-switch.jcfg', 'vjunos-switch.set', 'xrv9k.cfg', 'xrv9k.xrcfg']}}"
+  },
+  {
+   "check": "save-fix/Broken seeded directly (not a legacy parent) with state B files (9)",
+   "ok": true,
+   "detail": "['ceos.cfg', 'ceos.eoscfg', 'cjunosevolved.jcfg', 'cjunosevolved.set', 'manifest.json', 'vjunos-switch.jcfg', 'vjunos-switch.set', 'xrv9k.cfg', 'xrv9k.xrcfg']"
+  },
+  {
+   "check": "second checkout local HEAD == origin/main after seeding",
+   "ok": true,
+   "detail": "{'local': '9885f430dd87181b69daa126d091dff8e2ee2b37', 'origin': '9885f430dd87181b69daa126d091dff8e2ee2b37'}"
+  },
+  {
+   "check": "binding still save-fix/working after Update from the repository",
+   "ok": true,
+   "detail": "restore-square saves to CLAB-MNGR-DEV-LLM \u203a save-fix/working \u203a latest/"
+  },
+  {
+   "check": "/git/history lists save-fix/Final",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "/git/history lists save-fix/Broken",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "/git/history lists save-fix/course/lab/reference/solution",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "/git/history lists save-fix/Legacy/latest",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "/git/history lists save-fix/working/checkpoints/state-B",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "/git/history lists save-fix/working/baseline",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "/git/history lists save-fix/working/latest",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "all four nodes still read C at the end of preparation (devices only ever changed by this run's own drift/undo/marker steps, never by Update)",
+   "ok": true,
+   "detail": "{'ceos': 'C', 'cjunosevolved': 'C', 'vjunos-switch': 'C', 'xrv9k': 'C'}"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T15:05:27Z"
+}
