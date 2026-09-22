@@ -29,7 +29,8 @@ identity of every saved state is `clab-<labname>-<node>` per node. Two rules fol
 | node `kind:` / image | the platform lives here, not in the node name; pin the image |
 | login | one standard per platform (the kind default, or one credential profile) |
 
-Live restore is Junos only for now (`juniper_cjunosevolved`, `juniper_vjunosswitch`).
+Live restore covers Junos (`juniper_cjunosevolved`, `juniper_vjunosswitch`), Arista EOS (`arista_ceos`) and Cisco IOS XR
+(`cisco_xrv9k`); see [GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node).
 
 ## Node names
 

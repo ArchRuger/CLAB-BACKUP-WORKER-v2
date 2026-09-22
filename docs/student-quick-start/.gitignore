@@ -1,0 +1,5 @@
+# Intermediate build output (build/guide.html, build/pages/*.png); rebuild with build.sh.
+# The delivered PDF, the raw captures, screenshots/spec.json and the composed screenshots are tracked.
+/build/
+__pycache__/
+*.pyc

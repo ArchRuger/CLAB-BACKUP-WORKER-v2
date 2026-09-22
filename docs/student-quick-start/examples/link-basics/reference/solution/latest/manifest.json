@@ -1,0 +1,45 @@
+{
+  "backup_job_id": "bedad9d61aaa4c68a0240e3e261d86a3",
+  "captured_at": "2026-09-22T16:53:19.875273+00:00",
+  "excluded_nodes": [],
+  "files": [
+    {
+      "format": "eos-running-config",
+      "node": "clab-link-basics-r1",
+      "path": "r1.cfg",
+      "platform": "arista_ceos",
+      "restore_artifact": "r1.eoscfg",
+      "restore_capable": true,
+      "restore_format": "eos-running-config",
+      "restore_sha256": "df8390ba5afe670d3e629dc4f4148be8894adc22839d2714fb8b7d4168d5b7f6",
+      "restore_size": 1085,
+      "sha256": "df8390ba5afe670d3e629dc4f4148be8894adc22839d2714fb8b7d4168d5b7f6",
+      "short_name": "r1",
+      "size": 1085
+    },
+    {
+      "format": "eos-running-config",
+      "node": "clab-link-basics-r2",
+      "path": "r2.cfg",
+      "platform": "arista_ceos",
+      "restore_artifact": "r2.eoscfg",
+      "restore_capable": true,
+      "restore_format": "eos-running-config",
+      "restore_sha256": "0ccb5560afc877c5539a37c74f45d30f8d554f63cf77a1e0e6fcc68e30c22a0d",
+      "restore_size": 1085,
+      "sha256": "0ccb5560afc877c5539a37c74f45d30f8d554f63cf77a1e0e6fcc68e30c22a0d",
+      "short_name": "r2",
+      "size": 1085
+    }
+  ],
+  "lab_id": "7c099ca1d3c94235acb8469f9544743c",
+  "lab_name": "link-basics",
+  "node_names": [
+    "clab-link-basics-r1",
+    "clab-link-basics-r2"
+  ],
+  "restore_capable_nodes": 2,
+  "schema": 2,
+  "topology_digest": "9d0ce2d42e22d8ec1aa5883d323b6305b934abe77982fa5483d7587927949aee",
+  "topology_provenance": "captured"
+}

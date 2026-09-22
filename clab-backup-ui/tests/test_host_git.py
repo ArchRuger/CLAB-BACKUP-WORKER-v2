@@ -25,6 +25,7 @@ class HostGitTests(unittest.TestCase):
         self.remote = self.base / 'remote.git'; self.home = self.base / 'home'; self.home.mkdir()
         self.env = {**os.environ, 'HOME': str(self.home), 'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_CONFIG_NOSYSTEM': '1',
                     'GIT_TERMINAL_PROMPT': '0', 'GIT_CONFIG_COUNT': '0'}
+        for key in ('GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'): self.env.pop(key, None)
         self.git = shutil.which('git')
         self.raw('init', '--bare', str(self.remote))
         self.raw('init', '-b', 'main'); self.raw('config', 'user.name', 'Fixture Ben'); self.raw('config', 'user.email', 'ben@example.invalid')
@@ -167,6 +168,20 @@ class HostGitTests(unittest.TestCase):
         retry = self.worker.dispatch(req)
         self.assertEqual(retry['status'], 'committed', retry)
         self.assertEqual(self.raw('rev-list', '--count', 'HEAD'), '2')
+
+    def test_connect_derives_the_identity_from_a_github_account_without_a_display_name(self):
+        self.raw('config', '--unset', 'user.name'); self.raw('config', '--unset', 'user.email')
+        self.raw('config', 'user.useConfigOnly', 'true')
+        fake_gh = self.base / 'gh'
+        fake_gh.write_text('#!/bin/sh\nprintf \'328467482\\tpruger-dev\\t\\n\'\n'); fake_gh.chmod(0o755)
+        worker = GitRepository(self.binding, git=self.git, allow_local=True, env=self.env, gh=str(fake_gh))
+        worker.ensure_identity('https://github.com/pruger-dev/netlab-course.git')
+        self.assertEqual(self.raw('config', 'user.name'), 'pruger-dev')
+        self.assertEqual(self.raw('config', 'user.email'), '328467482+pruger-dev@users.noreply.github.com')
+        self.raw('config', '--unset', 'user.name'); self.raw('config', '--unset', 'user.email')
+        fake_gh.write_text('#!/bin/sh\nprintf \'328467482\\tpruger-dev\\tSam Colt\\n\'\n')
+        worker.ensure_identity('https://github.com/pruger-dev/netlab-course.git')
+        self.assertEqual(self.raw('config', 'user.name'), 'Sam Colt')
 
     def test_push_preflight_does_not_publish_local_commit(self):
         self.publish()
