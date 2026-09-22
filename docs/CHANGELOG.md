@@ -4,6 +4,25 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.33
+
+**Student quick start, part 1: Scenario A executed and recorded; a Git-identity fix in the helper.** First checkpoint
+of the illustrated student guide ([docs/student-quick-start/PICKUP.md](student-quick-start/PICKUP.md)): the
+instructor lab package `link-basics` (two cEOS routers, three saved states in a course repository), the Scenario A
+walkthrough (deploy an instructor's lab, connect the student's own copy of the course repository, apply the starting
+state, change, save, checkpoint, break and recover) executed on the development VM with screenshots and an evidence log,
+the reproducible PDF pipeline (Markdown → WeasyPrint) and the first draft of the guide. The PDF itself is delivered with
+the last checkpoint of the stream, not this one.
+
+- **Connect a repository by URL no longer fails for a GitHub account without a display name.** The helper derives the
+  commit identity from `gh api user`; when the profile's name is empty the tab-separated answer ends with an empty field,
+  and trimming the line removed it, so the connection ended with "This VM account has no Git commit identity yet" although
+  the documented fallback (login name and the account's noreply address) should have applied. Fixed in `host_git.py`
+  (`ensure_identity`), with a regression test. An installed VM picks the fix up with
+  `sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --refresh` (the launcher does this on every start).
+- `docs/NAMING.md` names the three platforms live restore covers (it still said Junos only);
+  `docs/student-quick-start/` is a history directory for the documentation check.
+
 ## Changes in 1.30.32
 
 **Save location fix: live acceptance closed on the four images.** Second and closing release of the save-location

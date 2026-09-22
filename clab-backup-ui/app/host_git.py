@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.30.32'
+VERSION = '1.30.33'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -777,8 +777,10 @@ class GitRepository:
         host = urlsplit(url).hostname
         if host and host.lower() == 'github.com' and Path(self.gh).exists():
             code, raw = self.tool([self.gh, 'api', 'user', '--jq', '[(.id|tostring), .login, (.name // "")] | @tsv'])
-            fields = raw.decode('utf8', errors='replace').strip().split('\t') if not code else []
-            if len(fields) == 3 and fields[0].isdigit() and GITHUB_PART.fullmatch(fields[1]):
+            # Only the line ending is trimmed: an account without a display name ends the line with an empty
+            # third field, and strip() would eat that tab and lose the field.
+            fields = raw.decode('utf8', errors='replace').rstrip('\r\n').split('\t') if not code else []
+            if len(fields) == 3 and re.fullmatch(r'[0-9]+', fields[0]) and GITHUB_PART.fullmatch(fields[1]):
                 name = (fields[2].strip() or fields[1])[:200]
                 email = fields[0] + '+' + fields[1] + '@users.noreply.github.com'
         if not name or not email or any(ord(c) < 32 or ord(c) == 127 for c in name):

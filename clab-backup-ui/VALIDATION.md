@@ -1,3 +1,31 @@
+# Student quick start, part 1: Scenario A on the live manager; helper identity fix — 1.30.33
+
+Prepared on `claude/student-quick-start` (from `main` `132122b`, 1.30.32) on 2026-09-22. What was actually run:
+
+- **Unit and browser suites** (`clab-backup-ui/.venv`, Python 3.12; `node --test`, Node 18): the full `unittest discover`
+  run and the browser test files, results recorded in the commit message of this release; `test_host_git.py` (67 tests,
+  including the new `test_connect_derives_the_identity_from_a_github_account_without_a_display_name`, which errors on the
+  1.30.32 helper and passes on this one; the fixture now drops inherited `GIT_AUTHOR_*`/`GIT_COMMITTER_*` variables).
+  `deploy/verify-release.py`, `docs/maintenance-audit/tools/check_links.py`, `git diff --check`.
+- **Independent review** of the helper diff by the Opus `risk-reviewer` (accepted; its two findings — the
+  environment-sensitive test and the ASCII-digit check on the account id — are applied).
+- **Live Scenario A on the development VM** (`clab-llm-dev2`, manager image `clab-backup:1.30.32` with the helper refreshed
+  from this commit's `host_git.py`, containerlab 0.79, cEOS `n24l/ceos:4.35.0F`): the Playwright walkthrough
+  `docs/student-quick-start/tools/capture_scenario_a.py` ran all eleven steps through the real pages from an empty
+  My labs — deploy from the VM file (both routers Ready 38 s after *Start lab*), Open CLI in the real terminal page,
+  *Connect a repository by URL* to the student's private copy of the course repository (folder `link-basics/work`),
+  *Apply to running lab…* of the instructor's `Starting state` (both verified, 12 s), a loopback added over the CLI,
+  *Save progress* → *Review before uploading* → *Upload these changes* (commit on GitHub with
+  `link-basics/work/latest/{manifest.json,r1.cfg,r2.cfg,r1.eoscfg,r2.eoscfg}`), checkpoint `loopback-added`, a second
+  change and a second Latest (updated in place, checkpoint untouched, no `latest/latest`), `Troubleshooting scenario 01`
+  applied (ping fails, r1 sees Et1 `notconnect`) and the lab's own Latest applied back (ping and both loopbacks back,
+  save location unchanged), then a fresh browser context. Device facts were read back over direct SSH
+  (`tools/eos.py`) and the remote trees with `gh api`. Evidence: `docs/student-quick-start/evidence/scenario-a.{md,json}`,
+  raw screenshots under `screenshots/raw/`.
+- **Not done in this release:** Scenario B, the composed PDF and its page-by-page inspection, the independent QA replay
+  of the guide, a rebuilt image (the VM still runs the 1.30.32 image; only the helper was refreshed). The guide's
+  "tested with" line will name the release the final replay runs on.
+
 # Save location fix, part 2: the four-image live acceptance — 1.30.32
 
 Prepared on `claude/save-location-fix` on 2026-09-22 after 1.30.31 (`8ea56e0`, pushed, CI green on the push and the

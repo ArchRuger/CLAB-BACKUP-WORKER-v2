@@ -1,0 +1,26 @@
+# link-basics: two Arista cEOS routers joined by one link.
+# Instructor lab package for the Containerlab Node Manager student quick start.
+#
+#   r1 eth1 ---------- eth1 r2
+#   10.0.0.1/30        10.0.0.2/30   (addresses come from the saved state "reference/start")
+#
+# Keep `name:` and the node names exactly as they are: every saved configuration state in the
+# course repository is recorded against clab-link-basics-r1 and clab-link-basics-r2. The
+# management addresses are pinned so that a saved state applies after a redeploy as well.
+# Logins are the kind's published default (admin / admin); nothing secret is kept here.
+name: link-basics
+mgmt:
+  network: clab
+  ipv4-subnet: 172.20.20.0/24
+topology:
+  nodes:
+    r1:
+      kind: arista_ceos
+      image: n24l/ceos:4.35.0F
+      mgmt-ipv4: 172.20.20.11
+    r2:
+      kind: arista_ceos
+      image: n24l/ceos:4.35.0F
+      mgmt-ipv4: 172.20.20.12
+  links:
+    - endpoints: ["r1:eth1", "r2:eth1"]

@@ -1,0 +1,973 @@
+{
+ "scenario": "Scenario A: use an instructor's lab",
+ "manager_base": "http://127.0.0.1:8081",
+ "started_utc": "2026-09-22T17:26:40Z",
+ "finished_utc": "2026-09-22T17:30:05Z",
+ "steps": [
+  {
+   "step": 1,
+   "title": "Home: empty My labs, Deploy box",
+   "actions": [
+    "Navigate to the manager home page"
+   ],
+   "observed": {
+    "lab_card_count": 0,
+    "empty_state_heading": "No labs yet"
+   },
+   "screenshots": [
+    {
+     "file": "a1-home-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a1-deploy-box.png",
+     "element": "Deploy box",
+     "callouts": [
+      {
+       "label": "Choose a file on the lab VM\u2026",
+       "box": {
+        "x": 47,
+        "y": 253.453125,
+        "width": 259.453125,
+        "height": 36
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 2,
+   "title": "Deploy link-basics from the lab VM",
+   "actions": [
+    "Click \"Choose a file on the lab VM\u2026\"",
+    "Open folder /srv/containerlab-node-manager/projects",
+    "Open folder link-basics",
+    "Click \u25c7 link-basics.clab.yml",
+    "Topology file dialog shown with YAML preview",
+    "Click \"Deploy lab\""
+   ],
+   "observed": {
+    "topology_path_field": "/srv/containerlab-node-manager/projects/link-basics/link-basics.clab.yml",
+    "yaml_preview_first_line": "# link-basics: two Arista cEOS routers joined by one link.",
+    "review_title": "Start link-basics?",
+    "confirm_button_label": "Start lab",
+    "post_confirm_hash": "#lab=b84d9778df174d5fb80efae12c92b69a&view=topology",
+    "lab_id": "b84d9778df174d5fb80efae12c92b69a"
+   },
+   "screenshots": [
+    {
+     "file": "a2-file-picker-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a2-file-picker-dialog.png",
+     "element": "Lab folders on the VM",
+     "callouts": [
+      {
+       "label": "\u25c7 link-basics.clab.yml",
+       "box": {
+        "x": 221,
+        "y": 538.90625,
+        "width": 986,
+        "height": 35.5
+       }
+      },
+      {
+       "label": "Lab folders on the VM",
+       "box": {
+        "x": 123,
+        "y": 221.8125,
+        "width": 1120,
+        "height": 456.375
+       }
+      }
+     ]
+    },
+    {
+     "file": "a2-topology-file-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a2-topology-file-dialog.png",
+     "element": "Topology file",
+     "callouts": [
+      {
+       "label": "Deploy lab",
+       "box": {
+        "x": 760.515625,
+        "y": 715.09375,
+        "width": 113.828125,
+        "height": 36
+       }
+      },
+      {
+       "label": "Topology file",
+       "box": {
+        "x": 123,
+        "y": 115.90625,
+        "width": 1120,
+        "height": 668.1875
+       }
+      }
+     ]
+    },
+    {
+     "file": "a2-start-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a2-start-review-dialog.png",
+     "element": "Start link-basics?",
+     "callouts": [
+      {
+       "label": "Start lab",
+       "box": {
+        "x": 1119.03125,
+        "y": 557.046875,
+        "width": 98.96875,
+        "height": 36
+       }
+      },
+      {
+       "label": "Start link-basics?",
+       "box": {
+        "x": 123,
+        "y": 261.9375,
+        "width": 1120,
+        "height": 376.109375
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 3,
+   "title": "Starting -> Ready (deploy timing)",
+   "actions": [
+    "Open the Devices tab while devices are starting",
+    "Polled the Devices tab until both rows read Ready (38.0s since confirm)"
+   ],
+   "observed": {
+    "lab_state_starting": "Starting lab",
+    "lab_ready_starting": "0 of 2 devices ready",
+    "devices_pills_starting": [
+     "Unavailable",
+     "Unavailable"
+    ],
+    "deploy_to_ready_seconds": 38.0,
+    "lab_ready_final": "2 of 2 devices ready",
+    "devices_pills_ready": [
+     "Ready",
+     "Ready"
+    ]
+   },
+   "screenshots": [
+    {
+     "file": "a3-header-starting-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a3-header-starting-el.png",
+     "element": "Lab header (Starting)",
+     "callouts": [
+      {
+       "label": "Lab header (Starting)",
+       "box": {
+        "x": 24,
+        "y": 64,
+        "width": 1318,
+        "height": 70.390625
+       }
+      }
+     ]
+    },
+    {
+     "file": "a3-devices-starting-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a3-devices-starting-el.png",
+     "element": "Devices tab (Starting)",
+     "callouts": [
+      {
+       "label": "Devices tab (Starting)",
+       "box": {
+        "x": 24,
+        "y": 271.53125,
+        "width": 1318,
+        "height": 596.46875
+       }
+      }
+     ]
+    },
+    {
+     "file": "a3-devices-ready-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a3-devices-ready-el.png",
+     "element": "Devices tab (Ready)",
+     "callouts": [
+      {
+       "label": "Devices tab (Ready)",
+       "box": {
+        "x": 24,
+        "y": 201.890625,
+        "width": 1318,
+        "height": 666.109375
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 4,
+   "title": "Topology tab and r1 CLI (show version / show interfaces status)",
+   "actions": [
+    "Open the Topology tab",
+    "Open CLI on r1 from the Devices tab"
+   ],
+   "observed": {
+    "terminal_status_before_typing": "Connected",
+    "et1_connected": true,
+    "no_ip_on_et1_yet": true
+   },
+   "screenshots": [
+    {
+     "file": "a4-topology-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a4-topology-el.png",
+     "element": "Topology map",
+     "callouts": [
+      {
+       "label": "Topology map",
+       "box": {
+        "x": 24,
+        "y": 201.890625,
+        "width": 1318,
+        "height": 666.109375
+       }
+      }
+     ]
+    },
+    {
+     "file": "a4-r1-terminal-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a4-r1-terminal-el.png",
+     "element": "r1 CLI (show version / show interfaces status)",
+     "callouts": [
+      {
+       "label": "r1 CLI (show version / show interfaces status)",
+       "box": {
+        "x": 24,
+        "y": 148.5,
+        "width": 1318,
+        "height": 731.5
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {
+    "r1_show_interfaces_status": "enable\r\nr1#show interfaces status\r\nPort       Name   Status       Vlan     Duplex Speed  Type            Flags Encapsulation\r\nEt1               connected    1        full   1G     EbraTestPhyPort                   \r\nMa0               connected    routed   a-full a-1G   10/100/1000                       \r\n\r\nr1#",
+    "r1_show_ip_interface_brief": "enable\r\nr1#show ip interface brief\r\n                                                                               Address\r\nInterface         IP Address            Status       Protocol           MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ---------- -------\r\nManagement0       172.20.20.11/24       up           up                1500           \r\n\r\nr1#"
+   },
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 5,
+   "title": "Connect a repository by URL",
+   "actions": [
+    "Open the Progress tab",
+    "Click \"Connect a repository by URL\"",
+    "Click \"Connect repository\" and wait for the clone/check/register"
+   ],
+   "observed": {
+    "unconnected_card_heading": "Choose where to save your progress",
+    "destination_line": "link-basics saves to netlab-course-student \u203a link-basics/work \u203a latest/",
+    "saved_versions_text": "Browse the repository\u2026\nFull history\u2026\nLatest\n\nYou haven't saved this lab yet. Save progress creates a configuration snapshot you can return to later.\n\nCheckpoints\n\nNo checkpoints yet. Create a checkpoint when you reach an important milestone.\n\nInstructor and reference versions\n\nVersions your instructor put in the repository appear here. Apply one to load it onto your running devices; the current configuration is backed up first.\n\nTroubleshooting scenario 01\nlink-basics/reference/broken-01/latest\n5 files\nView\nCompare with my latest save\nApply to running lab\u2026\nFinal state (instructor)\nlink-basics/reference/solution/latest\n5 files\nView\nCompare with my latest save\nApply to running lab\u2026\nStarting state\nlink-basics/reference/start/latest\n5 files\nView\nCompare with my latest save\nApply to running lab\u2026",
+    "saved_versions_rows": [
+     "Troubleshooting scenario 01 | link-basics/reference/broken-01/latest | 5 files | View | Compare with my latest save | Apply to running lab\u2026",
+     "Final state (instructor) | link-basics/reference/solution/latest | 5 files | View | Compare with my latest save | Apply to running lab\u2026",
+     "Starting state | link-basics/reference/start/latest | 5 files | View | Compare with my latest save | Apply to running lab\u2026"
+    ],
+    "reference_group_present": true
+   },
+   "screenshots": [
+    {
+     "file": "a5-progress-unconnected-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a5-progress-unconnected-el.png",
+     "element": "Choose where to save your progress",
+     "callouts": [
+      {
+       "label": "Choose where to save your progress",
+       "box": {
+        "x": 24,
+        "y": 524.453125,
+        "width": 1318,
+        "height": 248.390625
+       }
+      }
+     ]
+    },
+    {
+     "file": "a5-connect-dialog-filled-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a5-connect-dialog-filled-el.png",
+     "element": "Connect a repository by URL (filled)",
+     "callouts": [
+      {
+       "label": "Connect a repository by URL (filled)",
+       "box": {
+        "x": 123,
+        "y": 237.375,
+        "width": 1120,
+        "height": 425.234375
+       }
+      }
+     ]
+    },
+    {
+     "file": "a5-progress-connected-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a5-progress-connected-el.png",
+     "element": "Connected save location",
+     "callouts": [
+      {
+       "label": "Connected save location",
+       "box": {
+        "x": 24,
+        "y": -76.203125,
+        "width": 1318,
+        "height": 1053.296875
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 6,
+   "title": "Apply reference 'start' state",
+   "actions": [
+    "Click Saved versions \u203a Starting state \u203a Apply to running lab\u2026"
+   ],
+   "observed": {
+    "start_row_caption": "link-basics/reference/start/latest",
+    "restore_source_line": "Source: Starting state \u00b7 netlab-course-student \u203a link-basics/reference/start/latest \u00b7 saved 35 minutes ago \u00b7 089a35aeb8",
+    "restore_target_rows": [
+     "r1 EOS 6 differences from the running configuration",
+     "r2 EOS 6 differences from the running configuration"
+    ],
+    "restore_job_id": "6a9f7302b32e46cba7b492eb233b8446",
+    "restore_apply_seconds": 12.0,
+    "restore_job_status": "succeeded",
+    "restore_targets": [
+     {
+      "name": "clab-link-basics-r1",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state."
+     },
+     {
+      "name": "clab-link-basics-r2",
+      "status": "verified",
+      "message": "Configuration replaced and verified against the saved desired state."
+     }
+    ],
+    "ping_ok_after_start": true
+   },
+   "screenshots": [
+    {
+     "file": "a6-apply-start-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a6-apply-start-review-el.png",
+     "element": "Replace running configuration (start)",
+     "callouts": [
+      {
+       "label": "Replace running configuration (start)",
+       "box": {
+        "x": 123,
+        "y": 188.6875,
+        "width": 1120,
+        "height": 522.609375
+       }
+      }
+     ]
+    },
+    {
+     "file": "a6-apply-start-result-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a6-apply-start-result-el.png",
+     "element": "Restore result (start)",
+     "callouts": [
+      {
+       "label": "Restore result (start)",
+       "box": {
+        "x": 123,
+        "y": 280.671875,
+        "width": 1120,
+        "height": 338.640625
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {
+    "r1_show_ip_interface_brief": "enable\r\nr1#show ip interface brief\r\n                                                                               Address\r\nInterface         IP Address            Status       Protocol           MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ---------- -------\r\nEthernet1         10.0.0.1/30           up           up                1500           \r\nManagement0       172.20.20.11/24       up           up                1500           \r\n\r\nr1#",
+    "r2_show_ip_interface_brief": "enable\r\nr2#show ip interface brief\r\n                                                                               Address\r\nInterface         IP Address            Status       Protocol           MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ---------- -------\r\nEthernet1         10.0.0.2/30           up           up                1500           \r\nManagement0       172.20.20.12/24       up           up                1500           \r\n\r\nr2#",
+    "r1_ping_10_0_0_2": "enable\r\nr1#ping 10.0.0.2 repeat 3\r\nPING 10.0.0.2 (10.0.0.2) 72(100) bytes of data.\r\n80 bytes from 10.0.0.2: icmp_seq=1 ttl=64 time=0.091 ms\r\n80 bytes from 10.0.0.2: icmp_seq=2 ttl=64 time=0.007 ms\r\n80 bytes from 10.0.0.2: icmp_seq=3 ttl=64 time=0.003 ms\r\n\r\n--- 10.0.0.2 ping statistics ---\r\n3 packets transmitted, 3 received, 0% packet loss, time 0ms\r\nrtt min/avg/max/mdev = 0.003/0.033/0.091/0.040 ms, ipg/ewma 0.063/0.070 ms\r\nr1#"
+   },
+   "remote_evidence": {
+    "binding_prefix_after_apply_start": "link-basics/work"
+   },
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 7,
+   "title": "r1: add Loopback0 over the CLI",
+   "actions": [
+    "Terminal: enable",
+    "Terminal: configure terminal",
+    "Terminal: interface Loopback0",
+    "Terminal: description r1 loopback",
+    "Terminal: ip address 10.255.0.1/32",
+    "Terminal: end",
+    "Terminal: write memory",
+    "Terminal: show ip interface brief"
+   ],
+   "observed": {
+    "loopback0_present": true
+   },
+   "screenshots": [
+    {
+     "file": "a7-r1-loopback-terminal-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a7-r1-loopback-terminal-el.png",
+     "element": "r1 CLI (Loopback0 readback)",
+     "callouts": [
+      {
+       "label": "r1 CLI (Loopback0 readback)",
+       "box": {
+        "x": 24,
+        "y": 148.5,
+        "width": 1318,
+        "height": 731.5
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {
+    "r1_show_ip_interface_brief_after_loopback": "enable\r\nr1#show ip interface brief\r\n                                                                                Address\r\nInterface         IP Address            Status       Protocol            MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ----------- -------\r\nEthernet1         10.0.0.1/30           up           up                 1500           \r\nLoopback0         10.255.0.1/32         up           up                65535           \r\nManagement0       172.20.20.11/24       up           up                 1500           \r\n\r\nr1#"
+   },
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 8,
+   "title": "Save progress and upload",
+   "actions": [
+    "Click \"Save progress\"",
+    "Click \"Upload these changes\""
+   ],
+   "observed": {
+    "review_before_uploading_text": "Review before uploading\n\u00d7\n\nWhat this save changed compared with the previous one. Configuration files may contain passwords or keys.\n\nThis save is on the lab VM only. Nothing is uploaded to github.com unless you choose Upload these changes.\n\nDetails\nr1.cfg added\nr1.eoscfg added\nr2.cfg added\nr2.eoscfg added\nOpen the full saved version\nNot now \u2014 keep it on the VM\nUpload these changes",
+    "upload_button_label": "Upload these changes",
+    "not_now_button_label": "Not now \u2014 keep it on the VM",
+    "save_job_status": "synced",
+    "save_job_commit": "7d3c23337247d825a2fad20bdfb32e79340b0e7f",
+    "progress_status_after_save": "Saved to Git just now"
+   },
+   "screenshots": [
+    {
+     "file": "a8-save-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a8-save-review-el.png",
+     "element": "Review before uploading",
+     "callouts": [
+      {
+       "label": "Upload these changes",
+       "box": {
+        "x": 1109.125,
+        "y": 627.890625,
+        "width": 204.546875,
+        "height": 36
+       }
+      },
+      {
+       "label": "Not now \u2014 keep it on the VM",
+       "box": {
+        "x": 842.515625,
+        "y": 627.890625,
+        "width": 258.609375,
+        "height": 36
+       }
+      },
+      {
+       "label": "Review before uploading",
+       "box": {
+        "x": 27.3125,
+        "y": 211.109375,
+        "width": 1311.359375,
+        "height": 477.78125
+       }
+      }
+     ]
+    },
+    {
+     "file": "a8-save-job-result-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a8-save-job-result-el.png",
+     "element": "Save job result",
+     "callouts": [
+      {
+       "label": "Save job result",
+       "box": {
+        "x": 123,
+        "y": 318.75,
+        "width": 1120,
+        "height": 262.5
+       }
+      }
+     ]
+    },
+    {
+     "file": "a8-progress-after-save-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a8-progress-after-save-el.png",
+     "element": "Progress tab after save",
+     "callouts": [
+      {
+       "label": "Progress tab after save",
+       "box": {
+        "x": 24,
+        "y": 201.890625,
+        "width": 1318,
+        "height": 102.6875
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {
+    "tree_paths_after_first_save": {
+     "link-basics/work/latest/manifest.json": true,
+     "link-basics/work/latest/r1.cfg": true,
+     "link-basics/work/latest/r2.cfg": true,
+     "link-basics/work/latest/r1.eoscfg": true,
+     "link-basics/work/latest/r2.eoscfg": true
+    },
+    "commit": "7d3c23337247d825a2fad20bdfb32e79340b0e7f"
+   },
+   "result": "PASS",
+   "notes": [
+    "Documented \"Not now \u2014 keep it on the VM\" sentence (not exercised here): \"This save is on the lab VM only. Nothing is uploaded to <host> unless you choose Upload these changes.\""
+   ]
+  },
+  {
+   "step": 9,
+   "title": "Checkpoint 'loopback-added', then r2's loopback and a second save",
+   "actions": [
+    "Click \"Create checkpoint\u2026\"",
+    "Review before uploading -> Upload these changes",
+    "r2 terminal: added Loopback0 10.255.0.2/32, write memory",
+    "Save progress again -> Review -> Upload these changes"
+   ],
+   "observed": {
+    "checkpoint_job_status": "synced",
+    "checkpoint_job_commit": "da05d70fd0f6d223dcb5fd6d7b641d7d9af6bdc3",
+    "second_save_job_status": "synced",
+    "second_save_job_commit": "cf244a099fe2a3c812e70e8bbb6da7c7aeea041a",
+    "saved_versions_text_after_checkpoint": "Browse the repository\u2026\nFull history\u2026\nLatest\nLatest\nnetlab-course-student \u203a link-basics/work \u203a latest\nSaved just now \u00b7 5 files\nView\nApply to running lab\u2026\nCheckpoints\nloopback-added\nSaved just now \u00b7 5 files\nView\nCompare with my latest save\nApply to running lab\u2026\nInstructor and reference versions\n\nVersions your instructor put in the repository appear here. Apply one to load it onto your running devices; the current configuration is backed up first.\n\nTroubleshooting scenario 01\nlink-basics/reference/broken-01/latest\n5 files\nView\nCompare with my latest save\nApply to running lab\u2026\nFinal state (instructor)\nlink-basics/reference/solution/latest\n5 files\nView\nCompare with my latest save\nApply to running lab\u2026\nStarting state\nlink-basics/reference/start/latest\n5 files\nView\nCompare with my latest save\nApply to running lab\u2026"
+   },
+   "screenshots": [
+    {
+     "file": "a9-checkpoint-dialog-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a9-checkpoint-dialog-el.png",
+     "element": "Create checkpoint (loopback-added)",
+     "callouts": [
+      {
+       "label": "Create checkpoint (loopback-added)",
+       "box": {
+        "x": 333,
+        "y": 216.03125,
+        "width": 700,
+        "height": 467.921875
+       }
+      }
+     ]
+    },
+    {
+     "file": "a9-checkpoint-job-result-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a9-checkpoint-job-result-el.png",
+     "element": "Checkpoint job result",
+     "callouts": [
+      {
+       "label": "Checkpoint job result",
+       "box": {
+        "x": 123,
+        "y": 318.75,
+        "width": 1120,
+        "height": 262.5
+       }
+      }
+     ]
+    },
+    {
+     "file": "a9-saved-versions-with-checkpoint-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a9-saved-versions-with-checkpoint-el.png",
+     "element": "Saved versions (Latest + loopback-added)",
+     "callouts": [
+      {
+       "label": "Saved versions (Latest + loopback-added)",
+       "box": {
+        "x": 24,
+        "y": 320.578125,
+        "width": 1318,
+        "height": 569.9375
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {
+    "latest_r2_has_loopback0": true,
+    "checkpoint_r2_lacks_loopback0": true,
+    "no_nested_latest_latest": true,
+    "double_latest_paths_found": []
+   },
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 10,
+   "title": "Apply reference 'broken-01', then return to the lab's own Latest",
+   "actions": [
+    "Saved versions \u203a Troubleshooting scenario 01 \u203a Apply to running lab\u2026",
+    "Saved versions \u203a Latest \u203a Apply to running lab\u2026"
+   ],
+   "observed": {
+    "broken_source_line": "Source: Troubleshooting scenario 01 \u00b7 netlab-course-student \u203a link-basics/reference/broken-01/latest \u00b7 saved 35 minutes ago \u00b7 cf244a099f",
+    "broken_restore_status": "succeeded",
+    "ping_fails_after_broken": true,
+    "et1_notconnect_after_broken": true,
+    "latest_source_line": "Source: work \u00b7 netlab-course-student \u203a link-basics/work/latest \u00b7 saved just now \u00b7 cf244a099f",
+    "latest_restore_status": "succeeded",
+    "ping_ok_after_latest": true,
+    "loopbacks_back": true,
+    "compare_checkpoint_dialog_title": "Compared with your latest save"
+   },
+   "screenshots": [
+    {
+     "file": "a10-apply-broken-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a10-apply-broken-review-el.png",
+     "element": "Replace running configuration (broken-01)",
+     "callouts": [
+      {
+       "label": "Replace running configuration (broken-01)",
+       "box": {
+        "x": 123,
+        "y": 188.6875,
+        "width": 1120,
+        "height": 522.609375
+       }
+      }
+     ]
+    },
+    {
+     "file": "a10-apply-broken-result-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a10-apply-broken-result-el.png",
+     "element": "Restore result (broken-01)",
+     "callouts": [
+      {
+       "label": "Restore result (broken-01)",
+       "box": {
+        "x": 123,
+        "y": 280.671875,
+        "width": 1120,
+        "height": 338.640625
+       }
+      }
+     ]
+    },
+    {
+     "file": "a10-apply-latest-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a10-apply-latest-review-el.png",
+     "element": "Replace running configuration (own Latest)",
+     "callouts": [
+      {
+       "label": "Replace running configuration (own Latest)",
+       "box": {
+        "x": 123,
+        "y": 188.6875,
+        "width": 1120,
+        "height": 522.609375
+       }
+      }
+     ]
+    },
+    {
+     "file": "a10-apply-latest-result-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a10-apply-latest-result-el.png",
+     "element": "Restore result (own Latest)",
+     "callouts": [
+      {
+       "label": "Restore result (own Latest)",
+       "box": {
+        "x": 123,
+        "y": 280.671875,
+        "width": 1120,
+        "height": 338.640625
+       }
+      }
+     ]
+    },
+    {
+     "file": "a10-compare-checkpoint-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a10-compare-checkpoint-el.png",
+     "element": "Compare with my latest save (loopback-added)",
+     "callouts": [
+      {
+       "label": "Compare with my latest save (loopback-added)",
+       "box": {
+        "x": 27.3125,
+        "y": 325.359375,
+        "width": 1311.359375,
+        "height": 249.28125
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {
+    "r1_ping_after_broken": "enable\r\nr1#ping 10.0.0.2 repeat 3\r\nPING 10.0.0.2 (10.0.0.2) 72(100) bytes of data.\r\n",
+    "r1_show_interfaces_status_after_broken": "enable\r\nr1#show interfaces status\r\nPort       Name       Status       Vlan     Duplex Speed  Type            Flags Encapsulation\r\nEt1        link to r2 notconnect   routed   full   1G     EbraTestPhyPort                   \r\nMa0                   connected    routed   a-full a-1G   10/100/1000                       \r\n\r\nr1#",
+    "r1_ping_after_latest": "enable\r\nr1#ping 10.0.0.2 repeat 3\r\nPING 10.0.0.2 (10.0.0.2) 72(100) bytes of data.\r\n80 bytes from 10.0.0.2: icmp_seq=1 ttl=64 time=0.095 ms\r\n80 bytes from 10.0.0.2: icmp_seq=2 ttl=64 time=0.004 ms\r\n80 bytes from 10.0.0.2: icmp_seq=3 ttl=64 time=0.003 ms\r\n\r\n--- 10.0.0.2 ping statistics ---\r\n3 packets transmitted, 3 received, 0% packet loss, time 0ms\r\nrtt min/avg/max/mdev = 0.003/0.034/0.095/0.043 ms, ipg/ewma 0.062/0.073 ms\r\nr1#",
+    "r1_show_ip_interface_brief_after_latest": "enable\r\nr1#show ip interface brief\r\n                                                                                Address\r\nInterface         IP Address            Status       Protocol            MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ----------- -------\r\nEthernet1         10.0.0.1/30           up           up                 1500           \r\nLoopback0         10.255.0.1/32         up           up                65535           \r\nManagement0       172.20.20.11/24       up           up                 1500           \r\n\r\nr1#",
+    "r2_show_ip_interface_brief_after_latest": "enable\r\nr2#show ip interface brief\r\n                                                                                Address\r\nInterface         IP Address            Status       Protocol            MTU    Owner  \r\n----------------- --------------------- ------------ -------------- ----------- -------\r\nEthernet1         10.0.0.2/30           up           up                 1500           \r\nLoopback0         10.255.0.2/32         up           up                65535           \r\nManagement0       172.20.20.12/24       up           up                 1500           \r\n\r\nr2#"
+   },
+   "remote_evidence": {
+    "binding_prefix_after_apply_latest": "link-basics/work"
+   },
+   "result": "PASS",
+   "notes": []
+  },
+  {
+   "step": 11,
+   "title": "Fresh context: Home card, Progress tab, Lab actions menu, Destroy review (cancelled)",
+   "actions": [
+    "Fresh browser context -> Home",
+    "Opened \"Destroy lab\u2026\" review, screenshotted it, then Cancel (no destroy performed)"
+   ],
+   "observed": {
+    "home_card_text": "link-basics | \u22ef |  | Running | 2 of 2 devices ready |  | Last saved 1 minute ago |  | Deployed 3 minutes ago |  | Open lab",
+    "lab_actions_menu_items": [
+     "Start stopped devices\nThe lab is already running",
+     "Stop devices",
+     "Restart devices",
+     "Sync topology from VM",
+     "Packet capture\u2026",
+     "Lab files\u2026",
+     "All lab operations\u2026",
+     "Redeploy lab\u2026",
+     "Redeploy and clear the lab folder\u2026",
+     "Destroy lab\u2026",
+     "Remove from this manager\u2026",
+     "Advanced options",
+     "Import map\u2026",
+     "Edit map",
+     "Telemetry settings\u2026",
+     "Operation history\u2026"
+    ],
+    "destroy_review_title": "Destroy link-basics?",
+    "console_errors_seen": []
+   },
+   "screenshots": [
+    {
+     "file": "a11-home-fresh-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a11-home-fresh-lab-card-el.png",
+     "element": "link-basics lab card",
+     "callouts": [
+      {
+       "label": "link-basics lab card",
+       "box": {
+        "x": 24,
+        "y": 477.734375,
+        "width": 428.65625,
+        "height": 194.28125
+       }
+      }
+     ]
+    },
+    {
+     "file": "a11-progress-fresh-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a11-progress-fresh-el.png",
+     "element": "Saved versions (fresh context)",
+     "callouts": [
+      {
+       "label": "Saved versions (fresh context)",
+       "box": {
+        "x": 24,
+        "y": 320.578125,
+        "width": 1318,
+        "height": 569.9375
+       }
+      }
+     ]
+    },
+    {
+     "file": "a11-lab-actions-menu-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a11-lab-actions-menu-el.png",
+     "element": "Lab actions menu",
+     "callouts": [
+      {
+       "label": "Lab actions menu",
+       "box": {
+        "x": 785.078125,
+        "y": 114,
+        "width": 240,
+        "height": 532.234375
+       }
+      }
+     ]
+    },
+    {
+     "file": "a11-destroy-review-full.png",
+     "element": "full-page",
+     "callouts": []
+    },
+    {
+     "file": "a11-destroy-review-el.png",
+     "element": "Destroy link-basics?",
+     "callouts": [
+      {
+       "label": "Destroy link-basics?",
+       "box": {
+        "x": 123,
+        "y": 228.796875,
+        "width": 1120,
+        "height": 442.390625
+       }
+      }
+     ]
+    }
+   ],
+   "device_evidence": {},
+   "remote_evidence": {},
+   "result": "PASS",
+   "notes": [
+    "Lab left running and connected for the lead, as instructed."
+   ]
+  }
+ ]
+}

@@ -1,0 +1,338 @@
+/* Print stylesheet for the Containerlab Node Manager Student Quick Start guide.
+   Rendered by WeasyPrint (docs/student-quick-start/build.py). Keep this file
+   self-contained: no @import, no external fonts, no network access. */
+
+@page {
+  size: Letter portrait;
+  margin: 0.8in;
+  @top-center {
+    content: string(doctitle);
+    font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+    font-size: 8pt;
+    color: #555555;
+  }
+  @bottom-center {
+    content: "Page " counter(page) " of " counter(pages);
+    font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+    font-size: 8pt;
+    color: #555555;
+  }
+}
+
+/* The title page carries no running header (nothing set yet). */
+@page :first {
+  @top-center { content: none; }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.45;
+  color: #1a1a1a;
+  hyphens: none;
+}
+
+/* ---------------------------------------------------------------------
+   Headings: hierarchy, running headers, bookmarks (h1-h3 only), and
+   orphan control.
+   ------------------------------------------------------------------ */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+  font-weight: bold;
+  color: #10233d;
+  break-after: avoid;
+  break-inside: avoid;
+}
+
+h1 {
+  font-size: 22pt;
+  margin: 0 0 0.5em 0;
+  padding-bottom: 0.2em;
+  border-bottom: 2px solid #10233d;
+  string-set: doctitle content();
+  bookmark-level: 1;
+  bookmark-label: content();
+}
+
+h2 {
+  font-size: 16pt;
+  margin: 1.6em 0 0.6em 0;
+  string-set: doctitle content();
+  bookmark-level: 2;
+  bookmark-label: content();
+}
+
+h3 {
+  font-size: 12.5pt;
+  margin: 1.3em 0 0.4em 0;
+  color: #1a3a63;
+  bookmark-level: 3;
+  bookmark-label: content();
+}
+
+h4, h5, h6 {
+  font-size: 11pt;
+  margin: 1.1em 0 0.3em 0;
+  color: #1a3a63;
+  bookmark-level: none;
+}
+
+/* A scenario section always starts on its own page. */
+h2.scenario {
+  page-break-before: always;
+}
+@page :first {
+  /* never applies to h2, kept for clarity that the title page is exempt */
+}
+
+p, ul, ol, dl {
+  margin: 0 0 0.75em 0;
+}
+
+a {
+  color: #0b4f8a;
+  text-decoration: none;
+}
+
+blockquote {
+  margin: 0.9em 0 0.9em 0;
+  padding: 0.1em 1em;
+  border-left: 3px solid #b7c7d9;
+  color: #333333;
+  break-inside: avoid;
+}
+
+blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------------------
+   Code
+   ------------------------------------------------------------------ */
+
+code, pre, kbd, samp {
+  font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+  font-size: 9pt;
+}
+
+code {
+  background: #f0f2f5;
+  padding: 0.05em 0.3em;
+  border-radius: 3px;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+pre {
+  background: #f0f2f5;
+  border: 1px solid #d7dde5;
+  border-radius: 4px;
+  padding: 0.6em 0.8em;
+  margin: 0 0 0.9em 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  break-inside: avoid;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* ---------------------------------------------------------------------
+   Tables: compact, wrapped, never overflow the column.
+   ------------------------------------------------------------------ */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 0 0 1em 0;
+  font-size: 9.3pt;
+  break-inside: auto;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tr {
+  break-inside: avoid;
+}
+
+th, td {
+  border: 1px solid #c9d1db;
+  padding: 0.35em 0.5em;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+th {
+  background: #e7edf5;
+  color: #10233d;
+}
+
+td code, th code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------------
+   Images and figures
+   ------------------------------------------------------------------ */
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+figure {
+  margin: 0.9em 0;
+  break-inside: avoid;
+  text-align: center;
+}
+
+figure img {
+  display: block;
+  margin: 0 auto 0.4em auto;
+  border: 1px solid #d7dde5;
+}
+
+figcaption {
+  font-size: 9pt;
+  color: #444444;
+  font-style: italic;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------------
+   Table of contents ([TOC] marker, toc extension output)
+   ------------------------------------------------------------------ */
+
+.toc {
+  margin: 0.5em 0 1.5em 0;
+  break-inside: avoid;
+}
+
+.toc > ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+
+.toc ul ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.toc li {
+  margin: 0.25em 0;
+}
+
+.toc a {
+  color: #10233d;
+  display: block;
+}
+
+.toc a::after {
+  content: leader(dotted) " " target-counter(attr(href), page);
+  color: #555555;
+}
+
+/* ---------------------------------------------------------------------
+   Callout boxes: given / step / tip / warn
+   ------------------------------------------------------------------ */
+
+.given {
+  border: 1px solid #b7c7d9;
+  background: #eef3f9;
+  border-radius: 4px;
+  padding: 0.7em 1em;
+  margin: 0 0 1em 0;
+  break-inside: avoid;
+}
+
+/* The box's title ("What you have been given") is written by hand as the
+   first bold line of its content (so it is real, searchable text and reads
+   correctly outside this stylesheet too) rather than CSS-generated, but it
+   is still styled to stand out like a heading. */
+.given > p:first-child {
+  font-weight: bold;
+  color: #10233d;
+  margin-bottom: 0.5em;
+}
+
+.given p:last-child {
+  margin-bottom: 0;
+}
+
+.step {
+  position: relative;
+  border: 1px solid #cdd6e0;
+  border-left: 4px solid #c05a1c;
+  background: #fbfaf8;
+  border-radius: 4px;
+  padding: 0.6em 1em 0.6em 1em;
+  margin: 0 0 0.9em 0;
+  break-inside: avoid;
+}
+
+.step p:last-child {
+  margin-bottom: 0;
+}
+
+.step .n {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0.1em 0.5em;
+  margin-right: 0.4em;
+  border-radius: 999px;
+  background: #c05a1c;
+  color: #ffffff;
+  font-weight: bold;
+  font-size: 9pt;
+  text-align: center;
+}
+
+/* Visual distinction only (accent border + tint); like .given above, a
+   label such as "Tip" or "Warning" is written as real text by the author
+   (e.g. a leading "**Tip**" line) rather than CSS-generated, so it stays
+   searchable and reads correctly even without this stylesheet. */
+.tip, .warn {
+  border-radius: 4px;
+  padding: 0.6em 1em;
+  margin: 0 0 0.9em 0;
+  break-inside: avoid;
+  border: 1px solid;
+  border-left-width: 4px;
+}
+
+.tip {
+  background: #eef7ef;
+  border-color: #9dc7a3;
+  border-left-color: #2c6b35;
+}
+
+.warn {
+  background: #fbeeee;
+  border-color: #d79a9a;
+  border-left-color: #8a2b2b;
+}
+
+.tip p:last-child, .warn p:last-child {
+  margin-bottom: 0;
+}

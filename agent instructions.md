@@ -1,3 +1,15 @@
+# Student quick start, part 1 — 1.30.33
+
+Read `docs/student-quick-start/PICKUP.md` first: it holds the environment changes made to the development VM to obtain a
+first-time student state (all reversible; the old manager data directory, Git registry and lab folders are kept beside
+the live ones), the repositories made for the guide, the routing and the exact next action. Preserve: (1) the instructor
+package `examples/link-basics/` and its three saved states are the fixed inputs of Scenario A — never rename the lab or
+its nodes (`clab-link-basics-r1/r2` is the identity every saved state maps to); (2) the guide (`source/guide.md`) states
+the release it was *tested* with, not the source release, and `docs/student-quick-start/` is a history directory of the
+documentation check for that reason; (3) `host_git.ensure_identity` trims only the line ending of the `gh api user`
+answer (an empty display name is a legitimate third field); (4) the walkthrough tools (`tools/capture_scenario_a.py`,
+`qs_lib.py`, `reset_scenario_a.sh`) do every student step through the real pages and use the API only to poll and verify.
+
 # Save location fix, part 2: acceptance closed — 1.30.32
 
 The stream's closing section; the 1.30.31 section below holds the contract facts to preserve, `docs/save-location-fix/PICKUP.md`

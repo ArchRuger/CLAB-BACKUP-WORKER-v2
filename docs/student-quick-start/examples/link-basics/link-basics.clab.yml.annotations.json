@@ -1,0 +1,12 @@
+{
+  "nodeAnnotations": [
+    {"id": "r1", "position": {"x": 200, "y": 180}, "icon": "router", "iconColor": "#416377", "label": "r1"},
+    {"id": "r2", "position": {"x": 600, "y": 180}, "icon": "router", "iconColor": "#416377", "label": "r2"}
+  ],
+  "edgeAnnotations": [
+    {"source": "r1", "sourceEndpoint": "eth1", "target": "r2", "targetEndpoint": "eth1", "endpointLabelOffsetEnabled": true, "endpointLabelOffset": 70}
+  ],
+  "freeTextAnnotations": [
+    {"id": "note-link", "text": "One link: r1 eth1 - r2 eth1 (10.0.0.0/30)", "position": {"x": 260, "y": 60}, "fontSize": 14, "fontColor": "#333333"}
+  ]
+}
