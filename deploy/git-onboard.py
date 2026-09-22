@@ -286,12 +286,20 @@ def ask_subfolder():
         if not value:
             return ''
         parts = value.split('/')
-        if (len(value) <= 200 and '\\' not in value
+        if not (len(value) <= 200 and '\\' not in value
                 and all(re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', part) and part.lower() != '.git'
                         for part in parts)):
-            return value
-        print('Use letters, numbers, dashes and underscores, with / to nest (for example courses/bgp). '
-              'No leading slash, no ".." and no .git parts.')
+            print('Use letters, numbers, dashes and underscores, with / to nest (for example courses/bgp). '
+                  'No leading slash, no ".." and no .git parts.')
+            continue
+        # Rule 1 (docs/save-location-fix/PICKUP.md): latest, baseline and checkpoints/<name> are
+        # the folders Save progress writes inside a lab folder, never the lab folder itself.
+        is_checkpoint = len(parts) >= 2 and parts[-2] == 'checkpoints'
+        if parts[-1] in ('latest', 'baseline', 'checkpoints') or is_checkpoint:
+            print('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. '
+                  'Choose the folder above them.')
+            continue
+        return value
 
 
 def selected_registration(account, path, registrations):

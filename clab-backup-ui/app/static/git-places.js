@@ -16,9 +16,15 @@ function gitFolderName(value){
 }
 // A whole nested destination typed in one go, e.g. "Week-04/BGP/Final-State". Each
 // segment obeys the single-folder rule; the manager and VM helper validate it again.
+// latest, baseline and checkpoints are reserved names inside a lab folder (Save progress writes
+// them there); a "latest" segment anywhere else in the path (e.g. "course/latest/working") is an
+// ordinary folder name and stays allowed.
+const GIT_RESERVED_FOLDER_MESSAGE='latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. Choose the folder above them: its saves go to <parent>/latest.';
 function gitFolderPath(value){
  const parts=String(value??'').trim().replace(/^\/+|\/+$/g,'').split('/').map(part=>part.trim()).filter(Boolean);
  if(!parts.length)throw new Error('Enter a folder name.');
+ const last=parts[parts.length-1],last2=parts.length>1?parts[parts.length-2]:'';
+ if(['latest','baseline','checkpoints'].includes(last)||last2==='checkpoints')throw new Error(GIT_RESERVED_FOLDER_MESSAGE);
  return parts.map(gitFolderName).join('/');
 }
 // The full repository-relative destination, joining an existing parent folder with new segments.
@@ -52,31 +58,74 @@ function gitTreeModel(files,folders,planned){
  // pending: a lab folder or a planned folder that holds no saved file yet. It is real as a destination,
  // not as a directory or a commit; the panel says so.
  for(const dir of nodes.values()){if(dir.planned&&!dir.count)dir.pending=true;if(!dir.registration)continue;dir.pending=!dir.count;for(const child of dir.dirs){if(child.name==='latest'||child.name==='baseline'||child.name==='checkpoints'){child.managed=child.name;if(child.name==='checkpoints')for(const grandchild of child.dirs)grandchild.managed='checkpoint';}}}
- // A folder holds an appliable saved state when its latest/ carries a restore artifact for a
- // supported platform (Junos .jcfg, Arista EOS .eoscfg, Cisco IOS XR .xrcfg), whether or not the
- // folder is still registered to a lab.
- for(const dir of nodes.values()){const latest=dir.dirs.find(child=>child.name==='latest');dir.restorable=!!(latest&&latest.files.some(file=>/\.(jcfg|eoscfg|xrcfg)$/i.test(file.name)));}
+ // A snapshot folder holds manifest.json among its own files, whatever its name or depth; the
+ // manifest and its referenced files (not a name pattern) decide what can be applied. The root
+ // folder ('') can be a snapshot too, when the repository itself was saved into directly.
+ for(const dir of nodes.values())dir.snapshot=dir.files.some(file=>file.name==='manifest.json');
+ // The legacy parent convenience: a folder that is not itself a snapshot, but whose latest/ child is.
+ for(const dir of nodes.values()){const latest=dir.dirs.find(child=>child.name==='latest');dir.latestSnapshot=!!(latest&&latest.snapshot);}
+ // dir.restorable stays for existing callers: true whenever the folder itself, or its legacy
+ // latest/ convenience, resolves to an applyable snapshot (see gitApplySource).
+ for(const dir of nodes.values())dir.restorable=!!gitApplySource(dir);
  return {root,nodes};
+}
+// The exact snapshot a folder applies: itself when it holds manifest.json, its latest/ child when
+// only that is a snapshot (the legacy parent convenience — "Broken" with only "Broken/latest" saved),
+// otherwise null. Nothing is ever substituted for a folder that is itself a snapshot. The path carries
+// the wire form's one leading slash ('/' is the repository root itself); display text strips it again.
+function gitApplySource(dir){
+ if(!dir)return null;
+ if(dir.snapshot)return {path:'/'+dir.path};
+ if(dir.latestSnapshot)return {path:'/'+(dir.path?dir.path+'/latest':'latest')};
+ return null;
 }
 function gitOwningFolder(model,path){let best=null;for(const dir of model.nodes.values()){if(!dir.registration)continue;if(dir.path===path||dir.path===''||path.startsWith(dir.path+'/')){if(!best||dir.path.length>best.path.length)best=dir;}}return best;}
 function gitLabFolder(model,bindingId){return [...model.nodes.values()].find(dir=>dir.registration&&dir.registration.id===bindingId)||null;}
+// The nearest ancestor folder (closest first, the repository root last) that holds manifest.json —
+// mirrors the manager's snapshot_conflict: a folder cannot sit at, or below, an existing snapshot
+// folder. `path` itself is never checked here (its own dir.snapshot is checked by the caller).
+function gitSnapshotAncestor(model,path){
+ for(const ancestor of gitAncestors(path).slice().reverse()){const node=model.nodes.get(ancestor);if(node&&node.snapshot)return ancestor;}
+ return '';
+}
 function gitFolderChoice(model,path,current){
  const dir=model.nodes.get(path);if(!dir)return {allowed:false,reason:'Choose a folder.'};
+ // A snapshot folder named "latest" is never a destination itself: the choice resolves to its
+ // parent (its own saves go to <parent>/latest), whatever the parent's own registration status.
+ if(dir.name==='latest'&&dir.snapshot){
+  const parentPath=path.includes('/')?path.slice(0,path.lastIndexOf('/')):'',parentChoice=gitFolderChoice(model,parentPath,current);
+  const dest=parentPath?parentPath+'/latest':'latest';
+  return {...parentChoice,target:parentPath,reason:('This is the saved state of '+(parentPath||'the repository')+'. Saves go to '+dest+'. '+parentChoice.reason).trim()};
+ }
  const owner=gitOwningFolder(model,path);
- if(dir.managed)return {allowed:false,reason:dir.managed==='checkpoint'?'This is a saved milestone. Choose a folder outside the lab folder that holds it.':'Save progress writes the '+dir.name+' folder itself. Choose the folder above it.'};
- if(owner&&owner.path!==path&&owner.registration.id!==current){const lab=owner.registration.lab;return {allowed:false,reason:'This folder is inside '+(lab?lab.name+"'s":'another')+' lab folder.'};}
+ if(dir.managed)return {allowed:false,reason:dir.managed==='checkpoint'?'This is a saved milestone. Choose a folder outside the lab folder that holds it.':'Save progress writes the '+dir.name+' folder itself. Choose the folder above it.',target:path};
+ // Any other snapshot folder (a differently-named one, or one not yet marked "managed" because its
+ // parent folder is not registered) is not a destination either: it already holds a saved configuration.
+ if(dir.snapshot)return {allowed:false,reason:'This folder is a saved configuration (it holds manifest.json). Choose the folder above it or a folder beside it.',target:path};
+ // A folder below an existing snapshot folder (an ancestor holds manifest.json) is refused the same
+ // way the manager's own folder routes refuse it, naming the ancestor exactly as the manager does.
+ const snapshotAncestor=gitSnapshotAncestor(model,path);
+ if(snapshotAncestor)return {allowed:false,reason:snapshotAncestor+' is a saved configuration (it holds manifest.json). Choose the folder above it or a folder beside it.',target:path};
+ if(owner&&owner.path!==path&&owner.registration.id!==current){const lab=owner.registration.lab;return {allowed:false,reason:'This folder is inside '+(lab?lab.name+"'s":'another')+' lab folder.',target:path};}
  if(dir.registration){
-  if(dir.registration.id===current)return {allowed:false,reason:'This lab already saves here.'};
-  if(dir.registration.lab)return {allowed:false,reason:dir.registration.lab.name+' already saves here.'};
-  return {allowed:true,reason:'This lab folder is free — no lab saves here yet.'};
+  if(dir.registration.id===current)return {allowed:false,reason:'This lab already saves here.',target:path};
+  if(dir.registration.lab)return {allowed:false,reason:dir.registration.lab.name+' already saves here.',target:path};
+  return {allowed:true,reason:'This lab folder is free — no lab saves here yet.',target:path};
  }
  const others=[...model.nodes.values()].filter(other=>other.registration&&other.registration.id!==current);
- if(path===''&&others.some(other=>other.path!==''))return {allowed:false,reason:'This repository already has lab folders for other labs. Pick a free one or create a new folder.'};
- if(path!==''&&others.some(other=>other.path===''))return {allowed:false,reason:'Another lab saves at the top level of this repository, so subfolders cannot be used here.'};
- if(path!==''&&others.some(other=>other.path.startsWith(path+'/')))return {allowed:false,reason:'This folder contains other lab folders.'};
- return {allowed:true,reason:''};
+ if(path===''&&others.some(other=>other.path!==''))return {allowed:false,reason:'This repository already has lab folders for other labs. Pick a free one or create a new folder.',target:path};
+ if(path!==''&&others.some(other=>other.path===''))return {allowed:false,reason:'Another lab saves at the top level of this repository, so subfolders cannot be used here.',target:path};
+ if(path!==''&&others.some(other=>other.path.startsWith(path+'/')))return {allowed:false,reason:'This folder contains other lab folders.',target:path};
+ return {allowed:true,reason:'',target:path};
 }
-function gitCanCreateIn(model,path,current){const owner=gitOwningFolder(model,path);return !owner||owner.registration.id===current;}
+function gitCanCreateIn(model,path,current){
+ const dir=model.nodes.get(path);
+ if(dir&&dir.snapshot)return false;
+ if(gitSnapshotAncestor(model,path))return false;
+ const owner=gitOwningFolder(model,path);
+ if(dir&&dir.managed&&owner&&owner.registration.id===current)return false;
+ return !owner||owner.registration.id===current;
+}
 function gitFolderTag(dir,current,long=false){
  const registration=dir.registration;if(!registration)return dir.pending?'':'';
  if(registration.id===current)return '<b class="git-tag">This lab'+(long?' saves here':'')+'</b>';
@@ -102,11 +151,12 @@ function gitPlacesMarkup(model,view){
  // Browsing is not saving: say where the lab saves whenever another folder is being looked at.
  const elsewhere=own&&own.path!==dir.path?'This lab saves to '+(own.path||'the top of the repository')+'. Looking at other folders does not change that.':'';
  const technical=[view.head?'Showing the repository as of commit '+esc(String(view.head).slice(0,10)):'',view.truncated?'Large repository: list shortened to the first 4000 files':'',savedAt?'Last save '+esc(utcDisplay(savedAt)):''].filter(Boolean);
- const applyable=view.canApply&&dir.restorable;
+ const applySource=gitApplySource(dir),applyable=view.canApply&&!!applySource;
  const applyBtn=applyable?`<button type="button" class="button danger-outline" data-git-places-action="apply" title="${esc('Load this saved configuration onto the running lab (no reboot)')}">Apply to running lab…</button>`:'';
  const forgettable=view.canAct&&view.canForget&&dir.planned&&dir.pending&&!dir.registration&&!dir.dirs.length;
  const actions=view.canAct?`${applyBtn}${forgettable?'<button type="button" class="button ghost" data-git-places-action="forget" title="Remove this empty folder from the list. Nothing in the repository changes.">Remove empty folder</button>':''}<button type="button" class="button secondary" data-git-places-action="new" ${creatable?'':'disabled'} title="${esc(creatable?'Create a folder here':'Folders cannot be created inside another lab’s folder')}">New folder…</button><button type="button" class="button primary" data-git-places-action="use" ${choice.allowed?'':'disabled'} title="${esc(choice.reason)}">${esc(view.connected?'Save this lab here':'Choose this folder')}</button>`:applyBtn;
- const captions=[applyable?'Applies this folder’s latest save to the running devices. They are not rebooted.':'',view.canAct&&!creatable?'Folders cannot be created inside another lab’s folder.':''].filter(Boolean);
+ const applyCaption=applyable?(dir.snapshot?'Applies this saved configuration to the running devices. They are not rebooted.':'Applies this folder’s latest save ('+applySource.path.replace(/^\//,'')+') to the running devices. They are not rebooted.'):'';
+ const captions=[applyCaption,view.canAct&&!creatable?'Folders cannot be created inside another lab’s folder.':''].filter(Boolean);
  return `<div class="git-places-head"><nav class="git-crumbs" aria-label="Repository folder">${chips}</nav><div class="actions">${actions}</div></div>${captions.length?`<p class="caption git-places-caption">${captions.map(esc).join(' ')}</p>`:''}
  <div class="git-places-body"><div class="git-outline" aria-label="Folders">${outline(model.root)}</div><div class="git-listing">${rows.length?`<table><thead><tr><th>Name</th><th>What it is</th><th>Size</th></tr></thead><tbody>${rows.join('')}</tbody></table>`:`<p class="git-empty-folder">${esc(dir.pending?'Nothing is saved here yet. The folder is kept by the manager and appears in the repository with the first save into it.':'Nothing saved here yet.')}</p>`}</div></div>
  <div class="git-places-foot"><span>${esc(saved)}${technical.length?`<details class="caption"><summary>Details</summary><p>${technical.join(' · ')}</p></details>`:''}</span><span>${esc([elsewhere,choice.reason].filter(Boolean).join(' '))}</span></div>`;
@@ -156,9 +206,9 @@ async function gitPlacesShow(container,labId,bindingId,options={}){
   if(focus){const again=[...container.querySelectorAll(focus[0]==='gitTwist'?'[data-git-twist]':'.git-outline summary[data-git-place]')].find(element=>element.dataset[focus[0]]===focus[1])||[...container.querySelectorAll('.git-outline summary[data-git-place]')].find(element=>element.dataset.gitPlace===focus[1]);if(again&&typeof again.focus==='function')again.focus();}
   const forget=container.querySelector('[data-git-places-action="forget"]');if(forget&&options.onForget)forget.onclick=()=>opTask(null,()=>options.onForget(gitPlacesState.selected,model,tree));
   const use=container.querySelector('[data-git-places-action="use"]'),create=container.querySelector('[data-git-places-action="new"]'),apply=container.querySelector('[data-git-places-action="apply"]');
-  if(use&&options.onUse)use.onclick=()=>opTask(null,()=>options.onUse(gitPlacesState.selected,model,tree));
+  if(use&&options.onUse)use.onclick=()=>opTask(null,()=>options.onUse(gitFolderChoice(model,gitPlacesState.selected,options.current).target,model,tree));
   if(create&&options.onNew)create.onclick=()=>opTask(null,()=>options.onNew(gitPlacesState.selected,model,tree));
-  if(apply&&options.onApply)apply.onclick=()=>opTask(null,()=>options.onApply(gitPlacesState.selected,model,tree));
+  if(apply&&options.onApply)apply.onclick=()=>opTask(null,()=>options.onApply(gitApplySource(model.nodes.get(gitPlacesState.selected))?.path,model,tree));
  };
  draw();return tree;
 }

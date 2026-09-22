@@ -1,0 +1,763 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:30:24Z",
+ "steps": {
+  "a_node_before": {
+   "profile_id": "",
+   "readiness": "Ready"
+  },
+  "a_git_before": {
+   "tree_hash": "21823fc27ca92a4c25c3b95258cd4469761e4b5e",
+   "head": "9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc"
+  },
+  "a_assign_wrong_profile": {
+   "status": 200,
+   "body": {
+    "id": "904a35a79dc341ce8a4638f83fc34185",
+    "name": "restore-square",
+    "defaults": {},
+    "interval": 0,
+    "next_run": null,
+    "created": "2026-09-20T22:20:45.528644+00:00",
+    "deployment_name": "restore-square",
+    "container_prefix": "clab",
+    "updated": "2026-09-20T22:20:45.528666+00:00",
+    "source": "restore-square.clab.yml",
+    "vm_source": {
+     "digest": "948a0c665a99af1764a9e87c4d7e7b8c8deac2c38972c6c6b452ca1250adbee3",
+     "files": {
+      "definition": {
+       "path": "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+       "sha256": "8d12d7a9020b9b933c086f1fb3599395ad17a9491355fa789831e2eeb48663f3"
+      },
+      "inventory": {
+       "path": "/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/ansible-inventory.yml",
+       "sha256": "7aea1eb0c620e590f4c8a340c66b8cedff15449d5f3dc90cf293b10a8366e18e"
+      },
+      "topology": {
+       "path": "/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/topology-data.json",
+       "sha256": "fb3eebdea5f628be70b3062d00f0e093e2fa3daff52249410ea7d68d81c9ac8c"
+      }
+     },
+     "missing": [
+      "annotations"
+     ],
+     "message": "Unavailable VM files: annotations. Saved settings are retained.",
+     "synced_digest": "f981d4a2d326529be953c7fa3af3a6ce61c37345be12befcdb5621a349fd654a",
+     "synced_at": "2026-09-20T22:20:45.528692+00:00",
+     "status": "Updates available",
+     "can_sync": true,
+     "warnings": []
+    },
+    "git_binding": {
+     "binding_id": "a777c74c755141cea40b4cbe4721d83a",
+     "revision": "0fb2bf160765a5389ba931d3fd700d9db7640dddb3b93e236bc6b109b8018fb9",
+     "repository": {
+      "id": "a777c74c755141cea40b4cbe4721d83a",
+      "label": "CLAB-MNGR-DEV-LLM / save-fix/working",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "save-fix/working",
+      "revision": "0fb2bf160765a5389ba931d3fd700d9db7640dddb3b93e236bc6b109b8018fb9"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "profiles": [
+     {
+      "id": "311acce74c984d03a811fd789a821fe6",
+      "label": "QA-wrong-password-ceos",
+      "platform": "arista_ceos",
+      "username": "admin",
+      "auth": "password"
+     }
+    ],
+    "nodes": [
+     {
+      "name": "clab-restore-square-ceos",
+      "short_name": "ceos",
+      "definition_node": "ceos",
+      "address": "172.20.20.101",
+      "port": 22,
+      "platform": "arista_ceos",
+      "kind": "arista_ceos",
+      "enabled": true,
+      "profile_id": "311acce74c984d03a811fd789a821fe6",
+      "groups": [
+       "all",
+       "arista_ceos"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.101",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "profile",
+      "login_configured": true,
+      "nos_login": {
+       "status": "ready",
+       "message": "NOS accepted SSH login and answered show version (automatic check)",
+       "at": "2026-09-22T14:17:42.846033+00:00"
+      },
+      "ssh_ready": true,
+      "telemetry": {
+       "state": "streaming",
+       "message": "Usable samples are arriving.",
+       "at": "2026-09-22T14:17:53.109355+00:00"
+      }
+     },
+     {
+      "name": "clab-restore-square-cjunosevolved",
+      "short_name": "cjunosevolved",
+      "definition_node": "cjunosevolved",
+      "address": "172.20.20.102",
+      "port": 22,
+      "platform": "juniper_cjunosevolved",
+      "kind": "juniper_cjunosevolved",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+       "all",
+       "juniper_cjunosevolved"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.102",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+       "status": "ready",
+       "message": "NOS accepted SSH login and answered show version (automatic check)",
+       "at": "2026-09-22T14:17:43.261119+00:00"
+      },
+      "ssh_ready": true,
+      "telemetry": {
+       "state": "waiting",
+       "message": "Waiting for the lab operation or backup job to finish before touching the node.",
+       "at": "2026-09-22T14:26:13.937751+00:00"
+      }
+     },
+     {
+      "name": "clab-restore-square-vjunos-switch",
+      "short_name": "vjunos-switch",
+      "definition_node": "vjunos-switch",
+      "address": "172.20.20.103",
+      "port": 22,
+      "platform": "juniper_vjunosswitch",
+      "kind": "juniper_vjunosswitch",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+       "all",
+       "juniper_vjunosswitch"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.103",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+       "status": "ready",
+       "message": "NOS accepted SSH login and answered show version (automatic check)",
+       "at": "2026-09-22T14:17:44.916560+00:00"
+      },
+      "ssh_ready": true,
+      "telemetry": {
+       "state": "unsupported",
+       "message": "No telemetry adapter for this node kind; supported kinds: cEOS, XRv9k, cJunosEvolved.",
+       "at": "2026-09-22T14:17:42.597116+00:00"
+      }
+     },
+     {
+      "name": "clab-restore-square-xrv9k",
+      "short_name": "xrv9k",
+      "definition_node": "xrv9k",
+      "address": "172.20.20.104",
+      "port": 22,
+      "platform": "cisco_xrv9k",
+      "kind": "cisco_xrv9k",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+       "all",
+       "cisco_xrv9k"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.104",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+       "status": "ready",
+       "message": "NOS accepted SSH login and answered show version (automatic check)",
+       "at": "2026-09-22T14:17:42.868913+00:00"
+      },
+      "ssh_ready": true,
+      "telemetry": {
+       "state": "connecting",
+       "message": "Connecting to gNMI at 172.20.20.104:57400.",
+       "at": "2026-09-22T14:30:24.604969+00:00"
+      }
+     }
+    ],
+    "deployment": {
+     "last_success": "2026-09-22T14:30:20.622805+00:00",
+     "checked_at": "2026-09-22T14:30:20.622805+00:00",
+     "status": "Running",
+     "message": "4/4 discovered containers running; 4 saved nodes. Container state does not verify NOS readiness."
+    },
+    "last_deployed": "",
+    "map_editor": true,
+    "nos_readiness": {
+     "status": "ready",
+     "total": 4,
+     "ready": 4,
+     "booting": 0,
+     "failed": 0
+    },
+    "telemetry": {
+     "status": "partial",
+     "total": 3,
+     "disabled": 0,
+     "waiting": 1,
+     "configuring": 0,
+     "connecting": 1,
+     "streaming": 1,
+     "stale": 0,
+     "unsupported": 1,
+     "failed": 0,
+     "auto": true,
+     "decided": true,
+     "profile_id": "",
+     "grafana": {
+      "enabled": true,
+      "port": 3000,
+      "map_uid": "clab-map-904a35a79dc341ce8a4638f8"
+     }
+    }
+   }
+  },
+  "a_readiness_after_assign": "Ready",
+  "a_save_attempt": {
+   "dialog_opened": "job",
+   "job_text": "Save failed\n\u00d7\nSave failed \u2014 a device could not be read\n\nCapture incomplete. Every included device must have a successful file; latest is unchanged.\n\nSaved as\nLatest\nStarted\njust now\nDetails\nView configuration backup"
+  },
+  "a_newest_job": {
+   "id": "eef67ef5b2ca93d8709da144846d86b7",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:30:27.211395+00:00",
+   "finished": "2026-09-22T14:30:30.589205+00:00",
+   "status": "capture_incomplete",
+   "message": "Capture incomplete. Every included device must have a successful file; latest is unchanged.",
+   "backup_job_id": "0a937651cdf9475aa55384f8089bbef7",
+   "pushed": false,
+   "target": "latest",
+   "checkpoint": "",
+   "note": "",
+   "review_before_push": true
+  },
+  "a_git_after": {
+   "tree_hash": "21823fc27ca92a4c25c3b95258cd4469761e4b5e",
+   "head": "9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc"
+  },
+  "a_restore_profile": {
+   "status": 200,
+   "body": {
+    "id": "904a35a79dc341ce8a4638f83fc34185",
+    "name": "restore-square",
+    "defaults": {},
+    "interval": 0,
+    "next_run": null,
+    "created": "2026-09-20T22:20:45.528644+00:00",
+    "deployment_name": "restore-square",
+    "container_prefix": "clab",
+    "updated": "2026-09-20T22:20:45.528666+00:00",
+    "source": "restore-square.clab.yml",
+    "vm_source": {
+     "digest": "948a0c665a99af1764a9e87c4d7e7b8c8deac2c38972c6c6b452ca1250adbee3",
+     "files": {
+      "definition": {
+       "path": "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+       "sha256": "8d12d7a9020b9b933c086f1fb3599395ad17a9491355fa789831e2eeb48663f3"
+      },
+      "inventory": {
+       "path": "/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/ansible-inventory.yml",
+       "sha256": "7aea1eb0c620e590f4c8a340c66b8cedff15449d5f3dc90cf293b10a8366e18e"
+      },
+      "topology": {
+       "path": "/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/topology-data.json",
+       "sha256": "fb3eebdea5f628be70b3062d00f0e093e2fa3daff52249410ea7d68d81c9ac8c"
+      }
+     },
+     "missing": [
+      "annotations"
+     ],
+     "message": "Unavailable VM files: annotations. Saved settings are retained.",
+     "synced_digest": "f981d4a2d326529be953c7fa3af3a6ce61c37345be12befcdb5621a349fd654a",
+     "synced_at": "2026-09-20T22:20:45.528692+00:00",
+     "status": "Updates available",
+     "can_sync": true,
+     "warnings": []
+    },
+    "git_binding": {
+     "binding_id": "a777c74c755141cea40b4cbe4721d83a",
+     "revision": "0fb2bf160765a5389ba931d3fd700d9db7640dddb3b93e236bc6b109b8018fb9",
+     "repository": {
+      "id": "a777c74c755141cea40b4cbe4721d83a",
+      "label": "CLAB-MNGR-DEV-LLM / save-fix/working",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "save-fix/working",
+      "revision": "0fb2bf160765a5389ba931d3fd700d9db7640dddb3b93e236bc6b109b8018fb9"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "profiles": [
+     {
+      "id": "311acce74c984d03a811fd789a821fe6",
+      "label": "QA-wrong-password-ceos",
+      "platform": "arista_ceos",
+      "username": "admin",
+      "auth": "password"
+     }
+    ],
+    "nodes": [
+     {
+      "name": "clab-restore-square-ceos",
+      "short_name": "ceos",
+      "definition_node": "ceos",
+      "address": "172.20.20.101",
+      "port": 22,
+      "platform": "arista_ceos",
+      "kind": "arista_ceos",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+       "all",
+       "arista_ceos"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.101",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+       "status": "ready",
+       "message": "NOS accepted SSH login and answered show version (automatic check)",
+       "at": "2026-09-22T14:17:42.846033+00:00"
+      },
+      "ssh_ready": true,
+      "telemetry": {
+       "state": "streaming",
+       "message": "Usable samples are arriving.",
+       "at": "2026-09-22T14:17:53.109355+00:00"
+      }
+     },
+     {
+      "name": "clab-restore-square-cjunosevolved",
+      "short_name": "cjunosevolved",
+      "definition_node": "cjunosevolved",
+      "address": "172.20.20.102",
+      "port": 22,
+      "platform": "juniper_cjunosevolved",
+      "kind": "juniper_cjunosevolved",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+       "all",
+       "juniper_cjunosevolved"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.102",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+       "status": "ready",
+       "message": "NOS accepted SSH login and answered show version (automatic check)",
+       "at": "2026-09-22T14:17:43.261119+00:00"
+      },
+      "ssh_ready": true,
+      "telemetry": {
+       "state": "waiting",
+       "message": "Waiting for the lab operation or backup job to finish before touching the node.",
+       "at": "2026-09-22T14:26:13.937751+00:00"
+      }
+     },
+     {
+      "name": "clab-restore-square-vjunos-switch",
+      "short_name": "vjunos-switch",
+      "definition_node": "vjunos-switch",
+      "address": "172.20.20.103",
+      "port": 22,
+      "platform": "juniper_vjunosswitch",
+      "kind": "juniper_vjunosswitch",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+       "all",
+       "juniper_vjunosswitch"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.103",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+       "status": "ready",
+       "message": "NOS accepted SSH login and answered show version (automatic check)",
+       "at": "2026-09-22T14:17:44.916560+00:00"
+      },
+      "ssh_ready": true,
+      "telemetry": {
+       "state": "unsupported",
+       "message": "No telemetry adapter for this node kind; supported kinds: cEOS, XRv9k, cJunosEvolved.",
+       "at": "2026-09-22T14:17:42.597116+00:00"
+      }
+     },
+     {
+      "name": "clab-restore-square-xrv9k",
+      "short_name": "xrv9k",
+      "definition_node": "xrv9k",
+      "address": "172.20.20.104",
+      "port": 22,
+      "platform": "cisco_xrv9k",
+      "kind": "cisco_xrv9k",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+       "all",
+       "cisco_xrv9k"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.104",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+       "status": "ready",
+       "message": "NOS accepted SSH login and answered show version (automatic check)",
+       "at": "2026-09-22T14:17:42.868913+00:00"
+      },
+      "ssh_ready": true,
+      "telemetry": {
+       "state": "failed",
+       "message": "The gNMI port did not answer. The service may still be starting, the port may differ from the configured one, or TLS may be required. Next attempt in 30 s.",
+       "at": "2026-09-22T14:30:32.730897+00:00"
+      }
+     }
+    ],
+    "deployment": {
+     "last_success": "2026-09-22T14:30:20.622805+00:00",
+     "checked_at": "2026-09-22T14:30:20.622805+00:00",
+     "status": "Running",
+     "message": "4/4 discovered containers running; 4 saved nodes. Container state does not verify NOS readiness."
+    },
+    "last_deployed": "",
+    "map_editor": true,
+    "nos_readiness": {
+     "status": "ready",
+     "total": 4,
+     "ready": 4,
+     "booting": 0,
+     "failed": 0
+    },
+    "telemetry": {
+     "status": "failed",
+     "total": 3,
+     "disabled": 0,
+     "waiting": 1,
+     "configuring": 0,
+     "connecting": 0,
+     "streaming": 1,
+     "stale": 0,
+     "unsupported": 1,
+     "failed": 1,
+     "auto": true,
+     "decided": true,
+     "profile_id": "",
+     "grafana": {
+      "enabled": true,
+      "port": 3000,
+      "map_uid": "clab-map-904a35a79dc341ce8a4638f8"
+     }
+    }
+   }
+  },
+  "a_readiness_restored": "Ready",
+  "b_gh_account_before": "pruger-dev",
+  "b_gh_switch_to_archruger": {
+   "returncode": 0,
+   "stdout": "",
+   "stderr": "\u2713 Switched active account for github.com to ArchRuger",
+   "active_after": "ArchRuger"
+  },
+  "b_save_attempts": [
+   {
+    "attempt": 1,
+    "outcome": "review dialog opened"
+   }
+  ],
+  "b_retry_response": {
+   "id": "c99db035e166e54f73a86517d0d4bb0f",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:30:38.043570+00:00",
+   "finished": "2026-09-22T14:30:41.522502+00:00",
+   "status": "queued",
+   "message": "Retry queued; the saved capture will be reused.",
+   "backup_job_id": "c08a5cf4def647e4a3fa2799afdbf26a",
+   "commit": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+   "pushed": false,
+   "target": "latest",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/latest",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:30:42.943154+00:00"
+  },
+  "b_job_after_failed_push": {
+   "id": "c99db035e166e54f73a86517d0d4bb0f",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:30:38.043570+00:00",
+   "finished": "2026-09-22T14:30:44.119452+00:00",
+   "status": "push_pending",
+   "message": "The commit is saved on the VM, but push failed. Check authentication, branch permissions or remote changes, then retry.",
+   "backup_job_id": "c08a5cf4def647e4a3fa2799afdbf26a",
+   "commit": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+   "pushed": false,
+   "target": "latest",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/latest",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:30:42.943154+00:00"
+  },
+  "b_job_dialog_text": "Saving progress\n\u00d7\nUploading\u2026\n\nPushing the saved commit.\n\nSaved as\nLatest\nStarted\njust now\nDetails\nView configuration backup\nReview changes\n\nYou can close this window. The save continues in the background and its result appears under Progress \u203a Recent saves.",
+  "b_git_after_fail": {
+   "origin_before": "9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc",
+   "origin_after": "9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc",
+   "local_before": "9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc",
+   "local_after": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea"
+  },
+  "b_gh_switch_back": {
+   "returncode": 0,
+   "stdout": "",
+   "stderr": "\u2713 Switched active account for github.com to pruger-dev",
+   "active_after": "pruger-dev"
+  },
+  "b_retry_button_label": "Upload now",
+  "b_job_after_retry": {
+   "id": "c99db035e166e54f73a86517d0d4bb0f",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:30:38.043570+00:00",
+   "finished": "2026-09-22T14:30:53.688333+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "c08a5cf4def647e4a3fa2799afdbf26a",
+   "commit": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+   "pushed": true,
+   "target": "latest",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/latest",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:30:42.943154+00:00"
+  },
+  "b_final_git": {
+   "local": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+   "origin": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+   "in_sync": true,
+   "ls_tree_save_fix_working_names": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/cjunosevolved.jcfg",
+    "save-fix/working/latest/cjunosevolved.set",
+    "save-fix/working/latest/latest/ceos.cfg",
+    "save-fix/working/latest/latest/ceos.eoscfg",
+    "save-fix/working/latest/latest/cjunosevolved.jcfg",
+    "save-fix/working/latest/latest/cjunosevolved.set",
+    "save-fix/working/latest/latest/manifest.json",
+    "save-fix/working/latest/latest/vjunos-switch.jcfg",
+    "save-fix/working/latest/latest/vjunos-switch.set",
+    "save-fix/working/latest/latest/xrv9k.cfg",
+    "save-fix/working/latest/latest/xrv9k.xrcfg",
+    "save-fix/working/latest/manifest.json",
+    "save-fix/working/latest/vjunos-switch.jcfg",
+    "save-fix/working/latest/vjunos-switch.set",
+    "save-fix/working/latest/xrv9k.cfg",
+    "save-fix/working/latest/xrv9k.xrcfg"
+   ]
+  },
+  "gh_final_account": "pruger-dev"
+ },
+ "checks": [
+  {
+   "check": "assigning QA-wrong-password-ceos to ceos returned 200",
+   "ok": true,
+   "detail": "{'status': 200, 'body': {'id': '904a35a79dc341ce8a4638f83fc34185', 'name': 'restore-square', 'defaults': {}, 'interval': 0, 'next_run': None, 'created': '2026-09-20T22:20:45.528644+00:00', 'deployment_name': 'restore-square', 'container_prefix': 'clab', 'updated': '2026-09-20T22:20:45.528666+00:00', 'source': 'restore-square.clab.yml', 'vm_source': {'digest': '948a0c665a99af1764a9e87c4d7e7b8c8deac2c38972c6c6b452ca1250adbee3', 'files': {'definition': {'path': '/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml', 'sha256': '8d12d7a9020b9b933c086f1fb3599395ad17a9491355fa789831e2eeb48663f3'}, 'inventory': {'path': '/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/ansible-inventory.yml', 'sha256': '7aea1eb0c620e590f4c8a340c66b8cedff15449d5f3dc90cf293b10a8366e18e'}, 'topology': {'path': '/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/topology-data.json', 'sha256': 'fb3eebdea5f628be70b3062d00f0e093e2fa3daff52249410ea7d68d81c9ac8c'}}, 'missing': ['annotations'], 'message': 'Unavailable VM files: annotations. Saved settings are retained.', 'synced_digest': 'f981d4a2d326529be953c7fa3af3a6ce61c37345be12befcdb562"
+  },
+  {
+   "check": "Save progress with wrong ceos credentials reports capture_incomplete",
+   "ok": true,
+   "detail": "{'id': 'eef67ef5b2ca93d8709da144846d86b7', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:30:27.211395+00:00', 'finished': '2026-09-22T14:30:30.589205+00:00', 'status': 'capture_incomplete', 'message': 'Capture incomplete. Every included device must have a successful file; latest is unchanged.', 'backup_job_id': '0a937651cdf9475aa55384f8089bbef7', 'pushed': False, 'target': 'latest', 'checkpoint': '', 'note': '', 'review_before_push': True}"
+  },
+  {
+   "check": "save-fix/working/latest tree unchanged after the incomplete capture",
+   "ok": true,
+   "detail": "('21823fc27ca92a4c25c3b95258cd4469761e4b5e', '21823fc27ca92a4c25c3b95258cd4469761e4b5e')"
+  },
+  {
+   "check": "local HEAD unchanged after the incomplete capture",
+   "ok": true,
+   "detail": "('9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc', '9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc')"
+  },
+  {
+   "check": "restoring the default/inventory credential (profile_id=\"\") returned 200",
+   "ok": true,
+   "detail": "{'status': 200, 'body': {'id': '904a35a79dc341ce8a4638f83fc34185', 'name': 'restore-square', 'defaults': {}, 'interval': 0, 'next_run': None, 'created': '2026-09-20T22:20:45.528644+00:00', 'deployment_name': 'restore-square', 'container_prefix': 'clab', 'updated': '2026-09-20T22:20:45.528666+00:00', 'source': 'restore-square.clab.yml', 'vm_source': {'digest': '948a0c665a99af1764a9e87c4d7e7b8c8deac2c38972c6c6b452ca1250adbee3', 'files': {'definition': {'path': '/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml', 'sha256': '8d12d7a9020b9b933c086f1fb3599395ad17a9491355fa789831e2eeb48663f3'}, 'inventory': {'path': '/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/ansible-inventory.yml', 'sha256': '7aea1eb0c620e590f4c8a340c66b8cedff15449d5f3dc90cf293b10a8366e18e'}, 'topology': {'path': '/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/topology-data.json', 'sha256': 'fb3eebdea5f628be70b3062d00f0e093e2fa3daff52249410ea7d68d81c9ac8c'}}, 'missing': ['annotations'], 'message': 'Unavailable VM files: annotations. Saved settings are retained.', 'synced_digest': 'f981d4a2d326529be953c7fa3af3a6ce61c37345be12befcdb562"
+  },
+  {
+   "check": "ceos readiness returns to Ready after restoring the credential",
+   "ok": true,
+   "detail": "Ready"
+  },
+  {
+   "check": "no page or console errors in part (a)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "gh auth switch -u ArchRuger succeeded",
+   "ok": true,
+   "detail": "{'returncode': 0, 'stdout': '', 'stderr': '\u2713 Switched active account for github.com to ArchRuger', 'active_after': 'ArchRuger'}"
+  },
+  {
+   "check": "save with wrong gh account reports push_pending (saved on the VM, push failed)",
+   "ok": true,
+   "detail": "{'id': 'c99db035e166e54f73a86517d0d4bb0f', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:30:38.043570+00:00', 'finished': '2026-09-22T14:30:44.119452+00:00', 'status': 'push_pending', 'message': 'The commit is saved on the VM, but push failed. Check authentication, branch permissions or remote changes, then retry.', 'backup_job_id': 'c08a5cf4def647e4a3fa2799afdbf26a', 'commit': 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'pushed': False, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T14:30:42.943154+00:00'}"
+  },
+  {
+   "check": "origin/main unchanged after the failed push",
+   "ok": true,
+   "detail": "('9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc', '9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc')"
+  },
+  {
+   "check": "local checkout HAS the new commit even though the push failed",
+   "ok": true,
+   "detail": "('9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc', 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea')"
+  },
+  {
+   "check": "gh auth switch -u pruger-dev succeeded",
+   "ok": true,
+   "detail": "{'returncode': 0, 'stdout': '', 'stderr': '\u2713 Switched active account for github.com to pruger-dev', 'active_after': 'pruger-dev'}"
+  },
+  {
+   "check": "Recent saves offers \"Upload now\" for the push_pending job (already reviewed)",
+   "ok": true,
+   "detail": "Upload now"
+  },
+  {
+   "check": "retry after switching gh account back reaches synced",
+   "ok": true,
+   "detail": "{'id': 'c99db035e166e54f73a86517d0d4bb0f', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:30:38.043570+00:00', 'finished': '2026-09-22T14:30:53.688333+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': 'c08a5cf4def647e4a3fa2799afdbf26a', 'commit': 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T14:30:42.943154+00:00'}"
+  },
+  {
+   "check": "the same commit is the one that ended up pushed (no duplicate commit)",
+   "ok": true,
+   "detail": "({'id': 'c99db035e166e54f73a86517d0d4bb0f', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:30:38.043570+00:00', 'finished': '2026-09-22T14:30:53.688333+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': 'c08a5cf4def647e4a3fa2799afdbf26a', 'commit': 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T14:30:42.943154+00:00'}, {'id': 'c99db035e166e54f73a86517d0d4bb0f', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:30:38.043570+00:00', 'finished': '2026-09-22T14:30:44.119452+00:00', 'status': 'push_pending', 'message': 'The commit is saved on the VM, but push failed. Check authentication, branch permissions or remote changes, then retry.', 'backup_job_id': 'c08a5cf4def647e4a3fa2799afdbf26a', 'commit': 'b302cb04cb0745867b1cdb7c5e4"
+  },
+  {
+   "check": "no page or console errors in part (b)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "local HEAD == origin/main at the end of B5",
+   "ok": true,
+   "detail": "('b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea')"
+  },
+  {
+   "check": "no double nesting under save-fix/working/latest",
+   "ok": true,
+   "detail": "['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/cjunosevolved.jcfg', 'save-fix/working/latest/cjunosevolved.set', 'save-fix/working/latest/latest/ceos.cfg', 'save-fix/working/latest/latest/ceos.eoscfg', 'save-fix/working/latest/latest/cjunosevolved.jcfg', 'save-fix/working/latest/latest/cjunosevolved.set', 'save-fix/working/latest/latest/manifest.json', 'save-fix/working/latest/latest/vjunos-switch.jcfg', 'save-fix/working/latest/latest/vjunos-switch.set', 'save-fix/working/latest/latest/xrv9k.cfg', 'save-fix/working/latest/latest/xrv9k.xrcfg', 'save-fix/working/latest/manifest.json', 'save-fix/working/latest/vjunos-switch.jcfg', 'save-fix/working/latest/vjunos-switch.set', 'save-fix/working/latest/xrv9k.cfg', 'save-fix/working/latest/xrv9k.xrcfg']"
+  },
+  {
+   "check": "gh is left active on pruger-dev",
+   "ok": true,
+   "detail": "pruger-dev"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:30:55Z"
+}

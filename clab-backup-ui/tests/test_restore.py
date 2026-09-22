@@ -240,6 +240,7 @@ class RestoreServiceTests(unittest.TestCase):
         self.svc.git = self._fake_git_folder()
         desc, candidates = self.svc.resolve_source('lab1', {'type': 'folder', 'path': 'labs/BGP-LAB/Broken/latest'})
         self.assertEqual(desc['type'], 'folder')
+        self.assertEqual(desc['path'], '/labs/BGP-LAB/Broken/latest')  # normalised wire form: '/' + exact path
         self.assertEqual(desc['folder'], 'labs/BGP-LAB/Broken')
         self.assertEqual(desc['restore_capable_nodes'], 1)
         self.assertIn('PTX1', candidates)
@@ -251,6 +252,132 @@ class RestoreServiceTests(unittest.TestCase):
         with patch('app.restore.junos.capture', return_value=DESIRED_SET):
             review = self.svc.preflight('lab1', {'type': 'folder', 'path': 'labs/BGP-LAB/Broken/latest'}, {'PTX1'})
         self.assertTrue(any(r['name'] == 'PTX1' and r['eligible'] for r in review['targets']))
+
+    def _fake_git_versioned(self):
+        """A folder source whose HEAD can move between preflight and submit, with more than one
+        commit in branch history, and one commit whose manifest is malformed."""
+        import base64, hashlib
+
+        def make_snap(hostname):
+            raw = ('set system host-name ' + hostname + '\n').encode()
+            hraw = ('system { host-name ' + hostname + '; }\n').encode()
+            return {'manifest': {'schema': 2, 'lab_id': 'lab1', 'lab_name': 'clabllm-dev', 'node_names': ['PTX1'],
+                                 'files': [{'path': 'PTX1.set', 'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(),
+                                            'node': 'PTX1', 'platform': 'juniper_cjunosevolved', 'format': 'junos-display-set',
+                                            'restore_artifact': 'PTX1.jcfg', 'restore_size': len(hraw),
+                                            'restore_sha256': hashlib.sha256(hraw).hexdigest(),
+                                            'restore_format': 'junos-hierarchical', 'restore_capable': True}]},
+                    'files': {'PTX1.set': base64.b64encode(raw).decode(), 'PTX1.jcfg': base64.b64encode(hraw).decode()}}
+
+        class FakeGit:
+            HEAD1 = 'a' * 40
+            HEAD2 = 'c' * 40
+            BAD_MANIFEST = 'd' * 40
+
+            def __init__(self):
+                self.head = self.HEAD1
+                self.commits = {self.HEAD1: make_snap('OLD-STATE'), self.HEAD2: make_snap('NEW-STATE')}
+                self.calls = []
+
+            def binding(self, lab_id):
+                return {'binding_id': 'b', 'revision': 'r', 'repository': {'prefix': 'labs/BGP-LAB/Base'}}
+
+            def invoke(self, request, binding=None):
+                self.calls.append(dict(request))
+                mode = request['mode']
+                if mode == 'status':
+                    return {'ready': True, 'head': self.head}
+                if mode == 'read-version':
+                    commit = request['commit']
+                    if commit == self.BAD_MANIFEST:
+                        raise ValueError('The saved version manifest is invalid.')
+                    if commit not in self.commits:
+                        raise ValueError('The selected commit is outside this repository branch history.')
+                    return {'snapshot': self.commits[commit]}
+                raise AssertionError(mode)
+        return FakeGit()
+
+    def test_folder_source_with_exact_path_resolves(self):
+        # Rule 6/5: an exact repository-relative path, no /latest suffix required. desc['path'] is
+        # the normalised wire form ('/' + exact path); desc['folder'] has no leading slash.
+        self.svc.git = self._fake_git_versioned()
+        desc, candidates = self.svc.resolve_source('lab1', {'type': 'folder', 'path': 'Final'})
+        self.assertEqual(desc['path'], '/Final')
+        self.assertEqual(desc['folder'], 'Final')
+        self.assertEqual(desc['commit'], self.svc.git.HEAD1)
+        self.assertIn('PTX1', candidates)
+        reads = [c for c in self.svc.git.calls if c['mode'] == 'read-version']
+        self.assertEqual(reads[0]['path'], 'Final')
+
+    def test_folder_source_with_an_explicit_leading_slash_resolves_the_same_way(self):
+        # (a): a value starting with '/' is the same exact path, one leading slash stripped.
+        self.svc.git = self._fake_git_versioned()
+        desc, _ = self.svc.resolve_source('lab1', {'type': 'folder', 'path': '/Final'})
+        self.assertEqual(desc['path'], '/Final')
+        self.assertEqual(desc['folder'], 'Final')
+        reads = [c for c in self.svc.git.calls if c['mode'] == 'read-version']
+        self.assertEqual(reads[0]['path'], 'Final')
+
+    def test_folder_source_root_path_resolves_to_the_empty_helper_path(self):
+        self.svc.git = self._fake_git_versioned()
+        desc, _ = self.svc.resolve_source('lab1', {'type': 'folder', 'path': '/'})
+        self.assertEqual(desc['path'], '/')
+        self.assertEqual(desc['folder'], '')
+        reads = [c for c in self.svc.git.calls if c['mode'] == 'read-version']
+        self.assertEqual(reads[0]['path'], '')
+
+    def test_folder_source_bare_reserved_name_keeps_its_pre_upgrade_meaning(self):
+        # (b) compatibility: a bare 'latest' still names the connected (lab) folder, not a
+        # root-level folder called 'latest' -- for a tab or tool built before this release.
+        self.svc.git = self._fake_git_folder()  # binding prefix 'labs/BGP-LAB/Base'
+        desc, candidates = self.svc.resolve_source('lab1', {'type': 'folder', 'path': 'latest'})
+        self.assertEqual(desc['path'], '/labs/BGP-LAB/Base/latest')
+        self.assertEqual(desc['folder'], 'labs/BGP-LAB/Base')
+        self.assertIn('PTX1', candidates)
+        reads = [c for c in self.svc.git.calls if c['mode'] == 'read-version']
+        self.assertEqual(reads[0]['path'], 'labs/BGP-LAB/Base/latest')
+
+    def test_preflight_without_a_commit_reads_head_and_returns_it_as_source_commit(self):
+        self.svc.git = self._fake_git_versioned()
+        with patch('app.restore.junos.capture', return_value='set system host-name OLD-STATE\n'):
+            review = self.svc.preflight('lab1', {'type': 'folder', 'path': 'Final'}, {'PTX1'})
+        self.assertEqual(review['source']['commit'], self.svc.git.HEAD1)
+
+    def test_submit_with_the_reviewed_commit_reads_that_commit_not_a_later_head(self):
+        self.svc.git = self._fake_git_versioned()
+        with patch('app.restore.junos.capture', return_value='set system host-name OLD-STATE\n'):
+            review = self.svc.preflight('lab1', {'type': 'folder', 'path': 'Final'}, {'PTX1'})
+        reviewed = review['source']  # exactly what the browser is expected to resubmit
+        self.assertEqual(reviewed['commit'], self.svc.git.HEAD1)
+        # The repository moves on before the student submits; the pinned commit must still be read.
+        self.svc.git.head = self.svc.git.HEAD2
+        job = self.svc.submit('lab1', {'type': 'folder', 'path': reviewed['path'], 'commit': reviewed['commit']},
+                              ['PTX1'], 5, uuid.uuid4().hex)
+        self.assertEqual(job['source']['commit'], self.svc.git.HEAD1)
+        stored = next(j for j in self.store.state['restore_jobs'] if j['id'] == job['id'])
+        self.assertIn('OLD-STATE', stored['_candidates']['PTX1']['candidate'])
+        self.assertNotIn('NEW-STATE', stored['_candidates']['PTX1']['candidate'])
+        reads = [c for c in self.svc.git.calls if c['mode'] == 'read-version']
+        self.assertEqual(reads[-1]['commit'], self.svc.git.HEAD1)
+
+    def test_submit_with_an_unknown_commit_is_refused_before_any_device_is_touched(self):
+        self.svc.git = self._fake_git_versioned()
+        with patch('app.restore.junos.capture') as capture, patch('app.restore.junos.apply_candidate') as apply:
+            with self.assertRaises(Exception) as refused:
+                self.svc.submit('lab1', {'type': 'folder', 'path': 'Final', 'commit': 'f' * 40}, ['PTX1'], 5, uuid.uuid4().hex)
+            self.assertEqual(refused.exception.status_code, 409)
+            self.assertIn('outside this repository branch history', refused.exception.detail)
+        capture.assert_not_called(); apply.assert_not_called()
+        self.assertEqual(self.store.state['restore_jobs'], [])
+
+    def test_a_malformed_manifest_at_the_reviewed_commit_is_refused_at_preflight(self):
+        git = self._fake_git_versioned()
+        git.head = git.BAD_MANIFEST
+        self.svc.git = git
+        with self.assertRaises(Exception) as refused:
+            self.svc.preflight('lab1', {'type': 'folder', 'path': 'Final'}, None)
+        self.assertEqual(refused.exception.status_code, 409)
+        self.assertIn('manifest is invalid', refused.exception.detail)
 
     def test_source_without_artifact_offers_no_targets(self):
         # A snapshot whose files have no restore_artifact (legacy) yields no candidates.

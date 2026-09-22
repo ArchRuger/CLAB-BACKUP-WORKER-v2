@@ -96,6 +96,7 @@ try:
     label=label or path.name
     if len(label)>100 or any(ord(c)<32 for c in label): raise ValueError('Use a short repository label.')
     old=next((b for b in registry['repositories'] if b['path']==str(path) and b['prefix']==prefix),None)
+    if not old: h.base_prefix(prefix)  # a new lab folder must not be a snapshot folder name; an existing registration stays repairable
     for b in registry['repositories']:
         if b is old or b['path']!=str(path): continue
         p=b['prefix']

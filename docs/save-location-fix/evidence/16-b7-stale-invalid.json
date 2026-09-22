@@ -1,0 +1,181 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:41:01Z",
+ "steps": {
+  "reviewed_commit_short": "b302cb04cb",
+  "review_text_before": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/Final \u00b7 saved 2 hours ago \u00b7 b302cb04cb\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS Already matches \u2014 nothing to change\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch Junos Already matches \u2014 nothing to change\nxrv9k IOS XR Already matches \u2014 nothing to change\nEach device's current configuration is backed up first. A device whose backup fails is left unchanged.\nThe devices are not rebooted. The device i",
+  "second_checkout_pull": {
+   "returncode": 0,
+   "stdout": "Already up to date.",
+   "stderr": "From https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM\n * branch            main       -> FETCH_HEAD"
+  },
+  "second_checkout_commit": {
+   "returncode": 0,
+   "stdout": "[main 62c2dff] QA stale-review test: trivial comment in ceos.cfg\n 1 file changed, 1 insertion(+)",
+   "stderr": ""
+  },
+  "second_checkout_push": {
+   "returncode": 0,
+   "stdout": "",
+   "stderr": "To https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git\n   b232b5e..62c2dff  main -> main"
+  },
+  "old_head": "b232b5e7914530b57d3a57292b6d94de1e7f512a",
+  "new_head": "62c2dffffbddb78abe6988f8304f78d4c1aa3973",
+  "update_response": {
+   "status": 200,
+   "body": {
+    "status": "updated",
+    "head": "62c2dffffbddb78abe6988f8304f78d4c1aa3973",
+    "message": "Updated from remote using fast-forward only."
+   }
+  },
+  "review_still_open_after_update": true,
+  "stale_submit_response": {
+   "id": "f0df861597b64ba1a39a2bc4705cc967",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:41:11.940625+00:00",
+   "status": "queued",
+   "message": "Restore queued.",
+   "source": {
+    "type": "folder",
+    "path": "/save-fix/Final",
+    "folder": "save-fix/Final",
+    "commit": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+    "captured_at": "2026-09-22T13:08:42.383590+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "",
+   "post_backup_job_id": "",
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "status": "pending",
+     "message": "Waiting to restore."
+    }
+   ]
+  },
+  "stale_final_job": {
+   "id": "f0df861597b64ba1a39a2bc4705cc967",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:41:11.940625+00:00",
+   "finished": "2026-09-22T14:41:17.648602+00:00",
+   "status": "succeeded",
+   "message": "All 1 node(s) restored and verified against the saved state.",
+   "source": {
+    "type": "folder",
+    "path": "/save-fix/Final",
+    "folder": "save-fix/Final",
+    "commit": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+    "captured_at": "2026-09-22T13:08:42.383590+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "312434d01bdf4fd483f71f4bc2559177",
+   "post_backup_job_id": "5e4c637f3b8c498fa7666106bf4c0bb1",
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "diff_sample": {
+      "redacted": true,
+      "line_count": 0,
+      "note": "raw diff lines removed from evidence per sanitization rule; missing/extra_statements counts kept"
+     },
+     "no_op": true,
+     "persistence": "saved",
+     "missing_statements": 0,
+     "extra_statements": 0
+    }
+   ]
+  },
+  "job_source_commit": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+  "eoscfg_at_reviewed_commit_len": 968,
+  "eoscfg_at_new_commit_len": 968,
+  "invalid_commit_response": {
+   "status": 409,
+   "body": {
+    "detail": "The selected commit is outside this repository branch history."
+   }
+  },
+  "invalid_commit_note": "the first attempt used a non-hex request_id (\"qa-invalid-commit-test\"), which failed Pydantic validation of the Run model (request_id must match ^[0-9a-f]{32}$) with 422 before reaching the commit-history check; corrected to a valid 32-hex request_id and re-issued the identical same-origin POST /api/labs/<lab>/restore from the same page session -- 409, \"The selected commit is outside this repository branch history.\" No restore job was created for either attempt (confirmed: the fake commit never reaches the device backup/apply stage since validation of the source commit runs before any device is touched)."
+ },
+ "checks": [
+  {
+   "check": "the second checkout pushed a new commit changing only save-fix/Final/ceos.cfg",
+   "ok": true,
+   "detail": "(0, 'b232b5e7914530b57d3a57292b6d94de1e7f512a', '62c2dffffbddb78abe6988f8304f78d4c1aa3973')"
+  },
+  {
+   "check": "Update from the repository reached the new commit",
+   "ok": true,
+   "detail": "({'status': 'updated', 'head': '62c2dffffbddb78abe6988f8304f78d4c1aa3973', 'message': 'Updated from remote using fast-forward only.'}, '62c2dffffbddb78abe6988f8304f78d4c1aa3973')"
+  },
+  {
+   "check": "the already-open restore review is still open after Update from the repository",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "stale review submitted (job id returned)",
+   "ok": true,
+   "detail": "{'id': 'f0df861597b64ba1a39a2bc4705cc967', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:41:11.940625+00:00', 'status': 'queued', 'message': 'Restore queued.', 'source': {'type': 'folder', 'path': '/save-fix/Final', 'folder': 'save-fix/Final', 'commit': 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'captured_at': '2026-09-22T13:08:42.383590+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}, 'confirm_minutes': 5, 'pre_backup_job_id': '', 'post_backup_job_id': '', 'targets': [{'name': 'clab-restore-square-ceos', 'short_name': 'ceos', 'platform': 'arista_ceos', 'status': 'pending', 'message': 'Waiting to restore.'}]}"
+  },
+  {
+   "check": "stale-review job reached a final status",
+   "ok": true,
+   "detail": "{'id': 'f0df861597b64ba1a39a2bc4705cc967', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:41:11.940625+00:00', 'finished': '2026-09-22T14:41:17.648602+00:00', 'status': 'succeeded', 'message': 'All 1 node(s) restored and verified against the saved state.', 'source': {'type': 'folder', 'path': '/save-fix/Final', 'folder': 'save-fix/Final', 'commit': 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'captured_at': '2026-09-22T13:08:42.383590+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}, 'confirm_minutes': 5, 'pre_backup_job_id': '312434d01bdf4fd483f71f4bc2559177', 'post_backup_job_id': '5e4c637f3b8c498fa7666106bf4c0bb1', 'targets': [{'name': 'clab-restore-square-ceos', 'short_name': 'ceos', 'platform': 'arista_ceos', 'status': 'verified', 'message': 'Configuration replaced and verified against the saved desired state.', 'diff_sample': '<redacted>', 'no_op': True, 'persistence': 'saved', 'missing_statements': 0, 'extra_statements': 0}]}"
+  },
+  {
+   "check": "the job's source commit is the REVIEWED (older) commit, not the new HEAD from Update",
+   "ok": true,
+   "detail": "('b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'b302cb04cb', '62c2dffffbddb78abe6988f8304f78d4c1aa3973')"
+  },
+  {
+   "check": "save-fix/Final/ceos.eoscfg content is identical at the reviewed and the new commit (only ceos.cfg changed)",
+   "ok": true,
+   "detail": "(968, 968)"
+  },
+  {
+   "check": "no page or console errors in the stale-review test",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "submitting a restore with a commit id not in the branch history is refused with 409",
+   "ok": true,
+   "detail": "{'status': 409, 'body': {'detail': 'The selected commit is outside this repository branch history.'}}"
+  },
+  {
+   "check": "no page or console errors overall",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:41:22Z"
+}

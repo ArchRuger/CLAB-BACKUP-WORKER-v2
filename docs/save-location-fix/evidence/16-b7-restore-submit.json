@@ -1,0 +1,131 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:37:47Z",
+ "steps": {
+  "review_text": "Replace running configuration\n\u00d7\n\nLab: restore-square\n\nSource: Final state (instructor) \u00b7 CLAB-MNGR-DEV-LLM \u203a save-fix/Final \u00b7 saved 1 hour ago \u00b7 b302cb04cb\n\nCurrent configurations are backed up first. The devices are not rebooted.\n\nDevices\nceos EOS 5 differences from the running configuration\ncjunosevolved Junos Evolved Already matches \u2014 nothing to change\nvjunos-switch Junos Already matches \u2014 nothing to change\nxrv9k IOS XR Already matches \u2014 nothing to change\nEach device's current configuration is backed up first. A device whose backup fails is left unchanged.\nThe devices are not rebooted. The device itself checks the new configuration when it is activated, and the change is undone on its own if the device cannot be reached again within 5 minutes.\nDevices that are skipped above are not touched.\nAdvanced options\nI understand the running configuration on the selected devices will be replaced.\nCancel\nReplace configurations",
+  "checked_devices_before_submit": [
+   "clab-restore-square-ceos"
+  ],
+  "submit_response": {
+   "id": "34cab3b97d7141be99c3082cf1f82961",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:37:54.987730+00:00",
+   "status": "preflight",
+   "message": "Checking the lab and target nodes.",
+   "source": {
+    "type": "folder",
+    "path": "/save-fix/Final",
+    "folder": "save-fix/Final",
+    "commit": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+    "captured_at": "2026-09-22T13:08:42.383590+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "",
+   "post_backup_job_id": "",
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "status": "pending",
+     "message": "Waiting to restore."
+    }
+   ]
+  },
+  "banner_restore_visible_while_running": true,
+  "reopened_from_banner_text": "Applying saved configuration\n\u00d7\nBacking up current configurations\u2026\n\nBacking up\u2026 ceos EOS\nDetails\nDetails\n\nYou can close this window. The change keeps running in the background; its result is shown in the lab header and under Advanced \u203a Action logs.",
+  "page_reload_ok": true,
+  "final_job": {
+   "id": "34cab3b97d7141be99c3082cf1f82961",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:37:54.987730+00:00",
+   "finished": "2026-09-22T14:38:00.653784+00:00",
+   "status": "succeeded",
+   "message": "All 1 node(s) restored and verified against the saved state.",
+   "source": {
+    "type": "folder",
+    "path": "/save-fix/Final",
+    "folder": "save-fix/Final",
+    "commit": "b302cb04cb0745867b1cdb7c5e4b9303f1c539ea",
+    "captured_at": "2026-09-22T13:08:42.383590+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "confirm_minutes": 5,
+   "pre_backup_job_id": "dd9a517c71d247c790850f190bf50b58",
+   "post_backup_job_id": "1f79e70608044942a8f75523053c8684",
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "status": "verified",
+     "message": "Configuration replaced and verified against the saved desired state.",
+     "diff_sample": {
+      "redacted": true,
+      "line_count": 12,
+      "note": "raw diff lines removed from evidence per sanitization rule; missing/extra_statements counts kept"
+     },
+     "no_op": false,
+     "persistence": "saved",
+     "missing_statements": 0,
+     "extra_statements": 0
+    }
+   ]
+  },
+  "page_shows_restore_status_after": "Configuration replaced\n\u00d7\nConfiguration replaced\n\nConfiguration replaced on 1 device.\n\nReplaced and verified ceos EOS\nDetails\nDetails"
+ },
+ "checks": [
+  {
+   "check": "only ceos is checked before submitting the real restore",
+   "ok": true,
+   "detail": "['clab-restore-square-ceos']"
+  },
+  {
+   "check": "restore submitted (job id returned)",
+   "ok": true,
+   "detail": "{'id': '34cab3b97d7141be99c3082cf1f82961', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:37:54.987730+00:00', 'status': 'preflight', 'message': 'Checking the lab and target nodes.', 'source': {'type': 'folder', 'path': '/save-fix/Final', 'folder': 'save-fix/Final', 'commit': 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'captured_at': '2026-09-22T13:08:42.383590+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}, 'confirm_minutes': 5, 'pre_backup_job_id': '', 'post_backup_job_id': '', 'targets': [{'name': 'clab-restore-square-ceos', 'short_name': 'ceos', 'platform': 'arista_ceos', 'status': 'pending', 'message': 'Waiting to restore.'}]}"
+  },
+  {
+   "check": "the running restore is reachable from the lab banner (View progress/Details)",
+   "ok": true,
+   "detail": "True"
+  },
+  {
+   "check": "restore job reached a final status",
+   "ok": true,
+   "detail": "{'id': '34cab3b97d7141be99c3082cf1f82961', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:37:54.987730+00:00', 'finished': '2026-09-22T14:38:00.653784+00:00', 'status': 'succeeded', 'message': 'All 1 node(s) restored and verified against the saved state.', 'source': {'type': 'folder', 'path': '/save-fix/Final', 'folder': 'save-fix/Final', 'commit': 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'captured_at': '2026-09-22T13:08:42.383590+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}, 'confirm_minutes': 5, 'pre_backup_job_id': 'dd9a517c71d247c790850f190bf50b58', 'post_backup_job_id': '1f79e70608044942a8f75523053c8684', 'targets': [{'name': 'clab-restore-square-ceos', 'short_name': 'ceos', 'platform': 'arista_ceos', 'status': 'verified', 'message': 'Configuration replaced and verified against the saved desired state.', 'diff_sample': '<redacted>'}]}"
+  },
+  {
+   "check": "restore job succeeded",
+   "ok": true,
+   "detail": "{'id': '34cab3b97d7141be99c3082cf1f82961', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:37:54.987730+00:00', 'finished': '2026-09-22T14:38:00.653784+00:00', 'status': 'succeeded', 'message': 'All 1 node(s) restored and verified against the saved state.', 'source': {'type': 'folder', 'path': '/save-fix/Final', 'folder': 'save-fix/Final', 'commit': 'b302cb04cb0745867b1cdb7c5e4b9303f1c539ea', 'captured_at': '2026-09-22T13:08:42.383590+00:00', 'lab_name': 'restore-square', 'restore_capable_nodes': 4, 'saved_nodes': ['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']}, 'confirm_minutes': 5, 'pre_backup_job_id': 'dd9a517c71d247c790850f190bf50b58', 'post_backup_job_id': '1f79e70608044942a8f75523053c8684', 'targets': [{'name': 'clab-restore-square-ceos', 'short_name': 'ceos', 'platform': 'arista_ceos', 'status': 'verified', 'message': 'Configuration replaced and verified against the saved desired state.', 'diff_sample': '<redacted>'}]}"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:38:03Z"
+}

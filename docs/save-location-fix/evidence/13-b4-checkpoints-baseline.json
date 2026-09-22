@@ -1,0 +1,274 @@
+{
+ "manager_base": "http://127.0.0.1:8081",
+ "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+ "lab_name": "restore-square",
+ "build": "clab-backup:1.30.31",
+ "started_utc": "2026-09-22T14:28:45Z",
+ "steps": {
+  "checkpoint_a_out_of_band_completion": {
+   "id": "aacc10209d2a49b2a82013139d5b2a59",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:24:02.160618+00:00",
+   "finished": "2026-09-22T14:27:22.053800+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "dd2d45e4e41b4b279839120ddf5e4395",
+   "commit": "78659615031c02d0b7188e636e85eabd6795ab65",
+   "pushed": true,
+   "target": "checkpoint",
+   "checkpoint": "qa-cp-a",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/manifest.json",
+    "save-fix/working/checkpoints/qa-cp-a/ceos.cfg",
+    "save-fix/working/checkpoints/qa-cp-a/ceos.eoscfg",
+    "save-fix/working/checkpoints/qa-cp-a/cjunosevolved.set",
+    "save-fix/working/checkpoints/qa-cp-a/cjunosevolved.jcfg",
+    "save-fix/working/checkpoints/qa-cp-a/vjunos-switch.set",
+    "save-fix/working/checkpoints/qa-cp-a/vjunos-switch.jcfg",
+    "save-fix/working/checkpoints/qa-cp-a/xrv9k.cfg",
+    "save-fix/working/checkpoints/qa-cp-a/xrv9k.xrcfg",
+    "save-fix/working/checkpoints/qa-cp-a/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/checkpoints/qa-cp-a",
+   "note": "QA checkpoint A",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:26:12.296729+00:00"
+  },
+  "checkpoint_a_final_job": {
+   "id": "aacc10209d2a49b2a82013139d5b2a59",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:24:02.160618+00:00",
+   "finished": "2026-09-22T14:27:22.053800+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "dd2d45e4e41b4b279839120ddf5e4395",
+   "commit": "78659615031c02d0b7188e636e85eabd6795ab65",
+   "pushed": true,
+   "target": "checkpoint",
+   "checkpoint": "qa-cp-a",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/manifest.json",
+    "save-fix/working/checkpoints/qa-cp-a/ceos.cfg",
+    "save-fix/working/checkpoints/qa-cp-a/ceos.eoscfg",
+    "save-fix/working/checkpoints/qa-cp-a/cjunosevolved.set",
+    "save-fix/working/checkpoints/qa-cp-a/cjunosevolved.jcfg",
+    "save-fix/working/checkpoints/qa-cp-a/vjunos-switch.set",
+    "save-fix/working/checkpoints/qa-cp-a/vjunos-switch.jcfg",
+    "save-fix/working/checkpoints/qa-cp-a/xrv9k.cfg",
+    "save-fix/working/checkpoints/qa-cp-a/xrv9k.xrcfg",
+    "save-fix/working/checkpoints/qa-cp-a/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/checkpoints/qa-cp-a",
+   "note": "QA checkpoint A",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:26:12.296729+00:00"
+  },
+  "checkpoint_b_reused_existing": "a previous run of this script already created and synced qa-cp-b; reused rather than refused as a duplicate name",
+  "checkpoint_b_final_job": {
+   "id": "b6f79e0fc311bbb1478bf33d16b82bab",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:26:52.736913+00:00",
+   "finished": "2026-09-22T14:27:22.053803+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "1176a853418f4bb1a38997a2cae00719",
+   "commit": "1b3bead1d0348c44e8eea2cb9c4d3d5411d70068",
+   "pushed": true,
+   "target": "checkpoint",
+   "checkpoint": "qa-cp-b",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/manifest.json",
+    "save-fix/working/checkpoints/qa-cp-b/ceos.cfg",
+    "save-fix/working/checkpoints/qa-cp-b/ceos.eoscfg",
+    "save-fix/working/checkpoints/qa-cp-b/cjunosevolved.set",
+    "save-fix/working/checkpoints/qa-cp-b/cjunosevolved.jcfg",
+    "save-fix/working/checkpoints/qa-cp-b/vjunos-switch.set",
+    "save-fix/working/checkpoints/qa-cp-b/vjunos-switch.jcfg",
+    "save-fix/working/checkpoints/qa-cp-b/xrv9k.cfg",
+    "save-fix/working/checkpoints/qa-cp-b/xrv9k.xrcfg",
+    "save-fix/working/checkpoints/qa-cp-b/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/checkpoints/qa-cp-b",
+   "note": "QA checkpoint B",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:26:58.739693+00:00"
+  },
+  "tree_hashes_after_creation": {
+   "qa-cp-a": "69e64585b04a4c011b9f2fae97e96d1e4a13c747",
+   "qa-cp-b": "10337c13edf63ac1f279fdc119009b2e6a5547bc"
+  },
+  "latest_after_checkpoints_reused_existing": "a previous run of this script already made this Latest save (created after checkpoint qa-cp-b); reused rather than repeated",
+  "latest_after_checkpoints_job": {
+   "id": "13dcfab773dec08904e9f20059ef047b",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:27:05.486603+00:00",
+   "finished": "2026-09-22T14:27:22.053805+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "b24b421e6a404c139941dbca664e9609",
+   "commit": "107e5b11b2bfbec21a273032654b75fbc2fcb6b7",
+   "pushed": true,
+   "target": "latest",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/latest/ceos.cfg",
+    "save-fix/working/latest/ceos.eoscfg",
+    "save-fix/working/latest/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/latest",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:27:10.339464+00:00"
+  },
+  "tree_hashes_after_latest_save": {
+   "qa-cp-a": "69e64585b04a4c011b9f2fae97e96d1e4a13c747",
+   "qa-cp-b": "10337c13edf63ac1f279fdc119009b2e6a5547bc"
+  },
+  "baseline_reused_existing": "a previous run of this script already set the baseline; reused rather than repeated",
+  "baseline_final_job": {
+   "id": "15afe53af24f960776f541fd176cd4af",
+   "lab_id": "904a35a79dc341ce8a4638f83fc34185",
+   "lab_name": "restore-square",
+   "created": "2026-09-22T14:27:14.322706+00:00",
+   "finished": "2026-09-22T14:27:22.053807+00:00",
+   "status": "synced",
+   "message": "Saved commit is included in the verified remote history.",
+   "backup_job_id": "b24b421e6a404c139941dbca664e9609",
+   "commit": "9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc",
+   "pushed": true,
+   "target": "baseline",
+   "checkpoint": "",
+   "changed_files": [
+    "save-fix/working/baseline/ceos.cfg",
+    "save-fix/working/baseline/ceos.eoscfg",
+    "save-fix/working/baseline/cjunosevolved.set",
+    "save-fix/working/baseline/cjunosevolved.jcfg",
+    "save-fix/working/baseline/vjunos-switch.set",
+    "save-fix/working/baseline/vjunos-switch.jcfg",
+    "save-fix/working/baseline/xrv9k.cfg",
+    "save-fix/working/baseline/xrv9k.xrcfg",
+    "save-fix/working/baseline/manifest.json"
+   ],
+   "snapshot_path": "save-fix/working/baseline",
+   "note": "",
+   "review_before_push": true,
+   "reviewed": "2026-09-22T14:27:18.788103+00:00"
+  },
+  "compare_qa_cp_a_text": "Compared with your latest save\n\u00d7\n\nShows how qa-cp-a differs from the last time you saved progress. To see what would change on the devices themselves, choose Apply to running lab\u2026 \u2014 the review lists the changes per device before anything is applied.\n\nceos.cfg changed\nceos.eoscfg changed",
+  "history_dialog_text": "Saved versions & history\n\u00d7\n\nEvery saved version of this lab and of the other labs in this repository. Open one to view, download or compare it, or apply it to the running lab (the current configuration is backed up first and nothing reboots).\n\nSaved versions\nsave-fix/working \u00b7 baseline\nsave-fix/working/baseline \u00b7 this lab\nsave-fix/working \u00b7 checkpoint \u00b7 qa-cp-a\nsave-fix/working/checkpoints/qa-cp-a \u00b7 this lab\nsave-fix/working \u00b7 checkpoint \u00b7 qa-cp-b\nsave-fix/working/checkpoints/qa-cp-b \u00b7 this lab\nsave-fix/working \u00b7 latest\nsave-fix/working/latest \u00b7 this lab\nARISTA-LAB-TEST \u00b7 latest\nARISTA-LAB-TEST/latest\nbgp-core/reference/broken-01 \u00b7 latest\nbgp-core/reference/broken-01/latest\nbgp-core/reference/solution \u00b7 latest\nbgp-core/reference/solution/latest\nbgp-core/reference/start \u00b7 latest\nbgp-core/reference/start/latest\nbgp-core/work \u00b7 latest\nbgp-core/work/latest\nclab-llm-dev2/reference/solution \u00b7 latest\nclab-llm-dev2/reference/solution/latest\nclab-llm-dev2/reference/start \u00b7 latest\nclab-llm-dev2/reference/start/latest\nclab-llm-dev2/work \u00b7 checkpoint \u00b7 release-129-live-validation\nclab-llm-dev2/work/checkpoints/release-129-live-validation\nclab-llm-dev2/work \u00b7 latest\nclab-llm-dev2/work/latest\nl01-ethernet/reference/broken-01 \u00b7 latest\nl01-ethernet/reference/broken-01/latest\nl01-ethernet/reference/solution \u00b7 latest\nl01-ethernet/reference/solution/latest\nl01-ethernet/reference/start \u00b7 latest\nl01-ethernet/reference/start/latest\nl01-ethernet/work \u00b7 latest\nl01-ethernet/work/latest\nl02-switching/reference/broken-01 \u00b7 latest\nl02-switching/reference/broken-01/latest\nl02-switching/reference/solution \u00b7 latest\nl02-switching/reference/solution/latest\nl02-switching/reference/start \u00b7 latest\nl02-switching/reference/start/latest\nl02-switching/work \u00b7 latest\nl02-switching/work/latest\nl03-addressing/reference/broken-01 \u00b7 latest\nl03-addressing/reference/broken-01/latest\nl03-addressing/reference/solution \u00b7 latest\nl03-addressing/reference/solution/latest\nl03-addressing/reference/start \u00b7 latest\nl03-addr",
+  "final_row_found": 15,
+  "final_view_text": "Saved version\n\u00d7\n\nFinal state (instructor)\n\nDetails\nApply to running lab\u2026\nCompare with my latest save\nDownload (ZIP)\n\nThis saved version can be applied to the running lab. The current configuration is backed up first and the devices are not rebooted.\n\nTechnical details\nceos.cfg\nceos.eoscfg\ncjunosevolved.set\ncjunosevolved.jcfg\nvjunos-switch.set\nvjunos-switch.jcfg\nxrv9k.cfg\nxrv9k.xrcfg",
+  "final_zip_contents": [
+   "ceos.cfg",
+   "ceos.eoscfg",
+   "cjunosevolved.jcfg",
+   "cjunosevolved.set",
+   "manifest.json",
+   "vjunos-switch.jcfg",
+   "vjunos-switch.set",
+   "xrv9k.cfg",
+   "xrv9k.xrcfg"
+  ],
+  "checkpoint_view_text": "Saved version\n\u00d7\n\nqa-cp-a\n\nDetails\nApply to running lab\u2026\nCompare with my latest save\nDownload (ZIP)\n\nThis saved version can be applied to the running lab. The current configuration is backed up first and the devices are not rebooted.\n\nTechnical details\nceos.cfg\nceos.eoscfg\ncjunosevolved.set\ncjunosevolved.jcfg\nvjunos-switch.set\nvjunos-switch.jcfg\nxrv9k.cfg\nxrv9k.xrcfg",
+  "checkpoint_zip_contents": [
+   "ceos.cfg",
+   "ceos.eoscfg",
+   "cjunosevolved.jcfg",
+   "cjunosevolved.set",
+   "manifest.json",
+   "vjunos-switch.jcfg",
+   "vjunos-switch.set",
+   "xrv9k.cfg",
+   "xrv9k.xrcfg"
+  ],
+  "final_git": {
+   "local": "9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc",
+   "origin": "9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc",
+   "in_sync": true
+  }
+ },
+ "checks": [
+  {
+   "check": "checkpoint qa-cp-a reached synced",
+   "ok": true,
+   "detail": "{'id': 'aacc10209d2a49b2a82013139d5b2a59', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:24:02.160618+00:00', 'finished': '2026-09-22T14:27:22.053800+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': 'dd2d45e4e41b4b279839120ddf5e4395', 'commit': '78659615031c02d0b7188e636e85eabd6795ab65', 'pushed': True, 'target': 'checkpoint', 'checkpoint': 'qa-cp-a', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json', 'save-fix/working/checkpoints/qa-cp-a/ceos.cfg', 'save-fix/working/checkpoints/qa-cp-a/ceos.eoscfg', 'save-fix/working/checkpoints/qa-cp-a/cjunosevolved.set', 'save-fix/working/checkpoints/qa-cp-a/cjunosevolved.jcfg', 'save-fix/working/checkpoints/qa-cp-a/vjunos-switch.set', 'save-fix/working/checkpoints/qa-cp-a/vjunos-switch.jcfg', 'save-fix/working/checkpoints/qa-cp-a/xrv9k.cfg', 'save-fix/working/checkpoints/qa-cp-a/xrv9k.xrcfg', 'save-fix/working/checkpoints/qa-cp-a/manifest.json'], 'snapshot_path': 'save-fix/working/checkpoints/qa-cp-a', 'note': 'QA checkpoint A', 'review_befor"
+  },
+  {
+   "check": "checkpoint qa-cp-b reached synced",
+   "ok": true,
+   "detail": "{'id': 'b6f79e0fc311bbb1478bf33d16b82bab', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:26:52.736913+00:00', 'finished': '2026-09-22T14:27:22.053803+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': '1176a853418f4bb1a38997a2cae00719', 'commit': '1b3bead1d0348c44e8eea2cb9c4d3d5411d70068', 'pushed': True, 'target': 'checkpoint', 'checkpoint': 'qa-cp-b', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json', 'save-fix/working/checkpoints/qa-cp-b/ceos.cfg', 'save-fix/working/checkpoints/qa-cp-b/ceos.eoscfg', 'save-fix/working/checkpoints/qa-cp-b/cjunosevolved.set', 'save-fix/working/checkpoints/qa-cp-b/cjunosevolved.jcfg', 'save-fix/working/checkpoints/qa-cp-b/vjunos-switch.set', 'save-fix/working/checkpoints/qa-cp-b/vjunos-switch.jcfg', 'save-fix/working/checkpoints/qa-cp-b/xrv9k.cfg', 'save-fix/working/checkpoints/qa-cp-b/xrv9k.xrcfg', 'save-fix/working/checkpoints/qa-cp-b/manifest.json'], 'snapshot_path': 'save-fix/working/checkpoints/qa-cp-b', 'note': 'QA checkpoint B', 'review_befor"
+  },
+  {
+   "check": "Latest save after the two checkpoints reached synced, snapshot_path save-fix/working/latest",
+   "ok": true,
+   "detail": "{'id': '13dcfab773dec08904e9f20059ef047b', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:27:05.486603+00:00', 'finished': '2026-09-22T14:27:22.053805+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': 'b24b421e6a404c139941dbca664e9609', 'commit': '107e5b11b2bfbec21a273032654b75fbc2fcb6b7', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': ['save-fix/working/latest/ceos.cfg', 'save-fix/working/latest/ceos.eoscfg', 'save-fix/working/latest/manifest.json'], 'snapshot_path': 'save-fix/working/latest', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T14:27:10.339464+00:00'}"
+  },
+  {
+   "check": "qa-cp-a tree is byte-identical to when it was created",
+   "ok": true,
+   "detail": "('69e64585b04a4c011b9f2fae97e96d1e4a13c747', '69e64585b04a4c011b9f2fae97e96d1e4a13c747')"
+  },
+  {
+   "check": "qa-cp-b tree is byte-identical to when it was created",
+   "ok": true,
+   "detail": "('10337c13edf63ac1f279fdc119009b2e6a5547bc', '10337c13edf63ac1f279fdc119009b2e6a5547bc')"
+  },
+  {
+   "check": "baseline set (job reached synced)",
+   "ok": true,
+   "detail": "{'id': '15afe53af24f960776f541fd176cd4af', 'lab_id': '904a35a79dc341ce8a4638f83fc34185', 'lab_name': 'restore-square', 'created': '2026-09-22T14:27:14.322706+00:00', 'finished': '2026-09-22T14:27:22.053807+00:00', 'status': 'synced', 'message': 'Saved commit is included in the verified remote history.', 'backup_job_id': 'b24b421e6a404c139941dbca664e9609', 'commit': '9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc', 'pushed': True, 'target': 'baseline', 'checkpoint': '', 'changed_files': ['save-fix/working/baseline/ceos.cfg', 'save-fix/working/baseline/ceos.eoscfg', 'save-fix/working/baseline/cjunosevolved.set', 'save-fix/working/baseline/cjunosevolved.jcfg', 'save-fix/working/baseline/vjunos-switch.set', 'save-fix/working/baseline/vjunos-switch.jcfg', 'save-fix/working/baseline/xrv9k.cfg', 'save-fix/working/baseline/xrv9k.xrcfg', 'save-fix/working/baseline/manifest.json'], 'snapshot_path': 'save-fix/working/baseline', 'note': '', 'review_before_push': True, 'reviewed': '2026-09-22T14:27:18.788103+00:00'}"
+  },
+  {
+   "check": "Saved versions lists the qa-cp-a checkpoint row",
+   "ok": true,
+   "detail": "1"
+  },
+  {
+   "check": "Compare with my latest save opened a dialog with file diff content",
+   "ok": true,
+   "detail": "Compared with your latest save\n\u00d7\n\nShows how qa-cp-a differs from the last time you saved progress. To see what would change on the devices themselves, choose Apply to running lab\u2026 \u2014 the review lists t"
+  },
+  {
+   "check": "Full history dialog lists Saved versions and Save history sections",
+   "ok": true,
+   "detail": "Saved versions & history\n\u00d7\n\nEvery saved version of this lab and of the other labs in this repository. Open one to view, download or compare it, or apply it to the running lab (the current configuratio"
+  },
+  {
+   "check": "Saved versions lists a row for save-fix/Final (reference group)",
+   "ok": true,
+   "detail": "15"
+  },
+  {
+   "check": "save-fix/Final ZIP contains manifest.json and the nine device files",
+   "ok": true,
+   "detail": "['ceos.cfg', 'ceos.eoscfg', 'cjunosevolved.jcfg', 'cjunosevolved.set', 'manifest.json', 'vjunos-switch.jcfg', 'vjunos-switch.set', 'xrv9k.cfg', 'xrv9k.xrcfg']"
+  },
+  {
+   "check": "qa-cp-a ZIP contains manifest.json and the nine device files",
+   "ok": true,
+   "detail": "['ceos.cfg', 'ceos.eoscfg', 'cjunosevolved.jcfg', 'cjunosevolved.set', 'manifest.json', 'vjunos-switch.jcfg', 'vjunos-switch.set', 'xrv9k.cfg', 'xrv9k.xrcfg']"
+  },
+  {
+   "check": "no page or console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "check": "local HEAD == origin/main at the end of B4",
+   "ok": true,
+   "detail": "{'local': '9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc', 'origin': '9ab58e4ea8668bd5d95fe3e9a64ee79c54c603bc', 'in_sync': True}"
+  }
+ ],
+ "failed": [],
+ "finished_utc": "2026-09-22T14:28:53Z"
+}

@@ -30,7 +30,10 @@ test('folder rules: own, other lab, inside, managed, unused, root versus subfold
  const {gitTreeModel,gitFolderChoice,gitCanCreateIn}=makeContext(),model=gitTreeModel(files,folders);
  assert.equal(gitFolderChoice(model,'bgp','bgp').allowed,false);assert.match(gitFolderChoice(model,'bgp','bgp').reason,/already saves here/);
  assert.match(gitFolderChoice(model,'eth','bgp').reason,/Ethernet lab already saves here/);
- assert.match(gitFolderChoice(model,'bgp/latest','bgp').reason,/latest folder/);
+ // bgp/latest holds manifest.json in the fixture, so choosing it now resolves to its parent (rule 3)
+ // instead of the old "latest folder" wording; the target is the parent, and its own reason is folded in.
+ assert.equal(gitFolderChoice(model,'bgp/latest','bgp').target,'bgp');
+ assert.match(gitFolderChoice(model,'bgp/latest','bgp').reason,/This is the saved state of bgp\. Saves go to bgp\/latest\. This lab already saves here\./);
  assert.match(gitFolderChoice(model,'bgp/checkpoints/peering','other').reason,/saved milestone/);
  assert.match(gitFolderChoice(model,'bgp/docs','other').reason,/inside BGP lab's lab folder/);
  assert.equal(gitFolderChoice(model,'bgp/docs','bgp').allowed,true,'a lab may move deeper inside its own folder; the old registration is retired');
@@ -39,10 +42,43 @@ test('folder rules: own, other lab, inside, managed, unused, root versus subfold
  assert.equal(gitFolderChoice(model,'notes','bgp').allowed,true);
  assert.match(gitFolderChoice(model,'','bgp').reason,/already has lab folders/);
  assert.match(gitFolderChoice(model,'missing','bgp').reason,/Choose a folder/);
+ assert.equal(gitFolderChoice(model,'free','bgp').target,'free','every result names its own target, not only the resolved ones');
  const rooted=gitTreeModel([{path:'latest/PE1.cfg',size:1},{path:'docs/a.md',size:1}],[{id:'root',label:'repo',prefix:'',lab:{id:'lab',name:'Root lab'}}]);
  assert.equal(gitFolderChoice(rooted,'docs','root').allowed,true,'a root lab may move into a subfolder because its old registration is retired');
  assert.match(gitFolderChoice(rooted,'docs','other').reason,/inside Root lab's lab folder/);
  assert.equal(gitCanCreateIn(model,'','bgp'),true);assert.equal(gitCanCreateIn(model,'notes','bgp'),true);assert.equal(gitCanCreateIn(model,'eth','bgp'),false);assert.equal(gitCanCreateIn(model,'bgp','bgp'),true);assert.equal(gitCanCreateIn(rooted,'docs','other'),false);
+ assert.equal(gitCanCreateIn(model,'bgp/latest','bgp'),false,'nothing is created inside a saved configuration');
+});
+test('selecting a snapshot folder named latest resolves to its parent; any other snapshot folder is refused outright',()=>{
+ const {gitTreeModel,gitFolderChoice}=makeContext();
+ const model=gitTreeModel([
+  {path:'working/latest/PE1.cfg',size:1},{path:'working/latest/manifest.json',size:1},   // the reported defect: an unregistered "latest" snapshot
+  {path:'course/lab/latest/PE1.cfg',size:1},{path:'course/lab/latest/manifest.json',size:1},
+  {path:'Final/PE1.cfg',size:1},{path:'Final/manifest.json',size:1},                     // a snapshot under any other name
+ ],[{id:'lab-bind',prefix:'course/lab',lab:{id:'lab',name:'Course lab'}}]);
+ // Unregistered parent: the choice resolves to "working", not "working/latest" (no lab folder ever nests inside its own snapshot).
+ const resolved=gitFolderChoice(model,'working/latest','someone');
+ assert.equal(resolved.target,'working');assert.equal(resolved.allowed,true);assert.match(resolved.reason,/This is the saved state of working\. Saves go to working\/latest\./);
+ // The registered current lab's own latest resolves to its own folder, and reports that it already saves there.
+ const own=gitFolderChoice(model,'course/lab/latest','lab-bind');
+ assert.equal(own.target,'course/lab');assert.equal(own.allowed,false);assert.match(own.reason,/This lab already saves here\./);
+ // Any other snapshot folder is not a destination.
+ const final=gitFolderChoice(model,'Final','someone');
+ assert.equal(final.allowed,false);assert.equal(final.target,'Final');
+ assert.match(final.reason,/This folder is a saved configuration \(it holds manifest\.json\)\. Choose the folder above it or a folder beside it\./);
+});
+test('a folder below a saved configuration is refused too, walking every ancestor for manifest.json, with the manager\'s own sentence naming the ancestor',()=>{
+ const {gitTreeModel,gitFolderChoice,gitCanCreateIn}=makeContext();
+ const model=gitTreeModel([{path:'Final/manifest.json',size:1},{path:'Final/sub/notes.txt',size:1},{path:'Final/sub/deeper/notes.txt',size:1}],[]);
+ const below=gitFolderChoice(model,'Final/sub','someone');
+ assert.equal(below.allowed,false);assert.equal(below.target,'Final/sub');
+ assert.match(below.reason,/^Final is a saved configuration \(it holds manifest\.json\)\. Choose the folder above it or a folder beside it\.$/,'the manager\'s own sentence, naming the ancestor, not "This folder"');
+ assert.equal(gitCanCreateIn(model,'Final/sub','someone'),false,'nothing can be created below a saved configuration either');
+ // Any depth below the snapshot is refused, not only its direct child.
+ const deeper=gitFolderChoice(model,'Final/sub/deeper','someone');
+ assert.equal(deeper.allowed,false);assert.match(deeper.reason,/^Final is a saved configuration/);
+ // Above the snapshot (the repository root, not itself an ancestor conflict for its own children other than Final) is unaffected.
+ assert.equal(gitFolderChoice(model,'','someone').allowed,true);
 });
 test('folder names are literal single segments',()=>{
  const {gitFolderName,gitSuggestedFolder}=makeContext();
@@ -222,62 +258,95 @@ test('nested folder helpers validate each segment and preview the full destinati
  assert.equal(gitDestinationPreview('CCNP-SP','  '),'','an empty or invalid entry previews nothing');
  assert.equal(gitDestinationPreview('CCNP-SP','bad/..'),'');
 });
-test('a folder whose latest carries a restore artifact is appliable from the browser',()=>{
- const {gitTreeModel,gitPlacesMarkup}=makeContext();
- const restoreFiles=[
-  {path:'labs/BGP-LAB/Broken/latest/PTX1.set',size:100},
-  {path:'labs/BGP-LAB/Broken/latest/PTX1.jcfg',size:200},
-  {path:'labs/BGP-LAB/Broken/latest/manifest.json',size:300},
-  {path:'labs/BGP-LAB/working/latest/PTX1.set',size:100},        // no .jcfg -> not restorable
-  {path:'labs/BGP-LAB/working/latest/manifest.json',size:300},
-  {path:'labs/BGP-LAB/eos/latest/CEOS1.eoscfg',size:150},        // Arista EOS restore artifact
-  {path:'labs/BGP-LAB/eos/latest/manifest.json',size:300},
-  {path:'labs/BGP-LAB/xr/latest/XRV1.xrcfg',size:150},           // Cisco IOS XR restore artifact
-  {path:'labs/BGP-LAB/xr/latest/manifest.json',size:300},
- ];
- const model=gitTreeModel(restoreFiles,[]);
- assert.equal(model.nodes.get('labs/BGP-LAB/Broken').restorable,true);
- assert.equal(model.nodes.get('labs/BGP-LAB/working').restorable,false);
- assert.equal(model.nodes.get('labs/BGP-LAB/eos').restorable,true,'an EOS .eoscfg artifact is restorable');
- assert.equal(model.nodes.get('labs/BGP-LAB/xr').restorable,true,'an IOS XR .xrcfg artifact is restorable');
- assert.equal(model.nodes.get('labs/BGP-LAB').restorable,false,'a parent folder is not itself restorable');
- // Apply shows for a restorable folder when the browser passes an apply handler.
- const shown=gitPlacesMarkup(model,{selected:'labs/BGP-LAB/Broken',canApply:true,canAct:true});
- assert.match(shown,/data-git-places-action="apply"/);
- assert.match(shown,/Apply to running lab/);
- // Hidden for a non-restorable folder or when applying is not offered.
- assert.doesNotMatch(gitPlacesMarkup(model,{selected:'labs/BGP-LAB/working',canApply:true,canAct:true}),/data-git-places-action="apply"/);
- assert.doesNotMatch(gitPlacesMarkup(model,{selected:'labs/BGP-LAB/Broken',canApply:false,canAct:true}),/data-git-places-action="apply"/);
+test('latest, baseline and checkpoints are reserved names inside a lab folder; a "latest" segment higher up is unrelated',()=>{
+ const {gitFolderPath}=makeContext();
+ for(const bad of ['latest','working/latest','x/baseline','x/checkpoints','x/checkpoints/one','Week-04/BGP/checkpoints/Final'])
+  assert.throws(()=>gitFolderPath(bad),/latest, baseline and checkpoints are the folders Save progress writes/,bad);
+ assert.equal(gitFolderPath('course/latest/working'),'course/latest/working','a "latest" segment that is not the last one or two segments is an ordinary folder name');
+ assert.equal(gitFolderPath('checkpoints-log'),'checkpoints-log','only the exact reserved name is refused, not a name that merely contains it');
 });
-test('saved versions come from the repository tree: this lab first, instructor folders beside it, apply only where a restore artifact exists',()=>{
+test('a folder is a saved configuration when it holds manifest.json, whatever its name or depth; a restore-shaped extension alone is not enough',()=>{
+ const {gitTreeModel,gitApplySource,gitPlacesMarkup}=makeContext();
+ const manifestFiles=[
+  {path:'labs/BGP-LAB/Final/PTX1.jcfg',size:200},{path:'labs/BGP-LAB/Final/manifest.json',size:300},         // holds manifest.json directly
+  {path:'labs/BGP-LAB/Broken/latest/PTX1.jcfg',size:200},{path:'labs/BGP-LAB/Broken/latest/manifest.json',size:300}, // legacy convenience: only the latest/ child is a snapshot
+  {path:'labs/BGP-LAB/Both/PTX1.jcfg',size:200},{path:'labs/BGP-LAB/Both/manifest.json',size:300},            // both the folder and its latest/ child are snapshots
+  {path:'labs/BGP-LAB/Both/latest/PTX1.jcfg',size:200},{path:'labs/BGP-LAB/Both/latest/manifest.json',size:300},
+  {path:'labs/BGP-LAB/eos/CEOS1.eoscfg',size:150},{path:'labs/BGP-LAB/eos/manifest.json',size:300},           // Arista EOS restore artifact, still needs the manifest
+  {path:'labs/BGP-LAB/xr/XRV1.xrcfg',size:150},{path:'labs/BGP-LAB/xr/manifest.json',size:300},               // Cisco IOS XR restore artifact
+  {path:'labs/BGP-LAB/NoManifest/PTX1.jcfg',size:200},                                                        // a .jcfg alone: no name pattern makes this a saved configuration
+  {path:'manifest.json',size:300},                                                                            // the repository root can itself be a saved configuration
+ ];
+ const model=gitTreeModel(manifestFiles,[]);
+ const final=model.nodes.get('labs/BGP-LAB/Final');assert.equal(final.snapshot,true);assert.equal(final.restorable,true);same(gitApplySource(final),{path:'/labs/BGP-LAB/Final'});
+ const broken=model.nodes.get('labs/BGP-LAB/Broken');assert.equal(broken.snapshot,false);assert.equal(broken.latestSnapshot,true);assert.equal(broken.restorable,true,'the legacy parent convenience is still appliable');same(gitApplySource(broken),{path:'/labs/BGP-LAB/Broken/latest'});
+ const both=model.nodes.get('labs/BGP-LAB/Both');assert.equal(both.snapshot,true);assert.equal(both.latestSnapshot,true);same(gitApplySource(both),{path:'/labs/BGP-LAB/Both'},'a folder that is itself a snapshot applies directly; nothing is substituted from its latest child');
+ same(gitApplySource(model.nodes.get('labs/BGP-LAB/Both/latest')),{path:'/labs/BGP-LAB/Both/latest'},'the nested latest/ is also its own, separate, applyable row');
+ assert.equal(model.nodes.get('labs/BGP-LAB/eos').restorable,true,'an EOS .eoscfg artifact is restorable once its folder holds manifest.json');
+ assert.equal(model.nodes.get('labs/BGP-LAB/xr').restorable,true,'a Cisco IOS XR .xrcfg artifact is restorable once its folder holds manifest.json');
+ const noManifest=model.nodes.get('labs/BGP-LAB/NoManifest');assert.equal(noManifest.snapshot,false);assert.equal(noManifest.restorable,false,'a restore-shaped extension without manifest.json is not a saved configuration');
+ assert.equal(model.nodes.get('labs/BGP-LAB').restorable,false,'a parent folder is not itself restorable');
+ assert.equal(model.root.snapshot,true);same(gitApplySource(model.root),{path:'/'},'the repository root is written "/" on the wire, never an empty string');
+ // Apply shows for a snapshot folder when the browser passes an apply handler, with the caption naming the exact source.
+ const shown=gitPlacesMarkup(model,{selected:'labs/BGP-LAB/Final',canApply:true,canAct:true});
+ assert.match(shown,/data-git-places-action="apply"/);assert.match(shown,/Apply to running lab/);
+ assert.match(shown,/Applies this saved configuration to the running devices\. They are not rebooted\./);
+ const legacy=gitPlacesMarkup(model,{selected:'labs/BGP-LAB/Broken',canApply:true,canAct:true});
+ assert.match(legacy,/data-git-places-action="apply"/);
+ // The caption is a label for the student, so it never carries gitApplySource's wire-form leading slash.
+ assert.match(legacy,/Applies this folder.s latest save \(labs\/BGP-LAB\/Broken\/latest\) to the running devices\. They are not rebooted\./);
+ // Hidden for a folder without manifest.json or when applying is not offered.
+ assert.doesNotMatch(gitPlacesMarkup(model,{selected:'labs/BGP-LAB/NoManifest',canApply:true,canAct:true}),/data-git-places-action="apply"/);
+ assert.doesNotMatch(gitPlacesMarkup(model,{selected:'labs/BGP-LAB/Final',canApply:false,canAct:true}),/data-git-places-action="apply"/);
+});
+test('Apply to running lab sends the exact resolved snapshot path to onApply, never a substituted one',async()=>{
+ const context=makeContext(),applied=[];
+ context.opTask=async(dialog,fn)=>fn();
+ const actionContainer=()=>({innerHTML:'',contains:()=>false,querySelectorAll:()=>[],_els:{},
+  querySelector(sel){const m=/\[data-git-places-action="([\w-]+)"\]/.exec(sel);if(!m)return null;if(!new RegExp('data-git-places-action="'+m[1]+'"').test(this.innerHTML))return null;return this._els[m[1]]||(this._els[m[1]]={onclick:null});}});
+ const finalFiles=[{path:'Final/PTX1.jcfg',size:10},{path:'Final/manifest.json',size:10}];
+ const brokenFiles=[{path:'Broken/latest/PTX1.jcfg',size:10},{path:'Broken/latest/manifest.json',size:10}];
+ const containerA=actionContainer();
+ await context.gitPlacesShow(containerA,'lab','r1',{tree:{repository:{id:'r1',path:'/p1'},files:finalFiles,folders:[{id:'lab-f',prefix:'Final',lab:{id:'lab',name:'Final lab'}}],planned:[],head:'a',saved:{}},current:'lab-f',canAct:true,onApply:p=>applied.push(p)});
+ await containerA.querySelector('[data-git-places-action="apply"]').onclick();
+ const containerB=actionContainer();
+ await context.gitPlacesShow(containerB,'lab','r2',{tree:{repository:{id:'r2',path:'/p2'},files:brokenFiles,folders:[{id:'lab-b',prefix:'Broken',lab:{id:'lab',name:'Broken lab'}}],planned:[],head:'a',saved:{}},current:'lab-b',canAct:true,onApply:p=>applied.push(p)});
+ await containerB.querySelector('[data-git-places-action="apply"]').onclick();
+ assert.deepEqual(applied,['/Final','/Broken/latest'],'the exact snapshot path onApply receives carries the wire\'s one leading slash');
+});
+test('saved versions come from the repository tree: this lab first, every manifest.json elsewhere, apply only where one exists',()=>{
  const context=makeContext();
  const versionFiles=[
   {path:'labs/BGP/work/latest/PE1.cfg',size:10},{path:'labs/BGP/work/latest/PE1.jcfg',size:20},{path:'labs/BGP/work/latest/manifest.json',size:5},
   {path:'labs/BGP/work/checkpoints/ospf-done/PE1.cfg',size:10},{path:'labs/BGP/work/checkpoints/ospf-done/manifest.json',size:5},
   {path:'labs/BGP/work/baseline/PE1.cfg',size:10},{path:'labs/BGP/work/baseline/manifest.json',size:5},
-  {path:'labs/BGP/solution/latest/PE1.cfg',size:10},{path:'labs/BGP/solution/latest/PE1.jcfg',size:20},{path:'labs/BGP/solution/latest/manifest.json',size:5},
-  {path:'labs/BGP/start/latest/PE1.cfg',size:10},{path:'labs/BGP/start/latest/manifest.json',size:5},
-  {path:'labs/OTHER/latest/R1.cfg',size:10},{path:'labs/OTHER/latest/R1.jcfg',size:20},{path:'labs/OTHER/latest/manifest.json',size:5}];
+  {path:'labs/BGP/Final/PE1.cfg',size:10},{path:'labs/BGP/Final/manifest.json',size:5},                               // a snapshot held directly, any other name
+  {path:'labs/BGP/Broken/latest/PE1.jcfg',size:20},{path:'labs/BGP/Broken/latest/manifest.json',size:5},              // legacy parent convenience
+  {path:'labs/BGP/course/lab/reference/solution/PE1.cfg',size:10},{path:'labs/BGP/course/lab/reference/solution/manifest.json',size:5}, // any depth
+  {path:'labs/BGP/NoManifest/PE1.jcfg',size:20},                                                                      // never listed: no manifest.json
+  {path:'labs/OTHER/latest/R1.cfg',size:10},{path:'labs/OTHER/latest/R1.jcfg',size:20},{path:'labs/OTHER/latest/manifest.json',size:5},
+  {path:'manifest.json',size:5},                                                                                      // elsewhere: the repository root
+  {path:'zzz-other/manifest.json',size:5}];                                                                           // elsewhere: outside the lab folder's parent entirely
  const versionFolders=[{id:'work',label:'repo / work',prefix:'labs/BGP/work',lab:{id:'lab',name:'BGP lab'}},{id:'other',label:'repo / other',prefix:'labs/OTHER',lab:{id:'o',name:'Other lab'}}];
  const tree={head:'a'.repeat(40),files:versionFiles,folders:versionFolders,saved:{latest:1789128000,baseline:1789100000,checkpoints:null},repository:{path:'/home/ben/labs/Course-Labs'}};
  const model=context.gitTreeModel(tree.files,tree.folders);
  const binding={binding_id:'work',repository:{path:'/home/ben/labs/Course-Labs',prefix:'labs/BGP/work',branch:'main'}};
  context.state.git_jobs=[{id:'cp',lab_id:'lab',target:'checkpoint',checkpoint:'ospf-done',status:'synced',note:'adjacencies up',created:'2026-09-11T12:00:00Z',finished:'2026-09-11T12:01:00Z'}];
  const groups=context.gitVersionGroups('lab',{binding},model,tree,null);
- assert.equal(groups.latest.length,1);assert.equal(groups.latest[0].name,'Latest');same(groups.latest[0].apply,{folder:'labs/BGP/work'});assert.equal(groups.latest[0].compare,false);same(groups.latest[0].view,{commit:tree.head,path:'latest'});
- assert.equal(groups.checkpoints[0].name,'ospf-done');assert.equal(groups.checkpoints[0].note,'adjacencies up');assert.equal(groups.checkpoints[0].apply,null);same(groups.checkpoints[0].view,{commit:tree.head,path:'checkpoints/ospf-done'});
- assert.equal(groups.baseline[0].name,'Baseline');same(groups.baseline[0].view,{commit:tree.head,path:'baseline'});
- same(groups.reference.map(r=>[r.caption,!!r.apply]),[['labs/BGP/solution',true],['labs/BGP/start',false]],'sibling folders with a latest save; apply only with a .jcfg');
- same(groups.reference.map(r=>r.view.path),['labs/BGP/solution/latest','labs/BGP/start/latest']);
- same(groups.others.map(r=>[r.name,r.caption,!!r.apply]),[['Other lab','labs/OTHER',true]],'other labs are listed under their own name');
- const rooted=context.gitTreeModel([{path:'latest/PE1.cfg',size:1},{path:'latest/PE1.jcfg',size:1},{path:'latest/manifest.json',size:1}],[{id:'root',label:'repo',prefix:'',lab:{id:'lab',name:'Root lab'}}]);
- const rootGroups=context.gitVersionGroups('lab',{binding:{binding_id:'root',repository:{path:'/p',prefix:''}}},rooted,{head:'b'.repeat(40),files:[],folders:[],saved:{}},null);
- same(rootGroups.latest[0].apply,{version:{type:'git',commit:'b'.repeat(40),path:'latest'}},'a lab saving at the top level applies its latest through the version path');
- const fromHistory=context.gitVersionGroups('lab',{binding},null,null,{versions:[{path:'labs/BGP/work/latest',commit:'c',connected:true,label:'x'},{path:'labs/BGP/solution/latest',commit:'c',connected:false,label:'solution · latest'}]});
- assert.equal(fromHistory.latest[0].name,'Latest');assert.equal(fromHistory.reference[0].caption,'labs/BGP/solution/latest');
+ assert.equal(groups.latest.length,1);assert.equal(groups.latest[0].name,'Latest');same(groups.latest[0].apply,{path:'/labs/BGP/work/latest'});assert.equal(groups.latest[0].compare,false);same(groups.latest[0].view,{commit:tree.head,path:'/labs/BGP/work/latest'});
+ assert.equal(groups.checkpoints[0].name,'ospf-done');assert.equal(groups.checkpoints[0].note,'adjacencies up');same(groups.checkpoints[0].apply,{path:'/labs/BGP/work/checkpoints/ospf-done'});same(groups.checkpoints[0].view,{commit:tree.head,path:'/labs/BGP/work/checkpoints/ospf-done'});
+ assert.equal(groups.baseline[0].name,'Baseline');same(groups.baseline[0].apply,{path:'/labs/BGP/work/baseline'});same(groups.baseline[0].view,{commit:tree.head,path:'/labs/BGP/work/baseline'});
+ same(groups.reference.map(r=>r.caption).sort(),['labs/BGP/Broken/latest','labs/BGP/Final','labs/BGP/course/lab/reference/solution'],'every snapshot folder below the lab folder\'s parent, any depth, not the lab\'s own');
+ assert.ok(groups.reference.every(r=>r.apply&&r.apply.path==='/'+r.caption&&r.view.path==='/'+r.caption),'reference rows apply and view from their exact snapshot path, with the wire\'s leading slash; nothing is substituted');
+ assert.ok(!groups.reference.some(r=>r.caption==='labs/BGP/NoManifest')&&!groups.others.some(r=>r.caption==='labs/BGP/NoManifest')&&!groups.elsewhere.some(r=>r.caption==='labs/BGP/NoManifest'),'a folder without manifest.json is never listed as a saved version');
+ same(groups.others.map(r=>[r.name,r.caption,!!r.apply]),[['Other lab','labs/OTHER/latest',true]],'other labs are listed under their own name, from their exact snapshot path');
+ same(groups.elsewhere.map(r=>[r.name,r.caption]).sort((a,b)=>a[1].localeCompare(b[1])),[['Repository root',''],['zzz-other','zzz-other']],'snapshot folders outside the lab folder\'s parent and outside any other lab\'s registration are listed separately');
+ const fromHistory=context.gitVersionGroups('lab',{binding},null,null,{versions:[{path:'labs/BGP/work/latest',commit:'c',connected:true,label:'x'},{path:'labs/BGP/Final',commit:'c',connected:false,label:'Final'}]});
+ assert.equal(fromHistory.latest[0].name,'Latest');assert.equal(fromHistory.reference[0].caption,'labs/BGP/Final');
  const el={innerHTML:'',querySelectorAll:()=>[]};context.$=id=>id==='git-saved-versions'?el:null;
  context.gitRenderVersions('lab',{binding},model,tree,null);
  assert.match(el.innerHTML,/<h3>Latest<\/h3>/);assert.match(el.innerHTML,/data-git-version-action="apply"/);assert.match(el.innerHTML,/Compare with my latest save/);assert.match(el.innerHTML,/Full history…/);assert.match(el.innerHTML,/Instructor and reference versions/);assert.match(el.innerHTML,/<summary>Other labs in this repository \(1\)<\/summary>/);
+ assert.match(el.innerHTML,/<summary>Elsewhere in this repository \(2\)<\/summary>/,'the new collapsed group for snapshot folders that are neither this lab\'s own, a nearby reference, nor another lab\'s');
  assert.match(el.innerHTML,/No checkpoints yet/.test(el.innerHTML)?/No checkpoints yet/:/ospf-done/);
  context.gitRenderVersions('lab',{binding:null},null,null,null);assert.match(el.innerHTML,/Choose a save location first/);
 });

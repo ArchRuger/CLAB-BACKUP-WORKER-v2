@@ -4,6 +4,39 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.31
+
+**Saving as Latest updates the same `latest/` in place, and Apply to running lab… is offered for any folder that
+holds a saved configuration.** First release of the save-location stream ([save-location-fix](save-location-fix/PICKUP.md)).
+
+- **No more `working/latest/latest`.** A lab folder (the folder a lab saves to) is where Save progress writes `latest/`,
+  `baseline/` and `checkpoints/<name>`; those names can no longer become a lab folder themselves. In the folder
+  browser, choosing an existing `…/latest` folder resolves to the folder above it (the button says *Saves go to
+  …/latest*); a typed folder name (New folder…, the first save, Connect by URL, the guided setup on the VM) and the
+  API refuse such a name with that explanation, and so does the VM helper. A folder that holds a saved configuration,
+  or sits inside one, is not a destination either. Reproduced live before the fix: a lab whose folder registration
+  had been retired could re-choose `save-fix/working/latest` and its next save nested `save-fix/working/latest/latest`
+  ([evidence](save-location-fix/evidence/00-repro-nested-latest.md)).
+- **Labs that were caught by it keep working and can get out.** A registration an older release made at `…/latest` is
+  left as it is (nothing stored is rewritten and its saves keep landing where they did); the Save location card now
+  says so and names the way out: pick the folder above under *Change folder…* and choose *Save this lab here* without
+  moving the files. The next save then updates the original `…/latest` again; the nested copy stays in the repository
+  as its own saved configuration (the helper no longer refuses a save because a subfolder sits inside the snapshot).
+- **Apply from any saved configuration.** A saved configuration is any repository folder holding `manifest.json`,
+  whatever its name or depth: `Final`, `Broken`, `working/latest`, `course/lab/reference/solution`, the repository
+  root. The folder browser offers *Apply to running lab…* on every such folder (and, for a folder whose only saved
+  state is its `latest/` child, on that child, saying so), the *Saved versions* card lists them all by their exact
+  path (own · instructor and reference · other labs · elsewhere in the repository), *Full history…* lists them, and
+  View, Compare, Download and Apply read exactly the folder named. Folders that arrive with *Update from the
+  repository* count as soon as they are there. The manifest and its files decide what can be applied: the review still
+  lists every device with its reason when it cannot be.
+- **The review is what gets applied.** The review of a folder source names the repository commit it read, and
+  confirming applies exactly that commit's files: a repository update between the review and the confirmation cannot
+  swap in different bytes, and a commit that left the branch history is refused before any device is contacted.
+- Guides: [Save lab progress to Git](GIT-PROGRESS.md) (repository layout, save location rules, apply) and
+  [Lab operations](LAB-OPERATIONS.md). The VM helpers changed (`read-version`, `history`, `register-prefix`,
+  `connect`): the launcher refreshes them; a mixed tree is refused as before.
+
 ## Changes in 1.30.30
 
 **Replace running configuration: acceptance closed on all four kinds.** Fourth and closing release of the

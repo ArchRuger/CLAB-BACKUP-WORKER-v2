@@ -1,10 +1,16 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../app/static/restore.js'),'utf8');
+// Objects returned from the vm context are not reference-equal to a literal built in this realm even
+// when they have the same shape, so deepStrictEqual on them needs a structural comparison instead.
+const same=(actual,expected)=>assert.equal(JSON.stringify(actual),JSON.stringify(expected));
 function ctx(){
  const context=vm.createContext({
   esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
   crypto:{getRandomValues:bytes=>{for(let i=0;i<bytes.length;i++)bytes[i]=i;return bytes;}},
   state:{labs:[]},utcDisplay:v=>new Date(v).toISOString(),clearTimeout:()=>{},setTimeout:()=>0,
+  // gitRepoName lives in git-progress.js, loaded before restore.js in the real page; restore.js only
+  // calls it behind a typeof guard, so this suite stubs it the same way git-progress.js defines it.
+  gitRepoName:repo=>String(repo?.path||'').split('/').filter(Boolean).pop()||repo?.label||'Repository',
   $:()=>null,api:async()=>({json:async()=>({})}),json:async()=>({}),opDialog:()=>({}),opTask:async()=>{},refresh:async()=>{}});
  vm.runInContext(source,context);return context;
 }
@@ -17,7 +23,59 @@ test('source labels describe git and backup origins',()=>{
  assert.match(c.restoreSourceLabel({type:'git',commit:'abcdef0123456789',path:'latest'}),/Saved version · abcdef0123/);
  assert.match(c.restoreSourceLabel({type:'backup',backup_job_id:'0123456789abcdef'}),/Backup · 0123456789/);
  assert.equal(c.restoreSourceLabel({type:'folder',path:'labs/BGP/solution/latest'}),'Saved version · labs/BGP/solution');
+ assert.equal(c.restoreSourceLabel({type:'folder',path:'/labs/BGP/solution/latest'}),'Saved version · labs/BGP/solution','the wire form\'s leading slash is stripped for display too');
+ assert.equal(c.restoreSourceLabel({type:'folder',path:'/'}),'Saved version · the repository root','the wire form of the repository root reads in words, not as a slash');
+ assert.equal(c.restoreSourceLabel({type:'folder',path:'Final'}),'Saved version · Final','an exact snapshot folder with no latest/ suffix names itself');
+ assert.equal(c.restoreSourceLabel({type:'folder',path:'/Final'}),'Saved version · Final');
  assert.equal(c.restoreSourceLabel(null),'Saved configuration');
+});
+test('restoreFromFolder sends the exact snapshot path over the wire with one leading slash, never a substituted /latest, and "/" for the repository root; a path that already carries the slash is not doubled',async()=>{
+ const c=ctx(),sent=[];
+ c.notify=()=>{};
+ c.restoreReview=async(labId,source,label)=>sent.push({labId,source,label});
+ await c.restoreFromFolder('lab','Final',{repository:{path:'/home/ben/Course-Labs'}});
+ same(sent[0].source,{type:'folder',path:'/Final'});
+ assert.match(sent[0].label,/^Final · Course-Labs › Final$/,'the label shown to the student never carries the wire\'s leading slash');
+ await c.restoreFromFolder('lab','Broken/latest',{repository:{path:'/home/ben/Course-Labs'}});
+ same(sent[1].source,{type:'folder',path:'/Broken/latest'},'the exact folder is sent; nothing appends another /latest');
+ assert.match(sent[1].label,/^Broken · Course-Labs › Broken\/latest$/);
+ await c.restoreFromFolder('lab','',{repository:{path:'/home/ben/Course-Labs'}});
+ same(sent[2].source,{type:'folder',path:'/'},'the repository root is written "/" on the wire');
+ assert.match(sent[2].label,/^the repository root · Course-Labs$/,'the root label names no path at all, never a bare slash');
+ await c.restoreFromFolder('lab','/Final',{repository:{path:'/home/ben/Course-Labs'}});
+ same(sent[3].source,{type:'folder',path:'/Final'},'a path that already carries the leading slash is not doubled');
+ assert.match(sent[3].label,/^Final · Course-Labs › Final$/);
+ await c.restoreFromFolder('lab','/',{repository:{path:'/home/ben/Course-Labs'}});
+ same(sent[4].source,{type:'folder',path:'/'},'the wire-form root, given directly, stays "/"');
+ const toasts=[];c.notify=m=>toasts.push(m);
+ await c.restoreFromFolder('lab',undefined,{});
+ assert.equal(sent.length,5,'nothing chosen sends no request');assert.match(toasts[0],/Choose a saved folder/);
+});
+test('restoreReview submits exactly the reviewed folder source (type, path, commit) and shows the pinned commit beside the source line; git and backup sources are sent unchanged',async()=>{
+ const c=ctx(),calls=[],elements=new Map(),dialogs=[];
+ const field=()=>({checked:false,value:'5',textContent:''});
+ const makeDialog=()=>({innerHTML:'',close(){},querySelector:()=>({onclick:null}),querySelectorAll(sel){return sel==='[data-op-close]'?[]:sel==='[name="restore-node"]:checked'?[{value:'r1'}]:[];}});
+ c.opDialog=()=>{const d=makeDialog();dialogs.push(d);return d;};c.opTask=async(d,fn)=>fn();c.refresh=async()=>{};
+ c.$=id=>elements.get(id)||(elements.set(id,field()),elements.get(id));
+ c.json=async(endpoint,method,payload)=>{calls.push({endpoint,method,payload});
+  if(endpoint.endsWith('/preflight'))return {source:{commit:'c'.repeat(40)},targets:[{name:'r1',short_name:'r1',eligible:true,platform:'arista_ceos'}]};
+  return {id:'job',lab_id:'lab',status:'queued',targets:[]};};
+ await c.restoreReview('lab',{type:'folder',path:'course/lab/latest'},'Latest · Course-Labs › course/lab/latest');
+ assert.match(dialogs[0].innerHTML,/c{10}/,'the commit is shown, first 10 characters, beside the source line');
+ c.$('restore-ack').checked=true;
+ await elements.get('restore-run').onclick();
+ assert.equal(calls[1].endpoint,'/labs/lab/restore');
+ assert.deepEqual(Object.keys(calls[1].payload.source).sort(),['commit','path','type'],'the API model forbids extra keys on a folder source');
+ assert.equal(calls[1].payload.source.commit,'c'.repeat(40));assert.equal(calls[1].payload.source.path,'course/lab/latest');
+ // A git source is submitted unchanged: it already names its own commit.
+ calls.length=0;elements.clear();
+ c.json=async(endpoint,method,payload)=>{calls.push({endpoint,method,payload});
+  if(endpoint.endsWith('/preflight'))return {source:{commit:'d'.repeat(40)},targets:[{name:'r1',short_name:'r1',eligible:true,platform:'arista_ceos'}]};
+  return {id:'job2',lab_id:'lab',status:'queued',targets:[]};};
+ await c.restoreReview('lab',{type:'git',commit:'e'.repeat(40),path:'checkpoints/day-1'},'Checkpoint');
+ c.$('restore-ack').checked=true;
+ await elements.get('restore-run').onclick();
+ same(calls[1].payload.source,{type:'git',commit:'e'.repeat(40),path:'checkpoints/day-1'});
 });
 test('badge classes reflect status and escape the label text',()=>{
  const c=ctx(),labels={verified:'Applied and verified',applying:'Replacing',rollback_expected:'Rolled back',verify_mismatch:'Differences',rolled_back:'Undone',uncertain:'Unknown'};

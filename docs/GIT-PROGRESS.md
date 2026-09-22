@@ -149,9 +149,21 @@ BENS-BGP-LAB/
 ```
 
 Names above illustrate the layout; the exporter chooses stable filenames from
-node identity and configuration format. Repeated saves update `latest/`; Git
-history preserves earlier contents. Capture timestamps alone do not create an
-extra commit when the configurations and meaningful metadata are unchanged.
+node identity and configuration format. The folder a lab saves to (its **lab
+folder**, `BENS-BGP-LAB/` above, or a subfolder of a shared repository) is where Save
+progress writes `latest/`, `baseline/` and `checkpoints/`; those three are the
+**snapshot folders** inside it. Repeated saves update the same `latest/` in place:
+changed files get a new commit and an ordinary push, and Git history preserves the
+earlier contents. Saving never creates `latest/latest`, a timestamped copy or a
+checkpoint of its own; a separately named state is only ever made by **Create
+checkpoint…**. Capture timestamps alone do not create an extra commit when the
+configurations and meaningful metadata are unchanged.
+
+Because `latest`, `baseline` and `checkpoints` are the names of the snapshot folders, they
+cannot be a lab folder themselves: choosing `working/latest` in the folder browser resolves
+to `working`, whose saves go to `working/latest`, and a typed folder name or an API request
+naming such a folder is refused with that explanation. A folder named `latest` higher up
+(`course/latest/working`) is an ordinary folder name and stays allowed.
 
 **Set baseline…** changes `baseline/` explicitly. Replacing an existing baseline
 requires review. **Create checkpoint…** creates a named milestone; choose a new name
@@ -178,7 +190,7 @@ repeats them on its status card, whose **More ▾** adds the rest.
 | **Save on this VM only** | Capture and commit without pushing. |
 | **Create checkpoint…** | Capture a named milestone in `checkpoints/<name>`. |
 | **Set baseline…** | Select a complete recorded capture for `baseline`; replacing one is reviewed explicitly. |
-| **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* diffs it against the lab's `latest/` (never against the running devices); *Apply to running lab…* replaces the running configuration of the selected devices (Junos, EOS or IOS XR) with that version (no reboot; backed up first) without changing where the lab saves. |
+| **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it and everything else in the repository. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* diffs it against the lab's `latest/` (never against the running devices); *Apply to running lab…* replaces the running configuration of the selected devices (Junos, EOS or IOS XR) with that version (no reboot; backed up first) without changing where the lab saves. |
 | **Full history…** | Every commit of the lab's folder with its versions. |
 | **Upload saved progress** / **Review and upload…** | Publish a saved commit without recapturing devices, through the same review (a save reviewed before, whose upload failed, reads **Upload now**). |
 | **Update from the repository** | Update an eligible clean checkout using a fast-forward; no merge/rebase conflict resolution. |
@@ -229,9 +241,19 @@ registration IDs and folder names.
   is registered on the VM. For a lab that is not connected yet, the new folder is
   registered and preselected for **Connect**.
 - Folders of one repository never overlap: a folder cannot be created inside another
-  lab's folder, `latest/`, `baseline/` and `checkpoints/` cannot be chosen as
-  destinations, and a repository that a lab saves to at its root cannot also hold lab
-  folders unless that lab moves first. The VM helper enforces the same rules again.
+  lab's folder or inside a saved configuration, `baseline/` and `checkpoints/` cannot be
+  chosen as destinations, choosing a `latest/` folder means the folder above it (the
+  browser says *Saves go to …/latest*), a folder that itself holds a `manifest.json` is a
+  saved configuration and not a destination, and a repository that a lab saves to at its
+  root cannot also hold lab folders unless that lab moves first. The manager and the VM
+  helper enforce the same rules again, so a folder named `latest`, `baseline` or
+  `checkpoints/<name>` is never registered as a lab folder.
+- A lab that an older release registered at a `…/latest` folder keeps working exactly as
+  it is (its saves go to `…/latest/latest`, and nothing is rewritten). To end the nesting,
+  choose the folder above it with **Save this lab here** *without* moving the files: the
+  next save updates the original `…/latest` snapshot again, and the nested copy stays in the
+  repository as its own saved configuration (visible in the browser, appliable, and removable
+  with Git on the VM whenever you want).
 
 A moved lab keeps working with its old saves: *Saved versions* and *Full history…*
 read the commits of the new folder, and the commit that moved the files lists
@@ -341,15 +363,30 @@ A saved configuration (Junos, EOS or IOS XR today) can be applied to the running
 both of which converge the running node to exactly the saved configuration without a
 reboot or a containerlab redeploy:
 
-- **From the saved versions (simplest).** On the **Progress** tab, every version whose
-  folder holds a restorable saved state (its `latest/` carries a restore-grade candidate
-  for at least one supported device) offers **Apply to running lab…** — the lab's own
-  *Latest*, and the *Instructor and reference versions* kept in other folders of the same
-  repository. **Browse the
-  repository…** (or *Save location › Change folder…*) reaches any other folder with the
-  same button. The lab does **not** have to save to that folder — you can keep saving
-  wherever you save and still apply Base, working, Final or Broken straight from their
-  folders. This makes a repository of named states a pick-and-load library.
+- **From the saved versions (simplest).** A saved configuration is any repository folder
+  that holds a `manifest.json` written by a manager save, whatever the folder is called and
+  however deep it sits: `Final`, `Broken`, `working/latest`, `course/lab/reference/solution`,
+  even the repository root. On the **Progress** tab every such folder offers **Apply to
+  running lab…** — the lab's own *Latest*, *Checkpoints* and *Baseline*, the *Instructor and
+  reference versions* kept beside the lab folder and, folded, the other labs' saves and
+  everything else in the repository, each row naming its exact folder. **Browse the
+  repository…** (or *Save location › Change folder…*) reaches any folder with the same
+  button: a folder with its own `manifest.json` applies that folder, and a folder whose only
+  saved state is its `latest/` child applies `…/latest` (the caption says which). When both
+  exist they are two different saved configurations and nothing is substituted. Folders that
+  arrived with **Update from the repository** count as soon as they are there. The lab does
+  **not** have to save to that folder — you can keep saving wherever you save and still apply
+  Base, working, Final or Broken straight from their folders, and the next **Save progress**
+  goes back to your own `latest/`. The folder's name only decides that it is listed; the
+  manifest and its files decide what can be applied: a device saved before its platform could
+  be restored, a damaged or missing file, a platform the manager cannot restore or a node that
+  is not in the running lab is listed in the review with that reason and is not touched, and a
+  manifest that cannot be read stops the review before any device is contacted.
+- **The review is what gets applied.** The review names the repository commit the saved
+  configuration was read from; replacing the configurations applies exactly that commit's
+  files, so an **Update from the repository** between the review and the confirmation cannot
+  swap in different bytes (a commit that is no longer in the branch history is refused, and
+  the review is simply run again).
 - **From a specific commit.** Open a version in **Full history…** and choose
   **Apply to running lab…** to apply that commit's snapshot.
 

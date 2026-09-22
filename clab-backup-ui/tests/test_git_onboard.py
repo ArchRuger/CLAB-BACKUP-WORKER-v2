@@ -169,6 +169,20 @@ class GitOnboardTests(unittest.TestCase):
             self.assertIn('bgp', binding['label'])
             self.assertEqual(binding['push_url'], '')
 
+    def test_ask_subfolder_refuses_reserved_snapshot_shapes_and_reprompts(self):
+        # Rule 1 (docs/save-location-fix/PICKUP.md): latest, baseline and checkpoints/<name> are
+        # the folders Save progress writes inside a lab folder, never the lab folder itself.
+        for bad in ('latest', 'baseline', 'checkpoints', 'course/latest', 'course/baseline',
+                    'course/checkpoints', 'working/checkpoints/one'):
+            with patch.object(onboard, 'ask', side_effect=[bad, 'bgp']), \
+                    patch('builtins.print') as output:
+                self.assertEqual(onboard.ask_subfolder(), 'bgp')
+            messages = [call.args[0] for call in output.call_args_list if call.args]
+            self.assertTrue(any('Choose the folder above them' in message for message in messages), bad)
+        # A folder that merely contains a reserved word elsewhere is fine.
+        with patch.object(onboard, 'ask', return_value='course/latest/working'):
+            self.assertEqual(onboard.ask_subfolder(), 'course/latest/working')
+
     def test_registered_repository_can_add_a_new_subfolder_for_another_lab(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)

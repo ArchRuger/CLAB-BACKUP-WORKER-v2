@@ -11,7 +11,8 @@ import zipfile
 from fastapi import HTTPException
 
 from app import __version__
-from app.git_progress import GitProgress, captured_snapshot, decoded_snapshot, pending_progress, PROTOCOL, version_label, resolve_version_path
+from app.git_progress import (GitProgress, base_folder, captured_snapshot, decoded_snapshot, pending_progress,
+                              PROTOCOL, snapshot_conflict, version_label, resolve_version_path)
 from app.store import Store
 import test_discovery as discovery_tests
 
@@ -23,15 +24,52 @@ class VersionPathTests(unittest.TestCase):
         self.assertEqual(version_label('work/baseline'), 'work · baseline')
         self.assertEqual(version_label('work/checkpoints/attempt-1'), 'work · checkpoint · attempt-1')
         self.assertEqual(version_label('latest'), 'latest')
+        self.assertEqual(version_label(''), 'repository root')
 
-    def test_resolve_version_path_handles_relative_and_full_paths(self):
+    def test_resolve_version_path_handles_exact_paths(self):
+        # Rule 5 (revised): a leading slash is an exact repository-relative path ('/' is the
+        # root); a bare 'latest', 'baseline' or 'checkpoints/<name>' keeps its pre-upgrade meaning
+        # (the lab's own folder), compatibility for a page or tool built before this release; any
+        # other bare path is exact, same as an explicit leading slash.
         binding = {'repository': {'prefix': 'labs/work'}}
-        self.assertEqual(resolve_version_path(binding, 'latest'), 'labs/work/latest')          # bare -> connected folder
-        self.assertEqual(resolve_version_path(binding, 'checkpoints/try1'), 'labs/work/checkpoints/try1')
-        self.assertEqual(resolve_version_path(binding, 'reference/broken/latest'), 'reference/broken/latest')  # full -> unchanged
-        for bad in ('reference/notasnapshot', '../etc/latest', 'reference/.git/latest', ''):
+        # (a) exact: leading slash strips to a repository-relative path.
+        self.assertEqual(resolve_version_path(binding, '/'), '')
+        self.assertEqual(resolve_version_path(binding, '/Final'), 'Final')
+        self.assertEqual(resolve_version_path(binding, '/latest'), 'latest')  # root-level 'latest', not labs/work/latest
+        self.assertEqual(resolve_version_path(binding, '/labs/work/latest'), 'labs/work/latest')
+        # (b) bare reserved names: compatibility mapping onto the connected (lab) folder.
+        self.assertEqual(resolve_version_path(binding, 'latest'), 'labs/work/latest')
+        self.assertEqual(resolve_version_path(binding, 'baseline'), 'labs/work/baseline')
+        self.assertEqual(resolve_version_path(binding, 'checkpoints/one'), 'labs/work/checkpoints/one')
+        # (c) any other bare path: exact, unchanged.
+        self.assertEqual(resolve_version_path(binding, 'Final'), 'Final')
+        self.assertEqual(resolve_version_path(binding, 'course/lab/reference/solution'), 'course/lab/reference/solution')
+        self.assertEqual(resolve_version_path(binding, 'Final/latest'), 'Final/latest')
+        self.assertEqual(resolve_version_path(binding, 'working/checkpoints/one'), 'working/checkpoints/one')
+        for bad in ('../etc/latest', 'reference/.git/latest', '/../etc/latest', ''):
             with self.assertRaises(HTTPException, msg=bad):
                 resolve_version_path(binding, bad)
+
+    def test_base_folder_refuses_reserved_lab_folder_shapes(self):
+        # Rule 1: latest, baseline and checkpoints/<name> are reserved lab-folder shapes.
+        for bad, parent in (('latest', ''), ('course/latest', 'course'), ('course/baseline', 'course'),
+                            ('course/checkpoints', 'course'), ('working/checkpoints/one', 'working')):
+            with self.assertRaises(ValueError, msg=bad) as refused:
+                base_folder(bad)
+            where = (parent + '/latest') if parent else "the repository root's latest"
+            self.assertIn('its saves go to ' + where, str(refused.exception), bad)
+        self.assertEqual(base_folder('course/latest/working'), 'course/latest/working')
+        self.assertEqual(base_folder('Week-01/BGP/Final-State'), 'Week-01/BGP/Final-State')
+        self.assertEqual(base_folder(''), '')
+
+    def test_snapshot_conflict_names_the_folder_at_or_below(self):
+        # Rule 2: a lab folder at, or below, an existing snapshot folder (manifest.json at HEAD).
+        files = [dict(path='README.md'), dict(path='Final/manifest.json'), dict(path='Final/latest/manifest.json')]
+        self.assertEqual(snapshot_conflict(files, 'Final'), 'Final')
+        self.assertEqual(snapshot_conflict(files, 'Final/sub'), 'Final')
+        self.assertEqual(snapshot_conflict(files, 'Final/latest'), 'Final/latest')
+        self.assertEqual(snapshot_conflict(files, 'Elsewhere'), '')
+        self.assertEqual(snapshot_conflict(files, ''), '')
 
 
 class GitProgressTests(unittest.TestCase):
@@ -47,6 +85,7 @@ class GitProgressTests(unittest.TestCase):
         self.repo = dict(id='bens-lab', label='Bens lab', owner='ben', path='/home/ben/labs/bgp',
                          remote='origin', branch='main', prefix='', revision='binding-1')
         self.sent = []; self.snapshots = {}; self.publish_error = ''; self.push_error = ''
+        self.extra_files = []           # extra repository files a GitPlacesTests test can add to 'browse'
         self.nothing_new = False        # the helper's answer when a save finds no changed file: it reuses HEAD
         self.helper = patch('app.git_progress.remote_git', side_effect=self.remote).start()
         self.addCleanup(patch.stopall)
@@ -75,7 +114,9 @@ class GitProgressTests(unittest.TestCase):
             if self.push_error: raise ValueError(self.push_error)
             return dict(status='synced', commit='b'*40, pushed=True, changed_files=[], snapshot_path='latest')
         if mode == 'read-version': return {'snapshot': next(iter(self.snapshots.values()))}
-        if mode == 'history': return dict(commits=[dict(commit='b'*40, message='Saved', time=1)], versions=[dict(name='latest', path='latest', commit='b'*40)])
+        if mode == 'history':
+            versions = getattr(self, 'history_versions', None) or [dict(name='latest', path='latest', commit='b'*40)]
+            return dict(commits=[dict(commit='b'*40, message='Saved', time=1)], versions=versions)
         if mode == 'compare': return {'files': [dict(name='r1.cfg', status='added', before='', after='hostname r1\n')]}
         if mode == 'update': return {'updated': True}
         raise AssertionError(mode)
@@ -511,6 +552,28 @@ class GitProgressTests(unittest.TestCase):
         for path in ('../outside', '.git/config', 'latest/../../escape', 'checkpoints/../../x'):
             self.assertEqual(self.client.post(self.url+'/version', json={**data, 'path': path}).status_code, 400)
 
+    def test_version_route_reads_an_exact_snapshot_path_and_names_the_download(self):
+        # Rule 5: an exact path with no reserved-name shape (not latest/baseline/checkpoints/<name>)
+        # is a valid snapshot path now; the old shape check is gone.
+        job, _ = self.save(); self.run_save(job)
+        data = dict(commit='b'*40, path='Final')
+        response = self.client.post(self.url+'/version', json=data)
+        self.assertEqual(response.status_code, 200, response.text)
+        read = next(r for r in self.sent if r['mode'] == 'read-version')
+        self.assertEqual(read['path'], 'Final')
+        download = self.client.post(self.url+'/version/download', json=data)
+        self.assertEqual(download.status_code, 200, download.text)
+        self.assertIn('.zip', download.headers['content-disposition'])
+        root = self.client.post(self.url+'/version', json={**data, 'path': '/'})
+        self.assertEqual(root.status_code, 200, root.text)
+        self.assertEqual([r for r in self.sent if r['mode'] == 'read-version'][-1]['path'], '')
+
+    def test_history_route_labels_an_exact_folder_by_its_own_path(self):
+        self.history_versions = [dict(name='Final', path='Final', commit='b'*40, connected=False)]
+        response = self.client.get(self.url + '/history')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['versions'][0]['label'], 'Final')
+
     def test_active_save_blocks_mutations_and_capture_can_ignore_own_reservation(self):
         job, _ = self.save()
         self.assertEqual(self.client.post(self.url+'/unlink', json={}).status_code, 409)
@@ -572,7 +635,7 @@ class GitPlacesTests(GitProgressTests):
         if mode == 'browse':
             self.sent.append(copy.deepcopy(request))
             repo = next(r for r in self.registry if r['id'] == request['binding_id'])
-            return dict(repository=repo, head='a'*40, files=[dict(path='README.md', size=12), dict(path='bgp/latest/r1.cfg', size=30), dict(path='bgp/latest/manifest.json', size=200)],
+            return dict(repository=repo, head='a'*40, files=[dict(path='README.md', size=12), dict(path='bgp/latest/r1.cfg', size=30), dict(path='bgp/latest/manifest.json', size=200)] + self.extra_files,
                         truncated=False, saved={'latest': 1789128000, 'baseline': None, 'checkpoints': None},
                         folders=[dict(id=r['id'], label=r['label'], prefix=r['prefix']) for r in self.registry if r['path'] == repo['path']])
         if mode in ('register-prefix', 'connect'):
@@ -732,6 +795,39 @@ class GitPlacesTests(GitProgressTests):
         failed = self.client.post(self.url + '/connect', json=dict(url='https://github.com/ben/Other', prefix='', acknowledge=True))
         self.assertEqual(failed.status_code, 409); self.assertIn('not signed in', failed.text)
         self.assertEqual(self.store.lab(self.lab['id'])['git_binding']['repository']['push_url'], 'https://github.com/ben/Course-Labs')
+
+    def test_destination_refuses_reserved_names_and_snapshot_conflicts(self):
+        # Rule 1: a reserved lab-folder shape is refused before the repository is even read.
+        reserved = self.client.post(self.url + '/destination', json=dict(prefix='working/latest'))
+        self.assertEqual(reserved.status_code, 400, reserved.text)
+        self.assertIn('Choose the folder above them', reserved.text)
+        self.assertFalse([r for r in self.sent if r['mode'] == 'browse'], 'no tree read for a name refused outright')
+        # Rule 2: a prefix at, or below, an existing snapshot folder is refused (409); the manager
+        # never registers or writes anything on the VM for it.
+        self.extra_files = [dict(path='Final/manifest.json', size=50), dict(path='Final/latest/manifest.json', size=60)]
+        at = self.client.post(self.url + '/destination', json=dict(prefix='Final'))
+        self.assertEqual(at.status_code, 409, at.text); self.assertIn('Final is a saved configuration', at.text)
+        self.assertIn('manifest.json', at.text)
+        below = self.client.post(self.url + '/destination', json=dict(prefix='Final/sub'))
+        self.assertEqual(below.status_code, 409, below.text); self.assertIn('Final is a saved configuration', below.text)
+        self.assertFalse([r for r in self.sent if r['mode'] == 'register-prefix'], 'a refused destination registers nothing')
+        # A folder beside the snapshot, not at or below it, is unaffected by rule 2.
+        beside = self.client.post(self.url + '/destination', json=dict(prefix='Other'))
+        self.assertEqual(beside.status_code, 200, beside.text)
+
+    def test_folders_route_refuses_reserved_names_and_snapshot_conflicts(self):
+        self.extra_files = [dict(path='Final/manifest.json', size=50), dict(path='Final/latest/manifest.json', size=60)]
+        for form in (dict(prefix='Final'), dict(prefix='Final/sub'), dict(prefix='Final', plan=True), dict(prefix='Final/sub', plan=True)):
+            response = self.client.post('/api/git/repositories/bens-lab/folders', json=form)
+            self.assertEqual(response.status_code, 409, response.text); self.assertIn('is a saved configuration', response.text)
+        self.assertFalse([r for r in self.sent if r['mode'] in ('register-prefix', 'connect')])
+        reserved = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='working/latest'))
+        self.assertEqual(reserved.status_code, 400, reserved.text)
+        reserved_plan = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='working/checkpoints/one', plan=True))
+        self.assertEqual(reserved_plan.status_code, 400, reserved_plan.text)
+        # A folder beside the snapshot still registers normally.
+        ok = self.client.post('/api/git/repositories/bens-lab/folders', json=dict(prefix='Other'))
+        self.assertEqual(ok.status_code, 200, ok.text)
 
 
 # The subclass only adds scenarios; the inherited scenarios already run once above.

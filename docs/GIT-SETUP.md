@@ -54,6 +54,9 @@ The wizard shows the Linux account it will use, then:
 - Offers to clone a repository into `~/labs/REPOSITORY`, or reuse an existing checkout.
 - Asks which repository **subfolder** holds this lab, so one repository can hold many
   labs (for example `bgp`, `eth`, `ip`). Leave it blank for a single-lab repository.
+  `latest`, `baseline` and `checkpoints` (or `checkpoints/<name>`) are refused as a subfolder:
+  those are the folders Save progress writes inside a lab folder, so choose the folder above
+  them instead.
 - Reuses a GitHub login or opens GitHub's browser authorization flow for that account.
 - Configures the Git credential helper and asks for missing commit author name/email.
 - Checks GitHub repository write permission, then asks to register the displayed checkout.
@@ -340,7 +343,9 @@ sudo bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --owner patrick --re
 For a separate owner, prepare its checkout/login/identity under that account, then
 return to the administrator for registration. Optional `--remote NAME`,
 `--label "Display name"` and `--prefix labs/bgp` select an existing remote,
-display label and managed subfolder. Prefixes must not overlap. A normal checkout
+display label and managed subfolder. Prefixes must not overlap, and `latest`, `baseline`
+and `checkpoints`/`checkpoints/<name>` are refused as a prefix for the same reason as in
+the wizard. A normal checkout
 with an existing published commit is required; linked worktrees, submodules,
 bare repositories and symbolic-link paths are unsupported.
 

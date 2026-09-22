@@ -1,3 +1,24 @@
+# Save location fix, part 1: stable Latest destination and manifest-based Apply — 1.30.31
+
+Read `docs/save-location-fix/PICKUP.md` first (the path contract, the reviews, the environment) and `MATRIX.md` there
+(what was proven on which build). Preserve: (1) two path roles: a *lab folder* (registration prefix) and the *snapshot
+folders* inside it; `latest`, `baseline`, `checkpoints[/name]` are never a *new* lab folder (`host_git.base_prefix`,
+`git_progress.base_folder`, `gitFolderPath`, the wizard prompt), and a folder at or below a manifest folder is refused
+by the routes that can read the tree (`snapshot_conflict`); an existing legacy `x/latest` registration is never
+rewritten and stays selectable, repairable and movable up (the rule runs after the "already registered" lookups; keep
+it there). (2) Snapshot paths on the wire: the browser sends exact paths with one leading slash (`/`, `/Final`,
+`/working/latest`, `gitSnapshotPath`, `'/' + job.snapshot_path`); `resolve_version_path` keeps the bare
+`latest`/`baseline`/`checkpoints/<name>` meaning "this lab's own folder" for pages and tools from before this release
+and treats other bare paths as exact; the helper's `read-version` reads any safe folder (`''`/`'/'` root) and `history`
+lists every manifest folder (`connected` rows are never dropped by the cap). (3) A folder restore source carries the
+commit the review read (`desc['commit']`, `restoreReview`'s `submitSource`); never let a submit re-read HEAD when the
+page sent a commit. (4) `publish` ignores subdirectories only for the foreign-*files* test; an unmanifested destination
+is adopted only when empty. (5) `docs/redesign/tools/fixture_manager.py` patches `restore._probe` (not only
+`_capture`) and mirrors the reserved-name refusal in `register-prefix`/`connect`. Known, documented limits: any file
+named `manifest.json` is listed until the review reads it; rule 2 sees the browse listing (4000 files) and the
+connect route applies the name rule only; a lab stuck at `x/latest` recovers by *Save this lab here* on `x` without
+moving files (a move up is refused because the parent snapshot exists).
+
 # Multi-platform restore, part 4: acceptance closed — 1.30.30
 
 The stream's closing section; the three below hold the facts to preserve, `docs/multi-platform-restore/PICKUP.md` the
