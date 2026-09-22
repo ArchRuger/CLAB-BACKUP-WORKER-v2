@@ -81,7 +81,7 @@ create `my-network-labs` afresh. The replay repositories `netlab-course-qa`, `ne
 
 ## Exact next action
 
-The stream is complete (PR #51). If it is picked up again: a change to `source/guide.md`, `screenshots/spec.json` or
+The stream is complete (PR #51 merged 1.30.33; PR #52 carries 1.30.34 and 1.30.35). If it is picked up again: a change to `source/guide.md`, `screenshots/spec.json` or
 `source/style.css` needs `bash docs/student-quick-start/build.sh`, a look at `build/pages/`, and — when a step's action or
 expected result changed — a replay of that step on the real manager (`evidence/qa/final_*.py` are the replay drivers;
 the reset tools bring the VM back to the starting states). Then update `VALIDATION.md` with the new SHA-256.
