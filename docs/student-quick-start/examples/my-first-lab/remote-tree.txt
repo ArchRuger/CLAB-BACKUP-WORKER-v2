@@ -1,0 +1,11 @@
+README.md
+my-first-lab
+my-first-lab/README.md
+my-first-lab/latest
+my-first-lab/latest/manifest.json
+my-first-lab/latest/r1.cfg
+my-first-lab/latest/r1.eoscfg
+my-first-lab/latest/r2.cfg
+my-first-lab/latest/r2.eoscfg
+my-first-lab/my-first-lab.clab.yml
+my-first-lab/my-first-lab.clab.yml.annotations.json

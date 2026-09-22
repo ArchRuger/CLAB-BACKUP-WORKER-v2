@@ -1,0 +1,13 @@
+name: my-first-lab
+topology:
+  nodes:
+    r1:
+      kind: arista_ceos
+      image: n24l/ceos:4.35.0F
+      mgmt-ipv4: 172.20.20.21
+    r2:
+      kind: arista_ceos
+      image: n24l/ceos:4.35.0F
+      mgmt-ipv4: 172.20.20.22
+  links:
+    - endpoints: [ "r1:eth1", "r2:eth1" ]

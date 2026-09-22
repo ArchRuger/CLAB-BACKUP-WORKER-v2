@@ -4,6 +4,20 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.34
+
+**Student quick start, part 2: Scenario B executed and recorded.** Second checkpoint of the illustrated student guide
+([docs/student-quick-start/PICKUP.md](student-quick-start/PICKUP.md)); no change to the manager's behaviour. The personal-lab
+walkthrough (lab builder → Save to the VM… → deploy → configure → a new private repository connected by URL → Save
+progress → the owner-side Git step that publishes the topology and map → a second save and a checkpoint → destroy,
+remove, clone the repository into the trusted lab folder, redeploy from that clone and apply the saved Latest) ran on the
+development VM through the real pages, with device readbacks and remote trees as evidence. The guide's Scenario B text is
+reconciled with that run; all figures are composed; the PDF is delivered with the next checkpoint.
+
+- Observed and documented for students: the lab builder's *Start lab* leaves the builder page where it is (go back to
+  My labs); the Node Editor can drop an image's registry prefix when the Network tab was edited (check *View YAML*);
+  the redeploy from a clone must pick the file under the repository folder, whose path the *Topology file* dialog shows.
+
 ## Changes in 1.30.33
 
 **Student quick start, part 1: Scenario A executed and recorded; a Git-identity fix in the helper.** First checkpoint

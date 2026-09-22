@@ -91,12 +91,13 @@ class StepRecorder:
     """Accumulates one JSON-serialisable record per numbered step and writes the JSON + Markdown
     evidence files the guide requires."""
 
-    def __init__(self, screenshots_dir, evidence_json, evidence_md, scenario_title):
+    def __init__(self, screenshots_dir, evidence_json, evidence_md, scenario_title, prefix='a'):
         self.screenshots_dir = pathlib.Path(screenshots_dir)
         self.screenshots_dir.mkdir(parents=True, exist_ok=True)
         self.evidence_json = pathlib.Path(evidence_json)
         self.evidence_md = pathlib.Path(evidence_md)
         self.scenario_title = scenario_title
+        self.prefix = prefix  # screenshot filename prefix: "a" for Scenario A, "b" for Scenario B, etc.
         self.steps = []
         self.started_utc = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
@@ -116,16 +117,16 @@ class StepRecorder:
         return record
 
     def shoot_full(self, page, record, name):
-        """Full-page screenshot named a<step>-<name>-full.png."""
-        filename = f"a{record['step']}-{name}-full.png"
+        """Full-page screenshot named <prefix><step>-<name>-full.png."""
+        filename = f"{self.prefix}{record['step']}-{name}-full.png"
         path = self.screenshots_dir / filename
         page.screenshot(path=str(path), full_page=True)
         record['screenshots'].append({'file': filename, 'element': 'full-page', 'callouts': []})
         return path
 
     def shoot_element(self, locator, record, name, label=None, callouts=None):
-        """Element screenshot named a<step>-<name>.png, with recorded bounding boxes for callouts."""
-        filename = f"a{record['step']}-{name}.png"
+        """Element screenshot named <prefix><step>-<name>.png, with recorded bounding boxes for callouts."""
+        filename = f"{self.prefix}{record['step']}-{name}.png"
         path = self.screenshots_dir / filename
         locator.screenshot(path=str(path))
         box = None
@@ -136,6 +137,19 @@ class StepRecorder:
         entry_callouts = list(callouts or [])
         if box is not None:
             entry_callouts.append({'label': label or name, 'box': box})
+        record['screenshots'].append({'file': filename, 'element': label or name, 'callouts': entry_callouts})
+        return path
+
+    def shoot_clip(self, page, record, name, clip, label=None, callouts=None):
+        """Screenshot of a fixed viewport region named <prefix><step>-<name>.png: for third-party
+        embedded UI (the lab builder's React panels) where no stable selector survives a rebuild,
+        but a fixed-width side panel's screen position is known."""
+        filename = f"{self.prefix}{record['step']}-{name}.png"
+        path = self.screenshots_dir / filename
+        page.screenshot(path=str(path), clip=clip)
+        entry_callouts = list(callouts or [])
+        if label:
+            entry_callouts.append({'label': label, 'box': clip})
         record['screenshots'].append({'file': filename, 'element': label or name, 'callouts': entry_callouts})
         return path
 

@@ -3,6 +3,35 @@
 What was actually executed for the guide, by whom (an agent, never a human study), on which build, with the evidence
 paths. Newest chunk first. The final section names the exact PDF (SHA-256) that was inspected page by page.
 
+## Chunk 2 — Scenario B executed and recorded (release 1.30.34, 2026-09-22)
+
+- **Build under test:** manager image `clab-backup:1.30.33` (commit `cf7bc5d`) on `clab-llm-dev2`, helpers 1.30.33.
+- **Starting state:** Scenario A's lab `link-basics` running and connected (left alone); no `my-first-lab` anywhere;
+  the private repository `pruger-dev/my-network-labs` (created with `gh repo create --private --add-readme` in an
+  earlier attempt of the same authoring session; the final run found it existing).
+- **Method:** `tools/capture_scenario_b.py` (same conventions as A); device readbacks with `tools/eos.py`; remote trees
+  with `gh api`; the owner-side Git commands run as the ordinary VM account and captured as a transcript. Agent
+  simulation of the student, not a human study.
+
+| Step | UI action | Result observed | Evidence |
+|---|---|---|---|
+| B1 | Open the lab builder › New lab… (my-first-lab, Two devices one link, Arista cEOS, projects folder) › Create draft | Editor with ceos1/ceos2 and one link; "Draft · kept in this browser only · not on the VM yet" | `raw/b1-*.png` |
+| B2 | Edit Node ×2 (names r1/r2, image n24l/ceos 4.35.0F, Management IPv4 .21/.22), Add Text, View YAML | YAML with both images `n24l/ceos:4.35.0F` and `mgmt-ipv4` | `raw/b2-*.png`, `examples/my-first-lab/` |
+| B3 | Save to the VM… › Save lab; Deploy or add this lab… › Deploy lab › Start lab | "Save my-first-lab to the VM?", "✔ Save lab to the VM succeeded", "Saved on the VM"; files on the VM; builder page stays (← My labs) | `raw/b3-*.png`, `ls -la` in the log |
+| B4 | Wait for Ready; CLI on r1/r2 (ip routing, no switchport, addresses); ping | Ready after 40.7 s; ping 3/3 | `raw/b4-*.png`, SSH |
+| B5 | `gh repo create pruger-dev/my-network-labs --private --add-readme` | Repository private, branch main (creation in an earlier attempt; HTTP 422 "already exists" in the final run) | log step 5 |
+| B6 | Connect a repository by URL (folder my-first-lab) › Save progress › Upload these changes | "my-first-lab saves to my-network-labs › my-first-lab › latest/"; job synced; remote `my-first-lab/latest/*`, no topology file | `raw/b6-*.png`, tree |
+| B7 | Terminal on the VM: copy topology+map, README, git add/commit/push | Clean tree; remote holds topology, map, README beside latest/ | transcript, `raw/b7-terminal-transcript.png` (rendered transcript) |
+| B8 | Saved versions › Browse the repository… | Lists README.md, my-first-lab.clab.yml, .annotations.json, latest/ | `raw/b8-*.png`, `examples/my-first-lab/remote-tree.txt` |
+| B9 | r2 Loopback0; Save progress; Create checkpoint… link-up | Review lists only r2.cfg/r2.eoscfg changed; checkpoint present; no latest/latest | `raw/b9-*.png`, tree |
+| B10 | Destroy lab… › Remove from this manager… › `git clone` into the trusted root › Deploy from `my-network-labs/my-first-lab` › Connect by URL › Latest › Apply to running lab… | Path field and `vm_project_path` under `projects/my-network-labs/`; Ready after 46.8 s; both verified in 12 s; addresses, Loopback0 and ping back; binding `my-first-lab` | `raw/b10-*.png`, SSH, API |
+
+- **Re-execution:** the first run of B10 had deployed the original `projects/my-first-lab` folder (the tree locator matched
+  the root-level folder of the same name); step 10 was re-run with a scoped locator and assertions on the path and on
+  `vm_project_path`, after the original folder had been moved to `projects-archive-2026-09-22/my-first-lab.original`
+  (an authoring step; the guide tells the student to check the path in the *Topology file* dialog instead).
+- **Not yet done:** PDF inspection, independent QA replay (fresh repository name for B5), Opus review.
+
 ## Chunk 1 — Scenario A executed and recorded (release 1.30.33, 2026-09-22)
 
 - **Build under test:** manager image `clab-backup:1.30.32` on `clab-llm-dev2` (`/api/state` 1.30.32), containerlab

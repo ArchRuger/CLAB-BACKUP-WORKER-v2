@@ -200,7 +200,7 @@ img {
 }
 
 figure {
-  margin: 0.9em 0;
+  margin: 6pt 0;
   break-inside: avoid;
   text-align: center;
 }
@@ -209,6 +209,15 @@ figure img {
   display: block;
   margin: 0 auto 0.4em auto;
   border: 1px solid #d7dde5;
+  /* A figure taller than roughly 55% of a Letter page (11in - 1.6in
+     margins = 9.4in usable; 55% ~= 5.2in, kept a little tighter at 4.9in
+     so the caption always has room too) is scaled down instead of pushing
+     the rest of the step to its own near-empty page. WeasyPrint has no
+     vh/vw units, so this is a fixed inch value rather than a page-relative
+     one; width stays auto so the image's aspect ratio is preserved and
+     the smaller of this and img{max-width:100%} above wins. */
+  max-height: 4.9in;
+  width: auto;
 }
 
 figcaption {
@@ -263,7 +272,11 @@ figcaption {
   border-radius: 4px;
   padding: 0.7em 1em;
   margin: 0 0 1em 0;
-  break-inside: avoid;
+  /* Letting this box break (like .step below) means a tall "What you have
+     been given" table shares the title page with the guide title instead
+     of being pushed whole to page 2 and leaving the title page mostly
+     blank; the title line itself stays glued to what follows it. */
+  break-inside: auto;
 }
 
 /* The box's title ("What you have been given") is written by hand as the
@@ -274,6 +287,8 @@ figcaption {
   font-weight: bold;
   color: #10233d;
   margin-bottom: 0.5em;
+  break-inside: avoid;
+  break-after: avoid;
 }
 
 .given p:last-child {
@@ -286,9 +301,24 @@ figcaption {
   border-left: 4px solid #c05a1c;
   background: #fbfaf8;
   border-radius: 4px;
-  padding: 0.6em 1em 0.6em 1em;
+  padding: 8pt 12pt;
   margin: 0 0 0.9em 0;
+  /* A step's own action/expected-result text plus its figure(s) can be
+     taller than one page's remaining room; forcing the whole block to stay
+     together then pushes it whole to the next page, leaving the previous
+     page mostly blank (the figure itself still keeps break-inside: avoid,
+     so it is never split, and the step's own first line is pinned below so
+     the badge and title never separate from at least the start of the
+     step). */
+  break-inside: auto;
+}
+
+/* The badge + title line (e.g. <span class="n">A3</span> **Wait for...**)
+   stays whole and stays with whatever follows it, so a break inside .step
+   never leaves just the numbered badge alone at the bottom of a page. */
+.step > p:first-child {
   break-inside: avoid;
+  break-after: avoid;
 }
 
 .step p:last-child {

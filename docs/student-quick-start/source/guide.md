@@ -317,11 +317,16 @@ from the manager. The devices are `r1` and `r2`, joined by one link, both Arista
 <div class="step" markdown="1">
 <span class="n">B1</span> **Start a new lab in the builder**
 
-**Action** From Home, click **Open the lab builder** in the Build box. Click **New lab…**, name
-it `my-first-lab`, choose the starter **Two devices, one link**, device type **Arista cEOS**, and
-a lab folder on the VM. Click **Create draft**.
+**Action** From Home, click **Open the lab builder** in the Build box. The builder shows **Build a
+lab** with **New lab…** and **Open a draft…**; click **New lab…**. Fill in **Lab name**
+(`my-first-lab` — letters, digits, dot, dash and underscore only), **Start from** (**Two devices,
+one link**), **Device type for the starter** (**Arista cEOS · n24l/ceos:4.35.0F** — the image shown
+is only a suggestion, taken from labs already in My labs or a default) and **Lab folder on the VM**
+(`/srv/containerlab-node-manager/projects`). Click **Create draft**.
 
-**Expected result** The editor opens with two devices already placed and linked. <!-- verify -->
+**Expected result** The editor opens with two devices, named `ceos1` and `ceos2` by default,
+already joined by one link. The status pill reads **Draft · kept in this browser only · not on the
+VM yet**.
 
 <figure><img src="screenshots/b01-builder-new-lab.png"><figcaption>Figure B.1 — The New lab dialog, filled in.</figcaption></figure>
 </div>
@@ -329,46 +334,69 @@ a lab folder on the VM. Click **Create draft**.
 <div class="step" markdown="1">
 <span class="n">B2</span> **Draw and check the topology**
 
-**Action** Right-click each device, choose **Edit Node**, and set its **Image** field to
-`n24l/ceos:4.35.0F` — the starter's suggested tag is only a suggestion; this is the image actually
-installed on the lab VM. Click **View YAML** to see what the editor has built.
+**Action** Right-click the first device and choose **Edit Node**. In the Node Editor panel (tabs
+Basic / Configuration / Runtime / Network / Advanced), set **Node Name** to `r1` and, on the Basic
+tab, **Image** `n24l/ceos` and **Version** `4.35.0F`; on the Network tab, set **Management IPv4**
+to `172.20.20.21`. Click **Apply**. Repeat for the second device: name it `r2`, the same image and
+version, and Management IPv4 `172.20.20.22`. A saved management address like this one is
+recommended because it applies again after a redeploy.
 
-**Expected result** Both devices show the corrected image, still joined by one link. <!-- verify -->
+Changing something on the Network tab can reset the image back to its suggested name, so glance at
+the Basic tab again before you click **Apply**, and confirm with **View YAML** that each device
+still reads `image: n24l/ceos:4.35.0F`. While you are there, right-click empty canvas and choose
+**Add Text** to note what the lab is, for example "My first lab: r1 eth1 - r2 eth1".
 
-<figure><img src="screenshots/b02-builder-topology.png"><figcaption>Figure B.2 — Two devices with the image corrected on each.</figcaption></figure>
+**Expected result** **View YAML** shows the topology: `name: my-first-lab`, both nodes with `kind:
+arista_ceos`, `image: n24l/ceos:4.35.0F` and their management addresses, and one link,
+`r1:eth1`–`r2:eth1`.
+
+<figure><img src="screenshots/b02-node-editor.png"><figcaption>Figure B.2a — The Node Editor, setting r1's name, image and version.</figcaption></figure>
+<figure><img src="screenshots/b02-builder-topology.png"><figcaption>Figure B.2b — Finished canvas: r1, r2 and the note.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
 <span class="n">B3</span> **Save to the VM and deploy**
 
-**Action** Click **Save to the VM…**. Review the lab folder and the YAML that will be written,
-then confirm. In the dialog that follows, click **Deploy lab**, then confirm with **Start lab**.
+**Action** Click **Save to the VM…**. A review titled **Save my-first-lab to the VM?** shows the
+lab folder, `/srv/containerlab-node-manager/projects/my-first-lab/my-first-lab.clab.yml`, and the
+YAML that will be written; confirm with **Save lab**.
 
-**Expected result** `my-first-lab` is written to
-`/srv/containerlab-node-manager/projects/my-first-lab/my-first-lab.clab.yml` (with its map
-alongside it) and appears in My labs, starting. <!-- verify -->
+**Expected result** The result reads "✔ Save lab to the VM succeeded" and the status pill changes
+to **Saved on the VM**.
 
-<figure><img src="screenshots/b03-save-review.png"><figcaption>Figure B.3 — Reviewing the save before it is written to the VM.</figcaption></figure>
+**Action** Click **Deploy or add this lab…**, then in the **Topology file** dialog click **Deploy
+lab**. A review titled **Start my-first-lab?** opens; confirm with **Start lab**.
+
+**Expected result** The builder page itself does not navigate anywhere next — click **← My labs**
+at the top left and open the `my-first-lab` card from Home to continue. On the lab VM, the project
+folder now holds `my-first-lab.clab.yml`, `my-first-lab.clab.yml.annotations.json` and the
+generated `clab-my-first-lab` folder.
+
+<figure><img src="screenshots/b03-save-review.png"><figcaption>Figure B.3 — Save my-first-lab to the VM?, reviewing the YAML.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
 <span class="n">B4</span> **Bring the link up**
 
-**Action** Wait for both devices to read **Ready**. Open a CLI on `r1` and run:
+**Action** Wait for both devices to read **Ready** — around 40 seconds on this VM. Open a CLI on
+`r1` and run:
 
 ```
 r1>enable
 r1#configure terminal
 r1(config)#ip routing
 r1(config)#interface Ethernet1
+r1(config-if-Et1)#no switchport
 r1(config-if-Et1)#ip address 10.0.0.1/30
 r1(config-if-Et1)#end
+r1#write memory
 ```
 
-On `r2`, run the same commands with `ip address 10.0.0.2/30`. From `r1`, run `ping 10.0.0.2`.
+`no switchport` matters here: without it, EOS keeps `Ethernet1` as a switched port and refuses the
+`ip address` that follows. On `r2`, run the same commands with `ip address 10.0.0.2/30`. From `r1`,
+run `ping 10.0.0.2`.
 
-**Expected result** Both devices read **Ready** before you configure them, and the ping succeeds
-once both addresses are set. <!-- verify -->
+**Expected result** The ping succeeds.
 
 <figure><img src="screenshots/b04-devices-ready.png"><figcaption>Figure B.4 — Both devices Ready, link addressed and pinging.</figcaption></figure>
 </div>
@@ -388,10 +416,7 @@ $ gh repo create my-network-labs --private --add-readme
 
 Copy its **Code → HTTPS** address for the next step.
 
-**Expected result** GitHub shows the new, empty repository containing a single `README.md`.
-<!-- verify -->
-
-<figure><img src="screenshots/b05-github-new-repo.png"><figcaption>Figure B.5 — The new repository on GitHub, with its first commit.</figcaption></figure>
+**Expected result** The repository exists, private, on branch `main`, with a `README.md`.
 </div>
 
 <div class="step" markdown="1">
@@ -400,11 +425,18 @@ Copy its **Code → HTTPS** address for the next step.
 **Action** In the manager, open `my-first-lab` → **Progress** tab → **Connect a repository by
 URL**. Paste `https://github.com/pruger-dev/my-network-labs.git`, set the folder to
 `my-first-lab`, tick the acknowledgement that complete device configurations will be saved and
-uploaded, and click **Connect repository**. Then click **Save progress** and, in **Review before
-uploading**, click **Upload these changes**.
+uploaded, and click **Connect repository**.
 
-**Expected result** The status reads **Saved to Git**, and the repository now holds
-`my-first-lab/latest/` with both devices' configurations. <!-- verify -->
+**Expected result** The destination line reads exactly "my-first-lab saves to my-network-labs ›
+my-first-lab › latest/".
+
+**Action** Click **Save progress**. **Review before uploading** lists everything as added —
+`r1.cfg added`, `r1.eoscfg added`, `r2.cfg added`, `r2.eoscfg added`, since this is the first save
+— then click **Upload these changes**.
+
+**Expected result** The status reads **Saved to Git just now**. On GitHub, `my-first-lab/latest/`
+holds `manifest.json`, `r1.cfg`, `r2.cfg`, `r1.eoscfg` and `r2.eoscfg` — and no topology file: that
+still only exists on the lab VM until the next step.
 
 <figure><img src="screenshots/b06-connect-dialog.png"><figcaption>Figure B.6a — Connecting <code>my-network-labs</code> with folder <code>my-first-lab</code>.</figcaption></figure>
 <figure><img src="screenshots/b06-saved-to-git.png"><figcaption>Figure B.6b — The first Save progress, uploaded.</figcaption></figure>
@@ -424,17 +456,29 @@ $ mkdir -p my-first-lab
 $ cp /srv/containerlab-node-manager/projects/my-first-lab/my-first-lab.clab.yml* my-first-lab/
 ```
 
-Add a short `my-first-lab/README.md` describing the lab, then commit and push:
+Write `my-first-lab/README.md`, for example:
+
+```
+# my-first-lab
+Two Arista cEOS routers, r1 and r2, joined by one link (r1 eth1 - r2 eth1).
+Link addresses: 10.0.0.1/30 on r1, 10.0.0.2/30 on r2.
+Saved progress lives in latest/ (and checkpoints/ for named milestones).
+Topology: my-first-lab.clab.yml; map: my-first-lab.clab.yml.annotations.json.
+```
+
+Then commit and push:
 
 ```
 $ git add my-first-lab
 $ git commit -m "my-first-lab: topology and map"
 $ git push
+$ git status -sb
 ```
 
-**Expected result** `git status` reports a clean working tree, and the files are visible on
-GitHub. <!-- verify --> The checkout must be clean and pushed before the manager's next **Save
-progress**, or that save is refused.
+**Expected result** `git status -sb` reports `## main...origin/main` — clean, nothing left to
+push. On GitHub, `my-first-lab/` now holds `README.md`, `my-first-lab.clab.yml`,
+`my-first-lab.clab.yml.annotations.json` and `latest/`. The checkout must stay clean and pushed
+like this before the manager's next **Save progress**, or that save is refused.
 
 <figure><img src="screenshots/b07-terminal-git-push.png"><figcaption>Figure B.7 — Publishing the topology and map from the lab VM.</figcaption></figure>
 </div>
@@ -447,30 +491,50 @@ progress**, or that save is refused.
 **Action** Open `my-network-labs` on GitHub.
 
 **Expected result** The repository shows a `my-first-lab` folder holding the topology file, its
-map, the README you wrote, and the `latest/` folder your save uploaded. <!-- verify -->
+map, the README you wrote, and the `latest/` folder your save uploaded. Back in the manager, the
+same tree is one click away: **Progress › Saved versions › Browse the repository…** opens the
+repository browser on the lab's own folder and lists `README.md`, `my-first-lab.clab.yml`,
+`my-first-lab.clab.yml.annotations.json` and `latest/` side by side — the in-product view of
+exactly what GitHub holds.
 
-<figure><img src="screenshots/b08-remote-tree.png"><figcaption>Figure B.8 — <code>my-first-lab</code> in the repository, topology and saved progress together.</figcaption></figure>
+<figure><img src="screenshots/b08-remote-tree.png"><figcaption>Figure B.8 — Browsing the repository from the Progress tab.</figcaption></figure>
 </div>
 
 <div class="step" markdown="1">
 <span class="n">B9</span> **Change, save, and checkpoint again**
 
 **Action** On `r2`'s CLI, add a `Loopback0` addressed `10.255.0.2/32`, the same way as in
-Scenario A. Click **Save progress** and upload the review. Then open the **Save progress** menu
-and choose **Create checkpoint…**, name it `link-up`, and confirm.
+Scenario A, then `write memory`. Click **Save progress**.
 
-**Expected result** The upload updates the same `my-first-lab/latest` in place — never a nested
-`latest/latest` — and **Saved versions** lists a new checkpoint, `link-up`. <!-- verify -->
+**Expected result** This time **Review before uploading** lists only `r2.cfg changed` and
+`r2.eoscfg changed` — `r1` did not change. Click **Upload these changes**; the status reads
+**Saved to Git just now**.
+
+**Action** Open the **Save progress** menu and choose **Create checkpoint…**, name it `link-up`,
+and upload that review too.
+
+**Expected result** **Saved versions** lists **Latest** (`my-network-labs › my-first-lab ›
+latest`) and, under **Checkpoints**, `link-up`. On GitHub, `my-first-lab/latest/r2.cfg` contains
+the new `Loopback0`, `my-first-lab/checkpoints/link-up/` exists, and there is still no nested
+`latest/latest` — the two saves simply added two more commits ("Save my-first-lab progress") above
+"my-first-lab: topology and map".
 
 <figure><img src="screenshots/b09-checkpoint.png"><figcaption>Figure B.9 — Checkpoint <code>link-up</code> alongside Latest.</figcaption></figure>
 </div>
 
+
 <div class="step" markdown="1">
 <span class="n">B10</span> **Prove it: destroy, remove, and rebuild from Git**
 
-**Action** From **Lab actions ▾**, choose **Destroy lab…** and confirm. Then choose **Remove from
-this manager…** and confirm — this only removes the lab from this manager; it never touches your
-repository or the topology file you published in B7.
+**Action** From **Lab actions ▾**, choose **Destroy lab…**. The review, titled **Destroy
+my-first-lab?**, warns the same way as in Scenario A; confirm with **Destroy lab**.
+
+**Expected result** The lab header reads **Stopped** — the devices are gone.
+
+**Action** From **Lab actions ▾**, choose **Remove from this manager…** and confirm with **Remove
+lab**. Its checkbox **Don't offer this lab for import again** can stay ticked or not — either is
+fine here. This step only removes the lab from this manager; it never touches your repository or
+the topology file you published in B7.
 
 **Where to run it** On the lab VM, as your ordinary account. Clone your repository into a trusted
 lab folder, since the manager's deploy browser only shows folders it trusts:
@@ -479,19 +543,38 @@ lab folder, since the manager's deploy browser only shows folders it trusts:
 $ git clone https://github.com/pruger-dev/my-network-labs.git /srv/containerlab-node-manager/projects/my-network-labs
 ```
 
+**Expected result** `Cloning into '/srv/containerlab-node-manager/projects/my-network-labs'...`
+
 **Action** Back in the manager, from Home click **Choose a file on the lab VM…**, open
-`my-network-labs` → `my-first-lab`, and select `my-first-lab.clab.yml`. Deploy it exactly as in
-B3. Once both devices read **Ready**, open the **Progress** tab and connect the repository again
-with the same HTTPS URL and folder `my-first-lab`.
+`/srv/containerlab-node-manager/projects` → `my-network-labs` → `my-first-lab` (the folder inside
+the clone) → click **◇ my-first-lab.clab.yml**. In the **Topology file** dialog, check that **File
+location on the VM** reads
+`/srv/containerlab-node-manager/projects/my-network-labs/my-first-lab/my-first-lab.clab.yml` — it
+must contain `my-network-labs`. The original `my-first-lab` folder is still listed at the top
+level and looks the same; picking that one instead would deploy the old copy, not the one you just
+rebuilt from Git. Click **Deploy lab**, then confirm the **Start my-first-lab?** review with
+**Start lab**.
 
-**Expected result** The manager recognises the checkout as already registered on the lab VM
-rather than cloning a second copy. <!-- verify --> Open **Saved versions**, find **Latest**, click
-**Apply to running lab…**, then confirm with **Replace configurations**. Once it finishes, `ping
-10.0.0.2` from `r1` succeeds — the lab is back exactly where you left it, rebuilt entirely from
-what Git kept. <!-- verify -->
+**Expected result** Both devices read **Ready** after about 45 seconds, and the Topology tab shows
+the same map as before — the annotations file came from Git along with the topology.
 
-<figure><img src="screenshots/b10-fresh-deploy.png"><figcaption>Figure B.10a — <code>my-first-lab</code> redeployed from the cloned repository.</figcaption></figure>
-<figure><img src="screenshots/b10-apply-result.png"><figcaption>Figure B.10b — Latest applied; the link is back up.</figcaption></figure>
+**Action** Open the **Progress** tab and **Connect a repository by URL** again, with the same
+HTTPS URL and folder `my-first-lab`.
+
+**Expected result** The card simply reads "my-first-lab saves to my-network-labs › my-first-lab ›
+latest/" again — the checkout registered in B6 is reused, with no special message.
+
+**Action** Under **Saved versions**, find **Latest** and click **Apply to running lab…**. The
+review, titled **Replace running configuration**, lists both devices with their differences;
+confirm with **Replace configurations**.
+
+**Expected result** Within about 12 seconds each device reports "Configuration replaced and
+verified against the saved desired state." On `r1`'s CLI, `ping 10.0.0.2` succeeds, and `show ip
+interface brief` on `r2` lists `Loopback0 10.255.0.2/32` — the lab is rebuilt entirely from what
+Git kept.
+
+<figure><img src="screenshots/b10-fresh-deploy.png"><figcaption>Figure B.10a — The Topology file dialog, confirming the path runs through my-network-labs.</figcaption></figure>
+<figure><img src="screenshots/b10-apply-result.png"><figcaption>Figure B.10b — Latest applied; both devices replaced and verified.</figcaption></figure>
 </div>
 
 **Checklist**
@@ -502,8 +585,8 @@ what Git kept. <!-- verify -->
 - [ ] Repository connected, first **Save progress** uploaded
 - [ ] Topology and map published from the lab VM; checkout clean and pushed
 - [ ] A second change saved, and checkpoint `link-up` created
-- [ ] Lab destroyed and removed, then redeployed from the cloned repository
-- [ ] Repository reconnected and **Latest** applied; the link pings again
+- [ ] Lab destroyed and removed, then redeployed from the folder inside the cloned repository
+- [ ] Repository reconnected and **Latest** applied; the link pings and r2's loopback is back
 
 ## Reference
 

@@ -21,7 +21,10 @@ spec.json format -- a JSON list of objects:
                                         // top-right, bottom-left,
                                         // bottom-right, center
         }
-      ]
+      ],
+      "badge": 30                      // optional; pins the badge diameter
+                                        // in output px instead of the
+                                        // automatic size below
     }
 
 All paths ("src", "out") are relative to the screenshots/ directory itself.
@@ -29,9 +32,12 @@ All paths ("src", "out") are relative to the screenshots/ directory itself.
 source PNG named by "src" (the raw captures are taken at
 device_scale_factor 2, so this is already twice the CSS pixel size — give
 crop and callout coordinates in the file's own pixel grid, not CSS pixels).
-The callout badge itself is always drawn at a fixed ~34 px diameter in the
-*output* image, independent of "scale", so numbers stay legible even when a
-screenshot is shrunk.
+The callout badge is drawn after cropping and scaling, sized as a fraction
+of the composed image's own (output) width — about 26-40px, clamped at
+both ends — rather than a fixed raw-pixel size: the guide always shrinks a
+wide screenshot down to its ~6.9in text column, so a fixed-raw-pixel badge
+on a wide crop becomes a near-invisible dot once printed. Set "badge" on an
+entry to override the automatic size for that one figure.
 
 "label" is carried through only for --list and for the guide author's own
 reference (e.g. cross-checking a figure caption); this tool never draws the
@@ -52,12 +58,23 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_SCREENSHOTS_DIR = HERE.parent / "screenshots"
 
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-BADGE_DIAMETER = 34
+# The badge is sized relative to the OUTPUT image (after crop + scale), not
+# fixed in raw pixels: the guide always shrinks a wide screenshot down to
+# the ~6.9in text column, so a badge that is a fixed raw-pixel size becomes
+# a near-invisible dot on a wide crop (a 34px badge on a 2732px-wide image
+# prints at well under 2mm). Sizing it as a fraction of the composed
+# image's own width keeps it at roughly the same *printed* size (about
+# 2.5-3mm, ~26-30px in a typical <=1600px-wide output) regardless of how
+# wide the source crop was. `BADGE_MIN`/`BADGE_MAX` keep it sane at the
+# extremes (a small already-tight crop, or a deliberately huge overview).
+BADGE_DIAMETER_RATIO = 0.018
+BADGE_MIN = 26
+BADGE_MAX = 40
 BADGE_FILL = (192, 90, 28, 255)      # matches the .step .n accent colour (#c05a1c)
 BADGE_OUTLINE = (255, 255, 255, 255)
 BADGE_OUTLINE_WIDTH = 2
 BADGE_TEXT_FILL = (255, 255, 255, 255)
-BADGE_MARGIN = 4                     # gap between the anchor point and the badge edge
+BADGE_MARGIN_RATIO = 0.15            # gap between the anchor point and the badge edge
 
 ANCHOR_DIRECTIONS = {
     "top-left": (-1, -1),
@@ -121,12 +138,23 @@ def compose_entry(entry, screenshots_dir, index):
         new_size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
         image = image.resize(new_size, Image.LANCZOS)
 
-    draw = ImageDraw.Draw(image)
-    font_size = int(BADGE_DIAMETER * 0.55)
-    font = ImageFont.truetype(FONT_PATH, font_size)
-    radius = BADGE_DIAMETER / 2
+    callouts = entry.get("callouts", [])
+    if callouts:
+        # One badge size per composed image: computed from the OUTPUT
+        # width (post crop+scale) unless the entry pins an exact diameter
+        # with "badge" (raw output px) for a figure that needs hand tuning.
+        badge_diameter = entry.get("badge")
+        if badge_diameter is None:
+            badge_diameter = max(
+                BADGE_MIN, min(BADGE_MAX, round(image.width * BADGE_DIAMETER_RATIO))
+            )
+        draw = ImageDraw.Draw(image)
+        font_size = max(10, int(badge_diameter * 0.55))
+        font = ImageFont.truetype(FONT_PATH, font_size)
+        radius = badge_diameter / 2
+        margin = max(3, round(badge_diameter * BADGE_MARGIN_RATIO))
 
-    for callout in entry.get("callouts", []):
+    for callout in callouts:
         if "n" not in callout or "x" not in callout or "y" not in callout:
             raise SpecError(f"{label}: each callout needs 'n', 'x' and 'y'")
         anchor = callout.get("anchor", "top-left")
@@ -140,7 +168,7 @@ def compose_entry(entry, screenshots_dir, index):
         final_x = (raw_x - crop_x) * scale
         final_y = (raw_y - crop_y) * scale
 
-        offset = radius + BADGE_MARGIN
+        offset = radius + margin
         center_x = final_x + dx * offset
         center_y = final_y + dy * offset
 

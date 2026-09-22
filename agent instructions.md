@@ -1,3 +1,14 @@
+# Student quick start, part 2 — 1.30.34
+
+Scenario B is executed and recorded (`docs/student-quick-start/evidence/scenario-b.md`); the guide's two scenarios are
+reconciled with their runs. Preserve: (1) the fresh-checkout proof of B10 deploys the topology from
+`/srv/containerlab-node-manager/projects/my-network-labs/my-first-lab/` (the clone), never from the original lab folder;
+`capture_scenario_b.py` asserts the *Topology file* path and the lab's `vm_project_path`; (2) the three student-facing
+facts in the 1.30.34 CHANGELOG entry (builder page stays after *Start lab*; Node Editor image fallback; pick the file under
+the repository folder) are real behaviour of the shipped editor and pages, not defects fixed here; (3) the guide names
+the instructor's rows as the manager labels them (*Starting state*, *Final state (instructor)*, *Troubleshooting scenario
+01*). Read `docs/student-quick-start/PICKUP.md` for the exact next action (PDF build, inspection, QA replay, Opus review).
+
 # Student quick start, part 1 — 1.30.33
 
 Read `docs/student-quick-start/PICKUP.md` first: it holds the environment changes made to the development VM to obtain a

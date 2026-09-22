@@ -8,7 +8,7 @@ configurations in Git). Read this file first; keep it current before a compactio
 
 | Path | What |
 |---|---|
-| `Containerlab_Node_Manager_Student_Quick_Start.pdf` | The student guide (built, inspected page by page). |
+| `Containerlab_Node_Manager_Student_Quick_Start.pdf` | The student guide. **At 1.30.34 this is a draft build (26 pages, not yet inspected page by page, not yet QA-replayed); the final PDF is delivered with the last checkpoint.** |
 | `source/guide.md`, `source/style.css`, `build.py`, `build.sh`, `BUILD.md` | Editable source and the one-command build (Markdown → HTML → WeasyPrint). |
 | `screenshots/` (`raw/` captures, `spec.json` crops and callouts, composed PNGs) | Illustrations, all from the real manager and the exercised examples. |
 | `examples/` | The instructor package (`link-basics`) and the personal lab (`my-first-lab`) with a nonsecret preparation README. |
@@ -57,8 +57,16 @@ force off, agent teams off) overrides the user file; the routing files under `.c
   environment prepared as above; helper defect found and fixed while connecting the course repository; instructor states
   recorded with `deploy/scaffold-lab.py`; Scenario A capture, PDF pipeline and guide draft started in parallel.
 
+- 2026-09-22 17:58 UTC: **checkpoint 1 = release 1.30.33, commit `cf7bc5d`, PR #51** (Scenario A executed and recorded,
+  pipeline, guide draft with A reconciled, helper fix). Manager image rebuilt and running at 1.30.33 with `link-basics`
+  Ready and connected. Scenario B capture started (`tools/capture_scenario_b.py`).
+
+- 2026-09-22 18:45–19:40 UTC: Scenario B executed (`tools/capture_scenario_b.py`); B10 re-executed from the real clone
+  after the first run deployed the original folder; guide reconciled for B; **checkpoint 2 = release 1.30.34**.
+
 ## Exact next action
 
-Scenario A capture is running (`tools/capture_scenario_a.py`). When it lands: reconcile `source/guide.md` with
-`evidence/scenario-a.md`, then execute Scenario B the same way, then compose screenshots, build, inspect, QA replay,
-Opus review, release records (+0.0.1 per chunk with `deploy/set-release.py`), commit, push, PR.
+Chunk 3: build the PDF (`build.sh`), bring it to the page target (trim figures, tighten layout), inspect every page;
+independent QA replay of both scenarios from the documented starting states (`tools/reset_scenario_a.sh <fresh-repo>`;
+for B a fresh repository name and a fresh browser profile) using only the PDF; Opus completeness review; fixes; final
+build; page-by-page inspection of the delivered PDF with its SHA-256 recorded in VALIDATION.md; release 1.30.35.

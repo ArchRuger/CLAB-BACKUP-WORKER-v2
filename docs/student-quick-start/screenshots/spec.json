@@ -25,12 +25,14 @@
   {
     "out": "a03-devices-starting.png",
     "src": "raw/a3-devices-starting-full.png",
-    "crop": [0, 90, 2732, 910]
+    "crop": [0, 525, 2732, 475],
+    "scale": 0.55
   },
   {
     "out": "a03-devices-ready.png",
     "src": "raw/a3-devices-ready-full.png",
-    "crop": [0, 90, 2732, 910],
+    "crop": [0, 385, 2732, 375],
+    "scale": 0.55,
     "callouts": [
       {"n": 1, "x": 2280, "y": 555, "label": "Open CLI (r1)", "anchor": "top-left"}
     ]
@@ -53,7 +55,8 @@
   {
     "out": "a05-progress-connected.png",
     "src": "raw/a5-progress-connected-full.png",
-    "crop": [0, 0, 2732, 1520],
+    "crop": [0, 400, 2732, 1150],
+    "scale": 0.55,
     "callouts": [
       {"n": 1, "x": 60, "y": 442, "label": "Destination line", "anchor": "top-left"},
       {"n": 2, "x": 2325, "y": 1425, "label": "Apply to running lab… (Starting state)", "anchor": "top-left"}
@@ -89,7 +92,8 @@
   {
     "out": "a08-saved-to-git.png",
     "src": "raw/a8-progress-after-save-full.png",
-    "crop": [0, 380, 2732, 640]
+    "crop": [0, 380, 2732, 640],
+    "scale": 0.55
   },
   {
     "out": "a09-checkpoint-dialog.png",
@@ -97,7 +101,8 @@
   },
   {
     "out": "a09-saved-versions.png",
-    "src": "raw/a9-saved-versions-with-checkpoint-el.png"
+    "src": "raw/a9-saved-versions-with-checkpoint-el.png",
+    "scale": 0.55
   },
   {
     "out": "a10-broken-apply-result.png",
@@ -119,5 +124,87 @@
       {"n": 2, "x": 235, "y": 838, "label": "Destroy lab…", "anchor": "center"},
       {"n": 3, "x": 440, "y": 912, "label": "Remove from this manager…", "anchor": "center"}
     ]
+  },
+  {
+    "out": "b01-builder-new-lab.png",
+    "src": "raw/b1-new-lab-dialog-el.png",
+    "callouts": [
+      {"n": 1, "x": 44, "y": 150, "label": "Lab name", "anchor": "top-left"},
+      {"n": 2, "x": 44, "y": 355, "label": "Start from", "anchor": "top-left"},
+      {"n": 3, "x": 44, "y": 503, "label": "Device type for the starter", "anchor": "top-left"},
+      {"n": 4, "x": 1930, "y": 850, "label": "Create draft", "anchor": "top-left"}
+    ]
+  },
+  {
+    "out": "b02-node-editor.png",
+    "src": "raw/b2-node-editor-r1-el.png",
+    "callouts": [
+      {"n": 1, "x": 30, "y": 330, "label": "Node Name", "anchor": "top-left"},
+      {"n": 2, "x": 30, "y": 590, "label": "Image", "anchor": "top-left"},
+      {"n": 3, "x": 510, "y": 590, "label": "Version", "anchor": "top-left"}
+    ]
+  },
+  {
+    "out": "b02-builder-topology.png",
+    "src": "raw/b2-canvas-finished-el.png",
+    "crop": [0, 0, 1650, 1652]
+  },
+  {
+    "out": "b03-save-review.png",
+    "src": "raw/b3-save-review-el.png",
+    "callouts": [
+      {"n": 1, "x": 1990, "y": 1195, "label": "Save lab", "anchor": "top-left"}
+    ]
+  },
+  {
+    "out": "b04-devices-ready.png",
+    "src": "raw/b4-r1-ping-terminal-el.png",
+    "crop": [0, 0, 2636, 430]
+  },
+  {
+    "out": "b06-connect-dialog.png",
+    "src": "raw/b6-connect-dialog-filled-el.png",
+    "callouts": [
+      {"n": 1, "x": 44, "y": 227, "label": "Repository URL", "anchor": "top-left"},
+      {"n": 2, "x": 44, "y": 365, "label": "Folder for this lab", "anchor": "top-left"},
+      {"n": 3, "x": 45, "y": 578, "label": "Acknowledgement", "anchor": "top-left"},
+      {"n": 4, "x": 1845, "y": 733, "label": "Connect repository", "anchor": "top-left"}
+    ]
+  },
+  {
+    "out": "b06-saved-to-git.png",
+    "src": "raw/b6-progress-after-save-full.png",
+    "crop": [0, 380, 2732, 600],
+    "scale": 0.55
+  },
+  {
+    "out": "b07-terminal-git-push.png",
+    "src": "raw/b7-terminal-git-push.png"
+  },
+  {
+    "out": "b08-remote-tree.png",
+    "src": "raw/b8-browse-repository-el.png",
+    "crop": [0, 195, 2468, 860],
+    "scale": 0.6,
+    "callouts": [
+      {"n": 1, "x": 468, "y": 712, "label": "my-first-lab.clab.yml (topology file)", "anchor": "top-left"}
+    ]
+  },
+  {
+    "out": "b09-checkpoint.png",
+    "src": "raw/b9-saved-versions-with-checkpoint-el.png",
+    "scale": 0.55
+  },
+  {
+    "out": "b10-fresh-deploy.png",
+    "src": "raw/b10-redeploy-topology-file-el.png",
+    "callouts": [
+      {"n": 1, "x": 44, "y": 150, "label": "File location on the VM", "anchor": "top-left"},
+      {"n": 2, "x": 1290, "y": 1200, "label": "Deploy lab", "anchor": "top-left"}
+    ]
+  },
+  {
+    "out": "b10-apply-result.png",
+    "src": "raw/b10-apply-latest-result-el.png"
   }
 ]
