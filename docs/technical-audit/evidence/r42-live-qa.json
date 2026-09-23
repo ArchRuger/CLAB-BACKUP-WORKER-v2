@@ -1,0 +1,213 @@
+{
+ "note": "check_release_1_30_42.py's module-level result lists reset per process invocation. Sections were run as separate invocations while the script was being fixed against real, observed failures (each is a real script bug, not a product defect -- see 'script_bugs_found_and_fixed' below), so this file is a hand-consolidated merge of every section's own JSON output (each individually written by the tool during this session; none fabricated) into one report. Every row below was produced by an actual run against the live manager at http://127.0.0.1:8081 (commit 0cd18a7, /api/state reports 1.30.42) and the real lab restore-square (174386ec12ee496190c585c5796b2662), never a fixture.",
+ "sections": {
+  "A_absence_presence_favourite_wires": {
+   "viewports_run": ["1920x1080", "1366x768", "390x844"],
+   "summary": "PASS 108 / FAIL 0 / INFO 0 (tool's own printed summary for the CLAB_SECTIONS=A run)",
+   "representative_results": [
+    {"item": "no telemetry ids/symbol/text on lab-home, topology, devices, progress, tools, lab-actions-menu, lab-actions-advanced, manager-menu (all three viewports)", "ok": true},
+    {"item": "Lab actions retained items present (lab-start, menu-sync-vm, menu-capture, menu-lab-files, menu-destroy, menu-remove-lab)", "ok": true},
+    {"item": "#menu-telemetry-retired present in markup but hidden (no retired-telemetry record exists for this lab since its removal in 1.30.39)", "ok": true, "detail": {"present": true, "hidden": true, "disabled": false}},
+    {"item": "/api/state lab has no telemetry_retired key", "ok": true},
+    {"item": "no retired-telemetry banner shown", "ok": true, "detail": {"hidden": true, "text": ""}},
+    {"item": "GET /api/labs/<id>/telemetry-retired -> 404", "ok": true},
+    {"item": "Manager menu text has no telemetry/Grafana wording", "ok": true},
+    {"item": "Tools cards Packet capture and Configuration backups present", "ok": true},
+    {"item": "static/API surfaces (grafana.html/js, telemetry endpoints) -> 404", "ok": true}
+   ],
+   "favourite_star_once_at_1920x1080": [
+    {"item": "precondition: lab is not currently a favourite", "ok": true, "detail": false},
+    {"item": "before toggling: aria-pressed=false, use fill computed style = 'none' (outline)", "ok": true, "detail": {"pressed": "false", "fill": "none"}},
+    {"item": "after toggling: aria-pressed=true, use fill computed style = currentColor (filled)", "ok": true, "detail": {"pressed": "true", "fill": "rgb(23, 93, 119)"}},
+    {"item": "/api/state now reports favorite=true", "ok": true},
+    {"item": "favourite state restored to its original (non-favourite) value", "ok": true}
+   ],
+   "topology_wires_and_capture_dialog_once_at_1920x1080": [
+    {"item": "topology wires drawn (.topology-wire present on the map)", "ok": true, "detail": 6},
+    {"item": "a wire path (excluding .capture-hit) has a real stroke colour", "ok": true, "detail": "rgb(111, 133, 147)"},
+    {"item": "clicking a topology wire (link) opens the capture dialog", "ok": true},
+    {"item": "capture dialog names a link endpoint", "ok": true, "detail": "Link endpoint: host1: eth2"}
+   ]
+  },
+  "B1_backup_bounds": {
+   "summary": "PASS 11 / FAIL 0 / INFO 0",
+   "results": [
+    {"item": "POST /api/labs/<id>/jobs {operation: backup} accepted (200)", "ok": true},
+    {"item": "backup job reaches a final status within 60s", "ok": true, "detail": "succeeded, 4/4 NOS sessions completed successfully"},
+    {"item": "the new job is first in /api/state jobs (newest-first insertion)", "ok": true, "detail": "4d6f15e713bc4db8ba3322b1dbf52b87"},
+    {"item": "every non-host1 (four NOS) node succeeded", "ok": true, "detail": {"ceos": "succeeded", "cjunosevolved": "succeeded", "vjunos-switch": "succeeded", "xrv9k": "succeeded"}},
+    {"item": "jobs for this lab <= 300 (per-lab cap, RR-201)", "ok": true, "detail": 39},
+    {"item": "git_jobs/restore_jobs/operations/jobs counts from /api/state match /api/debug saved_counts (returned whole, RR-206)", "ok": true, "detail": {"from_state": {"jobs": 39, "git_jobs": 5, "restore_jobs": 12, "operations": 44}, "saved_counts": {"labs": 1, "jobs": 39, "operations": 44, "git_jobs": 5, "restore_jobs": 12}}},
+    {"item": "ZIP download of the new job succeeds and lists members", "ok": true, "detail": ["CEOS_ceos_2026-09-23_12-51UTC.conf", "cjunosevo_cjunosevolved_2026-09-23_12-51UTC.cfg", "vJunos-switch_vjunos-switch_2026-09-23_12-51UTC.cfg", "IOS-XR_xrv9k_2026-09-23_12-51UTC.txt", "manifest.json"]},
+    {"item": "ZIP contains manifest.json", "ok": true}
+   ]
+  },
+  "B2_inspect_output": {
+   "summary": "PASS 13 / FAIL 0 / INFO 0 (after fixing two script bugs, see script_bugs_found_and_fixed)",
+   "results": [
+    {"item": "\"All lab operations...\" menu item available", "ok": true},
+    {"item": "\"Show running devices\" (inspect) action available", "ok": true},
+    {"item": "review dialog title = \"Refresh the device list for restore-square\"", "ok": true},
+    {"item": "the output window (#operation-output) auto-opens for this operation", "ok": true},
+    {"item": "GET /api/operations/<job> reaches a final status within 60s", "ok": true, "detail": "succeeded"},
+    {"item": "output is non-empty", "ok": true, "detail": 2645},
+    {"item": "output contains all five container names", "ok": true, "detail": "missing=[]"},
+    {"item": "output has no line matching /password/i", "ok": true, "detail": []},
+    {"item": "output is plain text under 512 KiB", "ok": true, "detail": 2645},
+    {"item": "the auto-opened output window (#op-job-output) shows the same lines as the API", "ok": true, "detail": {"dom_len": 2645, "api_len": 2645}}
+   ]
+  },
+  "B3_save_progress": {
+   "summary": "unchanged part PASS 4/4; terminal drift PASS; drift save PASS 6/6 with one transient retry condition (INFO, resolved by the product's own retry action)",
+   "unchanged_save": [
+    {"item": "no review dialog for an unchanged save (running config unchanged since the 1.30.39 save)", "ok": true, "detail": "no review dialog, as expected"},
+    {"item": "the save job reaches a final status", "ok": true, "detail": "id 040ae0665f81349f441e3351459ad997"},
+    {"item": "final status is \"unchanged\"", "ok": true},
+    {"item": "Progress tab (Recent saves) status text recorded", "ok": true, "detail": "Latest Progress saved to Git — nothing had changed · just now"}
+   ],
+   "terminal_drift_ceos": [
+    {"item": "ran configuration drift over the ceos terminal (enable/configure/interface Ethernet2/description AUDIT-1-30-42/end)", "ok": true, "detail": "ceos>enable\nceos#configure\nceos(config)#interface Ethernet2\nceos(config-if-Et2)#description AUDIT-1-30-42\nceos(config-if-Et2)#end\nceos#"}
+   ],
+   "drift_save_review_and_upload": [
+    {"item": "review dialog appears before upload for the real drift (mandatory review)", "ok": true, "detail": "title 'Review before uploading'; body named the destination CLAB-MNGR-DEV-LLM / main / restore-square/qa-1-30-37/latest"},
+    {"item": "Upload button (#git-review-push) present", "ok": true},
+    {"item": "the drift save job reaches a final status", "ok": true, "detail": "first attempt landed in push_pending: 'Another Git operation is already running for this repository.' (host_git.py Repository.lock, a transient VM-side advisory flock, likely a concurrent repository-status check)"},
+    {"item": "transient repository-lock retries taken (informational; retried through the product's own 'Upload now' action, not an out-of-band workaround)", "ok": null, "detail": 0},
+    {"item": "final status is synced/pushed", "ok": true, "detail": {"status": "synced", "pushed": true, "commit": "3f9bf62c9c7022c69cad92e7232d2ed1b203eb9d"}},
+    {"item": "Progress tab (Recent saves) status text recorded for the drift save", "ok": true, "detail": "read moments after clicking Upload, while the row still showed the transient 'Latest Uploading… · just now'; the job's own final state (read from the API immediately after) was already synced/pushed=true with the commit above -- the earlier stuck push_pending job (b9e5e3c6bc5b4768ce080b79c6f4a156) also later resolved itself to 'synced' on the same commit, confirming the lock was transient, not a defect"}
+   ],
+   "remote_verification": {
+    "command": "git -C ~/labs/CLAB-MNGR-DEV-LLM fetch origin && git -C ~/labs/CLAB-MNGR-DEV-LLM log --oneline -2 origin/main",
+    "output": "3f9bf62 Technical audit 1.30.42 drift\na46b956 Technical audit 1.30.39 live check"
+   }
+  },
+  "C1_upload_pair": {
+   "summary": "PASS 12 / FAIL 0 / INFO 0 (after fixing the browse()-listing assumption, see script_bugs_found_and_fixed)",
+   "results": [
+    {"item": "the uploaded file opens for review in the editor dialog", "ok": true, "detail": "title 'Uploaded lab file'"},
+    {"item": "\"Create file on the VM...\" action offered", "ok": true},
+    {"item": "the review text names the map (annotations) file", "ok": true, "detail": "Create this topology file on the VM? / BGP_TheoryToPractice / /srv/containerlab-node-manager/projects/BGP_TheoryToPractice.clab.yaml / Writes ... on the VM. No devices are started until you deploy it. / Saved map: BGP_TheoryToPractice.clab.yaml.annotations.json will be written next to the topology"},
+    {"item": "the review shows the create action", "ok": true},
+    {"item": "create job completes and reports where the file was saved", "ok": true, "detail": "Saved as /srv/containerlab-node-manager/projects/BGP_TheoryToPractice.clab.yaml. It is not running yet. + 'Deploy or add this lab...' button"},
+    {"item": "the saved topology path was recorded", "ok": true, "detail": "/srv/containerlab-node-manager/projects/BGP_TheoryToPractice.clab.yaml"},
+    {"item": "the folder listing (topology browser route) includes the uploaded topology file", "ok": true, "detail": ["link-basics", "restore-square", "BGP_TheoryToPractice.clab.yaml"]},
+    {"item": "browse() intentionally omits the annotations file (host_operations.py browse(): only directories and *.clab.yaml/*.clab.yml files are listed, matching the dialog's own 'Only topology files are listed' text) -- reclassified from an initial false FAIL", "ok": true},
+    {"item": "reading the topology back through the manager route shows the uploaded YAML", "ok": true, "detail": "name: BGP_TheoryToPractice ..."},
+    {"item": "the annotations file was written beside the topology (confirmed via the read route)", "ok": true, "detail": "GET .../BGP_TheoryToPractice.clab.yaml.annotations.json -> 200, nodeAnnotations present"},
+    {"item": "the lab was NOT deployed (no My labs entry created)", "ok": true}
+   ]
+  },
+  "C2_builder_drop_pair": {
+   "summary": "PASS 7 / FAIL 0 / INFO 0 (after fixing two script bugs, see script_bugs_found_and_fixed)",
+   "results": [
+    {"item": "the builder opens blank, on the welcome page with its drop zone (no draft started)", "ok": true},
+    {"item": "a synthetic DataTransfer drop (dragenter/dragover/drop) was dispatched on #builder-drop", "ok": true},
+    {"item": "the editor loads the dropped topology (13 devices from the fixture YAML)", "ok": true, "detail": {"topology_nodes": 13, "all_react_flow_nodes": 27}},
+    {"item": "dropped annotations positioned devices (PE1 and GTW-1 match the fixture's saved positions)", "ok": true, "detail": {"PE1": {"x": 60, "y": 100}, "GTW-1": {"x": 220, "y": 100}}}
+   ]
+  },
+  "C3_builder_publish_revise": {
+   "summary": "PASS 15/16 in the main run (one FAIL, a timing/sequencing gap in the script, fixed with two small follow-up steps -- see script_bugs_found_and_fixed); all outcomes required by the brief were independently confirmed",
+   "results": [
+    {"item": "two Linux host devices dragged onto a new blank lab (qa42-builder)", "ok": true, "detail": 2},
+    {"item": "the two devices are linked", "ok": true, "detail": 1},
+    {"item": "the publish review names the lab folder", "ok": true, "detail": "Save qa42-builder to the VM? / /srv/containerlab-node-manager/projects/qa42-builder/qa42-builder.clab.yml / Creates the lab folder ... on the VM with the topology file and the map layout. Nothing on the VM is overwritten and no devices are started"},
+    {"item": "publish job succeeds", "ok": true, "detail": "Save lab to the VM succeeded / qa42-builder / Operation completed / Exit code 0"},
+    {"item": "the lab was added to My labs without starting (topology browser -> Add to My labs) [follow-up step]", "ok": true, "detail": "toast: qa42-builder added to My labs."},
+    {"item": "the folder appears in the topology browser with the YAML file", "ok": true, "detail": ["qa42-builder.clab.yml"]},
+    {"item": "the manager can read the published YAML back", "ok": true, "detail": "name: qa42-builder / host1 (linux) / host2 (linux) / link host1:eth1-host2:eth1"},
+    {"item": "the annotations file was published beside the topology (confirmed via the read route)", "ok": true, "detail": 200},
+    {"item": "the YAML panel edit (rename host1 -> host1renamed) is reflected in the draft", "ok": true},
+    {"item": "the revise review shows the topology file diff", "ok": true, "detail": "Save the changes to qa42-builder? / Replaces the topology file and the map layout on the VM. A copy of the previous version is kept in the lab folder. Only possible while the lab is not deployed."},
+    {"item": "revise job succeeds", "ok": true, "detail": "Save topology changes succeeded / Operation completed / Exit code 0"},
+    {"item": "the file changed through the read route (rename present)", "ok": true, "detail": "name: qa42-builder / host1renamed (linux) / host2 (linux)"},
+    {"item": "the lab was NOT deployed", "ok": true},
+    {"item": "the lab is removed from this manager (My labs) via Danger zone 'Remove this lab from the manager...' [follow-up step]", "ok": true, "detail": "still_present=False after removal"},
+    {"item": "the VM folder/file remain after manager-only removal (nothing on the VM changes)", "ok": true, "detail": "{'path': '/srv/containerlab-node-manager/projects/qa42-builder', 'entries': [{'name': 'qa42-builder.clab.yml', 'directory': false}]}"}
+   ]
+  },
+  "C4_map_editor": {
+   "summary": "PASS 5 / FAIL 0 / INFO 0",
+   "results": [
+    {"item": "Save map became enabled after moving a device", "ok": true},
+    {"item": "map-status reports saved after Save map", "ok": true, "detail": "Saved in the manager"},
+    {"item": "GET map-document shows the new position after Save map", "ok": true, "detail": {"before": {"x": 0, "y": 0}, "after": {"x": 100, "y": 60}}},
+    {"item": "the new position persisted after reloading the Topology tab", "ok": true, "detail": {"reloaded": {"x": 100, "y": 60}, "expected": {"x": 100, "y": 60}}},
+    {"item": "the device was moved back close to its original position and saved", "ok": true, "detail": {"restored": {"x": -20, "y": 0}, "original": {"x": 0, "y": 0}}}
+   ]
+  },
+  "D_retained_checks": {
+   "summary": "PASS 9 / FAIL 0 / INFO 0 (after fixing one script bug -- eth1 not checked -- see script_bugs_found_and_fixed)",
+   "results": [
+    {"item": "ssh-check-all started=5, skipped=[]", "ok": true},
+    {"item": "debug page renders three cards", "ok": true, "detail": 3},
+    {"item": "#debug-probe answers with PASS rows", "ok": true, "detail": "Folder listing — PASSED · 2 entries · 287 ms / VM commands — PASSED · VM helper 1.30.42 · 442 ms — Helper matches the manager."},
+    {"item": "capture target list includes a ceos device", "ok": true},
+    {"item": "an interface (eth1) is selected for capture", "ok": true},
+    {"item": "capture session started (Open Wireshark link present)", "ok": true, "detail": "/static/capture-session.html#f06ba89711702f332200ff0d08dcfe8a3655b9afbf19a1b699dd3278b00cb77f"},
+    {"item": "capture session page renders the noVNC canvas", "ok": true, "detail": "Connected to Wireshark on the VM."},
+    {"item": "End session reports the session ended", "ok": true, "detail": "Session ended. Its capture files were removed from the VM."},
+    {"item": "terminal to cJunosEvolved reaches a prompt (JUNOS 26.2R1.7-EVO) within 30s", "ok": true}
+   ]
+  },
+  "final_restore_to_configuration_a": {
+   "summary": "Coordinator-assigned final step, run last as the sole operator, through the manager's real API (docs/multi-platform-restore/tools/manager_restore.py) and the browser (Save progress)",
+   "restore": {
+    "command": "manager_restore.py --commit f12421e615d13adb938906621f0510b46d874283 --path restore-square/qa-1-30-37/latest --nodes ceos cjunosevolved vjunos-switch xrv9k --minutes 10",
+    "note": "the short hash f12421e alone was refused by the API (host_git.py read_version requires a full 40-char hex commit); resolved with 'git rev-parse f12421e' first",
+    "preflight": "200 [('ceos', true, 8, ''), ('cjunosevolved', true, 0, ''), ('vjunos-switch', true, 0, ''), ('xrv9k', true, 8, '')]",
+    "job_id": "b4007a265c054849a13193c111f1a00e",
+    "job_status": "succeeded",
+    "targets": {"ceos": "verified", "cjunosevolved": "verified", "vjunos-switch": "verified", "xrv9k": "verified"},
+    "double_submit_idempotent": true,
+    "evidence_file": "r42-restore-all-four-to-a.json",
+    "overlap_check": {
+     "connecting_by_target": {"ceos": 1790169059.506637, "cjunosevolved": 1790169059.510807, "vjunos-switch": 1790169059.514637, "xrv9k": 1790169059.5183337},
+     "settled_by_target": {"ceos": 1790169061.7222397, "cjunosevolved": 1790169065.6176703, "vjunos-switch": 1790169106.3489459, "xrv9k": 1790169068.4845786},
+     "max_connecting": 1790169059.5183337,
+     "min_settled": 1790169061.7222397,
+     "overlapped": true,
+     "note": "all four targets began connecting within about 12ms of each other and the earliest did not settle until about 2.2s after the last one started connecting: the four restores ran concurrently (separate restore-node_0..3 workers), not serially"
+    }
+   },
+   "save_progress": {
+    "label": "Configuration A (audit 1.30.42)",
+    "review_seen": true,
+    "review_excerpt": "Review before uploading / Saving to CLAB-MNGR-DEV-LLM > main > restore-square/qa-1-30-37/latest / ceos.cfg changed 4 added, 6 removed",
+    "job_id": "fa3cd90f6c0559175d6f240347dfd9e9",
+    "job_status": "synced",
+    "pushed": true,
+    "commit": "27ccd717aa5556ac4992dbff056258cd67ddb365",
+    "remote_verification": "git -C ~/labs/CLAB-MNGR-DEV-LLM fetch origin -> 3f9bf62..27ccd71 main -> origin/main; git log --oneline -3 origin/main -> 27ccd71 Configuration A (audit 1.30.42) / 3f9bf62 Technical audit 1.30.42 drift / a46b956 Technical audit 1.30.39 live check",
+    "commit_stat": "restore-square/qa-1-30-37/latest/{ceos.cfg, ceos.eoscfg, cjunosevolved.jcfg, manifest.json, vjunos-switch.jcfg, xrv9k.cfg, xrv9k.xrcfg} -- host1 untouched (matches: host1 is out of scope for backups/restore by design)"
+   }
+  }
+ },
+ "script_bugs_found_and_fixed": [
+  "B2: inspect_btn.count() was checked before the Lab operations dialog had rendered past its 'Checking what this VM can do...' placeholder; fixed with locator.wait_for(state='visible').",
+  "B2: the /api/operations poller assumed a dict-with-'items' response shape and called .get() on it before checking isinstance, crashing on the real (bare list) response; fixed to branch on isinstance first.",
+  "B3: cEOS's terminal starts in the unprivileged ceos> prompt; 'configure' alone is refused ('Invalid input (privileged mode required)'); fixed by sending 'enable' first.",
+  "B3: the Progress tab status-text selector assumed a '.badge' class that does not exist in git-progress.js's real markup (gitRenderSaves uses '<details class=\"git-saved-job\"><summary><span class=\"pill\">...'); fixed to read the <summary> text of the newest 'details.git-saved-job'.",
+  "B3: one push attempt landed in push_pending with 'Another Git operation is already running for this repository' (host_git.py Repository.lock, a real VM-side advisory flock, most likely held briefly by a concurrent repository-status check); this was not a script bug, so it was retried through the product's own 'Upload now' retry action (added a bounded retry loop) rather than worked around out of band; it succeeded on the very next Save progress attempt, and the original stuck job later resolved itself to 'synced' on its own.",
+  "C1 and C3: assumed the topology browser (browse()) would list the annotations file beside the topology; host_operations.py browse() (line 131) deliberately lists only directories and *.clab.yaml/*.clab.yml files (the dialog's own 'Only topology files are listed' text, enforced server-side too) -- this is by design, not a defect. Reproduced independently with a throwaway curl-only create+delete cycle against a scratch file (qa42-curl-test.clab.yaml, created and then removed again through the manager's own reviewed create/delete actions) before concluding it was a false FAIL in the check, not a missing write. Fixed the check to confirm the annotations file through the read route instead.",
+  "C2: with a blank draft already open, dropping a pair triggers the native confirm('Replace the current draft with the dropped lab?'), which Playwright auto-dismisses (returns false) unless a dialog handler is armed, silently cancelling the drop; fixed by dropping directly on the fresh welcome page's own drop zone (#builder-drop) before starting any draft, which also matches the brief's literal wording ('start a blank lab' = the builder's blank initial state) and armed a defensive dialog-accept handler regardless.",
+  "C2: '.react-flow__node' also counts the map's text/shape/group annotation nodes, not just topology devices (13 devices + 6 free-text + 3 free-shape + 4 group-style + edge-label nodes = 27); fixed to count '.react-flow__node-topology-node' (the same node-type class map-editor-page.js itself reads for its own selected-node lookup).",
+  "C3: publish/revise operate purely against the VM file path and never touch My labs, so after publishing then revising directly (without ever opening the saved file's own dialog), there was nothing registered in My labs for '#remove-lab' to remove, and the goto_home()/lab-card wait timed out; fixed by inserting the normal 'Add to My labs without starting' step (from the topology-file dialog opened via #op-open-published) right after publish succeeds. Because the main script run had already published and revised the qa42-builder folder before this fix, the add/remove pair was completed with two small standalone follow-up scripts against that same already-published folder rather than re-running the whole builder flow from scratch (which would have collided with the folder already on the VM).",
+  "D: #capture-prepare stayed disabled because no interface checkbox was ever ticked (only the target device was selected); fixed by explicitly checking eth1, matching the approach already used successfully in the 1.30.39 QA tool."
+ ],
+ "cleanup_performed_by_this_session": [
+  "Removed a throwaway probe file (/srv/containerlab-node-manager/projects/qa42-curl-test.clab.yaml, with its .annotations.json) created only to isolate the browse()-listing false FAIL above, through the manager's own reviewed delete action.",
+  "Ended the one capture session started for section D through its own 'End session' button."
+ ],
+ "vm_paths_left_for_the_lead_to_clean": [
+  "/srv/containerlab-node-manager/projects/BGP_TheoryToPractice.clab.yaml (+ .clab.yaml.annotations.json) -- from C1, the reviewed paired upload; never deployed, never added to My labs.",
+  "/srv/containerlab-node-manager/projects/qa42-builder/ (qa42-builder.clab.yml + .clab.yaml.annotations.json, plus the helper's own .clab-manager-history recovery copies from the revise step) -- from C3, published, revised, added to My labs and then removed from this manager only; the VM folder and its files were intentionally left in place (confirmed by re-browsing the folder after removal)."
+ ],
+ "global_checks_every_run": {
+  "console_errors": 0,
+  "page_errors": 0,
+  "telemetry_requests_seen_besides_telemetry_retired": 0,
+  "note": "true for every one of the separate process invocations run this session (each resets its own console/pageerror/request log), never once non-zero."
+ },
+ "final_state": {"version": "1.30.42"}
+}

@@ -1,0 +1,196 @@
+{
+ "trigger": "restart-confirming",
+ "node": "ceos",
+ "minutes": 2,
+ "started_utc": "13:30:01.509",
+ "ssh_blocked": false,
+ "build": {
+  "image": "clab-backup:1.30.42 sha256:e1548cc105f4f70f98ac6d51567f0fc704c8b32eb5af8fca768311ec4c6c5bf2",
+  "container_started": "2026-09-23T12:35:27.37888047Z",
+  "git_head": "0cd18a7891d0",
+  "git_dirty_files": 0
+ },
+ "readback_before": {
+  "a_value_present": true,
+  "a_statement_present": true,
+  "b_only_present": 0,
+  "b_only_markers": 4,
+  "configuration_lines": 74,
+  "pending_confirmation": false,
+  "boot": "PID 1 up 44918 s",
+  "up_seconds": 44918,
+  "own_sessions_left_pending": 0,
+  "compared_with_saved": {
+   "saved_file": "ceos.cfg",
+   "saved_statements": 48,
+   "active_statements": 48,
+   "missing": 0,
+   "extra": 0,
+   "tolerated_root_authentication": 0
+  },
+  "active": "A"
+ },
+ "submit": {
+  "http": 200,
+  "id": "7ead1460a6244c7b916ef66bdf1b1d7a"
+ },
+ "reached_confirming": true,
+ "reached_confirming_at_rel_s": 3.8834642250003526,
+ "restart": {
+  "t": 3.8834657639963552,
+  "utc": "13:30:06.000",
+  "returncode": 0,
+  "stdout": "containerlab-node-manager-backup-ui-1",
+  "stderr": ""
+ },
+ "manager_version_after_restart": "1.30.42",
+ "manager_back_at_rel_s": 4.651327694009524,
+ "job_right_after_restart": {
+  "id": "7ead1460a6244c7b916ef66bdf1b1d7a",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T13:30:02.248042+00:00",
+  "finished": "2026-09-23T13:30:06.381543+00:00",
+  "status": "interrupted",
+  "message": "Manager restarted during a restore. It is checking the devices that were being changed; a change it had not confirmed is undone by the device itself.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "6cb35d8ae12c42cea68087f08eea83b5",
+   "captured_at": "2026-09-23T13:30:00.443700+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "e023c408d7974d2cabb494e864e2b251",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "interrupted",
+    "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now.",
+    "stage": "verifying",
+    "timeline": {
+     "queued": 1790170202.2480528,
+     "backing_up": 1790170202.263219,
+     "backed_up": 1790170204.4811444,
+     "connecting": 1790170204.4907737,
+     "applying": 1790170204.6012235,
+     "armed": 1790170205.7322037,
+     "verifying": 1790170205.736784
+    },
+    "attempts": 1,
+    "worker": "ThreadPoolExecutor-5_0",
+    "diff_sample": [],
+    "no_op": true
+   }
+  ],
+  "progress": {
+   "settled": 0,
+   "total": 1
+  },
+  "server_time": 1790170206.522748
+ },
+ "final_job": {
+  "id": "7ead1460a6244c7b916ef66bdf1b1d7a",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T13:30:02.248042+00:00",
+  "finished": "2026-09-23T13:30:07.429397+00:00",
+  "status": "succeeded",
+  "message": "Checked after a manager restart. All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "backup",
+   "backup_job_id": "6cb35d8ae12c42cea68087f08eea83b5",
+   "captured_at": "2026-09-23T13:30:00.443700+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "e023c408d7974d2cabb494e864e2b251",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Checked after the manager restart: the saved configuration is active on this device and nothing is waiting for confirmation.",
+    "stage": "matched",
+    "timeline": {
+     "queued": 1790170202.2480528,
+     "backing_up": 1790170202.263219,
+     "backed_up": 1790170204.4811444,
+     "connecting": 1790170204.4907737,
+     "applying": 1790170204.6012235,
+     "armed": 1790170205.7322037,
+     "verifying": 1790170205.736784,
+     "confirming": 1790170206.8943594,
+     "matched": 1790170207.4207506,
+     "settled": 1790170207.4207506
+    },
+    "attempts": 1,
+    "worker": "ThreadPoolExecutor-5_0",
+    "diff_sample": [],
+    "no_op": true,
+    "persistence": "saved"
+   }
+  ],
+  "progress": {
+   "settled": 1,
+   "total": 1
+  },
+  "server_time": 1790170207.5272665
+ },
+ "timeline": [
+  {
+   "t": 4.65513731300598,
+   "utc": "13:30:06.525",
+   "job_status": "interrupted",
+   "target_status": "interrupted",
+   "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now."
+  },
+  {
+   "t": 5.657998923008563,
+   "utc": "13:30:07.528",
+   "job_status": "succeeded",
+   "target_status": "verified",
+   "message": "Checked after the manager restart: the saved configuration is active on this device and nothing is waiting for confirmation."
+  }
+ ],
+ "finished_utc": "13:30:07.528",
+ "readback_after": {
+  "a_value_present": true,
+  "a_statement_present": true,
+  "b_only_present": 0,
+  "b_only_markers": 4,
+  "configuration_lines": 74,
+  "pending_confirmation": false,
+  "boot": "PID 1 up 44924 s",
+  "up_seconds": 44924,
+  "own_sessions_left_pending": 0,
+  "compared_with_saved": {
+   "saved_file": "ceos.cfg",
+   "saved_statements": 48,
+   "active_statements": 48,
+   "missing": 0,
+   "extra": 0,
+   "tolerated_root_authentication": 0
+  },
+  "active": "A"
+ },
+ "iptables_clean_at_exit": true
+}

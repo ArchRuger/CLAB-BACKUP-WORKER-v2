@@ -52,3 +52,34 @@ Haiku (`clab-ui-scout`, `mechanical-editor`) was not needed in chunk 1: the inve
 | Single-node restore after a deliberate drift | live | cEOS restored from commit `a46b956` in 6 s, `verified`, drift gone on read-back (`evidence/r39-restore-ceos.json`) |
 | CI | CI | push run 35852987703 and PR #54 run 35853033263 both green (2 m 56 s and 3 m 16 s, about a minute less than before without the Grafana smoke) |
 | Not exercised live in this chunk | | four-node parallel restore, failure harnesses, lab builder publish/revise, map editor (unchanged code; final integrated pass) |
+
+## Chunks 2 to 4 (1.30.40 `f21125e`, 1.30.41 `e192ead`, 1.30.42 `0cd18a7`)
+
+| Check | Class | Result |
+|---|---|---|
+| Full suites at each commit | unit | 1.30.40: Python unchanged (1078), browser 281; 1.30.41: browser 281, deploy suites 57+7+15+38; 1.30.42: Python 1134 OK (1 skipped), browser 281, every deploy suite OK |
+| Release check, links, `bash -n`, `node --check`, `git diff --check` at each commit | static | clean each time |
+| CI (push and pull request) | CI | green for `f21125e`, `e192ead`, `0cd18a7` (about 3 minutes each) |
+| Fixture browser evidence for the frontend fixes (1.30.40) | fixture | favourite star pixel-sampled in both states; wires and link click; `verify_after.py` 97 of 97 at three viewports (Sonnet builder, scratch `FIXTURE_DATA`) |
+| Editor bundle after the dependency overrides (1.30.41) | build + browser | Node 24 rebuild reproducible (`--check`, 132 files), `npm audit` 0 (was 5), CI rebuild green; Playwright smoke on the rebuilt bundle 9 of 9 (blank lab, palette drag, link, YAML panel, map editor on the map fixture) |
+| Risk review of the backend chunk (1.30.42) | review | Opus: 1 must-fix + 6 should-fix, all applied; the reviewer's reproducers (`rr2mod.py`, `git_lock.py`, `restore_size.py`) and fuzzers rerun clean on the final code |
+| Redaction measurements (1.30.42) | unit | 65 µs per 4 KiB chunk, 120 of 120 live lines, 80,000 + 60,000 fuzz cases equal to whole-output redaction |
+| VM upgrade to 1.30.42 through `start-manager.sh` (already-retired case) | live | both teardown passes "nothing to retire"; manager and helpers 1.30.42; state intact (1 lab, 38 jobs, 5 Git jobs, 12 restore jobs, 44 operations); 5 of 5 nodes ready; idle 53 MiB / 10 threads; image 494 MB with 30 Python packages (pygnmi and its three exclusive transitives gone) |
+| Integrated live QA, restore harnesses, fresh-install VM | live | recorded in the chunk 5 section below |
+
+## Chunk 5 (final integrated pass on the 1.30.42 build)
+
+| Check | Class | Result |
+|---|---|---|
+| Integrated browser, API, builder and map checks (`tools/check_release_1_30_42.py`) | live | 149 checks, 0 FAIL, 1 INFO (`evidence/r42-live-qa.md`, eight screenshots) |
+| Pair upload through *Upload a lab file* to the real VM; pair dropped into the lab builder | live | both proven in a real browser (`r42-C1-upload-review.png`, `r42-C2-builder-drop-pair.png`): the earlier stream's two open gaps |
+| Builder publish, revise, import, manager-only removal; map editor save and reload | live | PASS (`r42-C3-*.png`) |
+| Fresh install on a brand-new Ubuntu 24.04 nested VM (`tools/fresh_install_vm.py`) | live, isolated | six phases, health check 54 PASS / 0 FAIL, *Retired telemetry stack* PASS, repeat upgrade idempotent, reboot cycle, VM connection from the fresh manager (`evidence/r42-fresh-install.md`) |
+| Four-node parallel restore from `f12421e` and from `27ccd71` | live | all `verified`, targets overlapped (`r42-restore-all-four-to-a.json`, `r42-final-restore-to-a.json`) |
+| Foreign change during the restore (`mixed_failure.py`) | live | `partial`: three verified, XRv9k refused unchanged, foreign change rolled back by itself, recovery verified (`r42-mixed-failure-xrv9k.json`) |
+| Connection loss to one node during the restore (`isolation_all_four.py`) | live | three verified, the victim `failed` with no change, iptables clean (`r42-isolation-xrv9k.json`) |
+| Management cut during the confirm reconnect, 2 minutes (`armed-cut`) | live | late confirmation inside the 5-minute window, no rollback (`r42-armed-cut-cjunosevolved.json`) |
+| Restart recovery (`restart-confirming --node ceos`) | live | manager restarted at `confirming`, back in 1 s, job `interrupted` then rechecked to `verified`, read-back A (`r42-restart-confirming-ceos.json`) |
+| Rollback read-back (drift to B, cut longer than the 5-minute timer during the confirm reconnect) | live | the device undid the change itself; the manager reported `rolled_back` only after reading B back; job `failed`, nothing restored (`r42-armed-cut-cjunosevolved-rollback.json`) |
+| Final restore of all four nodes to A and read-back | live | `succeeded`, all `verified`, 0 missing / 0 extra statements per node against the saved folder; iptables clean |
+| VM folders created by the QA | cleanup | `BGP_TheoryToPractice.clab.yaml(+annotations)` and `qa42-builder/` removed from the trusted root by the lead |

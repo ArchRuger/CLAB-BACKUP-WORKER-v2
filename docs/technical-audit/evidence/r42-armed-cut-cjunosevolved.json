@@ -1,0 +1,223 @@
+{
+ "trigger": "armed-cut",
+ "node": "cjunosevolved",
+ "minutes": 2,
+ "started_utc": "13:24:45.962",
+ "method": "connection-identity (apply connection closes, then the confirm reconnect opens)",
+ "build": {
+  "image": "clab-backup:1.30.42 sha256:e1548cc105f4f70f98ac6d51567f0fc704c8b32eb5af8fca768311ec4c6c5bf2",
+  "container_started": "2026-09-23T12:35:27.37888047Z",
+  "git_head": "0cd18a7891d0",
+  "git_dirty_files": 0
+ },
+ "readback_before": {
+  "a_value_present": true,
+  "a_statement_present": true,
+  "b_only_present": 0,
+  "b_only_markers": 3,
+  "configuration_lines": 23,
+  "pending_confirmation": false,
+  "boot": "System booted: 2026-09-23 01:08:29 UTC",
+  "up_seconds": null,
+  "compared_with_saved": {
+   "saved_file": "cjunosevolved.cfg",
+   "saved_statements": 22,
+   "active_statements": 22,
+   "missing": 0,
+   "extra": 0,
+   "tolerated_root_authentication": 0
+  },
+  "active": "A"
+ },
+ "submit": {
+  "http": 200,
+  "id": "d74e8f91a2794bfdb4fa604da3838ab4"
+ },
+ "reached_applying": true,
+ "conn_log": [
+  {
+   "t": 2.968243747993256,
+   "event": "apply_connection_port",
+   "port": "9BFC"
+  },
+  {
+   "t": 6.805117079988122,
+   "event": "blocked_on_new_port"
+  }
+ ],
+ "blocked_at_rel_s": 6.805117079988122,
+ "final_job_while_blocked": {
+  "id": "d74e8f91a2794bfdb4fa604da3838ab4",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T13:24:47.147145+00:00",
+  "status": "applying",
+  "message": "Applying the saved configuration.",
+  "source": {
+   "type": "git",
+   "commit": "27ccd717aa5556ac4992dbff056258cd67ddb365",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T13:13:03.491803+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "3914491a3e274ebb862d72f4f56b5ddf",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "confirming",
+    "message": "Configuration loaded; reconnecting to confirm.",
+    "stage": "verifying",
+    "timeline": {
+     "queued": 1790169887.1471567,
+     "backing_up": 1790169887.1595285,
+     "backed_up": 1790169889.3750317,
+     "connecting": 1790169889.3831446,
+     "applying": 1790169889.5182004,
+     "armed": 1790169893.246204,
+     "verifying": 1790169893.2505984
+    },
+    "attempts": 10,
+    "worker": "ThreadPoolExecutor-5_0",
+    "diff_sample": [
+     "[edit]"
+    ],
+    "no_op": true,
+    "root_authentication": "present"
+   }
+  ],
+  "progress": {
+   "settled": 0,
+   "total": 1
+  },
+  "server_time": 1790170060.6634743
+ },
+ "rule_present_before_unblock": true,
+ "rule_present_after_unblock": false,
+ "unblocked_at_rel_s": 174.23469288100023,
+ "final_job": {
+  "id": "d74e8f91a2794bfdb4fa604da3838ab4",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T13:24:47.147145+00:00",
+  "finished": "2026-09-23T13:27:46.066610+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "27ccd717aa5556ac4992dbff056258cd67ddb365",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T13:13:03.491803+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 2,
+  "pre_backup_job_id": "3914491a3e274ebb862d72f4f56b5ddf",
+  "post_backup_job_id": "394f6a6fc3484fbb8a6e8da1b4f3cb7a",
+  "targets": [
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "matched",
+    "timeline": {
+     "queued": 1790169887.1471567,
+     "backing_up": 1790169887.1595285,
+     "backed_up": 1790169889.3750317,
+     "connecting": 1790169889.3831446,
+     "applying": 1790169889.5182004,
+     "armed": 1790169893.246204,
+     "verifying": 1790169893.2505984,
+     "matched": 1790170063.839465,
+     "settled": 1790170063.839465,
+     "checking": 1790170063.8476903,
+     "checked": 1790170066.0622475
+    },
+    "attempts": 11,
+    "worker": "ThreadPoolExecutor-5_0",
+    "diff_sample": [
+     "[edit]"
+    ],
+    "no_op": true,
+    "root_authentication": "present",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ],
+  "progress": {
+   "settled": 1,
+   "total": 1
+  },
+  "server_time": 1790170066.7076092
+ },
+ "timeline": [
+  {
+   "t": 6.806991476987605,
+   "utc": "13:24:53.265",
+   "job_status": "applying",
+   "target_status": "confirming",
+   "message": "Configuration loaded; reconnecting to confirm."
+  },
+  {
+   "t": 174.23636771999008,
+   "utc": "13:27:40.695",
+   "job_status": "applying",
+   "target_status": "confirming",
+   "message": "Configuration loaded; reconnecting to confirm."
+  },
+  {
+   "t": 178.2452875589952,
+   "utc": "13:27:44.704",
+   "job_status": "verifying",
+   "target_status": "applied",
+   "message": "Configuration replaced and the change confirmed."
+  },
+  {
+   "t": 180.2495400209882,
+   "utc": "13:27:46.708",
+   "job_status": "succeeded",
+   "target_status": "verified",
+   "message": "Configuration replaced and verified against the saved desired state."
+  }
+ ],
+ "finished_utc": "13:27:46.708",
+ "readback_after": {
+  "a_value_present": true,
+  "a_statement_present": true,
+  "b_only_present": 0,
+  "b_only_markers": 3,
+  "configuration_lines": 23,
+  "pending_confirmation": false,
+  "boot": "System booted: 2026-09-23 01:08:29 UTC",
+  "up_seconds": null,
+  "compared_with_saved": {
+   "saved_file": "cjunosevolved.cfg",
+   "saved_statements": 22,
+   "active_statements": 22,
+   "missing": 0,
+   "extra": 0,
+   "tolerated_root_authentication": 0
+  },
+  "active": "A"
+ },
+ "iptables_clean_at_exit": true
+}

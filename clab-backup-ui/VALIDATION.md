@@ -21,7 +21,65 @@ entries, wording) were all applied before this commit.
   showed 63); 80,000 fuzz cases equal to redacting the whole output first; the reviewer's own fuzz (3 × 20,000)
   clean. Restore state after 200 four-node restores with 30 KiB configurations: 50 MB and 334 ms per save before,
   bounded after.
-- **Live (dev VM):** recorded below after the deployment of this release's build.
+- **Live upgrade of the dev VM (already-retired case):** `start-manager.sh` from the 1.30.42 worktree: both teardown
+  passes reported nothing to retire, capture stack refreshed to 1.30.42, manager and helpers 1.30.42, state intact
+  (1 lab, 38 jobs, 5 Git jobs, 12 restore jobs, 44 operations), 5 of 5 nodes ready; idle 53 MiB / 10 threads; the
+  image holds 30 Python packages (494 MB); superseded local images removed afterwards.
+- **Integrated live QA (independent Sonnet QA, `docs/technical-audit/tools/check_release_1_30_42.py`, report
+  `docs/technical-audit/evidence/r42-live-qa.md`, 149 checks: 0 FAIL, 1 INFO):** absence and presence at three
+  viewports with 0 console and 0 page errors and no retired request; the favourite star an outline until pressed
+  (computed `fill` read in both states); wires drawn and a link click opening the capture dialog; a lab-wide backup
+  (four NOS nodes `succeeded`, ZIP downloaded) with `jobs` bounded per lab and the other lists returned whole;
+  *Show running devices* with streamed output equal in the window and in the API, no `password` line; *Save
+  progress* on an unchanged lab → "Progress saved to Git — nothing had changed" (`unchanged`, no upload), then a
+  real drift on cEOS → review → upload `3f9bf62` on the remote (one transient VM-side Git lock resolved by the
+  product's own *Upload now*, recorded as INFO); **the two gaps left open by the earlier stream are closed:** a
+  topology + annotations pair uploaded through *Upload a lab file* to the real VM through the reviewed `create`
+  (both files on the VM, YAML read back through the manager) and a pair dropped into the blank lab builder (nodes
+  and positions from the fixture); `qa42-builder` published, revised while undeployed, imported through the preview
+  and removed from the manager only; *Edit map* move, save, reload, persisted, moved back; *Test logins* 5 started,
+  a terminal to cJunosEvolved, Diagnostics PASS rows, a capture session started and ended. Then the real four-node
+  restore from "Configuration A" `f12421e` (all `verified`, overlap `max(connecting) < min(settled)`,
+  `evidence/r42-restore-all-four-to-a.json`) and a save "Configuration A (audit 1.30.42)" → `27ccd71` on the remote.
+- **Fresh install (independent Sonnet QA, a brand-new Ubuntu 24.04 nested VM under QEMU/KVM on the dev VM,
+  `docs/technical-audit/tools/fresh_install_vm.py`, `evidence/r42-fresh-install*.md/.txt/.json`, 19 minutes):**
+  Docker, containerlab and the manager absent before; the guided installer's standard path (menu 1, the
+  `clab-discovery` password, six phases, `Manager 1.30.42: running; HTTP and version checks passed.`), stopped at the
+  Git wizard's first prompt by design (GitHub login is a separate step; the installer's closing lines recorded);
+  `check-install.sh` 31 PASS / 0 FAIL before a VM connection and 54 PASS / 0 FAIL / 3 WARN / 3 INFO after it
+  (WARNs: Git helper and registry not set up, the folder-coverage cap); *Retired telemetry stack* PASS; only the
+  manager and the three capture containers, no grafana/prometheus image, no `TELEMETRY_` key, no `telemetry`
+  folder, `retire-telemetry.sh --dry-run` "nothing to retire" (never-installed case); a second `start-manager.sh`
+  idempotent; a reboot brought the manager and the capture stack back with no telemetry container; the fresh
+  manager connected to its own VM with the seeded password (`discovery.connected`, helper 1.30.42). Note: a bare
+  `sudo -v` prompts on a NOPASSWD account that is also in the `sudo` group (the quick-install guide's own
+  `[sudo] password` row), not a manager defect.
+- **Restore harnesses (lead, `docs/multi-platform-restore/tools/`, `docs/ui-ux-cleanup/tools/`, evidence under
+  `docs/technical-audit/evidence/r42-*.json`):** independent read-back of all four nodes at A before and after;
+  `mixed_failure.py` (a foreign `commit confirmed` armed on XRv9k during the four-node restore): armed before the
+  victim's driver connected, three nodes replaced and verified, the victim refused with "Configuration was not
+  changed", job `partial`, the foreign change left alone and rolled back by itself, the recovery restore of that
+  node alone `verified`; `isolation_all_four.py --victim xrv9k` (management cut the instant the victim reached
+  `applying`): the other three verified independently, the victim `failed` with a connectivity message and no
+  change, the cut lifted, iptables clean; `failure_harness.py armed-cut --node cjunosevolved --minutes 2`
+  (management cut the instant the confirm reconnect opened): the driver kept the arming session, waited in
+  `confirming` for the 174 s of the cut and confirmed on the fresh connection after it, inside the 5-minute
+  `commit confirmed` window (`verified`, no pending change on read-back): a late confirmation, not a rollback.
+  `failure_harness.py restart-confirming --node ceos` (the manager container restarted the instant the target
+  reached `confirming`, 3.9 s into the job): the manager was back as 1.30.42 within a second, the job `interrupted`
+  with "Manager restarted during a restore. It is checking the devices that were being changed…", the recheck
+  found the saved configuration active with nothing pending, job `succeeded` / `verified` (this is the restart path
+  that reads the candidate before finalisation, the one the risk review examined), read-back A
+  (`r42-restart-confirming-ceos.json`). Rollback read-back (`armed-cut --node cjunosevolved --minutes 7` after the
+  node was drifted to B with `lab/drift/cjunosevolved-B.cli`, read back as B): the restore of A loaded and armed,
+  management cut the instant the confirm reconnect opened and kept cut for 474 s, longer than the 5-minute
+  `commit confirmed` timer; the device undid the change by itself; when the cut lifted the manager read the device
+  back and reported the target `rolled_back` ("The change was not confirmed in time and the device undid it.
+  Checked: the configuration from before the restore is active."), job `failed` ("No node was restored. Existing
+  configurations were preserved by the safety backup."); the independent read-back shows B active with nothing
+  pending (`r42-armed-cut-cjunosevolved-rollback.json`). Final restore of all four nodes to A `succeeded`, read-back
+  A with 0 missing and 0 extra statements against the saved folder, no iptables rule left behind
+  (`r42-final-restore-to-a.json`).
 
 # Technical audit, part 3: deployment and dependencies — 1.30.41
 

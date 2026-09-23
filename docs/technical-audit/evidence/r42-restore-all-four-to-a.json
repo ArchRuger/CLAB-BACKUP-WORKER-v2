@@ -1,0 +1,908 @@
+{
+ "manager_version": "1.30.42",
+ "build": {
+  "image": "clab-backup:1.30.42 sha256:e1548cc105f4f70f98ac6d51567f0fc704c8b32eb5af8fca768311ec4c6c5bf2",
+  "container_started": "2026-09-23T12:35:27.37888047Z",
+  "git_head": "0cd18a7891d0",
+  "git_dirty_files": 0
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "git",
+  "commit": "f12421e615d13adb938906621f0510b46d874283",
+  "path": "restore-square/qa-1-30-37/latest"
+ },
+ "requested": [
+  "clab-restore-square-ceos",
+  "clab-restore-square-cjunosevolved",
+  "clab-restore-square-vjunos-switch",
+  "clab-restore-square-xrv9k"
+ ],
+ "started_utc": "13:10:47",
+ "device_readback_before": null,
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "git",
+    "commit": "f12421e615d13adb938906621f0510b46d874283",
+    "path": "restore-square/qa-1-30-37/latest",
+    "captured_at": "2026-09-23T02:45:46.602128+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 8,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 10,
+        "old_count": 18,
+        "new_start": 10,
+        "new_count": 20,
+        "lines": [
+         {
+          "type": "context",
+          "old": 10,
+          "new": 10,
+          "text": "system l1"
+         },
+         {
+          "type": "context",
+          "old": 11,
+          "new": 11,
+          "text": "   unsupported speed action error"
+         },
+         {
+          "type": "context",
+          "old": 12,
+          "new": 12,
+          "text": "   unsupported error-correction action error"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 13,
+          "text": "vlan 777"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 14,
+          "text": "   name B-ONLY"
+         },
+         {
+          "type": "context",
+          "old": 13,
+          "new": 15,
+          "text": "management api gnmi"
+         },
+         {
+          "type": "context",
+          "old": 14,
+          "new": 16,
+          "text": "   transport grpc default"
+         },
+         {
+          "type": "context",
+          "old": 15,
+          "new": 17,
+          "text": "management api netconf"
+         },
+         {
+          "type": "context",
+          "old": 16,
+          "new": 18,
+          "text": "   transport ssh default"
+         },
+         {
+          "type": "context",
+          "old": 17,
+          "new": 19,
+          "text": "interface Ethernet1"
+         },
+         {
+          "type": "del",
+          "old": 18,
+          "new": null,
+          "text": "   description A to-cjunosevolved"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 20,
+          "text": "   description B changed"
+         },
+         {
+          "type": "context",
+          "old": 19,
+          "new": 21,
+          "text": "   no switchport"
+         },
+         {
+          "type": "context",
+          "old": 20,
+          "new": 22,
+          "text": "   ip address 10.0.12.0/31"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 23,
+          "text": "   ip ospf network point-to-point"
+         },
+         {
+          "type": "context",
+          "old": 22,
+          "new": 24,
+          "text": "   ip ospf area 0.0.0.0"
+         },
+         {
+          "type": "context",
+          "old": 23,
+          "new": 25,
+          "text": "interface Ethernet2"
+         },
+         {
+          "type": "del",
+          "old": 24,
+          "new": null,
+          "text": "   description A to-xrv9k"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 26,
+          "text": "   description AUDIT-1-30-42"
+         },
+         {
+          "type": "context",
+          "old": 25,
+          "new": 27,
+          "text": "   no switchport"
+         },
+         {
+          "type": "context",
+          "old": 26,
+          "new": 28,
+          "text": "   ip address 10.0.41.1/31"
+         },
+         {
+          "type": "context",
+          "old": 27,
+          "new": 29,
+          "text": "   ip ospf network point-to-point"
+         }
+        ]
+       },
+       {
+        "old_start": 34,
+        "old_count": 9,
+        "new_start": 36,
+        "new_count": 9,
+        "lines": [
+         {
+          "type": "context",
+          "old": 34,
+          "new": 36,
+          "text": "interface Management0"
+         },
+         {
+          "type": "context",
+          "old": 35,
+          "new": 37,
+          "text": "   ip address 172.20.20.101/24"
+         },
+         {
+          "type": "context",
+          "old": 36,
+          "new": 38,
+          "text": "ip routing"
+         },
+         {
+          "type": "del",
+          "old": 37,
+          "new": null,
+          "text": "ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32"
+         },
+         {
+          "type": "context",
+          "old": 38,
+          "new": 39,
+          "text": "ip route 0.0.0.0/0 172.20.20.1"
+         },
+         {
+          "type": "context",
+          "old": 39,
+          "new": 40,
+          "text": "ip route 192.0.2.1/32 Null0"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 41,
+          "text": "ip route 198.51.100.0/24 Null0"
+         },
+         {
+          "type": "context",
+          "old": 40,
+          "new": 42,
+          "text": "router multicast"
+         },
+         {
+          "type": "context",
+          "old": 41,
+          "new": 43,
+          "text": "   ipv4"
+         },
+         {
+          "type": "context",
+          "old": 42,
+          "new": 44,
+          "text": "      software-forwarding kernel"
+         }
+        ]
+       }
+      ],
+      "added": 5,
+      "removed": 3,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0,
+     "diff": {
+      "hunks": [],
+      "added": 0,
+      "removed": 0,
+      "truncated": false,
+      "identical": true,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0,
+     "diff": {
+      "hunks": [],
+      "added": 0,
+      "removed": 0,
+      "truncated": false,
+      "identical": true,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 8,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 14,
+        "old_count": 23,
+        "new_start": 14,
+        "new_count": 26,
+        "lines": [
+         {
+          "type": "context",
+          "old": 14,
+          "new": 14,
+          "text": "interface Loopback0"
+         },
+         {
+          "type": "context",
+          "old": 15,
+          "new": 15,
+          "text": " description A loopback"
+         },
+         {
+          "type": "context",
+          "old": 16,
+          "new": 16,
+          "text": " ipv4 address 10.255.0.4 255.255.255.255"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 17,
+          "text": "interface Loopback777"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 18,
+          "text": " ipv4 address 198.51.100.77 255.255.255.255"
+         },
+         {
+          "type": "context",
+          "old": 17,
+          "new": 19,
+          "text": "interface MgmtEth0/RP0/CPU0/0"
+         },
+         {
+          "type": "context",
+          "old": 18,
+          "new": 20,
+          "text": " description Containerlab management interface"
+         },
+         {
+          "type": "context",
+          "old": 19,
+          "new": 21,
+          "text": " vrf clab-mgmt"
+         },
+         {
+          "type": "context",
+          "old": 20,
+          "new": 22,
+          "text": " ipv4 address 10.0.0.15 255.255.255.0"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 23,
+          "text": " ipv6 address 2001:db8::2/64"
+         },
+         {
+          "type": "context",
+          "old": 22,
+          "new": 24,
+          "text": "interface GigabitEthernet0/0/0/0"
+         },
+         {
+          "type": "del",
+          "old": 23,
+          "new": null,
+          "text": " description A to-vjunos-switch"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 25,
+          "text": " description B changed"
+         },
+         {
+          "type": "context",
+          "old": 24,
+          "new": 26,
+          "text": " ipv4 address 10.0.34.1 255.255.255.254"
+         },
+         {
+          "type": "context",
+          "old": 25,
+          "new": 27,
+          "text": "interface GigabitEthernet0/0/0/1"
+         },
+         {
+          "type": "context",
+          "old": 26,
+          "new": 28,
+          "text": " description A to-ceos"
+         },
+         {
+          "type": "context",
+          "old": 27,
+          "new": 29,
+          "text": " ipv4 address 10.0.41.0 255.255.255.254"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 30,
+          "text": "prefix-set B-ONLY"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 31,
+          "text": "  198.51.100.0/24"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 32,
+          "text": "end-set"
+         },
+         {
+          "type": "context",
+          "old": 28,
+          "new": 33,
+          "text": "prefix-set RESTORE-A"
+         },
+         {
+          "type": "context",
+          "old": 29,
+          "new": 34,
+          "text": "  10.255.0.0/24 le 32"
+         },
+         {
+          "type": "context",
+          "old": 30,
+          "new": 35,
+          "text": "end-set"
+         },
+         {
+          "type": "context",
+          "old": 31,
+          "new": 36,
+          "text": "router static"
+         },
+         {
+          "type": "del",
+          "old": 32,
+          "new": null,
+          "text": " address-family ipv4 unicast"
+         },
+         {
+          "type": "del",
+          "old": 33,
+          "new": null,
+          "text": "  192.0.2.4/32 Null0"
+         },
+         {
+          "type": "context",
+          "old": 34,
+          "new": 37,
+          "text": " vrf clab-mgmt"
+         },
+         {
+          "type": "context",
+          "old": 35,
+          "new": 38,
+          "text": "  address-family ipv4 unicast"
+         },
+         {
+          "type": "context",
+          "old": 36,
+          "new": 39,
+          "text": "   0.0.0.0/0 10.0.0.2"
+         }
+        ]
+       }
+      ],
+      "added": 6,
+      "removed": 3,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    }
+   ],
+   "eligible_count": 4
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "b4007a265c054849a13193c111f1a00e"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "13:10:56",
+   "job": "backing_up",
+   "targets": {
+    "ceos": "backing_up",
+    "cjunosevolved": "backing_up",
+    "vjunos-switch": "backing_up",
+    "xrv9k": "backing_up"
+   }
+  },
+  {
+   "utc": "13:11:00",
+   "job": "applying",
+   "targets": {
+    "ceos": "applying",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "13:11:01",
+   "job": "applying",
+   "targets": {
+    "ceos": "confirming",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "13:11:02",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "13:11:04",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "confirming",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "13:11:06",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "applying",
+    "xrv9k": "confirming"
+   }
+  },
+  {
+   "utc": "13:11:09",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "applying",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "13:11:43",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "confirming",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "13:11:46",
+   "job": "verifying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "applied",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "13:11:50",
+   "job": "succeeded",
+   "targets": {
+    "ceos": "verified",
+    "cjunosevolved": "verified",
+    "vjunos-switch": "verified",
+    "xrv9k": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "b4007a265c054849a13193c111f1a00e",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T13:10:56.246589+00:00",
+  "finished": "2026-09-23T13:11:49.600985+00:00",
+  "status": "succeeded",
+  "message": "All 4 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "f12421e615d13adb938906621f0510b46d874283",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T02:45:46.602128+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 10,
+  "pre_backup_job_id": "cafae70e3ab9404dac486f0fee08cd50",
+  "post_backup_job_id": "25eb1875b93449caad4aa7c572d9e014",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790169056.246601,
+     "backing_up": 1790169056.2592216,
+     "backed_up": 1790169059.489582,
+     "connecting": 1790169059.506637,
+     "applying": 1790169059.6235976,
+     "armed": 1790169060.845531,
+     "verifying": 1790169060.8497257,
+     "confirming": 1790169061.204479,
+     "replaced": 1790169061.7222397,
+     "settled": 1790169061.7222397,
+     "checking": 1790169106.3571467,
+     "checked": 1790169109.5852666
+    },
+    "attempts": 1,
+    "worker": "restore-node_0",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-dec06f57-session-config",
+     "-vlan 777",
+     "-   name B-ONLY",
+     " !",
+     " interface Ethernet1",
+     "-   description B changed",
+     "+   description A to-cjunosevolved",
+     " !",
+     " interface Ethernet2",
+     "-   description AUDIT-1-30-42",
+     "+   description A to-xrv9k",
+     "+!",
+     "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+     " !",
+     "-ip route 198.51.100.0/24 Null0"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   },
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "matched",
+    "timeline": {
+     "queued": 1790169056.2466033,
+     "backing_up": 1790169056.2626665,
+     "backed_up": 1790169059.4934452,
+     "connecting": 1790169059.510807,
+     "applying": 1790169059.6773884,
+     "armed": 1790169064.1131182,
+     "verifying": 1790169064.117199,
+     "confirming": 1790169065.0316231,
+     "matched": 1790169065.6176703,
+     "settled": 1790169065.6176703,
+     "checking": 1790169106.360476,
+     "checked": 1790169109.589509
+    },
+    "attempts": 1,
+    "worker": "restore-node_1",
+    "diff_sample": [
+     "[edit]"
+    ],
+    "no_op": true,
+    "root_authentication": "synthesized",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   },
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "short_name": "vjunos-switch",
+    "platform": "juniper_vjunosswitch",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "matched",
+    "timeline": {
+     "queued": 1790169056.2466044,
+     "backing_up": 1790169056.2658842,
+     "backed_up": 1790169059.496871,
+     "connecting": 1790169059.514637,
+     "applying": 1790169059.6934924,
+     "armed": 1790169103.0202591,
+     "verifying": 1790169103.0244308,
+     "confirming": 1790169103.651491,
+     "matched": 1790169106.3489459,
+     "settled": 1790169106.3489459,
+     "checking": 1790169106.3639052,
+     "checked": 1790169109.5933082
+    },
+    "attempts": 1,
+    "worker": "restore-node_2",
+    "diff_sample": [
+     "[edit]"
+    ],
+    "no_op": true,
+    "root_authentication": "present",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   },
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790169056.2466056,
+     "backing_up": 1790169056.2691512,
+     "backed_up": 1790169059.5000966,
+     "connecting": 1790169059.5183337,
+     "applying": 1790169059.7119215,
+     "armed": 1790169066.0525804,
+     "verifying": 1790169066.0567284,
+     "confirming": 1790169066.9374483,
+     "replaced": 1790169068.4845786,
+     "settled": 1790169068.4845786,
+     "checking": 1790169106.3672361,
+     "checked": 1790169109.5970273
+    },
+    "attempts": 1,
+    "worker": "restore-node_3",
+    "diff_sample": [
+     "Wed Sep 23 13:11:00.044 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "-  interface Loopback777",
+     "-   ipv4 address 198.51.100.77 255.255.255.255",
+     "-  !",
+     "#  interface GigabitEthernet0/0/0/0",
+     "#   description B changed",
+     "#   description A to-vjunos-switch",
+     "#  !",
+     "-  prefix-set B-ONLY",
+     "+  router static",
+     "+   address-family ipv4 unicast",
+     "+    192.0.2.4/32 Null0",
+     "+   !",
+     "+  !",
+     "end"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ],
+  "progress": {
+   "settled": 4,
+   "total": 4
+  },
+  "server_time": 1790169110.4379172
+ },
+ "finished_utc": "13:11:50",
+ "overlap_analysis": {
+  "connecting_by_target": {
+   "ceos": 1790169059.506637,
+   "cjunosevolved": 1790169059.510807,
+   "vjunos-switch": 1790169059.514637,
+   "xrv9k": 1790169059.5183337
+  },
+  "settled_by_target": {
+   "ceos": 1790169061.7222397,
+   "cjunosevolved": 1790169065.6176703,
+   "vjunos-switch": 1790169106.3489459,
+   "xrv9k": 1790169068.4845786
+  },
+  "max_connecting": 1790169059.5183337,
+  "min_settled": 1790169061.7222397,
+  "overlapped": true,
+  "note": "All four targets began connecting within ~12ms of each other and the earliest did not settle until ~2.2s after the last one started connecting: the four node restores ran concurrently (separate restore-node_N workers), not serially."
+ },
+ "full_job_targets_timeline": {
+  "ceos": {
+   "queued": 1790169056.246601,
+   "backing_up": 1790169056.2592216,
+   "backed_up": 1790169059.489582,
+   "connecting": 1790169059.506637,
+   "applying": 1790169059.6235976,
+   "armed": 1790169060.845531,
+   "verifying": 1790169060.8497257,
+   "confirming": 1790169061.204479,
+   "replaced": 1790169061.7222397,
+   "settled": 1790169061.7222397,
+   "checking": 1790169106.3571467,
+   "checked": 1790169109.5852666
+  },
+  "cjunosevolved": {
+   "queued": 1790169056.2466033,
+   "backing_up": 1790169056.2626665,
+   "backed_up": 1790169059.4934452,
+   "connecting": 1790169059.510807,
+   "applying": 1790169059.6773884,
+   "armed": 1790169064.1131182,
+   "verifying": 1790169064.117199,
+   "confirming": 1790169065.0316231,
+   "matched": 1790169065.6176703,
+   "settled": 1790169065.6176703,
+   "checking": 1790169106.360476,
+   "checked": 1790169109.589509
+  },
+  "vjunos-switch": {
+   "queued": 1790169056.2466044,
+   "backing_up": 1790169056.2658842,
+   "backed_up": 1790169059.496871,
+   "connecting": 1790169059.514637,
+   "applying": 1790169059.6934924,
+   "armed": 1790169103.0202591,
+   "verifying": 1790169103.0244308,
+   "confirming": 1790169103.651491,
+   "matched": 1790169106.3489459,
+   "settled": 1790169106.3489459,
+   "checking": 1790169106.3639052,
+   "checked": 1790169109.5933082
+  },
+  "xrv9k": {
+   "queued": 1790169056.2466056,
+   "backing_up": 1790169056.2691512,
+   "backed_up": 1790169059.5000966,
+   "connecting": 1790169059.5183337,
+   "applying": 1790169059.7119215,
+   "armed": 1790169066.0525804,
+   "verifying": 1790169066.0567284,
+   "confirming": 1790169066.9374483,
+   "replaced": 1790169068.4845786,
+   "settled": 1790169068.4845786,
+   "checking": 1790169106.3672361,
+   "checked": 1790169109.5970273
+  }
+ }
+}

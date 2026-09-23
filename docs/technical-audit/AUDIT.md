@@ -14,19 +14,19 @@ reason). Filled in as the audits report.
 
 | Area | Paths | Status |
 |---|---|---|
-| Architecture and ownership | `app/main.py`, module boundaries | reviewed (AU1): lifecycle order and the three NDJSON readers consistent; B-006 |
-| Backend behaviour | `runner.py`, `node_services.py`, `node_readiness.py`, `discovery.py`, `vm_files.py`, `lab_operations.py`, `diagnostics.py`, `downloads.py`, `inventory.py`, `capture*.py`, `textdiff.py`, `layout.py`, `topology.py`, `drawio_export.py` | reviewed (AU1, Sonnet, read-only): findings B-001 to B-006 |
-| State and concurrency | `store.py`, `runner.py` pool, `operation_busy`, `restore.py` pools, `git_progress.py` pending jobs | reviewed (AU1): B-001, B-003, B-005 |
-| Frontend | `app/static/*.js`, `*.html`, `style.css` | reviewed (AU2, Sonnet, read-only): F-001 to F-006; the cross-file function map is in the AU2 report (scratch) |
+| Architecture and ownership | `app/main.py`, module boundaries | reviewed (AU1): lifecycle order and the three NDJSON readers consistent; B-006 closed in 1.30.42 (one late import kept: real cycle) |
+| Backend behaviour | `runner.py`, `node_services.py`, `node_readiness.py`, `discovery.py`, `vm_files.py`, `lab_operations.py`, `diagnostics.py`, `downloads.py`, `inventory.py`, `capture*.py`, `textdiff.py`, `layout.py`, `topology.py`, `drawio_export.py` | reviewed (AU1): B-001 to B-006 closed in 1.30.42 (chunk 2) |
+| State and concurrency | `store.py`, `runner.py` pool, `operation_busy`, `restore.py` pools, `git_progress.py` pending jobs | reviewed (AU1): B-001, B-003, B-005 closed in 1.30.42; the reverse busy guard for retirement removals added in 1.30.39 |
+| Frontend | `app/static/*.js`, `*.html`, `style.css` | reviewed (AU2): F-001 to F-006 closed in 1.30.40 |
 | Editor integration | `lab-builder/src/main.tsx`, `lab-builder-page.js`, `lab-builder-yaml.js`, `map-editor-page.js` | reviewed/no change (AU2): whitelist, undo ownership, drafts, build reproducibility consistent |
-| Git and filesystem | `host_git.py`, `git_progress.py`, `host_operations.py`, `host_files.py`, `deploy/setup-git.sh`, `git-onboard.py` | reviewed (AU3, Sonnet, read-only): S-004; the Git save flow and the helper write pattern consistent |
-| Network drivers | `restore_*.py`, `runner.py`, `node_readiness.py`, `inventory.py` defaults | reviewed/no change (AU1): the three drivers, the IOS XR arming session, credential precedence and readiness consistent; B-004 |
-| Install, build, release | `deploy/*.sh`, `install-manager.py`, `check_*.py`, `apt_*.py`, Dockerfile, compose files, `verify-release.py`, `set-release.py` | reviewed (AU3): S-001, S-003, S-005; changed in chunk 1 (telemetry) |
-| Dependencies | `requirements.txt`, `collections.yml`, `lab-builder/package.json`, vendored assets | reviewed (AU3): every installed Python pin clean on OSV except paramiko's disputed SHA-1 advisory (S-006); the editor lockfile carries S-002; `pygnmi` removed in chunk 1 |
-| Tests and CI | `tests/`, `.github/workflows/release-check.yml` | reviewed (AU3, AU4): CI runs every test file except the opt-in EOS fixture; T-001 to T-005; fixtures and fakes agree with the real helpers' shapes |
-| Security boundaries | `main.py` guard, WebSockets, helpers, gateway, `capture_service.py` | reviewed (AU1, AU3): B-002 (scrub after truncation); the gateway's command list, sudoers, the capture service's fixed image and the WebSocket checks consistent |
-| Performance and resource use | polling loops, startup, image size | reviewed (AU1): B-001; the polling intervals are bounded and documented |
-| Documentation | `README.md`, `docs/`, `CLAUDE.md`, `deploy/*.md`, `NODE-FEATURES.md` | reviewed (AU4, Sonnet, read-only): every command, path, variable and numeric claim checked matched the code except D-001 to D-004; changed in chunk 1 (telemetry) |
+| Git and filesystem | `host_git.py`, `git_progress.py`, `host_operations.py`, `host_files.py`, `deploy/setup-git.sh`, `git-onboard.py` | reviewed (AU3): S-004 deferred (§3); the Git save flow and the helper write pattern consistent; `host_operations.py` lost its Grafana mode and unused `docker` path in 1.30.39 |
+| Network drivers | `restore_*.py`, `runner.py`, `node_readiness.py`, `inventory.py` defaults | reviewed/no change (AU1): the three drivers, the IOS XR arming session, credential precedence and readiness consistent; B-004 closed in 1.30.42; live harnesses in 1.30.42 |
+| Install, build, release | `deploy/*.sh`, `install-manager.py`, `check_*.py`, `apt_*.py`, Dockerfile, compose files, `verify-release.py`, `set-release.py` | reviewed (AU3): S-001 and S-005 closed in 1.30.41, S-003 deferred (§3); telemetry tooling retired in 1.30.39; fresh install proven in a nested VM |
+| Dependencies | `requirements.txt`, `collections.yml`, `lab-builder/package.json`, vendored assets | reviewed (AU3): every installed Python pin clean on OSV except paramiko's disputed SHA-1 advisory (S-006, §3); S-002 closed in 1.30.41 (overrides, audit 0); `pygnmi` and three transitives removed in 1.30.39 |
+| Tests and CI | `tests/`, `.github/workflows/release-check.yml` | reviewed (AU3, AU4): CI runs every test file except the opt-in EOS fixture; T-001/T-002 closed in 1.30.40, T-003 in 1.30.42, T-004/T-005 deferred (§3); 93 telemetry tests removed, 84 tests added across the chunks |
+| Security boundaries | `main.py` guard, WebSockets, helpers, gateway, `capture_service.py` | reviewed (AU1, AU3): B-002 closed in 1.30.42; D-003 (loopback-only capture ports) in 1.30.41; the gateway's command list, sudoers, the capture service's fixed image and the WebSocket checks consistent |
+| Performance and resource use | polling loops, startup, image size | reviewed (AU1): B-001 closed in 1.30.42; the retired collector removed the manager's only per-node polling threads (44 → 10 threads idle) |
+| Documentation | `README.md`, `docs/`, `CLAUDE.md`, `deploy/*.md`, `NODE-FEATURES.md` | reviewed (AU4): D-001/D-002 closed in 1.30.40, D-003 in 1.30.41, D-004 deferred (§3, excluded stream); the telemetry guides retired in 1.30.39 |
 | Telemetry and Grafana | see TELEMETRY-REMOVAL.md | changed (chunk 1, R-001) |
 
 ## 2. Findings
@@ -74,6 +74,38 @@ preferences are marked as such. Filled in as the audits report.
 | RR-207 | `NODE-FEATURES.md` cap sentence; `restore.py` comment; T-003 coverage | note: wording and a missing "lab gone" branch test | reviewer | misleading text | low | reword; extend the test | none | | chunk 2 (backend) | closed in 1.30.42 |
 | R-001 | `deploy/install-manager.py`, `check_install.py`, `start-manager.sh`, docs | the telemetry retirement (see TELEMETRY-REMOVAL.md) | this audit | intentional removal | n/a | done | migration | see VALIDATION.md | lead | chunk 1 |
 
+## 2a. Resource comparison (dev VM, idle manager with the five-node lab running)
+
+| Measure | 1.30.38 (before) | 1.30.42 (after) | How measured |
+|---|---|---|---|
+| Manager container memory / threads / PIDs, idle | 71.7 MiB / 44 / 45 | 52.9 MiB / 10 / 11 | `docker stats --no-stream`, `docker top … nlwp` |
+| Extra containers of the feature | Prometheus running (76.9 MiB, restart `unless-stopped`), Grafana exited | none | `docker ps -a` |
+| Listening ports | 8081, 9090 (Prometheus), 5001, 5801 | 8081, 5001, 5801 | `ss -ltnp` |
+| Manager image | 525 MB, 34 Python packages | 494 MB, 30 packages (pygnmi, grpcio, protobuf, dictdiffer gone) | `docker images`, `/opt/python-packages.txt` |
+| Third-party images of the feature | grafana-oss 1.47 GB, prometheus 372 MB | removed | `docker images` |
+| Disk | 50 G used / 19 G free of 72 G | 52 G used / 17 G free (two extra worktrees, the Node 24 toolchain and the nested-VM cloud image on the host; the 1.85 GB of images freed) | `df -h /` |
+| CI wall time | 4 m 07 s (`b1ced1d`) | 2 m 51 s to 3 m 16 s (`0cd18a7`, `e192ead`) | GitHub Actions |
+| Unit tests | 1096 Python (93 telemetry-only), 274 browser | 1134 Python, 281 browser; 15 deploy-script suites | the suites |
+| Background threads of the feature | per-node gNMI collector threads, the 5 s scan loop, the 30 s Grafana monitor | none | code, `nlwp` |
+
+Limits: single idle samples on a busy dev VM (the lab's five NOS containers dominate the host); the memory delta
+also reflects the absence of the collector's buffers rather than a per-request improvement; no load test was run.
+
 ## 3. Remaining debt
 
-Filled in at the end with the concrete constraint, impact, evidence and next action of each deferred item.
+Every item below was examined and deliberately left; each has the concrete constraint, the impact, the evidence and
+the next action. Nothing here is a confirmed regression of this audit.
+
+| Item | Kind | Constraint | Impact | Evidence | Next action | Route |
+|---|---|---|---|---|---|---|
+| S-003 base image by tag, no pip hashes | preference | a digest pin and a hash-pinned requirements file change the release procedure (every dependency bump regenerates the lock) and CI | reproducibility only; every installed pin is clean on OSV | AU3 dependency table | decide with the maintainer; if wanted, digest-pin `python:3.12-slim` in both Dockerfiles and add `pip install --require-hashes` with a generated lock | Sonnet |
+| S-004 `host_git.py` per-repository state touched by path after `drop_owner()` | hypothesis | a review-grade helper change (sudoers helper) with a live Save-progress rerun; no privilege boundary is crossed today | consistency with the descriptor pattern | AU3 reading | open the state directory once after the ownership check and work relative to its descriptor; risk review; live save | Opus |
+| S-006 paramiko SHA-1 RSA advisory | informational | a paramiko major bump (3.x → 5.x) needs live validation of every SSH path (Ansible `network_cli`, readiness, terminals, restore) against the four images; devices may still offer SHA-1 | none today | AU3 OSV query | track upstream; plan a dedicated validation release | Sonnet + live |
+| T-004 fixed paste-prompt sleeps in `restore_junos.py` / `restore_eos.py` | hypothesis | a settle parameter is behaviour on real devices; needs live evidence before changing | about 15 s of suite time; a theoretical race on a slow device | AU4 timing | measure prompt latency live on the four images before touching it | live |
+| T-005 6 MiB stderr transfer in `test_operations_ssh.py` | preference | none | 14 s of suite time | AU4 timing | shrink the payload to just over the 5 MiB cap | Haiku |
+| D-004 `docs/student-quick-start/tools/capture_scenario_b.py` stale selectors | defect (tooling) | the student quick-start stream is excluded from this audit by the brief | the guide's capture tool fails at the YAML step | AU4 comparison | when the guide is next regenerated: `#builder-yaml-panel`, `#builder-yaml-editor`, `#builder-yaml-close` | Sonnet |
+| Non-ASCII secret split at a helper read boundary; a secret interrupted by a colour code | pre-existing gap noted by the risk review of chunk 2 | the helper decodes 4 KiB reads with `errors='replace'`; `scrub()` strips ANSI after replacing | a non-ASCII or colour-interrupted secret could survive redaction | risk review of 1.30.42 | decode with an incremental decoder in `remote()`; strip ANSI before replacing | Opus |
+| A secret saved while its own occurrence is streaming | pre-existing gap (33 of 20,000 fuzz cases, fewer than before) | the window cannot re-scan text already published | rare | risk review of 1.30.42 | accept, or re-scrub the window when the secret list changes | Sonnet |
+| `restore.py` `interrupted` jobs never rechecked stay protected for ever | note | a job interrupted with nothing in flight is not rechecked | list growth by rare events | risk review of 1.30.42 | recheck or release such jobs at start | Sonnet |
+| The redeploy rule of the telemetry retirement only knows manager-driven deploys | note | a redeploy from the VM's terminal is invisible to the manager | the read-back still limits deletion to recorded lines | risk review of 1.30.39 | none unless a lab is redeployed outside the manager while a record exists | none |
+| `docs/student-quick-start/` staleness (byline 1.30.35, the label dialog missing from step A8) | observation | excluded from this audit by the brief | a student sees one extra dialog the guide does not show | AU4 | regenerate the guide in its own stream | Sonnet |
