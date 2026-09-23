@@ -1,3 +1,22 @@
+# Technical audit, part 1: telemetry and Grafana retired — 1.30.39
+
+Read `docs/technical-audit/PICKUP.md` first (branch, environment, chunks, routing), then `AUDIT.md`,
+`FEATURE-PARITY.md` and `TELEMETRY-REMOVAL.md`. The retirement is final and intentional (maintainer decision,
+2026-09-23): never reintroduce a collector, a dashboard route, device provisioning, a Grafana helper mode or the
+`TELEMETRY_*` settings; the redesign inventories and older handoff sections that list telemetry are history.
+Preserve: (1) `app/telemetry_retirement.py` is the only remnant: the startup migration keeps a lab's ledger of
+manager-added device lines under the private `telemetry_retired` key (merged, never overwritten; a malformed
+value kept under `malformed`), `public_lab` strips `telemetry` and `telemetry_retired` and exposes names and
+counts only, and the removal route deletes only recorded lines, refuses foreign statements, pending changes and
+exclusive sessions, reads the device back before clearing an entry, and is guarded by `operation_busy`, in-flight
+restores, running backups and one removal per lab. (2) `deploy/retire-telemetry.sh` finds resources by the Compose
+label `com.docker.compose.project=clab-manager-telemetry` only, validates the two paths under the data root, archives
+by default and refuses a mixed tree; `start-manager.sh` runs it before every build; the health-check row
+`Retired telemetry stack` warns on leftovers. (3) CI names `test_telemetry_retirement.py`, `test_telemetry_absence.py`
+and `test_telemetry_retired_ui.js` in the venv-backed steps and `test_retire_telemetry.py` (stdlib) in the
+system-python step. (4) `docs/technical-audit/` is a history folder for the release check; the audit tooling
+(`tools/upgrade_rehearsal.py`) runs only against a copy of the data directory.
+
 # Setup Script Cleanup Log, part 3 — 1.30.38
 
 Closing release of the stream: read `docs/ui-ux-cleanup/PICKUP.md` (environment, routing, chunks, follow-ups) and the

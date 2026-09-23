@@ -4,6 +4,49 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.39
+
+**Network telemetry and the Grafana dashboards are retired.** An intentional product change, decided by the
+maintainer for the technical audit ([docs/technical-audit/](technical-audit/AUDIT.md)): the feature was never
+used. Removed from the product: automatic gNMI collection and the device provisioning of the gNMI service, the
+Prometheus exposition (`/api/telemetry/metrics`), the Grafana dashboards and generated lab maps (Flow panel),
+the on-demand Grafana control and its `grafana` helper mode, the Tools › Telemetry card and *Telemetry
+settings…*, `/static/grafana.html`, the `TELEMETRY_*` settings, `deploy/setup-telemetry.sh`,
+`compose.telemetry.yml`, `deploy/telemetry/`, the installer phase "Grafana dashboards and lab maps" (menu 4 is
+now *Browser Wireshark stack only*), the two health-check rows, the CI Grafana smoke test, the `pygnmi`
+dependency with its exclusive transitives, and the two guides (`docs/TELEMETRY.md` stays as a short retirement
+notice). Ports 3000 and 9090 are no longer used. Browser Wireshark, readiness and *Test logins*, terminals,
+backups and downloads, Save progress, restore on all four platforms, the topology tab, the lab builder and the
+map editor are unchanged ([FEATURE-PARITY.md](technical-audit/FEATURE-PARITY.md)).
+
+- **Upgrading an installation that had the stack.** `start-manager.sh` (and therefore `install.sh`) now runs
+  `deploy/retire-telemetry.sh --no-recreate` before building the manager: it removes only the containers,
+  volumes and networks whose Compose labels prove the old project `clab-manager-telemetry`, removes the two
+  pinned images when nothing else uses them, moves the feature's files
+  (`/srv/containerlab-node-manager/telemetry`, `…/data/telemetry`) into
+  `/srv/containerlab-node-manager/telemetry-retired-<UTC stamp>/` (`--purge` deletes instead) and strips every
+  `TELEMETRY_*` line from `clab-backup-ui/.env` (archived as `env-telemetry.txt`, mode 600). Idempotent, a
+  no-op on a VM that never had the stack, a failed step exits non-zero. The health check gains the row *Retired
+  telemetry stack*, which warns while leftovers exist. Manager data, credentials, VM trust, Git registrations and
+  every other setting are untouched ([TELEMETRY.md](TELEMETRY.md)).
+- **Manager state migration.** The first start of this release drops each lab's stored telemetry setting. Where
+  the removed feature had added configuration lines to a device (Arista cEOS, Cisco XRv9k or Juniper
+  cJunosEvolved; on the dev VM one line on the Junos Evolved node), the record is kept and the lab shows the
+  notice *Configuration lines added by the retired telemetry feature are still on: …* with **Review and remove…**:
+  the dialog lists the lines and **Remove from devices** deletes exactly those lines inside the device's own
+  configuration session, reads the device back and reports `removed`, `absent`, `failed` or `skipped`; it never
+  removes what the manager did not add and never disables gRPC/gNMI as a whole. A malformed stored value is kept
+  for review and reported in the log instead of being replaced by a default. Downgrading after the migration needs
+  the pre-upgrade data copy ([technical-audit/TELEMETRY-REMOVAL.md](technical-audit/TELEMETRY-REMOVAL.md)).
+- **Tests.** 93 telemetry-only tests and the Grafana helper-mode test are gone with the feature; 56 new tests
+  cover the migration (`test_telemetry_retirement.py`), the absence of every retired surface
+  (`test_telemetry_absence.py`, `test_telemetry_retired_ui.js`), the teardown (`test_retire_telemetry.py`) and the
+  rewritten installer, health-check and release-consistency claims. Every retained claim of a mixed test kept its
+  assertion. CI runs the new files explicitly.
+- The operations helper no longer reads the `docker` path of `/etc/clab-manager/operations.json` (the retired
+  Grafana mode was its only user); `setup-operations.sh` stops validating and writing it, and older files that
+  still carry the key are tolerated.
+
 ## Changes in 1.30.38
 
 **Test logins includes hosts that are excluded from backups.** The lab-wide *Test logins* skipped a device whose
@@ -1141,7 +1184,7 @@ and [GIT-SETUP.md](GIT-SETUP.md#connect-or-switch-a-repository-from-the-manager)
 The map takes its node positions from the annotations file, destroy cleans up, and
 Grafana runs only while someone reads it, with fifteen minutes of history everywhere.
 See [LAB-OPERATIONS.md](LAB-OPERATIONS.md), [TELEMETRY.md](TELEMETRY.md) and
-[GRAFANA-MAP.md](GRAFANA-MAP.md).
+`GRAFANA-MAP.md` (removed with the feature as of 1.30.39; see [TELEMETRY.md](TELEMETRY.md)).
 
 - **Map positions come from the annotations file.** *Deploy lab* and *Save to manager*
   registered the workspace from the topology YAML alone, so every node landed on the
@@ -1244,7 +1287,7 @@ and [REPOSITORY-MAINTENANCE.md](REPOSITORY-MAINTENANCE.md).
 ## Changes in 1.24.0
 
 A Grafana weathermap for every lab, generated by the manager. See
-[GRAFANA-MAP.md](GRAFANA-MAP.md).
+`GRAFANA-MAP.md` (removed with the feature as of 1.30.39; see [TELEMETRY.md](TELEMETRY.md)).
 
 - **Lab map dashboards.** For each lab with a drawing the manager renders an SVG of the
   topology (positions, icons, labels, groups and notes as on its own map) and a Flow

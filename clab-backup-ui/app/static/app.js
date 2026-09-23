@@ -9,7 +9,7 @@ const PANELS=['topology','devices','progress','tools','advanced'];
 const TAB_ALIAS={inventory:'devices',git:'progress',backups:'tools',credentials:'advanced',logs:'advanced'};
 const SUBVIEW={inventory:'technical',backups:'backups-view',credentials:'credentials-view',logs:'logs-view'};
 const APP_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
-const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-retry-save','banner-save-details','banner-credentials','banner-vm','banner-link','banner-dismiss'],'home-banner':['home-banner-output']};
+const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-retry-save','banner-save-details','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
 const current=()=>state.labs.find(l=>l.id===activeId);
 const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status))||(state.operations||[]).some(j=>['queued','running'].includes(j.status))||(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status));
 function notify(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,5000);}
@@ -37,24 +37,17 @@ function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platf
 // Why an SSH action is disabled right now; the readiness monitor clears it on its own. Fallback for
 // contexts without status.js — deviceState(n).detail is the student sentence.
 function sshHint(n){return typeof deviceState==='function'?deviceState(n).detail||'Add login credentials to open the CLI.':(n.nos_login?.status==='booting'?'NOS is still booting; SSH opens when it accepts a login':n.nos_login?.status==='failed'?'SSH login failed with the saved credentials; assign a credential profile':n.nos_login?.status==='unavailable'?'Node is not running':'Assign credentials first');}
-// Telemetry is read in Grafana, which runs beside the manager on the VM (deploy/setup-telemetry.sh);
-// the browser reaches it on the manager's own host name. The lab's generated map when it has one,
-// else the lab overview dashboard, both filtered to this lab.
-// Grafana is on demand (stopped until someone opens it), so the button goes through /static/grafana.html:
-// that page asks the manager to start Grafana on the VM when needed and then moves on to the dashboard.
-// Only the dashboard path travels in the link; the page builds the Grafana origin from the manager's host.
-function grafanaPath(lab){
- const g=lab?.telemetry?.grafana;if(!g?.enabled||!g.port)return '';
- return `/d/${g.map_uid||'clab-lab-overview'}?${new URLSearchParams({'var-lab':lab.name||'',refresh:'10s'})}`;
+// The retired telemetry feature's leftover device configuration (lab.telemetry_retired, set by the
+// manager only while lines it once added are still on a device): the short names for the banner
+// headline, plus the malformed-record caveat when a stored ledger could not be read.
+function retiredBannerText(retired){
+ const nodes=retired.nodes||[];
+ if(!nodes.length)return 'A telemetry record of this lab could not be read and is kept for review.';
+ const names=nodes.map(n=>n.short_name||n.name).filter(Boolean).join(', ');
+ let text=`Configuration lines added by the retired telemetry feature are still on: ${names}.`;
+ if(retired.malformed)text+=' A telemetry record of this lab could not be read and is kept for review.';
+ return text;
 }
-function grafanaLaunch(lab){const path=grafanaPath(lab);return path?'/static/grafana.html#'+new URLSearchParams({path,title:lab.name||''}):'';}
-function renderGrafanaLink(lab){
- const link=$('grafana-open');if(!link)return;const url=grafanaLaunch(lab);link.hidden=!url;
- if(!url){link.removeAttribute('href');return;}
- link.href=url;setMarkup(link,(lab.telemetry.grafana.map_uid?'Open lab map':'Open network dashboard')+' <span aria-hidden="true">↗</span>');
- link.title=(lab.telemetry.grafana.map_uid?'Live map of this lab: link rates, port and device state, in Grafana.':'Live interface rates, link state and BGP neighbours of this lab, in Grafana.')+' The dashboard starts on the VM when needed.';
-}
-function renderTelemetryLine(lab){const el=$('telemetry-line');if(!el)return;const t=lab.telemetry||{};el.textContent=t.grafana&&t.grafana.enabled===false?'Telemetry is not installed on this VM.':typeof telemetryLine==='function'?telemetryLine(t.status,t):'';}
 // Vocabulary helpers shared by the header, the lab switcher and home.js. labContext adds the dismissed
 // operation ids so a failed job the student already dismissed stops reading as "Needs attention".
 function dismissedSet(){const ids=new Set();if(typeof isDismissed!=='function')return ids;for(const j of [...(state.operations||[]),...(state.restore_jobs||[])])if(j.id&&['failed','interrupted','preflight_failed'].includes(j.status)&&isDismissed(j.id))ids.add(j.id);return ids;}
@@ -82,7 +75,7 @@ function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.30.38';$('app-version').textContent='v'+version;
+ const version=state.version||'1.30.39';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
@@ -100,7 +93,6 @@ function render(){
  if(!lab){renderLabBanner();syncProxies();syncRoute();return;}
  renderLabHeader(lab);renderTechnical(lab);
  $('node-count').textContent=lab.nodes.length;
- renderGrafanaLink(lab);renderTelemetryLine(lab);
  const sshReady=lab.nodes.some(n=>n.ssh_ready);
  $('map-ssh-all').disabled=!sshReady;
  $('map-ssh-all').title=sshReady?'':lab.nodes.some(n=>n.nos_login?.status==='booting')?'Waiting for devices to finish starting — this becomes available automatically':'No device is ready for a CLI session yet';
@@ -209,6 +201,7 @@ function renderLabBanner(){
  else if(ls.key==='stopped')spec={tone:'info',icon:'info',text:'This lab is not running.',actions:start()};
  else if(ls.key==='unknown')spec={tone:'warn',icon:'alert',text:ls.detail||'The lab VM cannot be reached. Status may be out of date.',actions:{'banner-vm':{label:'VM connection…',run:()=>{if(typeof openVmDialog==='function')openVmDialog();}}}};
  else if(ls.key==='unlinked')spec={tone:'info',icon:'info',text:ls.detail,actions:{'banner-link':{label:'Match to a running lab…',run:()=>{const b=$('link-deployment');if(b&&typeof b.onclick==='function')b.onclick();}}}};
+ else if(lab.telemetry_retired)spec={tone:'info',icon:'info',text:retiredBannerText(lab.telemetry_retired),actions:{'banner-retired-review':{label:'Review and remove…',run:()=>{if(typeof openTelemetryRetired==='function'&&typeof opTask==='function')opTask(null,()=>openTelemetryRetired(lab.id));}}}};
  setBanner('lab-banner',spec);
 }
 function renderNodes(){const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();const nodes=lab.nodes.filter(n=>(n.name+' '+n.address+' '+platformLabel(n.platform)).toLowerCase().includes(term));
@@ -289,7 +282,6 @@ $('labs').addEventListener('click',e=>{const b=e.target.closest('[data-lab]');if
 $('search').oninput=()=>{renderNodes();renderDeviceList();};
 $('devices-technical').onclick=()=>{devicesTechnical=!devicesTechnical;showTab('devices');};
 $('lab-content').addEventListener('click',e=>{const mirror=e.target.closest('[data-proxy]');if(mirror&&!mirror.disabled)activateProxy(mirror);});
-for(const id of ['menu-telemetry','tools-telemetry-settings'])$(id).onclick=()=>{if(typeof openTelemetrySettings==='function'&&typeof opTask==='function')opTask(null,()=>openTelemetrySettings(activeId));};
 for(const id of ['menu-lab-files','advanced-lab-files'])$(id).onclick=()=>{if(typeof opBrowse==='function'&&typeof opTask==='function')opTask(null,()=>opBrowse('',activeId));};
 // Progress-tab git buttons: onclick properties so git-progress.js can take them over by assigning its own.
 for(const b of document.querySelectorAll('#progress-view [data-git-action], #git-repository-advanced [data-git-repo-action]'))b.onclick=()=>{if(typeof closeMenus==='function')closeMenus();if(typeof gitRunAction==='function')gitRunAction(b.dataset.gitAction||b.dataset.gitRepoAction);};

@@ -14,7 +14,6 @@ const STATUS_GIT_BUSY=['queued','capturing','exporting','pushing'];
 const STATUS_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
 const STATUS_RESTORE_FAILED=['failed','preflight_failed','interrupted'];
 const STATUS_BADGE_LABELS={reachable:'Login OK',unreachable:'Login failed',succeeded:'Succeeded',failed:'Failed',interrupted:'Interrupted',partial:'Partly succeeded',queued:'Queued',running:'Running',Ready:'Ready'};
-const STATUS_TELEMETRY_LINES={partial:'Some devices are not reporting — open Telemetry settings.',waiting:'Waiting for devices to finish starting.',unsupported:'None of this lab’s devices support telemetry.',disabled:'Telemetry is off for this lab.',unmonitored:'Available once the lab is running on the VM.'};
 function plural(count,word,pluralWord){const n=Number(count)||0;return n+' '+(n===1?word:(pluralWord||word+'s'));}
 function operationLabel(action){return STATUS_OPERATION_LABELS[action]||'Lab operation';}
 function statusDeviceName(node){return node?.short_name||node?.definition_node||node?.name||'This device';}
@@ -141,13 +140,6 @@ function progressSummary(lab,gitJobs,now,problem){const p=progressState(lab,gitJ
 // Backup / login-check badges in the technical table and job list; unknown values pass through and
 // the caller keeps the raw value in `title`.
 function badgeLabel(status){return STATUS_BADGE_LABELS[status]||String(status??'');}
-// One sentence for the Tools › Telemetry card from lab.telemetry ({status, total, streaming, failed, …}).
-function telemetryLine(status,summary){
- if(status&&typeof status==='object'){summary=status;status=summary.status;}const s=summary||{};
- if(status==='streaming')return `Collecting live data from ${plural(s.streaming??s.total??0,'device')}.`;
- if(status==='failed')return `${plural(s.failed??0,'device')} could not be set up for telemetry.`;
- return STATUS_TELEMETRY_LINES[status]||'';
-}
 // A student-facing name for a saved-version folder the instructor put in the repository: the last
 // path segment through a small map, otherwise the segment itself (callers show the full path as a caption).
 function savedVersionName(folder){

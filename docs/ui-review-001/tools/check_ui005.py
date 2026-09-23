@@ -14,7 +14,7 @@ BASE = os.environ.get('CLAB_BASE', 'http://127.0.0.1:8090')
 OUT = os.environ.get('CLAB_SHOTS', '')
 LAB = os.environ.get('CLAB_LAB', 'BGP_TheoryToPractice')
 EMPTY_MAP_LAB = os.environ.get('CLAB_EMPTY_LAB', 'ospf-basics')
-MOVED = ['menu-import-map', 'menu-map-edit', 'menu-telemetry', 'menu-operation-history']
+MOVED = ['menu-import-map', 'menu-map-edit', 'menu-operation-history']
 failed = []
 
 
@@ -99,12 +99,12 @@ with sync_playwright() as pw:
     shot(page, 'ui005-operation-history')
     page.keyboard.press('Escape')
     check('focus returns to the Lab actions button', page.evaluate('() => document.activeElement.id') == 'lab-actions-button')
-    # Pointer: the three other actions
+    # Pointer: Operation history again (by click, not keyboard), then the two remaining actions
     open_group(page)
-    page.click('#menu-telemetry')
+    page.click('#menu-operation-history')
     page.wait_for_selector('dialog[open]', timeout=15000)
     title = page.evaluate('() => document.querySelector("dialog[open] h2")?.textContent || ""')
-    check('Telemetry settings opens from the group', 'telemetry' in title.lower(), title)
+    check('Operation history opens from the group by pointer', 'history' in title.lower(), title)
     page.keyboard.press('Escape')
     open_group(page)
     page.click('#menu-import-map')

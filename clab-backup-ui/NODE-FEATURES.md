@@ -10,9 +10,8 @@ Click a lab to open its workspace. Every imported node is shown, including Linux
 and unmapped kinds. The device panel (**Details** on the Devices tab, or a click on
 the device) contains the last SSH check, the connection
 settings and the node's saved configuration history; checks are on demand, with
-timestamps. The manager collects no host CPU or memory metrics; network telemetry
-(interface rates, link state, BGP) is collected per lab and shown in Grafana, see
-[TELEMETRY.md](../docs/TELEMETRY.md).
+timestamps. The manager collects no host CPU or memory metrics; the retired network
+telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
 
 ## Node actions
 
@@ -142,8 +141,7 @@ its label. Keyboard users can focus a device and press Shift+F10, navigate with 
 keys, and press Escape to close the menu. Actions have the same credential/readiness
 requirements as the Devices tab. Each device carries a state dot (ready, starting,
 needs attention, unavailable) taken from the same readiness check as the Devices tab.
-Links show the imported wiring, never live connectivity: live link state is on the
-Grafana lab map (Tools › Open lab map ↗).
+Links show the imported wiring, never live connectivity.
 
 This is an operational map, not a complete VS Code topology editor: custom icons,
 HTML/Markdown text styling, geographic layouts, nested relative geometry, traffic

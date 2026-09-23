@@ -74,9 +74,9 @@ FAILURES FOUND
   Next: sudo bash /home/archtop/projects/clab-manager/deploy/setup-operations.sh
 [FAIL] Topology browser over saved SSH connection
   The uncached browser request failed: HTTP 409
-[WARN] Grafana telemetry dashboards
-  Not installed. Grafana is where telemetry is shown; without it live rates, link state and the lab maps are not visible anywhere.
-  Next: Run sudo bash /home/archtop/projects/clab-manager/deploy/setup-telemetry.sh: it starts Prometheus, provisions Grafana (started on request from a lab) with the Flow panel and recreates the manager. See docs/TELEMETRY.md.
+[WARN] Retired telemetry stack
+  Still present: container(s) clab-manager-grafana, clab-manager-telemetry-prometheus-1; volume(s) clab-manager-telemetry_grafana-data, clab-manager-telemetry_prometheus-data; .env key(s) TELEMETRY_STACK; folder /srv/containerlab-node-manager/telemetry.
+  Next: sudo bash /home/archtop/projects/clab-manager/deploy/retire-telemetry.sh
 [INFO] Git repository 1: push permission
   Not exercised. Remote read access does not prove write permission or acceptance by branch rules.
 
@@ -106,8 +106,7 @@ FAILURES FOUND (exit 1)
 | Git | Registry access through the manager, local registered owners/checkouts, initial commit, commit identity, registered branch/destination, and staged/managed-folder changes |
 | Optional Git remote read | With `--git-remote`, a bounded `ls-remote` as each registered owner; no fetch, commit or push |
 | Browser Wireshark capture | Whether the provider is enabled (a WARN with the setup command when it is not, since the stack is part of every installation), Edgeshark lists targets, and the browser session service and pinned image are ready. Live packets, viewer interaction and saved-capture download remain acceptance checks |
-| Network telemetry | Whether the gNMI dial-in collector is available (informational when disabled), and each linked lab's telemetry verdict through the manager; a lab with failed nodes is a warning with the remedy. Dashboards and the lab map following real traffic in Grafana remain acceptance checks |
-| Grafana telemetry dashboards | A WARN with the setup command when the stack is not installed; otherwise whether Prometheus answers at all (a restarting container is reported with the Compose status and log commands), whether it scrapes the manager's metrics endpoint (scrape errors are classified, never echoed) and whether the manager can write the lab maps (a WARN with the remedy). Grafana is on demand, so a stopped Grafana passes as *provisioned and stopped until someone opens it* and the check never starts it; while it runs (open it from a lab first) its health endpoint and the Flow panel that draws the lab maps are checked too. Opening the dashboards from the workstation remains an acceptance check |
+| Retired telemetry stack | PASS when no container or volume labelled with the old telemetry Compose project remains, no `TELEMETRY_*` key remains in `clab-backup-ui/.env` and neither retired feature folder remains on disk; otherwise WARN listing what is left, with the remedy |
 
 Disabled online lab downloads are informational and do not explain a failed
 folder browse. Existing empty folders are valid. A missing folder, symlinked
@@ -156,7 +155,7 @@ sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh" --enable-operati
 ```
 
 This reinstalls the gateway, operations helper and sudoers, verifies them through
-the restricted account, refreshes the capture and Grafana stacks and recreates the
+the restricted account, refreshes the capture stack and recreates the
 manager container so the running image matches. Then reconnect in **Manager ▾ › VM
 connection…** and reopen the folder. The Diagnostics page labels this a gateway/enablement problem
 (`did not run the operations gateway`) rather than an authentication failure, and
@@ -236,9 +235,8 @@ Even when automated checks pass, verify these actions yourself:
    destination. Configuration checks do not prove a real password login.
 3. Test an intended device login and capture/download its configuration. A
    running Docker container or `/dev/kvm` device does not prove NOS readiness.
-4. Open the network dashboard (**Tools › Telemetry › Open lab map ↗**) from a deployed
-   lab and confirm the dashboards and the lab map follow traffic; start a capture
-   (**Capture traffic…**) and confirm packets arrive in Wireshark.
+4. Start a capture (**Capture traffic…**) on a deployed lab and confirm packets
+   arrive in Wireshark.
 5. Use **Save progress** deliberately, confirm the review (**Upload these changes**), wait for **Saved to Git**, and inspect the
    expected remote files. A public remote can be readable anonymously;
    `ls-remote` does not prove GitHub write permission or branch-rule acceptance.

@@ -1,3 +1,36 @@
+# Technical audit, part 1: telemetry and Grafana retired — 1.30.39
+
+Prepared on `claude/technical-audit` (from `main` `b1ced1d`) on 2026-09-23. The full audit record is
+`docs/technical-audit/` (AUDIT, FEATURE-PARITY, TELEMETRY-REMOVAL, VALIDATION, PICKUP).
+
+- **Baseline (unit, at `b1ced1d`):** `python -m unittest discover` 1096 OK (1 skipped), `node --test tests/*.js`
+  274 OK, `verify-release.py` and `check_links.py` (132 files) clean, CI green on `main`.
+- **Unit and static (the integrated tree after the risk review's fixes, at the release bump):** `python -m unittest
+  discover` 1078 OK (1 skipped): 93 telemetry-only tests and the Grafana helper-mode test removed with the feature,
+  31 (`test_telemetry_retirement.py`), 9 (`test_telemetry_absence.py`), one `operation_busy` test and the rewritten
+  helper-mode test added; `node --test tests/*.js` 281 OK (`test_grafana_ui.js` removed, `test_telemetry_retired_ui.js`
+  added); every deploy-script suite with the system `python3` OK (`test_retire_telemetry.py` 33, `test_check_install.py` 38,
+  `test_install_manager.py` 53, `test_release_consistency.py` 14, the APT, host, Git, onboarding and scaffold suites);
+  `bash -n` on every deploy script; `node --check` on every static script; `verify-release.py` (runtime and
+  documentation); `check_links.py` 129 files, 0 problems; `git diff --check`.
+- **Upgrade rehearsal (isolated copy of the real pre-change data, `docs/technical-audit/tools/upgrade_rehearsal.py`):**
+  PASS: every protected field identical before and after the migration (labs, profiles and secrets, Git bindings,
+  30 jobs, 3 Git jobs, 11 restore jobs, 44 operations, host trust), the `telemetry` key gone, one ledger kept
+  (`clab-restore-square-cjunosevolved`, 1 line), the second run a no-op, the event carries names and counts only.
+- **Independent review (Opus 5.5 `risk-reviewer`, read-only):** two must-fix and seven should-fix findings, all
+  applied before this commit: the new browser test added to CI; the teardown acts only on the two fixed feature
+  folders (resolved path equal, no symlink in any component; a `.env` value pointing elsewhere is skipped), reads and
+  validates everything before the first destructive step, archives the removed `.env` lines before rewriting the
+  file as bytes (CRLF and control characters preserved), and runs a second time after the manager is recreated;
+  Junos removal refuses when deleting the routing-instance would leave foreign gRPC leaves; an entry recorded
+  before the lab's last deploy is cleared without touching the device (identical text such as containerlab's cEOS
+  template is not proof of authorship); a `removing` flag makes `operation_busy` refuse restores, backups, saves and
+  operations during a removal; permanent entries and unreadable records can be forgotten; a second entry point under
+  Advanced options; the weakened `End`-key claim in `test_shell_ui.js` restored. Notes accepted as is: the
+  four-worker pool is more than a one-off needs; *Remove lab* and *Start fresh* drop the record with the lab; a
+  1.30.38 manager started on migrated data would show the record in its lab view (see the rollback note).
+- **Live (dev VM):** recorded below after the deployment of this release's build.
+
 # Setup Script Cleanup Log, part 3: Test logins eligibility and the 1.30.37 live records — 1.30.38
 
 Prepared on `claude/ui-ux-cleanup` on 2026-09-23 after 1.30.37 (`96b72d7`, CI green on the push; PR #53). One

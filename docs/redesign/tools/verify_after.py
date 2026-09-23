@@ -350,23 +350,18 @@ def labs_by_name(r):
 
 
 def tools(r):
-    """Tools tab: cards with captions, the capture dialog (device picker first) and telemetry settings."""
+    """Tools tab: cards with captions, the capture dialog (device picker first)."""
     p = r.page
     go_home(r)
     r.open_lab(SHOWCASE); r.tab('tools'); p.wait_for_timeout(500)
-    cards = r.js('() => ({grafana: document.getElementById("grafana-open").hidden ? "" : document.getElementById("grafana-open").textContent.trim(), caption: document.getElementById("grafana-caption").textContent, tele: document.getElementById("telemetry-line").textContent, capture: document.getElementById("capture-open").textContent, cap_caption: document.getElementById("capture-caption").hidden ? "" : document.getElementById("capture-caption").textContent, ssh: document.getElementById("tools-ssh-all")?.textContent.trim()})')
-    r.check('tools: dashboard link label, telemetry line, Capture traffic…, capture caption when disabled', cards['grafana'] in ('', 'Open lab map ↗', 'Open network dashboard ↗') and cards['tele'] and cards['capture'] == 'Capture traffic…' and (cards['cap_caption'] == '' or 'not set up' in cards['cap_caption']), cards)
+    cards = r.js('() => ({capture: document.getElementById("capture-open").textContent, cap_caption: document.getElementById("capture-caption").hidden ? "" : document.getElementById("capture-caption").textContent, ssh: document.getElementById("tools-ssh-all")?.textContent.trim()})')
+    r.check('tools: Capture traffic…, capture caption when disabled', cards['capture'] == 'Capture traffic…' and (cards['cap_caption'] == '' or 'not set up' in cards['cap_caption']), cards)
     r.shot('40-tools')
     p.click('#capture-open'); p.wait_for_selector('#capture-dialog[open]'); p.wait_for_timeout(800)
     cap = r.js('() => ({ctx: document.getElementById("capture-context").textContent, adv: document.getElementById("capture-advanced-label").textContent, open: document.getElementById("capture-advanced").open, legend: document.getElementById("capture-primary-legend").textContent, start: document.getElementById("capture-prepare").textContent, order: [...document.querySelectorAll("#capture-form > *")].map(e => e.id || e.tagName.toLowerCase()), sessions: document.getElementById("capture-sessions").textContent})')
     r.check('capture dialog: lab context, device picker unfolded first, Start capture, sessions explained', cap['ctx'].startswith('Lab ') and cap['adv'] == 'Choose a device' and cap['open'] and cap['start'] == 'Start capture' and cap['order'].index('capture-advanced') < cap['order'].index('fieldset') and cap['sessions'], cap)
     r.shot('41-capture-dialog')
     p.click('#capture-close')
-    p.click('#tools-telemetry-settings'); p.wait_for_selector('#telemetry-settings-dialog[open]', timeout=15000); p.wait_for_timeout(300)
-    tele = r.js('() => document.getElementById("telemetry-settings-dialog").textContent')
-    r.check('telemetry settings: student sentences with a Dashboard: line', tele.startswith('Telemetry settings') and 'Dashboard:' in tele and 'pygnmi' not in tele, tele[:160])
-    r.shot('42-telemetry-settings')
-    p.click('#telemetry-settings-dialog [data-op-close]')
 
 
 def operations(r):
@@ -488,10 +483,6 @@ def pages(r):
     probe = r.js('() => [...document.querySelectorAll("#debug-checks p")].map(p => p.textContent)')
     r.check('diagnostics: probe rows use student names and an uppercase status', all(row.startswith(('Folder listing — ', 'VM commands — ')) for row in probe), probe)
     r.shot('59-diagnostics')
-    p.goto(f'{BASE}/static/grafana.html#path=%2Fd%2Fclab-map-abc&title={SHOWCASE}'); p.wait_for_timeout(1500)
-    gf = r.js('() => ({title: document.getElementById("grafana-title").textContent, headline: document.getElementById("grafana-headline").textContent, status: document.getElementById("grafana-status").textContent})')
-    r.check('network dashboard page: title, headline sentence and the raw reason as details', gf['title'] == f'Network dashboard · {SHOWCASE}' and gf['headline'] and gf['status'], gf)
-    r.shot('60-network-dashboard')
     ready = next((n for n in bgp['nodes'] if n.get('ssh_ready')), bgp['nodes'][0])
     p.goto(f'{BASE}/static/terminal.html#lab={bgp["id"]}&node={ready["name"]}&label={SHOWCASE}'); p.wait_for_timeout(2500)
     term = r.js('() => ({title: document.getElementById("title").textContent, back: document.getElementById("back").textContent, status: document.getElementById("status").textContent, notice: document.getElementById("notice-text").textContent, connect: document.getElementById("connect").textContent})')

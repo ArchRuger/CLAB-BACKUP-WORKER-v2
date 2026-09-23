@@ -1,5 +1,7 @@
 import copy
+from contextlib import redirect_stdout
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -7,10 +9,12 @@ import re
 import tempfile
 import time
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
+import app.host_operations as host_operations
 from app.host_operations import HostOperations, LIFECYCLE, digest, capture, stream
 from app.lab_operations import LabOperations, scrub, drawio
 from app.store import Store
@@ -29,7 +33,7 @@ class HostOperationTests(unittest.TestCase):
             if '--help' in argv: return (1, '') if argv[1] in self.missing else (0, '--name --cleanup --graceful help')
             if argv[1:2] == ['inspect']: return 0, json.dumps(self.rows)
             return 0, 'fixture'
-        self.host = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', git='/usr/bin/git', roots=[str(self.root)], projects=str(self.root), network=True), run)
+        self.host = HostOperations(dict(clab='/usr/bin/containerlab', git='/usr/bin/git', roots=[str(self.root)], projects=str(self.root), network=True), run)
 
     def tearDown(self): self.tmp.cleanup()
 
@@ -53,32 +57,26 @@ class HostOperationTests(unittest.TestCase):
         self.missing.add('apply'); self.assertFalse(self.host.capabilities()['actions']['apply']['available'])
         with self.assertRaisesRegex(ValueError,'does not support'): self.host.plan(self.request('apply'))
 
-    def test_grafana_mode_starts_stops_and_inspects_the_named_container_only(self):
-        from app.host_operations import GRAFANA_CONTAINER
-        states = {'inspect': (0, 'exited\n')}
-        def run(argv):
-            self.calls.append(argv)
-            if argv[1] == 'start': states['inspect'] = (0, 'running\n'); return 0, ''
-            if argv[1] == 'stop': states['inspect'] = (0, 'exited\n'); return 0, ''
-            if argv[1] == 'inspect': return states['inspect']
-            return 1, ''
-        host = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', roots=[str(self.root)], projects=str(self.root)), run)
-        self.assertEqual(host.grafana('status'), {'container': GRAFANA_CONTAINER, 'state': 'exited'})
-        self.assertEqual(host.grafana('start'), {'container': GRAFANA_CONTAINER, 'state': 'running'})
-        self.assertEqual(host.grafana('stop'), {'container': GRAFANA_CONTAINER, 'state': 'exited'})
-        self.assertEqual([a[1:] for a in self.calls], [
-            ['inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER],
-            ['start', GRAFANA_CONTAINER], ['inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER],
-            ['stop', '-t', '10', GRAFANA_CONTAINER], ['inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER]])
-        self.assertTrue(all(a[0] == '/usr/bin/docker' for a in self.calls))
-        states['inspect'] = (1, '')
-        self.assertEqual(host.grafana('status')['state'], 'missing')
-        states['inspect'] = (0, 'running; rm -rf /\n')
-        self.assertEqual(host.grafana('status')['state'], 'missing', 'only a plain word is reported')
-        for action in ('restart', 'rm', '', None, ['start']):
-            with self.assertRaisesRegex(ValueError, 'Unsupported Grafana action'): host.grafana(action)
-        failing = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', roots=[str(self.root)], projects=str(self.root)), lambda argv: (1, ''))
-        with self.assertRaisesRegex(ValueError, 'Could not start the Grafana container'): failing.grafana('start')
+    def test_grafana_mode_is_gone_and_the_helper_answers_unknown_request_mode(self):
+        config = dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', roots=[str(self.root)], projects=str(self.root))
+        real_path = host_operations.Path
+        class ConfigFile:
+            def read_text(self): return json.dumps(config)
+        def fake_path(value): return ConfigFile() if value == '/etc/clab-manager/operations.json' else real_path(value)
+        stdin = SimpleNamespace(buffer=io.BytesIO(json.dumps({'mode': 'grafana', 'action': 'start'}).encode() + b'\n'))
+        output = io.StringIO()
+        with patch.object(host_operations, 'Path', side_effect=fake_path), \
+             patch.object(host_operations, 'signal'), \
+             patch.object(host_operations.sys, 'stdin', stdin), \
+             patch.object(host_operations.subprocess, 'Popen') as popen, \
+             redirect_stdout(output):
+            code = host_operations.main()
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(output.getvalue()), {'error': 'Unknown request mode.'})
+        popen.assert_not_called()
+        self.assertFalse(hasattr(host_operations, 'GRAFANA_CONTAINER'))
+        self.assertFalse(hasattr(host_operations, 'GRAFANA_ACTIONS'))
+        self.assertFalse(hasattr(HostOperations, 'grafana'))
 
     def test_redeploy_fallback_order_cleanup_and_name(self):
         self.missing.add('redeploy')
@@ -619,6 +617,16 @@ class OperationAPITests(unittest.TestCase):
             response=self.client.put('/api/labs/'+self.lab_id+'/operations-settings',headers=self.auth,json={'favorite':True})
             self.assertEqual(response.status_code,409)
             with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
+
+    def test_a_removal_of_retired_telemetry_lines_holds_the_lab(self):
+        from app.lab_operations import operation_busy
+        with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
+            preview=self.preview();self.store.lab(self.lab_id)['telemetry_retired']={'applied':{},'removing':'2026-09-23T10:00:00+00:00'}
+            self.assertTrue(operation_busy(self.store.state,self.lab_id));self.assertTrue(operation_busy(self.store.state))
+            self.assertFalse(operation_busy(self.store.state,'another-lab'))
+            self.assertEqual(self.confirm(preview['token']).status_code,409);submit.assert_not_called()
+            with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
+            del self.store.lab(self.lab_id)['telemetry_retired']['removing'];self.assertFalse(operation_busy(self.store.state,self.lab_id))
 
     def test_last_deployed_is_the_real_time_of_a_succeeded_deploy_and_never_invented(self):
         from app.lab_operations import last_deployed

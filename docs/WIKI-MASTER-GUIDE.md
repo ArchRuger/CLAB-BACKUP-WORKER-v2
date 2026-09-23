@@ -61,7 +61,6 @@ Engineer workstation
                                         |          Git helper -> engineer-owned checkout -> HTTPS Git remote
                                         |
                                         +-- SSH --> network nodes
-                                        +-- gNMI --> network nodes --> Prometheus + Grafana (TCP 3000)
                                         +-- HTTP --> Edgeshark + Wireshark sessions (browser capture)
 
 Proxmox --> Ubuntu VM --> Docker / Containerlab --> training devices
@@ -477,8 +476,8 @@ bash "$HOME/projects/clab-manager/deploy/install.sh"
 
 Choose **Install or update manager, then set up Git**. The menu combines missing
 prerequisites, approved APT media repair with backups, password/helpers, persistent
-storage, image build/start, the browser Wireshark stack, the Grafana dashboards and
-running-container/HTTP checks. It then opens Git
+storage, image build/start, the browser Wireshark stack and running-container/HTTP
+checks. It then opens Git
 setup as the same ordinary owner. Existing `.env` is retained; a new source
 folder offers to copy your previous `.env`. Existing passwords/data are kept.
 
@@ -685,8 +684,9 @@ sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" 
 sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" logs --tail=50 backup-ui
 ```
 
-The launcher refreshes and verifies the host helpers, prepares persistent
-storage, installs the browser Wireshark and Grafana stacks, builds the manager
+The launcher runs `retire-telemetry.sh --no-recreate` to tear down any leftover
+telemetry stack, then refreshes and verifies the host helpers, prepares persistent
+storage, installs the browser Wireshark stack, builds the manager
 image and recreates the manager. It retains an
 existing `clab-discovery` password. If Parts 7–9 were skipped, the first launch
 prompts for the password before building or starting the container.
@@ -949,16 +949,6 @@ The browser CLI is an SSH session from the manager to the device. Test the saved
 
 Review readiness, choose a backup, then inspect its outcome under **Tools › Configuration backups › Backups on this VM** and download a configuration. Set the automatic interval only after a manual backup works. Linked discovery pauses automatic work when its lab is unavailable; a running container alone is not proof of SSH readiness.
 
-## Live telemetry (network dashboard)
-
-With automatic telemetry on (the default for labs created since 1.23.0), the manager
-configures gNMI on supported devices once they answer `show version` and streams
-interface rates, link state and BGP neighbours; **Open lab map ↗** (or **Open network
-dashboard ↗** for a lab without a map) under **Tools › Telemetry** opens the lab's
-Grafana dashboards and generated map on TCP 3000 of the VM, starting Grafana on the
-VM when needed. Settings, device states and the acceptance procedure are in
-[TELEMETRY.md](TELEMETRY.md) and [GRAFANA-MAP.md](GRAFANA-MAP.md).
-
 ## Wireshark in the browser
 
 Right-click a device and choose **Capture traffic…**, click a link on the map, or
@@ -1144,8 +1134,9 @@ undo an intentional stop on reboot. [Docker restart policies](https://docs.docke
 sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh" --enable-operations --lab-root /etc/containerlab
 ```
 
-This updates and verifies the helpers, refreshes the browser Wireshark and Grafana
-stacks, builds the matching image and recreates the manager using the existing
+This runs `retire-telemetry.sh --no-recreate` to tear down any leftover telemetry
+stack, updates and verifies the helpers, refreshes the browser Wireshark stack,
+builds the matching image and recreates the manager using the existing
 persistent data. Existing passwords are retained.
 If Git repositories are already registered, the launcher also refreshes and
 verifies the Git helper while preserving those registrations.
@@ -1501,26 +1492,23 @@ For image-only installations use these same env-file/Compose arguments for
 status, logs, stop, start, backups and upgrades. Continue with Part 11 to save
 the VM password in the manager. Do not run the source-build launcher offline.
 
-**Browser Wireshark and the Grafana dashboards on a prepared-image installation.** The two
-setup scripts write their settings to `clab-backup-ui/.env` and normally finish by recreating
-the manager from the source-build Compose file, which is the wrong file here. Run them with
-`--no-recreate`, copy their settings into `deploy/image.env`, and recreate the manager with the
-image Compose file yourself. Both stacks need their container images (pulled by the scripts, or
-loaded beforehand on a VM without internet access). If `UI_PORT` is not 8081, put the same
-`UI_PORT` line into `clab-backup-ui/.env` first: the dashboards setup reads the manager's port
-from that file for the Prometheus scrape target.
+**Browser Wireshark on a prepared-image installation.** The setup script writes its settings
+to `clab-backup-ui/.env` and normally finishes by recreating the manager from the source-build
+Compose file, which is the wrong file here. Run it with `--no-recreate`, copy its settings into
+`deploy/image.env`, and recreate the manager with the image Compose file yourself. The stack
+needs its container image (pulled by the script, or loaded beforehand on a VM without internet
+access).
 
 ```bash
 cd "$HOME/projects/clab-manager"
 sudo bash deploy/setup-capture.sh --no-recreate
-sudo bash deploy/setup-telemetry.sh --no-recreate
-sudo grep -E '^(CAPTURE_|TELEMETRY_)' clab-backup-ui/.env | sudo tee -a deploy/image.env >/dev/null
+sudo grep -E '^CAPTURE_' clab-backup-ui/.env | sudo tee -a deploy/image.env >/dev/null
 sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml \
   up -d --no-build --pull never --force-recreate
 ```
 
 `deploy/image.env` now holds the capture session token: keep it readable by the installing
-account only (`chmod 600 deploy/image.env`). After a later rerun of either setup script, replace
+account only (`chmod 600 deploy/image.env`). After a later rerun of the setup script, replace
 those lines in `deploy/image.env` rather than appending a second copy. Then run the health check.
 
 ## Engineer handoff record

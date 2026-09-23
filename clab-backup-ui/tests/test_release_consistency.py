@@ -23,14 +23,14 @@ def docs_fixture(root, version):
     files = {
         'README.md': f'# Manager\n\nCurrent release: **{version}** · changelog\n\nClone into ~/projects/clab-manager.\n',
         'docs/INSTALL.md': '# Guided installation\n\nLabs saved since 1.19.3 keep their login. '
-                           'The Flow panel (`andrewbmchugh-flow-panel` 1.20.1) draws the map.\n',
+                           'The terminal library (`xterm` 1.20.1) draws the console.\n',
         'docs/archive/OLD.md': '# Old guide — 1.12.0\n\ncd ~/projects/v1.12.0 && docker build -t clab-backup:1.12.0 .\n',
         'docs/CHANGELOG.md': f'# Changelog\n\n## Changes in {version}\n\n- x\n\n## Changes in 1.19.2\n\n- y\n',
         'clab-backup-ui/VALIDATION.md': f'# Audit — {version}\n\nevidence\n\n# Older — 1.19.2\n',
         'agent instructions.md': f'# Audit — {version}\n\nnotes\n\n# Older — 1.19.2\n',
         'clab-backup-ui/README.md': 'Run the tests.\n',
         'clab-backup-ui/NODE-FEATURES.md': 'Node actions.\n',
-        'deploy/NOTICES.md': '| Flow panel (`andrewbmchugh-flow-panel` 1.20.1) | Apache-2.0 |\n',
+        'deploy/NOTICES.md': '| xterm (`xterm` 1.20.1) | MIT |\n',
     }
     for rel, text in files.items():
         path = root / rel
@@ -94,29 +94,48 @@ class ReleaseConsistencyTests(unittest.TestCase):
             return set(re.findall(r'^      ([A-Z][A-Z_]+):', block.split('    volumes:', 1)[0], re.M))
 
         built, image = settings('clab-backup-ui/compose.yml'), settings('deploy/compose.image.yml')
-        self.assertIn('TELEMETRY_GRAFANA_IDLE_MINUTES', built)
+        self.assertIn('CAPTURE_EDGESHARK_URL', built)
+        self.assertFalse(any(key.startswith('TELEMETRY_') for key in built), 'the Grafana/Prometheus telemetry stack was retired')
         self.assertEqual(built, image)
 
     def test_source_check_precedes_host_setup(self):
         launcher = (ROOT / 'deploy/start-manager.sh').read_text()
         self.assertLess(launcher.index('verify-release.py'), launcher.index('bash "$script_dir/setup-discovery.sh"'))
 
-    def test_capture_and_grafana_stacks_follow_storage_and_precede_the_image_build(self):
+    def test_capture_stack_and_telemetry_retirement_follow_storage_and_precede_the_image_build(self):
         launcher = (ROOT / 'deploy/start-manager.sh').read_text()
+        retire_step = 'retire-telemetry.sh" --no-recreate'
         order = [launcher.index(step) for step in ('setup-vm.sh', 'setup-capture.sh" --no-recreate',
-                                                    'setup-telemetry.sh" --no-recreate', 'compose.yml build')]
+                                                    retire_step, 'compose.yml build')]
         self.assertEqual(order, sorted(order), 'stacks need the data directory and must precede the manager build')
         self.assertIn('--manager-only', launcher)
+        # The retirement runs twice, both idempotent: once early (frees the Grafana image before
+        # the build and stops Prometheus) and again after the new manager is recreated, because
+        # the old manager's own background loop can recreate its data folder while it is still
+        # running.
+        self.assertEqual(launcher.count(retire_step), 2, 'the retirement must run both before the build and after recreation')
+        first_retire = launcher.index(retire_step)
+        second_retire = launcher.index(retire_step, first_retire + 1)
+        build_index = launcher.index('compose.yml build')
+        recreate_index = launcher.index('up -d --force-recreate')
+        ps_index = launcher.index('compose.yml ps')
+        self.assertLess(first_retire, build_index, 'the first retirement precedes the image build')
+        self.assertGreater(second_retire, recreate_index, 'the second retirement follows the recreated manager')
+        self.assertLess(second_retire, ps_index)
         # A pending documentation section must never block a VM install: the VM scripts check the runtime set only.
-        for script in ('start-manager.sh', 'setup-capture.sh', 'setup-telemetry.sh'):
+        for script in ('start-manager.sh', 'setup-capture.sh', 'retire-telemetry.sh'):
             with self.subTest(script=script):
                 self.assertIn('verify-release.py" --runtime', (ROOT / 'deploy' / script).read_text())
-        for script in ('setup-capture.sh', 'setup-telemetry.sh'):
-            with self.subTest(script=script):
-                text = (ROOT / 'deploy' / script).read_text()
-                self.assertIn('recreate-manager.sh', text)
-                self.assertIn('--no-recreate', text)
-                self.assertIn('--remove', text)
+        capture_text = (ROOT / 'deploy/setup-capture.sh').read_text()
+        self.assertIn('recreate-manager.sh', capture_text)
+        self.assertIn('--no-recreate', capture_text)
+        self.assertIn('--remove', capture_text)
+        # retire-telemetry.sh always removes what it finds (there is no enable/disable toggle to
+        # switch off), but it still recreates the manager itself unless told not to.
+        retire_text = (ROOT / 'deploy/retire-telemetry.sh').read_text()
+        self.assertIn('recreate-manager.sh', retire_text)
+        self.assertIn('--no-recreate', retire_text)
+        self.assertNotIn('--remove', retire_text)
 
     # ---- documentation ------------------------------------------------------------------
 
@@ -158,14 +177,14 @@ class ReleaseConsistencyTests(unittest.TestCase):
         docs_fixture(self.root, self.version)
         guide = self.root / 'docs/GUIDE.md'
         guide.write_text(f'The installer ends with `Manager {self.version}: running`. Labs saved since {self.version} keep it. '
-                         f'Flow panel 1.20.1.\n', encoding='utf-8')
+                         f'xterm 1.20.1.\n', encoding='utf-8')
         previous, changed = set_release.set_release(self.root, '9.9.9')
         self.assertEqual(previous, self.version)
         self.assertEqual(release.verify(self.root), '9.9.9')
         text = guide.read_text(encoding='utf-8')
         self.assertIn('Manager 9.9.9: running', text)
         self.assertIn(f'since {self.version}', text, 'a history phrase keeps the release it names')
-        self.assertIn('Flow panel 1.20.1', text)
+        self.assertIn('xterm 1.20.1', text)
         self.assertIn('Current release: **9.9.9**', (self.root / 'README.md').read_text(encoding='utf-8'))
         self.assertIn('docs/GUIDE.md', changed)
         self.assertIn('clab-backup-ui/VERSION', changed)

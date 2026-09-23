@@ -210,6 +210,9 @@ class InstallManagerTests(unittest.TestCase):
         git.assert_called_once()
 
     def test_wireshark_and_grafana_stacks_are_standard_phases_between_launch_and_verification(self):
+        # The Grafana/Prometheus telemetry stack was retired: install() no longer runs a
+        # separate phase for it (deploy/start-manager.sh cleans up any leftovers itself), so
+        # this claims the capture phase only.
         order = []
         with patch.object(install, 'default_env_choice', return_value=None), \
                 patch.object(install, 'setup_lazydocker'), patch.object(install, 'git_setup'), \
@@ -218,19 +221,19 @@ class InstallManagerTests(unittest.TestCase):
             install.install({'USER': 'owner', 'HOME': '/home/owner'}, '1.25.0')
         launch = next(i for i, c in enumerate(order) if 'start-manager.sh' in c)
         capture = next(i for i, c in enumerate(order) if 'setup-capture.sh' in c)
-        grafana = next(i for i, c in enumerate(order) if 'setup-telemetry.sh' in c)
-        self.assertIn('--manager-only', order[launch], 'the launcher leaves the stacks to their own retryable phases')
-        self.assertEqual([launch, capture, grafana, order.index('verify')], sorted([launch, capture, grafana, order.index('verify')]))
-        for index in (capture, grafana):
-            self.assertTrue(order[index].startswith('sudo env DOCKER_HOST=unix:///var/run/docker.sock bash ' + str(install.SOURCE / 'deploy')))
-            self.assertNotIn('--no-recreate', order[index], 'standalone stack setup recreates the manager itself')
+        self.assertIn('--manager-only', order[launch], 'the launcher leaves the stack to its own retryable phase')
+        self.assertEqual([launch, capture, order.index('verify')], sorted([launch, capture, order.index('verify')]))
+        self.assertTrue(order[capture].startswith('sudo env DOCKER_HOST=unix:///var/run/docker.sock bash ' + str(install.SOURCE / 'deploy')))
+        self.assertNotIn('--no-recreate', order[capture], 'standalone stack setup recreates the manager itself')
+        self.assertFalse(any('setup-telemetry.sh' in c for c in order), 'the Grafana/Prometheus stack was retired')
 
-    def test_stack_menu_reinstalls_both_stacks_without_a_rebuild(self):
+    def test_stack_menu_reinstalls_the_capture_stack_without_a_rebuild(self):
         commands = []
         with patch.object(install, 'run', side_effect=lambda args, env, capture=False, tee=False: (commands.append(' '.join(args)), subprocess.CompletedProcess(args, 0, stdout=''))[1]):
             install.stacks({'USER': 'owner'})
         self.assertEqual([c for c in commands if 'start-manager.sh' in c], [])
-        self.assertTrue(any('setup-capture.sh' in c for c in commands) and any('setup-telemetry.sh' in c for c in commands))
+        self.assertTrue(any('setup-capture.sh' in c for c in commands))
+        self.assertFalse(any('setup-telemetry.sh' in c for c in commands), 'the Grafana/Prometheus stack was retired')
 
     def test_declined_advanced_plan_runs_no_commands_and_copies_no_settings(self):
         with patch.object(install, 'choose_env_copy', return_value=None), \

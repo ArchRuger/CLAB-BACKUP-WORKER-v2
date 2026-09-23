@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Recreate the manager container with the current clab-backup-ui/.env, without rebuilding
-# the image: the capture and Grafana setups call this after changing settings. Saved data
+# the image: the capture setup calls this after changing settings. Saved data
 # and the VM password are retained. Works from any directory.
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }

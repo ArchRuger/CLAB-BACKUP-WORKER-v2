@@ -75,8 +75,7 @@ running before discovery is configured. No migration automatically resets schedu
 ## 3. Build and start the independent manager
 
 After configuring the discovery account in section 4, run the launcher. It also
-installs the browser Wireshark stack and the Grafana dashboards (skip them with
-`--manager-only`):
+installs the browser Wireshark stack (skip it with `--manager-only`):
 
 ```bash
 sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh"
@@ -105,7 +104,7 @@ After loading it, launch it with `deploy/compose.image.yml` as described in the
 Host networking shares the VM's network namespace. The UI binds directly to port
 8081, and the manager can reach node addresses that are reachable from the VM.
 There is no `ports:` mapping and no dependency on a lab Docker network's lifecycle.
-If needed, set `UI_BIND`/`UI_PORT` in `clab-backup-ui/.env` before the launcher runs (`sudo` does not pass shell variables on, and the Grafana setup reads `UI_PORT` from that file). Do not run
+If needed, set `UI_BIND`/`UI_PORT` in `clab-backup-ui/.env` before the launcher runs (`sudo` does not pass shell variables on). Do not run
 another application on the same listening address/port. Node routing, firewall and
 SSH readiness still apply; deployment status is not proof of a successful NOS login.
 

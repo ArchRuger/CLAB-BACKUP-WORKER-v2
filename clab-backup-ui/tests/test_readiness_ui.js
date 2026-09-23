@@ -93,21 +93,3 @@ test('the deployment bar reports NOS readiness in plain words',()=>{
  delete lab.nos_readiness;h.context.renderManagement();
  assert.equal(h.element('deployment-nos').textContent,'');
 });
-
-test('the Grafana link goes through the start page with the lab map or overview path and hides without the stack',()=>{
- const {context,document}=appHarness();
- context.location={protocol:'http:',hostname:'10.0.0.5'};
- const link=document.getElementById('grafana-open');link.removeAttribute=function(name){delete this[name];};
- const lab={id:'lab',name:'bgp lab',nodes:[],telemetry:{grafana:{enabled:true,port:3000,map_uid:'clab-map-abc'}}};
- context.renderGrafanaLink(lab);
- assert.equal(link.hidden,false);assert.equal(link.innerHTML,'Open lab map <span aria-hidden="true">↗</span>','the arrow is decoration, outside the accessible name');
- assert.equal(link.href,'/static/grafana.html#path=%2Fd%2Fclab-map-abc%3Fvar-lab%3Dbgp%2Blab%26refresh%3D10s&title=bgp+lab');
- assert.equal(new URLSearchParams(link.href.split('#')[1]).get('path'),'/d/clab-map-abc?var-lab=bgp+lab&refresh=10s','only the dashboard path travels; the page builds the origin');
- assert.match(link.title,/starts on the VM when needed/);
- lab.telemetry.grafana.map_uid='';context.renderGrafanaLink(lab);
- assert.equal(new URLSearchParams(link.href.split('#')[1]).get('path'),'/d/clab-lab-overview?var-lab=bgp+lab&refresh=10s');assert.equal(link.innerHTML,'Open network dashboard <span aria-hidden="true">↗</span>');
- lab.telemetry.grafana.enabled=false;context.renderGrafanaLink(lab);
- assert.equal(link.hidden,true);assert.equal(link.href,undefined);
- context.renderGrafanaLink({id:'x',name:'unlinked',nodes:[],telemetry:{status:'unmonitored',total:0}});
- assert.equal(link.hidden,true);
-});

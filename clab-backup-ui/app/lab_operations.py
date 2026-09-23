@@ -36,7 +36,10 @@ def operation_busy(state, lab_id=None, progress_id=None):
                 for j in state.get('git_jobs', [])) or
             any(j['status'] in RESTORE_BUSY and j.get('id') != progress_id and
                 (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
-                for j in state.get('restore_jobs', [])))
+                for j in state.get('restore_jobs', [])) or
+            # Removing the lines the retired telemetry feature added holds the lab while it configures its devices.
+            any(isinstance(l.get('telemetry_retired'), dict) and l['telemetry_retired'].get('removing') and
+                (not lab_id or l.get('id') == lab_id) for l in state.get('labs', [])))
 
 
 def operation_connection_error(status, stderr):
@@ -217,8 +220,8 @@ class LabOperations:
                 parsed = parse_definition(raw)
             except invalid: raise HTTPException(400, 'Enter a valid literal Containerlab topology.')
             # The annotations file the VS Code extension keeps beside a topology carries the drawn node
-            # positions and styling. When the browser found one it comes along here, so the preview, the
-            # saved workspace and the Grafana map start from that layout instead of the default grid; a
+            # positions and styling. When the browser found one it comes along here, so the preview and the
+            # saved workspace start from that layout instead of the default grid; a
             # file that cannot be read falls back to the grid without failing the topology.
             annotations = data.options.get('annotations', '')
             drawing = None; used = False

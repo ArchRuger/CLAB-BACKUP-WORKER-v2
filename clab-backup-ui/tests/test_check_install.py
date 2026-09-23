@@ -217,127 +217,58 @@ class InstallationCheckTests(unittest.TestCase):
         self.assertEqual(by_id(ctx, 'capture')['status'], 'SKIP')
         ctx.http.assert_not_called()
 
-    def test_telemetry_check_reports_disabled_ready_and_failed_labs(self):
-        def router(enabled, labs):
-            def request(path, payload=None, **kwargs):
-                if path == '/api/telemetry/health':
-                    return check.Result(0), {'enabled': enabled, 'collector': 'gnmi' if enabled else 'disabled', 'library': 'pygnmi',
-                                             'message': PRIVATE if enabled else 'Telemetry is disabled by TELEMETRY_COLLECTOR=disabled in the manager environment.'}
-                if path == '/api/state':
-                    return check.Result(0), {'labs': labs}
-                return check.Result(reason='unexpected route'), None
-            return request
+    def test_retired_telemetry_check_passes_when_nothing_remains(self):
+        def command(args, **kwargs):
+            if 'info' in args:
+                return check.Result(0)
+            if 'ps' in args:
+                return check.Result(0, '')
+            if 'volume' in args and 'ls' in args:
+                return check.Result(0, '')
+            if 'cat' in args:
+                return check.Result(0, 'UI_PORT=8081\nCAPTURE_PROVIDER=edgeshark\n')
+            if 'test' in args:
+                return check.Result(1)
+            return check.Result(reason='unexpected command')
         ctx = context()
-        ctx.http = Mock(side_effect=router(False, []))
-        check.check_telemetry(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'INFO')
-        self.assertIn('TELEMETRY_COLLECTOR', by_id(ctx, 'telemetry')['fix'])
-        self.assertEqual([call.args[0] for call in ctx.http.call_args_list], ['/api/telemetry/health'])
-        ctx = context()
-        ctx.http = Mock(side_effect=router(True, []))
-        check.check_telemetry(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'PASS')
-        self.assertIn('no deployed lab is linked', by_id(ctx, 'telemetry')['detail'])
-        self.assertTrue(any('Telemetry:' in item for item in ctx.manual))
-        self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
-        labs = [{'deployment_name': 'a', 'telemetry': {'status': 'streaming'}}, {'deployment_name': 'b', 'telemetry': {'status': 'waiting'}}, {'name': 'unlinked'}]
-        ctx = context()
-        ctx.http = Mock(side_effect=router(True, labs))
-        check.check_telemetry(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'PASS')
-        self.assertIn('2 linked lab(s): 1 streaming, 1 waiting', by_id(ctx, 'telemetry')['detail'])
-        ctx = context()
-        ctx.http = Mock(side_effect=router(True, [{'deployment_name': 'a', 'telemetry': {'status': 'failed'}}]))
-        check.check_telemetry(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'WARN')
-        self.assertIn('Retry now', by_id(ctx, 'telemetry')['fix'])
-        ctx = context()
-        ctx.base_url = ''
-        ctx.http = Mock()
-        check.check_telemetry(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry')['status'], 'SKIP')
-        ctx.http.assert_not_called()
+        ctx.run = Mock(side_effect=command)
+        check.check_retired_telemetry(ctx)
+        record = by_id(ctx, 'telemetry-retired')
+        self.assertEqual(record['status'], 'PASS')
+        self.assertEqual(record['fix'], '')
 
-    def test_telemetry_dashboard_check_probes_grafana_and_prometheus(self):
-        def router(grafana, healthy=True, scraping=True, prometheus=True, plugin=True, maps=None, running=True):
-            def request(path, payload=None, base=None, **kwargs):
-                if path == '/api/telemetry/health':
-                    return check.Result(0), {'enabled': True, 'grafana': grafana, 'maps': maps if maps is not None else {'enabled': True, 'dashboards': 2, 'error': ''}}
-                if path == '/api/telemetry/grafana':
-                    return check.Result(0), {'enabled': grafana.get('enabled'), 'port': grafana.get('port'), 'running': running, 'idle_minutes': 15}
-                if path == '/api/health' and base == 'http://127.0.0.1:3100':
-                    return check.Result(0), {'database': 'ok' if healthy else 'failing', 'version': PRIVATE}
-                if path == '/api/frontend/settings' and base == 'http://127.0.0.1:3100':
-                    return check.Result(0), {'panels': {'andrewbmchugh-flow-panel': {'id': 'andrewbmchugh-flow-panel'}} if plugin else {'timeseries': {}}, 'buildInfo': PRIVATE}
-                if path == '/api/v1/targets' and base == 'http://127.0.0.1:9090':
-                    if not prometheus:
-                        return check.Result(reason='connection refused'), None
-                    return check.Result(0), {'status': 'success', 'data': {'activeTargets': [{'health': 'up' if scraping else 'down', 'scrapeUrl': PRIVATE,
-                                                                                                    'lastError': '' if scraping else 'server returned HTTP status 404 Not Found ' + PRIVATE}]}}
-                return check.Result(reason='unexpected route'), None
-            return request
+    def test_retired_telemetry_check_warns_and_lists_every_kind_of_leftover_without_leaking_values(self):
+        def command(args, **kwargs):
+            if 'info' in args:
+                return check.Result(0)
+            if 'ps' in args:
+                return check.Result(0, 'clab-manager-telemetry-prometheus-1\n')
+            if 'volume' in args and 'ls' in args:
+                return check.Result(0, 'clab-manager-telemetry_grafana-data\n')
+            if 'cat' in args:
+                return check.Result(0, 'UI_PORT=8081\nTELEMETRY_STACK=' + PRIVATE + '\n')
+            if 'test' in args:
+                return check.Result(0) if args[-1] == '/srv/containerlab-node-manager/telemetry' else check.Result(1)
+            return check.Result(reason='unexpected command')
         ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': False, 'port': 3000, 'prometheus_port': 9090}))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'WARN', 'Grafana is part of every installation')
-        self.assertIn(str(ctx.source / 'deploy/setup-telemetry.sh'), by_id(ctx, 'telemetry-dashboards')['fix'])
-        ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'PASS')
-        self.assertIn('Flow panel is loaded and 2 lab map(s)', by_id(ctx, 'telemetry-dashboards')['detail'])
-        self.assertTrue(any('Grafana: open http://VM_IP:3100/' in item and 'Lab maps' in item for item in ctx.manual))
+        ctx.run = Mock(side_effect=command)
+        check.check_retired_telemetry(ctx)
+        record = by_id(ctx, 'telemetry-retired')
+        self.assertEqual(record['status'], 'WARN')
+        self.assertIn('clab-manager-telemetry-prometheus-1', record['detail'])
+        self.assertIn('clab-manager-telemetry_grafana-data', record['detail'])
+        self.assertIn('TELEMETRY_STACK', record['detail'])
+        self.assertIn('/srv/containerlab-node-manager/telemetry', record['detail'])
+        self.assertIn('retire-telemetry.sh', record['fix'])
         self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
+
+    def test_retired_telemetry_check_skips_when_docker_is_unavailable(self):
         ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, plugin=False))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'WARN'); self.assertIn('setup-telemetry.sh', by_id(ctx, 'telemetry-dashboards')['fix'])
-        self.assertIn('Flow panel', by_id(ctx, 'telemetry-dashboards')['detail'])
-        # Grafana is on demand: stopped is the normal state. The check stays read-only, verifies
-        # Prometheus and the maps, and never calls Grafana's endpoints while it is stopped.
-        ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, healthy=False, plugin=False, running=False))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'PASS', by_id(ctx, 'telemetry-dashboards'))
-        self.assertIn('stopped until someone opens it', by_id(ctx, 'telemetry-dashboards')['detail'])
-        self.assertIn('stops it after 15 minutes', by_id(ctx, 'telemetry-dashboards')['detail'])
-        self.assertIn('2 lab map(s)', by_id(ctx, 'telemetry-dashboards')['detail'])
-        self.assertFalse(any(call.kwargs.get('base') == 'http://127.0.0.1:3100' for call in ctx.http.call_args_list), 'no Grafana request while it is stopped')
-        self.assertTrue(any('Open network dashboard ↗ (Tools › Telemetry) in a deployed lab' in item and 'Open lab map ↗' in item for item in ctx.manual))
-        ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, running=False, scraping=False))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL', 'a stopped Grafana never hides a broken scrape')
-        ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, running=False, maps={'enabled': True, 'dashboards': 0, 'error': 'The Grafana lab map folder is not writable (Permission denied).'}))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'WARN'); self.assertIn('TELEMETRY_MAPS_DIR', by_id(ctx, 'telemetry-dashboards')['fix'])
-        ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, maps={'enabled': True, 'dashboards': 0, 'error': 'The Grafana lab map folder is not writable (Permission denied).'}))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'WARN'); self.assertIn('TELEMETRY_MAPS_DIR', by_id(ctx, 'telemetry-dashboards')['fix'])
-        ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, healthy=False))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL'); self.assertIn('logs --tail=80 grafana', by_id(ctx, 'telemetry-dashboards')['fix'])
-        ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, scraping=False))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL'); self.assertIn('scrape target', by_id(ctx, 'telemetry-dashboards')['fix'])
-        self.assertIn('answered 404', by_id(ctx, 'telemetry-dashboards')['detail'], 'the scrape error is classified, not echoed')
+        ctx.run = Mock(return_value=check.Result(1, PRIVATE))
+        check.check_retired_telemetry(ctx)
+        self.assertEqual(by_id(ctx, 'telemetry-retired')['status'], 'SKIP')
+        self.assertEqual(ctx.run.call_count, 1, 'nothing further is probed once Docker itself is unavailable')
         self.assertNotIn(PRIVATE, check.render(check.summarize(ctx)))
-        # A crash-looping Prometheus (1.23.0 shipped a rejected command-line flag) answers nothing:
-        # point at its container state and logs, not at the scrape target.
-        ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 3100, 'prometheus_port': 9090}, prometheus=False))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL')
-        self.assertIn('every dashboard panel shows an error', by_id(ctx, 'telemetry-dashboards')['detail'])
-        self.assertIn('logs --tail=40 prometheus', by_id(ctx, 'telemetry-dashboards')['fix'])
-        ctx = context()
-        ctx.http = Mock(side_effect=router({'enabled': True, 'port': 0, 'prometheus_port': 9090}))
-        check.check_telemetry_dashboards(ctx)
-        self.assertEqual(by_id(ctx, 'telemetry-dashboards')['status'], 'FAIL')
 
     def test_untrusted_helper_cannot_be_executed_or_reached_over_http(self):
         ctx = context(require_git=True)

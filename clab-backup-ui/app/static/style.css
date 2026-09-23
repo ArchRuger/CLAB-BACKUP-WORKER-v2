@@ -2,7 +2,7 @@
    Containerlab Node Manager — stylesheet (student-centred redesign, 1.29.0)
    ==========================================================================
    Loaded by index.html, workspace.html, debug.html, capture-session.html,
-   capture-setup.html, grafana.html and vm-connection.html. terminal.html
+   capture-setup.html and vm-connection.html. terminal.html
    uses terminal.css (same tokens, dark chrome).
 
    Sections
@@ -2429,7 +2429,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .op-session-row .pill { margin-right: 4px; }
 .op-session-row .caption { flex: 1 1 260px; }
 .workspace-links { margin: 24px 0 0; color: var(--muted); font-size: 13px; }
-#grafana-headline { font-size: 17px; font-weight: 600; color: var(--ink); margin: 0 0 4px; }
 .debug-page details summary { cursor: pointer; }
 .git-version-when { color: var(--muted); font-size: 12px; }
 .restore-job-details { margin-top: 6px; }

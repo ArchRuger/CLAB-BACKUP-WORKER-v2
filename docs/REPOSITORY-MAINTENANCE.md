@@ -43,15 +43,14 @@ refuses. The rules, enforced by `verify_docs()` in `deploy/verify-release.py`:
 - **Living guides** (`README.md`, `docs/*.md`, `deploy/*.md`, the app README,
   `NODE-FEATURES.md`, the VM connection and capture setup pages) may name the
   manager's release only where they mean the current one, for example the
-  installer's closing line `Manager 1.30.38: running`. Those mentions are moved by
+  installer's closing line `Manager 1.30.39: running`. Those mentions are moved by
   the bump tool.
 - **Release history** is written with a relational phrase, which is allowed
   anywhere: `since 1.23.0`, `before 1.21.1`, `introduced in 1.19.4`, `as of 1.22.0`,
   `upgrading from 1.20.1`, `1.22.0 or later`, `1.18.0 and earlier`. Anything else
   that names another release is reported with its file and line.
-- **A third-party version** that shares the manager's major number (the Flow panel
-  plugin, for example) is fine when the component is named shortly before it
-  (`andrewbmchugh-flow-panel 1.20.1`).
+- **A third-party version** that shares the manager's major number is fine when the
+  component is named shortly before it.
 - **Versioned source folders** (`projects/vX.Y.Z`) and **versioned image tags**
   (`clab-backup:X.Y.Z`, `clab-capture-service:X.Y.Z`) are refused in the living
   guides outright. The source folder is `~/projects/clab-manager`; an image tag is
@@ -59,7 +58,7 @@ refuses. The rules, enforced by `verify_docs()` in `deploy/verify-release.py`:
 - **History files** may name any release: `docs/CHANGELOG.md`,
   `clab-backup-ui/VALIDATION.md`, `agent instructions.md` and everything under
   `docs/archive/`, `docs/redesign/`, `docs/ui-review-001/`, `docs/multi-platform-restore/`,
-  `docs/save-location-fix/`, `docs/student-quick-start/` and `docs/ui-ux-cleanup/` (design notes, a per-release review log, dated acceptance
+  `docs/save-location-fix/`, `docs/student-quick-start/`, `docs/ui-ux-cleanup/` and `docs/technical-audit/` (design notes, a per-release review log, dated acceptance
   records and the student guide, which states the release it was tested with). Each of the first three must lead with the current release.
 - **Relative links and anchors resolve.** `python3 docs/maintenance-audit/tools/check_links.py` checks
   every tracked Markdown file (standard library only, run from anywhere inside the checkout); run it
@@ -91,7 +90,7 @@ refuses. The rules, enforced by `verify_docs()` in `deploy/verify-release.py`:
    included; never replace selected files through a browser upload. Deploy scripts
    and `VERSION` stay LF (`.gitattributes` enforces it).
 5. Push and open a pull request; CI runs the release check, the unit and browser
-   tests, the shell syntax check and the real capture and Grafana smoke tests.
+   tests, the shell syntax check and the real capture smoke test.
 
 Do not overwrite an existing numbered release with different contents. A Git tag
 identifies source; a Docker tag identifies a built image; neither implies a
@@ -111,10 +110,9 @@ and its licences, test fixtures and the archived guides are intentional content.
 1. `python3 deploy/verify-release.py` (runtime and documentation).
 2. The release, installer, Git onboarding, APT and health-check regression tests.
 3. `bash -n` on every deploy shell script.
-4. The application test suites in a virtual environment, the telemetry suites, the
-   browser test files under `node --test`, and the capture suites.
-5. `docker compose config` for both stacks, then the real Grafana stack against a
-   fixture manager (`deploy/telemetry/smoke.py`) and real browser Wireshark with
+4. The application test suites in a virtual environment, the browser test files
+   under `node --test`, and the capture suites.
+5. `docker compose config` for the capture stack, then real browser Wireshark with
    loopback packets (`deploy/capture/smoke.py`).
 
 Branch protection must require the workflow if merges are to be blocked on a red

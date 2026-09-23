@@ -40,7 +40,7 @@ async function openLabOperations(id=activeId){
  const cleanup=['deploy','redeploy'].filter(a=>opCaps?.actions[a]?.cleanup).map(a=>opCommand(a,(a==='deploy'?'Deploy lab':'Redeploy lab')+' and clear the lab folder…',{cleanup:true})).join('');
  opDialog(dialog.id,lab.name,`<p class="op-path">${path?'Topology file on the VM: '+esc(path):"This lab has no topology file on the VM yet. Import the lab's files (Advanced › Deployment details) to enable these actions."}</p>${problem?`<p class="op-notice">Couldn't check the VM's commands, so every action is shown; some may fail. Details: ${esc(problem)}</p>`:''}
  <div class="op-sections"><section><h3>Deployment</h3><div class="op-grid">${opCommand('deploy','Deploy lab')}${['redeploy','start','stop','restart','apply','inspect','save'].map(a=>opCommand(a)).join('')}</div><p class="form-help">Deploy creates and starts the devices; Start, Stop and Restart act on the running devices. "Save device configurations" uses containerlab's own save (supported device types only); your Save progress snapshots are separate.</p></section>
- <section><h3>Lab tools</h3><div class="op-grid"><button class="button secondary" data-local="ssh"><span>Open all CLIs <span aria-hidden="true">↗</span></span></button><button class="button secondary" data-local="interactive">Edit map</button><button class="button secondary" data-local="telemetry">Telemetry settings…</button><button class="button secondary" data-local="history">Operation history…</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove from favourites':'Add to favourites'}</button></div></section>
+ <section><h3>Lab tools</h3><div class="op-grid"><button class="button secondary" data-local="ssh"><span>Open all CLIs <span aria-hidden="true">↗</span></span></button><button class="button secondary" data-local="interactive">Edit map</button><button class="button secondary" data-local="history">Operation history…</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove from favourites':'Add to favourites'}</button></div></section>
  <section class="op-danger"><h3>Danger</h3><div class="op-grid">${opCommand('destroy','Destroy lab…',opDestroyOptions())}${cleanup}${opCommand('delete','Delete the topology file from the VM…')}</div><p class="form-help">Destroy removes the running devices and, when the installed containerlab supports cleanup, the lab's generated folder on the VM. Redeploy keeps that folder unless you choose the "clear the lab folder" variant.</p></section></div>`);
  dialog.querySelectorAll('[data-op-action]').forEach(b=>b.onclick=()=>{
   const action=b.dataset.opAction,options=JSON.parse(b.dataset.opOptions);
@@ -51,41 +51,52 @@ async function openLabOperations(id=activeId){
   if(action==='ssh')opNewTab({mode:'ssh',lab:id});
   if(action==='favorite'){await json('/labs/'+id+'/operations-settings','PUT',{favorite:!lab.favorite});await refresh();dialog.close();}
   if(action==='interactive')await opLayout(id);
-  if(action==='telemetry'){dialog.close();await openTelemetrySettings(id);}
   if(action==='history')await opHistory(id);
  }));
 }
-// Per-lab telemetry: on/off, the login used for gNMI, the removal of manager-added lines and
-// the reason a node is not streaming. The data itself is read in the network dashboard, never here.
-const teleStateLabels={disabled:'off',waiting:'waiting',configuring:'configuring',connecting:'connecting',streaming:'streaming',stale:'stale',unsupported:'unsupported',failed:'failed',unmonitored:'unmonitored'};
-function telemetrySummaryText(data){
- const s=data.settings||{},sum=data.summary||{};
- if(!data.enabled)return 'Telemetry is not installed on this VM.';
- if(!data.linked)return "Telemetry only works for labs running on the VM; this lab isn't linked to a running lab yet.";
- if(!s.decided)return 'Telemetry hasn’t been set up for this lab. Nothing changes on any device until you turn it on.';
- if(!s.auto)return 'Telemetry is off for this lab, so the network dashboard shows nothing for it.';
- const parts=['streaming','stale','waiting','configuring','connecting','failed','unsupported'].filter(k=>sum[k]).map(k=>`${sum[k]} ${teleStateLabels[k]}`);
- return `Telemetry is on: ${sum.total||0} supported device${sum.total===1?'':'s'}${parts.length?' · '+parts.join(' · '):''}. Open the network dashboard to see the data.`;
-}
-// The dashboard runs on the VM only while someone reads it; the manager starts it from Tools › Telemetry
-// and stops it after the idle time. Its state and a manual stop live in the same dialog.
-function telemetryGrafanaText(g){
- if(!g)return 'Dashboard: status unavailable.';
- if(!g.enabled)return 'Dashboard: not installed on this VM.';
- if(g.running)return `Dashboard: running (port ${g.port})${g.idle_minutes?`; stops automatically after ${g.idle_minutes} minute${g.idle_minutes===1?'':'s'} without a viewer`:'; automatic stop is off'}.`;
- if(g.running===false)return 'Dashboard: stopped; it starts when you open it from Tools › Telemetry.';
- return 'Dashboard: not checked yet.';
-}
-async function openTelemetrySettings(id=activeId){
- const data=await(await api('/labs/'+id+'/telemetry')).json();
- let grafana=null;try{grafana=await(await api('/telemetry/grafana')).json();}catch{grafana=null;}
- const s=data.settings||{},profiles=data.password_profiles||[],usable=data.enabled&&data.linked;
- const failed=(data.nodes||[]).filter(n=>['failed','stale'].includes(n.state));
- const dialog=opDialog('telemetry-settings-dialog','Telemetry settings',`<p class="form-help">${esc(telemetrySummaryText(data))}</p>${!data.enabled&&data.unavailable?`<details class="caption"><summary>Details</summary><p>${esc(data.unavailable)}</p></details>`:''}${failed.length?`<p class="form-help">Devices that need attention:</p><ul class="form-help">${failed.map(n=>`<li><strong>${esc(n.short_name||n.name)}</strong> (${esc(teleStateLabels[n.state]||n.state)}): ${esc(n.message||'')}</li>`).join('')}</ul>`:''}<p class="form-help" id="tele-grafana">${esc(telemetryGrafanaText(grafana))}${grafana?.running?' <button class="button secondary" id="tele-grafana-stop" type="button">Stop the dashboard now</button>':''}</p><label class="checkbox-label"><input type="checkbox" id="tele-auto" ${s.auto?'checked':''} ${usable?'':'disabled'}> Collect live interface statistics from this lab's devices (shown in the network dashboard)</label><p class="form-help">Works on Arista cEOS, Cisco XRv9k and Juniper cJunosEvolved devices once they finish starting. The manager adds only the few configuration lines needed for streaming and never overwrites your configuration. Data is kept for 15 minutes; stopping, destroying or redeploying the lab clears it.</p><label>Login used for telemetry<select id="tele-profile" ${usable?'':'disabled'}><option value="">Same login as the CLI (saved credentials)</option>${profiles.map(p=>`<option value="${esc(p.id)}" ${p.id===s.profile_id?'selected':''}>${esc(p.label)} · ${esc(p.platform)}</option>`).join('')}</select></label><p class="form-help">Telemetry needs a username and password. Devices that log in with an SSH key need a password profile here. Passwords never leave the manager.</p><div class="dialog-actions">${failed.length?'<button class="button secondary" id="tele-retry">Retry failed devices</button>':''}<button class="button danger-outline" id="tele-remove" ${s.auto||!usable?'disabled title="Turn telemetry off first"':''}>Remove telemetry configuration from devices…</button><button class="button primary" id="tele-save" ${usable?'':'disabled'}>Save</button></div><p class="form-help">Remove deletes only the lines this manager added, on running devices. Turning telemetry off leaves the device configuration as it is.</p>`);
- $('tele-save').onclick=()=>opTask(dialog,async()=>{const auto=$('tele-auto').checked;await json('/labs/'+id+'/telemetry/settings','PUT',{auto,profile_id:$('tele-profile').value||''});notify(auto?'Telemetry turned on. Supported devices are set up as they become ready — open the network dashboard to watch them.':'Telemetry turned off; collection stopped.');dialog.close();await refresh();});
- $('tele-remove').onclick=()=>opTask(dialog,async()=>{const lab=state.labs.find(l=>l.id===id);if(!confirm(`Remove the telemetry configuration lines this manager added on ${lab?lab.name+"'s":'the'} running devices? Your own configuration is not touched.`))return;const result=await json('/labs/'+id+'/telemetry/remove-config','POST',{});notify(result.started.length?`Removing telemetry configuration on ${result.started.join(', ')}.`:'Nothing to remove on the running devices.');dialog.close();});
- if($('tele-retry'))$('tele-retry').onclick=()=>opTask(dialog,async()=>{await json('/labs/'+id+'/telemetry/retry','POST',{});notify('Retrying telemetry on the failed devices.');dialog.close();});
- if($('tele-grafana-stop'))$('tele-grafana-stop').onclick=()=>opTask(dialog,async()=>{const result=await json('/telemetry/grafana/stop','POST',{});$('tele-grafana').textContent=telemetryGrafanaText(result);notify('Dashboard stopped; it starts again when you open it.');});
+// Retired telemetry configuration: the manager once added a handful of configuration lines on some
+// devices so it could collect live interface data; the feature is gone, but the lines it left stay on
+// a device until removed. lab.telemetry_retired (app.js, the lab banner and the Lab actions ▾ menu
+// item) names the short-named devices that still carry them; this dialog reads the full record (kind,
+// the lines themselves, whether a device can be reached to remove them and, when not, why) and either
+// removes the lines inside the device's own configuration session (reading the device back), or
+// forgets an entry the manager can never remove automatically (`permanent`: the device left the lab,
+// changed or unsupported kind, or lines outside the recorded shape) — or a whole record it could never
+// read (`malformed`). A transient reason (device not running, login not proven) gets no forget button:
+// the reason text already says what to do, and a fresh read may make it removable.
+function retiredKindLabel(kind){return kind?((state.platforms||{})[kind]?.label||kind):'';}
+async function openTelemetryRetired(id=activeId){
+ const data=await(await api('/labs/'+id+'/telemetry-retired')).json();
+ const nodes=data.nodes||[],removable=nodes.some(n=>n.removable),shortByName=Object.fromEntries(nodes.map(n=>[n.name,n.short_name||n.name]));
+ const malformedButton='<button type="button" class="button secondary" id="op-retired-forget-malformed">Forget the unreadable record</button>';
+ const rows=nodes.map((n,i)=>`<div class="op-retired-node"><h4>${esc(n.short_name||n.name)}${n.kind?` <span class="badge platform">${esc(retiredKindLabel(n.kind))}</span>`:''}</h4><pre class="op-output">${esc((n.lines||[]).join('\n'))}</pre>${!n.removable&&n.reason?`<p class="op-notice">${esc(n.reason)}${n.permanent?` <button type="button" class="button secondary small" id="op-retired-forget-${i}">Forget</button>`:''}</p>`:''}</div>`).join('');
+ const body=nodes.length
+  ?`<p class="form-help">Removing deletes only these lines on the running device, inside the device's own configuration session, and reads the device back. Nothing else changes.</p>${rows}${data.malformed?`<p class="op-notice">A telemetry record of this lab could not be read and is kept for review. ${malformedButton}</p>`:''}`
+  :'<p class="form-help">A telemetry record of this lab could not be read and is kept for review.</p>';
+ const dialog=opDialog('telemetry-retired-dialog','Retired telemetry configuration',`${body}<div id="op-retired-results"></div><div class="dialog-actions"><button class="button secondary" id="op-retired-close">Close</button>${nodes.length?`<button class="button primary" id="op-retired-remove" ${removable?'':'disabled'}>Remove from devices</button>`:malformedButton}</div>`);
+ $('op-retired-close').onclick=()=>dialog.close();
+ if(nodes.length)$('op-retired-remove').onclick=()=>opTask(dialog,async()=>{
+  const result=await json('/labs/'+id+'/telemetry-retired/remove','POST',{});
+  const results=result.results||[],removed=results.filter(r=>r.outcome==='removed').length;
+  $('op-retired-results').innerHTML=results.length?'<ul>'+results.map(r=>`<li>${esc(shortByName[r.name]||r.name)}: ${esc(r.outcome)} — ${esc(r.message||'')}</li>`).join('')+'</ul>':'';
+  notify(results.length?`Removed telemetry configuration on ${removed} of ${results.length} device${results.length===1?'':'s'}.`:'Nothing to remove on the running devices.');
+  await refresh();
+ });
+ if(data.malformed)$('op-retired-forget-malformed').onclick=()=>opTask(dialog,async()=>{
+  await json('/labs/'+id+'/telemetry-retired/forget','POST',{malformed:true});
+  $('op-retired-results').innerHTML='<ul><li>The unreadable record was forgotten.</li></ul>';
+  notify('Forgot the unreadable record.');
+  await refresh();
+ });
+ nodes.forEach((n,i)=>{
+  if(n.removable||!n.permanent)return;
+  $('op-retired-forget-'+i).onclick=()=>opTask(dialog,async()=>{
+   await json('/labs/'+id+'/telemetry-retired/forget','POST',{node:n.name});
+   $('op-retired-results').innerHTML=`<ul><li>${esc(n.short_name||n.name)}: forgotten.</li></ul>`;
+   notify(`Forgot the record for ${n.short_name||n.name}.`);
+   await refresh();
+  });
+ });
  return dialog;
 }
 // What each action asks the student before it runs: title, one-sentence effect, confirm label.
@@ -254,8 +265,8 @@ async function opHistory(labId=''){
 // source link) is saved before the command runs, so the lab is in My labs at once
 // and NOS logins are verified as soon as its containers start. Nothing to import.
 // The VS Code extension keeps a topology's node positions and styling in <file>.annotations.json
-// beside it. It is read with the topology so the preview, the saved workspace and the Grafana map
-// start from that layout instead of the default grid; a missing or unreadable file means the grid.
+// beside it. It is read with the topology so the preview and the saved workspace start from that
+// layout instead of the default grid; a missing or unreadable file means the grid.
 async function opReadAnnotations(path){
  if(!path)return '';
  try{return (await json('/operations/read','POST',{path:path+'.annotations.json'})).text||'';}catch{return '';}
@@ -504,6 +515,10 @@ function renderLabOperations(){
   opMenuState(b,!ok,unavailable?'Not available on this VM — see Diagnostics':quick.available?'The lab is not running':quick.reason);
  }
  if($('vm-projects')){const connected=!!state.discovery?.connected;opMenuState($('vm-projects'),!connected,'Connect the VM to browse its lab topologies');}
+ // The banner (app.js) is the lowest-priority notice and a student can hide it for the session, so
+ // this menu item is a second, always-reachable way to the same dialog: shown only while the lab has
+ // something recorded, hidden (not merely disabled, so keyboard and pointer navigation both skip it).
+ if($('menu-telemetry-retired'))$('menu-telemetry-retired').hidden=!lab?.telemetry_retired;
  // Busy controls carry their reason: the menu proxies and the Advanced buttons read it from the title.
  if(busy()){for(const id of ['remove-lab','sync-vm','update-definition','link-deployment'])if($(id)){$(id).disabled=true;$(id).title='Wait for the current operation to finish';}}
  else{for(const id of ['update-definition','link-deployment'])if($(id)){$(id).disabled=false;$(id).title='';}}
@@ -515,6 +530,7 @@ if($('import-top')){
  if($('lab-operations-all'))$('lab-operations-all').onclick=()=>openLabOperations();
  // Operation history for THIS lab from its menu and its Advanced tab; Manager ▾ keeps the history of every lab.
  for(const id of ['menu-operation-history','advanced-operation-history'])if($(id))$(id).onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTask(null,()=>opHistory(activeId));};
+ if($('menu-telemetry-retired'))$('menu-telemetry-retired').onclick=()=>{if(typeof closeMenus==='function')closeMenus();opTask(null,()=>openTelemetryRetired(activeId));};
  $('lab-actions').onclick=()=>openLabOperations();$('vm-projects').onclick=()=>openDeploy();$('lab-start').onclick=()=>opTask(null,()=>opQuickRun('start'));$('lab-destroy').onclick=()=>opTask(null,()=>opQuickRun('destroy'));$('operations-history').onclick=()=>opTask(null,()=>opHistory());$('inspect-all').onclick=()=>opTask(null,()=>opReview({action:'inspect-all'}));
  // Lab actions ▾ lifecycle items go through the same preview/confirm flow as the operations dialog.
  const menu=$('lab-actions-menu');

@@ -21,9 +21,10 @@ Setup prompts twice (`New password:`, `Retype new password:`) for the new
 `clab-discovery` password without displaying it; the two entries must match and must
 not be empty. This is separate from sudo's prompt for your administrator password. Use
 a unique password. There is no default or generated password, command-line password
-argument or environment variable. Setup then verifies helpers, refreshes the capture
-and Grafana stacks, builds the image and recreates the manager with its existing
-persistent data. Omit `--enable-operations` for discovery/import only.
+argument or environment variable. Setup then runs `retire-telemetry.sh --no-recreate`
+to tear down any leftover telemetry stack, verifies helpers, refreshes the capture
+stack, builds the image and recreates the manager with its existing persistent data.
+Omit `--enable-operations` for discovery/import only.
 
 ### The prefilled VM connection
 

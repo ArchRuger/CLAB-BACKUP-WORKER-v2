@@ -167,29 +167,17 @@ test('relative times stay human and never print NaN',()=>{
  assert.equal(c.plural(1,'device'),'1 device');assert.equal(c.plural(2,'device'),'2 devices');
 });
 
-test('badges, telemetry lines and saved-version names use student words',()=>{
+test('badges and saved-version names use student words',()=>{
  const c=makeContext();
  assert.equal(c.badgeLabel('reachable'),'Login OK');assert.equal(c.badgeLabel('unreachable'),'Login failed');
  assert.equal(c.badgeLabel('succeeded'),'Succeeded');assert.equal(c.badgeLabel('failed'),'Failed');assert.equal(c.badgeLabel('interrupted'),'Interrupted');
  assert.equal(c.badgeLabel('partial'),'Partly succeeded');assert.equal(c.badgeLabel('queued'),'Queued');assert.equal(c.badgeLabel('running'),'Running');assert.equal(c.badgeLabel('Ready'),'Ready');
  assert.equal(c.badgeLabel('Needs credentials'),'Needs credentials','unknown values pass through');assert.equal(c.badgeLabel(undefined),'');
- assert.equal(c.telemetryLine('streaming',{total:3,streaming:3}),'Collecting live data from 3 devices.');
- assert.equal(c.telemetryLine('streaming',{total:1,streaming:1}),'Collecting live data from 1 device.');
- assert.equal(c.telemetryLine('partial',{total:3,streaming:1,stale:1}),'Some devices are not reporting — open Telemetry settings.');
- assert.equal(c.telemetryLine('waiting',{total:2}),'Waiting for devices to finish starting.');
- assert.equal(c.telemetryLine('failed',{total:3,failed:2}),'2 devices could not be set up for telemetry.');
- assert.equal(c.telemetryLine('failed',{total:3,failed:1}),'1 device could not be set up for telemetry.');
- assert.equal(c.telemetryLine('unsupported',{total:0}),'None of this lab’s devices support telemetry.');
- assert.equal(c.telemetryLine('disabled',{}),'Telemetry is off for this lab.');
- assert.equal(c.telemetryLine('unmonitored',{total:0}),'Available once the lab is running on the VM.');
- assert.equal(c.telemetryLine({status:'streaming',total:2,streaming:2}),'Collecting live data from 2 devices.','the lab.telemetry summary object is accepted directly');
- assert.equal(c.telemetryLine('made-up',{}),'');assert.equal(c.telemetryLine(undefined),'');
  assert.equal(c.savedVersionName('labs/BGP-LAB/reference/solution'),'Final state (instructor)');
  assert.equal(c.savedVersionName('bgp-core/reference/final/'),'Final state (instructor)');
  assert.equal(c.savedVersionName('bgp-core/reference/start'),'Starting state');assert.equal(c.savedVersionName('base'),'Starting state');assert.equal(c.savedVersionName('Initial'),'Starting state');
  assert.equal(c.savedVersionName('bgp-core/reference/broken-01'),'Troubleshooting scenario 01');assert.equal(c.savedVersionName('broken_2'),'Troubleshooting scenario 2');
  assert.equal(c.savedVersionName('bgp-core/work'),'work');assert.equal(c.savedVersionName('ARISTA-LAB-TEST'),'ARISTA-LAB-TEST');assert.equal(c.savedVersionName(''),'');
- assert.doesNotMatch(JSON.stringify(['streaming','partial','waiting','failed','unsupported','disabled','unmonitored'].map(s=>c.telemetryLine(s,{total:2,failed:1,streaming:2}))),/router|node|gNMI|Grafana/i);
 });
 
 function pick(o){return {key:o.key,label:o.label,detail:o.detail,pill:o.pill};}

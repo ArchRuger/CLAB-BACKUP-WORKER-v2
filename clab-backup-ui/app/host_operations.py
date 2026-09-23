@@ -20,13 +20,9 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.30.38'
+VERSION = '1.30.39'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
-# The on-demand Grafana of the telemetry stack: deploy/compose.telemetry.yml names the container so
-# the manager can start and stop it here by a fixed argv; nothing else of Docker is reachable.
-GRAFANA_CONTAINER = 'clab-manager-grafana'
-GRAFANA_ACTIONS = ('status', 'start', 'stop')
 # The lab builder publishes a new lab folder (publish) and saves again over a lab that is not
 # deployed (revise). Both texts travel in one request line, so each stays well inside it.
 BUILDER_LIMIT = 512 * 1024
@@ -101,7 +97,8 @@ def stream(argv, cwd, emit, timeout=1200):
 class HostOperations:
     def __init__(self, config, run=capture):
         self.config = config; self.run = run
-        self.clab = config['clab']; self.docker = config['docker']
+        # Older operations.json files still carry a 'docker' path (the retired Grafana mode used it); it is ignored.
+        self.clab = config['clab']
         self.roots = [Path(p) for p in config['roots']]
 
     def path(self, value, exists=True):
@@ -162,17 +159,6 @@ class HostOperations:
             items = json.loads(raw).get('items', [])
             return {'items': [{'name': str(i['name'])[:120], 'url': i['html_url'], 'description': str(i.get('description') or '')[:300]} for i in items[:30] if str(i.get('html_url', '')).startswith('https://github.com/srl-labs/')]}
         except Exception: raise ValueError('The GitHub catalog is unavailable. Retry when online or select an existing VM project.')
-
-    def grafana(self, action):
-        """Start, stop or look at the on-demand Grafana container: fixed argv, no request input in it."""
-        if action not in GRAFANA_ACTIONS: raise ValueError('Unsupported Grafana action.')
-        if action != 'status':
-            argv = [self.docker, 'start', GRAFANA_CONTAINER] if action == 'start' else [self.docker, 'stop', '-t', '10', GRAFANA_CONTAINER]
-            code, _ = self.run(argv)
-            if code: raise ValueError(f'Could not {action} the Grafana container {GRAFANA_CONTAINER}. Rerun sudo bash deploy/setup-telemetry.sh on the VM, then retry.')
-        code, out = self.run([self.docker, 'inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER])
-        state = out.strip()
-        return {'container': GRAFANA_CONTAINER, 'state': state if code == 0 and re.fullmatch(r'[a-z]+', state) else 'missing'}
 
     def deployed(self):
         code, out = self.run([self.clab, 'inspect', '--all', '--format', 'json'])
@@ -575,7 +561,6 @@ def main():
         elif mode == 'read': result = host.read(req.get('path'))
         elif mode == 'browse': result = host.browse(req.get('path', ''))
         elif mode == 'popular': result = host.popular()
-        elif mode == 'grafana': result = host.grafana(req.get('action'))
         elif mode in ('preview', 'run'):
             import fcntl
             with open('/run/clab-manager-operations.lock', 'a') as lock:

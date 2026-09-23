@@ -418,15 +418,9 @@ def capture_stack(env):
     command_step(stack_command('setup-capture.sh'), env)
 
 
-def telemetry_stack(env):
-    # Grafana dashboards and the generated lab maps, fed by the manager's telemetry collector.
-    command_step(stack_command('setup-telemetry.sh'), env)
-
-
 def stacks(env):
     phase('Browser Wireshark capture stack', lambda: capture_stack(env), env)
-    phase('Grafana dashboards and lab maps', lambda: telemetry_stack(env), env)
-    print('Wireshark opens from the map (Capture packets); Grafana starts on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM when you open it from a lab and stops itself when nobody reads it.')
+    print('Wireshark opens from the map (Capture packets).')
 
 
 def verify_manager(env, version):
@@ -473,7 +467,6 @@ def install(env, version, advanced=False):
     print('  Rebuild/recreate only the manager; existing lab containers remain in place.')
     print('  Lab operations: ' + ('enabled with default trusted roots' if operations == '1' else 'existing permissions retained'))
     print('  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).')
-    print('  Grafana dashboards: pull Prometheus and Grafana, install the Flow panel, provision the dashboards and lab maps (TCP 3000, started on request).')
     print('  Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'))
     print('  Settings: ' + ('copy ' + str(env_source) if env_source else 'retain current .env or use defaults'))
     print('  Installation-media APT repair: ' + ('enabled with backup' if repair else 'not selected'))
@@ -484,28 +477,27 @@ def install(env, version, advanced=False):
             raise Cancelled()
     else:
         print('Starting now; the standard path runs these steps without further confirmation.')
-    total = '7' if engineer == '1' else '6'
+    total = '6' if engineer == '1' else '5'
     phase('1/' + total + ' Administrator access and settings', lambda: command_step(['sudo', '-v'], env), env)
     copy_env(env_source)
     prereqs = ['sudo', 'bash', str(SOURCE / 'deploy/install-prerequisites.sh'), '--docker', '--containerlab']
     if repair:
         prereqs.append('--repair-install-media')
     phase('2/' + total + ' VM prerequisites', lambda: command_step(prereqs, env, tee=True), env)
-    # The two stacks are separate phases so a failed image pull or plugin download is retried
-    # on its own instead of repeating the password, helper and image-build step.
+    # A separate phase so a failed image pull is retried on its own instead of repeating the
+    # password, helper and image-build step.
     launch = ['sudo', 'env', 'DOCKER_HOST=unix:///var/run/docker.sock',
               'bash', str(SOURCE / 'deploy/start-manager.sh'), '--manager-only']
     if operations == '1':
         launch.append('--enable-operations')
     phase('3/' + total + ' Password, helpers, image and manager', lambda: command_step(launch, env), env)
     phase('4/' + total + ' Browser Wireshark capture stack', lambda: capture_stack(env), env)
-    phase('5/' + total + ' Grafana dashboards and lab maps', lambda: telemetry_stack(env), env)
-    phase('6/' + total + ' Running manager verification', lambda: verify_manager(env, version), env)
+    phase('5/' + total + ' Running manager verification', lambda: verify_manager(env, version), env)
     if engineer == '1':
-        phase('7/7 Engineer access for VS Code', lambda: engineer_access(env), env)
+        phase('6/6 Engineer access for VS Code', lambda: engineer_access(env), env)
     setup_lazydocker(env)
     print('\nManager installation is ready. Git is a separate setup step under your ordinary account.')
-    print('Wireshark opens from the map (Capture packets); Grafana starts on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM when you open it from a lab and stops itself when nobody reads it.')
+    print('Wireshark opens from the map (Capture packets).')
     if advanced:
         # Item 1 says "then set up Git"; the standard path always runs it, the advanced
         # path keeps the choice of doing it now or later.
@@ -544,7 +536,7 @@ def main(argv=None):
         choice = menu('Setup menu', [('1', 'Install or update manager, then set up Git'),
                       ('2', 'Git setup / repair only (no rebuild)'),
                       ('3', 'VS Code / Containerlab extension access for ' + account.pw_name + ' (no rebuild)'),
-                      ('4', 'Browser Wireshark and Grafana stacks only (reinstall or upgrade both, no rebuild)'),
+                      ('4', 'Browser Wireshark stack only (reinstall or upgrade, no rebuild)'),
                       ('5', 'Check running installation'), ('6', 'Exit')])
         if choice == '6':
             return 0

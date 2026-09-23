@@ -7,4 +7,3 @@ httpx>=0.27,<1
 python-multipart>=0.0.20,<1
 cryptography>=43
 PyYAML>=6,<7
-pygnmi>=0.8.15,<0.9

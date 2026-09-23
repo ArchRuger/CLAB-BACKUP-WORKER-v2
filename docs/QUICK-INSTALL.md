@@ -71,9 +71,9 @@ date -u
 | `New password:` then `Retype new password:` (after `Create the clab-discovery password`) | A new password for the manager's VM login. **Write it down**; step 9 needs it |
 | `Next step` | `1` if your GitHub repository already exists, otherwise `2` and skip step 5 |
 
-The browser Wireshark and Grafana phases run without questions. Wait for
-`Manager 1.30.38: running; HTTP and version checks passed.` The image build and the
-two stacks take several minutes. If a step fails, read the error, fix it in a second
+The browser Wireshark phase runs without questions. Wait for
+`Manager 1.30.39: running; HTTP and version checks passed.` The image build and the
+capture stack take several minutes. If a step fails, read the error, fix it in a second
 terminal, then type `1` to retry. A `not valid yet` APT error is the clock:
 redo step 2 in the second terminal, then retry.
 
@@ -194,13 +194,9 @@ Deployed from the VM terminal instead (`sudo containerlab deploy -t
 /etc/containerlab/LAB_NAME/LAB_NAME.clab.yaml`)? Open
 **Manager ▾ › Labs found on the VM…** and click the lab to add it to My labs.
 
-## 11. Watch it and capture
+## 11. Capture packets
 
-1. **Open lab map ↗** under **Tools › Telemetry** starts Grafana on the VM when it is
-   stopped (a few seconds) and opens the lab map. Links colour as traffic flows; the
-   Interfaces dashboard shows rates. Grafana stops itself after 15 minutes without an
-   open dashboard; the button brings it back.
-2. Right-click a device on the map → **Capture traffic…** → tick a port → **Start
+1. Right-click a device on the map → **Capture traffic…** → tick a port → **Start
    capture** → **Open Wireshark ↗**.
 
 ## 12. Save to Git

@@ -310,10 +310,9 @@ VM, the normal selections are:
 
 The installer handles missing Git, SSH, Docker/Compose and Containerlab;
 prepares persistent manager storage; installs and verifies helpers; builds and
-starts the manager; installs the browser Wireshark stack and the Grafana
-dashboards; then checks its running version and HTTP response. The image build
-and the two stacks take several minutes. Keep the terminal open and wait for the
-result.
+starts the manager; installs the browser Wireshark stack; then checks its
+running version and HTTP response. The image build and the capture stack take
+several minutes. Keep the terminal open and wait for the result.
 
 Before APT updates, setup displays UTC and NTP status. If a time service is
 already active but not yet synchronized, it waits up to 30 seconds before
@@ -684,9 +683,8 @@ ready; the device's pill says *Ready* when it is. Then:
    configured with it.
 2. Test a device login, then take one backup and inspect/download the result.
 3. Once that succeeds, capture the full intended node set.
-4. Click **Open lab map ↗** under **Tools › Telemetry** and confirm the lab map and the
-   Interfaces dashboard show the devices; right-click a device for **Capture traffic…**
-   and confirm Wireshark opens in a browser tab.
+4. Right-click a device for **Capture traffic…** and confirm Wireshark opens in a
+   browser tab.
 
 For the Juniper kinds added in 1.18.0, use these names in your topology and
 select the matching NOS when adding a credential profile:
@@ -1030,7 +1028,7 @@ Retry the same installation step only after APT succeeds.
 | Correct UTC on host/guest and functioning time provider | Steps 1 and 3, with the step 3 clock paste-in after a snapshot rollback; recovery C if APT already failed. Installer checks status and waits briefly but does not set time |
 | Obtain source | Step 4; VM console/SSH bootstrap |
 | Docker, SSH, Containerlab, manager storage/password/helpers/build/start | Installer in step 5 |
-| Browser Wireshark stack and Grafana dashboards with lab maps | Installer phases 4 and 5 in step 5; menu 4 reinstalls both; checked in step 11 |
+| Browser Wireshark stack | Installer phase 4 in step 5; menu 4 reinstalls it; checked in step 11 |
 | Git login, identity, checkout and registration | Git terminal wizard in step 6 |
 | Ordinary-user SFTP and actual workstation transfer | Explicit checkpoint in step 7 |
 | Optional administrative WinSCP access | Paste-in sudoers rule and matching WinSCP setting in step 7; not added by the installer |

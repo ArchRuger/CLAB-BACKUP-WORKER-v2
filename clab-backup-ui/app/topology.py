@@ -53,11 +53,11 @@ def bounded(value, default, minimum, maximum):
 #    (and the vjunosevolved/vjunosrouter pages next to it) — the first data interface is eth1 == ge-0/0/0.
 #  - juniper_cjunosevolved: https://containerlab.dev/manual/kinds/cjunosevolved/ — eth1-eth3 are the
 #    image's own re0-mgmt/fabric/internal interfaces; the first data port et-0/0/0 is eth4 (confirmed
-#    against a live `restore-square` deploy log and matches telemetry_names.nos_interface).
+#    against a live `restore-square` deploy log).
 #  - juniper_vqfx: https://containerlab.dev/manual/kinds/vr-vqfx/ — the first data interface is
 #    eth1 == xe-0/0/0.
 #  - cisco_xrv9k: https://containerlab.dev/manual/kinds/vr-xrv9k/ — the first data interface is
-#    eth1 == Gi0/0/0/0 (also confirmed live and by telemetry_names.nos_interface).
+#    eth1 == Gi0/0/0/0 (also confirmed live).
 #  - arista_ceos: https://containerlab.dev/manual/kinds/ceos/ — EthernetN is eth(N) exactly.
 #  - nokia_srlinux (see NOKIA_PORT below): https://containerlab.dev/manual/kinds/srl/ — containerlab
 #    keeps the NOS's own `e1-N` veth name; there is no `ethN` form to reverse.
