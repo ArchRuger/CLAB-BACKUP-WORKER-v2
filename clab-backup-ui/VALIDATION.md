@@ -29,7 +29,46 @@ Prepared on `claude/technical-audit` (from `main` `b1ced1d`) on 2026-09-23. The 
   Advanced options; the weakened `End`-key claim in `test_shell_ui.js` restored. Notes accepted as is: the
   four-worker pool is more than a one-off needs; *Remove lab* and *Start fresh* drop the record with the lab; a
   1.30.38 manager started on migrated data would show the record in its lab view (see the rollback note).
-- **Live (dev VM):** recorded below after the deployment of this release's build.
+- **Live upgrade of the dev VM (an installation that had the stack: Prometheus running with restart
+  `unless-stopped`, Grafana exited, two tmpfs volumes, eight `TELEMETRY_*` keys, the Flow panel and one generated
+  lab-map dashboard on disk).** `deploy/retire-telemetry.sh --dry-run` from the 1.30.39 worktree listed exactly the
+  two labelled containers, the two volumes, the two image digests, the two folders and the eight keys. `sudo bash
+  deploy/start-manager.sh` then removed them (log kept in the audit record), refreshed the capture stack to
+  `clab-capture-service:1.30.39`, built `clab-backup:1.30.39` (494 MB, down from 525 MB; the pip step no longer
+  installs pygnmi, grpcio, protobuf or dictdiffer) and recreated the manager; the second teardown pass after the
+  recreate found and archived `data/telemetry` again, which the old manager's loop had recreated during the build
+  (the risk review's case). Afterwards: no container or volume with the project label, `grafana/grafana-oss` and
+  `prom/prometheus` gone (1.85 GB freed), ports 3000 and 9090 closed, 8081/5001/5801 as before, `.env` holds only the
+  `CAPTURE_*` keys (byte-identical), archives `/srv/containerlab-node-manager/telemetry-retired-20260923T111011Z`
+  (config, plugins, dashboards, `env-telemetry.txt` mode 600) and `…-20260923T111103Z`; `/api/state` 1.30.39, helpers
+  1.30.39, `{"mode":"grafana"}` to the installed operations helper answers `Unknown request mode.`, capabilities
+  list unchanged otherwise; the lab record has no `telemetry` key and carries `telemetry_retired` for
+  `cjunosevolved` (1 line) with the `telemetry.retired` event; a repeated `retire-telemetry.sh` reports nothing to
+  retire. `check-install.sh` as the ordinary account: 61 PASS, 1 WARN (the folder-coverage cap, as before), 0 FAIL,
+  *Retired telemetry stack* PASS, *Browser Wireshark capture* PASS (9 targets). Idle manager: 52 MiB and 10 threads
+  (1.30.38: 72 MiB and 44 threads with the collector); disk 51G → 50G used.
+- **Live device-line removal and retained workflows (independent Sonnet QA, `docs/technical-audit/tools/check_release_1_30_39.py`,
+  report `docs/technical-audit/evidence/r39-live-qa.md`, 142 PASS / 0 FAIL / 3 INFO):** at 1920×1080, 1366×768 and
+  390×844 no retired id, text, page or route remains (`grafana.html` and every `/api/telemetry*` route 404), no
+  request to `/telemetry` during the whole navigation except `/telemetry-retired`, 0 console and 0 page errors, every
+  retained control present; the lab notice read exactly `Configuration lines added by the retired telemetry feature
+  are still on: cjunosevolved.`, *Review and remove…* opened the dialog with the recorded line, **Remove from
+  devices** answered `cjunosevolved: removed — Removed the lines the manager had added and read the device back: they
+  are gone.`, the record, the banner and the Advanced-options item disappeared, the `telemetry.retired.removed` event
+  carries no configuration text, and *Test logins* started right after (the lab was not left busy). Independent
+  read-back by the lead over SSH (`nodecli.py`): `set system services ssh` is the only service line and the
+  extension-service is empty. Retained workflows: lab-wide backup (four NOS nodes `succeeded`, host1 excluded by
+  design) and the ZIP download with the documented names; `ssh-check-all` 5 started, 0 skipped; a real terminal to
+  cEOS; *Save progress* with the label `Technical audit 1.30.39 live check` → review → upload, commit
+  `a46b9569…` on `pruger-dev/CLAB-MNGR-DEV-LLM` `main` verified with `git fetch` and `git ls-tree` (a repeat save
+  reported `unchanged`); browser Wireshark on the ceos↔cjunosevolved link with 5 ICMP pairs generated from the ceos
+  terminal (Wireshark's status bar: 13 packets), session ended and gone from the list; Diagnostics probe PASS rows.
+  Then a real restore by the lead: cEOS drifted (`description AUDIT-DRIFT-1-30-39`), `manager_restore.py --commit
+  a46b956…` restored it in 6 s (`backing_up → applying → confirming → applied → verified`, job `succeeded`,
+  `evidence/r39-restore-ceos.json`) and the read-back shows the saved description again.
+- **Not exercised live in this chunk (unchanged code, covered by the unit suites):** the four-node parallel restore,
+  the mixed-failure and isolation harnesses, the lab builder's publish/revise, the map editor; they are scheduled for
+  the final integrated pass of the audit.
 
 # Setup Script Cleanup Log, part 3: Test logins eligibility and the 1.30.37 live records — 1.30.38
 

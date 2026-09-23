@@ -34,3 +34,21 @@ Evidence: the `"model"` fields of each worker's transcript under the session's t
 
 Haiku (`clab-ui-scout`, `mechanical-editor`) was not needed in chunk 1: the inventory was produced by scripts
 (`git grep`, `wc`, `pip show`, `docker inspect`) and the decided mechanical edits were small enough for the lead.
+
+## Chunk 1 (1.30.39, `73c6712`): telemetry and Grafana retired
+
+| Check | Class | Result |
+|---|---|---|
+| Full suites on the committed tree | unit | Python 1078 OK (1 skipped), browser 281 OK, every deploy-script suite OK with the system python |
+| Release check, links, `bash -n`, `node --check`, `git diff --check`, CI list versus `tests/` | static | clean; only the opt-in `test_eos_ssh.py` is outside CI |
+| Upgrade rehearsal on the isolated copy of the pre-change data (`tools/upgrade_rehearsal.py`) | unit on real data | PASS: protected fields identical, ledger kept for `cjunosevolved` (1), idempotent |
+| Risk review (Opus 5.5) | review | 2 must-fix + 7 should-fix, all applied (VALIDATION.md of the app has the list) |
+| VM upgrade through `start-manager.sh` from the 1.30.39 worktree | live | stack removed as the dry run listed; second pass after the recreate archived the recreated maps folder; manager and helpers 1.30.39 |
+| Absence on the VM | live | no labelled container/volume, images gone, ports 3000/9090 closed, `.env` without `TELEMETRY_*`, retired helper mode refused, no `telemetry` key in `/api/state` |
+| Health check (`check-install.sh`, ordinary account) | live | 61 PASS, 1 WARN (folder-coverage cap, pre-existing), 0 FAIL; *Retired telemetry stack* PASS |
+| Resources | live | manager idle 72 MiB / 44 threads → 52 MiB / 10 threads; image 525 → 494 MB; 1.85 GB of images freed |
+| Browser checks, device-line removal, retained workflows | live | Sonnet QA, `tools/check_release_1_30_39.py`: 142 PASS / 0 FAIL / 3 INFO (`evidence/r39-live-qa.md`, `.json`, six screenshots) |
+| Independent device read-back after the removal | live | `nodecli.py` on cjunosevolved: only `set system services ssh`; extension-service empty |
+| Single-node restore after a deliberate drift | live | cEOS restored from commit `a46b956` in 6 s, `verified`, drift gone on read-back (`evidence/r39-restore-ceos.json`) |
+| CI | CI | push run 35852987703 and PR #54 run 35853033263 both green (2 m 56 s and 3 m 16 s, about a minute less than before without the Grafana smoke) |
+| Not exercised live in this chunk | | four-node parallel restore, failure harnesses, lab builder publish/revise, map editor (unchanged code; final integrated pass) |
