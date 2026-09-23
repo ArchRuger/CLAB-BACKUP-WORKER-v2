@@ -7,6 +7,7 @@ import socket
 import threading
 import time
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 
@@ -125,18 +126,81 @@ def last_deployed(state, lab):
     return max(stamps, default='')
 
 
-def scrub(text, state):
-    secrets = []
-    host = state.get('host', {})
-    secrets += [host.get(k, '') for k in ('password', 'passphrase', 'private_key')]
+OUTPUT_LIMIT = 512 * 1024
+
+
+def secret_values(state):
+    """The stored credentials scrub() replaces, each once, longest first."""
+    host = state.get('host', {}); secrets = [host.get(k, '') for k in ('password', 'passphrase', 'private_key')]
     for lab in state['labs']:
         for item in lab.get('nodes', []) + lab.get('profiles', []):
             secrets += [item.get(k, '') for k in ('password', 'passphrase', 'private_key', 'enable_password')]
-    for secret in sorted(filter(None, secrets), key=len, reverse=True): text = text.replace(secret, '[redacted]')
+    return sorted(dict.fromkeys(filter(None, secrets)), key=len, reverse=True)
+
+
+def scrub(text, state):
+    for secret in secret_values(state): text = text.replace(secret, '[redacted]')
     text = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text)
     text = re.sub(r'(?s)-----BEGIN [^-]*PRIVATE KEY-----.*?(?:-----END [^-]*PRIVATE KEY-----|$)', '[private key omitted]', text)
     text = re.sub(r'(?im)^.*(?:password|passphrase|private.key|community|secret)\s*[:= ].*$', '[sensitive output omitted]', text)
-    return text[-512 * 1024:]
+    return text[-OUTPUT_LIMIT:]
+
+
+class OutputWindow:
+    """The last 512 KiB of an operation's streamed output, its stored secrets (secret_values(), longest first)
+    replaced before the window cuts anything. Only the longest tail of the received text that is a proper prefix of
+    a secret (at most max(len(secret)) - 1 characters, usually none after a line break) waits unscrubbed for the
+    next chunk or the final flush, so a secret split between chunks is still matched whole, only redacted text is
+    ever cut, and every line that cannot begin a secret is published at once. Adding a chunk costs its own length
+    plus that tail (and at most one 4 KiB part), never the window; scrub() still runs on the whole window before it
+    is published."""
+    def __init__(self): self.carry = ''; self.covered = 0; self.parts = deque(); self.size = 0; self.cut = False; self.whole = False
+
+    def add(self, chunk, secrets, final=False):
+        text = self.carry + chunk; cut = len(text)
+        # The tail held back: the leftmost start from which the rest of the text is a proper prefix of some secret. Each
+        # secret is looked for only in its own last len(secret) - 1 characters and only left of the tail found so far:
+        # by its first 16 characters where that much text is left, by its first character in the shorter remainder.
+        for secret in () if final else secrets:
+            low = max(len(text) - len(secret) + 1, 0); head = secret[:min(len(secret) - 1, 16)]
+            if not head: continue  # a one-character secret has no proper prefix to wait for
+            at = text.find(head, low, cut + len(head) - 1)
+            while at >= 0 and not secret.startswith(text[at:]): at = text.find(head, at + 1, cut + len(head) - 1)
+            if at < 0: at = text.find(secret[0], max(low, len(text) - len(head) + 1), cut)
+            while at >= 0 and not secret.startswith(text[at:]): at = text.find(secret[0], at + 1, cut)
+            if at >= 0: cut = at
+        if not cut: self.carry = text; return
+        # Every occurrence of every secret, overlapping ones too. One that starts before the cut ends inside this
+        # text, so everything before the cut is decided; the head of the carry an earlier one covered stays covered.
+        spans = [(0, self.covered)] if self.covered else []
+        for secret in secrets:
+            at = text.find(secret)
+            while 0 <= at < cut: spans.append((at, at + len(secret))); at = text.find(secret, at + 1)
+        runs = []
+        for begin, end in sorted(spans):
+            if runs and begin < runs[-1][1]: runs[-1][1] = max(runs[-1][1], end)
+            else: runs.append([begin, end])
+        done = 0
+        for begin, end in runs:  # a run that continues one of the previous chunk already has its marker
+            self.keep(text[done:begin] + ('' if begin == 0 and self.covered else '[redacted]')); done = end
+        self.keep(text[done:cut]); self.covered = max(done - cut, 0); self.carry = text[cut:]
+
+    def keep(self, text):
+        if not text: return
+        if self.parts and len(self.parts[-1]) < 4096: self.size -= len(self.parts[-1]); text = self.parts.pop() + text
+        self.parts.append(text); self.size += len(text)
+        while self.size - len(self.parts[0]) >= OUTPUT_LIMIT:
+            dropped = self.parts.popleft(); self.size -= len(dropped); self.cut = True; self.whole = dropped.endswith('\n')
+
+    def text(self):
+        text = ''.join(self.parts); longer = len(text) > OUTPUT_LIMIT
+        if not (longer or self.cut): return text
+        # A window that lost its beginning starts at a whole line, so scrub()'s line rules see every line it keeps,
+        # and a private key whose BEGIN line was cut off is omitted up to its END line.
+        whole = text[-OUTPUT_LIMIT - 1] == '\n' if longer else self.whole; text = text[-OUTPUT_LIMIT:]
+        if not whole and '\n' in text: text = text.partition('\n')[2]
+        marker = re.search(r'-----(BEGIN|END) [^-]*PRIVATE KEY-----', text)
+        return '[private key omitted]' + text[marker.end():] if marker and marker.group(1) == 'END' else text
 
 
 class LabOperations:
@@ -486,29 +550,36 @@ class LabOperations:
 
     def execute(self, ident, host, req):
         with self.store.lock: self.active.add(ident)
-        raw_output = ''; last_save = 0
+        window = OutputWindow(); last_save = 0
         def update(**fields):
             with self.store.lock:
                 job = next(j for j in self.store.state['operations'] if j['id'] == ident)
                 job.update(fields); self.store.save()
+        def add(chunk, final=False):
+            # Secrets are replaced as the output arrives, before the 512 KiB window can cut one.
+            with self.store.lock: secrets = secret_values(self.store.state)
+            window.add(chunk, secrets, final)
         def output(chunk):
-            nonlocal raw_output, last_save
-            raw_output = (raw_output + chunk)[-512 * 1024:]
+            nonlocal last_save
+            add(chunk)
             if time.monotonic() - last_save > .25:
                 # Publish complete lines so split credential values cannot leak mid-chunk.
-                with self.store.lock: clean = scrub(raw_output.rpartition('\n')[0], self.store.state)
+                text = window.text().rpartition('\n')[0]
+                with self.store.lock: clean = scrub(text, self.store.state)
                 update(output=clean); last_save = time.monotonic()
         try:
             update(status='running', started=stamp(), message='Executing on the VM')
             result = remote(host, req, output, self.stopping)
-            with self.store.lock: clean = scrub(raw_output, self.store.state)
+            add('', True); text = window.text()
+            with self.store.lock: clean = scrub(text, self.store.state)
             finished = stamp()
             if result.get('exit_code') == 0: self.record_deployment(ident, finished)
             update(status='succeeded' if result.get('exit_code') == 0 else 'failed', exit_code=result.get('exit_code'),
                    finished=finished, output=clean, result=result, message='Operation completed' if result.get('exit_code') == 0 else 'Host command returned an error')
         except Exception as exc:
             message = str(exc) if type(exc) is ValueError else 'SSH connection or operation failed. Inspect the VM before retrying.'
-            with self.store.lock: clean = scrub(raw_output, self.store.state); message = scrub(message, self.store.state)
+            add('', True); text = window.text()
+            with self.store.lock: clean = scrub(text, self.store.state); message = scrub(message, self.store.state)
             try:
                 update(status='interrupted' if self.stopping.is_set() else 'failed', finished=stamp(), output=clean, message=message)
             except OSError:
@@ -516,7 +587,8 @@ class LabOperations:
         finally:
             try:
                 try:
-                    self.store.event('lab.operation', 'Lab operation finished; review its operation record', lab_id=next(j['lab_id'] for j in self.store.state['operations'] if j['id'] == ident))
+                    with self.store.lock: lab_id = next((j.get('lab_id', '') for j in self.store.state['operations'] if j['id'] == ident), '')
+                    self.store.event('lab.operation', 'Lab operation finished; review its operation record', lab_id=lab_id)
                 except OSError:
                     pass  # Logging cannot retain the active guard after execution ends.
                 if not self.stopping.is_set(): self.discovery.refresh()

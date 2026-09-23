@@ -23,7 +23,7 @@ from .discovery import PinnedHostKey, vm_password
 from .downloads import component, short_name, stored_path, stored_restore_path
 from .inventory import PLATFORMS
 from .lab_operations import operation_busy, scrub, GIT_BUSY
-from .runner import now
+from .runner import now, trim_jobs
 from .textdiff import unified
 
 PROTOCOL = 'clab-manager-git-v1'
@@ -237,11 +237,40 @@ def snapshot_conflict(files, prefix):
     return ''
 
 
+def job_pending(job):
+    """True while a Git save still needs attention: awaiting review, a retry, capture, export or
+    push. Also used to protect an entry from ``_append_git_job``'s cap: a pending save is compared
+    by digest later and must stay findable."""
+    return (job.get('status') not in ('synced', 'dismissed', 'capture_incomplete', 'failed') and
+            not (job.get('status') == 'unchanged' and job.get('pushed')))
+
+
 def pending_progress(state, lab_id=None):
-    return any((not lab_id or j.get('lab_id') == lab_id) and
-               j.get('status') not in ('synced', 'dismissed', 'capture_incomplete', 'failed') and
-               not (j.get('status') == 'unchanged' and j.get('pushed'))
+    return any((not lab_id or j.get('lab_id') == lab_id) and job_pending(j)
                for j in state.get('git_jobs', []))
+
+
+GIT_JOB_CAP = 200
+
+
+def _newest_pushed_ids(jobs):
+    """The id of the newest 'git_jobs' entry with `pushed=True`, per `binding_digest`. finish()'s
+    'unchanged' detection compares a fresh commit against exactly this entry (same commit, same
+    pushed, same binding): trimming it away makes that comparison find nothing and fall back to
+    'review_pending' even though the save truly changed nothing."""
+    newest = {}
+    for j in jobs:
+        if j.get('pushed') is True: newest[j.get('binding_digest')] = j.get('id')
+    return set(newest.values())
+
+
+def _append_git_job(state, job):
+    """Append one entry to 'git_jobs' and cap it at the newest 200, never dropping one
+    ``job_pending`` still calls true, nor the newest pushed save of any binding (see
+    ``_newest_pushed_ids``, ``trim_jobs``)."""
+    state['git_jobs'].append(job)
+    keep = _newest_pushed_ids(state['git_jobs'])
+    state['git_jobs'] = trim_jobs(state['git_jobs'], GIT_JOB_CAP, lambda j: job_pending(j) or j.get('id') in keep, False)
 
 
 def remote_git(host, request, stopping=None):
@@ -908,7 +937,7 @@ class GitProgress:
                                backup_job_id='', target='move', checkpoint='', note='', pushed=False, review_before_push=False,
                                binding_digest=digest(new_binding), request=request, want_push=True, node_names=node_names, capture_context={},
                                destination=move_destination(new_binding))
-                    self.store.state['git_jobs'].append(job)
+                    _append_git_job(self.store.state, job)
                     try: self.store.save()
                     except OSError:
                         self.store.state['git_jobs'].remove(job); raise HTTPException(500, 'The folder changed, but the file move could not be queued.')
@@ -992,7 +1021,7 @@ class GitProgress:
                            # binding that may have moved by the time the save is reviewed or shown later.
                            destination=job_destination(binding, data.target, data.checkpoint),
                            node_names=copy.deepcopy(names), capture_context=context)
-                self.store.state['git_jobs'].append(job)
+                _append_git_job(self.store.state, job)
                 try: self.store.save()
                 except OSError:
                     self.store.state['git_jobs'].remove(job); raise HTTPException(500, 'Could not save the request. No work was submitted.')
@@ -1036,7 +1065,7 @@ class GitProgress:
                 self.idle(); self.guard_pending(lab_id); binding = self.binding(lab_id)
                 ident = uuid.uuid4().hex
                 marker = dict(id=ident, lab_id=lab_id, status='exporting', created=now(), message='Updating repository from remote.', target='update')
-                self.store.state['git_jobs'].append(marker)
+                _append_git_job(self.store.state, marker)
                 try: self.store.save()
                 except OSError:
                     self.store.state['git_jobs'].remove(marker)

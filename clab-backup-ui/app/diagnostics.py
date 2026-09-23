@@ -80,7 +80,7 @@ class Diagnostics:
         with self.store.lock:
             state = self.store.state
             host = state.get('host', {})
-            counts = {name: len(state.get(name, [])) for name in ('labs', 'jobs', 'operations', 'git_jobs')}
+            counts = {name: len(state.get(name, [])) for name in ('labs', 'jobs', 'operations', 'git_jobs', 'restore_jobs')}
             connection = {'configured': bool(host), 'enabled': bool(host.get('enabled')),
                           'password_saved': bool(host.get('password')), 'fingerprint_saved': bool(host.get('fingerprint'))}
         connection.update({key: bool(public.get(key)) for key in ('connected', 'checking', 'file_import_supported')})

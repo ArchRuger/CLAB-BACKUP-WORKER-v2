@@ -42,7 +42,7 @@ from .lab_operations import RESTORE_BUSY, operation_busy, scrub
 from .node_services import connect
 from .restore_compare import compare_junos, set_lines  # noqa: F401  (set_lines is part of this module's API)
 from .restore_shell import RestoreError, SessionLost
-from .runner import effective_credentials, now
+from .runner import effective_credentials, now, trim_jobs
 
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'message', 'source',
               'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets', 'progress')
@@ -134,6 +134,27 @@ def node_endpoint(node):
     """The SSH endpoint the manager connects to (node_services.connect). Two targets behind one endpoint are
     changed one after another: the IOS XR driver recognises its held arming session by the peer address alone."""
     return (str(node.get('address') or ''), str(node.get('port') or ''))
+
+
+RESTORE_JOB_CAP = 200
+# A job this busy (RESTORE_BUSY) must stay findable. So must one a restart left 'interrupted'
+# (__init__): if any of its targets was IN_FLIGHT, it is still waiting for _recheck_all/
+# _recheck_interrupted to look at that node and, once every node has been looked at, to finalize
+# it; if none was, __init__ never adds it to self.unchecked, so nothing ever reaches it again and
+# it stays 'interrupted' for good. Either way it never reaches one of the terminal statuses
+# _finalize() assigns, so it must stay protected regardless of age, not just until its own recheck.
+RESTORE_JOB_ACTIVE = RESTORE_BUSY + ('interrupted',)
+
+
+def _restore_job_active(job):
+    return job.get('status') in RESTORE_JOB_ACTIVE
+
+
+def _append_restore_job(state, job):
+    """Append one entry to 'restore_jobs' and cap it at the newest 200, never dropping one still
+    in progress or awaiting its post-restart recheck (see ``trim_jobs``)."""
+    state['restore_jobs'].append(job)
+    state['restore_jobs'] = trim_jobs(state['restore_jobs'], RESTORE_JOB_CAP, _restore_job_active, False)
 
 
 def saved_label(desc):
@@ -670,7 +691,7 @@ class RestoreService:
                              'timeline': {'queued': time.time()}, 'attempts': 0} for r in chosen],
                 'progress': {'settled': 0, 'total': len(chosen)},
                 '_candidates': {r['name']: candidates[r['name']] for r in chosen}}
-            self.store.state['restore_jobs'].append(job)
+            _append_restore_job(self.store.state, job)
             try:
                 self.store.save()
             except OSError:
@@ -1136,6 +1157,11 @@ class RestoreService:
                 message = f'{restored}/{total} node(s) restored and verified; {bad} did not complete.'
             message = prefix + message
             job.update(status=status, finished=now(), message=message)
+            # The candidate and desired-state text of every node (tens of KiB each) is only ever
+            # read before this point (execute()'s own run, or _recheck_interrupted() on the restart
+            # path, both of which finish before their job's _finalize()); a finished job never needs
+            # it again, and dropping it keeps 'restore_jobs' from growing without bound.
+            job.pop('_candidates', None)
             self.store.save()
         self.event('restore.finish', message, lab_id, job_id,
                    level='info' if status == 'succeeded' else 'warning')

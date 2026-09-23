@@ -44,9 +44,9 @@ Claude Code 2.1.280; project settings model `claude-fable-5-1`, `CLAUDE_CODE_SUB
 |---|---|---|---|---|
 | 0 | Baseline, inventory, preservation matrix, records skeleton, four read-only audits (AU1 backend, AU2 frontend, AU3 helpers/deploy, AU4 tests/docs) | none | (records land with chunk 1) | done except AU4 |
 | 1 | Telemetry and Grafana retirement with the state, VM and device migration; risk review applied; VM upgraded, device line removed and read back, retained workflows proven | 1.30.39 | `73c6712` (pushed; PR #54; CI green) + records commit | done |
-| 2 | Backend and state debt: A-001, B-001 to B-006, T-003 | 1.30.40 | | implemented (Sonnet + Opus), gates and deployment pending |
-| 3 | Frontend, tooling and guide debt: F-001 to F-006, T-001, T-002, D-001, D-002 | 1.30.41 | | implemented (Sonnet builder, docs auditor), gates pending |
-| 4 | Deploy and dependency debt: S-001, S-005, D-003, S-002 evaluation (Node 24 under `~/.local/node24`) | 1.30.42 | | planned |
+| 2 | Frontend, tooling and guide debt: F-001 to F-006, T-001, T-002, D-001, D-002 (committed first because the release bump touches the static pages) | 1.30.40 | `f21125e` (pushed) | done; no rebuild (no Python change) |
+| 3 | Deploy and dependency debt: S-001, S-002 (overrides + rebuilt bundle, audit 0), S-005, D-003 | 1.30.41 | `e192ead` (pushed; CI green) | done; no rebuild of the manager (no Python change) |
+| 4 | Backend and state debt: A-001, B-001 to B-006, T-003, risk review RR-201 to RR-207 | 1.30.42 | | committing; then the VM deployment and the targeted live checks |
 | 5 | Final integrated pass: four-node restore, harnesses, builder, fresh-install evidence, resource comparison, records | | | planned |
 
 ## Exact next action

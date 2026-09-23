@@ -25,6 +25,7 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertEqual(data['manager_version'], __version__)
             self.assertFalse(data['vm']['configured'])
             self.assertEqual(data['saved_counts']['labs'], 0)
+            self.assertEqual(data['saved_counts']['restore_jobs'], 0)  # B-001: watched alongside jobs/git_jobs
             remote.assert_not_called()
         self.assertEqual(response.headers['cache-control'], 'no-store')
 

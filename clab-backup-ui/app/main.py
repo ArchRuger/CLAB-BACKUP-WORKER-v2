@@ -21,7 +21,7 @@ from .runner import Runner, readiness, now, effective_credentials, credential_so
 from .node_services import NodeServices
 from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
-from .discovery import Discovery, lab_status, node_available
+from .discovery import Discovery, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
 from .lab_operations import LabOperations, last_deployed, operation_busy
 from .git_progress import GitProgress, public_job as public_git_job
@@ -105,7 +105,7 @@ def create_app(data_dir=None):
                     matched=next((j for j in store.state['jobs'] if j['id']==job_id),None)
                     if matched: lab_id=matched['lab_id']
             route=request.scope.get('route')
-            store.event('api.request',f'{request.method} {getattr(route, "path", "/api/unknown")} â†’ {response.status_code} ({time.monotonic()-started:.3f}s)',
+            store.event('api.request',f'{request.method} {getattr(route, "path", "/api/unknown")} -> {response.status_code} ({time.monotonic()-started:.3f}s)',
                         level='error' if response.status_code>=400 else 'info',lab_id=lab_id,job_id=job_id)
         response.headers['X-Content-Type-Options']='nosniff'
         response.headers['Referrer-Policy']='no-referrer'
@@ -179,12 +179,17 @@ def create_app(data_dir=None):
     @app.get('/api/state')
     def state():
         with store.lock:
+            # jobs, git_jobs, restore_jobs and operations are all bounded in storage at write time
+            # now (Runner.submit()/_append_git_job()/_append_restore_job()/the operations preview
+            # confirm, each per lab or globally with its own protected entries); reading is never
+            # sliced again here, because a fixed-window read slice (the previous '[-200:]') can cut
+            # off a protected entry the write-time trim deliberately kept in front of it.
             return {'labs':[public_lab(l) for l in store.state['labs']],
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
                     'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
-                    'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])[-200:]],
-                    'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])[-200:]],
-                    'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])[-200:]]}
+                    'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])],
+                    'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])],
+                    'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])]}
     class RemoveLab(BaseModel):
         model_config = ConfigDict(extra='forbid')
         name: str = Field(min_length=1, max_length=120)
@@ -297,7 +302,6 @@ def create_app(data_dir=None):
             node.update(address=endpoint,port=ssh_port,platform=edit.platform,
                         profile_id=edit.profile_id,enabled=edit.enabled and bool(edit.platform))
             if edit.endpoint_mode=='auto':
-                from .discovery import reconcile
                 reconcile(store.state)
             store.save()
             return public_lab(lab)

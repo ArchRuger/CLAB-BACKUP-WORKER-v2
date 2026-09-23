@@ -1,3 +1,28 @@
+# Technical audit, part 4: backend and state — 1.30.42
+
+Prepared on `claude/technical-audit` on 2026-09-23 after 1.30.41 (`e192ead`, CI green). Backend changes in
+`runner.py`, `git_progress.py`, `restore.py`, `main.py`, `node_readiness.py`, `diagnostics.py`, `lab_operations.py`,
+implemented by a Sonnet builder and, for the secret redaction, the Opus specialist; reviewed independently by the
+Opus `risk-reviewer`, whose one must-fix (a pending save's capture could be evicted by the first draft's global cap,
+reproduced with the real `submit()`) and six should-fix items (live-log lag from the carry-over, a stale git lock
+after a timeout, restore candidates kept for ever, the `unchanged` reference save, read slices hiding protected
+entries, wording) were all applied before this commit.
+
+- **Unit and static:** `python -m unittest discover` 1134 OK (1 skipped): 28 tests added (bounds per list and per
+  lab, protected ids, the retry of a pending save after the cap, the interrupted restore's backups, the `unchanged`
+  reference, the redaction window: a secret at the cut, split across chunks, repeated thousands of times, multi-line,
+  the lag claim that every line that cannot begin a secret is published at once, and a randomised claim over 3,000
+  chunkings and cuts; the git timeout with a real `git` and a planted `index.lock`; the scheduler join; the
+  restart-recheck branches for a missing candidate and a missing lab; the ASCII arrow); `node --test tests/*.js` 281
+  OK; every deploy-script suite OK; `verify-release.py`; `check_links.py` (135 files); `git diff --check`;
+  `python -W error -c "import app.main"`.
+- **Measured (Opus, scratch scripts):** redaction cost 65 µs per 4 KiB chunk with 42 secrets including a 2.9 KB
+  key, flat from an empty to a 2 MiB window; 120 of 120 lines visible live with the key stored (the first draft
+  showed 63); 80,000 fuzz cases equal to redacting the whole output first; the reviewer's own fuzz (3 × 20,000)
+  clean. Restore state after 200 four-node restores with 30 KiB configurations: 50 MB and 334 ms per save before,
+  bounded after.
+- **Live (dev VM):** recorded below after the deployment of this release's build.
+
 # Technical audit, part 3: deployment and dependencies — 1.30.41
 
 Prepared on `claude/technical-audit` on 2026-09-23 after 1.30.40 (`f21125e`, CI green). Deploy tooling, the editor's

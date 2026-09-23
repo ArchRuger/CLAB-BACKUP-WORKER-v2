@@ -15,7 +15,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.store import Store
-from app.restore import RestoreService, compare_states, mask_line, set_lines
+from app.restore import (RestoreService, compare_states, mask_line, set_lines,
+                         RESTORE_JOB_CAP, _append_restore_job, _restore_job_active)
 
 DESIRED_SET = ('set system host-name FINAL\n'
                'set system login user admin authentication encrypted-password "$6$loginhash"\n'
@@ -71,6 +72,34 @@ class FakeRunner:
 
 def fake_connect(client, node, creds):
     return None
+
+
+class RestoreJobCapTests(unittest.TestCase):
+    """B-001: 'restore_jobs' is bounded like 'operations', never dropping a job still in progress
+    or awaiting its post-restart recheck ('interrupted', see RestoreService.__init__)."""
+
+    def test_restore_job_active_matches_restore_busy_plus_interrupted(self):
+        for status in ('queued', 'preflight', 'backing_up', 'applying', 'confirming', 'verifying', 'interrupted'):
+            self.assertTrue(_restore_job_active(dict(status=status)), status)
+        for status in ('succeeded', 'failed', 'needs_attention', 'partial', 'preflight_failed'):
+            self.assertFalse(_restore_job_active(dict(status=status)), status)
+
+    def test_append_caps_at_the_newest_but_keeps_an_in_progress_job_beyond_it(self):
+        state = {'restore_jobs': [dict(id=str(i), status='succeeded') for i in range(RESTORE_JOB_CAP)]}
+        state['restore_jobs'][0]['status'] = 'interrupted'  # oldest entry; first to fall out of the window
+        _append_restore_job(state, dict(id='new', status='queued'))
+        self.assertEqual(len(state['restore_jobs']), RESTORE_JOB_CAP + 1)  # the newest cap, plus the survivor
+        ids = [j['id'] for j in state['restore_jobs']]
+        self.assertIn('0', ids)
+        self.assertIn('new', ids)
+        self.assertLess(ids.index('0'), ids.index('new'))  # append order (oldest to newest) is preserved
+
+    def test_append_drops_only_terminal_jobs_once_over_cap(self):
+        state = {'restore_jobs': [dict(id=str(i), status='succeeded') for i in range(RESTORE_JOB_CAP)]}
+        _append_restore_job(state, dict(id='newest', status='succeeded'))
+        self.assertEqual(len(state['restore_jobs']), RESTORE_JOB_CAP)
+        self.assertNotIn('0', [j['id'] for j in state['restore_jobs']])   # the oldest terminal job was dropped
+        self.assertIn('newest', [j['id'] for j in state['restore_jobs']])
 
 
 class RestoreServiceTests(unittest.TestCase):
@@ -919,6 +948,16 @@ class RestoreServiceTests(unittest.TestCase):
         self.assertNotIn('_candidates', blob)
         self.assertNotIn('host_identity', blob)
 
+    def test_finished_job_drops_candidates_from_storage(self):
+        # Risk review 2, item 5: a finished job's candidate and desired-state text (tens of KiB per
+        # node) is only ever read before _finalize() (by execute() itself, or by
+        # _recheck_interrupted() on the restart path); _finalize() drops it so 'restore_jobs' does
+        # not grow without bound while it survives its cap.
+        self.run_execute()
+        stored = self.store.state['restore_jobs'][-1]
+        self.assertEqual(stored['status'], 'succeeded')
+        self.assertNotIn('_candidates', stored)
+
     def test_restart_reconciles_busy_restore(self):
         job = self.svc.submit('lab1', self.source(), ['PTX1'], 5, uuid.uuid4().hex)
         self.svc.update(job['id'], status='applying')
@@ -1003,6 +1042,55 @@ class RestoreServiceTests(unittest.TestCase):
             confirm.assert_not_called()
             apply.assert_not_called()
             self.assertEqual(rechecked['status'], 'needs_attention')
+
+    def test_restart_recheck_reports_uncertain_when_the_candidate_is_gone_and_other_nodes_still_finish(self):
+        # T-003: the lab or a node's saved candidate can be gone by the time a restart-recheck runs
+        # (the lab was removed, or the candidate the job started with is no longer tracked). This
+        # must not abandon the batch: the affected node is reported 'uncertain', and the job's other
+        # node is still looked at and finished normally by the same restart recheck.
+        job = self.svc.submit('lab1', self.source(), ['PTX1', 'SW1'], 5, uuid.uuid4().hex)
+        self.svc.update(job['id'], status='applying')
+        stored = next(j for j in self.store.state['restore_jobs'] if j['id'] == job['id'])
+        for target in stored['targets']: target['status'] = 'applying'
+        stored['_candidates'].pop('PTX1')       # the saved candidate is no longer available for this node
+        self.store.save()
+        again = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        again.retry_interval = again.recovery_grace = 0
+        self.assertEqual(sorted(again.unchecked), sorted([(job['id'], 'PTX1'), (job['id'], 'SW1')]))
+        again.rechecks[job['id']] = 2
+        with patch('app.restore.junos.apply_candidate') as apply, patch('app.restore.junos.confirm') as confirm, \
+                patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            again._recheck_all([(job['id'], 'PTX1'), (job['id'], 'SW1')])
+        result = again.get_job(job['id'])
+        by_name = {t['name']: t for t in result['targets']}
+        self.assertEqual(by_name['PTX1']['status'], 'uncertain')
+        self.assertIn('could not check the device', by_name['PTX1']['message'])
+        self.assertEqual(by_name['SW1']['status'], 'verified')     # the healthy node was still rechecked and finished
+        self.assertEqual(result['status'], 'needs_attention')      # the job as a whole reflects the unresolved node
+        apply.assert_not_called(); confirm.assert_not_called()      # nothing is ever re-applied or blindly confirmed
+
+    def test_restart_recheck_reports_uncertain_when_the_lab_is_gone(self):
+        # T-003 (risk review 2, item 7): the lab itself can be removed before a restart-recheck
+        # runs; this is the same LookupError branch as a missing candidate ('not node'), exercised
+        # here directly rather than only through a missing '_candidates' entry.
+        job = self.svc.submit('lab1', self.source(), ['PTX1'], 5, uuid.uuid4().hex)
+        self.svc.update(job['id'], status='applying')
+        stored = next(j for j in self.store.state['restore_jobs'] if j['id'] == job['id'])
+        stored['targets'][0]['status'] = 'applying'
+        self.store.state['labs'] = [l for l in self.store.state['labs'] if l['id'] != 'lab1']
+        self.store.save()
+        again = RestoreService(self.store, self.runner, self.git, connector=fake_connect)
+        again.retry_interval = again.recovery_grace = 0
+        self.assertEqual(again.unchecked, [(job['id'], 'PTX1')])
+        again.rechecks[job['id']] = 1
+        with patch('app.restore.junos.apply_candidate') as apply, patch('app.restore.junos.confirm') as confirm, \
+                patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            again._recheck_all([(job['id'], 'PTX1')])
+        result = again.get_job(job['id'])
+        self.assertEqual(result['targets'][0]['status'], 'uncertain')
+        self.assertIn('could not check the device', result['targets'][0]['message'])
+        self.assertEqual(result['status'], 'needs_attention')
+        apply.assert_not_called(); confirm.assert_not_called()
 
     def test_a_shutdown_inside_the_undo_window_leaves_the_node_in_flight_for_the_restart_recheck(self):
         self.svc.retry_interval, self.svc.recovery_grace = 0, 3600

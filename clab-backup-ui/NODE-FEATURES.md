@@ -67,7 +67,12 @@ device is the short name frozen with that backup, and the time is when the devic
 captured, in UTC, never the download time. **Download all (ZIP)** is
 `<lab>_<YYYY-MM-DD>_<HH-mm>.zip` (the job's start, UTC) and holds the same file names and a
 manifest. Characters Windows cannot store are replaced, and two names that differ only by
-case get a number. The files kept on the VM use different, stable internal names.
+case get a number. The files kept on the VM use different, stable internal names. The manager
+keeps only the newest 300 backup and login-test job records per lab (a busy one, or one a
+pending Git save or restore still needs, survives longer); once a record is dropped it can no
+longer be downloaded, chosen as a Git save's capture or a restore source, used as a Save-progress
+baseline, or shown as a node's last backup. Its configuration files are not deleted: they stay
+under the manager's own data directory (`backups/<lab>/latest` and `backups/<lab>/history/<job>`).
 
 ## Browser terminal behaviour
 

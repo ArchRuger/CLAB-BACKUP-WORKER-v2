@@ -4,6 +4,34 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.42
+
+**Technical audit, part 4: backend and state debt** ([docs/technical-audit/AUDIT.md](technical-audit/AUDIT.md), findings
+A-001, B-001 to B-006, T-003 and the risk review's items RR-201 to RR-207).
+
+- **Job lists are bounded.** Backup and login jobs are kept per lab, the newest 300, and Git saves and restore jobs
+  the newest 200 each, mirroring the existing cap on operations; a queued or running job, a pending save (and the
+  backup capture it still references), a busy or interrupted restore (and its pre- and post-restore backups) and
+  the last uploaded save of each save location are never dropped. A state saved before this release is trimmed at the
+  next append to each list, not at load, and the backup files on disk are never touched. A record that leaves the
+  list can no longer be downloaded, chosen as a restore source, used as a Save-progress baseline or shown as a node's
+  last backup ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)). `/api/state` no longer slices any list on read
+  (the read window could hide a protected older entry), and finished restore jobs no longer keep their candidate
+  configuration text in the state (200 restores of four devices held tens of megabytes).
+- **Operation output is redacted before it is cut.** The streamed output of a lab operation had stored secrets
+  replaced only after the 512 KiB window was trimmed, so a VM or device password cut by the window could leave a
+  fragment in `/api/operations/{id}` and the saved record (the audit reproduced 48 of 49 characters). Secrets are now
+  replaced as each chunk arrives, with a carry-over that holds back only a tail that could still become a secret,
+  so live lines are not delayed; a full window starts at a whole line; the final pass on the whole buffer stays.
+- **Backups cannot hang on Git and do not leave a lock behind.** The post-backup `git` commands share a 120 s deadline
+  like the Ansible run; on a timeout the job ends with its files saved and the history step marked failed, and a
+  stale `index.lock` or `config.lock` the killed process left is removed so the next backup's history step works.
+- **Runner shutdown joins its scheduler thread** like the discovery and readiness monitors; the end of a lab
+  operation reads the store under its lock with a default; two late imports moved to module level (the third,
+  `runner.py` → `lab_operations`, guards a real cycle through `topology.py` and stays); the audit log's request arrow
+  is plain ASCII (`->`) instead of mojibake; the restart-recheck branch for a lab or candidate that disappeared is now
+  covered by tests (it already behaved correctly).
+
 ## Changes in 1.30.41
 
 **Technical audit, part 3: deployment and dependency debt** ([docs/technical-audit/AUDIT.md](technical-audit/AUDIT.md),

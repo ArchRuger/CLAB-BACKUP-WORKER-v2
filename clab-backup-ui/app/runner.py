@@ -19,6 +19,17 @@ from .discovery import automatic_ready, node_available
 from .downloads import short_name
 
 APP = Path(__file__).parent
+# Bookkeeping cap on 'jobs' (every backup and login-test run), mirroring the one lab_operations.py
+# already keeps on 'operations', but per lab_id: a single lab's schedule (a 1-minute interval reaches
+# 500 jobs in about 8 hours) must never evict every *other* lab's history along with its own. The
+# stored files a job's downloads point at are untouched; only the job record itself is dropped, and
+# never one still queued or running, nor one a pending Git save or a busy/interrupted restore still
+# needs to find by id (see protected_job_ids).
+JOB_CAP = 300
+# The post-backup local git commands (below, in _execute) get the same bounded deadline as the
+# ansible-playbook run a few lines above them; a stuck git process must not stall the one-worker
+# backup pipeline forever.
+GIT_TIMEOUT = 120
 
 def now():
     return datetime.now(timezone.utc).isoformat()
@@ -139,17 +150,63 @@ def job_environment(work, event):
             'ANSIBLE_HOST_KEY_CHECKING':'False','ANSIBLE_PERSISTENT_LOG_MESSAGES':'False',
             'ANSIBLE_DEBUG':'False','ANSIBLE_VERBOSITY':'0'}
 
+def trim_jobs(jobs, cap, protected, newest_first):
+    """Cap one globally-bounded stored job list (git_progress.py 'git_jobs', restore.py
+    'restore_jobs') at its newest `cap` entries without ever dropping one `protected` calls true
+    for (pending/in-flight work that must survive to be found again). `newest_first` matches how
+    the caller stores (and reads) the list: True when the newest entry is inserted at index 0,
+    False when it is appended at the end (both callers append). Entries kept only for being
+    protected keep their original relative order."""
+    if len(jobs)<=cap: return jobs
+    newest,older=(jobs[:cap],jobs[cap:]) if newest_first else (jobs[-cap:],jobs[:-cap])
+    survivors=[j for j in older if protected(j)]
+    return newest+survivors if newest_first else survivors+newest
+
+def trim_jobs_per_lab(jobs, cap, protected):
+    """Cap 'jobs' (stored newest-first, one flat list shared by every lab) at its newest `cap`
+    entries *per lab_id*, so one lab's own history never evicts another lab's, plus every entry
+    `protected` calls true for regardless of age. Original (newest-first) order is preserved."""
+    seen={}
+    result=[]
+    for job in jobs:
+        lab_id=job.get('lab_id')
+        seen[lab_id]=seen.get(lab_id,0)+1
+        if seen[lab_id]<=cap or protected(job): result.append(job)
+    return result
+
+def protected_job_ids(state):
+    """Job ids that 'jobs' must keep findable even past its cap, because something outside
+    'jobs' still looks one up by id: a Git save job_pending() calls pending (its capture is
+    compared and re-read on every retry, by backup_job_id: losing it makes every future retry
+    fail with "the original capture is unavailable", forever); a restore job that is still busy
+    or was left 'interrupted' by a restart (its pre/post safety backups, read back by
+    pre_backup_job_id on the restart recheck path). Both imports are late (inside the function,
+    not at module level): git_progress.py and lab_operations.py (through topology.py) each import
+    this module at their own top level, so a top-level import here of either would be a real cycle,
+    same as submit()'s existing late import of RESTORE_BUSY below."""
+    from .git_progress import job_pending
+    from .lab_operations import RESTORE_BUSY
+    ids=set()
+    for j in state.get('git_jobs',[]):
+        if job_pending(j) and j.get('backup_job_id'): ids.add(j['backup_job_id'])
+    for j in state.get('restore_jobs',[]):
+        if j.get('status') in RESTORE_BUSY or j.get('status')=='interrupted':
+            ids.update(j[k] for k in ('pre_backup_job_id','post_backup_job_id') if j.get(k))
+    return ids
+
 class Runner:
     def __init__(self, store):
         self.store=store
         self.pool=ThreadPoolExecutor(max_workers=1)
         self.stopping=threading.Event()
-        self.scheduler=threading.Thread(target=self.tick,daemon=True)
+        self.scheduler=None
     def start(self):
+        self.scheduler=threading.Thread(target=self.tick,daemon=True)
         self.scheduler.start()
     def close(self):
         self.stopping.set()
         self.pool.shutdown(wait=False,cancel_futures=True)
+        if self.scheduler: self.scheduler.join(timeout=2)
     def submit(self, lab_id, operation='backup', source='manual', node_names=None, progress_id=None, progress_context=None):
         from .lab_operations import operation_busy, RESTORE_BUSY
         with self.store.lock:
@@ -185,7 +242,12 @@ class Runner:
             if progress_id:
                 job.update(progress_id=progress_id, progress_context=copy.deepcopy(progress_context or {}))
             self.store.state['jobs'].insert(0,job)
-            # History records are retained alongside snapshots; no automatic deletion.
+            # Backup/history files on disk are retained regardless; only this bookkeeping record is
+            # capped, per lab (never one still queued/running, or one a pending Git save or a busy/
+            # interrupted restore still needs to find by id).
+            still_needed=protected_job_ids(self.store.state)
+            self.store.state['jobs']=trim_jobs_per_lab(self.store.state['jobs'],JOB_CAP,
+                lambda j:j['status'] in ('queued','running') or j['id'] in still_needed)
             old_next_run = lab.get('next_run')
             if node_names is None:
                 lab['next_run']=time.time()+lab['interval']*60 if lab['interval'] else None
@@ -370,7 +432,7 @@ class Runner:
                         log('git.start','Recording successful configurations in Git')
                         latest=root/'latest'
                         def git(*args):
-                            return subprocess.run(['git','-C',str(latest),*args],check=True,capture_output=True,text=True)
+                            return subprocess.run(['git','-C',str(latest),*args],check=True,capture_output=True,text=True,timeout=GIT_TIMEOUT)
                         if not (latest/'.git').exists(): git('init','-q')
                         git('config','user.email','backup@worker.local'); git('config','user.name','NOS Backup')
                         git('add','--all')
@@ -378,6 +440,19 @@ class Runner:
                             git('commit','-q','-m',f'Backup {job_id}')
                             log('git.commit','Configuration changes committed')
                         else: log('git.unchanged','Configurations unchanged; no commit needed')
+                    except subprocess.TimeoutExpired as exc:
+                        log('git.diagnostic',safe_error(getattr(exc,'stderr','') or str(exc)),'error')
+                        # subprocess.run(timeout=...) has already killed and reaped the git process by
+                        # the time it raises this, and the runner's single worker is this repository's
+                        # only writer, so a lock it left behind is safe to clear now: otherwise every
+                        # later backup of this lab fails to commit ("Unable to create '...index.lock'").
+                        cleared=[name for name in ('index.lock','config.lock') if (latest/'.git'/name).exists()]
+                        for name in cleared:
+                            try: (latest/'.git'/name).unlink()
+                            except OSError: pass
+                        git_error='Files saved, but the Git history step timed out'+(
+                            '; cleared a stale '+' and '.join(cleared)+' left by it' if cleared else '')
+                        log('git.failed',git_error,'error')
                     except (OSError,subprocess.SubprocessError) as exc:
                         log('git.diagnostic',safe_error(getattr(exc,'stderr','') or str(exc)),'error')
                         git_error='Files saved, but Git commit failed'

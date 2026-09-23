@@ -85,6 +85,16 @@ class LoggingTests(unittest.TestCase):
         self.assertNotIn('login-sensitive',rendered);self.assertNotIn('enable-sensitive',rendered)
         self.assertNotIn('set system host-name',rendered)
         self.assertTrue(any(e['node']=='arista_ceos' and e['level']=='error' for e in logs))
+    def test_api_request_log_is_plain_ascii_with_an_arrow(self):
+        # A-001: the audit-log arrow must be a plain '->', never the mojibake it once was.
+        r=self.client.post('/api/labs/lab/profiles',headers=self.auth,
+                           data=dict(label='Fixture',platform='arista_ceos',username='admin',password='login-sensitive'))
+        self.assertEqual(r.status_code,200,r.text)
+        events=[e for e in self.store.events() if e['action']=='api.request']
+        self.assertTrue(events)
+        for e in events:
+            self.assertTrue(all(ord(c)<128 for c in e['message']),e['message'])
+            self.assertIn('->',e['message'])
     def test_empty_and_cli_error_outputs_never_replace_backups(self):
         for kind in PLATFORMS:
             for value in ('','% Invalid input','error: configuration database locked','System is not yet ready...',None):

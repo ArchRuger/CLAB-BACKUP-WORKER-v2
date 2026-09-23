@@ -1,3 +1,16 @@
+# Technical audit, part 4: backend and state — 1.30.42
+
+Read `docs/technical-audit/PICKUP.md` first. Preserve: (1) list bounds are enforced at write time only:
+`runner.trim_jobs_per_lab` (300 per lab) with `protected_job_ids(state)` (queued/running, captures of pending saves,
+backups of busy or interrupted restores), `git_progress._append_git_job` (200; pending saves and the newest pushed
+entry per binding digest kept), `restore._append_restore_job` (200; `RESTORE_BUSY` and `interrupted` kept); never
+reintroduce a read slice in `/api/state`, and `_finalize()` drops `_candidates`. (2) `lab_operations.OutputWindow`
+is the one path for streamed operation output: secrets replaced per chunk with the longest proper-prefix carry-over,
+only redacted text enters the 512 KiB window, a full window starts at a whole line, `scrub()` still runs on the whole
+buffer at the end; keep the fuzz test that any chunking and cut equals redacting the whole output first. (3) The
+git timeout branch in `runner.py` removes `index.lock`/`config.lock` (single writer). (4) `runner.py`'s late import
+of `lab_operations` guards a real cycle (`runner → lab_operations → topology → runner`); do not move it.
+
 # Technical audit, part 3: deployment and dependencies — 1.30.41
 
 Read `docs/technical-audit/PICKUP.md` first. Preserve: (1) `clab-backup-ui/lab-builder/package.json` carries an
