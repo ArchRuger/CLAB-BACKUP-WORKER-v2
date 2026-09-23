@@ -1,0 +1,473 @@
+{
+ "build": {
+  "image": "clab-backup:1.30.37 sha256:eb1bf9b0dd438e61fee52b53c8bbec23fa06e8b8664dd97f5608c106b9cd8f48",
+  "container_started": "2026-09-23T02:27:12.611969658Z",
+  "git_head": "96b72d7e9259",
+  "git_dirty_files": 1
+ },
+ "victim": "xrv9k",
+ "steps": [
+  {
+   "utc": "03:01:31",
+   "step": "all four drifted",
+   "active": {
+    "ceos": "B",
+    "cjunosevolved": "B",
+    "vjunos-switch": "B",
+    "xrv9k": "B"
+   }
+  },
+  {
+   "utc": "03:01:40",
+   "step": "victim reached stage 'backing_up'; arming a foreign timed change on it",
+   "job": "a07d63689a5a499b9ddff4334c8e0eea"
+  },
+  {
+   "utc": "03:01:45",
+   "step": "foreign `commit confirmed 120` armed on xrv9k; that session stays open and never confirms"
+  },
+  {
+   "utc": "03:02:14",
+   "step": "job ended",
+   "status": "partial",
+   "targets": {
+    "ceos": "verified",
+    "cjunosevolved": "verified",
+    "vjunos-switch": "verified",
+    "xrv9k": "failed"
+   }
+  },
+  {
+   "utc": "03:02:17",
+   "step": "devices after the job",
+   "active": {
+    "ceos": [
+     "B",
+     false
+    ],
+    "cjunosevolved": [
+     "B",
+     false
+    ],
+    "vjunos-switch": [
+     "B",
+     false
+    ],
+    "xrv9k": [
+     "B",
+     true
+    ]
+   }
+  },
+  {
+   "utc": "03:04:16",
+   "step": "after the foreign window",
+   "victim_active": "B",
+   "pending": false
+  },
+  {
+   "utc": "03:04:29",
+   "step": "recovery restore of the failed node alone",
+   "status": "succeeded",
+   "target": "verified"
+  }
+ ],
+ "device_readback_before": {
+  "read_at_utc": "2026-09-23T03:01:29Z",
+  "nodes": {
+   "ceos": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 4,
+    "b_only_markers": 4,
+    "configuration_lines": 76,
+    "pending_confirmation": false,
+    "boot": "PID 1 up 7206 s",
+    "up_seconds": 7206,
+    "own_sessions_left_pending": 0,
+    "active": "B"
+   },
+   "cjunosevolved": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 24,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-23 01:08:29 UTC",
+    "up_seconds": null,
+    "active": "B"
+   },
+   "vjunos-switch": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 27,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-23 01:03:04 UTC",
+    "up_seconds": null,
+    "active": "B"
+   },
+   "xrv9k": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 82,
+    "pending_confirmation": false,
+    "boot": "System uptime is 1 hour 51 minutes",
+    "up_seconds": 6660,
+    "active": "B"
+   }
+  }
+ },
+ "restore": {
+  "source": {
+   "type": "folder",
+   "path": "restore-square/qa-1-30-37/latest"
+  },
+  "timeline": [
+   {
+    "utc": "03:01:40",
+    "job": "backing_up",
+    "targets": {
+     "ceos": "backing_up",
+     "cjunosevolved": "backing_up",
+     "vjunos-switch": "backing_up",
+     "xrv9k": "backing_up"
+    }
+   },
+   {
+    "utc": "03:01:43",
+    "job": "applying",
+    "targets": {
+     "ceos": "applying",
+     "cjunosevolved": "applying",
+     "vjunos-switch": "applying",
+     "xrv9k": "failed"
+    }
+   },
+   {
+    "utc": "03:01:44",
+    "job": "applying",
+    "targets": {
+     "ceos": "confirming",
+     "cjunosevolved": "applying",
+     "vjunos-switch": "applying",
+     "xrv9k": "failed"
+    }
+   },
+   {
+    "utc": "03:01:45",
+    "job": "applying",
+    "targets": {
+     "ceos": "applied",
+     "cjunosevolved": "applying",
+     "vjunos-switch": "applying",
+     "xrv9k": "failed"
+    }
+   },
+   {
+    "utc": "03:01:47",
+    "job": "applying",
+    "targets": {
+     "ceos": "applied",
+     "cjunosevolved": "confirming",
+     "vjunos-switch": "applying",
+     "xrv9k": "failed"
+    }
+   },
+   {
+    "utc": "03:01:48",
+    "job": "applying",
+    "targets": {
+     "ceos": "applied",
+     "cjunosevolved": "applied",
+     "vjunos-switch": "applying",
+     "xrv9k": "failed"
+    }
+   },
+   {
+    "utc": "03:02:09",
+    "job": "applying",
+    "targets": {
+     "ceos": "applied",
+     "cjunosevolved": "applied",
+     "vjunos-switch": "confirming",
+     "xrv9k": "failed"
+    }
+   },
+   {
+    "utc": "03:02:11",
+    "job": "verifying",
+    "targets": {
+     "ceos": "applied",
+     "cjunosevolved": "applied",
+     "vjunos-switch": "applied",
+     "xrv9k": "failed"
+    }
+   },
+   {
+    "utc": "03:02:14",
+    "job": "partial",
+    "targets": {
+     "ceos": "verified",
+     "cjunosevolved": "verified",
+     "vjunos-switch": "verified",
+     "xrv9k": "failed"
+    }
+   }
+  ],
+  "job_status": "partial",
+  "job_message": "3/4 node(s) restored and verified; 1 did not complete.",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "no_op": true,
+    "missing_statements": 0,
+    "extra_statements": 0,
+    "persistence": "saved"
+   },
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "no_op": true,
+    "missing_statements": 0,
+    "extra_statements": 0,
+    "persistence": "saved"
+   },
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "platform": "juniper_vjunosswitch",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "no_op": true,
+    "missing_statements": 0,
+    "extra_statements": 0,
+    "persistence": "saved"
+   },
+   {
+    "name": "clab-restore-square-xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "failed",
+    "message": "Pre-restore backup failed for this node; it was not changed.",
+    "no_op": null,
+    "missing_statements": null,
+    "extra_statements": null,
+    "persistence": null
+   }
+  ]
+ },
+ "job_id": "a07d63689a5a499b9ddff4334c8e0eea",
+ "stages": {
+  "ceos": {
+   "stage": "matched",
+   "timeline": {
+    "queued": 1790132500.4910405,
+    "backing_up": 1790132500.4996471,
+    "backed_up": 1790132503.1154203,
+    "connecting": 1790132503.1234307,
+    "applying": 1790132503.2328362,
+    "armed": 1790132504.3460832,
+    "verifying": 1790132504.3482397,
+    "confirming": 1790132504.6916125,
+    "matched": 1790132505.1791558,
+    "settled": 1790132505.1791558,
+    "checking": 1790132531.2555747,
+    "checked": 1790132534.473093
+   },
+   "worker": "restore-node_0"
+  },
+  "cjunosevolved": {
+   "stage": "matched",
+   "timeline": {
+    "queued": 1790132500.4910414,
+    "backing_up": 1790132500.5015392,
+    "backed_up": 1790132503.1177375,
+    "connecting": 1790132503.125973,
+    "applying": 1790132503.3361313,
+    "armed": 1790132507.1026924,
+    "verifying": 1790132507.1050878,
+    "confirming": 1790132507.728605,
+    "matched": 1790132508.320184,
+    "settled": 1790132508.320184,
+    "checking": 1790132531.2575016,
+    "checked": 1790132534.4757137
+   },
+   "worker": "restore-node_1"
+  },
+  "vjunos-switch": {
+   "stage": "matched",
+   "timeline": {
+    "queued": 1790132500.4910421,
+    "backing_up": 1790132500.5033638,
+    "backed_up": 1790132503.1196568,
+    "connecting": 1790132503.1281314,
+    "applying": 1790132503.2533872,
+    "armed": 1790132529.0413613,
+    "verifying": 1790132529.043697,
+    "confirming": 1790132529.429986,
+    "matched": 1790132531.2505193,
+    "settled": 1790132531.2505193,
+    "checking": 1790132531.2592783,
+    "checked": 1790132534.4778445
+   },
+   "worker": "restore-node_3"
+  },
+  "xrv9k": {
+   "stage": "failed",
+   "timeline": {
+    "queued": 1790132500.4910426,
+    "backing_up": 1790132500.5050728,
+    "failed": 1790132503.130525,
+    "settled": 1790132503.130525
+   },
+   "worker": null
+  }
+ },
+ "foreign_armed_at": 1790132505.220466,
+ "others_overlapped": true,
+ "device_readback_after_job": {
+  "read_at_utc": "2026-09-23T03:02:14Z",
+  "nodes": {
+   "ceos": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 4,
+    "b_only_markers": 4,
+    "configuration_lines": 76,
+    "pending_confirmation": false,
+    "boot": "PID 1 up 7252 s",
+    "up_seconds": 7252,
+    "own_sessions_left_pending": 0,
+    "compared_with_saved": {
+     "saved_file": "ceos.cfg",
+     "saved_statements": 48,
+     "active_statements": 50,
+     "missing": 2,
+     "extra": 4,
+     "tolerated_root_authentication": 0
+    },
+    "active": "B"
+   },
+   "cjunosevolved": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 24,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-23 01:08:29 UTC",
+    "up_seconds": null,
+    "compared_with_saved": {
+     "saved_file": "cjunosevolved.cfg",
+     "saved_statements": 21,
+     "active_statements": 23,
+     "missing": 2,
+     "extra": 3,
+     "tolerated_root_authentication": 1
+    },
+    "active": "B"
+   },
+   "vjunos-switch": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 27,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-23 01:03:04 UTC",
+    "up_seconds": null,
+    "compared_with_saved": {
+     "saved_file": "vjunos-switch.cfg",
+     "saved_statements": 25,
+     "active_statements": 26,
+     "missing": 2,
+     "extra": 3,
+     "tolerated_root_authentication": 0
+    },
+    "active": "B"
+   },
+   "xrv9k": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 85,
+    "pending_confirmation": true,
+    "boot": "System uptime is 1 hour 52 minutes",
+    "up_seconds": 6720,
+    "compared_with_saved": {
+     "saved_file": "xrv9k.cfg",
+     "saved_statements": 51,
+     "active_statements": 55,
+     "missing": 3,
+     "extra": 7,
+     "tolerated_root_authentication": 0
+    },
+    "active": "B"
+   }
+  }
+ },
+ "device_readback_after_foreign_window": {
+  "read_at_utc": "2026-09-23T03:04:15Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 82,
+    "pending_confirmation": false,
+    "boot": "System uptime is 1 hour 54 minutes",
+    "up_seconds": 6840,
+    "active": "B"
+   }
+  }
+ },
+ "recovery": {
+  "job_status": "succeeded",
+  "target_status": "verified",
+  "no_op": true,
+  "device_readback_after": {
+   "read_at_utc": "2026-09-23T03:04:28Z",
+   "nodes": {
+    "xrv9k": {
+     "a_value_present": false,
+     "a_statement_present": false,
+     "b_only_present": 3,
+     "b_only_markers": 3,
+     "configuration_lines": 82,
+     "pending_confirmation": false,
+     "boot": "System uptime is 1 hour 54 minutes",
+     "up_seconds": 6840,
+     "compared_with_saved": {
+      "saved_file": "xrv9k.cfg",
+      "saved_statements": 51,
+      "active_statements": 53,
+      "missing": 3,
+      "extra": 5,
+      "tolerated_root_authentication": 0
+     },
+     "active": "B"
+    }
+   }
+  }
+ },
+ "summary": {
+  "armed_before_victim_connected": true,
+  "three_replaced_and_verified": true,
+  "victim_failed_not_changed": true,
+  "job_partial": true,
+  "devices_agree": false,
+  "foreign_change_left_alone_and_rolled_back_by_itself": true,
+  "recovery_verified": true
+ },
+ "ok": false
+}

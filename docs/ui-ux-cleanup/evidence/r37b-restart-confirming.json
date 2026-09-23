@@ -1,0 +1,221 @@
+{
+ "trigger": "restart-confirming",
+ "node": "vjunos-switch",
+ "minutes": 3,
+ "started_utc": "03:31:48.397",
+ "ssh_blocked": false,
+ "build": {
+  "image": "clab-backup:1.30.37 sha256:eb1bf9b0dd438e61fee52b53c8bbec23fa06e8b8664dd97f5608c106b9cd8f48",
+  "container_started": "2026-09-23T03:31:24.391032304Z",
+  "git_head": "96b72d7e9259",
+  "git_dirty_files": 1
+ },
+ "readback_before": {
+  "a_value_present": false,
+  "a_statement_present": false,
+  "b_only_present": 3,
+  "b_only_markers": 3,
+  "configuration_lines": 27,
+  "pending_confirmation": false,
+  "boot": "System booted: 2026-09-23 01:03:04 UTC",
+  "up_seconds": null,
+  "active": "B"
+ },
+ "submit": {
+  "http": 200,
+  "id": "ce2d4b2ac5a44e63ac169bfdb8dadfa6"
+ },
+ "reached_confirming": true,
+ "reached_confirming_at_rel_s": 27.978556932001084,
+ "restart": {
+  "t": 27.97855825899751,
+  "utc": "03:32:18.729",
+  "returncode": 0,
+  "stdout": "containerlab-node-manager-backup-ui-1",
+  "stderr": ""
+ },
+ "manager_version_after_restart": "1.30.37",
+ "manager_back_at_rel_s": 29.70121417199698,
+ "job_right_after_restart": {
+  "id": "ce2d4b2ac5a44e63ac169bfdb8dadfa6",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T03:31:51.041408+00:00",
+  "finished": "2026-09-23T03:32:19.126976+00:00",
+  "status": "interrupted",
+  "message": "Manager restarted during a restore. It is checking the devices that were being changed; a change it had not confirmed is undone by the device itself.",
+  "source": {
+   "type": "git",
+   "commit": "f12421e615d13adb938906621f0510b46d874283",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T02:45:46.602128+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 3,
+  "pre_backup_job_id": "3f3d50b1530f43d7b70ceee3af5b644d",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "short_name": "vjunos-switch",
+    "platform": "juniper_vjunosswitch",
+    "status": "interrupted",
+    "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now.",
+    "stage": "verifying",
+    "timeline": {
+     "queued": 1790134311.0414186,
+     "backing_up": 1790134311.050427,
+     "backed_up": 1790134314.26413,
+     "connecting": 1790134314.2694857,
+     "applying": 1790134314.3841736,
+     "armed": 1790134337.4804616,
+     "verifying": 1790134337.4833612,
+     "confirming": 1790134338.0192206
+    },
+    "attempts": 1,
+    "worker": "ThreadPoolExecutor-5_0",
+    "diff_sample": [
+     "[edit interfaces ge-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-cjunosevolved\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options]",
+     "+   static {",
+     "+       route 192.0.2.3/32 discard;",
+     "+   }",
+     "[edit]",
+     "-  vlans {",
+     "-      B-ONLY {",
+     "-          vlan-id 777;",
+     "-      }",
+     "-  }",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present"
+   }
+  ],
+  "progress": {
+   "settled": 0,
+   "total": 1
+  },
+  "server_time": 1790134339.2459793
+ },
+ "final_job": {
+  "id": "ce2d4b2ac5a44e63ac169bfdb8dadfa6",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T03:31:51.041408+00:00",
+  "finished": "2026-09-23T03:32:22.532097+00:00",
+  "status": "succeeded",
+  "message": "Checked after a manager restart. All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "f12421e615d13adb938906621f0510b46d874283",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T02:45:46.602128+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 3,
+  "pre_backup_job_id": "3f3d50b1530f43d7b70ceee3af5b644d",
+  "post_backup_job_id": "",
+  "targets": [
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "short_name": "vjunos-switch",
+    "platform": "juniper_vjunosswitch",
+    "status": "verified",
+    "message": "Checked after the manager restart: the saved configuration is active on this device and nothing is waiting for confirmation.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790134311.0414186,
+     "backing_up": 1790134311.050427,
+     "backed_up": 1790134314.26413,
+     "connecting": 1790134314.2694857,
+     "applying": 1790134314.3841736,
+     "armed": 1790134337.4804616,
+     "verifying": 1790134337.4833612,
+     "confirming": 1790134338.0192206,
+     "replaced": 1790134342.5263224,
+     "settled": 1790134342.5263224
+    },
+    "attempts": 1,
+    "worker": "ThreadPoolExecutor-5_0",
+    "diff_sample": [
+     "[edit interfaces ge-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-cjunosevolved\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options]",
+     "+   static {",
+     "+       route 192.0.2.3/32 discard;",
+     "+   }",
+     "[edit]",
+     "-  vlans {",
+     "-      B-ONLY {",
+     "-          vlan-id 777;",
+     "-      }",
+     "-  }",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present",
+    "persistence": "saved"
+   }
+  ],
+  "progress": {
+   "settled": 1,
+   "total": 1
+  },
+  "server_time": 1790134343.2561913
+ },
+ "timeline": [
+  {
+   "t": 29.704956187997595,
+   "utc": "03:32:19.248",
+   "job_status": "interrupted",
+   "target_status": "interrupted",
+   "message": "Restore interrupted while this node was being changed. The manager is checking what is active on it now."
+  },
+  {
+   "t": 33.71328049599833,
+   "utc": "03:32:23.256",
+   "job_status": "succeeded",
+   "target_status": "verified",
+   "message": "Checked after the manager restart: the saved configuration is active on this device and nothing is waiting for confirmation."
+  }
+ ],
+ "finished_utc": "03:32:23.256",
+ "readback_after": {
+  "a_value_present": true,
+  "a_statement_present": true,
+  "b_only_present": 0,
+  "b_only_markers": 3,
+  "configuration_lines": 26,
+  "pending_confirmation": false,
+  "boot": "System booted: 2026-09-23 01:03:04 UTC",
+  "up_seconds": null,
+  "active": "A"
+ },
+ "iptables_clean_at_exit": true
+}

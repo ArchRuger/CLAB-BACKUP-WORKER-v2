@@ -1,0 +1,57 @@
+{
+ "phase": "d1-full",
+ "results": [
+  {
+   "item": "D1: right-click vjunos-switch<->xrv9k, endpoint \"xrv9k\" preselects eth1",
+   "ok": true,
+   "detail": "{'checked': 'eth1', 'endpoints': ['vjunos-switch: ge-0/0/1', 'xrv9k: Gi0/0/0/0']}"
+  },
+  {
+   "item": "D1: capture launch URL matches the session pattern",
+   "ok": true,
+   "detail": "/static/capture-session.html#38e13ed611fb5127eaf5cf178818c662a165e3228a732406cb77cf10b85e1201"
+  },
+  {
+   "item": "D1: capture viewer status at t+3.5s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+7.0s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+10.5s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+14.0s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+17.5s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+21.0s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: ping vjunos-switch -> 10.0.34.1 while capturing",
+   "ok": true,
+   "detail": "10.493 ms\n64 bytes from 10.0.34.1: icmp_seq=8 ttl=255 time=9.942 ms\n64 bytes from 10.0.34.1: icmp_seq=9 ttl=255 time=7.920 ms\n64 bytes from 10.0.34.1: icmp_seq=10 ttl=255 time=7.730 ms\n64 bytes from 10.0.34.1: icmp_seq=11 ttl=255 time=6.884 ms\n64 bytes from 10.0.34.1: icmp_seq=12 ttl=255 time=14.050 ms\n64 bytes from 10.0.34.1: icmp_seq=13 ttl=255 time=8.088 ms\n64 bytes from 10.0.34.1: icmp_seq=14 ttl=255 time=8.982 ms\n\n--- 10.0.34.1 ping statistics ---\n15 packets transmitted, 15 packets received, 0% packet loss\nround-trip min/avg/max/stddev = 6.352/9.272/14.050/2.031 ms\n\nadmin@vjunos-switch> \n"
+  },
+  {
+   "item": "D1: session ended cleanly from the viewer (confirm() accepted, /end returned 2xx)",
+   "ok": true,
+   "detail": "200"
+  }
+ ],
+ "console_errors": [],
+ "page_errors": []
+}

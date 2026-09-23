@@ -1,3 +1,13 @@
+# Setup Script Cleanup Log, part 3 — 1.30.38
+
+Closing release of the stream: read `docs/ui-ux-cleanup/PICKUP.md` (environment, routing, chunks, follow-ups) and the
+1.30.36/1.30.37 sections below. Preserve: `bulk_check_targets` in `node_services.py` skips a node only for a missing
+address or a missing login; the backup flag (`enabled`) never gates a login test (the multitool host has no NOS platform
+and is never backed up, but its login is tested and its CLI opens). The parallel restore default (4 workers) is now
+proven live on the four images (overlap, isolation, foreign change, restart recovery, rollback read-back, sequential
+baseline); keep `RESTORE_NODE_WORKERS` as the only knob and rerun `docs/ui-ux-cleanup/tools/isolation_all_four.py`,
+`failure_harness.py` and `mixed_failure.py` after any change to `restore.py`.
+
 # Setup Script Cleanup Log, part 2 — 1.30.37
 
 Read `docs/ui-ux-cleanup/PICKUP.md` first. Preserve: (1) Helper writes: `create`, `revise` and `delete` in

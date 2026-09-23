@@ -1,0 +1,442 @@
+{
+ "manager_version": "1.30.37",
+ "build": {
+  "image": "clab-backup:1.30.37 sha256:eb1bf9b0dd438e61fee52b53c8bbec23fa06e8b8664dd97f5608c106b9cd8f48",
+  "container_started": "2026-09-23T02:27:12.611969658Z",
+  "git_head": "96b72d7e9259",
+  "git_dirty_files": 1
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "git",
+  "commit": "f12421e615d13adb938906621f0510b46d874283",
+  "path": "restore-square/qa-1-30-37/latest"
+ },
+ "requested": [
+  "clab-restore-square-xrv9k"
+ ],
+ "started_utc": "02:59:40",
+ "device_readback_before": {
+  "read_at_utc": "2026-09-23T02:59:40Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 82,
+    "pending_confirmation": false,
+    "boot": "System uptime is 1 hour 50 minutes",
+    "up_seconds": 6600,
+    "active": "B"
+   }
+  }
+ },
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "git",
+    "commit": "f12421e615d13adb938906621f0510b46d874283",
+    "path": "restore-square/qa-1-30-37/latest",
+    "captured_at": "2026-09-23T02:45:46.602128+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 8,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 14,
+        "old_count": 23,
+        "new_start": 14,
+        "new_count": 26,
+        "lines": [
+         {
+          "type": "context",
+          "old": 14,
+          "new": 14,
+          "text": "interface Loopback0"
+         },
+         {
+          "type": "context",
+          "old": 15,
+          "new": 15,
+          "text": " description A loopback"
+         },
+         {
+          "type": "context",
+          "old": 16,
+          "new": 16,
+          "text": " ipv4 address 10.255.0.4 255.255.255.255"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 17,
+          "text": "interface Loopback777"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 18,
+          "text": " ipv4 address 198.51.100.77 255.255.255.255"
+         },
+         {
+          "type": "context",
+          "old": 17,
+          "new": 19,
+          "text": "interface MgmtEth0/RP0/CPU0/0"
+         },
+         {
+          "type": "context",
+          "old": 18,
+          "new": 20,
+          "text": " description Containerlab management interface"
+         },
+         {
+          "type": "context",
+          "old": 19,
+          "new": 21,
+          "text": " vrf clab-mgmt"
+         },
+         {
+          "type": "context",
+          "old": 20,
+          "new": 22,
+          "text": " ipv4 address 10.0.0.15 255.255.255.0"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 23,
+          "text": " ipv6 address 2001:db8::2/64"
+         },
+         {
+          "type": "context",
+          "old": 22,
+          "new": 24,
+          "text": "interface GigabitEthernet0/0/0/0"
+         },
+         {
+          "type": "del",
+          "old": 23,
+          "new": null,
+          "text": " description A to-vjunos-switch"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 25,
+          "text": " description B changed"
+         },
+         {
+          "type": "context",
+          "old": 24,
+          "new": 26,
+          "text": " ipv4 address 10.0.34.1 255.255.255.254"
+         },
+         {
+          "type": "context",
+          "old": 25,
+          "new": 27,
+          "text": "interface GigabitEthernet0/0/0/1"
+         },
+         {
+          "type": "context",
+          "old": 26,
+          "new": 28,
+          "text": " description A to-ceos"
+         },
+         {
+          "type": "context",
+          "old": 27,
+          "new": 29,
+          "text": " ipv4 address 10.0.41.0 255.255.255.254"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 30,
+          "text": "prefix-set B-ONLY"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 31,
+          "text": "  198.51.100.0/24"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 32,
+          "text": "end-set"
+         },
+         {
+          "type": "context",
+          "old": 28,
+          "new": 33,
+          "text": "prefix-set RESTORE-A"
+         },
+         {
+          "type": "context",
+          "old": 29,
+          "new": 34,
+          "text": "  10.255.0.0/24 le 32"
+         },
+         {
+          "type": "context",
+          "old": 30,
+          "new": 35,
+          "text": "end-set"
+         },
+         {
+          "type": "context",
+          "old": 31,
+          "new": 36,
+          "text": "router static"
+         },
+         {
+          "type": "del",
+          "old": 32,
+          "new": null,
+          "text": " address-family ipv4 unicast"
+         },
+         {
+          "type": "del",
+          "old": 33,
+          "new": null,
+          "text": "  192.0.2.4/32 Null0"
+         },
+         {
+          "type": "context",
+          "old": 34,
+          "new": 37,
+          "text": " vrf clab-mgmt"
+         },
+         {
+          "type": "context",
+          "old": 35,
+          "new": 38,
+          "text": "  address-family ipv4 unicast"
+         },
+         {
+          "type": "context",
+          "old": 36,
+          "new": 39,
+          "text": "   0.0.0.0/0 10.0.0.2"
+         }
+        ]
+       }
+      ],
+      "added": 6,
+      "removed": 3,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    }
+   ],
+   "eligible_count": 1
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "d2550100816e4c38873bd89ae5dbb895"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "02:59:44",
+   "job": "backing_up",
+   "targets": {
+    "xrv9k": "backing_up"
+   }
+  },
+  {
+   "utc": "02:59:47",
+   "job": "applying",
+   "targets": {
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "02:59:52",
+   "job": "applying",
+   "targets": {
+    "xrv9k": "confirming"
+   }
+  },
+  {
+   "utc": "02:59:54",
+   "job": "verifying",
+   "targets": {
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "02:59:56",
+   "job": "succeeded",
+   "targets": {
+    "xrv9k": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "d2550100816e4c38873bd89ae5dbb895",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T02:59:44.395428+00:00",
+  "finished": "2026-09-23T02:59:56.298044+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "f12421e615d13adb938906621f0510b46d874283",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T02:45:46.602128+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 5,
+  "pre_backup_job_id": "9f7931e76ad8432b9d33f5b771e2479a",
+  "post_backup_job_id": "c50157ce2ae24b7d8a1f9518fa02effa",
+  "targets": [
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790132384.3954387,
+     "backing_up": 1790132384.4018397,
+     "backed_up": 1790132386.6108274,
+     "connecting": 1790132386.614915,
+     "applying": 1790132386.8005998,
+     "armed": 1790132392.0693655,
+     "verifying": 1790132392.0713809,
+     "confirming": 1790132392.749335,
+     "replaced": 1790132394.0823238,
+     "settled": 1790132394.0823238,
+     "checking": 1790132394.086573,
+     "checked": 1790132396.2958753
+    },
+    "attempts": 1,
+    "worker": "ThreadPoolExecutor-5_0",
+    "diff_sample": [
+     "Wed Sep 23 02:59:46.651 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "-  interface Loopback777",
+     "-   ipv4 address 198.51.100.77 255.255.255.255",
+     "-  !",
+     "#  interface GigabitEthernet0/0/0/0",
+     "#   description B changed",
+     "#   description A to-vjunos-switch",
+     "#  !",
+     "-  prefix-set B-ONLY",
+     "+  router static",
+     "+   address-family ipv4 unicast",
+     "+    192.0.2.4/32 Null0",
+     "+   !",
+     "+  !",
+     "end"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ],
+  "progress": {
+   "settled": 1,
+   "total": 1
+  },
+  "server_time": 1790132396.5395913
+ },
+ "device_readback_after": {
+  "read_at_utc": "2026-09-23T02:59:56Z",
+  "nodes": {
+   "xrv9k": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 78,
+    "pending_confirmation": false,
+    "boot": "System uptime is 1 hour 50 minutes",
+    "up_seconds": 6600,
+    "compared_with_saved": {
+     "saved_file": "xrv9k.cfg",
+     "saved_statements": 51,
+     "active_statements": 51,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "A"
+   }
+  }
+ },
+ "finished_utc": "02:59:57"
+}

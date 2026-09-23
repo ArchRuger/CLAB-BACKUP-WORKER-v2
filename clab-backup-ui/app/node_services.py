@@ -98,15 +98,14 @@ class NodeServices:
     def bulk_check_targets(self, lab):
         """Split a lab's nodes into (targets, skipped) for ssh-check-all.
 
-        Eligible: enabled, with an address and effective credentials — exactly what
-        the per-node ssh-check needs to attempt a login. Everything else is skipped
-        with the reason a student would find under Devices, not attempted.
+        Eligible: an address and effective credentials — exactly what the per-node
+        ssh-check needs to attempt a login. `enabled` is the backup flag (a Linux host
+        such as the multitool has no NOS platform and is never backed up) and does not
+        decide whether its login can be tested. Everything else is skipped with the
+        reason a student would find under Devices, not attempted.
         """
         targets, skipped = [], []
         for node in lab['nodes']:
-            if not node.get('enabled', True):
-                skipped.append({'name': node['name'], 'reason': 'disabled'})
-                continue
             if not node.get('address'):
                 skipped.append({'name': node['name'], 'reason': 'no address'})
                 continue

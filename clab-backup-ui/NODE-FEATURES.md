@@ -34,8 +34,9 @@ timestamps. The manager collects no host CPU or memory metrics; network telemetr
 **Test logins**, beside the Devices heading on both the topology rail and the Devices
 tab, repeats **Test login** for every device of the lab at once instead of one at a
 time (bounded to 4 SSH sessions together, so it never opens more than that). A device
-is skipped, not attempted, when it is excluded from backups (*disabled*), has no saved
-address (*no address*) or has no login to try (*needs credentials*); the notification
+is skipped, not attempted, when it has no saved address (*no address*) or no login to
+try (*needs credentials*); being excluded from backups (a Linux host such as the
+multitool, which has no NOS platform) does not exclude it from the login test; the notification
 after starting says how many devices were skipped. While it runs the button reads
 *Testing…* and is disabled, and so is the other copy of it; each device being tested
 reads *Testing login…* until it answers. A refresh only ever reports what the device

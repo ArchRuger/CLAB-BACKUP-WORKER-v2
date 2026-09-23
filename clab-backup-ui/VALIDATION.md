@@ -1,3 +1,57 @@
+# Setup Script Cleanup Log, part 3: Test logins eligibility and the 1.30.37 live records — 1.30.38
+
+Prepared on `claude/ui-ux-cleanup` on 2026-09-23 after 1.30.37 (`96b72d7`, CI green on the push; PR #53). One
+application change (`node_services.bulk_check_targets` no longer skips a backup-excluded node), found by the
+independent browser QA of 1.30.37 (`host1` was reported `skipped: disabled` by `ssh-check-all`).
+
+- **Unit and static:** `test_nodes.py` (14; the three claims that pinned the backup flag as a gate rewritten),
+  full `python -m unittest discover` in the venv, `node --test tests/*.js`, `verify-release.py`, `git diff --check`,
+  `check_links.py`: see the records entry for the totals of the committed tree.
+- **Live (after the 1.30.38 rebuild):** `POST /api/labs/<id>/ssh-check-all` on `restore-square` reports
+  `started: 5` and no `disabled` skip; `host1`'s `nos_login.at` advances: in the records entry.
+
+**Live records of 1.30.37** (the build of `96b72d7` from its clean worktree, `/api/state` 1.30.37, helpers 1.30.37,
+`clab-capture-service:1.30.37`; two independent Sonnet QA agents, one operator per resource; reports and evidence
+under `docs/ui-ux-cleanup/evidence/`, prefixes `r37a-` and `r37b-`):
+
+- **Browser pass A** (`browser-1.30.37-a.md`, `check_release_1_30_37_a.py`, 62 PASS / 1 FAIL / 5 INFO, 0 console
+  and 0 page errors): B3 preview ≥ 80% of the viewport at 1920×1080 and 1366×768, full screen at 390×844, viewBox
+  fitted (content bbox inside the svg), refit on resize, Escape closes, no caption for a topology with and without a
+  saved map; D2 control on both surfaces with the tooltip text, "Testing…"/busy pills, `nos_login.at` advancing, a
+  real 409 on a concurrent second click; **the FAIL is the multitool exclusion fixed in this release**; B5: the banner
+  "The last save did not complete." (raised by the other pass's failed save) was hidden with its close control and
+  stayed hidden after a reload; C1–C4 on the real manager: New lab with name and folder only, blank canvas, hidden
+  empty pill, drop zone, YAML panel beside the canvas (stacked at phone width), apply of a two-node topology, parser
+  refusal with the line, Revert, a canvas link reflected in the panel (link drawing at 390×844 not possible: the
+  editor's palette covers the canvas there).
+- **Live pass B** (`live-1.30.37-b.md`, `live_1_30_37_b.py`, `isolation_all_four.py`; all steps PASS, two skipped
+  there and run by the lead below): A1 Junos files saved as `<node>.cfg` + `<node>.jcfg`; E1/E3 a new lab folder
+  `restore-square/qa-1-30-37`, the mandatory label (empty refused), the review with the full destination line, the
+  upload (remote commit `f12421e6…` "Configuration A", tree `…/qa-1-30-37/latest/` with `.cfg`/`.jcfg`/`manifest.json`);
+  drift to B; E1/E4 the second save "Configuration B" with unified diffs per platform (EOS, Junos display set, IOS
+  XR hunks recorded, secrets masked); F1 one `latest/` (no nesting), two distinct labels in the history; E2 no
+  stale dialog after *View configuration backup*; E5/F2 the review from the history and from the folder browser
+  with per-device saved → running diffs; **E6/E7** the real four-node restore from the "Configuration A" commit:
+  all four `verified`, `progress 4/4`, four distinct workers, `max(connecting) 1790132109.51 < min(settled)
+  1790132111.65` (overlap proved), per-device intervals 2.2 / 5.6 / 8.2 / 23.6 s, job 28.9 s (apply window 23.6 s),
+  mid-run screenshot with three devices Replaced while one still validated; read-back `A` on all four and 0 missing /
+  0 extra against the exact commit; isolation (`isolation_all_four.py`, xrv9k cut at `applying`): the other three
+  `verified` while xrv9k `failed` "not changed", job `partial`, iptables rule gone; foreign change
+  (`mixed_failure.py`, armed before the victim connected): victim not changed, foreign change left alone; **D1**
+  capture on `xrv9k: Gi0/0/0/0` (preselected `eth1`) and on the cEOS end (`eth2`) showed the ICMP echo generated
+  over the /31 by `nodecli.py`; lab left at A, mesh healthy, no sessions left.
+- **Lead's runs (same build):** the **sequential baseline** with `RESTORE_NODE_WORKERS=1` (temporary compose override
+  on the manager, removed afterwards): all four `verified`, one worker, no overlap, job 46.6 s / apply window 41.3 s
+  against 28.9 s / 23.6 s with four workers (`r37b-restore-all-four-sequential.json`, `…-2.json`); **restart
+  recovery** (`failure_harness.py restart-confirming --node vjunos-switch`): the manager restarted 28 s in while the
+  node was `confirming`, the job was `interrupted` at start-up and re-checked on the node pool, ending `succeeded` /
+  `verified` "Checked after a manager restart" with read-back `A` (`r37b-restart-confirming.json`); **rollback with
+  read-back** (`armed-cut --node cjunosevolved`): the node ended `rolled_back` (read back as `B`, nothing pending),
+  the iptables rule removed, then recovered to `A` by a normal restore (`r37b-armed-cut-cjunosevolved.json`,
+  `…-recovery.json`); final read-back `A` on all four with 0 missing / 0 extra, `square_check` ok.
+- **Not run:** a lab with ten or more devices for the rail (the rail's scrolling was proven with the five-node lab at
+  1366×600 and by a 12-row unit test); a fresh-VM installer run (only the repair/upgrade path of this VM was run).
+
 # Setup Script Cleanup Log, part 2 — 1.30.37
 
 Prepared on `claude/ui-ux-cleanup` on 2026-09-23 after 1.30.36 (`f47d3b8` + records `aa36ea5`). This entry lists what

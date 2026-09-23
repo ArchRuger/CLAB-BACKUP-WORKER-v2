@@ -44,8 +44,8 @@ not committed). Read this file first, then `REQUIREMENTS.md` (page → requireme
 |---|---|---|---|---|
 | 0 | baseline, cleanup, routing, requirement map | none (no shipped content) | (in 1.30.36) | done |
 | 1 | A2–A7, B1, B2, B4–B7, D1 (setup, onboarding, import, deploy review, notices, multitool, device rail, capture mapping) | 1.30.36 | `f47d3b8` + records commit | done; B3 and a helper must-fix carried to 1.30.37 |
-| 2 | A1, B3, helper hardening, E1–E7, D2 (Junos .cfg, preview size, save labels/destination/diff, restore diff/stages/parallel, Test logins) | 1.30.37 | | in progress |
-| 3 | C1–C4 (lab builder: blank canvas, pill, drop, editable YAML) | 1.30.38 | | built, awaiting release |
+| 2 | A1, B3, helper hardening, E1–E7, D2, C1–C4 (Junos .cfg, preview size, save labels/destination/diff, restore diff/stages/parallel, Test logins, lab builder) | 1.30.37 | `96b72d7` (CI green, PR #53) | done; live records in the 1.30.38 entry |
+| 3 | D2 eligibility fix (backup-excluded hosts are login-tested) + 1.30.37 live records | 1.30.38 | | in progress |
 
 ## Live validation resources (2026-09-23)
 
@@ -57,8 +57,18 @@ not committed). Read this file first, then `REQUIREMENTS.md` (page → requireme
 - Known follow-up outside this stream: `docs/student-quick-start/tools/capture_scenario_b.py` waits for the removed
   read-only View YAML dialog (`#builder-yaml-text`); the guide itself is out of scope here.
 
+## Lab and repository state left (2026-09-23 03:40 UTC)
+
+- `restore-square` deployed, all four NOS nodes at configuration A (read back 0/0 against the "Configuration A"
+  commit), `host1` Ready; bound in the manager to `restore-square/qa-1-30-37` of `~/labs/CLAB-MNGR-DEV-LLM`
+  (remote `pruger-dev/CLAB-MNGR-DEV-LLM`, commits "Configuration A" `f12421e6…` and "Configuration B" pushed by the
+  QA pass). Worktrees `~/projects/clab-manager-1.30.3x` hold the built commits; the manager container was last
+  recreated from the newest worktree's compose file (same project name, so `deploy/recreate-manager.sh` from the main
+  checkout keeps working).
+- Superseded local images were removed after each rebuild; disk stays around 20 G free with the five-node lab running
+  (its writable layers hold about 8 G).
+
 ## Exact next action
 
-Cut 1.30.37 (A1, B3, helper hardening, E1–E7, D2), rebuild from its worktree, run the live restore checks
-(`docs/multi-platform-restore/tools/`, overlap from `timeline`), the save/diff/label live checks, D2/B5 live, then the
-records commit, push and CI; then 1.30.38 for C1–C4.
+Build 1.30.38 from its worktree, run the D2 live recheck (`ssh-check-all` includes `host1`), add the records commit,
+push, check CI, update PR #53's description; then remove the older worktrees. The stream is complete after that.

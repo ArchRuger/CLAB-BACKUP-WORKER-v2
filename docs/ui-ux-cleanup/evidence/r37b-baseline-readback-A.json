@@ -1,0 +1,50 @@
+{
+ "read_at_utc": "2026-09-23T02:29:35Z",
+ "nodes": {
+  "ceos": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 4,
+   "configuration_lines": 74,
+   "pending_confirmation": false,
+   "boot": "PID 1 up 5292 s",
+   "up_seconds": 5292,
+   "own_sessions_left_pending": 0,
+   "active": "A"
+  },
+  "cjunosevolved": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 22,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-23 01:08:29 UTC",
+   "up_seconds": null,
+   "active": "A"
+  },
+  "vjunos-switch": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 26,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-23 01:03:04 UTC",
+   "up_seconds": null,
+   "active": "A"
+  },
+  "xrv9k": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 78,
+   "pending_confirmation": false,
+   "boot": "System uptime is 1 hour 20 minutes",
+   "up_seconds": 4800,
+   "active": "A"
+  }
+ }
+}

@@ -1,0 +1,1254 @@
+{
+ "manager_version": "1.30.37",
+ "build": {
+  "image": "clab-backup:1.30.37 sha256:eb1bf9b0dd438e61fee52b53c8bbec23fa06e8b8664dd97f5608c106b9cd8f48",
+  "container_started": "2026-09-23T02:27:12.611969658Z",
+  "git_head": "96b72d7e9259",
+  "git_dirty_files": 1
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "git",
+  "commit": "f12421e615d13adb938906621f0510b46d874283",
+  "path": "restore-square/qa-1-30-37/latest"
+ },
+ "requested": [
+  "clab-restore-square-ceos",
+  "clab-restore-square-cjunosevolved",
+  "clab-restore-square-vjunos-switch",
+  "clab-restore-square-xrv9k"
+ ],
+ "started_utc": "03:05:20",
+ "device_readback_before": {
+  "read_at_utc": "2026-09-23T03:05:20Z",
+  "nodes": {
+   "ceos": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 4,
+    "b_only_markers": 4,
+    "configuration_lines": 76,
+    "pending_confirmation": false,
+    "boot": "PID 1 up 7437 s",
+    "up_seconds": 7437,
+    "own_sessions_left_pending": 0,
+    "active": "B"
+   },
+   "cjunosevolved": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 24,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-23 01:08:29 UTC",
+    "up_seconds": null,
+    "active": "B"
+   },
+   "vjunos-switch": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 27,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-23 01:03:04 UTC",
+    "up_seconds": null,
+    "active": "B"
+   },
+   "xrv9k": {
+    "a_value_present": false,
+    "a_statement_present": false,
+    "b_only_present": 3,
+    "b_only_markers": 3,
+    "configuration_lines": 82,
+    "pending_confirmation": false,
+    "boot": "System uptime is 1 hour 55 minutes",
+    "up_seconds": 6900,
+    "active": "B"
+   }
+  }
+ },
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "git",
+    "commit": "f12421e615d13adb938906621f0510b46d874283",
+    "path": "restore-square/qa-1-30-37/latest",
+    "captured_at": "2026-09-23T02:45:46.602128+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 6,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 10,
+        "old_count": 12,
+        "new_start": 10,
+        "new_count": 14,
+        "lines": [
+         {
+          "type": "context",
+          "old": 10,
+          "new": 10,
+          "text": "system l1"
+         },
+         {
+          "type": "context",
+          "old": 11,
+          "new": 11,
+          "text": "   unsupported speed action error"
+         },
+         {
+          "type": "context",
+          "old": 12,
+          "new": 12,
+          "text": "   unsupported error-correction action error"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 13,
+          "text": "vlan 777"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 14,
+          "text": "   name B-ONLY"
+         },
+         {
+          "type": "context",
+          "old": 13,
+          "new": 15,
+          "text": "management api gnmi"
+         },
+         {
+          "type": "context",
+          "old": 14,
+          "new": 16,
+          "text": "   transport grpc default"
+         },
+         {
+          "type": "context",
+          "old": 15,
+          "new": 17,
+          "text": "management api netconf"
+         },
+         {
+          "type": "context",
+          "old": 16,
+          "new": 18,
+          "text": "   transport ssh default"
+         },
+         {
+          "type": "context",
+          "old": 17,
+          "new": 19,
+          "text": "interface Ethernet1"
+         },
+         {
+          "type": "del",
+          "old": 18,
+          "new": null,
+          "text": "   description A to-cjunosevolved"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 20,
+          "text": "   description B changed"
+         },
+         {
+          "type": "context",
+          "old": 19,
+          "new": 21,
+          "text": "   no switchport"
+         },
+         {
+          "type": "context",
+          "old": 20,
+          "new": 22,
+          "text": "   ip address 10.0.12.0/31"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 23,
+          "text": "   ip ospf network point-to-point"
+         }
+        ]
+       },
+       {
+        "old_start": 34,
+        "old_count": 9,
+        "new_start": 36,
+        "new_count": 9,
+        "lines": [
+         {
+          "type": "context",
+          "old": 34,
+          "new": 36,
+          "text": "interface Management0"
+         },
+         {
+          "type": "context",
+          "old": 35,
+          "new": 37,
+          "text": "   ip address 172.20.20.101/24"
+         },
+         {
+          "type": "context",
+          "old": 36,
+          "new": 38,
+          "text": "ip routing"
+         },
+         {
+          "type": "del",
+          "old": 37,
+          "new": null,
+          "text": "ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32"
+         },
+         {
+          "type": "context",
+          "old": 38,
+          "new": 39,
+          "text": "ip route 0.0.0.0/0 172.20.20.1"
+         },
+         {
+          "type": "context",
+          "old": 39,
+          "new": 40,
+          "text": "ip route 192.0.2.1/32 Null0"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 41,
+          "text": "ip route 198.51.100.0/24 Null0"
+         },
+         {
+          "type": "context",
+          "old": 40,
+          "new": 42,
+          "text": "router multicast"
+         },
+         {
+          "type": "context",
+          "old": 41,
+          "new": 43,
+          "text": "   ipv4"
+         },
+         {
+          "type": "context",
+          "old": 42,
+          "new": 44,
+          "text": "      software-forwarding kernel"
+         }
+        ]
+       }
+      ],
+      "added": 4,
+      "removed": 2,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 5,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 1,
+        "old_count": 5,
+        "new_start": 1,
+        "new_count": 6,
+        "lines": [
+         {
+          "type": "context",
+          "old": 1,
+          "new": 1,
+          "text": "set version 26.2R1.7-EVO"
+         },
+         {
+          "type": "context",
+          "old": 2,
+          "new": 2,
+          "text": "set system host-name HOSTNAME"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 3,
+          "text": "set system root-authentication [redacted]"
+         },
+         {
+          "type": "context",
+          "old": 3,
+          "new": 4,
+          "text": "set system login user admin uid 500"
+         },
+         {
+          "type": "context",
+          "old": 4,
+          "new": 5,
+          "text": "set system login user admin class superuser"
+         },
+         {
+          "type": "context",
+          "old": 5,
+          "new": 6,
+          "text": "set system login user admin authentication [redacted]"
+         }
+        ]
+       },
+       {
+        "old_start": 7,
+        "old_count": 16,
+        "new_start": 8,
+        "new_count": 17,
+        "lines": [
+         {
+          "type": "context",
+          "old": 7,
+          "new": 8,
+          "text": "set system syslog file messages any notice"
+         },
+         {
+          "type": "context",
+          "old": 8,
+          "new": 9,
+          "text": "set system syslog file messages authorization info"
+         },
+         {
+          "type": "context",
+          "old": 9,
+          "new": 10,
+          "text": "set system services ssh"
+         },
+         {
+          "type": "del",
+          "old": 10,
+          "new": null,
+          "text": "set interfaces et-0/0/0 description \"A to-ceos\""
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 11,
+          "text": "set interfaces et-0/0/0 description \"B changed\""
+         },
+         {
+          "type": "context",
+          "old": 11,
+          "new": 12,
+          "text": "set interfaces et-0/0/0 unit 0 family inet address 10.0.12.1/31"
+         },
+         {
+          "type": "context",
+          "old": 12,
+          "new": 13,
+          "text": "set interfaces et-0/0/1 description \"A to-vjunos-switch\""
+         },
+         {
+          "type": "context",
+          "old": 13,
+          "new": 14,
+          "text": "set interfaces et-0/0/1 unit 0 family inet address 10.0.23.0/31"
+         },
+         {
+          "type": "context",
+          "old": 14,
+          "new": 15,
+          "text": "set interfaces lo0 unit 0 description \"A loopback\""
+         },
+         {
+          "type": "context",
+          "old": 15,
+          "new": 16,
+          "text": "set interfaces lo0 unit 0 family inet address 10.255.0.2/32"
+         },
+         {
+          "type": "context",
+          "old": 16,
+          "new": 17,
+          "text": "set interfaces re0:mgmt-0 unit 0 family inet address 172.20.20.102/24"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 18,
+          "text": "set policy-options prefix-list B-ONLY 198.51.100.0/24"
+         },
+         {
+          "type": "context",
+          "old": 17,
+          "new": 19,
+          "text": "set policy-options prefix-list RESTORE-A 10.255.0.0/24"
+         },
+         {
+          "type": "context",
+          "old": 18,
+          "new": 20,
+          "text": "set routing-options router-id 10.255.0.2"
+         },
+         {
+          "type": "del",
+          "old": 19,
+          "new": null,
+          "text": "set routing-options static route 192.0.2.2/32 discard"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 21,
+          "text": "set routing-options static route 198.51.100.0/24 discard"
+         },
+         {
+          "type": "context",
+          "old": 20,
+          "new": 22,
+          "text": "set protocols ospf area 0.0.0.0 interface et-0/0/0.0 interface-type p2p"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 23,
+          "text": "set protocols ospf area 0.0.0.0 interface et-0/0/1.0 interface-type p2p"
+         },
+         {
+          "type": "context",
+          "old": 22,
+          "new": 24,
+          "text": "set protocols ospf area 0.0.0.0 interface lo0.0 passive"
+         }
+        ]
+       }
+      ],
+      "added": 4,
+      "removed": 2,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 5,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 8,
+        "old_count": 7,
+        "new_start": 8,
+        "new_count": 7,
+        "lines": [
+         {
+          "type": "context",
+          "old": 8,
+          "new": 8,
+          "text": "set system services netconf ssh"
+         },
+         {
+          "type": "context",
+          "old": 9,
+          "new": 9,
+          "text": "set system management-instance"
+         },
+         {
+          "type": "context",
+          "old": 10,
+          "new": 10,
+          "text": "set chassis fpc 0 pic 0 number-of-ports 56"
+         },
+         {
+          "type": "del",
+          "old": 11,
+          "new": null,
+          "text": "set interfaces ge-0/0/0 description \"A to-cjunosevolved\""
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 11,
+          "text": "set interfaces ge-0/0/0 description \"B changed\""
+         },
+         {
+          "type": "context",
+          "old": 12,
+          "new": 12,
+          "text": "set interfaces ge-0/0/0 unit 0 family inet address 10.0.23.1/31"
+         },
+         {
+          "type": "context",
+          "old": 13,
+          "new": 13,
+          "text": "set interfaces ge-0/0/1 description \"A to-xrv9k\""
+         },
+         {
+          "type": "context",
+          "old": 14,
+          "new": 14,
+          "text": "set interfaces ge-0/0/1 unit 0 family inet address 10.0.34.0/31"
+         }
+        ]
+       },
+       {
+        "old_start": 16,
+        "old_count": 11,
+        "new_start": 16,
+        "new_count": 12,
+        "lines": [
+         {
+          "type": "context",
+          "old": 16,
+          "new": 16,
+          "text": "set interfaces fxp0 unit 0 family inet6 address 2001:db8::2/64"
+         },
+         {
+          "type": "context",
+          "old": 17,
+          "new": 17,
+          "text": "set interfaces lo0 unit 0 description \"A loopback\""
+         },
+         {
+          "type": "context",
+          "old": 18,
+          "new": 18,
+          "text": "set interfaces lo0 unit 0 family inet address 10.255.0.3/32"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 19,
+          "text": "set policy-options prefix-list B-ONLY 198.51.100.0/24"
+         },
+         {
+          "type": "context",
+          "old": 19,
+          "new": 20,
+          "text": "set policy-options prefix-list RESTORE-A 10.255.0.0/24"
+         },
+         {
+          "type": "context",
+          "old": 20,
+          "new": 21,
+          "text": "set routing-instances mgmt_junos routing-options rib mgmt_junos.inet6.0 static route ::/0 next-hop 2001:db8::1"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 22,
+          "text": "set routing-instances mgmt_junos routing-options static route 0.0.0.0/0 next-hop 10.0.0.2"
+         },
+         {
+          "type": "context",
+          "old": 22,
+          "new": 23,
+          "text": "set routing-options router-id 10.255.0.3"
+         },
+         {
+          "type": "del",
+          "old": 23,
+          "new": null,
+          "text": "set routing-options static route 192.0.2.3/32 discard"
+         },
+         {
+          "type": "context",
+          "old": 24,
+          "new": 24,
+          "text": "set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 interface-type p2p"
+         },
+         {
+          "type": "context",
+          "old": 25,
+          "new": 25,
+          "text": "set protocols ospf area 0.0.0.0 interface ge-0/0/1.0 interface-type p2p"
+         },
+         {
+          "type": "context",
+          "old": 26,
+          "new": 26,
+          "text": "set protocols ospf area 0.0.0.0 interface lo0.0 passive"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 27,
+          "text": "set vlans B-ONLY vlan-id 777"
+         }
+        ]
+       }
+      ],
+      "added": 3,
+      "removed": 2,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 8,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 14,
+        "old_count": 23,
+        "new_start": 14,
+        "new_count": 26,
+        "lines": [
+         {
+          "type": "context",
+          "old": 14,
+          "new": 14,
+          "text": "interface Loopback0"
+         },
+         {
+          "type": "context",
+          "old": 15,
+          "new": 15,
+          "text": " description A loopback"
+         },
+         {
+          "type": "context",
+          "old": 16,
+          "new": 16,
+          "text": " ipv4 address 10.255.0.4 255.255.255.255"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 17,
+          "text": "interface Loopback777"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 18,
+          "text": " ipv4 address 198.51.100.77 255.255.255.255"
+         },
+         {
+          "type": "context",
+          "old": 17,
+          "new": 19,
+          "text": "interface MgmtEth0/RP0/CPU0/0"
+         },
+         {
+          "type": "context",
+          "old": 18,
+          "new": 20,
+          "text": " description Containerlab management interface"
+         },
+         {
+          "type": "context",
+          "old": 19,
+          "new": 21,
+          "text": " vrf clab-mgmt"
+         },
+         {
+          "type": "context",
+          "old": 20,
+          "new": 22,
+          "text": " ipv4 address 10.0.0.15 255.255.255.0"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 23,
+          "text": " ipv6 address 2001:db8::2/64"
+         },
+         {
+          "type": "context",
+          "old": 22,
+          "new": 24,
+          "text": "interface GigabitEthernet0/0/0/0"
+         },
+         {
+          "type": "del",
+          "old": 23,
+          "new": null,
+          "text": " description A to-vjunos-switch"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 25,
+          "text": " description B changed"
+         },
+         {
+          "type": "context",
+          "old": 24,
+          "new": 26,
+          "text": " ipv4 address 10.0.34.1 255.255.255.254"
+         },
+         {
+          "type": "context",
+          "old": 25,
+          "new": 27,
+          "text": "interface GigabitEthernet0/0/0/1"
+         },
+         {
+          "type": "context",
+          "old": 26,
+          "new": 28,
+          "text": " description A to-ceos"
+         },
+         {
+          "type": "context",
+          "old": 27,
+          "new": 29,
+          "text": " ipv4 address 10.0.41.0 255.255.255.254"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 30,
+          "text": "prefix-set B-ONLY"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 31,
+          "text": "  198.51.100.0/24"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 32,
+          "text": "end-set"
+         },
+         {
+          "type": "context",
+          "old": 28,
+          "new": 33,
+          "text": "prefix-set RESTORE-A"
+         },
+         {
+          "type": "context",
+          "old": 29,
+          "new": 34,
+          "text": "  10.255.0.0/24 le 32"
+         },
+         {
+          "type": "context",
+          "old": 30,
+          "new": 35,
+          "text": "end-set"
+         },
+         {
+          "type": "context",
+          "old": 31,
+          "new": 36,
+          "text": "router static"
+         },
+         {
+          "type": "del",
+          "old": 32,
+          "new": null,
+          "text": " address-family ipv4 unicast"
+         },
+         {
+          "type": "del",
+          "old": 33,
+          "new": null,
+          "text": "  192.0.2.4/32 Null0"
+         },
+         {
+          "type": "context",
+          "old": 34,
+          "new": 37,
+          "text": " vrf clab-mgmt"
+         },
+         {
+          "type": "context",
+          "old": 35,
+          "new": 38,
+          "text": "  address-family ipv4 unicast"
+         },
+         {
+          "type": "context",
+          "old": 36,
+          "new": 39,
+          "text": "   0.0.0.0/0 10.0.0.2"
+         }
+        ]
+       }
+      ],
+      "added": 6,
+      "removed": 3,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    }
+   ],
+   "eligible_count": 4
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "7efba2aa828a4d508e2cc1302fcc2e5c"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "03:05:31",
+   "job": "backing_up",
+   "targets": {
+    "ceos": "backing_up",
+    "cjunosevolved": "backing_up",
+    "vjunos-switch": "backing_up",
+    "xrv9k": "backing_up"
+   }
+  },
+  {
+   "utc": "03:05:35",
+   "job": "applying",
+   "targets": {
+    "ceos": "applying",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "03:05:36",
+   "job": "applying",
+   "targets": {
+    "ceos": "confirming",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "03:05:37",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "03:05:39",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "confirming",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "03:05:41",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "applying",
+    "xrv9k": "confirming"
+   }
+  },
+  {
+   "utc": "03:05:43",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "applying",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "03:06:00",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "confirming",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "03:06:03",
+   "job": "verifying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "applied",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "03:06:06",
+   "job": "succeeded",
+   "targets": {
+    "ceos": "verified",
+    "cjunosevolved": "verified",
+    "vjunos-switch": "verified",
+    "xrv9k": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "7efba2aa828a4d508e2cc1302fcc2e5c",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T03:05:31.245857+00:00",
+  "finished": "2026-09-23T03:06:06.323661+00:00",
+  "status": "succeeded",
+  "message": "All 4 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "f12421e615d13adb938906621f0510b46d874283",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T02:45:46.602128+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 5,
+  "pre_backup_job_id": "37de70bd5567454d971eeb90db75e5b1",
+  "post_backup_job_id": "5c36d5cd6e68424388d2a5839b13e58c",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790132731.2458675,
+     "backing_up": 1790132731.253729,
+     "backed_up": 1790132734.4715273,
+     "connecting": 1790132734.4825342,
+     "applying": 1790132734.5929492,
+     "armed": 1790132735.8175962,
+     "verifying": 1790132735.8201654,
+     "confirming": 1790132736.1799905,
+     "replaced": 1790132736.7138739,
+     "settled": 1790132736.7138739,
+     "checking": 1790132763.094612,
+     "checked": 1790132766.3141136
+    },
+    "attempts": 1,
+    "worker": "restore-node_2",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-d7fa5b9b-session-config",
+     "-vlan 777",
+     "-   name B-ONLY",
+     " !",
+     " interface Ethernet1",
+     "-   description B changed",
+     "+   description A to-cjunosevolved",
+     "+!",
+     "+ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 32",
+     " !",
+     "-ip route 198.51.100.0/24 Null0"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   },
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790132731.2458692,
+     "backing_up": 1790132731.2557652,
+     "backed_up": 1790132734.4741263,
+     "connecting": 1790132734.48529,
+     "applying": 1790132734.669996,
+     "armed": 1790132738.5925398,
+     "verifying": 1790132738.5951273,
+     "confirming": 1790132740.5698256,
+     "replaced": 1790132741.1401613,
+     "settled": 1790132741.1401613,
+     "checking": 1790132763.096859,
+     "checked": 1790132766.3168705
+    },
+    "attempts": 1,
+    "worker": "restore-node_0",
+    "diff_sample": [
+     "[edit interfaces et-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-ceos\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options static]",
+     "+    route 192.0.2.2/32 discard;",
+     "-    route 198.51.100.0/24 discard;",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "synthesized",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   },
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "short_name": "vjunos-switch",
+    "platform": "juniper_vjunosswitch",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790132731.2458699,
+     "backing_up": 1790132731.2577534,
+     "backed_up": 1790132734.4763699,
+     "connecting": 1790132734.4880562,
+     "applying": 1790132734.5976844,
+     "armed": 1790132759.8769546,
+     "verifying": 1790132759.8796377,
+     "confirming": 1790132760.4204376,
+     "replaced": 1790132763.0892055,
+     "settled": 1790132763.0892055,
+     "checking": 1790132763.0989628,
+     "checked": 1790132766.3193698
+    },
+    "attempts": 1,
+    "worker": "restore-node_1",
+    "diff_sample": [
+     "[edit interfaces ge-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-cjunosevolved\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options]",
+     "+   static {",
+     "+       route 192.0.2.3/32 discard;",
+     "+   }",
+     "[edit]",
+     "-  vlans {",
+     "-      B-ONLY {",
+     "-          vlan-id 777;",
+     "-      }",
+     "-  }",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   },
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790132731.2458706,
+     "backing_up": 1790132731.259782,
+     "backed_up": 1790132734.4783463,
+     "connecting": 1790132734.490717,
+     "applying": 1790132734.8646567,
+     "armed": 1790132740.3945804,
+     "verifying": 1790132740.3973978,
+     "confirming": 1790132741.214323,
+     "replaced": 1790132742.658018,
+     "settled": 1790132742.658018,
+     "checking": 1790132763.1010134,
+     "checked": 1790132766.3216414
+    },
+    "attempts": 1,
+    "worker": "restore-node_3",
+    "diff_sample": [
+     "Wed Sep 23 03:05:35.085 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "-  interface Loopback777",
+     "-   ipv4 address 198.51.100.77 255.255.255.255",
+     "-  !",
+     "#  interface GigabitEthernet0/0/0/0",
+     "#   description B changed",
+     "#   description A to-vjunos-switch",
+     "#  !",
+     "-  prefix-set B-ONLY",
+     "+  router static",
+     "+   address-family ipv4 unicast",
+     "+    192.0.2.4/32 Null0",
+     "+   !",
+     "+  !",
+     "end"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ],
+  "progress": {
+   "settled": 4,
+   "total": 4
+  },
+  "server_time": 1790132766.3627856
+ },
+ "device_readback_after": {
+  "read_at_utc": "2026-09-23T03:06:06Z",
+  "nodes": {
+   "ceos": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 4,
+    "configuration_lines": 74,
+    "pending_confirmation": false,
+    "boot": "PID 1 up 7483 s",
+    "up_seconds": 7483,
+    "own_sessions_left_pending": 0,
+    "compared_with_saved": {
+     "saved_file": "ceos.cfg",
+     "saved_statements": 48,
+     "active_statements": 48,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "A"
+   },
+   "cjunosevolved": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 23,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-23 01:08:29 UTC",
+    "up_seconds": null,
+    "compared_with_saved": {
+     "saved_file": "cjunosevolved.cfg",
+     "saved_statements": 21,
+     "active_statements": 22,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 1
+    },
+    "active": "A"
+   },
+   "vjunos-switch": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 26,
+    "pending_confirmation": false,
+    "boot": "System booted: 2026-09-23 01:03:04 UTC",
+    "up_seconds": null,
+    "compared_with_saved": {
+     "saved_file": "vjunos-switch.cfg",
+     "saved_statements": 25,
+     "active_statements": 25,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "A"
+   },
+   "xrv9k": {
+    "a_value_present": true,
+    "a_statement_present": true,
+    "b_only_present": 0,
+    "b_only_markers": 3,
+    "configuration_lines": 78,
+    "pending_confirmation": false,
+    "boot": "System uptime is 1 hour 56 minutes",
+    "up_seconds": 6960,
+    "compared_with_saved": {
+     "saved_file": "xrv9k.cfg",
+     "saved_statements": 51,
+     "active_statements": 51,
+     "missing": 0,
+     "extra": 0,
+     "tolerated_root_authentication": 0
+    },
+    "active": "A"
+   }
+  }
+ },
+ "finished_utc": "03:06:08"
+}

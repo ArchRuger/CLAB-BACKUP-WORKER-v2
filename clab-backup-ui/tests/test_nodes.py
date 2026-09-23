@@ -211,12 +211,13 @@ class NodeTests(unittest.TestCase):
             result = self.post('/api/labs/lab/ssh-check-all', {})
             self.assertEqual(result.status_code, 200, result.text)
             body = result.json()
-            self.assertEqual(body['started'], 6)
+            # 'off' is excluded from backups only; its login is still tested (a Linux host
+            # such as the multitool is never backed up but has a working login).
+            self.assertEqual(body['started'], 7)
             self.assertIn('at', body)
             self.assertEqual(sorted(body['skipped'], key=lambda s: s['name']), [
                 {'name': 'noaddr', 'reason': 'no address'},
                 {'name': 'nocreds', 'reason': 'needs credentials'},
-                {'name': 'off', 'reason': 'disabled'},
             ])
             deadline = time.monotonic() + 2
             while counters['peak'] < 4 and time.monotonic() < deadline:
@@ -231,7 +232,8 @@ class NodeTests(unittest.TestCase):
         for i in range(1, 6):
             self.assertEqual(health[f'n{i}']['status'], 'reachable', f"n6 failing did not stop n{i}")
         self.assertEqual(health['n6']['status'], 'failed')
-        for name in ('off', 'noaddr', 'nocreds'):
+        self.assertEqual(health['off']['status'], 'reachable', 'excluded from backups, but its login is still tested')
+        for name in ('noaddr', 'nocreds'):
             self.assertIsNone(health[name], f'{name} was skipped, never attempted')
         self.assertNotIn('never-log-this-either', self.client.get('/api/logs', headers=self.auth).text)
 
@@ -240,7 +242,7 @@ class NodeTests(unittest.TestCase):
         with patch('app.node_services.connect', side_effect=lambda *a: release.wait(2)):
             first = self.post('/api/labs/lab/ssh-check-all', {})
             self.assertEqual(first.status_code, 200, first.text)
-            self.assertEqual(first.json()['started'], 1, 'only r1 is enabled with an address and credentials')
+            self.assertEqual(first.json()['started'], 3, 'every node with an address and credentials is tested, whatever its backup flag')
             second = self.post('/api/labs/lab/ssh-check-all', {})
             self.assertEqual(second.status_code, 409)
             deadline = time.monotonic() + 2
@@ -261,13 +263,16 @@ class NodeTests(unittest.TestCase):
         self.assertFalse(self.services.checking_all)
 
     def test_ssh_check_all_reports_nothing_started_when_every_node_is_skipped(self):
+        # The backup flag never decides eligibility: only a missing address does here.
         for node in self.lab['nodes']:
             node['enabled'] = False
+            node['address'] = ''
         result = self.post('/api/labs/lab/ssh-check-all', {})
         self.assertEqual(result.status_code, 200, result.text)
         body = result.json()
         self.assertEqual(body['started'], 0)
         self.assertEqual({s['name'] for s in body['skipped']}, {'r1', 'r2', 'linux'})
+        self.assertEqual({s['reason'] for s in body['skipped']}, {'no address'})
         self.assertFalse(self.services.checking_all, 'nothing was started, so the debounce clears immediately')
 
     def test_lab_builder_styles_are_scoped_to_its_document_and_only_its_assets_are_cached(self):

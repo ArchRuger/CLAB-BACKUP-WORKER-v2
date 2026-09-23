@@ -4,6 +4,13 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.38
+
+**Test logins includes hosts that are excluded from backups.** The lab-wide *Test logins* skipped a device whose
+backup flag is off, which is every Linux host such as the network-multitool (no NOS platform, never backed up), although
+its login is known and its CLI opens. Eligibility is now an address and a login only; the guide says so
+([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)). Records of the 1.30.37 live checks are added with this release.
+
 ## Changes in 1.30.37
 
 **Setup Script Cleanup Log, part 2: saves, diffs, restore progress and parallel restore, Test logins, the lab

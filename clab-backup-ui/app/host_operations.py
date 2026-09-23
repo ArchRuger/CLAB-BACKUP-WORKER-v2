@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.30.37'
+VERSION = '1.30.38'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 # The on-demand Grafana of the telemetry stack: deploy/compose.telemetry.yml names the container so
