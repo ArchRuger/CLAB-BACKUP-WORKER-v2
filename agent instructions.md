@@ -1,3 +1,28 @@
+# Setup Script Cleanup Log, part 2 — 1.30.37
+
+Read `docs/ui-ux-cleanup/PICKUP.md` first. Preserve: (1) Helper writes: `create`, `revise` and `delete` in
+`host_operations.py` write only through `place()` / `owned_bytes_any()` / `history_backup()` (directory fd opened
+`O_DIRECTORY|O_NOFOLLOW`, `fchmod` on the open file, `O_NONBLOCK` reads, a history folder the helper owns); the `create`
+digest carries `annotations_hash`; never reintroduce `os.chmod`/`open()` by path in the helper. (2) Git snapshots: Junos
+human file `<label>.cfg` (`snapshot_suffix` in `inventory.py`, read only by `git_progress.captured_snapshot`); internal
+storage keeps `suffix` (`.set`); readers go through `manifest.json`; `snapshot_diff` / `pair_renamed_files` pair an old
+`.set` with a new `.cfg` per node. (3) Saves: `note` is required for `latest`/`checkpoint`/`baseline` (≤120, "Give this
+save a short label."), it is the commit message; `job['destination']` (`repository`, `remote` without credentials,
+`branch`, `path`, `checkout`) is frozen at creation and in `PUBLIC_JOB`; `textdiff.unified()` is the one diff
+producer and `diff-view.js` (`diffMarkup`, `diffFileMarkup`, loaded before `git-progress.js` and `restore.js`) the one
+renderer; `closeDialogsExcept()` runs before every navigation out of a save dialog. (4) Restore: `status` values,
+`IN_FLIGHT`, `_verify` and `_finalize` are unchanged; `stage`, `timeline`, `attempts`, `worker`, `progress` and
+`server_time` are labels beside them; node tasks run on `node_pool` (never `pool`), grouped by `(address, port)`;
+`_HELD` in `restore_iosxr.py` is guarded by `_HELD_LOCK`; `SECRET_WORD` masks every diff line; `mixed_failure.py`
+triggers on the victim's stage. (5) `POST /api/labs/{id}/ssh-check-all` stores results exactly like `ssh-check`
+(`BULK_CHECK_WORKERS` = 4, 409 while any check of the lab runs); `login_state` knows `checking`; never mark a device
+ready without a probe answer. (6) Lab builder: `builderBlank()` is the only starter; `#builder-status` hides when empty;
+`builderDropPair()`/`builderDropOpen()` take file drags only (palette drags must not be intercepted); the adapter's edit-mode
+`attach({applyYaml, getYaml, checkYaml, subscribe})` drives `lab-builder-yaml.js` (`builderYamlPanelInit`); `setYamlContent`
+is sent from that one place, never from the map editor; the Monaco stub stays; a canvas edit reformats YAML text (content
+kept). (7) `docs/student-quick-start/tools/capture_scenario_b.py` still waits for the removed `#builder-yaml-text`; the
+guide is a separate stream.
+
 # Setup Script Cleanup Log, part 1 — 1.30.36
 
 Read `docs/ui-ux-cleanup/PICKUP.md` first (branch, VM state, routing, chunks) and `REQUIREMENTS.md` (PDF page →

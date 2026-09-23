@@ -31,6 +31,7 @@ function mapStateKey(n,lab){
  return {key,ds};
 }
 function renderMapState(){
+ renderRailTest();
  const lab=typeof current==='function'?current():null;if(!lab||!map||typeof map.querySelectorAll!=='function')return 0;
  let updated=0;
  for(const el of map.querySelectorAll('[data-map-node]')){
@@ -45,6 +46,32 @@ function renderMapState(){
  return updated;
 }
 function applyMapStates(){return renderMapState();}
+// "Test logins": a lab-wide SSH login refresh beside the Devices heading — the rail's sticky h2 and
+// the Devices tab heading both carry it (node_services.py POST …/ssh-check-all). It only starts real
+// login tests and never marks a device ready by itself: deviceState()'s 'checking' pill and the
+// existing 4 s poll are what move a device on to Ready once it actually answers, or back to its
+// previous reason when it does not. Both buttons mirror whichever check is really running, derived
+// from the lab's own devices, so a check started from the other button, another browser tab or the
+// automatic monitor's own probe disables them too.
+function railTestButtons(){return ['rail-test-logins','devices-test-logins'].map(id=>$(id)).filter(Boolean);}
+function railTestActive(lab){return (lab&&lab.nodes||[]).some(n=>n.nos_login&&n.nos_login.status==='checking');}
+function renderRailTest(){
+ const active=railTestActive(typeof current==='function'?current():null);
+ for(const button of railTestButtons()){button.disabled=active;button.textContent=active?'Testing…':'Test logins';}
+ return active;
+}
+async function runRailTest(){
+ const lab=typeof current==='function'?current():null;if(!lab||typeof json!=='function')return;
+ for(const button of railTestButtons()){button.disabled=true;button.textContent='Testing…';}
+ try{
+  const result=await json('/labs/'+lab.id+'/ssh-check-all','POST',{});
+  const started=(result&&result.started)||0,skipped=(result&&result.skipped)||[];
+  if(typeof notify==='function')notify(started?`Testing the SSH login of ${mapPlural(started,'device')}…`+(skipped.length?` ${mapPlural(skipped.length,'device')} skipped — see each device for why.`:''):'No device is ready to test right now. Add credentials under Devices first.');
+ }catch(e){if(typeof notify==='function')notify(e.message);}
+ if(typeof refresh==='function')await refresh().catch(()=>{});
+ renderRailTest();
+}
+for(const id of ['rail-test-logins','devices-test-logins'])if($(id))$(id).onclick=runRailTest;
 const nodeMenu=$('node-context-menu');let contextLab='',contextNode=null;
 function closeNodeMenu(restore=false){nodeMenu.hidden=true;if(restore)contextNode?.focus();contextNode=null;}
 function nodeMenuReason(text){return text?`<small>${esc(text)}</small>`:'';}

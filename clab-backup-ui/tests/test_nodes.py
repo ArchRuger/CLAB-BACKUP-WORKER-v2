@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import MagicMock, patch
@@ -177,6 +178,97 @@ class NodeTests(unittest.TestCase):
         self.assertEqual(self.post('/api/labs/lab/ssh-check', {'name': 'r1'}).status_code, 429)
         for client in clients:
             self.services.release(client)
+
+    def test_ssh_check_all_skips_ineligible_nodes_with_a_reason_and_bounds_concurrency(self):
+        # Six eligible nodes plus one of each ineligible reason ssh-check-all reports.
+        self.lab['nodes'] = [
+            {'name': f'n{i}', 'address': f'192.0.2.{i}', 'port': 22, 'platform': 'arista_ceos',
+             'username': 'user', 'password': 'never-log-this', 'profile_id': '', 'enabled': True}
+            for i in range(1, 7)
+        ] + [
+            {'name': 'off', 'address': '192.0.2.20', 'port': 22, 'platform': 'arista_ceos',
+             'username': 'user', 'password': 'never-log-this', 'profile_id': '', 'enabled': False},
+            {'name': 'noaddr', 'address': '', 'port': 22, 'platform': 'arista_ceos',
+             'username': 'user', 'password': 'never-log-this', 'profile_id': '', 'enabled': True},
+            # No platform (and no image): effective_credentials() finds neither a profile, saved
+            # credentials nor a containerlab/image default, so this one is truly "needs credentials".
+            {'name': 'nocreds', 'address': '192.0.2.21', 'port': 22, 'platform': '',
+             'username': '', 'password': '', 'profile_id': '', 'enabled': True},
+        ]
+        lock = threading.Lock(); counters = {'concurrent': 0, 'peak': 0}
+        release = threading.Event()
+
+        def fake_connect(client, node, creds):
+            with lock:
+                counters['concurrent'] += 1; counters['peak'] = max(counters['peak'], counters['concurrent'])
+            release.wait(2)
+            with lock:
+                counters['concurrent'] -= 1
+            if node['name'] == 'n6':
+                raise ValueError('never-log-this-either')
+
+        with patch('app.node_services.connect', side_effect=fake_connect):
+            result = self.post('/api/labs/lab/ssh-check-all', {})
+            self.assertEqual(result.status_code, 200, result.text)
+            body = result.json()
+            self.assertEqual(body['started'], 6)
+            self.assertIn('at', body)
+            self.assertEqual(sorted(body['skipped'], key=lambda s: s['name']), [
+                {'name': 'noaddr', 'reason': 'no address'},
+                {'name': 'nocreds', 'reason': 'needs credentials'},
+                {'name': 'off', 'reason': 'disabled'},
+            ])
+            deadline = time.monotonic() + 2
+            while counters['peak'] < 4 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertEqual(counters['peak'], 4, 'ssh-check-all never opens more than 4 SSH sessions at once')
+            release.set()
+            deadline = time.monotonic() + 2
+            while self.services.checking_all and time.monotonic() < deadline:
+                time.sleep(0.01)
+        self.assertFalse(self.services.checking_all)
+        health = {row['name']: row['ssh'] for row in self.client.get('/api/labs/lab/health', headers=self.auth).json()['nodes']}
+        for i in range(1, 6):
+            self.assertEqual(health[f'n{i}']['status'], 'reachable', f"n6 failing did not stop n{i}")
+        self.assertEqual(health['n6']['status'], 'failed')
+        for name in ('off', 'noaddr', 'nocreds'):
+            self.assertIsNone(health[name], f'{name} was skipped, never attempted')
+        self.assertNotIn('never-log-this-either', self.client.get('/api/logs', headers=self.auth).text)
+
+    def test_ssh_check_all_is_debounced_against_itself_and_against_a_manual_check(self):
+        release = threading.Event()
+        with patch('app.node_services.connect', side_effect=lambda *a: release.wait(2)):
+            first = self.post('/api/labs/lab/ssh-check-all', {})
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(first.json()['started'], 1, 'only r1 is enabled with an address and credentials')
+            second = self.post('/api/labs/lab/ssh-check-all', {})
+            self.assertEqual(second.status_code, 409)
+            deadline = time.monotonic() + 2
+            while not self.services.checking and time.monotonic() < deadline:
+                time.sleep(0.01)
+            manual = self.post('/api/labs/lab/ssh-check', {'name': 'r1'})
+            self.assertEqual(manual.status_code, 409, "a manual check for a node the bulk run is already testing is blocked too")
+            release.set()
+            deadline = time.monotonic() + 2
+            while self.services.checking_all and time.monotonic() < deadline:
+                time.sleep(0.01)
+            # Still patched: a real connect() here would leave a background probe running past teardown.
+            third = self.post('/api/labs/lab/ssh-check-all', {})
+            self.assertEqual(third.status_code, 200, 'the debounce clears once the run finishes')
+            deadline = time.monotonic() + 2
+            while self.services.checking_all and time.monotonic() < deadline:
+                time.sleep(0.01)
+        self.assertFalse(self.services.checking_all)
+
+    def test_ssh_check_all_reports_nothing_started_when_every_node_is_skipped(self):
+        for node in self.lab['nodes']:
+            node['enabled'] = False
+        result = self.post('/api/labs/lab/ssh-check-all', {})
+        self.assertEqual(result.status_code, 200, result.text)
+        body = result.json()
+        self.assertEqual(body['started'], 0)
+        self.assertEqual({s['name'] for s in body['skipped']}, {'r1', 'r2', 'linux'})
+        self.assertFalse(self.services.checking_all, 'nothing was started, so the debounce clears immediately')
 
     def test_lab_builder_styles_are_scoped_to_its_document_and_only_its_assets_are_cached(self):
         builder = self.client.get('/static/lab-builder.html'); policy = builder.headers['content-security-policy']

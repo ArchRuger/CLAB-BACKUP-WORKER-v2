@@ -90,7 +90,7 @@ async function openTelemetrySettings(id=activeId){
 }
 // What each action asks the student before it runs: title, one-sentence effect, confirm label.
 const opReviewCopy={
- deploy:{title:n=>`Start ${n}?`,body:'Creates and starts the devices in this topology. Nothing is deleted; device logins open as the devices boot.',confirm:'Start lab'},
+ deploy:{title:n=>`Start ${n}?`,body:'Creates and starts the devices in this topology as its file describes them, including any hooks, mounts and image pulls. Nothing is deleted; device logins open as the devices boot.',confirm:'Start lab'},
  start:{title:n=>`Start ${n}'s stopped devices?`,body:'Stopped devices start again with their existing configuration.',confirm:'Start devices'},
  stop:{title:()=>'Stop devices?',body:'Devices stop but keep their startup configuration.',confirm:'Stop devices'},
  restart:{title:()=>'Restart devices?',body:'Devices restart from their startup configuration. Open CLI sessions disconnect.',confirm:'Restart devices',danger:true},
@@ -131,10 +131,14 @@ async function opReview(request){
  // Start lab (deploy) is the everyday, non-destructive action: its review shows the command plainly
  // instead of behind a fold, and skips the generic "this is checked again" caption other reviews keep.
  const plain=value.action==='deploy';
+ // create's optional map file (an upload's saved layout) is written next to the topology; named here
+ // so the student sees exactly what lands on the VM, whether or not it replaces one already there.
+ const mapLine=value.action==='create'&&typeof request.options?.annotations==='string'?`<p>Saved map: <code>${esc((value.path||'').split('/').pop()+'.annotations.json')}</code>${warnings.some(w=>/Replaces the existing map file/.test(w))?' — replaces the existing map file (a recovery copy is kept)':' will be written next to the topology'}</p>`:'';
  const commandBlock=`${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}<h4>Command run on the VM</h4><pre class="op-output">${esc((value.steps?.length?value.steps:[value.argv]).filter(a=>a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n')||label)}</pre>${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}`;
  const dialog=opDialog('operation-review',title,`${copy.hideName?'':`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All labs on the VM')}</p>`}
  ${warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
  <p>${esc(body)}</p>
+ ${mapLine}
  ${disruptive&&value.action!=='destroy'?'<p>Configuration changes you have not saved are lost.</p>':''}
  ${opSaveLine(lab,value)}
  ${disruptive?'<p class="op-notice">Open CLI sessions to this lab will disconnect.</p>':''}
@@ -285,25 +289,25 @@ function opBuilderRoot(path,roots){
 function opBuilderUrl(values){return '/static/lab-builder.html#'+new URLSearchParams(Object.fromEntries(Object.entries(values).filter(([,v])=>v)));}
 // On the builder page itself only the fragment changes, which loads nothing: the page has one editor per load.
 function opBuilderOpen(values){if(location.pathname==='/static/lab-builder.html'&&typeof builderGo==='function')builderGo(Object.fromEntries(Object.entries(values).filter(([,v])=>v)));else location.assign(opBuilderUrl(values));}
-// Returning from the lab builder: the dialog the student left (a VM topology file, or an upload that
-// only ever lived in this browser) is remembered here, so the builder's "← My labs" link and the browser
-// Back button — both a normal navigation back to this page — land on that dialog again, not only Home.
-// A direct visit to the builder (the Build card's "Open the lab builder") sets no marker, so it still
-// returns to My labs exactly as before. Consumed once, by this page's own load-time wiring below.
+// Returning from the lab builder: the VM topology file dialog the student left is remembered here, so
+// the builder's "← My labs" link and the browser Back button — both a normal navigation back to this
+// page — land on that dialog again, not only Home. A direct visit to the builder (the Build card's
+// "Open the lab builder") sets no marker, so it still returns to My labs exactly as before. Only a VM
+// file opens "Open in Lab Builder…" today (an upload has no such button, since it has no VM path yet
+// to hand the builder); the marker is 'vm'-only until an upload gains that handoff. Consumed once, by
+// this page's own load-time wiring below.
 const OP_RETURN_KEY='op-return';
 function opRemember(kind,values){try{sessionStorage.setItem(OP_RETURN_KEY,JSON.stringify({kind,...values}));}catch{/* private window or blocked storage: only this convenience is lost */}}
 function opConsumeReturn(){
  let raw=null;try{raw=sessionStorage.getItem(OP_RETURN_KEY);sessionStorage.removeItem(OP_RETURN_KEY);}catch{return null;}
  if(!raw)return null;
  let value;try{value=JSON.parse(raw);}catch{return null;}
- return value&&typeof value==='object'&&['vm','upload'].includes(value.kind)?value:null;
+ return value&&typeof value==='object'&&value.kind==='vm'?value:null;
 }
-// A remembered VM file is reread fresh (so a save made in the builder shows up); a remembered upload
-// puts the same browser text straight back, exactly as it was before the builder was opened.
+// The remembered VM file is reread fresh, so a save made in the builder shows up.
 function opReopenReturn(value){
  if(!value)return;
  if(value.kind==='vm'&&value.path)return opEdit(value.path);
- if(value.kind==='upload'&&typeof value.text==='string')return opEdit('','',value.path||'',{text:value.text,file:value.name||'',annotations:value.annotations||'',mapNotice:value.mapNotice||''});
 }
 function openDeploy(){return opTask(null,()=>opBrowse());}
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open the CLI launcher',`<p>Your browser blocked the new tab. Use this button instead:</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open CLI launcher <span aria-hidden="true">↗</span></a>`);}
@@ -439,9 +443,27 @@ async function opPopular(){
  const dialog=opDialog('op-popular-dialog','Popular labs','<p>Community containerlab labs on GitHub (tagged clab-topo, most-starred first). Downloading and deploying are separate steps you confirm.</p><div class="op-history">'+data.items.map((item,i)=>`<button class="button secondary" data-repo="${i}"><strong>${esc(item.name)}</strong><small>${esc(item.description)}</small></button>`).join('')+'</div>');
  dialog.querySelectorAll('[data-repo]').forEach(b=>b.onclick=()=>{const item=data.items[Number(b.dataset.repo)];opClone(item.url,item.name);});
 }
+// The map alone, sized to the dialog rather than the small fixed box other dialogs use (B3): the
+// caption under it named nothing the student can act on, so the title is the only text. Fitting reuses
+// the Topology tab's own bounding-box routine (measureTopology, topology-render.js — also sizes the
+// device/interface label backgrounds) so a saved map and an unplaced grid both open already fit; a
+// resize while the dialog stays open refits it, and the listener leaves with the dialog.
+function opFitPreview(svg){
+ if(!svg||typeof measureTopology!=='function')return;
+ svg.setAttribute('viewBox',measureTopology(svg).join(' '));
+ svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+}
 function opMapPreview(drawing,name,positioned=false){
- const dialog=opDialog('op-map-preview','Topology preview · '+name,`<svg id="op-preview-map" class="topology-map op-layout-map" role="img" aria-label="Proposed topology"></svg><p>${positioned?'Wiring from the topology file; device positions from its saved map file.':'Wiring from the topology file. Devices sit on a default grid — arrange them later with Edit map.'}</p>`);
- const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing);svg.setAttribute('viewBox',measureTopology(svg).join(' '));return dialog;
+ const dialog=opDialog('op-map-preview','Topology preview · '+name,'<svg id="op-preview-map" class="topology-map op-layout-map" role="img" aria-label="Proposed topology"></svg>');
+ dialog.classList.add('dialog-viewport');
+ const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing);
+ if(dialog._previewResize&&typeof window!=='undefined')window.removeEventListener('resize',dialog._previewResize);
+ const fit=()=>opFitPreview(svg);
+ dialog._previewResize=fit;
+ if(typeof window!=='undefined')window.addEventListener('resize',fit);
+ dialog.addEventListener('close',()=>{if(typeof window!=='undefined')window.removeEventListener('resize',fit);dialog._previewResize=null;},{once:true});
+ if(typeof requestAnimationFrame==='function')requestAnimationFrame(fit);else fit();
+ return dialog;
 }
 // Edit map. A lab whose topology text the manager has opens the full map editor (the lab builder's editor
 // in map mode, map-editor.html): it edits the drawing only and leaves through its own Save / Back. A lab

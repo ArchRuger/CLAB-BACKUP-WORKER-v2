@@ -12,6 +12,9 @@ body.lab-builder{display:flex;flex-direction:column}
 .builder-bar .builder-name{flex:0 1 auto;min-width:6ch;font-weight:600;color:var(--ink);max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* A small window or browser zoom: the name and the status give way, Save to the VM never leaves the window. */
 @media (max-width:1100px){.builder-title{display:none}.builder-bar{gap:var(--space-2);padding:0 var(--space-3)}.builder-bar .button{padding:7px 10px}}
+/* A phone-sized window: the bar wraps onto a second line, so every action (the YAML toggle and Save included)
+   stays on screen instead of being pushed past the right edge. */
+@media (max-width:640px){.builder-bar{height:auto;min-height:52px;flex-wrap:wrap;row-gap:6px;padding-top:8px;padding-bottom:8px}.builder-spacer{display:none}.builder-bar .builder-name{max-width:14ch}.builder-bar .button{padding:6px 9px;font-size:13px}}
 .builder-spacer{flex:1}
 .builder-note{flex:none;margin:0;padding:var(--space-2) var(--space-4);background:var(--warn-soft);color:var(--warn-strong);border-bottom:1px solid var(--line)}
 .builder-note .button{margin-left:var(--space-2);padding:2px 10px;min-height:0}
@@ -19,13 +22,44 @@ body.lab-builder{display:flex;flex-direction:column}
 .lab-builder #root{position:absolute;inset:0;width:auto;height:auto}
 .builder-welcome{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);text-align:center;background:var(--bg);z-index:3}
 .builder-welcome p,.builder-problem p{max-width:60ch;margin:0}
+/* The lab builder's welcome card only (the map editor's #map-welcome keeps the plain card): the whole
+   card is a drop target, so it carries the dashed border (dragging over it is wired in
+   lab-builder-page.js). .builder-drop is only its own content, never overlapping the buttons above it. */
+#builder-welcome{margin:var(--space-4);border:2px dashed var(--line);border-radius:12px}
+.builder-drop{display:flex;flex-direction:column;align-items:center;gap:var(--space-2);margin-top:var(--space-2)}
+.builder-drop small{color:var(--muted);max-width:52ch}
 .builder-welcome[hidden],.builder-problem[hidden],.builder-note[hidden],.builder-hint[hidden]{display:none}
 .builder-problem{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--space-3);padding:var(--space-5);text-align:center;background:rgba(244,246,248,.94);z-index:6}
 .builder-problem #builder-problem-text{font-weight:600;color:var(--ink)}
 /* Shown on an empty canvas only, left of the palette, and never in the way of the pointer. */
 .builder-hint{position:absolute;left:var(--space-5);bottom:var(--space-5);max-width:44ch;margin:0;padding:var(--space-3) var(--space-4);background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--text);pointer-events:none;z-index:2}
 .builder-credit{flex:none;height:22px;margin:0;padding:0 var(--space-4);font-size:12px;line-height:22px;color:var(--muted);background:var(--surface);border-top:1px solid var(--line);z-index:2}
-.builder-yaml{max-height:60vh}
+/* The editable YAML panel (lab-builder-yaml.js). At desktop widths it sits right of the canvas and the editor
+   shrinks to make room (the editor follows its container's size); on a narrow window the canvas keeps the top and
+   the panel takes the lower half. The gutter and the text share every font metric and the top padding, and the
+   text never wraps (wrap="off"), so line N of the gutter is line N of the text. */
+.builder-yaml-panel{position:absolute;top:0;right:0;bottom:0;width:min(44%,560px);display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--line);z-index:4}
+.builder-yaml-panel[hidden]{display:none}
+.builder-stage.yaml-open #root{right:min(44%,560px)}
+.builder-yaml-head{flex:none;display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--line)}
+.builder-yaml-head h2{flex:1;margin:0;font-size:15px;color:var(--ink)}
+.builder-yaml-head .button{padding:5px 12px;min-height:0}
+.builder-yaml-help{flex:none;margin:0;padding:var(--space-2) var(--space-3) 0;font-size:12.5px;color:var(--muted)}
+.builder-yaml-body{flex:1 1 auto;min-height:0;display:flex;margin:var(--space-2) var(--space-3) 0;border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.builder-yaml-gutter,.builder-yaml-editor{margin:0;padding:8px 8px 24px;font:13px/20px var(--mono);tab-size:2;border:0;box-sizing:border-box}
+.builder-yaml-gutter{flex:none;min-width:4ch;overflow:hidden;text-align:right;color:var(--muted);background:var(--surface-2);border-right:1px solid var(--line);user-select:none}
+.builder-yaml-editor{flex:1 1 auto;min-width:0;height:100%;resize:none;white-space:pre;overflow:auto;color:var(--ink);background:var(--surface)}
+.builder-yaml-editor:focus{outline:none}
+.builder-yaml-body:focus-within{outline:2px solid var(--focus-ring);outline-offset:1px}
+.builder-yaml-editor[readonly]{background:var(--surface-2)}
+.builder-yaml-status{flex:none;min-height:20px;margin:0;padding:var(--space-2) var(--space-3);font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.builder-yaml-status.is-error{color:var(--danger-strong);background:var(--danger-soft)}
+.builder-yaml-status.is-warn{color:var(--warn-strong);background:var(--warn-soft)}
+.builder-yaml-status.is-ok{color:var(--ok-strong)}
+@media (max-width:900px){
+ .builder-yaml-panel{top:auto;left:0;width:auto;height:55%;border-left:0;border-top:1px solid var(--line-strong)}
+ .builder-stage.yaml-open #root{right:0;bottom:55%}
+}
 .builder-draft-list .op-session-row{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap}
 .lab-builder dialog{font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}
 /* Editor controls that cannot work in a builder and have no switch in this editor version. Hidden by

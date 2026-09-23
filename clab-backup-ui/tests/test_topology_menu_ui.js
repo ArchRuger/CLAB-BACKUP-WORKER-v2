@@ -13,15 +13,16 @@ function stub(id){
   setPointerCapture(){},getBoundingClientRect(){return {left:0,top:0,right:10,bottom:10,width:10,height:10};},contains(){return false;}};
 }
 function mapNode(name,label){const n=stub('node-'+name);n.dataset={mapNode:name,label};n.title={textContent:''};n.querySelector=sel=>sel==='title'?n.title:null;return n;}
-function harness({lab,drawing,captureAttrs='',busy=false}={}){
+function harness({lab,drawing,captureAttrs='',busy=false,jsonImpl}={}){
  const elements=new Map(),$=id=>{if(!elements.has(id))elements.set(id,stub(id));return elements.get(id);};
  const docListeners={},winListeners={};
  const document={activeElement:null,addEventListener(name,fn){(docListeners[name]=docListeners[name]||[]).push(fn);},querySelector(){return null;},querySelectorAll(){return [];},createElement:()=>stub('a')};
  const window={innerWidth:1366,innerHeight:768,addEventListener(name,fn){winListeners[name]=fn;}};
  const nodeMenu=$('node-context-menu');nodeMenu.hidden=true;nodeMenu.querySelector=()=>({focus(){nodeMenu.focused++;}});
- const calls={openDetails:[],handleNodeAction:0,notify:[],api:[]};
+ const calls={openDetails:[],handleNodeAction:0,notify:[],api:[],json:[],refresh:0};
  const context=vm.createContext({$,esc,document,window,console,URLSearchParams,JSON,activeId:lab?lab.id:'',state:{labs:lab?[lab]:[]},busy:()=>busy,openDetails(n){calls.openDetails.push(n);},handleNodeAction(){calls.handleNodeAction++;},notify(m){calls.notify.push(m);},
-  api:async url=>{calls.api.push(url);return {json:async()=>drawing===undefined?null:drawing};},topologyMarkup:d=>'<g data-nodes="'+d.nodes.length+'"></g>',measureTopology:()=>[0,0,100,50],syncProxies(){calls.synced=(calls.synced||0)+1;},setTimeout(){},closeMenus:()=>false,captureActionAttrs:()=>captureAttrs});
+  api:async url=>{calls.api.push(url);return {json:async()=>drawing===undefined?null:drawing};},topologyMarkup:d=>'<g data-nodes="'+d.nodes.length+'"></g>',measureTopology:()=>[0,0,100,50],syncProxies(){calls.synced=(calls.synced||0)+1;},setTimeout(){},closeMenus:()=>false,captureActionAttrs:()=>captureAttrs,
+  json:async(path,method,data)=>{calls.json.push({path,method,data});return jsonImpl?jsonImpl(path,method,data):{started:0,skipped:[],at:''};},refresh:async()=>{calls.refresh++;}});
  context.current=()=>context.state.labs.find(l=>l.id===context.activeId);
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/topology.js'),'utf8'),context);
@@ -45,7 +46,7 @@ test('the context menu leads with Open CLI, shows the state instead of the addre
  assert.equal(list.length,4);assert.equal(h.nodeMenu.hidden,false);assert.equal(h.nodeMenu.focused,1,'the first enabled item takes focus');
  assert.match(html,/<div class="context-node-name">R2<span class="pill warn">Starting<\/span><\/div>/,'the header carries the state pill');
  assert.doesNotMatch(html,/\d+\.\d+\.\d+\.\d+|:22/,'the management address stays in the device panel');
- assert.match(list[0].attrs,/disabled title="R2 is still starting/);assert.match(list[0].body,/<small>R2 is still starting\. SSH opens automatically when it answers\.<\/small>/);
+ assert.match(list[0].attrs,/disabled title="R2 is still starting/);assert.match(list[0].body,/<small>R2 is still starting\. SSH opens automatically when it answers\. Use Test logins \(above\) or this device&#39;s Test login to check again now\.<\/small>/);
  assert.match(list[0].body,/Open CLI <span class="external" aria-hidden="true">↗<\/span>/);
  assert.match(list[1].attrs,/disabled/);assert.match(list[1].body,/<small>Packet capture isn’t set up on this VM yet — see Tools › Packet capture\.<\/small>/);
  assert.doesNotMatch(list[2].attrs,/disabled/,'a Ready device can be backed up');assert.doesNotMatch(list[2].body,/<small>/);
@@ -96,7 +97,7 @@ test('renderMapState swaps state classes and labels on the drawn devices without
  assert.deepEqual(states,{r1:['state-ready'],r2:['state-starting'],r3:['state-attention'],r4:['state-unavailable'],r5:['state-credentials'],ghost:['state-neutral']});
  assert.equal(map.innerHTML,'<svg-before/>','the markup is never rebuilt for a state change');
  assert.equal(nodes[0].getAttribute('aria-label'),'R1');assert.equal(nodes[0].title.textContent,'R1 — click to open, right-click for more actions');
- assert.equal(nodes[1].getAttribute('aria-label'),'R2 · Starting');assert.equal(nodes[1].title.textContent,'R2 · Starting. R2 is still starting. SSH opens automatically when it answers.');
+ assert.equal(nodes[1].getAttribute('aria-label'),'R2 · Starting');assert.equal(nodes[1].title.textContent,"R2 · Starting. R2 is still starting. SSH opens automatically when it answers. Use Test logins (above) or this device's Test login to check again now.");
  assert.equal(nodes[2].getAttribute('aria-label'),'R3 · Needs attention');
  assert.equal(h.context.renderMapState(),0,'a second pass with the same state changes nothing');
  h.context.state.labs[0].nodes[1].ssh_ready=true;h.context.state.labs[0].nodes[1].nos_login.status='ready';
@@ -161,4 +162,35 @@ test('a successful map import re-renders the map and reports in map words',async
  assert.deepEqual(h.calls.api,['/labs/a/topology','/labs/a/topology'],'the upload and the refresh both target the lab');
  assert.deepEqual(h.calls.notify,['Map imported.']);assert.equal(h.$('map-dialog').open,false);
  assert.equal(h.$('map-status').textContent,'0 devices · 0 links');
+});
+
+test('Test logins mirrors whichever check is really running and never marks a device ready by itself',()=>{
+ const running=lab();running.nodes[1].nos_login={status:'checking'};
+ const h=harness({lab:running});
+ // A node already "checking" (started elsewhere: the other button, another tab, the automatic
+ // monitor) disables both buttons before this browser ever clicks anything.
+ assert.equal(h.context.railTestActive(h.context.state.labs[0]),true);
+ assert.equal(h.context.renderRailTest(),true);
+ for(const id of ['rail-test-logins','devices-test-logins']){assert.equal(h.$(id).disabled,true);assert.equal(h.$(id).textContent,'Testing…');}
+ h.context.state.labs[0].nodes[1].nos_login.status='booting';
+ assert.equal(h.context.renderRailTest(),false);
+ for(const id of ['rail-test-logins','devices-test-logins']){assert.equal(h.$(id).disabled,false);assert.equal(h.$(id).textContent,'Test logins');}
+ // renderMapState (the 4 s poll's entry point) keeps the buttons in step without a click.
+ h.context.state.labs[0].nodes[1].nos_login.status='checking';h.context.renderMapState();
+ assert.equal(h.$('rail-test-logins').disabled,true);
+});
+
+test('Test logins starts the lab-wide refresh, reports what was skipped, and settles once every device answers',async()=>{
+ const h=harness({lab:lab(),jsonImpl:()=>({started:2,skipped:[{name:'r6',reason:'needs credentials'}],at:'2026-09-23T00:00:00Z'})});
+ const pending=h.context.runRailTest();
+ // Optimistic feedback: both buttons already read Testing… before the request settles.
+ assert.equal(h.$('rail-test-logins').disabled,true);assert.equal(h.$('rail-test-logins').textContent,'Testing…');
+ assert.equal(h.$('devices-test-logins').disabled,true);assert.equal(h.$('devices-test-logins').textContent,'Testing…');
+ await pending;
+ assert.equal(h.calls.json.length,1);assert.equal(h.calls.json[0].path,'/labs/a/ssh-check-all');
+ assert.equal(h.calls.json[0].method,'POST');assert.equal(JSON.stringify(h.calls.json[0].data),'{}');
+ assert.equal(h.calls.refresh,1,'the poll refreshes once so the cards pick up whatever already landed');
+ assert.deepEqual(h.calls.notify,['Testing the SSH login of 2 devices… 1 device skipped — see each device for why.']);
+ // No lab: never sends a request.
+ const home=harness({});await home.context.runRailTest();assert.equal(home.calls.json.length,0);
 });

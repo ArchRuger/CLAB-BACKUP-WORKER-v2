@@ -292,7 +292,9 @@ class JunosKindAppTests(unittest.TestCase):
         for row in manifest['files']:
             self.assertEqual(row['format'], 'junos-display-set')
             self.assertIn(row['platform'], KINDS)
-            self.assertEqual(row['path'], row['short_name'] + '.set')
+            # The Git snapshot's human-facing file is `.cfg` (display-set text, matching EOS and
+            # IOS XR there); the internal capture storage extension stays `.set` (asserted above).
+            self.assertEqual(row['path'], row['short_name'] + '.cfg')
             self.assertEqual(files[row['path']], output[row['node']].encode())
             self.assertEqual(base64.b64decode(snapshot['files'][row['path']]), output[row['node']].encode())
 

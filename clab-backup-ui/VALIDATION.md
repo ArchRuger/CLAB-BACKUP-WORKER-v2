@@ -1,3 +1,23 @@
+# Setup Script Cleanup Log, part 2 — 1.30.37
+
+Prepared on `claude/ui-ux-cleanup` on 2026-09-23 after 1.30.36 (`f47d3b8` + records `aa36ea5`). This entry lists what
+was run before the commit; the live evidence of the rebuilt manager (parallel restore, saves and diffs, Test logins,
+the lab builder on the real manager) follows in the records entry added after it.
+
+- **Unit and static (working tree at the commit):** `python -m unittest discover -s tests -t tests` in the venv (total
+  in the records entry), deploy-script suites with the system `python3`, `node --test tests/*.js`, `node --check`,
+  `bash -n deploy/*.sh`, `verify-release.py`, `git diff --check`, `check_links.py`; the editor bundle rebuilt with
+  Node 24 (`node build.mjs`, `node build.mjs --check`: 132 files match).
+- **Reviews (Opus, read-only):** the parallel restore design (`docs/ui-ux-cleanup/design/restore-parallel-design.md`),
+  the E5–E7 diff (items applied: per-node lookups inside the task, secret words in the diff masking, `identical` only
+  on a real match, interrupted targets settled, server-clock durations, `mixed_failure.py` triggered on the target's
+  stage), the helper `create` map-file write (must-fix applied and re-reviewed: the regression tests now reproduce the
+  original bug against `f47d3b8` and pass on the fix; `revise`/`delete` moved to the same pattern).
+- **Fixture browser (real Chromium, fixture manager, before the commit):** the lab builder YAML panel scenario
+  (`docs/ui-ux-cleanup/tools/check_lab_builder_yaml.py`, screenshots `evidence/lab-builder-yaml-*`): 38 of 39 checks
+  PASS at 1366×768 and 390×844 (one skipped at phone width because the editor's own palette covers the canvas);
+  `docs/lab-builder/tools/student_workflow.py` 41/41.
+
 # Setup Script Cleanup Log, part 1 — 1.30.36
 
 Prepared on `claude/ui-ux-cleanup` (from `main` `c0851b7`, 1.30.35) on 2026-09-23 on the development VM

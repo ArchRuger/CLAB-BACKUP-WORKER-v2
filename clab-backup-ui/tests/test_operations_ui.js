@@ -252,8 +252,10 @@ test('the dialog left for the lab builder is remembered and reopened once, on th
  // Built inside the vm context: compared by content (deepEqual sees a cross-realm object as unequal).
  assert.equal(JSON.stringify(value),JSON.stringify({kind:'vm',path:'/etc/containerlab/demo.clab.yaml',name:'demo.clab.yaml'}));
  assert.equal(page.opConsumeReturn(),null,'consumed once: a second read finds nothing, so a later, unrelated load never reopens it');
- page.opRemember('upload',{path:'/srv/containerlab-node-manager/projects/bgp.clab.yaml',name:'bgp.clab.yaml',text:'name: bgp\n',annotations:'',mapNotice:''});
- assert.equal(JSON.stringify(page.opConsumeReturn()),JSON.stringify({kind:'upload',path:'/srv/containerlab-node-manager/projects/bgp.clab.yaml',name:'bgp.clab.yaml',text:'name: bgp\n',annotations:'',mapNotice:''}));
+ // An upload has no "Open in Lab Builder…" button yet (it has no VM path to hand the builder), so a
+ // remembered 'upload' marker is never produced by this page; opConsumeReturn refuses one anyway.
+ store.set('op-return',JSON.stringify({kind:'upload',path:'/srv/containerlab-node-manager/projects/bgp.clab.yaml',name:'bgp.clab.yaml',text:'name: bgp\n'}));
+ assert.equal(page.opConsumeReturn(),null,'an upload marker is not a kind this page reopens');
  for(const bad of ['{not json','null','"just text"',JSON.stringify({kind:'other'})]){store.set('op-return',bad);assert.equal(page.opConsumeReturn(),null,bad);}
  assert.equal(page.opConsumeReturn(),null);
  // A page that never left for the builder (a direct visit, or storage that refuses reads) never reopens anything.
@@ -262,7 +264,7 @@ test('the dialog left for the lab builder is remembered and reopened once, on th
  assert.equal(broken.opConsumeReturn(),null);assert.doesNotThrow(()=>broken.opRemember('vm',{path:'/x'}));
 });
 
-test('reopening a remembered dialog rereads a VM file fresh, and puts an upload\'s text straight back',async()=>{
+test('reopening a remembered dialog rereads a VM file fresh; an upload marker (never produced today) is ignored',async()=>{
  const calls=[];
  const page=vm.createContext({$:()=>null});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),page);
@@ -272,10 +274,9 @@ test('reopening a remembered dialog rereads a VM file fresh, and puts an upload\
  await page.opReopenReturn(null);assert.equal(calls.length,0,'nothing to reopen: opEdit is not called at all');
  await page.opReopenReturn({kind:'vm',path:'/etc/containerlab/demo.clab.yaml',name:'demo.clab.yaml'});
  assert.equal(JSON.stringify(calls[0]),JSON.stringify(['/etc/containerlab/demo.clab.yaml']),'a VM file is reread, not restored from a stale copy');
- await page.opReopenReturn({kind:'upload',path:'/srv/containerlab-node-manager/projects/bgp.clab.yaml',name:'bgp.clab.yaml',text:'name: bgp\n',annotations:'{"nodeAnnotations":[]}',mapNotice:'moved'});
- // The 4th argument (the upload object) is built inside the vm context: compared by content, not by realm.
- assert.equal(JSON.stringify(calls[1]),JSON.stringify(['','','/srv/containerlab-node-manager/projects/bgp.clab.yaml',{text:'name: bgp\n',file:'bgp.clab.yaml',annotations:'{"nodeAnnotations":[]}',mapNotice:'moved'}]));
- await page.opReopenReturn({kind:'vm',path:''});assert.equal(calls.length,2,'an incomplete marker calls nothing');
+ await page.opReopenReturn({kind:'upload',path:'/srv/containerlab-node-manager/projects/bgp.clab.yaml',name:'bgp.clab.yaml',text:'name: bgp\n'});
+ assert.equal(calls.length,1,'an upload marker calls nothing: the upload dialog has no builder handoff to reopen');
+ await page.opReopenReturn({kind:'vm',path:''});assert.equal(calls.length,1,'an incomplete marker calls nothing');
 });
 
 test('the deploy review shows the command directly and drops the trust warning and repeat-check caption that other reviews keep',async()=>{
@@ -304,6 +305,28 @@ test('the deploy review shows the command directly and drops the trust warning a
  assert.match(destroyHtml,/<details><summary>Technical details<\/summary>/,'other reviews still fold the command away');
 });
 
+test('the create review names the map file it will write, and whether it replaces one already there',async()=>{
+ const elements=new Map(),el=()=>({value:'',onclick:null,addEventListener(){},querySelector:()=>({textContent:''}),querySelectorAll:()=>[],hidden:false});
+ const dialogs=[];
+ const previews={
+  fresh:{action:'create',name:'training',path:'/srv/labs/training.clab.yaml',token:'a'.repeat(32),warnings:[],affected:[],argv:[],steps:[],diff:''},
+  replace:{action:'create',name:'training',path:'/srv/labs/training.clab.yaml',token:'b'.repeat(32),warnings:['Replaces the existing map file next to this topology; a recovery copy of it is kept.'],affected:[],argv:[],steps:[],diff:''},
+  none:{action:'create',name:'training',path:'/srv/labs/training.clab.yaml',token:'c'.repeat(32),warnings:[],affected:[],argv:[],steps:[],diff:''},
+ };
+ const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[],operations:[],git_jobs:[]},activeId:'',console,
+  document:{body:{insertAdjacentHTML(){}},querySelectorAll:()=>[],getElementById:()=>null,createElement:()=>el()},
+  location:{pathname:'/'},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},setTimeout:()=>0,clearTimeout(){},notify(){},refresh:async()=>{},current:()=>null,busy:()=>false,
+  json:async(endpoint,method,payload)=>endpoint==='/operations/preview'?previews[payload.name]:{}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],el());const d={id,title,html,open:true,close(){this.open=false;},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};dialogs.push(d);return d;};
+ await c.opReview({action:'create',lab_id:'',name:'fresh',path:'/srv/labs/training.clab.yaml',options:{text:'name: training\n',annotations:'{}'}});
+ assert.match(dialogs.at(-1).html,/Saved map: <code>training\.clab\.yaml\.annotations\.json<\/code> will be written next to the topology/);
+ await c.opReview({action:'create',lab_id:'',name:'replace',path:'/srv/labs/training.clab.yaml',options:{text:'name: training\n',annotations:'{}'}});
+ assert.match(dialogs.at(-1).html,/Saved map: <code>training\.clab\.yaml\.annotations\.json<\/code> — replaces the existing map file \(a recovery copy is kept\)/);
+ await c.opReview({action:'create',lab_id:'',name:'none',path:'/srv/labs/training.clab.yaml',options:{text:'name: training\n'}});
+ assert.doesNotMatch(dialogs.at(-1).html,/Saved map:/,'no annotations option at all: no line about a map file');
+});
+
 test('the operation output opens the moment Start lab is confirmed, does not pop back up once closed on purpose, and a fresh launch or View output still work',async()=>{
  const elements=new Map();
  for(const id of ['op-job-banner','op-job-output','op-job-result'])elements.set(id,{hidden:false,className:'',textContent:'',innerHTML:'',scrollTop:0,scrollHeight:0,clientHeight:0});
@@ -330,4 +353,41 @@ test('the operation output opens the moment Start lab is confirmed, does not pop
  assert.equal(dialogs['operation-output'].open,false,'navigating away closes it');
  c.activeId='lab1';await c.opShowJob('b',{auto:true});
  assert.equal(dialogs['operation-output'].open,false,'still not reopened for that same job once it left');
+});
+
+test('the topology preview drops the caption in both branches, sizes the dialog to the viewport, and fits the map on open',()=>{
+ const elements=new Map();
+ const makeSvg=()=>{const attrs={};return {setAttribute(name,value){attrs[name]=value;},getAttribute:name=>attrs[name]};};
+ elements.set('op-preview-map',makeSvg());
+ const fitCalls=[],resizeListeners=[];
+ const dialogClasses=[];
+ const dialogListeners={};
+ const dialog={classList:{add(cls){dialogClasses.push(cls);}},addEventListener(type,fn){(dialogListeners[type]=dialogListeners[type]||[]).push(fn);},close(){(dialogListeners.close||[]).forEach(fn=>fn());}};
+ const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),
+  topologyMarkup:drawing=>'<g id="topology-scene" data-nodes="'+drawing.nodes.length+'"></g>',
+  measureTopology:svg=>{fitCalls.push(svg);return [10,20,30,40];},
+  window:{addEventListener(type,fn){if(type==='resize')resizeListeners.push(fn);},removeEventListener(type,fn){const i=resizeListeners.indexOf(fn);if(i>=0)resizeListeners.splice(i,1);}},
+  requestAnimationFrame:fn=>fn()});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ let capturedBody='',capturedTitle='';
+ c.opDialog=(id,title,body)=>{capturedBody=body;capturedTitle=title;return dialog;};
+ const returned=c.opMapPreview({nodes:[],links:[],decorations:[]},'demo',true);
+ assert.equal(returned,dialog,'the dialog opDialog built is returned unchanged');
+ assert.equal(capturedTitle,'Topology preview · demo','the title stays, only the caption goes');
+ assert.doesNotMatch(capturedBody,/<p>/,'no caption paragraph — the positioned branch');
+ assert.doesNotMatch(capturedBody,/Wiring from the topology file/);
+ assert.match(capturedBody,/^<svg id="op-preview-map" class="topology-map op-layout-map"/,'the map is the whole body');
+ assert.deepEqual(dialogClasses,['dialog-viewport'],'sized to the viewport, not the dialog default');
+ assert.equal(fitCalls.length,1,'fit runs once on open (via requestAnimationFrame)');
+ assert.equal(fitCalls[0],elements.get('op-preview-map'));
+ assert.equal(elements.get('op-preview-map').getAttribute('viewBox'),'10 20 30 40','the viewBox comes from the reused bounding-box routine');
+ assert.equal(elements.get('op-preview-map').getAttribute('preserveAspectRatio'),'xMidYMid meet');
+ assert.equal(resizeListeners.length,1,'refits on a resize while the dialog stays open');
+ resizeListeners[0]();
+ assert.equal(fitCalls.length,2);
+ dialog.close();
+ assert.equal(resizeListeners.length,0,'the resize listener leaves with the dialog');
+ c.opMapPreview({nodes:[],links:[],decorations:[]},'fresh',false);
+ assert.doesNotMatch(capturedBody,/<p>/,'no caption paragraph — the unpositioned branch either');
+ assert.doesNotMatch(capturedBody,/default grid/);
 });

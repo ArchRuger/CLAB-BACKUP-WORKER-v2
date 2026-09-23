@@ -6,6 +6,7 @@ import json
 import secrets
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlsplit
 
 import paramiko
@@ -14,6 +15,11 @@ from pydantic import BaseModel, Field
 
 from .runner import effective_credentials, now
 from .discovery import node_available
+
+BULK_CHECK_WORKERS = 4     # ssh-check-all never opens more SSH sessions than this at once
+CHECKING_MESSAGE = 'Testing the SSH login…'
+REACHABLE_MESSAGE = 'SSH authentication succeeded'
+FAILED_MESSAGE = 'SSH login failed. Check credentials, address, port, and NOS readiness.'
 
 
 class NodeRequest(BaseModel):
@@ -52,6 +58,8 @@ class NodeServices:
         self.tickets = {}
         self.clients = set()
         self.checking = set()
+        self.checking_all = set()      # lab ids with a lab-wide ssh-check-all in flight
+        self.bulk_pool = ThreadPoolExecutor(max_workers=BULK_CHECK_WORKERS)
         self.closed = False
 
     def close(self):
@@ -60,6 +68,7 @@ class NodeServices:
             self.tickets.clear()
             for client in list(self.clients):
                 client.close()
+        self.bulk_pool.shutdown(wait=False, cancel_futures=True)
 
     def node(self, lab_id, name):
         with self.store.lock:
@@ -85,6 +94,76 @@ class NodeServices:
         client.close()
         with self.lock:
             self.clients.discard(client)
+
+    def bulk_check_targets(self, lab):
+        """Split a lab's nodes into (targets, skipped) for ssh-check-all.
+
+        Eligible: enabled, with an address and effective credentials — exactly what
+        the per-node ssh-check needs to attempt a login. Everything else is skipped
+        with the reason a student would find under Devices, not attempted.
+        """
+        targets, skipped = [], []
+        for node in lab['nodes']:
+            if not node.get('enabled', True):
+                skipped.append({'name': node['name'], 'reason': 'disabled'})
+                continue
+            if not node.get('address'):
+                skipped.append({'name': node['name'], 'reason': 'no address'})
+                continue
+            creds = effective_credentials(lab, node)
+            if not creds.get('username'):
+                skipped.append({'name': node['name'], 'reason': 'needs credentials'})
+                continue
+            targets.append((node['name'], copy.deepcopy(node), copy.deepcopy(creds)))
+        return targets, skipped
+
+    def run_bulk_check(self, lab_id, name, node, creds):
+        """One node's login test from ssh-check-all's bounded pool; stores exactly what
+        the per-node route stores, and never raises (one node's failure never stops the rest)."""
+        key = (lab_id, name)
+        with self.lock:
+            if key in self.checking:
+                return      # a manual Test login is already running for this node
+            self.checking.add(key)
+            self.checks[key] = {'status': 'checking', 'at': now(), 'message': CHECKING_MESSAGE}
+        try:
+            try:
+                client = self.reserve()
+            except HTTPException:
+                result = {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
+            else:
+                try:
+                    connect(client, node, creds)
+                    result = {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
+                except Exception:
+                    result = {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
+                finally:
+                    self.release(client)
+        finally:
+            with self.lock:
+                self.checking.discard(key)
+        with self.lock:
+            self.checks[key] = result
+        self.store.event('ssh.check', result['message'], lab_id=lab_id, node=name)
+
+    def run_bulk_checks(self, lab_id, targets):
+        """Run every target through the bounded pool (never more than BULK_CHECK_WORKERS
+        SSH sessions from this call at once), then clear the lab-wide debounce flag."""
+        futures = []
+        try:
+            for name, node, creds in targets:
+                try:
+                    futures.append(self.bulk_pool.submit(self.run_bulk_check, lab_id, name, node, creds))
+                except RuntimeError:
+                    break   # the pool is closing; the remaining nodes are simply not probed
+            for future in futures:
+                try:
+                    future.result()
+                except Exception:
+                    pass    # one node's probe failing never stops the others
+        finally:
+            with self.lock:
+                self.checking_all.discard(lab_id)
 
     def install(self, app):
         @app.get('/api/labs/{lab_id}/health')
@@ -118,9 +197,9 @@ class NodeServices:
                 self.checking.add(key)
             try:
                 connect(client, node, creds)
-                result = {'status': 'reachable', 'at': now(), 'message': 'SSH authentication succeeded'}
+                result = {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
             except Exception:
-                result = {'status': 'failed', 'at': now(), 'message': 'SSH login failed. Check credentials, address, port, and NOS readiness.'}
+                result = {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
             finally:
                 self.release(client)
                 with self.lock:
@@ -129,6 +208,28 @@ class NodeServices:
                 self.checks[key] = result
             self.store.event('ssh.check', result['message'], lab_id=lab_id, node=data.name)
             return result
+
+        @app.post('/api/labs/{lab_id}/ssh-check-all')
+        def check_all(lab_id: str):
+            with self.store.lock:
+                lab = self.store.lab(lab_id)
+                if not lab:
+                    raise HTTPException(404, 'Lab not found')
+                lab = copy.deepcopy(lab)
+            with self.lock:
+                if lab_id in self.checking_all or any(key[0] == lab_id for key in self.checking):
+                    raise HTTPException(409, 'A login check is already running for this lab.')
+                self.checking_all.add(lab_id)
+            at = now()
+            targets, skipped = self.bulk_check_targets(lab)
+            if not targets:
+                with self.lock:
+                    self.checking_all.discard(lab_id)
+                return {'started': 0, 'skipped': skipped, 'at': at}
+            # Started in the background: the route answers at once, and the browser's
+            # existing 4 s poll picks up each node's result from /api/state as it lands.
+            threading.Thread(target=self.run_bulk_checks, args=(lab_id, targets), daemon=True).start()
+            return {'started': len(targets), 'skipped': skipped, 'at': at}
 
         @app.post('/api/labs/{lab_id}/terminal-ticket')
         def ticket(lab_id: str, data: NodeRequest):

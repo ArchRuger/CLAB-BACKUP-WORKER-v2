@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -222,11 +223,20 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(login_state(lab, item, True, {'status': 'reachable', 'at': 't', 'message': 'ok'}),
                          {'status': 'ready', 'message': 'ok', 'at': 't'})
         self.assertEqual(login_state(lab, item, True, {'status': 'failed', 'at': 't', 'message': 'no'})['status'], 'failed')
+        # 'checking': ssh-check-all (or a manual Test login) is answering right now; never a real
+        # answer by itself, so it must never read as 'ready' or 'unmonitored'.
+        checking = login_state(lab, item, True, {'status': 'checking', 'at': 't', 'message': 'Testing the SSH login…'})
+        self.assertEqual(checking, {'status': 'checking', 'message': 'Testing the SSH login…', 'at': 't'})
         self.assertEqual(summarize([])['status'], 'idle')
         self.assertEqual(summarize([{'status': 'unmonitored'}, {'status': 'unavailable'}])['status'], 'idle')
         self.assertEqual(summarize([{'status': 'ready'}, {'status': 'booting'}])['status'], 'booting')
         self.assertEqual(summarize([{'status': 'ready'}, {'status': 'failed'}]), {'status': 'failed', 'total': 2, 'ready': 1, 'booting': 0, 'failed': 1})
         self.assertEqual(summarize([{'status': 'ready'}, {'status': 'ready'}])['status'], 'ready')
+        # A node being tested counts with 'booting' at the lab level: the total does not shrink
+        # while a refresh is in flight, and one node "checking" alongside a failed node still reads
+        # as 'booting' overall (not 'failed') because it might still turn out ready.
+        self.assertEqual(summarize([{'status': 'ready'}, {'status': 'checking'}]), {'status': 'booting', 'total': 2, 'ready': 1, 'booting': 1, 'failed': 0})
+        self.assertEqual(summarize([{'status': 'checking'}])['status'], 'booting')
 
     def test_image_default_login_reaches_ready_while_a_different_linux_image_still_needs_credentials(self):
         multitool = next(iter(IMAGE_DEFAULT_CREDENTIALS))
@@ -251,6 +261,37 @@ class ReadinessTests(unittest.TestCase):
         after = next(n for n in self.public()['nodes'] if n['name'] == 'clab-demo-host1')
         self.assertEqual(after['nos_login']['status'], 'ready')
         self.assertTrue(after['ssh_ready'])
+
+    def test_ssh_check_all_reflects_through_nos_login_as_checking_then_a_real_answer(self):
+        # A refresh in flight (node_services.py ssh-check-all) shows through the same nos_login and
+        # ssh_ready a deployed lab already uses: 'checking' while it runs, never optimistic, and a
+        # real answer (or a real refusal) once it is done — one node's failure does not stop the other.
+        services = self.app.state.node_services
+        release = threading.Event()
+
+        def fake_connect(client, item, creds):
+            release.wait(2)
+            if item['name'] == 'clab-demo-r2':
+                raise ValueError('nope')
+
+        with patch('app.node_services.connect', side_effect=fake_connect):
+            result = self.client.post('/api/labs/lab/ssh-check-all', json={})
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertEqual(result.json()['started'], 2)
+            keys = [('lab', 'clab-demo-r1'), ('lab', 'clab-demo-r2')]
+            deadline = time.monotonic() + 2
+            while not all(k in services.checking for k in keys) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            during = self.public()
+            self.assertEqual([n['nos_login']['status'] for n in during['nodes']], ['checking', 'checking'])
+            self.assertFalse(any(n['ssh_ready'] for n in during['nodes']), 'a refresh in flight never marks a device ready')
+            release.set()
+            deadline = time.monotonic() + 2
+            while services.checking_all and time.monotonic() < deadline:
+                time.sleep(0.01)
+        after = self.public()
+        self.assertEqual([n['nos_login']['status'] for n in after['nodes']], ['ready', 'failed'])
+        self.assertEqual([n['ssh_ready'] for n in after['nodes']], [True, False])
 
 
 class Stream:

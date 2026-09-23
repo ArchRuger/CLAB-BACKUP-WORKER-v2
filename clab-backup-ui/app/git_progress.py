@@ -24,6 +24,7 @@ from .downloads import component, short_name, stored_path, stored_restore_path
 from .inventory import PLATFORMS
 from .lab_operations import operation_busy, scrub, GIT_BUSY
 from .runner import now
+from .textdiff import unified
 
 PROTOCOL = 'clab-manager-git-v1'
 MAX_PLANNED_FOLDERS = 200
@@ -34,7 +35,15 @@ FORMATS = {'juniper_cjunosevolved': 'junos-display-set', 'juniper_vqfx': 'junos-
            'juniper_vjunosswitch': 'junos-display-set', 'cisco_xrv9k': 'iosxr-running-config',
            'arista_ceos': 'eos-running-config'}
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'message', 'backup_job_id',
-              'commit', 'pushed', 'target', 'checkpoint', 'changed_files', 'snapshot_path', 'note', 'review_before_push', 'reviewed')
+              'commit', 'pushed', 'target', 'checkpoint', 'changed_files', 'snapshot_path', 'note', 'review_before_push',
+              'reviewed', 'destination')
+# A save with a filename that changed between releases (Junos moved its human backup extension from
+# `.set` to `.cfg`, `snapshot_suffix` above) still reads as one changed file to a person, never a
+# removed-plus-added pair. Built from PLATFORMS so a future extension change stays covered without
+# a new constant to remember: every `(old suffix, new suffix)` pair where a platform's storage suffix
+# differs from its Git snapshot suffix.
+SUFFIX_RENAMES = {(p['suffix'], p['snapshot_suffix']) for p in PLATFORMS.values()
+                   if p.get('snapshot_suffix') and p['snapshot_suffix'] != p['suffix']}
 
 
 def digest(value):
@@ -47,6 +56,96 @@ def host_identity(host):
 
 def public_job(job):
     return {k: copy.deepcopy(job[k]) for k in PUBLIC_JOB if k in job}
+
+
+def strip_credentials(url):
+    """A push URL for display: userinfo (`user:pass@` or a bare token before `@`) removed, everything
+    else unchanged. `''` in, `''` out."""
+    return re.sub(r'^(https?://)[^/@]*@', r'\1', str(url or ''))
+
+
+def repository_display_name(repo):
+    """The repository's own name for a person: the remote URL's last path segment without `.git`
+    when a push URL is known (verified at least once), else the VM checkout folder's own name."""
+    push_url = str(repo.get('push_url') or '').rstrip('/')
+    if push_url:
+        leaf = push_url.rsplit('/', 1)[-1]
+        if leaf.endswith('.git'): leaf = leaf[:-4]
+        if leaf: return leaf
+    path = str(repo.get('path') or '').rstrip('/')
+    return (path.rsplit('/', 1)[-1] if path else '') or repo.get('label') or 'repository'
+
+
+def job_destination(binding, target, checkpoint=''):
+    """Freeze where a save is going, from the binding as it is right now (rule: capture immutably at
+    save time, never re-derive from a binding that may have moved since). `path` is the exact
+    repository-relative folder this save writes to, in the binding's own casing."""
+    repo = binding['repository']
+    leaf = 'checkpoints/' + checkpoint if target == 'checkpoint' else target
+    return dict(repository=repository_display_name(repo), remote=strip_credentials(repo.get('push_url', '')),
+                branch=repo.get('branch', ''), path=repo_path(binding, leaf), checkout=repo.get('path', ''))
+
+
+def move_destination(binding):
+    """The destination row for a folder move: the whole lab folder the files move into, not a single
+    snapshot leaf inside it."""
+    repo = binding['repository']
+    return dict(repository=repository_display_name(repo), remote=strip_credentials(repo.get('push_url', '')),
+                branch=repo.get('branch', ''), path=repo.get('prefix', '') or '(repository root)', checkout=repo.get('path', ''))
+
+
+def file_label(name):
+    """The device-facing label of a saved file, its name without the extension Save progress gave it
+    (`<label>.<suffix>`, `captured_snapshot`). Falls back to the whole name when there is no
+    extension to strip."""
+    name = str(name or '')
+    return name.rsplit('.', 1)[0] if '.' in name else name
+
+
+def pair_renamed_files(files):
+    """The VM helper's `compare` mode (host_git.py) pairs saved files by name, so a device whose
+    human backup extension changed between saves (rule: `SUFFIX_RENAMES`, Junos `.set` to `.cfg`)
+    comes back as one file removed and a different one added rather than one changed file. Fold an
+    unambiguous removed/added pair with a known suffix swap and a matching stem back into a single
+    `changed` entry with a `renamed_from` name, so a person sees one real change, not two false
+    ones. Ambiguous stems (more than one candidate) are left alone rather than guessed at."""
+    removed = [f for f in files if f.get('status') == 'removed']
+    added = [f for f in files if f.get('status') == 'added']
+
+    def stem_suffix(name):
+        name = str(name or '')
+        return (name.rsplit('.', 1)[0], name.rsplit('.', 1)[1]) if '.' in name else (name, '')
+
+    matches = {}
+    for old in removed:
+        old_stem, old_suffix = stem_suffix(old.get('name'))
+        candidates = [new for new in added if stem_suffix(new.get('name')) == (old_stem, next((b for a, b in SUFFIX_RENAMES if a == old_suffix), None))]
+        if len(candidates) == 1:
+            matches[old['name']] = candidates[0]
+    used_new = set()
+    result = []
+    for f in files:
+        if f.get('status') == 'removed' and f['name'] in matches:
+            new = matches[f['name']]
+            if new['name'] in used_new: continue
+            used_new.add(new['name'])
+            result.append(dict(name=new['name'], status='changed', before=f.get('before', ''), after=new.get('after', ''),
+                               renamed_from=f['name']))
+            continue
+        if f.get('status') == 'added' and f.get('name') in used_new:
+            continue
+        result.append(f)
+    return sorted(result, key=lambda f: f.get('name', ''))
+
+
+def annotated_compare(files):
+    """Every file the compare route returns gets a real line diff and a human label, on top of the
+    `name`/`status`/`before`/`after` it already carries."""
+    files = pair_renamed_files(files)
+    for f in files:
+        f['diff'] = unified(f.get('before', ''), f.get('after', ''))
+        f['label'] = file_label(f.get('name', ''))
+    return files
 
 
 def repo_path(binding, value):
@@ -230,7 +329,10 @@ def captured_snapshot(store, backup, context=None):
             if node.get('restore_sha256') and hashlib.sha256(restore_raw).hexdigest() != node['restore_sha256']:
                 raise ValueError('A stored restore candidate no longer matches the digest recorded when it was taken. Take a new backup.')
         label = component(short_name(node, backup.get('lab_name', '')))
-        suffix = PLATFORMS[platform]['suffix']
+        # The Git snapshot's human-facing file uses its own extension, `snapshot_suffix` when a
+        # platform sets one (Junos: `.cfg`, matching EOS and IOS XR there), never the internal
+        # capture storage extension (`suffix`, read by runner.py and unaffected by this).
+        suffix = PLATFORMS[platform].get('snapshot_suffix') or PLATFORMS[platform]['suffix']
         name = f'{label}.{suffix}'
         names.setdefault(name.casefold(), []).append(node['name'])
         rows.append((node, name, raw, restore_raw))
@@ -294,6 +396,44 @@ def decoded_snapshot(result):
             take(item['restore_artifact'], item.get('restore_size'), item.get('restore_sha256'))
     if set(files) != set(snapshot['files']): raise ValueError('Version files do not match the manifest.')
     return snapshot['manifest'], files
+
+
+def _node_slots(manifest, files):
+    """Map each saved node to its current human file and restore artifact, `(path, bytes)` each,
+    keyed by the manifest's `node` identity rather than by filename: an older save's human file can
+    carry a different extension than a fresh one (Junos moved from `.set` to `.cfg`), and the two
+    must still be found as the same node's file."""
+    slots = {}
+    for entry in manifest.get('files', []):
+        node = entry.get('node')
+        if not node: continue
+        slot = slots.setdefault(node, {})
+        slot['config'] = (entry.get('path', ''), files.get(entry.get('path', '')))
+        if entry.get('restore_artifact'):
+            slot['restore'] = (entry['restore_artifact'], files.get(entry['restore_artifact']))
+    return slots
+
+
+def snapshot_diff(before_manifest, before_files, after_manifest, after_files):
+    """Pair two saved snapshots by manifest node, never by filename, so a device whose human backup
+    extension changed between saves (Junos `.set` to `.cfg`) still compares as one changed file
+    rather than a removed file plus an added one. Returns the same shape the compare route always
+    has: a list of `{name, status, before, after}`, sorted by name."""
+    before_slots = _node_slots(before_manifest, before_files)
+    after_slots = _node_slots(after_manifest, after_files)
+    result = []
+    for node in before_slots.keys() | after_slots.keys():
+        b = before_slots.get(node, {}); a = after_slots.get(node, {})
+        for kind in ('config', 'restore'):
+            b_path, b_raw = b.get(kind, ('', None))
+            a_path, a_raw = a.get(kind, ('', None))
+            if b_raw is None and a_raw is None: continue
+            if b_raw == a_raw and b_path == a_path: continue
+            status = 'added' if b_raw is None else 'removed' if a_raw is None else 'changed'
+            result.append(dict(name=a_path or b_path, status=status,
+                               before=b_raw.decode('utf-8') if b_raw is not None else '',
+                               after=a_raw.decode('utf-8') if a_raw is not None else ''))
+    return sorted(result, key=lambda f: f['name'])
 
 
 class GitProgress:
@@ -514,7 +654,7 @@ class GitProgress:
             target: str = 'latest'
             checkpoint: str = Field(default='', max_length=100)
             push: bool = True
-            note: str = Field(default='', max_length=500)
+            note: str = Field(default='', max_length=120)
             backup_job_id: str = Field(default='', max_length=64)
             replace_baseline: bool = False
             expected_baseline: str = Field(default='', max_length=64)
@@ -766,7 +906,8 @@ class GitProgress:
                     request = dict(source_prefix=source, push=False, message='Move ' + name + ' progress to ' + (prefix + '/' if prefix else 'the repository root'))
                     job = dict(id=uuid.uuid4().hex, lab_id=lab_id, lab_name=name, created=now(), status='queued', message='Folder move queued.',
                                backup_job_id='', target='move', checkpoint='', note='', pushed=False, review_before_push=False,
-                               binding_digest=digest(new_binding), request=request, want_push=True, node_names=node_names, capture_context={})
+                               binding_digest=digest(new_binding), request=request, want_push=True, node_names=node_names, capture_context={},
+                               destination=move_destination(new_binding))
                     self.store.state['git_jobs'].append(job)
                     try: self.store.save()
                     except OSError:
@@ -812,6 +953,10 @@ class GitProgress:
                 raise HTTPException(400, 'Use a checkpoint name containing letters, numbers, hyphens or underscores.')
             if data.target == 'baseline' and not data.backup_job_id: raise HTTPException(400, 'Select a complete saved capture for the baseline.')
             if any(ord(c) < 32 for c in data.note): raise HTTPException(400, 'Use a single-line save note.')
+            # Every save carries a short human label: it is the commit message and the way every
+            # save is named back to the student (pending list, history, the job window). A save
+            # (unlike a folder move or a remote update, which never reach this model) always needs one.
+            if not data.note.strip(): raise HTTPException(400, 'Give this save a short label.')
             request_digest = digest(dict(lab_id=lab_id, **data.model_dump()))
             with self.store.lock:
                 previous = next((j for j in self.store.state['git_jobs'] if j['id'] == data.request_id), None)
@@ -843,6 +988,9 @@ class GitProgress:
                            target=data.target, checkpoint=data.checkpoint, note=data.note, pushed=False,
                            review_before_push=review, binding_digest=digest(binding), request=request,
                            want_push=data.push and not review,
+                           # Frozen at capture time from the binding as it is now: never re-derived from a
+                           # binding that may have moved by the time the save is reviewed or shown later.
+                           destination=job_destination(binding, data.target, data.checkpoint),
                            node_names=copy.deepcopy(names), capture_context=context)
                 self.store.state['git_jobs'].append(job)
                 try: self.store.save()
@@ -947,15 +1095,18 @@ class GitProgress:
                     if job['lab_id'] != lab_id: raise HTTPException(404, 'Git save not found in this lab.')
                     binding = self.binding(lab_id)
                     if digest(binding) != job.get('binding_digest'): raise HTTPException(409, 'Reconnect the original repository to review this save.')
-                return call({'mode': 'compare', 'operation_id': data.job_id}, binding)
+                result = call({'mode': 'compare', 'operation_id': data.job_id}, binding)
+                # The helper pairs files by name; fold a suffix-renamed file (Junos `.set` to `.cfg`)
+                # back into one changed entry before it ever reaches a person.
+                return {'files': annotated_compare(result.get('files', []))}
             if not re.fullmatch(r'[0-9a-f]{40,64}', data.commit): raise HTTPException(400, 'Choose a saved commit.')
-            _, before = version_data(lab_id, data)
+            before_manifest, before = version_data(lab_id, data)
             with self.store.lock: binding = self.binding(lab_id)
             status = call({'mode': 'status'}, binding)
             path = repo_path(binding, 'latest')
             result = call({'mode': 'read-version', 'commit': status['head'], 'path': path}, binding)
-            try: _, after = decoded_snapshot(result)
+            try: after_manifest, after = decoded_snapshot(result)
             except ValueError as exc: raise HTTPException(409, str(exc))
-            return {'files': [dict(name=n, status='added' if n not in before else 'removed' if n not in after else 'changed',
-                                   before=before.get(n, b'').decode('utf-8'), after=after.get(n, b'').decode('utf-8'))
-                              for n in sorted(before.keys() | after.keys()) if before.get(n) != after.get(n)]}
+            # snapshot_diff already pairs by manifest node identity, never by filename, so a suffix
+            # rename never appears here as a false removed-plus-added pair.
+            return {'files': annotated_compare(snapshot_diff(before_manifest, before, after_manifest, after))}

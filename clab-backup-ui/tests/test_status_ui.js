@@ -82,18 +82,24 @@ test('a device explains itself in one sentence and says whether the CLI can open
  assert.equal(ready.label,'Ready');assert.equal(ready.cli,true);assert.match(ready.detail,/R1 is accepting SSH logins/);
  const booting=c.deviceState({name:'R2',ssh_ready:false,login_configured:true,nos_login:{status:'booting'}});
  assert.equal(booting.label,'Starting');assert.equal(booting.cli,false);assert.match(booting.detail,/R2 is still starting\. SSH opens automatically/);
+ // The disabled Open CLI reason points at the refresh control, both the rail-wide one and this device's own.
+ assert.match(booting.detail,/Use Test logins \(above\) or this device's Test login to check again now\./);
  const failed=c.deviceState({name:'R3',ssh_ready:false,login_configured:true,nos_login:{status:'failed'}});
  assert.equal(failed.label,'Needs attention');assert.match(failed.detail,/R3 is running, but SSH login failed/);assert.equal(failed.next,'Check credentials');assert.equal(failed.pill,'danger');
  const down=c.deviceState({name:'R4',ssh_ready:false,available:false,nos_login:{status:'unavailable'}});
  assert.equal(down.label,'Unavailable');assert.equal(down.next,'Start lab');assert.equal(down.detail,'R4 is not running, or the lab status is out of date.');
  const creds=c.deviceState({name:'R5',ssh_ready:false,login_configured:false,nos_login:{status:'needs_credentials'}});
  assert.equal(creds.label,'Needs credentials');assert.equal(creds.next,'Add credentials');
+ assert.match(creds.detail,/Add login credentials to open the CLI of R5\./);assert.match(creds.detail,/Add them under Devices, then use Test logins to check again\./);
  assert.equal(c.deviceState({name:'R6',ssh_ready:false,platform:'',readiness:'Choose NOS'}).label,'Choose network OS');
  const manual=c.deviceState({name:'R7',ssh_ready:true,nos_login:{status:'unmonitored'}});
  assert.equal(manual.label,'Ready');assert.equal(manual.detail,'Connected with the saved address.');assert.equal(manual.cli,true);
+ // A refresh in flight is never optimistic: no CLI, a distinct label and pill, until a real answer lands.
+ const checking=c.deviceState({name:'R8',ssh_ready:false,login_configured:true,nos_login:{status:'checking'}});
+ assert.equal(checking.label,'Testing login…');assert.equal(checking.cli,false);assert.equal(checking.pill,'busy');assert.match(checking.detail,/Testing the SSH login of R8/);
  assert.equal(c.deviceState(null).cli,false);
- for(const n of [ready,booting,failed,down,creds,manual])assert.ok(PILLS.includes(n.pill),n.label);
- assert.doesNotMatch(JSON.stringify([ready,booting,failed,down,creds,manual]),/router|stale|Not connected/i);
+ for(const n of [ready,booting,failed,down,creds,manual,checking])assert.ok(PILLS.includes(n.pill),n.label);
+ assert.doesNotMatch(JSON.stringify([ready,booting,failed,down,creds,manual,checking]),/router|stale|Not connected/i);
 });
 
 test('progress reads Not saved yet, Saving, Saved to Git, Saved on this VM or Needs attention',()=>{

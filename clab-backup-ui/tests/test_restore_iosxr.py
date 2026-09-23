@@ -1005,6 +1005,59 @@ class RestoreIosXrDriverTests(unittest.TestCase):
             confirm(fresh, {'token': 'tok-8'})
         self.assertNotIn('tok-8', restore_iosxr._HELD)
 
+    # --- parallel restore: the held-session table is shared by every node worker -----------------
+
+    def test_every_access_to_the_held_session_table_happens_under_its_lock(self):
+        # Several nodes are restored at the same time, each on its own worker thread; the GIL alone is not
+        # a contract for the check-then-set in apply_candidate or the scan in pending().
+        from unittest.mock import patch
+        lock, test = restore_iosxr._HELD_LOCK, self
+
+        class Guarded(dict):
+            def _check(self):
+                test.assertTrue(lock.locked(), 'the held-session table was touched without _HELD_LOCK')
+            def get(self, *args): self._check(); return super().get(*args)
+            def pop(self, *args): self._check(); return super().pop(*args)
+            def items(self): self._check(); return super().items()
+            def __contains__(self, key): self._check(); return super().__contains__(key)
+            def __setitem__(self, key, value): self._check(); super().__setitem__(key, value)
+        guarded = Guarded()
+        with patch.object(restore_iosxr, '_HELD', guarded):
+            device = FakeDevice(leaves=LEAVES)
+            apply_candidate(FakeClient(device, peer=('172.20.20.104', 22), name='armer'), CANDIDATE,
+                            confirm_minutes=2, token='tok-lock')
+            self.assertEqual(pending(FakeClient(device, peer=('172.20.20.104', 22), name='fresh')), 'tok-lock')
+            self.assertEqual(confirm(FakeClient(device, name='good'), {'token': 'tok-lock'}), {'confirmed': True})
+            apply_candidate(FakeClient(FakeDevice(leaves=LEAVES), name='second'), CANDIDATE, confirm_minutes=2,
+                            token='tok-lock-2')
+            release('tok-lock-2')
+        self.assertEqual(dict(guarded), {})
+        self.assertFalse(lock.locked(), 'the lock is never left held')
+
+    def test_nodes_armed_and_released_from_many_threads_leave_no_session_behind(self):
+        import threading
+        errors = []
+
+        def one(index):
+            try:
+                device = FakeDevice(leaves=LEAVES)
+                peer = ('172.20.20.%d' % (100 + index), 22)
+                apply_candidate(FakeClient(device, peer=peer, name='armer'), CANDIDATE, confirm_minutes=2,
+                                token='tok-par-%d' % index)
+                # Each node's fresh connection finds its own token, never another node's.
+                if pending(FakeClient(device, peer=peer, name='fresh')) != 'tok-par-%d' % index:
+                    errors.append(index)
+                release('tok-par-%d' % index)
+            except Exception as exc:   # pragma: no cover - reported below
+                errors.append(repr(exc))
+        threads = [threading.Thread(target=one, args=(index,)) for index in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(30)
+        self.assertEqual(errors, [])
+        self.assertEqual(restore_iosxr._HELD, {})
+
     # --- F7: the arming wait is bounded by the confirm window, not just COMMIT_TIMEOUT ------------
 
     def test_arm_timeout_formula(self):

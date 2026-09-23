@@ -1,0 +1,236 @@
+[
+ {
+  "viewport": "1366x768",
+  "check": "every bar action is inside the window",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "1366x768",
+  "check": "the bar button is labelled YAML and starts collapsed",
+  "pass": true,
+  "observed": "YAML"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "the panel opens with the draft's topology text",
+  "pass": true,
+  "observed": "182 chars"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "the canvas and the panel do not overlap (side by side)",
+  "pass": true,
+  "observed": "root 1366x694 -> 806x694, panel at x=806 y=52"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "the line gutter numbers every line",
+  "pass": true,
+  "observed": "12"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "typing marks the panel edited, Apply adds the device to the canvas",
+  "pass": true,
+  "observed": "before apply \"Edited \u00b7 not applied\", after \"Applied\", nodes ['r1', 'r2', 'r3']"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "Undo is enabled after an apply",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "1366x768",
+  "check": "Undo removes the applied device and the panel shows the text before the apply",
+  "pass": true,
+  "observed": "nodes ['r1', 'r2']"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "a syntax error is shown while typing and refused on Apply, graph untouched",
+  "pass": true,
+  "observed": "live \"Line 5: Nested mappings are not allowed in compact mappings\" \u00b7 apply \"Line 5: Nested mappings are not allowed in compact mappings\""
+ },
+ {
+  "viewport": "1366x768",
+  "check": "the refused text stays in the panel, marked invalid",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "1366x768",
+  "check": "a readable text of the wrong shape is refused before the engine, graph untouched",
+  "pass": true,
+  "observed": "Line 3: topology.nodes must be a mapping of device names."
+ },
+ {
+  "viewport": "1366x768",
+  "check": "Escape does not close the panel while it holds edits",
+  "pass": true,
+  "observed": "Apply or Revert your edits before closing with Escape."
+ },
+ {
+  "viewport": "1366x768",
+  "check": "Revert loads the editor's text again",
+  "pass": true,
+  "observed": "Reverted to the editor\u2019s topology"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "renaming a device in the text (Ctrl+Enter) renames it on the canvas",
+  "pass": true,
+  "observed": "nodes ['core2', 'r1'], 1 links, status \"Applied\""
+ },
+ {
+  "viewport": "1366x768",
+  "check": "unknown keys and comments are applied verbatim",
+  "pass": true,
+  "observed": "Applied"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "a link drawn on the canvas reaches a clean panel",
+  "pass": true,
+  "observed": "2 links, panel==draft True"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "unknown keys and comments survive the canvas edit (reformatted by the engine)",
+  "pass": true,
+  "observed": "x-course: { lesson: 3 } |       x-note: keep me # a comment"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "a canvas edit never overwrites unapplied text",
+  "pass": true,
+  "observed": "Canvas changed \u00b7 Revert to load it"
+ },
+ {
+  "viewport": "1366x768",
+  "check": "Revert then shows the canvas's text",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "1366x768",
+  "check": "the panel closes, the bar button and the layout follow",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "1366x768",
+  "check": "no console errors, page errors or CSP violations",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "390x844",
+  "check": "every bar action is inside the window",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "390x844",
+  "check": "the bar button is labelled YAML and starts collapsed",
+  "pass": true,
+  "observed": "YAML"
+ },
+ {
+  "viewport": "390x844",
+  "check": "the panel opens with the draft's topology text",
+  "pass": true,
+  "observed": "182 chars"
+ },
+ {
+  "viewport": "390x844",
+  "check": "the canvas and the panel do not overlap (stacked)",
+  "pass": true,
+  "observed": "root 390x672 -> 390x302, panel at x=0 y=452"
+ },
+ {
+  "viewport": "390x844",
+  "check": "the line gutter numbers every line",
+  "pass": true,
+  "observed": "12"
+ },
+ {
+  "viewport": "390x844",
+  "check": "typing marks the panel edited, Apply adds the device to the canvas",
+  "pass": true,
+  "observed": "before apply \"Edited \u00b7 not applied\", after \"Applied\", nodes ['r1', 'r2', 'r3']"
+ },
+ {
+  "viewport": "390x844",
+  "check": "Undo is enabled after an apply",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "390x844",
+  "check": "Undo removes the applied device and the panel shows the text before the apply",
+  "pass": true,
+  "observed": "nodes ['r1', 'r2']"
+ },
+ {
+  "viewport": "390x844",
+  "check": "a syntax error is shown while typing and refused on Apply, graph untouched",
+  "pass": true,
+  "observed": "live \"Line 5: Nested mappings are not allowed in compact mappings\" \u00b7 apply \"Line 5: Nested mappings are not allowed in compact mappings\""
+ },
+ {
+  "viewport": "390x844",
+  "check": "the refused text stays in the panel, marked invalid",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "390x844",
+  "check": "a readable text of the wrong shape is refused before the engine, graph untouched",
+  "pass": true,
+  "observed": "Line 3: topology.nodes must be a mapping of device names."
+ },
+ {
+  "viewport": "390x844",
+  "check": "Escape does not close the panel while it holds edits",
+  "pass": true,
+  "observed": "Apply or Revert your edits before closing with Escape."
+ },
+ {
+  "viewport": "390x844",
+  "check": "Revert loads the editor's text again",
+  "pass": true,
+  "observed": "Reverted to the editor\u2019s topology"
+ },
+ {
+  "viewport": "390x844",
+  "check": "renaming a device in the text (Ctrl+Enter) renames it on the canvas",
+  "pass": true,
+  "observed": "nodes ['core2', 'r1'], 1 links, status \"Applied\""
+ },
+ {
+  "viewport": "390x844",
+  "check": "unknown keys and comments are applied verbatim",
+  "pass": true,
+  "observed": "Applied"
+ },
+ {
+  "viewport": "390x844",
+  "check": "canvas edits at this width",
+  "pass": null,
+  "observed": "the editor's palette covers the canvas; its fold button is at x=-130"
+ },
+ {
+  "viewport": "390x844",
+  "check": "the panel closes, the bar button and the layout follow",
+  "pass": true,
+  "observed": ""
+ },
+ {
+  "viewport": "390x844",
+  "check": "no console errors, page errors or CSP violations",
+  "pass": true,
+  "observed": ""
+ }
+]

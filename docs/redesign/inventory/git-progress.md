@@ -45,7 +45,7 @@ Script load order in index.html (all `defer`): app.js, topology-render.js, topol
 | `gitSavePayload(values, requestId)` | function | builds `{request_id, target('latest'), checkpoint(''), push(true unless false), note(''), backup_job_id(''), replace_baseline(bool), expected_baseline(''), allow_removed(bool)}` | no |
 | `gitRequestId()` | function | 32 hex chars from `crypto.getRandomValues` | no |
 | `gitJobMarkup(job)` | function | job summary HTML (badge, message, Saved target, Started, Commit, Changed files) | no |
-| `gitDiffMarkup(files, beforeLabel, afterLabel)` | function | per-file `<details>` with two `<pre>` columns | no |
+| `gitFilesDiffMarkup(files, beforeLabel, afterLabel)` | function | per-file `<details>` holding a unified diff table (`diffFileMarkup` / `diffMarkup` in `diff-view.js`: line-number gutters, add/del/context rows) | no |
 | `gitLoadContext(id, force)` | async | `GET /api/labs/{id}/git`, cached in `gitContexts`, in-flight dedupe via `gitLoads` | no |
 | `renderGitProgress()` | function | renders the top progress bar + Save button + menu gating; starts watch for an active job | **yes: app.js:53 (`render()`), guarded by typeof** |
 | `gitOpenRepository()` | function | `showTab('git')` and closes `#extra-views` | no |

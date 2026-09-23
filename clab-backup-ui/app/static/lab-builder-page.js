@@ -1,8 +1,8 @@
 'use strict';
 // The lab builder page. The editor itself is SR Labs' clab-ui, bundled under /static/lab-builder/ and
 // mounted by lab-builder/src/main.tsx; everything the manager owns is here: the drafts (kept in this
-// browser, never on the manager), the starters, the device templates and the reviewed save to the VM,
-// which goes through the same preview and confirm as every other lab operation (operations.js).
+// browser, never on the manager), the device templates and the reviewed save to the VM, which goes
+// through the same preview and confirm as every other lab operation (operations.js).
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state={labs:[],jobs:[],operations:[]},activeId='',toastTimer,builderDraft=null,builderPending=null,builderMount=null,builderCaps=null,builderCapsError='',builderKnown={};
 // What the editor holds while this browser could not store it (null while everything is stored).
@@ -15,7 +15,7 @@ async function api(path,options={}){let response;try{response=await fetch('/api'
 async function json(path,method,data){return(await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
 async function refresh(){state=await(await api('/state')).json();}
 
-// --- names, templates, starters (pure) ---------------------------------------------------------------
+// --- names and device templates (pure) --------------------------------------------------------------
 const BUILDER_PREFIX='clab-builder:',BUILDER_FORMAT='clab-manager-lab-draft';
 // The lab name becomes the folder and the file name on the VM, and containerlab puts it in every
 // container name: the same literal rule the VM helper applies, kept short.
@@ -39,18 +39,10 @@ const BUILDER_TEMPLATES=[
 // known: {kind:[image,…]} from the topologies already in My labs; the first one replaces the default.
 function builderTemplateList(known){return BUILDER_TEMPLATES.map(t=>({...t,image:(known&&known[t.kind]&&known[t.kind][0])||t.image}));}
 function builderImages(templates,known){return [...new Set([...templates.map(t=>t.image),...Object.values(known||{}).flat()].filter(i=>typeof i==='string'&&i))];}
-// eth{n} counts from 1, {n:0} from the given start: the pattern grammar of the editor's templates.
-function builderInterface(pattern,index){const p=pattern||'eth{n}',m=/\{n(?::(\d+))?\}/.exec(p);if(!m)return p+(index+1);return p.replace(m[0],String((m[1]===undefined?1:Number(m[1]))+index));}
-const BUILDER_STARTERS=[{id:'blank',label:'Blank canvas',nodes:0,links:[]},{id:'pair',label:'Two devices, one link',nodes:2,links:[[0,1]]},{id:'triangle',label:'Three devices in a triangle',nodes:3,links:[[0,1],[1,2],[2,0]]}];
-function builderStarter(id,name,template){
- const shape=BUILDER_STARTERS.find(s=>s.id===id)||BUILDER_STARTERS[0],t=template||BUILDER_TEMPLATES[0],used=Array(shape.nodes).fill(0);
- const names=used.map((_,i)=>t.baseName+(i+1)),spot=[[260,120],[520,120],[390,320]];
- const next=i=>builderInterface(t.interfacePattern,used[i]++);
- const links=shape.links.map(([a,b])=>`    - endpoints: ["${names[a]}:${next(a)}", "${names[b]}:${next(b)}"]\n`);
- const yaml=`name: ${name}\ntopology:\n  nodes:${names.length?'\n'+names.map(n=>`    ${n}:\n      kind: ${t.kind}\n      image: ${t.image}\n`).join(''):' {}\n'}${links.length?'  links:\n'+links.join(''):''}`;
- const annotations=names.length?JSON.stringify({nodeAnnotations:names.map((n,i)=>({id:n,position:{x:spot[i][0],y:spot[i][1]},icon:t.icon}))},null,2):'';
- return {yaml,annotations};
-}
+// A new lab always begins as a blank canvas; devices come from dragging the palette's templates
+// (BUILDER_TEMPLATES above, which also feed builderPage.templates()/images()) onto it, not from a
+// starter shape.
+function builderBlank(name){return {yaml:'name: '+name+'\ntopology:\n  nodes: {}\n',annotations:''};}
 
 // --- drafts: this browser only (pure over a Storage-like object) -------------------------------------
 function draftRead(storage,id){try{const d=JSON.parse(storage.getItem(BUILDER_PREFIX+'draft:'+id)||'null');return d&&typeof d==='object'&&typeof d.yaml==='string'?d:null;}catch{return null;}}
@@ -139,6 +131,9 @@ function builderNotice(){
 }
 function builderRenderBar(){
  const s=draftStatus(builderDraft,builderUnstored);$('builder-name').textContent=builderDraft?builderDraft.name:'';$('builder-status').textContent=s.text;$('builder-status').title=[s.text,s.detail].filter(Boolean).join(' · ');$('builder-status').className='pill '+s.tone;
+ // Nothing to say when no draft is open: the pill carries no text then, so it stays out of the way
+ // (and out of the accessibility tree) instead of showing an empty, colourless chip.
+ $('builder-status').hidden=!s.text;
  const blocked=builderBlocked(),can=!!builderDraft&&!blocked;
  $('builder-save').disabled=!can;$('builder-save').title=blocked;$('builder-save').textContent=builderDraft?.vm?'Save changes to the VM…':'Save to the VM…';
  for(const id of ['builder-yaml','builder-download'])$(id).disabled=!builderDraft;
@@ -167,6 +162,8 @@ const builderPage={
  requestSave(){opTask(null,builderSave);},
  problem(message,code){builderProblem(message,code);},
  ready(mount){builderMount=mount;if(builderDraft)builderOpenEditor();},
+ // The editor's topology text handle (applyYaml, getYaml, checkYaml, subscribe): the YAML panel's engine.
+ attach(editor){if(typeof builderYamlPanelInit==='function')builderYamlPanelInit(builderYamlOptions(editor));},
 };
 if(typeof window!=='undefined')window.labBuilderPage=builderPage;
 let builderMounted=false;
@@ -190,16 +187,15 @@ function builderUse(draft){builderDraft=builderNamed(draft);builderRenderBar();d
 // The id of a new draft. A draft renamed in the editor keeps its first id, so that id can be taken by another name.
 function builderDraftId(name){const id='new:'+name;return draftRead(builderStore,id)?id+':'+draftToken():id;}
 function builderNewDialog(root){
- const roots=(builderCaps?.roots||[]).length?builderCaps.roots:[root],templates=builderPage.templates().list;
- const dialog=opDialog('builder-new','New lab',`<label>Lab name<input id="builder-new-name" maxlength="60" autocomplete="off" spellcheck="false"></label><p class="form-help">Letters, digits, dot, dash and underscore. The name becomes the lab folder on the VM and part of every device's container name.</p><label>Start from<select id="builder-new-starter">${BUILDER_STARTERS.map(s=>`<option value="${esc(s.id)}">${esc(s.label)}</option>`).join('')}</select></label><label>Device type for the starter<select id="builder-new-template">${templates.map((t,i)=>`<option value="${i}">${esc(t.name)} · ${esc(t.image||'')}</option>`).join('')}</select></label><p class="form-help">The image name is a suggestion taken from your labs or from the usual default. The builder does not check that the image is installed on the VM; you can change it on each device.</p><label>Lab folder on the VM<select id="builder-new-root">${roots.map(r=>`<option ${r===root?'selected':''}>${esc(r)}</option>`).join('')}</select></label><div class="dialog-actions"><button class="button secondary" id="builder-new-cancel">Cancel</button><button class="button primary" id="builder-new-create">Create draft</button></div>`);
+ const roots=(builderCaps?.roots||[]).length?builderCaps.roots:[root];
+ const dialog=opDialog('builder-new','New lab',`<label>Lab name<input id="builder-new-name" maxlength="60" autocomplete="off" spellcheck="false"></label><p class="form-help">Letters, digits, dot, dash and underscore. The name becomes the lab folder on the VM and part of every device's container name. The lab starts as a blank canvas; drag devices from the palette to build it.</p><label>Lab folder on the VM<select id="builder-new-root">${roots.map(r=>`<option ${r===root?'selected':''}>${esc(r)}</option>`).join('')}</select></label><div class="dialog-actions"><button class="button secondary" id="builder-new-cancel">Cancel</button><button class="button primary" id="builder-new-create">Create draft</button></div>`);
  $('builder-new-cancel').onclick=()=>dialog.close();
  const create=()=>opTask(dialog,async()=>{
   const name=$('builder-new-name').value.trim();if(!builderName(name))throw new Error('Choose a lab name made of letters, digits, dot, dash or underscore (up to 60 characters).');
   if((state.labs||[]).some(l=>(l.deployment_name||l.name)===name))throw new Error('A lab named '+name+' is already in My labs. Choose another name.');
   if(draftList(builderStore).some(d=>d.name===name))throw new Error('This browser already has a draft named '+name+'. Open it from Drafts, or choose another name.');
   const id=builderDraftId(name);
-  const made=builderStarter($('builder-new-starter').value,name,templates[Number($('builder-new-template').value)]);
-  draftWrite(builderStore,{id,name,root:$('builder-new-root').value,...made},undefined);builderGo({draft:id});
+  draftWrite(builderStore,{id,name,root:$('builder-new-root').value,...builderBlank(name)},undefined);builderGo({draft:id});
  });
  $('builder-new-create').onclick=create;$('builder-new-name').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();create();}};
  $('builder-new-name').focus();
@@ -213,6 +209,74 @@ async function builderImportDraft(text,root){
  if(value.annotations){try{JSON.parse(value.annotations);}catch{value.annotations='';note='The map layout in this file could not be read, so the devices are placed automatically.';}}
  return {draft:{root,...value,name},note};
 }
+
+// --- drag-and-drop (and the "Open lab files…" picker), on the welcome page or on the canvas ---------
+// 1-2 files, order independent: a containerlab topology and, optionally, its saved map. The map is
+// recognised by name only (*.annotations.json, the name this builder and the VS Code extension both
+// write) and its JSON is checked here, the same rule as operations.js opUploadAnnotationsParse, kept
+// local because this page's own scripts do not assume operations.js has already run. The topology's
+// YAML is checked by the manager instead (builderDropOpen), exactly like a downloaded draft
+// (builderImportDraft above) or an uploaded file (operations.js opUpload).
+const BUILDER_DROP_LIMIT=1024*1024;
+function builderMapText(text){
+ let value;try{value=JSON.parse(text);}catch{throw new Error('The map file is not valid JSON.');}
+ if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('The map file must hold one JSON object, not a list or a plain value.');
+ return text;
+}
+// Pure over {name,size,text} descriptors (the caller has already read the files), so pairing, the
+// file-count and size rules and the map's JSON can be tested without a browser File or the manager.
+function builderDropPair(files){
+ const list=[...(files||[])];
+ if(!list.length)throw new Error('Drop a lab file, or use Open lab files… to choose one.');
+ if(list.length>2)throw new Error('Drop one topology file, optionally with its saved map (up to two files).');
+ const isMap=f=>/\.annotations\.json$/i.test(f.name||''),isYaml=f=>!isMap(f)&&/\.ya?ml$/i.test(f.name||'');
+ const topologies=list.filter(isYaml),maps=list.filter(isMap),other=list.filter(f=>!isYaml(f)&&!isMap(f));
+ if(other.length)throw new Error('Drop a containerlab topology file (.clab.yml or .yaml) and, optionally, its saved map (a *.annotations.json file).');
+ if(!topologies.length)throw new Error('Drop a containerlab topology file (.clab.yml or .yaml).');
+ if(topologies.length>1)throw new Error('Drop one topology file at a time.');
+ if(maps.length>1)throw new Error('Drop one map file at a time.');
+ const topology=topologies[0],map=maps[0]||null;
+ for(const f of [topology,map])if(f&&f.size>BUILDER_DROP_LIMIT)throw new Error('"'+f.name+'" is larger than 1 MiB, which is more than a lab file can be.');
+ let notice='';
+ if(map){
+  const base=topology.name.replace(/\.ya?ml$/i,'').toLowerCase();
+  if(!map.name.toLowerCase().startsWith(base))notice='The map file name does not match the topology file name; it is used anyway.';
+  builderMapText(map.text);
+ }
+ return {yaml:topology.text,annotations:map?map.text:'',notice};
+}
+// Whether the open draft holds work the VM does not have: a drop over it then needs a confirmation
+// first, so a drop target never loses work by accident. Nothing to lose when no draft is open.
+function builderHasUnsaved(){return !!builderDraft&&draftStatus(builderDraft,builderUnstored).tone!=='ok';}
+// The drop (or picker) handler: reads the files, pairs and checks them, then opens the result exactly
+// as builderImportDraft does for a downloaded draft — one browser draft, checked by the manager, with
+// its map kept — and, when a draft was already open with work not on the VM, only after a confirm.
+async function builderDropOpen(fileList){
+ const files=await Promise.all([...(fileList||[])].map(async f=>({name:f.name,size:f.size,text:await f.text()})));
+ const pair=builderDropPair(files);
+ if(builderHasUnsaved()&&!confirm('Replace the current draft with the dropped lab?'))return;
+ let name=builderYamlName(pair.yaml);
+ try{name=(await json('/operations/parse-yaml','POST',{options:{text:pair.yaml}})).name||name;}catch(e){if(!e.network)throw new Error('This topology cannot be read: '+e.message);}
+ if(!builderName(name))throw new Error('This lab file has no usable lab name.');
+ const root=builderDraft?.root||opBuilderRoot('',builderCaps?.roots);
+ const old=draftList(builderStore).filter(d=>d.name===name&&!d.vm);
+ if(old.length&&!confirm(old.length>1?'Replace the '+old.length+' drafts named '+name+' that are already in this browser?':'Replace the draft '+name+' that is already in this browser?'))return;
+ const made=draftWrite(builderStore,{id:'new:'+name+':'+draftToken(),name,root,yaml:pair.yaml,annotations:pair.annotations},undefined);
+ for(const d of old)draftDelete(builderStore,d.id);if(pair.notice)notify(pair.notice);builderGo({draft:made.id});
+}
+// Drag-and-drop targets: the welcome card before a draft is open, the whole stage (which holds the
+// welcome card or the mounted editor) once one is — one set of listeners covers both, because the
+// welcome card hides as soon as the editor mounts.
+function builderDropWire(){
+ // Only a drag that carries files is ours: a device dragged from the editor's palette onto the canvas passes
+ // through the stage too, and taking it over (dropEffect 'copy' against the palette's 'move') cancels that drop.
+ const files=e=>!!e.dataTransfer&&Array.from(e.dataTransfer.types||[]).includes('Files');
+ const prevent=e=>{if(!files(e))return;e.preventDefault();e.dataTransfer.dropEffect='copy';};
+ const drop=e=>{if(!files(e))return;e.preventDefault();opTask(null,()=>builderDropOpen(e.dataTransfer.files));};
+ for(const id of ['builder-welcome','builder-stage']){const el=$(id);if(!el)continue;el.addEventListener('dragover',prevent);el.addEventListener('drop',drop);}
+ $('builder-drop-file').onchange=()=>{const files=[...$('builder-drop-file').files];$('builder-drop-file').value='';opTask(null,()=>builderDropOpen(files));};
+}
+
 function builderDraftsDialog(){
  const drafts=draftList(builderStore);
  const dialog=opDialog('builder-drafts-dialog','Drafts in this browser',`<p class="form-help">Drafts are kept in this browser only. Download a draft to move it to another computer or to hand it in.</p>${drafts.length?`<div class="builder-draft-list">${drafts.map((d,i)=>`<p class="op-session-row"><strong>${esc(d.name)}</strong> <span class="pill ${esc(draftStatus(d).tone)}">${esc(d.vm?draftStatus(d).tone==='ok'?'on the VM':'on the VM · newer changes here':'draft')}</span> <small>${esc(typeof opWhen==='function'?opWhen(d.updated):d.updated)}</small> <button class="button secondary" data-draft-open="${i}">Open</button> <button class="button danger-outline" data-draft-delete="${i}">Delete draft</button></p>`).join('')}</div>`:'<p>No drafts yet.</p>'}<div class="dialog-actions"><button class="button secondary" id="builder-upload">Open a downloaded draft…</button><button class="button primary" id="builder-new-from-list">New lab…</button></div><input type="file" id="builder-upload-file" accept=".json,application/json" hidden>`);
@@ -229,7 +293,11 @@ function builderDraftsDialog(){
   const made=draftWrite(builderStore,{...draft,id:'new:'+draft.name+':'+draftToken()},undefined);for(const d of old)draftDelete(builderStore,d.id);if(note)alert(note);builderGo({draft:made.id});
  });
 }
-function builderYamlDialog(){if(!builderDraft)return;const dialog=opDialog('builder-yaml-dialog','Topology (YAML) · '+builderDraft.name,`<p class="form-help">This is what the editor has built. It is read-only here; the same text is shown again before anything is saved to the VM.</p><pre class="op-output builder-yaml" id="builder-yaml-text" tabindex="0"></pre>`);$('builder-yaml-text').textContent=(builderUnstored||builderDraft).yaml;return dialog;}
+// The editable YAML panel (lab-builder-yaml.js) drives the editor's engine through the adapter's handle; the
+// page only places it, feeds it the draft's newest text and mirrors its open state in the bar and the layout.
+function builderYamlDraft(){return builderDraft?(builderUnstored||builderDraft).yaml:'';}
+function builderYamlShown(open){$('builder-yaml').setAttribute('aria-expanded',String(!!open));$('builder-stage').classList.toggle('yaml-open',!!open);}
+function builderYamlOptions(editor){return {editor,getDraftYaml:builderYamlDraft,onApplied:()=>builderRenderBar(),onToggle:builderYamlShown};}
 // The newest work, also when this browser could not store it.
 function builderDownload(){if(!builderDraft)return;const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([draftExport({...builderDraft,...(builderUnstored||{})})],{type:'application/json'}));link.download=builderDraft.name+'.lab-draft.json';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
 // Storing again what the editor holds; the editor itself restarts from the stored draft.
@@ -326,7 +394,9 @@ async function builderConnect(){
 }
 async function builderStart(){
  const params=new URLSearchParams(location.hash.slice(1));
- for(const [id,fn] of [['builder-save',()=>opTask(null,builderSave)],['builder-yaml',builderYamlDialog],['builder-download',builderDownload],['builder-drafts',builderDraftsDialog],['builder-welcome-new',()=>builderNewDialog(params.get('root')||opBuilderRoot('',builderCaps?.roots))],['builder-welcome-drafts',builderDraftsDialog],['builder-problem-reload',()=>location.reload()],['builder-problem-download',builderDownload],['builder-problem-retry',builderStoreAgain],['builder-note-retry',()=>opTask(null,builderConnect)]])$(id).onclick=fn;
+ for(const [id,fn] of [['builder-save',()=>opTask(null,builderSave)],['builder-yaml',()=>builderYamlPanelToggle()],['builder-download',builderDownload],['builder-drafts',builderDraftsDialog],['builder-welcome-new',()=>builderNewDialog(params.get('root')||opBuilderRoot('',builderCaps?.roots))],['builder-welcome-drafts',builderDraftsDialog],['builder-drop-pick',()=>$('builder-drop-file').click()],['builder-problem-reload',()=>location.reload()],['builder-problem-download',builderDownload],['builder-problem-retry',builderStoreAgain],['builder-note-retry',()=>opTask(null,builderConnect)]])$(id).onclick=fn;
+ builderDropWire();
+ $('root').insertAdjacentHTML('afterend',builderYamlPanelMarkup());builderYamlPanelInit(builderYamlOptions(null));
  builderRenderBar();
  // The editor takes its device templates when it opens, and they carry the images this site already uses,
  // so the manager is asked first. A draft is in this browser: it opens even when the manager never answers.

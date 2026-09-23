@@ -6,7 +6,7 @@ It reuses the manager's existing direct node-SSH path (no new host helper) and t
 Runner for durable pre- and post-restore backups, and it serialises against backups,
 Git saves and lab operations through ``operation_busy``.
 
-Flow: preflight -> mandatory pre-restore backup -> per node (replace the whole configuration
+Flow: preflight -> mandatory pre-restore backup -> per node, several nodes side by side (replace the whole configuration
 inside the NOS's own transaction with its timed recovery armed, reconnect to prove management,
 confirm) -> post backup and desired-state comparison. What a platform needs for that (Junos
 ``load override`` + ``commit confirmed``, EOS session + ``commit timer``, ...) lives in its driver;
@@ -22,11 +22,13 @@ counts and masked sample lines, and every message is scrubbed.
 """
 import base64
 import copy
+import os
 import re
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, CancelledError, ThreadPoolExecutor, wait
+from functools import partial
 
 import paramiko
 from fastapi import HTTPException
@@ -43,7 +45,7 @@ from .restore_shell import RestoreError, SessionLost
 from .runner import effective_credentials, now
 
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'message', 'source',
-              'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets')
+              'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets', 'progress')
 
 NO_ARTIFACT = 'This saved configuration has no restore data for this node.'
 UNUSABLE = 'The saved restore data for this node is not usable: '
@@ -51,11 +53,31 @@ FOREIGN_PENDING = 'Another change is waiting for confirmation on this node.'
 BAD_LOGIN = 'The node rejected the login credentials.'
 # Target states that mean "a driver may have armed a change and nobody confirmed it".
 IN_FLIGHT = ('applying', 'confirming')
+# What a target is doing, for the progress view. `stage` is a label written beside `status`, never instead
+# of it: the restart classification (IN_FLIGHT), _verify and _finalize read `status` only, and jobs stored
+# before stages existed have none. `timeline` maps a stage to the epoch second it was first entered, plus
+# `settled` (the first final outcome) and `checked` (after the post-restore comparison).
+#   queued -> backing_up -> backed_up -> connecting -> applying -> armed -> verifying -> confirming ->
+#   replaced | matched  (then checking -> replaced | matched while the post-restore backup compares)
+#   skipped | failed | rolled_back | uncertain  (final, at whichever point the node stopped)
+# `matched` is `applied` with `no_op`: the device reported nothing to change. It is a label only.
+STAGES = ('queued', 'backing_up', 'backed_up', 'connecting', 'applying', 'armed', 'verifying', 'confirming',
+          'replaced', 'matched', 'skipped', 'failed', 'rolled_back', 'uncertain', 'checking')
+SETTLED_STAGES = ('replaced', 'matched', 'skipped', 'failed', 'rolled_back', 'uncertain')
+# Nodes changed at the same time inside one restore job (RESTORE_NODE_WORKERS, 1..8). 1 is the one-after-
+# another behaviour of releases before parallel restore.
+DEFAULT_NODE_WORKERS = 4
+MAX_NODE_WORKERS = 8
+# Lines of the review diff sent to the browser per node; the rest is cut and flagged `truncated`.
+DIFF_MAX_LINES = 400
 # A configuration line is shown only up to its first secret keyword. What follows differs per NOS (a
 # quoted hash on Junos; `secret sha512 <hash>`, `password 7 <hash>`, `key-string 7 <hash>` on EOS and
-# IOS XR), so nothing after the keyword is kept: not the type token, not the hash.
+# IOS XR), so nothing after the keyword is kept: not the type token, not the hash. SNMPv3 users carry their
+# keys after `localized`, `auth`, `priv` or `encrypted` (`snmp-server user u g v3 localized <engine> auth sha <key>
+# priv aes <key>`), SSH public keys follow `authentication` (Junos) or `sshkey` (EOS).
 SECRET_WORD = re.compile(r'(?i)\b(secret|encrypted-password|password|passphrase|authentication-key|pre-shared-key|'
-                         r'community|key-string|key-chain|key|md5|sha1|sha256|sha512|hash|certificate|private)\b')
+                         r'community|key-string|key-chain|key|md5|sha|sha1|sha256|sha512|hash|certificate|private|'
+                         r'encrypted|localized|auth|authentication|priv|sshkey|psk)\b')
 
 
 def public_job(job):
@@ -63,6 +85,7 @@ def public_job(job):
     # Keys starting with "_" (driver token, recovery deadline) are the service's own.
     value['targets'] = [{k: v for k, v in target.items() if not k.startswith('_')}
                         for target in value.get('targets', [])]
+    value['server_time'] = time.time()   # the clock the timeline was written with; the page measures against it
     return value
 
 
@@ -96,6 +119,78 @@ def backup_failure(message):
     return ''
 
 
+def node_worker_count(value=None):
+    """How many nodes one restore changes at the same time: `value`, else RESTORE_NODE_WORKERS, else 4; 1..8."""
+    if value is None:
+        value = os.environ.get('RESTORE_NODE_WORKERS', '')
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        count = DEFAULT_NODE_WORKERS
+    return max(1, min(MAX_NODE_WORKERS, count))
+
+
+def node_endpoint(node):
+    """The SSH endpoint the manager connects to (node_services.connect). Two targets behind one endpoint are
+    changed one after another: the IOS XR driver recognises its held arming session by the peer address alone."""
+    return (str(node.get('address') or ''), str(node.get('port') or ''))
+
+
+def saved_label(desc):
+    """The saved side's name in a review diff: the folder, the commit or the backup it was read from."""
+    desc = desc or {}
+    if desc.get('type') == 'folder':
+        return desc.get('folder') or 'the repository root'
+    if desc.get('type') == 'git':
+        return str(desc.get('commit') or '')[:10] or str(desc.get('path') or '')
+    if desc.get('type') == 'backup':
+        return 'backup ' + str(desc.get('backup_job_id') or '')[:10]
+    return 'saved configuration'
+
+
+def _diff_text(text):
+    """The lines a review diff shows: blank lines and comment lines (`!` banners and separators, `#`) carry no
+    configuration and are left out, as the comparison leaves them out."""
+    return '\n'.join(line.rstrip() for line in (text or '').splitlines()
+                     if line.strip() and not line.lstrip().startswith(('!', '#')))
+
+
+def _unified(before, after):
+    from . import textdiff   # the manager's shared unified-diff helper (also used by the Git version view)
+    return textdiff.unified(before, after, context=3)
+
+
+def review_diff(saved, running, converged, label):
+    """What the review shows for one node before anything is submitted: the saved configuration against the
+    running one the probe just captured, in the comparison form (`display set` on Junos, running-config on EOS
+    and IOS XR). Every line is cut at its first secret keyword (mask_line), exactly like `diff_sample`; at most
+    DIFF_MAX_LINES lines are sent. A node the comparison calls converged is `identical` with no hunks."""
+    labels = {'old': 'Saved (' + label + ')', 'new': 'Running now'}
+    if converged:
+        return {'hunks': [], 'added': 0, 'removed': 0, 'truncated': False, 'identical': True, 'labels': labels}
+    diff = _unified(_diff_text(saved), _diff_text(running))
+    if not diff.get('hunks'):
+        # The comparison sees a difference the filtered texts hide (it lives in a left-out line): show it all.
+        diff = _unified(saved or '', running or '')
+    hunks, sent, truncated = [], 0, bool(diff.get('truncated'))
+    for hunk in diff.get('hunks', []):
+        lines = hunk.get('lines', [])
+        room = DIFF_MAX_LINES - sent
+        if room <= 0:
+            truncated = True
+            break
+        if len(lines) > room:
+            truncated, lines = True, lines[:room]
+        sent += len(lines)
+        hunks.append(dict(hunk, lines=[dict(line, text=mask_line(str(line.get('text', '')))) for line in lines]))
+    result = {'hunks': hunks, 'added': int(diff.get('added', 0)), 'removed': int(diff.get('removed', 0)),
+              'truncated': truncated, 'identical': False, 'labels': labels}   # never "identical" when not converged
+    if not hunks:
+        result['reason'] = ('The comparison found differences in spacing or layout that this line view cannot show. '
+                            'Replacing the configuration still makes the device match the saved one.')
+    return result
+
+
 def compare_for(platform, desired, actual):
     """(missing, extra, converged) in the comparable form of the node's platform."""
     driver = drivers.for_platform(platform)
@@ -105,14 +200,30 @@ def compare_for(platform, desired, actual):
     return missing, extra, not missing and not extra
 
 
+def _enter_stage(job, target, stage, stamp):
+    """Set a target's stage and first-entry time; count its first final outcome in the job's progress. The caller
+    holds the store lock and saves."""
+    timeline = target.setdefault('timeline', {})
+    timeline.setdefault(stage, stamp)
+    target['stage'] = stage
+    if stage in SETTLED_STAGES and 'settled' not in timeline:
+        timeline['settled'] = stamp
+        progress = job.setdefault('progress', {'settled': 0, 'total': len(job.get('targets', []))})
+        progress['settled'] = progress.get('settled', 0) + 1
+
+
 class RestoreService:
-    def __init__(self, store, runner, git_progress, connector=None):
+    def __init__(self, store, runner, git_progress, connector=None, node_workers=None):
         self.store = store
         self.runner = runner
         self.git = git_progress
         self.connect = connector or connect
         self.stopping = threading.Event()
+        # One restore job at a time (the Runner refuses a second job's backups anyway). Inside a job the
+        # nodes run on their own pool: submitting them to `pool`, which runs execute() itself, would deadlock.
         self.pool = ThreadPoolExecutor(max_workers=1)
+        self.node_workers = node_worker_count(node_workers)
+        self.node_pool = ThreadPoolExecutor(max_workers=self.node_workers, thread_name_prefix='restore-node')
         self.retry_interval = 10      # seconds between reconnect attempts inside the recovery window
         self.recovery_grace = 90      # seconds past the window before giving up: Junos was seen rolling back 35 s late
         self.window_seconds = lambda minutes: int(minutes) * 60
@@ -132,22 +243,79 @@ class RestoreService:
                                           'changed. The manager is checking what is active on it now.')
                         elif target.get('status') in ('backing_up', 'pending', 'ready', 'preflight'):
                             target.update(status='interrupted', message='Restore interrupted before this node was changed.')
+                            _enter_stage(job, target, 'failed', time.time())   # settled: not changed, and not rechecked
             store.save()
 
     def start(self):
-        """Read back every node a restart left in flight. Called once the application is up."""
+        """Read back every node a restart left in flight. Called once the application is up.
+
+        The read-backs run side by side on the node pool, scheduled from the job pool so that a restore
+        submitted meanwhile still waits until every interrupted node has been looked at."""
         pending, self.unchecked = self.unchecked, []
         for job_id, _name in pending:
             self.rechecks[job_id] = self.rechecks.get(job_id, 0) + 1
-        for job_id, name in pending:
+        if pending:
             try:
-                self.pool.submit(self._recheck_interrupted, job_id, name)
+                self.pool.submit(self._recheck_all, pending)
             except RuntimeError:
-                break
+                pass
+
+    def _recheck_all(self, pending):
+        with self.store.lock:
+            endpoints = {}
+            for job_id, name in pending:
+                job = next((j for j in self.store.state['restore_jobs'] if j['id'] == job_id), None)
+                lab = self.store.lab(job['lab_id']) if job else None
+                node = next((n for n in (lab or {}).get('nodes', []) if n['name'] == name), None)
+                endpoints[(job_id, name)] = node_endpoint(node) if node else ('', job_id + '/' + name)
+        groups = {}
+        for item in pending:
+            groups.setdefault(endpoints[item], []).append(item)
+        self._run_groups(list(groups.values()),
+                         lambda group: [self._recheck_interrupted(job_id, name) for job_id, name in group])
 
     def close(self):
         self.stopping.set()
         self.pool.shutdown(wait=False, cancel_futures=True)
+        # A node task that has not started is dropped: its target keeps the state it had, and the next start
+        # marks it "interrupted before this node was changed". A running one returns at its next wait.
+        self.node_pool.shutdown(wait=False, cancel_futures=True)
+
+    def _run_groups(self, groups, work):
+        """Run `work(group)` for every group, at most `node_workers` groups at the same time, and return when
+        all have finished. The items of one group run one after another inside it. With one worker (or one
+        group) everything runs right here, in order, as restores always did before parallel nodes."""
+        if min(self.node_workers, len(groups)) <= 1:
+            for group in groups:
+                if self.stopping.is_set():
+                    return
+                work(group)
+            return
+        futures = []
+        for group in groups:
+            try:
+                futures.append(self.node_pool.submit(work, group))
+            except RuntimeError:
+                break   # shutting down: the groups not handed over keep their state for the next start
+        # A future that shutdown(cancel_futures=True) cancels before it ran never wakes as_completed() or
+        # wait(), so the remaining futures are polled and the cancelled ones dropped.
+        remaining = set(futures)
+        while remaining:
+            done, remaining = wait(remaining, timeout=0.5, return_when=FIRST_COMPLETED)
+            remaining = {future for future in remaining if not future.cancelled()}
+            for future in done:
+                try:
+                    future.result()
+                except (CancelledError, Exception):
+                    pass    # every node task records its own outcome; nothing from one reaches the others
+
+    @staticmethod
+    def _endpoint_groups(nodes):
+        """Target nodes grouped by SSH endpoint, groups and members in target order."""
+        groups = {}
+        for node in nodes:
+            groups.setdefault(node_endpoint(node), []).append(node['name'])
+        return list(groups.values())
 
     # --- helpers ---------------------------------------------------------------
 
@@ -179,6 +347,29 @@ class RestoreService:
                 self.store.save()
             except OSError:
                 pass
+
+    def stage_target(self, job_id, name, stage, stamp_also=(), **fields):
+        """Move one target to `stage` in one locked write: the stage, the time it was first entered, any other
+        fields, and the job's settled count when this is the target's first final outcome. Only that target's
+        dict is changed in place, never the job as a whole, so node workers cannot overwrite each other."""
+        with self.store.lock:
+            job = self.get_job(job_id)
+            target = next((t for t in job.get('targets', []) if t['name'] == name), None)
+            if target is None:
+                return
+            stamp = time.time()
+            timeline = target.setdefault('timeline', {})
+            for key in stamp_also:
+                timeline.setdefault(key, stamp)
+            target.update(fields)
+            _enter_stage(job, target, stage, stamp)
+            try:
+                self.store.save()
+            except OSError:
+                pass
+
+    def _stager(self, job_id, name):
+        return lambda stage, **fields: self.stage_target(job_id, name, stage, **fields)
 
     def event(self, action, message, lab_id, job_id, node='', level='info'):
         try:
@@ -360,9 +551,14 @@ class RestoreService:
                 if refusal:
                     row.update(reachable=True, eligible=False, reason=refusal)
                     continue
-                missing, extra, converged = compare_for(node['platform'], candidates[row['name']]['desired_set'], current)
+                desired = candidates[row['name']]['desired_set']
+                missing, extra, converged = compare_for(node['platform'], desired, current)
                 row.update(reachable=True, matches_saved=converged,
                            pending_changes=len(missing) + len(extra))
+                try:
+                    row['diff'] = review_diff(desired, current, converged, saved_label(desc))
+                except Exception:
+                    row['diff_reason'] = 'The differences could not be shown for this device.'
             except paramiko.AuthenticationException:
                 row.update(reachable=True, eligible=False, reason=BAD_LOGIN)
             except Exception as exc:
@@ -470,7 +666,9 @@ class RestoreService:
                 'confirm_minutes': int(confirm_minutes), 'source': desc,
                 'pre_backup_job_id': '', 'post_backup_job_id': '', 'host_identity': before,
                 'targets': [{'name': r['name'], 'short_name': r['short_name'], 'platform': r['platform'],
-                             'status': 'pending', 'message': 'Waiting to restore.'} for r in chosen],
+                             'status': 'pending', 'message': 'Waiting to restore.', 'stage': 'queued',
+                             'timeline': {'queued': time.time()}, 'attempts': 0} for r in chosen],
+                'progress': {'settled': 0, 'total': len(chosen)},
                 '_candidates': {r['name']: candidates[r['name']] for r in chosen}}
             self.store.state['restore_jobs'].append(job)
             try:
@@ -526,7 +724,7 @@ class RestoreService:
                 node = nodes.get(name)
                 if not node or not node_available(self.store.state, lab, node):
                     ineligible.add(name)
-                    self.update_target(job_id, name, status='ineligible', message='Node is not currently running.')
+                    self.stage_target(job_id, name, 'skipped', status='ineligible', message='Node is not currently running.')
             live = [name for name in targets if name not in ineligible]
             if not live:
                 raise _Fail('None of the selected nodes are currently running; no configuration was changed.')
@@ -534,7 +732,7 @@ class RestoreService:
             # 2. Mandatory pre-restore backup of every live target (durable, referenced below).
             self.update(job_id, status='backing_up', message='Backing up the current configuration first.')
             for name in live:
-                self.update_target(job_id, name, status='backing_up', message='Capturing current configuration.')
+                self.stage_target(job_id, name, 'backing_up', status='backing_up', message='Capturing current configuration.')
             try:
                 pre = self.runner.submit(job['lab_id'], operation='backup', source='restore-pre',
                                          node_names=live, progress_id=job_id,
@@ -547,30 +745,35 @@ class RestoreService:
                 raise _Fail('The pre-restore backup did not complete; no configuration was changed.')
             backed_up = {n['name'] for n in backup.get('nodes', []) if n.get('status') == 'succeeded'}
             before = {n['name']: self._stored_text(backup, n) for n in backup.get('nodes', []) if n['name'] in backed_up}
+            for name in live:
+                if name in backed_up:
+                    self.stage_target(job_id, name, 'backed_up')
             self.event('restore.prebackup', f'Pre-restore backup {pre["id"]}: {len(backed_up)}/{len(live)} nodes captured.',
                        lab_id, job_id)
 
-            # 3. Apply the candidate per live node with a confirmed commit, then reconnect + confirm.
+            # 3. Apply the candidate per live node with a confirmed commit, then reconnect + confirm. Nodes run
+            # side by side, at most node_workers at once, each with its own token, deadline and settle loop;
+            # nodes that share one SSH endpoint run one after another inside one task.
             self.update(job_id, status='applying', message='Applying the saved configuration.')
-            applied = []
-            for name in live:
-                if self.stopping.is_set():
-                    return   # shutting down: leave the job in flight; the next start marks it interrupted and reads the nodes back
-                node = nodes.get(name)
-                if name not in backed_up:
-                    outcome = next((n for n in backup.get('nodes', []) if n.get('name') == name), {})
-                    self.update_target(job_id, name, status='failed', message='Pre-restore backup failed for this node'
-                                       + backup_failure(outcome.get('message', '')) + '; it was not changed.')
-                    continue
-                creds = effective_credentials(lab, node)
-                self._apply_one(job_id, lab_id, node, creds, candidates[name], confirm_minutes, applied, before.get(name))
+
+            def run(group):
+                for name in group:
+                    self._node_task(job_id, lab_id, lab, name, candidates, confirm_minutes, before.get(name),
+                                    name in backed_up, backup)
+            self._run_groups(self._endpoint_groups([nodes[name] for name in live]), run)
 
             if self.stopping.is_set():
-                return
+                return   # shutting down: leave the job in flight; the next start marks it interrupted and reads the nodes back
+            # The post-restore backup's node list comes from the recorded outcomes, in target order, however
+            # the nodes finished.
+            with self.store.lock:
+                applied = [t['name'] for t in self.get_job(job_id)['targets'] if t['status'] == 'applied']
             # 4. Post-restore backup + desired-state comparison for the applied nodes. A
             # failure to start it leaves the nodes applied-but-unverified, never "failed".
             if applied:
                 self.update(job_id, status='verifying', message='Verifying the restored configuration.')
+                for name in applied:
+                    self.stage_target(job_id, name, 'checking')
                 try:
                     post = self.runner.submit(job['lab_id'], operation='backup', source='restore-post',
                                               node_names=applied, progress_id=job_id,
@@ -607,6 +810,54 @@ class RestoreService:
         with self.store.lock:
             return scrub(str(text), self.store.state)
 
+    def _node_task(self, job_id, lab_id, lab, name, candidates, confirm_minutes, before, backed_up, backup):
+        """One node's whole restore, on a node worker. It records its own outcome and never raises: an error here
+        must neither reach execute() (which would mark the whole job) nor touch another node, not even the
+        next one behind the same endpoint."""
+        if self.stopping.is_set():
+            return   # nothing is recorded; the next start marks this node "interrupted before it was changed"
+        node = creds = cand = None
+        try:
+            node = next(n for n in lab['nodes'] if n['name'] == name)
+            creds = effective_credentials(lab, node)
+            cand = candidates[name]
+            if not backed_up:
+                outcome = next((n for n in (backup or {}).get('nodes', []) if n.get('name') == name), {})
+                self.stage_target(job_id, name, 'failed', status='failed', message='Pre-restore backup failed for this node'
+                                  + backup_failure(outcome.get('message', '')) + '; it was not changed.')
+                return
+            self._apply_one(job_id, lab_id, node, creds, cand, confirm_minutes, None, before)
+        except Exception as exc:
+            self._contain(job_id, lab_id, node or {'name': name}, creds, cand, before, exc)
+
+    def _contain(self, job_id, lab_id, node, creds, cand, before, exc):
+        """An unexpected error inside one node's task. A node that may hold an armed change is read back (one more
+        settle, confirming only under its own token); a node not yet touched is "not changed"; one already
+        settled keeps its outcome. If even that fails, the node is `uncertain`, never `failed`."""
+        name = node['name']
+        why = self._scrubbed(type(exc).__name__)
+        try:
+            with self.store.lock:
+                target = copy.deepcopy(next(t for t in self.get_job(job_id)['targets'] if t['name'] == name))
+            status = target.get('status')
+            if status in IN_FLIGHT:
+                armed = True if target.get('_handle') is not None else None
+                deadline = target.get('_deadline') or time.time()
+                state, detail = self._settle(node, creds, cand, target.get('_token', ''), target.get('_handle'), armed,
+                                             deadline, before, on_stage=self._stager(job_id, name))
+                self._record_settled(job_id, lab_id, name, state, detail, armed, None)
+            elif status in ('pending', 'backing_up'):
+                self.stage_target(job_id, name, 'failed', status='failed',
+                                  message='Configuration was not changed: internal error (' + why + ').')
+            self.event('restore.node', 'Internal error while restoring this node: ' + why, lab_id, job_id, name, level='error')
+        except Exception:
+            try:
+                self.stage_target(job_id, name, 'uncertain', status='uncertain',
+                                  message='The manager could not establish what this device is running (internal error: '
+                                          + why + '). Check it before relying on it.')
+            except Exception:
+                pass
+
     def _apply_one(self, job_id, lab_id, node, creds, cand, confirm_minutes, applied, before):
         """Replace one node's configuration. `before` is its pre-restore capture (the rollback proof)."""
         name = node['name']
@@ -614,8 +865,9 @@ class RestoreService:
         opts = drivers.options(driver, creds)
         token = 'clabmgr-' + uuid.uuid4().hex[:8]
         deadline = time.time() + self.window_seconds(confirm_minutes)
-        self.update_target(job_id, name, status='applying', _token=token, _deadline=deadline,
-                           message='Replacing the configuration; the device undoes it by itself unless the manager confirms.')
+        self.stage_target(job_id, name, 'connecting', status='applying', _token=token, _deadline=deadline,
+                          worker=threading.current_thread().name,
+                          message='Replacing the configuration; the device undoes it by itself unless the manager confirms.')
         # Where only the arming CLI session can confirm (IOS XR), the driver keeps this connection
         # after a successful apply and confirms on it once a fresh connection has proven management.
         holds = getattr(driver, 'HOLDS_SESSION', False)
@@ -624,10 +876,12 @@ class RestoreService:
             client = self._open(node, creds)
         except Exception as exc:
             message = BAD_LOGIN if isinstance(exc, paramiko.AuthenticationException) else 'Connectivity: ' + self._scrubbed(type(exc).__name__)
-            self.update_target(job_id, name, status='failed', message='Configuration was not changed. ' + message)
+            self.stage_target(job_id, name, 'failed', status='failed', message='Configuration was not changed. ' + message)
             self.event('restore.node', 'Not changed: the node could not be reached. ' + message, lab_id, job_id, name, level='error')
             return
         try:
+            # The driver validates, loads and arms in one call; the service cannot see the moment of arming.
+            self.stage_target(job_id, name, 'applying')
             try:
                 result = driver.apply_candidate(client, cand['candidate'], confirm_minutes, token=token, **opts)
             except SessionLost as exc:
@@ -635,7 +889,7 @@ class RestoreService:
             except RestoreError as exc:
                 # The driver refused or the node rejected the candidate, and the candidate was discarded.
                 message = self._scrubbed(exc)
-                self.update_target(job_id, name, status='failed', message='Configuration was not changed: ' + message)
+                self.stage_target(job_id, name, 'failed', status='failed', message='Configuration was not changed: ' + message)
                 self.event('restore.node', message, lab_id, job_id, name, level='error')
                 return
             except Exception as exc:
@@ -643,20 +897,21 @@ class RestoreService:
         finally:
             if not (holds and result is not None):
                 client.close()
-        if result is None:
-            # The session died somewhere inside the transaction: whether a change was armed is unknown.
-            self.update_target(job_id, name, status='confirming',
-                               message='The session to the device was lost during the change; checking what is active. ' + lost)
-            self.event('restore.node', 'Session lost during the change; reading the node back. ' + lost, lab_id, job_id, name, level='warning')
-            armed, handle = None, None
-        else:
-            armed, handle = True, result.get('handle') or {}
-            sample = [mask_line(l) for l in result.get('diff', '').splitlines() if l.strip()][:40]
-            self.update_target(job_id, name, status='confirming', diff_sample=sample, no_op=result.get('no_op', False),
-                               _handle=handle, message='Configuration loaded; reconnecting to confirm.',
-                               **({'root_authentication': result['root_authentication']} if 'root_authentication' in result else {}))
         try:
-            state, detail = self._settle(node, creds, cand, token, handle, armed, deadline, before)
+            if result is None:
+                # The session died somewhere inside the transaction: whether a change was armed is unknown.
+                self.update_target(job_id, name, status='confirming',
+                                   message='The session to the device was lost during the change; checking what is active. ' + lost)
+                self.event('restore.node', 'Session lost during the change; reading the node back. ' + lost, lab_id, job_id, name, level='warning')
+                armed, handle = None, None
+            else:
+                armed, handle = True, result.get('handle') or {}
+                sample = [mask_line(l) for l in result.get('diff', '').splitlines() if l.strip()][:40]
+                self.stage_target(job_id, name, 'armed', status='confirming', diff_sample=sample, no_op=result.get('no_op', False),
+                                  _handle=handle, message='Configuration loaded; reconnecting to confirm.',
+                                  **({'root_authentication': result['root_authentication']} if 'root_authentication' in result else {}))
+            state, detail = self._settle(node, creds, cand, token, handle, armed, deadline, before,
+                                         on_stage=self._stager(job_id, name))
         finally:
             if holds:
                 # Confirmed or not, the held session ends here. Unconfirmed, the node undoes the change itself.
@@ -666,7 +921,7 @@ class RestoreService:
                     pass
         self._record_settled(job_id, lab_id, name, state, detail, armed, applied)
 
-    def _settle(self, node, creds, cand, token, handle, armed, deadline, before):
+    def _settle(self, node, creds, cand, token, handle, armed, deadline, before, on_stage=None):
         """Confirm the armed change, or establish what the node runs. Returns (state, detail).
 
         Reconnecting is retried for the whole recovery window: a whole-configuration change can
@@ -675,6 +930,8 @@ class RestoreService:
         alone proves nothing about whose it is.
         `state` is 'applied', 'rolled_back' (armed by this call, then read back as undone),
         'unchanged' (the previous configuration is active and arming was never observed) or 'uncertain'.
+        `on_stage(stage, **fields)` is told of each fresh-connection pass (`verifying`, with `attempts`) and
+        of the moment before a confirmation is sent (`confirming`).
         """
         driver = drivers.for_platform(node['platform'])
         opts = drivers.options(driver, creds)
@@ -689,6 +946,8 @@ class RestoreService:
                 if pending != token and not (handle and pending in handle.values()):
                     return None   # not ours to confirm: wait for the node's own timer
                 seen['ours'] = True
+                if on_stage:
+                    on_stage('confirming')
                 confirmed = driver.confirm(client, {**(handle or {}), 'token': token}, **opts)
                 matches = None
                 try:
@@ -710,7 +969,11 @@ class RestoreService:
             return 'uncertain', {'why': 'the active configuration matches neither the saved nor the previous one'}
 
         why = ''
+        attempts = 0
         while True:
+            attempts += 1
+            if on_stage:
+                on_stage('verifying', attempts=attempts)
             try:
                 outcome = self._session(node, creds, once)
                 if outcome:
@@ -734,30 +997,33 @@ class RestoreService:
         if state == 'stopping':
             return
         if state == 'applied':
-            self.update_target(job_id, name, status='applied', persistence=detail.get('persistence', ''),
-                               message='Configuration replaced and the change confirmed.')
+            with self.store.lock:
+                target = next((t for t in self.get_job(job_id)['targets'] if t['name'] == name), {})
+                stage = 'matched' if target.get('no_op') else 'replaced'
+            self.stage_target(job_id, name, stage, status='applied', persistence=detail.get('persistence', ''),
+                              message='Configuration replaced and the change confirmed.')
             if applied is not None:
                 applied.append(name)
             self.event('restore.node', 'Configuration replaced and confirmed on this node.', lab_id, job_id, name)
         elif state == 'rolled_back':
-            self.update_target(job_id, name, status='rolled_back',
-                               message='The change was not confirmed in time and the device undid it. Checked: the '
-                                       'configuration from before the restore is active.')
+            self.stage_target(job_id, name, 'rolled_back', status='rolled_back',
+                              message='The change was not confirmed in time and the device undid it. Checked: the '
+                                      'configuration from before the restore is active.')
             self.event('restore.node', 'Not confirmed; the node rolled back and its previous configuration was read back.',
                        lab_id, job_id, name, level='error')
         elif state == 'unchanged':
             # The session was lost inside the transaction and nobody saw the change armed: the saved
             # configuration may have been active for a while before the device undid it. Say so.
-            self.update_target(job_id, name, status='failed',
-                               message='Configuration was not changed. Checked: the configuration from before the restore is active. '
-                                       'The session to the device was lost during the change, so the saved configuration may have '
-                                       'been active for a short time before the device undid it.')
+            self.stage_target(job_id, name, 'failed', status='failed',
+                              message='Configuration was not changed. Checked: the configuration from before the restore is active. '
+                                      'The session to the device was lost during the change, so the saved configuration may have '
+                                      'been active for a short time before the device undid it.')
             self.event('restore.node', 'The change did not take place; the previous configuration was read back.',
                        lab_id, job_id, name, level='error')
         else:
-            self.update_target(job_id, name, status='uncertain',
-                               message='The manager could not establish what this device is running ('
-                                       + detail.get('why', 'unknown') + '). Check it before relying on it.')
+            self.stage_target(job_id, name, 'uncertain', status='uncertain',
+                              message='The manager could not establish what this device is running ('
+                                      + detail.get('why', 'unknown') + '). Check it before relying on it.')
             self.event('restore.node', 'Outcome unknown: ' + detail.get('why', ''), lab_id, job_id, name, level='error')
 
     def _recheck_interrupted(self, job_id, name):
@@ -784,7 +1050,7 @@ class RestoreService:
             # armed before the restart: the previous configuration coming back is then a rollback.
             armed = True if target.get('_handle') is not None else None
             state, detail = self._settle(node, effective_credentials(lab, node), cand, target.get('_token', ''),
-                                         target.get('_handle'), armed, deadline, before)
+                                         target.get('_handle'), armed, deadline, before, on_stage=self._stager(job_id, name))
             self._record_settled(job_id, job['lab_id'], name, state, detail, armed, None)
             if state == 'applied' and detail.get('matches'):
                 self.update_target(job_id, name, status='verified', message='Checked after the manager restart: the saved '
@@ -793,8 +1059,8 @@ class RestoreService:
                 self.update_target(job_id, name, status='applied_unverified', message='After the manager restart the pending '
                                    'change was confirmed, but the device could not be compared with the saved configuration.')
         except Exception as exc:
-            self.update_target(job_id, name, status='uncertain', message='The manager restarted during this change and could '
-                               'not check the device afterwards (' + self._scrubbed(type(exc).__name__) + '). Check it by hand.')
+            self.stage_target(job_id, name, 'uncertain', status='uncertain', message='The manager restarted during this change and could '
+                              'not check the device afterwards (' + self._scrubbed(type(exc).__name__) + '). Check it by hand.')
         finally:
             with self.store.lock:
                 self.rechecks[job_id] = self.rechecks.get(job_id, 1) - 1
@@ -814,34 +1080,35 @@ class RestoreService:
             name = target['name']
             if target['status'] != 'applied':
                 continue
+            # The outcome label stays what the device reported; `status` carries the comparison's verdict.
+            done = partial(self.stage_target, job_id, name, 'matched' if target.get('no_op') else 'replaced',
+                           stamp_also=('checked',))
             outcome = outcomes.get(name)
             if not post_backup or not outcome or outcome.get('status') != 'succeeded' or not outcome.get('file'):
-                self.update_target(job_id, name, status='applied_unverified',
-                                   message='Configuration replaced, but the post-restore backup did not confirm it. Re-check by hand.')
+                done(status='applied_unverified',
+                     message='Configuration replaced, but the post-restore backup did not confirm it. Re-check by hand.')
                 continue
             from .downloads import stored_path
             path = stored_path(self.store, post_backup, outcome)
             if not path:
-                self.update_target(job_id, name, status='applied_unverified',
-                                   message='Configuration replaced, but its verification capture is unavailable.')
+                done(status='applied_unverified', message='Configuration replaced, but its verification capture is unavailable.')
                 continue
             try:
                 actual = path.read_text('utf-8', 'replace')
             except OSError:
-                self.update_target(job_id, name, status='applied_unverified', message='Verification capture unreadable.')
+                done(status='applied_unverified', message='Verification capture unreadable.')
                 continue
             missing, extra, converged = compare_for(target.get('platform', ''), candidates[name]['desired_set'], actual)
             if converged:
-                self.update_target(job_id, name, status='verified',
-                                   message='Configuration replaced and verified against the saved desired state.',
-                                   missing_statements=0, extra_statements=0)
+                done(status='verified', message='Configuration replaced and verified against the saved desired state.',
+                     missing_statements=0, extra_statements=0)
             else:
-                self.update_target(job_id, name, status='verify_mismatch',
-                                   missing_statements=len(missing), extra_statements=len(extra),
-                                   missing_sample=[mask_line(l) for l in missing[:20]],
-                                   extra_sample=[mask_line(l) for l in extra[:20]],
-                                   message=f'Configuration replaced, but {len(missing)} desired statement(s) are missing '
-                                           f'and {len(extra)} unexpected statement(s) remain.')
+                done(status='verify_mismatch',
+                     missing_statements=len(missing), extra_statements=len(extra),
+                     missing_sample=[mask_line(l) for l in missing[:20]],
+                     extra_sample=[mask_line(l) for l in extra[:20]],
+                     message=f'Configuration replaced, but {len(missing)} desired statement(s) are missing '
+                             f'and {len(extra)} unexpected statement(s) remain.')
 
     def _finalize(self, job_id, lab_id, prefix=''):
         with self.store.lock:

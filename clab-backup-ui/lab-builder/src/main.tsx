@@ -9,7 +9,8 @@ import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-
 import { TopologySessionCore, mergeCustomNodeTemplates, parseCustomNodeTemplatesExport } from "@containerlab/clab-ui/session";
 import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
-import { parseDocument } from "yaml";
+import { LineCounter, isMap, isSeq, isScalar, parseDocument } from "yaml";
+import type { Node as YamlNode } from "yaml";
 import "@containerlab/clab-ui/styles/global.css";
 
 // mapOnly: the page is the manager's map editor (../../app/static/map-editor-page.js). The topology is an
@@ -29,9 +30,24 @@ interface BuilderPage {
   // code: "storage" (the browser could not store the draft) or "conflict" (another tab holds a newer one).
   problem(message: string, code?: string): void;
   ready(mount: (draft: BuilderDraft) => Promise<void>): void;
-  // Map editor only: the page receives a way to put a whole annotations document into the running editor
+  // Map editor: the page receives a way to put a whole annotations document into the running editor
   // (its own undo / redo history, the device look). The topology is not reachable through it.
-  attach?(editor: { applyAnnotations(text: string): Promise<void> }): void;
+  // Lab builder: the page receives the topology text handle behind its editable YAML panel.
+  attach?(editor: MapEditorHandle | YamlEditorHandle): void;
+}
+interface MapEditorHandle { applyAnnotations(text: string): Promise<void> }
+// A refusal found before the engine is asked: `line` is 1-based when the text points at one.
+interface YamlFlaw { message: string; line?: number; severity: "error" | "warning" }
+interface YamlEditorHandle {
+  // Replaces the whole topology text as one engine step (the editor's own undo takes it back). Rejects with
+  // an Error carrying `code: "yaml"` and `line` when the text is refused; the graph is then untouched.
+  applyYaml(text: string): Promise<void>;
+  // The topology text as of the last settled operation.
+  getYaml(): string;
+  // Parser and shape check only, no engine call: the first error, else the first warning, else null.
+  checkYaml(text: string): YamlFlaw | null;
+  // Hears every stored state, after the page stored it. Returns the unsubscribe function.
+  subscribe(listener: (yaml: string, annotations: string) => void): () => void;
 }
 declare global { interface Window { labBuilderPage: BuilderPage; __DOCKER_IMAGES__?: string[] } }
 
@@ -46,6 +62,35 @@ const mapCommandAllowed = (command: unknown): boolean => {
   return typeof c?.command === "string" && MAP_COMMANDS.has(c.command);
 };
 const refused = (message: string) => Object.assign(new Error(message), { code: "topology" });
+
+// The engine refuses only text the parser cannot read. A readable text of the wrong shape (an empty file, a
+// list, `topology: 5`, nodes written as a list) it accepts, and the canvas then shows nothing: such a text is
+// refused here, so the last good graph is never replaced by an empty one. Links naming a device that is not
+// in topology.nodes are kept by the engine but not drawn: that is a warning, not a refusal.
+function yamlFlaw(text: string): YamlFlaw | null {
+  const lines = new LineCounter(), doc = parseDocument(text, { prettyErrors: true, lineCounter: lines });
+  const lineOf = (node: unknown) => { const r = (node as YamlNode | null)?.range; return r ? lines.linePos(r[0]).line : undefined; };
+  const error = doc.errors[0];
+  if (error) return { message: error.message.split("\n")[0].replace(/ at line \d+, column \d+:?$/, ""), line: error.linePos?.[0]?.line, severity: "error" };
+  const shape = (message: string, node?: unknown): YamlFlaw => ({ message, line: lineOf(node), severity: "error" });
+  if (!isMap(doc.contents)) return shape("A topology file is a mapping with name: and topology: at the top.", doc.contents);
+  const topology = doc.contents.get("topology", true);
+  if (!isMap(topology)) return shape(topology === undefined ? "The file has no topology: section." : "topology: must be a mapping (nodes:, links:, …).", topology);
+  const nodes = topology.get("nodes", true), links = topology.get("links", true);
+  if (nodes !== undefined && !(isMap(nodes) || (isScalar(nodes) && nodes.value === null))) return shape("topology.nodes must be a mapping of device names.", nodes);
+  if (links !== undefined && !(isSeq(links) || (isScalar(links) && links.value === null))) return shape("topology.links must be a list.", links);
+  const names = new Set(isMap(nodes) ? nodes.items.map((p) => String(isScalar(p.key) ? p.key.value : p.key)) : []);
+  for (const link of isSeq(links) ? links.items : []) {
+    const endpoints = isMap(link) ? link.get("endpoints", true) : undefined;
+    for (const end of isSeq(endpoints) ? endpoints.items : []) {
+      const node = isScalar(end) ? String(end.value ?? "").split(":")[0] : isMap(end) ? String(end.get("node") ?? "") : "";
+      // host:, macvlan:, mgmt-net: and the like are containerlab's special endpoints, not devices.
+      if (node && !names.has(node) && !/^(host|mgmt-net|macvlan|vxlan|vxlan-stitch|dummy)$/.test(node)) return { message: `The link endpoint ${node} is not a device in topology.nodes: containerlab refuses such a link and the canvas cannot draw it.`, line: lineOf(end), severity: "warning" };
+    }
+  }
+  return null;
+}
+const yamlRefusal = (flaw: YamlFlaw) => Object.assign(new Error(flaw.line ? `Line ${flaw.line}: ${flaw.message}` : flaw.message), { code: "yaml", line: flaw.line });
 
 const enoent = (p: string) => Object.assign(new Error(`ENOENT: no such file, open '${p}'`), { code: "ENOENT" });
 
@@ -81,6 +126,9 @@ async function mount(draft: BuilderDraft): Promise<void> {
   // One engine operation at a time, and the draft is stored before the editor hears the answer: an
   // acknowledged edit is already durable, and a half-finished rename sequence is never stored.
   let queue: Promise<unknown> = Promise.resolve();
+  // The texts as of the last settled operation, and the page's listeners for them (the YAML panel).
+  let storedYaml = draft.yaml;
+  const yamlListeners = new Set<(yaml: string, annotations: string) => void>();
   const settled = <T,>(work: () => Promise<T>): Promise<T> => {
     const run = queue.then(work).then((value) => {
       // Second line of defence in the map editor: whatever happened, the topology text leaves as it came.
@@ -88,8 +136,11 @@ async function mount(draft: BuilderDraft): Promise<void> {
         files.files.set(yamlPath, draft.yaml);
         const e = refused("The map editor does not change the topology. That edit was not kept."); page.problem(e.message, "topology"); throw e;
       }
-      try { page.persist(files.files.get(yamlPath) ?? "", files.files.get(layoutPath) ?? ""); }
+      const yaml = files.files.get(yamlPath) ?? "", annotations = files.files.get(layoutPath) ?? "";
+      try { page.persist(yaml, annotations); }
       catch (e) { page.problem(e instanceof Error ? e.message : String(e), (e as { code?: string }).code); throw e; }
+      storedYaml = yaml;
+      for (const listener of Array.from(yamlListeners)) { try { listener(yaml, annotations); } catch (e) { console.error(e); } }
       return value;
     });
     queue = run.catch(() => undefined);
@@ -106,6 +157,29 @@ async function mount(draft: BuilderDraft): Promise<void> {
       const snapshot = await core.getSnapshot();
       window.postMessage({ type: "topology-host:snapshot", protocolVersion: 1, snapshot, reason: "external-change" }, window.location.origin);
     })
+  });
+
+  // Lab builder: the page's YAML panel drives the same engine. The whole text is one setYamlContent command
+  // with history, so the editor's own undo takes an apply back in one step; the editor redraws from the
+  // snapshot it is sent, as for a file changed outside it. The engine keeps the text exactly as given; its next
+  // visual edit reprints the whole document in its own style (see docs/LAB-BUILDER.md).
+  if (!mapOnly && page.attach) page.attach({
+    applyYaml: (text: string) => {
+      const flaw = yamlFlaw(text);
+      if (flaw?.severity === "error") return Promise.reject(yamlRefusal(flaw));
+      return settled(async () => {
+        const before = await core.getSnapshot() as { revision: number; yamlContent?: string };
+        if (before.yamlContent === text) return;
+        const answer = await core.applyCommand({ command: "setYamlContent", payload: { content: text } } as never, before.revision) as { type?: string; error?: string };
+        if (answer?.type === "topology-host:error") throw yamlRefusal({ message: (answer.error || "The editor did not accept that topology.").split("\n")[0], severity: "error" });
+        if (answer?.type === "topology-host:reject") throw Object.assign(new Error("The editor changed the topology meanwhile. Nothing was applied; try again."), { code: "yaml" });
+        const snapshot = await core.getSnapshot();
+        window.postMessage({ type: "topology-host:snapshot", protocolVersion: 1, snapshot, reason: "external-change" }, window.location.origin);
+      });
+    },
+    getYaml: () => storedYaml,
+    checkYaml: yamlFlaw,
+    subscribe(listener: (yaml: string, annotations: string) => void) { yamlListeners.add(listener); return () => { yamlListeners.delete(listener); }; }
   });
 
   const listeners = new Set<(e: unknown) => void>();

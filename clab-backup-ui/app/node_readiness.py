@@ -69,6 +69,10 @@ def login_state(lab, node, available, check):
     if not effective_credentials(lab, node).get('username'):
         return {'status': 'needs_credentials', 'message': 'Assign NOS credentials to this node first.'}
     status = (check or {}).get('status')
+    # 'checking': a manual Test login or a lab-wide "Test logins" refresh is in flight for this
+    # node right now (node_services.py); never a real answer, so it never marks a device ready.
+    if status == 'checking':
+        return {'status': 'checking', 'message': check.get('message', ''), 'at': check.get('at')}
     if status == 'reachable':
         return {'status': 'ready', 'message': check.get('message', ''), 'at': check.get('at')}
     if status == 'failed':
@@ -77,9 +81,15 @@ def login_state(lab, node, available, check):
 
 
 def summarize(states):
-    """Lab-level readiness for the deployment bar: ready, booting, failed or idle."""
-    monitored = [s for s in states if s['status'] in ('ready', 'booting', 'failed')]
-    counts = {key: sum(s['status'] == key for s in monitored) for key in ('ready', 'booting', 'failed')}
+    """Lab-level readiness for the deployment bar: ready, booting, failed or idle.
+
+    A node being tested right now ('checking') is neither ready nor failed; it counts
+    alongside 'booting' so the deployment bar's total keeps every monitored device
+    while a "Test logins" refresh is in flight, instead of the total briefly shrinking.
+    """
+    bucket = lambda s: 'booting' if s['status'] == 'checking' else s['status']
+    monitored = [s for s in states if bucket(s) in ('ready', 'booting', 'failed')]
+    counts = {key: sum(bucket(s) == key for s in monitored) for key in ('ready', 'booting', 'failed')}
     if not monitored: status = 'idle'
     elif counts['ready'] == len(monitored): status = 'ready'
     elif counts['booting']: status = 'booting'

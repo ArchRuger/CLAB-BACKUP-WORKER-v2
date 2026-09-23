@@ -4,6 +4,58 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.37
+
+**Setup Script Cleanup Log, part 2: saves, diffs, restore progress and parallel restore, Test logins, the lab
+builder, and the helper hardening.** Second release of the stream ([docs/ui-ux-cleanup/PICKUP.md](ui-ux-cleanup/PICKUP.md)).
+
+- **Helper hardening (install this release, not 1.30.36, on a VM with engineer access).** The sudoers helper's
+  `create` wrote the uploaded map file and set its mode by path, which follows a symlink planted in a group-writable
+  engineer folder; every write in `create`, `revise` and `delete` now goes through the descriptor-based pattern
+  `publish` uses (directory opened without following links, modes set on the open file, recovery copies in a history
+  folder the helper owns), the review digest binds the existing map file's state, and anything but a regular file of
+  at most 1 MiB in the map file's place is refused before the topology is written. The deploy review's plain text now
+  says the topology runs as its file describes it (hooks, mounts, image pulls) and names the map file it will write.
+- **Junos backups in the repository are `<node>.cfg`** (display-set text, as EOS and IOS XR already were); the
+  hierarchical restore artifact stays `<node>.jcfg`. Older `<node>.set` saves stay listed, compared (paired per node;
+  the upload review shows the rename as one changed file) and restorable ([GIT-PROGRESS](GIT-PROGRESS.md)).
+- **Topology preview** fills the viewport (96% × 92%, full screen on a phone), fits the map on opening and on resize,
+  and has no caption.
+- **Every save has a label.** *Save progress* asks "What changed?" (required, up to 120 characters, kept as a draft
+  through cancel and retry); the label is the Git commit message and names the save in the pending list, the history,
+  the job window and the review. A new label on Latest still updates the same Latest folder; older saves without a
+  label fall back to their kind and date.
+- **The save destination is complete**: review, job window and details show `<repository> · <branch> · <path>` from
+  the destination frozen on the job (never the current binding), the local checkout path and the commit, and say
+  whether the save is on the VM, waiting for review, uploaded or verified on the remote.
+- **Real diffs**: the upload review and *Compared with your latest save* render unified diffs (line numbers,
+  insertions and deletions marked by colour and sign, hunk headers, per-file disclosure, wrapping on narrow screens)
+  produced by the manager from the exact texts; nothing is normalised away.
+- **"View configuration backup" closes the save windows it came from** (no stale *Saves waiting to be uploaded*
+  under the destination) and moves the focus.
+- **Replace running configuration**: every differing device row expands to the diff between the saved candidate and
+  the running configuration read by the review, before anything is applied ("saved → running now"; devices that
+  already match, or whose artifact or probe is missing, say so instead); the progress window lists each device's
+  stages (Waiting → Backup → Validate → Replace, timed recovery armed → Fresh connection and read-back → Confirm →
+  Done) with the current one highlighted, completed ones green with a check, and distinct Replaced / Already matched
+  / Skipped / Failed / Rolled back / Uncertain outcomes, timed from the server clock and rebuilt on reopen or reload.
+- **Devices are replaced in parallel**: independent devices run on a bounded pool (default 4, `RESTORE_NODE_WORKERS`
+  1–8), each with its own backup check, timed recovery, fresh-connection read-back and confirmation; devices sharing
+  one SSH endpoint run one after another; one device's failure or rollback never touches another's. The job records
+  a per-device timeline that proves the overlap. The safety backup before and the check backup after stay one job each
+  ([multi-platform restore README](multi-platform-restore/README.md)).
+- **Test logins** beside the *Devices* heading (topology rail and Devices tab) runs the real SSH login test for every
+  device with at most four sessions at once, shows "Testing login…" per device and updates the cards as answers come
+  in; a disabled *Open CLI* names the reason and points to it. Nothing is marked ready without a real answer
+  ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)).
+- **Lab builder**: *New lab* asks only for a name and a folder and opens a blank canvas (no starters); the empty status
+  pill is hidden; a `.clab.yml` and its `.annotations.json` can be dropped on the welcome card or the canvas (or picked
+  with *Open lab files…*), in any order, topology-only allowed, with the parser's reason on refusal and a confirmation
+  before an unsaved draft is replaced; *View YAML* became an editable **YAML** panel beside the canvas: edit the text
+  and Apply (Ctrl+Enter) to see it on the map, draw on the canvas and see the text follow, with syntax and shape
+  diagnostics, Revert, and the editor's own Undo covering an apply; invalid text never replaces the last valid graph;
+  a canvas edit reformats hand-written text (content kept) and the guide says so ([LAB-BUILDER](LAB-BUILDER.md)).
+
 ## Changes in 1.30.36
 
 **Setup Script Cleanup Log, part 1: setup and onboarding, import, deploy review, layout, capture mapping.** First

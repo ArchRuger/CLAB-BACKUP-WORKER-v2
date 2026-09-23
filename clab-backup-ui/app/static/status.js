@@ -92,9 +92,12 @@ function deviceState(node){
  if(!node)return {key:'unknown',label:'Unknown',detail:'',next:'',cli:false,pill:'neutral'};
  if(node.ssh_ready)return {key:'ready',label:'Ready',detail:login==='unmonitored'?'Connected with the saved address.':`${name} is accepting SSH logins.`,next:'',cli:true,pill:'ok'};
  if(statusNotRunning(node))return {key:'unavailable',label:'Unavailable',detail:`${name} is not running, or the lab status is out of date.`,next:'Start lab',cli:false,pill:'neutral'};
- if(login==='booting')return {key:'starting',label:'Starting',detail:`${name} is still starting. SSH opens automatically when it answers.`,next:'',cli:false,pill:'warn'};
+ // A refresh (Test logins, or this device's own Test login) is answering right now; only a
+ // real answer ever marks a device ready, so this is never optimistic.
+ if(login==='checking')return {key:'testing',label:'Testing login…',detail:`Testing the SSH login of ${name} again.`,next:'',cli:false,pill:'busy'};
+ if(login==='booting')return {key:'starting',label:'Starting',detail:`${name} is still starting. SSH opens automatically when it answers. Use Test logins (above) or this device's Test login to check again now.`,next:'',cli:false,pill:'warn'};
  if(login==='failed')return {key:'attention',label:'Needs attention',detail:`${name} is running, but SSH login failed with the saved credentials.`,next:'Check credentials',cli:false,pill:'danger'};
- if(statusNeedsCredentials(node))return {key:'credentials',label:'Needs credentials',detail:`Add login credentials to open the CLI of ${name}.`,next:'Add credentials',cli:false,pill:'warn'};
+ if(statusNeedsCredentials(node))return {key:'credentials',label:'Needs credentials',detail:`Add login credentials to open the CLI of ${name}. Add them under Devices, then use Test logins to check again.`,next:'Add credentials',cli:false,pill:'warn'};
  if(!node.platform||node.readiness==='Choose NOS')return {key:'credentials',label:'Choose network OS',detail:`Tell the manager which network OS ${name} runs.`,next:'Edit connection',cli:false,pill:'warn'};
  return {key:'unknown',label:'Unknown',detail:'',next:'',cli:false,pill:'neutral'};
 }
