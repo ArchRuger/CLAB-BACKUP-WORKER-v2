@@ -25,6 +25,47 @@ this one once it was run; this entry lists only what was run before the commit.
   odd image string never blocking a topology parse) were applied and the suites rerun. The `host_operations.py` change
   (`options.annotations` on `create`) is reviewed in the records entry.
 
+**Records added after the release commit `f47d3b8` (same VM, 2026-09-23 01:30–02:20 UTC):**
+
+- **Unit and static of the committed tree:** `python -m unittest discover` 1029 OK (1 skipped, the opt-in EOS fixture);
+  `node --test tests/*.js` 228 OK; `verify-release.py`, `check_links.py` (128 files, 0 problems), `git diff --check`, `bash -n`.
+- **Live installer, standard path**, `bash deploy/install.sh` from a clean worktree of `f47d3b8` with the VM's `.env` copied in,
+  driven through a pty (`docs/ui-ux-cleanup/` keeps the driver out of Git): exactly three prompts in 86 s (Setup menu
+  → 1; "Where are your lab configurations going?" → existing checkout; checkout directory), no bind/port, operations,
+  VS Code, APT-media, plan, "Next step", GitHub CLI, subfolder or "Register?" question; the plan printed
+  `lazydocker: install or update for clabllm`; the manager image and the capture session image were rebuilt at 1.30.36
+  and recreated (`/api/state` 1.30.36, helper 1.30.36, capture stack `clab-capture-service:1.30.36`); Git setup ran as
+  part of item 1 and registered the existing checkout at the repository root (`Destination: repository root`); the
+  process exited 0 to the shell after the SUCCESS box and the `check-install.sh` line.
+- **Live VM-connection seed (A7):** `sudo bash deploy/setup-discovery.sh --reset-password --data-dir /srv/containerlab-node-manager/data`
+  from the same worktree, new password typed twice into the pty: seed `host-bootstrap.json` (mode 600, uid 10001)
+  present right after, consumed by the running manager 24 s later (file gone; `bootstrap_at` set, `password_saved`
+  true, the pinned fingerprint kept because address and port were unchanged, `bootstrap_pending` false), and
+  `POST /api/discovery/refresh` reconnected with the new password (`connected: true`, helper 1.30.36). The pending /
+  first-trust path (no fingerprint yet) has unit evidence only (`test_host_bootstrap.py`, 23 tests); the fixture
+  manager overwrites the host after start-up, so it could not show that dialog state.
+- **Health check** as the ordinary account: `check-install.sh` exit 2 with two warnings only (folder coverage capped at
+  20 folders; one telemetry failure on the multitool host, expected: it is not a NOS), every Git, Wireshark, Grafana
+  and helper row PASS.
+- **Multitool login (B6):** after *Sync from VM* of the imported `restore-square`, `host1` carried its image,
+  `credential_source: default`, and the readiness monitor's real SSH probe made it `ready` / `ssh_ready: true`;
+  backups stay unavailable for it (`readiness: Choose NOS`).
+- **Browser QA (independent Sonnet agent, `docs/ui-ux-cleanup/tools/check_release_1_30_36.py`, report and 21
+  screenshots in `docs/ui-ux-cleanup/evidence/`):** 34 PASS / 2 FAIL / 12 INFO, 0 console and 0 page errors, at
+  1920×1080, 1366×768 and 390×844 against the real manager and the live lab: B1, B2 (both *← My labs* and the browser
+  Back reopen the dialog on the same VM path with re-read YAML), B4, B6, B7, D1 (vJunos `ge-0/0/0`→`eth1`, cJunosEvolved
+  `et-0/0/1`→`eth5`, XRv9k `Gi0/0/0/0`→`eth1`, cEOS/Linux identity, `tap` never preselected) PASS. **B3 FAIL**: the
+  preview dialog measured 58%×60% of 1920×1080 and 82%×64% of 1366×768, and the caption was still shown for a
+  topology with a saved map file; fixed in 1.30.37. B5's close control was confirmed by code and unit tests only (no
+  banner was showing on the healthy lab); a live banner check is in the 1.30.37 records.
+- **Second Opus risk review (after the commit)** of the helper's `create` map-file write found a must-fix in this
+  release: the mode was set with `os.chmod` by path after `os.replace`, which follows a symlink planted in a
+  group-writable engineer folder. **1.30.36 must not be installed with engineer access on a shared VM**; the fix
+  (descriptor-based writes, the map file's state bound into the review digest, plan-time refusal of anything but a
+  regular file) ships in 1.30.37, together with the review's other items (trust sentence in the deploy review text,
+  the review naming the map file).
+- **Disk after the rebuild and a build-cache prune:** 49G used, 20G available.
+
 # Student quick start delivered: the PDF, its inspection and two independent replays — 1.30.35
 
 Prepared on `claude/student-quick-start` on 2026-09-22 after 1.30.34 (`2ef98a2`, CI green). **No application code

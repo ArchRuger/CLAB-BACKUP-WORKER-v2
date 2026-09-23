@@ -42,8 +42,23 @@ not committed). Read this file first, then `REQUIREMENTS.md` (page → requireme
 
 | Chunk | Content | Release | Commit | Status |
 |---|---|---|---|---|
-| 0 | baseline, cleanup, routing, requirement map | none (no shipped content) | | in progress |
+| 0 | baseline, cleanup, routing, requirement map | none (no shipped content) | (in 1.30.36) | done |
+| 1 | A2–A7, B1, B2, B4–B7, D1 (setup, onboarding, import, deploy review, notices, multitool, device rail, capture mapping) | 1.30.36 | `f47d3b8` + records commit | done; B3 and a helper must-fix carried to 1.30.37 |
+| 2 | A1, B3, helper hardening, E1–E7, D2 (Junos .cfg, preview size, save labels/destination/diff, restore diff/stages/parallel, Test logins) | 1.30.37 | | in progress |
+| 3 | C1–C4 (lab builder: blank canvas, pill, drop, editable YAML) | 1.30.38 | | built, awaiting release |
+
+## Live validation resources (2026-09-23)
+
+- Lab `restore-square` (four images + `host1` multitool) deployed from `/srv/containerlab-node-manager/projects/restore-square/`
+  and imported (lab id `174386ec12ee496190c585c5796b2662`); configuration A applied with `nodecli.py`; the manager runs
+  the build of the release under test from a clean worktree `~/projects/clab-manager-<release>` (the VM's `.env` copied
+  in). The `clab-discovery` password was reset during the A7 live check (kept in the manager's encrypted store; not
+  written anywhere else).
+- Known follow-up outside this stream: `docs/student-quick-start/tools/capture_scenario_b.py` waits for the removed
+  read-only View YAML dialog (`#builder-yaml-text`); the guide itself is out of scope here.
 
 ## Exact next action
 
-Finish the requirement map from the scout reports, then chunk 1 (setup and onboarding, A1–A7).
+Cut 1.30.37 (A1, B3, helper hardening, E1–E7, D2), rebuild from its worktree, run the live restore checks
+(`docs/multi-platform-restore/tools/`, overlap from `timeline`), the save/diff/label live checks, D2/B5 live, then the
+records commit, push and CI; then 1.30.38 for C1–C4.
