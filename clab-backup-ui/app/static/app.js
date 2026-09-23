@@ -82,7 +82,7 @@ function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.30.35';$('app-version').textContent='v'+version;
+ const version=state.version||'1.30.36';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
@@ -126,11 +126,24 @@ function syncProxies(){
  for(const note of document.querySelectorAll('[data-proxy-reason]')){const owner=$(note.dataset.proxyReason);const text=owner&&owner.disabled?owner.title||'':'';note.textContent=text;note.hidden=!text;}
 }
 function activateProxy(mirror){const owner=$(mirror.dataset.proxy);if(!owner||owner.disabled)return false;if(typeof owner.onclick==='function'){owner.onclick.call(owner);return true;}if(typeof owner.click==='function')owner.click();return true;}
+// Notices: a running operation (spec.running, e.g. "Lab operation running…", "Replacing configuration…",
+// "Lab is starting…") never disappears — the student must still see something is happening — so its close
+// control only collapses it to a one-line pill; every other notice can be hidden outright. Either way the
+// key is the lab (or "home" for the home banner) plus the banner id plus a digest of the headline alone,
+// never the detail (which can change every poll for a running job): the same headline stays collapsed or
+// hidden across rerenders, and a materially different headline is shown again in full. noticeCollapsed is
+// in-memory only (a page reload always starts expanded); noticeDismissed/dismissNotice (shell.js) persist
+// a hide in sessionStorage.
+let noticeCollapsed={};
+function noticeDigest(text){let hash=0;const s=String(text||'');for(let i=0;i<s.length;i++)hash=(hash*31+s.charCodeAt(i))>>>0;return hash.toString(36);}
+function noticeKey(id,spec){return (id==='home-banner'?'home':(typeof activeId==='string'?activeId:''))+'.'+id+'.'+noticeDigest(spec.text);}
 // The situational banner: static children only (text, hidden, className), never innerHTML, so an open
 // menu or a focused button survives the 4 s poll. One case at a time, in priority order.
 function setBanner(id,spec={}){
  const banner=$(id);if(!banner)return;
- if(!spec.text){banner.hidden=true;return;}
+ if(!spec.text){banner.hidden=true;if(banner.classList)banner.classList.remove('banner-collapsed');return;}
+ const key=noticeKey(id,spec),running=!!spec.running;
+ if(!running&&typeof noticeDismissed==='function'&&noticeDismissed(key)){banner.hidden=true;if(banner.classList)banner.classList.remove('banner-collapsed');return;}
  banner.hidden=false;banner.className='banner '+(spec.tone||'info');
  if(typeof banner.setAttribute==='function'){banner.setAttribute('role',spec.tone==='danger'?'alert':'status');banner.setAttribute('aria-live',spec.tone==='danger'?'assertive':'polite');}
  const glyph=$(id+'-glyph');if(glyph&&typeof glyph.setAttribute==='function')glyph.setAttribute('href','#i-'+(spec.icon||'info'));
@@ -138,13 +151,28 @@ function setBanner(id,spec={}){
  // A disabled Start in the banner explains itself: its reason becomes the Details line when nothing else is.
  const disabledStart=spec.actions?.['banner-start']?.disabled?spec.actions['banner-start'].title:'',detailText=spec.detail||disabledStart||'';
  const details=$(id+'-detail');if(details){details.hidden=!detailText;if($(id+'-detail-text'))$(id+'-detail-text').textContent=detailText;}
- for(const key of BANNER_BUTTONS[id]||[]){const b=$(key);if(!b)continue;const action=spec.actions?.[key];b.hidden=!action;if(action){b.textContent=action.label;b.disabled=!!action.disabled;b.title=action.title||'';b.onclick=action.run;}}
+ for(const action of BANNER_BUTTONS[id]||[]){const b=$(action);if(!b)continue;const spec2=spec.actions?.[action];b.hidden=!spec2;if(spec2){b.textContent=spec2.label;b.disabled=!!spec2.disabled;b.title=spec2.title||'';b.onclick=spec2.run;}}
+ const collapsed=running&&noticeCollapsed[id]===key;
+ if(banner.classList)banner.classList.toggle('banner-collapsed',collapsed);
+ const close=$(id+'-close');
+ if(close){
+  close.hidden=false;
+  if(typeof close.setAttribute==='function')close.setAttribute('aria-label',running?(collapsed?'Show this notice':'Collapse this notice'):'Hide this notice');
+  close.onclick=running?(()=>{
+   const next=noticeCollapsed[id]!==key;noticeCollapsed[id]=next?key:'';
+   if(banner.classList)banner.classList.toggle('banner-collapsed',next);
+   if(typeof close.setAttribute==='function')close.setAttribute('aria-label',next?'Show this notice':'Collapse this notice');
+  }):(()=>{
+   if(typeof dismissNotice==='function')dismissNotice(key);
+   banner.hidden=true;if(banner.classList)banner.classList.remove('banner-collapsed');
+  });
+ }
 }
 function startLab(){const b=$('lab-start');if(b&&!b.disabled&&typeof b.onclick==='function')b.onclick();}
 function renderHomeBanner(){
  const op=(state.operations||[]).find(j=>!j.lab_id&&['queued','running'].includes(j.status));
  if(!op){setBanner('home-banner',{});return;}
- setBanner('home-banner',{tone:'info',icon:'clock',text:(typeof operationLabel==='function'?operationLabel(op.action):'Lab operation')+'…',detail:op.message||'',actions:{'home-banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(op.id);}}}});
+ setBanner('home-banner',{tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(op.action):'Lab operation')+'…',detail:op.message||'',actions:{'home-banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(op.id);}}}});
 }
 function renderLabBanner(){
  const lab=current();
@@ -160,8 +188,8 @@ function renderLabBanner(){
  const start=()=>({'banner-start':{label:startLabel(),run:startLab,disabled:!!$('lab-start')?.disabled,title:$('lab-start')?.title||''}});
  let spec={};
  if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
- else if(runningOp)spec={tone:'info',icon:'clock',text:(typeof operationLabel==='function'?operationLabel(runningOp.action):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
- else if(runningRestore)spec={tone:'info',icon:'clock',text:'Replacing configuration…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
+ else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
+ else if(runningRestore)spec={tone:'info',icon:'clock',running:true,text:'Replacing configuration…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
  else if(ls.key==='attention'&&ls.job){
   const job=ls.job,isRestore=restores.includes(job),actions={'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissJob==='function')dismissJob(job.id);render();}}};
   if(isRestore)actions['banner-restore']={label:'Details',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(job.id);}};
@@ -177,7 +205,7 @@ function renderLabBanner(){
  }
  else if(ls.key==='attention')spec={tone:'danger',icon:'alert',text:ls.detail,actions:lab.deployment?.status==='Partially running'?start():{'banner-credentials':{label:'Check credentials',run:()=>showTab('credentials')}}};
  else if(credentials)spec={tone:'warn',icon:'alert',text:`${credentials} ${credentials===1?'device needs':'devices need'} login credentials before you can open ${credentials===1?'its':'their'} CLI.`,actions:{'banner-credentials':{label:'Add credentials',run:()=>openProfile()}}};
- else if(ls.key==='starting')spec={tone:'info',icon:'clock',text:'Lab is starting — '+ls.detail};
+ else if(ls.key==='starting')spec={tone:'info',icon:'clock',running:true,text:'Lab is starting — '+ls.detail};
  else if(ls.key==='stopped')spec={tone:'info',icon:'info',text:'This lab is not running.',actions:start()};
  else if(ls.key==='unknown')spec={tone:'warn',icon:'alert',text:ls.detail||'The lab VM cannot be reached. Status may be out of date.',actions:{'banner-vm':{label:'VM connection…',run:()=>{if(typeof openVmDialog==='function')openVmDialog();}}}};
  else if(ls.key==='unlinked')spec={tone:'info',icon:'info',text:ls.detail,actions:{'banner-link':{label:'Match to a running lab…',run:()=>{const b=$('link-deployment');if(b&&typeof b.onclick==='function')b.onclick();}}}};

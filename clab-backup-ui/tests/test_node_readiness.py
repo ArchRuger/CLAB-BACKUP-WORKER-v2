@@ -6,11 +6,13 @@ import time
 import unittest
 from unittest.mock import patch
 
+import paramiko
 from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.node_readiness import MAX_TEST_ATTEMPTS, REFUSALS_BEFORE_FAILED, cli_answers, login_state, summarize
-from app.runner import job_environment
+from app.runner import job_environment, effective_credentials, credential_source
+from app.inventory import IMAGE_DEFAULT_CREDENTIALS, DEFAULT_CREDENTIALS, image_default_credentials, image_repository
 
 
 class Inline:
@@ -226,6 +228,30 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(summarize([{'status': 'ready'}, {'status': 'failed'}]), {'status': 'failed', 'total': 2, 'ready': 1, 'booting': 0, 'failed': 1})
         self.assertEqual(summarize([{'status': 'ready'}, {'status': 'ready'}])['status'], 'ready')
 
+    def test_image_default_login_reaches_ready_while_a_different_linux_image_still_needs_credentials(self):
+        multitool = next(iter(IMAGE_DEFAULT_CREDENTIALS))
+        self.lab['nodes'].append(dict(node('host1', '172.20.20.9', platform=''), image=multitool + ':latest'))
+        self.lab['nodes'].append(dict(node('host2', '172.20.20.10', platform=''), image='ghcr.io/library/alpine'))
+        self.store.state['discovery']['labs']['demo'] += [
+            dict(name='clab-demo-host1', address='172.20.20.9', state='running', kind='linux'),
+            dict(name='clab-demo-host2', address='172.20.20.10', state='running', kind='linux')]
+        self.store.save()
+        before = self.public()
+        host1 = next(n for n in before['nodes'] if n['name'] == 'clab-demo-host1')
+        host2 = next(n for n in before['nodes'] if n['name'] == 'clab-demo-host2')
+        self.assertEqual(host1['credential_source'], 'default')
+        self.assertTrue(host1['login_configured'])
+        self.assertNotEqual(host1['nos_login']['status'], 'needs_credentials')
+        self.assertEqual(host2['credential_source'], '')
+        self.assertEqual(host2['nos_login']['status'], 'needs_credentials')
+        with patch.object(self.app.state.runner.pool, 'submit'):
+            self.answers = {n['name']: 'reachable' for n in self.lab['nodes']}
+            self.monitor.scan()
+        self.assertIn(('clab-demo-host1', 'admin', IMAGE_DEFAULT_CREDENTIALS[multitool][1]), self.probes)
+        after = next(n for n in self.public()['nodes'] if n['name'] == 'clab-demo-host1')
+        self.assertEqual(after['nos_login']['status'], 'ready')
+        self.assertTrue(after['ssh_ready'])
+
 
 class Stream:
     def __init__(self, data=b''):
@@ -258,6 +284,46 @@ class ProbeTests(unittest.TestCase):
             self.assertFalse(cli_answers(FakeClient(output)), output)
         self.assertFalse(cli_answers(FakeClient(error=TimeoutError('slow'))))
 
+    def make_monitor(self, client):
+        from app.node_readiness import ReadinessMonitor
+
+        class FakeServices:
+            def reserve(self):
+                return client
+
+            def release(self, given):
+                pass
+
+        return ReadinessMonitor(store=None, services=FakeServices(), runner=None)
+
+    def test_ssh_probe_asks_show_version_only_for_a_node_with_a_nos_platform(self):
+        client = FakeClient(b'Arista cEOSLab\nSoftware image version: 4.35.0F\n')
+        monitor = self.make_monitor(client)
+        with patch('app.node_readiness.connect'):
+            status = monitor.ssh_probe({'platform': 'arista_ceos'}, {'username': 'admin', 'password': 'admin'})
+        self.assertEqual(status, 'reachable')
+        self.assertEqual(client.commands, [('show version', 25)])
+
+    def test_ssh_probe_uses_a_generic_command_for_a_node_without_a_nos_platform(self):
+        from app.node_readiness import GENERIC_CLI_COMMAND
+        # A Linux host (kind `linux`, an unmapped kind, or a generic SSH profile) has
+        # no NOS CLI; `show version` would never answer and readiness would never
+        # leave 'booting'. A harmless real shell command still proves a real login.
+        client = FakeClient(b'readiness-check\n')
+        monitor = self.make_monitor(client)
+        with patch('app.node_readiness.connect'):
+            status = monitor.ssh_probe({'platform': ''}, {'username': 'admin', 'password': ''})
+        self.assertEqual(status, 'reachable')
+        self.assertEqual(client.commands, [(GENERIC_CLI_COMMAND, 25)])
+
+    def test_ssh_probe_reports_failed_only_on_an_authentication_error(self):
+        client = FakeClient(b'ok')
+        monitor = self.make_monitor(client)
+        with patch('app.node_readiness.connect', side_effect=paramiko.AuthenticationException('no')):
+            self.assertEqual(monitor.ssh_probe({'platform': ''}, {'username': 'admin', 'password': 'wrong'}), 'failed')
+        with patch('app.node_readiness.connect', side_effect=OSError('unreachable')):
+            self.assertEqual(monitor.ssh_probe({'platform': ''}, {'username': 'admin', 'password': ''}), 'booting')
+
     def test_job_environment_starts_every_ansible_run_without_recorded_host_keys(self):
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
@@ -269,6 +335,69 @@ class ProbeTests(unittest.TestCase):
             self.assertEqual(env['BACKUP_EVENT_FILE'], str(work / 'events.jsonl'))
             self.assertNotIn('ANSIBLE_COLLECTIONS_PATH', {k: v for k, v in env.items() if k not in os.environ},
                              'the image, not the job, decides where collections live')
+
+
+class ImageDefaultCredentialTests(unittest.TestCase):
+    """profile > inventory > kind default > image default > none (CLAUDE.md login order)."""
+
+    def setUp(self):
+        self.multitool = next(iter(IMAGE_DEFAULT_CREDENTIALS))
+        self.lab = dict(profiles=[], defaults={})
+
+    def test_image_repository_strips_a_tag_or_digest_but_keeps_a_registry_port(self):
+        self.assertEqual(image_repository(self.multitool + ':latest'), self.multitool)
+        self.assertEqual(image_repository(self.multitool), self.multitool)
+        self.assertEqual(image_repository(self.multitool + '@sha256:' + 'a' * 64), self.multitool)
+        self.assertEqual(image_repository('localhost:5000/team/tool:v1'), 'localhost:5000/team/tool')
+        self.assertEqual(image_repository(''), '')
+
+    def test_image_default_applies_only_to_the_exact_repository_and_only_without_a_platform(self):
+        matching = {'platform': '', 'image': self.multitool + ':v2'}
+        self.assertEqual(image_default_credentials(matching), IMAGE_DEFAULT_CREDENTIALS[self.multitool])
+        other_image = {'platform': '', 'image': 'ghcr.io/library/alpine:latest'}
+        self.assertIsNone(image_default_credentials(other_image))
+        prefix_only = {'platform': '', 'image': self.multitool + '-extra'}
+        self.assertIsNone(image_default_credentials(prefix_only), 'a same-prefix image is a different repository')
+        has_platform = {'platform': 'arista_ceos', 'image': self.multitool}
+        self.assertIsNone(image_default_credentials(has_platform), 'a device kind never reaches the image table')
+        self.assertIsNone(image_default_credentials({'platform': '', 'image': ''}))
+
+    def test_precedence_profile_then_inventory_then_kind_default_then_image_default(self):
+        node = {'profile_id': '', 'platform': '', 'image': self.multitool, 'username': '', 'password': ''}
+        # No profile, no inventory login, no kind default (platform is empty): image default applies.
+        creds = effective_credentials(self.lab, node)
+        self.assertEqual((creds['username'], creds['password']), IMAGE_DEFAULT_CREDENTIALS[self.multitool])
+        self.assertEqual(credential_source(self.lab, node), 'default')
+        # Inventory credentials win over the image default.
+        with_inventory = dict(node, username='inv-user', password='inv-pass')
+        self.assertEqual(effective_credentials(self.lab, with_inventory), {'username': 'inv-user', 'password': 'inv-pass',
+                                                                            'auth': 'password', 'enable_password': ''})
+        self.assertEqual(credential_source(self.lab, with_inventory), 'inventory')
+        # A profile wins over both.
+        profiled_lab = dict(self.lab, profiles=[{'id': 'p', 'label': 'Ops', 'platform': '', 'username': 'ops',
+                                                  'auth': 'password', 'password': 'ops-secret'}])
+        with_profile = dict(node, profile_id='p')
+        self.assertEqual(effective_credentials(profiled_lab, with_profile)['username'], 'ops')
+        self.assertEqual(credential_source(profiled_lab, with_profile), 'profile')
+        # A node with a real NOS kind default never falls through to the image table,
+        # even if (implausibly) it also named this image.
+        kind_default_node = {'profile_id': '', 'platform': 'arista_ceos', 'image': self.multitool, 'username': '', 'password': ''}
+        eos_user, eos_password = DEFAULT_CREDENTIALS['arista_ceos']
+        creds = effective_credentials(self.lab, kind_default_node)
+        self.assertEqual((creds['username'], creds['password']), (eos_user, eos_password))
+        # No profile, no inventory, no kind default and no matching image: nothing applies.
+        self.assertEqual(effective_credentials(self.lab, {'profile_id': '', 'platform': '', 'image': '',
+                                                            'username': '', 'password': ''}), {})
+        self.assertEqual(credential_source(self.lab, {'profile_id': '', 'platform': '', 'image': '',
+                                                       'username': '', 'password': ''}), '')
+
+    def test_a_tag_variant_still_matches_but_a_different_image_does_not(self):
+        for tag in (':latest', ':v1.2.3', ''):
+            node = {'profile_id': '', 'platform': '', 'image': self.multitool + tag, 'username': '', 'password': ''}
+            self.assertEqual(credential_source(self.lab, node), 'default', tag)
+        different = {'profile_id': '', 'platform': '', 'image': 'ghcr.io/library/alpine:latest', 'username': '', 'password': ''}
+        self.assertEqual(credential_source(self.lab, different), '')
+        self.assertEqual(effective_credentials(self.lab, different), {})
 
 
 if __name__ == '__main__':

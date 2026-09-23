@@ -131,6 +131,63 @@ test('a link opens on its first endpoint with that port ticked',async()=>{
  assert.match(h.$('capture-interfaces').innerHTML,/value="eth2" checked/);assert.doesNotMatch(h.$('capture-interfaces').innerHTML,/value="eth1" checked/);
  assert.equal(h.$('capture-prepare').disabled,false);
 });
+test('a mapped NOS port name preselects its container interface once confirmed live (Junos)',async()=>{
+ const h=mapHarness(['lo','eth1','eth2','eth3'],[[{node:'r1',interface:'ge-0/0/0',capture_interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint='ge-0/0/0'",h.c);
+ await h.c.refreshCaptureTargets();
+ assert.match(h.$('capture-interfaces').innerHTML,/value="eth1" checked/);
+ assert.equal(h.$('capture-prepare').disabled,false);
+ assert.equal(h.$('capture-status').textContent,'Capturing clab-demo-r1 port ge-0/0/0 (container interface eth1) — start the capture when you are ready.');
+});
+test('a mapped NOS port name preselects its container interface (XRv9k, first data port)',async()=>{
+ const h=mapHarness(['lo','eth1'],[[{node:'r1',interface:'Gi0/0/0/0',capture_interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint='Gi0/0/0/0'",h.c);
+ await h.c.refreshCaptureTargets();
+ assert.match(h.$('capture-interfaces').innerHTML,/value="eth1" checked/);
+ assert.match(h.$('capture-status').textContent,/Capturing clab-demo-r1 port Gi0\/0\/0\/0 \(container interface eth1\)/);
+});
+test('a mapped cJunosEvolved port missing from the live list keeps manual selection with a specific reason',async()=>{
+ const h=mapHarness(['lo','eth1','eth2','eth3'],[[{node:'r1',interface:'et-0/0/31',capture_interface:'eth35'},{node:'r2',interface:'eth1'}]]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint='et-0/0/31'",h.c);
+ await h.c.refreshCaptureTargets();
+ assert.doesNotMatch(h.$('capture-interfaces').innerHTML,/checked/);
+ assert.equal(h.$('capture-prepare').disabled,true);
+ assert.equal(h.$('capture-status').textContent,'The VM lists no eth35 for et-0/0/31 yet: the node may still be starting, or the topology changed. Tick the interface to use.');
+});
+test('an EOS/linux identity mapping behaves exactly as an unmapped hint did before',async()=>{
+ const h=mapHarness(['lo','eth1'],[[{node:'r1',interface:'eth1',capture_interface:'eth1'},{node:'r2',interface:'eth1'}]]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint='eth1'",h.c);
+ await h.c.refreshCaptureTargets();
+ assert.match(h.$('capture-interfaces').innerHTML,/value="eth1" checked/);
+ assert.equal(h.$('capture-status').textContent,'eth1 is selected — start the capture when you are ready.');
+});
+test('an unrecognised kind or port shape falls back to the prior "not found" guidance',async()=>{
+ const h=mapHarness(['lo','eth1'],[[{node:'r1',interface:'fabric0'},{node:'r2',interface:'eth1'}]]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint='fabric0'",h.c);
+ await h.c.refreshCaptureTargets();
+ assert.doesNotMatch(h.$('capture-interfaces').innerHTML,/checked/);
+ assert.match(h.$('capture-status').textContent,/The diagram calls this port fabric0, but the VM lists no interface with that name/);
+});
+test('a mapped port is never preselected onto a vJunos tap device',async()=>{
+ const h=mapHarness(['lo','tap1','eth1'],[[{node:'r1',interface:'ge-0/0/0',capture_interface:'tap1'},{node:'r2',interface:'eth1'}]]);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint='ge-0/0/0'",h.c);
+ await h.c.refreshCaptureTargets();
+ assert.doesNotMatch(h.$('capture-interfaces').innerHTML,/checked/);
+ assert.equal(h.$('capture-prepare').disabled,true);
+ assert.equal(h.$('capture-status').textContent,'The VM lists no tap1 for ge-0/0/0 yet: the node may still be starting, or the topology changed. Tick the interface to use.');
+});
+test('a link between two different kinds resolves the mapped interface on each end',async()=>{
+ const h=mapHarness(['lo','eth1','eth4','eth5'],[[{node:'r1',interface:'Gi0/0/0/0',capture_interface:'eth1'},{node:'r2',interface:'et-0/0/0',capture_interface:'eth4'}]]);
+ vm.runInContext("activeId='lab'",h.c);
+ h.c.openCapture('','',[{node:'clab-demo-r1',label:'r1',interface:'Gi0/0/0/0'},{node:'clab-demo-r2',label:'r2',interface:'et-0/0/0'}]);
+ for(let i=0;i<4;i++)await new Promise(r=>setImmediate(r));
+ assert.match(h.$('capture-interfaces').innerHTML,/value="eth1" checked/);
+ assert.match(h.$('capture-status').textContent,/Capturing clab-demo-r1 port Gi0\/0\/0\/0 \(container interface eth1\)/);
+ h.$('capture-endpoints').onclick({target:{closest:()=>({dataset:{captureEnd:'1'}})}});
+ for(let i=0;i<4;i++)await new Promise(r=>setImmediate(r));
+ assert.match(h.$('capture-interfaces').innerHTML,/value="eth4" checked/);
+ assert.match(h.$('capture-status').textContent,/Capturing clab-demo-r2 port et-0\/0\/0 \(container interface eth4\)/);
+});
 test('every rendered link including coincident nodes exposes both endpoint actions',()=>{
  const {c}=harness();vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/topology-render.js'),'utf8'),c);
  for(const x of [0,200]){

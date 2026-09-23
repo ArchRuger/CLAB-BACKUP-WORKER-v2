@@ -50,8 +50,8 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Telemetry settings… | Telemetry on or off for this lab, the login used for gNMI, why a device is not streaming, retry, removal of the lines the manager added, and the network dashboard's state. |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the lab is running. |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
-| Upload a file from this computer… (Home › Deploy, and the link in the topology browser) | For a topology file that is on your computer: the browser reads it, the manager checks that it is a topology it can read, you see the text and where it will be written, **Create file on the VM…** runs as a reviewed operation, and **Deploy or add this lab…** continues as for any file on the VM. Only that one file is uploaded (up to 1 MiB); files it refers to must be on the VM. |
-| Build a lab visually… / Edit visually… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Edit visually…* opens an existing topology file; saving again is only possible while the lab is not deployed and keeps a copy of the previous version. |
+| Upload a file from this computer… (Home › Deploy, and the link in the topology browser) | For a topology file that is on your computer: the browser reads it, the manager checks that it is a topology it can read, you see the text and where it will be written, **Create file on the VM…** runs as a reviewed operation, and **Deploy or add this lab…** continues as for any file on the VM. Only that one file is uploaded (up to 1 MiB); files it refers to must be on the VM. A copied lab's saved map (`<topology>.annotations.json`, up to 1 MiB) can be added at the same time so devices keep their positions; it travels through the same review and is written beside the topology under its own name regardless of what the file on your computer was called, with a notice when that name differs and, if a map file is already there, a "Replaces the existing map file" notice in the review. |
+| Build a lab visually… / Open in Lab Builder… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Open in Lab Builder…* opens an existing topology file; saving again is only possible while the lab is not deployed and keeps a copy of the previous version. Opened from the topology file dialog, the builder's **← My labs** link and the browser Back button return to that same dialog (read fresh from the VM); opening it directly from the Build card returns to My labs as usual. |
 | Write a new topology… | Creates a new topology file on the VM after a structure preview and confirmation; never replaces an existing file. |
 | Add to My labs without starting / Deploy lab | Read an existing file and add the lab to My labs without deploying, or deploy it: *Deploy lab* saves the workspace (devices, map, VM source path) first and then reviews the containerlab command, so the lab is in My labs at once and nothing needs importing afterwards. |
 | Download a lab from GitHub… / Browse popular labs… | Optional HTTPS download into the VM's lab folder, followed by a review of the files and a separate deployment. |
@@ -70,11 +70,15 @@ words (*Destroy BGP_TheoryToPractice?*, *Stop devices?*), says what happens to t
 devices, warns that **configuration changes you have not saved are lost** for the
 disruptive ones, shows when progress was last saved to Git (in red when it never was, or
 when a lab operation ran after the last save) and offers **Save progress first** when the
-lab has a save location. The exact containerlab command, the affected devices and the
-cleanup folder are under *Technical details*. Confirming a lifecycle action on the open
-lab closes the review and reports in the lab banner (*Stopping devices…* with **View
-output**); the result window opens on its own only for actions that produce something to
-read, such as *Show running devices*.
+lab has a save location. The affected devices and the cleanup folder are under *Technical
+details* together with the exact containerlab command; the *Start lab* review shows that
+command directly, under **Command run on the VM**, since a fresh deploy has nothing else
+to disclose. Confirming a lifecycle action on the open lab closes the review and reports
+in the lab banner (*Stopping devices…* with **View output**); confirming *Start lab*
+instead opens its live output immediately, with no second click — closing that window on
+purpose does not bring it back on its own, and **View output** or a new *Start lab* still
+open it again. The result window otherwise opens on its own only for actions that produce
+something to read, such as *Show running devices*.
 
 ## Device readiness after deployment
 

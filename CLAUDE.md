@@ -235,8 +235,10 @@ One line each; the handoff section named in the routing table has the reasoning 
 *Devices*
 - Supported kinds keep their drivers and commands: EOS with `enable` become, IOS XR
   `show running-config`, Junos `display set` as the canonical human and diff form.
-- Login order is profile > inventory > documented kind default; add a default only if containerlab.dev
-  publishes it.
+- Login order is profile > inventory > documented kind default > documented image default (only the
+  `ghcr.io/srl-labs/network-multitool` repository, for `linux` nodes); add a kind default only if
+  containerlab.dev publishes it, an image default only if the image's own project documents it and it was
+  verified live.
 - Every Ansible job has its own `HOME` and never reads a shared `known_hosts`.
 - For linked labs SSH readiness means a real `show version` answer; backend `readiness === 'Ready'`
   is backup eligibility, `deviceState()` is SSH readiness.

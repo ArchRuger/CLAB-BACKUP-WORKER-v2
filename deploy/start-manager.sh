@@ -20,7 +20,9 @@ repo_dir=$(dirname -- "$script_dir")
 command -v docker >/dev/null || { echo 'Install Docker first; see docs/FRESH-VM-GUIDE-V2.md.' >&2; exit 1; }
 docker compose version >/dev/null
 docker info >/dev/null
-bash "$script_dir/setup-discovery.sh" "${password_args[@]}"
+# The data directory must exist before setup-discovery writes the one-time VM connection seed into it.
+bash "$script_dir/setup-vm.sh"
+bash "$script_dir/setup-discovery.sh" "${password_args[@]}" --data-dir /srv/containerlab-node-manager/data
 # Fail before recreation if the installed helper cannot return file-transfer data.
 # Only the version is printed: its response may contain inventory credentials.
 expected=$(tr -d '\r\n' < "$repo_dir/clab-backup-ui/VERSION")
@@ -50,7 +52,6 @@ fi
 # Root-only helper checks cannot prove the account's forced gateway can invoke
 # them. Exercise the same read-only requests under clab-discovery before build.
 /usr/bin/python3 "$script_dir/verify-gateway.py" "$expected" "${gateway_args[@]}"
-bash "$script_dir/setup-vm.sh"
 # The browser Wireshark stack and the Grafana dashboards are part of every installation and
 # follow the release (the session service image carries the version), so an upgrade refreshes
 # them before the manager is created with the settings they write into clab-backup-ui/.env.

@@ -4,6 +4,56 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.36
+
+**Setup Script Cleanup Log, part 1: setup and onboarding, import, deploy review, layout, capture mapping.** First
+release of the UI/UX cleanup stream ([docs/ui-ux-cleanup/PICKUP.md](ui-ux-cleanup/PICKUP.md); the requirement map with
+PDF page numbers is [REQUIREMENTS.md](ui-ux-cleanup/REQUIREMENTS.md)).
+
+- **Setup takes the routine choices itself** (`bash deploy/install.sh`): all VM interfaces on port 8081 when no `.env`
+  exists (an existing `.env`, credentials, registrations and enabled components are retained), reviewed lab operations,
+  VS Code / Containerlab access for the invoking account, backup of obsolete installation-media APT entries, the plan
+  printed and started; Git setup runs as part of *Install or update manager, then set up Git*; a successful path prints
+  its closing information and exits to the shell. `--advanced` restores every question ([INSTALL](INSTALL.md)).
+- **Package-lock recovery**: when APT/dpkg is locked (typically `unattended-upgrades`), the installer names the process
+  holding it *now*, prints one copyable command (`sudo python3 …/deploy/apt_lock.py --wait --pause-timers`) and offers to
+  wait here and retry. `deploy/apt_lock.py` finds the holder from `/proc`, waits within a bound, optionally pauses the two
+  `apt-daily` timers and restores exactly those it stopped, and never kills a process or deletes a lock file.
+- **Git onboarding condensed**: GitHub CLI is installed when missing, the device login runs without gh's own questions
+  (the one-time code and URL are printed unchanged, followed by
+  `https://github.com/login/device/select_account` for browsers signed in to several accounts), a repository new to the
+  manager registers at its root without the subfolder question (`--subfolder` and the "another lab in a registered
+  repository" path still take one), and registration completes by itself once its checks pass. Setup still creates no
+  commit and no push ([GIT-SETUP](GIT-SETUP.md)).
+- **lazydocker** is installed for the invoking account from the upstream release for the VM's architecture into
+  `~/.local/bin`, with one guarded PATH block in `~/.bashrc` (never duplicated).
+- **VM connection prefilled from setup**: `setup-password.sh` hands the new `clab-discovery` password once to the manager
+  through a one-time seed in the data directory (root and the manager account only); the manager stores it encrypted,
+  fills address, port, account, inspection method and automatic check, and waits for one *Save and test connection*,
+  which is the explicit first-use trust of the VM key (the key the installer recorded is shown for comparison; a
+  different key is refused unless the replacement-key box is ticked) ([VM-CONNECTION](VM-CONNECTION.md)).
+- **Upload a lab file** takes an optional saved map (`.annotations.json`) next to the topology; the pair goes through the
+  same reviewed `create`, an existing map file is never replaced silently (the review says so and a recovery copy is
+  kept), and the imported lab opens with its positions.
+- **Open in Lab Builder…** (was *Edit visually…*); returning with *← My labs* or the browser's Back reopens the Topology
+  file dialog on the same VM file, re-read from the VM.
+- **Topology preview** is sized to the viewport and fits the map; its wiring caption is gone.
+- **Start lab review** shows the command run on the VM directly (no *Technical details* toggle, no host-privilege
+  warning box for a deploy, no "Runs on the lab VM…" caption), and the live output window opens by itself when the
+  start is accepted; a window the student closed is not reopened by polling.
+- **Notices can be hidden**: lab and home banners have an accessible close control; a hidden notice stays hidden across
+  rerenders for that lab and text and returns when the text changes; a running-operation banner collapses to one line
+  instead of disappearing. Hiding never acknowledges a job or enables an unavailable action.
+- **network-multitool** nodes (`ghcr.io/srl-labs/network-multitool`, kind `linux`) use the image's documented login
+  after profiles and inventory logins, so a stock node no longer asks for credentials; other Linux images are unchanged
+  ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)).
+- **Topology tab**: the *Details* disclosure ("Lines show how the lab is wired…") is gone; the Devices column scrolls on
+  its own beside the map at desktop widths (sticky heading, keyboard reachable).
+- **Capture on the displayed port**: right-clicking a link and choosing an endpoint such as `ge-0/0/35` preselects the
+  container interface containerlab created for it (per-kind rules for vJunos, cJunosEvolved, vQFX, XRv9k, cEOS, Linux),
+  confirmed against the VM's live interface list; an unresolved port keeps the manual list with the reason
+  ([CAPTURE](CAPTURE.md)).
+
 ## Changes in 1.30.35
 
 **Student quick start delivered: the illustrated PDF guide, validated end to end.** Closing release of the stream

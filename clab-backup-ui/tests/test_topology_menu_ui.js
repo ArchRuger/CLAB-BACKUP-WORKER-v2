@@ -114,7 +114,7 @@ test('the map stage shows the loading skeleton, then the empty state or the map 
  assert.equal(e$('map-loading').hidden,false,'the first fetch for a lab shows the skeleton');assert.equal(e$('topology-map').hidden,true);
  await fetching;
  assert.equal(e$('map-loading').hidden,true);assert.equal(e$('map-empty').hidden,false);assert.equal(e$('topology-map').hidden,true);
- assert.equal(e$('map-status').textContent,'');assert.equal(e$('map-notes').hidden,true);
+ assert.equal(e$('map-status').textContent,'');assert.equal(e$('topology-hint').textContent,'Click a device to open it. Click a link to capture its traffic. Right-click for more actions.','no map: the hint resets to the fixed sentence, with no notes appended');
  for(const id of ['map-fit','map-in','map-out','map-expand'])assert.equal(e$(id).disabled,true,id+' is disabled without a map');
  assert.equal(e$('map-edit').disabled,true);assert.equal(e$('map-edit').title,'Import a map first.');
  assert.ok(empty.calls.synced>=1,'the proxies mirror the disabled tools');
@@ -123,8 +123,8 @@ test('the map stage shows the loading skeleton, then the empty state or the map 
  const nodes=['r1','r2'].map(n=>mapNode(n,n.toUpperCase()));$('topology-map').querySelectorAll=()=>nodes;
  await h.context.refreshMap();
  assert.equal($('map-loading').hidden,true);assert.equal($('map-empty').hidden,true);assert.equal($('topology-map').hidden,false);
- assert.equal($('map-status').textContent,'2 devices · 1 link');assert.equal($('map-notes').hidden,false);
- assert.equal($('map-notes-text').textContent,'Lines show how the lab is wired, not whether links are up.');
+ assert.equal($('map-status').textContent,'2 devices · 1 link');
+ assert.equal($('topology-hint').textContent,'Click a device to open it. Click a link to capture its traffic. Right-click for more actions.','a normal drawing (schema 3, no skipped links) carries no extra notes');
  assert.equal($('map-edit').disabled,false);assert.equal($('map-fit').disabled,false);
  assert.equal($('topology-map').innerHTML,'<g data-nodes="2"></g>');assert.equal($('topology-map').attrs.viewBox,'0 0 100 50');
  assert.deepEqual(nodes.map(n=>n.classList.list()),[['state-ready'],['state-starting']],'state is applied right after the render');
@@ -133,7 +133,7 @@ test('the map stage shows the loading skeleton, then the empty state or the map 
  const busy=harness({lab:lab(),drawing:{...drawing,schema:2,has_links_source:false,skipped_links:2,nodes:[...drawing.nodes,{id:'c',label:'ghost',x:0,y:0}]}});
  await busy.context.refreshMap();
  assert.equal(busy.$('map-status').textContent,'2 devices · 1 link · 1 drawn but not in this lab. Links aren’t shown yet — import the lab topology file with the map to draw them.');
- assert.equal(busy.$('map-notes-text').textContent,'Lines show how the lab is wired, not whether links are up. 2 links could not be drawn (unsupported or one-ended). Some map styling and port labels could not be shown. Re-import the original map files to restore them.');
+ assert.equal(busy.$('topology-hint').textContent,'Click a device to open it. Click a link to capture its traffic. Right-click for more actions. 2 links could not be drawn (unsupported or one-ended). Some map styling and port labels could not be shown. Re-import the original map files to restore them.','skipped-links and schema notes join the hint line instead of a Details toggle');
  const failing=harness({lab:lab(),drawing});failing.context.api=async()=>{throw new Error('boom');};
  await failing.context.refreshMap();
  assert.equal(failing.$('map-status').textContent,'The map could not be loaded. boom');assert.equal(failing.$('map-loading').hidden,true);

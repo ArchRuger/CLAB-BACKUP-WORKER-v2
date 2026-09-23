@@ -128,6 +128,10 @@ async function opReview(request){
  const body=(typeof copy.body==='function'?copy.body(value):copy.body)+(cleanup&&copy.cleanup?copy.cleanup:'');
  const technicalWarnings=value.warnings.filter(w=>/cleanup/i.test(w)),warnings=value.warnings.filter(w=>!technicalWarnings.includes(w));
  const disruptive=opDisruptive.includes(value.action);
+ // Start lab (deploy) is the everyday, non-destructive action: its review shows the command plainly
+ // instead of behind a fold, and skips the generic "this is checked again" caption other reviews keep.
+ const plain=value.action==='deploy';
+ const commandBlock=`${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}<h4>Command run on the VM</h4><pre class="op-output">${esc((value.steps?.length?value.steps:[value.argv]).filter(a=>a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n')||label)}</pre>${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}`;
  const dialog=opDialog('operation-review',title,`${copy.hideName?'':`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All labs on the VM')}</p>`}
  ${warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
  <p>${esc(body)}</p>
@@ -135,10 +139,10 @@ async function opReview(request){
  ${opSaveLine(lab,value)}
  ${disruptive?'<p class="op-notice">Open CLI sessions to this lab will disconnect.</p>':''}
  ${copy.readonly||copy.quiet||value.action==='deploy'?'':`<p>${value.affected.length} running ${value.affected.length===1?'device':'devices'} affected</p>`}
- <details><summary>Technical details</summary>${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}<h4>Command run on the VM</h4><pre class="op-output">${esc((value.steps?.length?value.steps:[value.argv]).filter(a=>a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n')||label)}</pre>${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}</details>
+ ${plain?commandBlock:`<details><summary>Technical details</summary>${commandBlock}</details>`}
  ${copy.quiet&&typeof request.options?.text==='string'?`<details ${value.diff?'':'open'}><summary>Topology that will be saved (YAML)</summary><pre class="op-output" id="op-review-yaml">${esc(request.options.text)}</pre></details>`:''}
  ${value.diff?`<details open><summary>Topology file changes</summary><pre class="op-output">${esc(value.diff)}</pre></details>`:''}
- <p class="form-help">Runs on the lab VM. If the lab changes before you confirm, this check is repeated.</p>
+ ${plain?'':'<p class="form-help">Runs on the lab VM. If the lab changes before you confirm, this check is repeated.</p>'}
  <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button>${lab&&lab.git_binding&&disruptive&&typeof gitSaveProgress==='function'?'<button class="button secondary" id="op-save-first">Save progress first</button>':''}<button class="button ${copy.danger?'danger':'primary'}" id="op-confirm">${esc(copy.confirm||label)}</button></div>`);
  $('op-cancel').onclick=()=>dialog.close();
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
@@ -151,6 +155,9 @@ async function opReview(request){
   if(typeof selectLab==='function'&&labId&&labId!==activeId&&(state.labs||[]).some(l=>l.id===labId))selectLab(labId);
   // The job exists: a state refresh that fails must not keep its output (and its outcome) from being followed.
   try{await refresh();}catch{}
+  // Starting a lab opens its live output right away — no second click for "View output" — but a
+  // student who deliberately closes it is not interrupted again by the same launch.
+  if(plain){await opShowJob(job.id,{auto:true});return;}
   // Lifecycle actions on the open lab report through the header and the banner ([View output]);
   // result-bearing actions open their output right away.
   if(opLifecycle.includes(value.action)&&labId&&labId===activeId&&typeof renderLabBanner==='function'){notify(label+'…');return;}
@@ -185,7 +192,7 @@ function opInspectionTable(rows){return `<div class="op-inspection"><table><capt
 function opJobHint(job){
  if(!['failed','interrupted'].includes(job.status))return '';
  const images=[...new Set([...String(job.output||'').matchAll(/Failed to pull image\s+image=(\S+)/g)].map(m=>m[1].replace(/^docker\.io\/(library\/)?/,'')))];
- if(images.length)return 'The VM does not have '+(images.length>1?'these images':'this image')+' and could not download '+(images.length>1?'them':'it')+': '+images.join(', ')+'. Check the image name on the devices that use '+(images.length>1?'them':'it')+' (open the topology file and choose Edit visually, then the device\'s Image field), or ask for the image to be installed on the VM.';
+ if(images.length)return 'The VM does not have '+(images.length>1?'these images':'this image')+' and could not download '+(images.length>1?'them':'it')+': '+images.join(', ')+'. Check the image name on the devices that use '+(images.length>1?'them':'it')+' (open the topology file and choose Open in Lab Builder…, then the device\'s Image field), or ask for the image to be installed on the VM.';
  return '';
 }
 function opJobBanner(job){
@@ -194,7 +201,15 @@ function opJobBanner(job){
  const exit=job.exit_code===null||job.exit_code===undefined?'':'Exit code '+job.exit_code;
  return {tone:done?'good':failed?'bad':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:`${label} ${job.status}…`,detail,exit,...(opJobHint(job)?{hint:opJobHint(job)}:{})};
 }
-async function opShowJob(id){
+// Auto-opened right after a confirmed launch (Start lab today), with no second "View output" click; a
+// student who closes it on purpose does not have it pop back up on the next poll tick — its job id goes
+// into opClosedOutputs, and only an auto open ever checks that set. "View output" (no auto option) always
+// shows it, however it was closed; a fresh launch is a different job id, so an older closed one never
+// holds it back. Moving to another lab closes an auto-opened dialog instead of leaving it open over a lab
+// it is not about, and — being closed the same way — it does not come back there on its own either.
+const opClosedOutputs=new Set();
+async function opShowJob(id,{auto=false}={}){
+ if(auto&&opClosedOutputs.has(id))return;
  clearTimeout(opOutputTimer);
  const dialog=opDialog('operation-output','Lab operation','<div id="op-job-banner" class="op-banner" hidden></div><pre class="op-output" id="op-job-output" tabindex="0"></pre><div id="op-job-result"></div>');
  // A page that acts on the outcome (the lab builder's opJobDone) hears it even when this dialog was closed
@@ -204,7 +219,8 @@ async function opShowJob(id){
   if(!dialog.open&&!follows)return;
   try{
    const job=await(await api('/operations/'+id)).json();fails=0;
-   if(!dialog.open){if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();opJobDone(job);}return;}
+   if(auto&&dialog.open&&job.lab_id&&typeof activeId==='string'&&activeId&&job.lab_id!==activeId)dialog.close();
+   if(!dialog.open){if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(follows)opJobDone(job);}return;}
    const heading=dialog.querySelector('h2');if(heading)heading.textContent=(opLabels[job.action]||job.action)+(job.name?' · '+job.name:'');
    const banner=opJobBanner(job),shown=$('op-job-banner');shown.hidden=false;shown.className='op-banner '+banner.tone;shown.innerHTML=`<strong>${esc(banner.title)}</strong><span>${esc(banner.detail)}</span>${banner.exit?`<small class="${job.exit_code?'op-exit-bad':''}">${esc(banner.exit)}</small>`:''}${banner.hint?`<p class="op-banner-hint">${esc(banner.hint)}</p>`:''}`;
    const pre=$('op-job-output'),follow=pre.scrollTop+pre.clientHeight>=pre.scrollHeight-30;pre.textContent=job.output||'Waiting for the VM…';if(follow)pre.scrollTop=pre.scrollHeight;
@@ -219,7 +235,7 @@ async function opShowJob(id){
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
   }catch(e){if(dialog.open)dialog.querySelector('.form-error').textContent=++fails<10?e.message+' Trying again…':e.message;else fails++;if(fails<10)opOutputTimer=setTimeout(poll,3000);else if(typeof opJobLost==='function')opJobLost(id);}
- };dialog.onclose=()=>{if(!follows)clearTimeout(opOutputTimer);};await poll();
+ };dialog.onclose=()=>{opClosedOutputs.add(id);if(!follows)clearTimeout(opOutputTimer);};await poll();
 }
 // The topology file a finished job left on the VM, to continue with "Deploy or add this lab…": the builder's
 // save names it in its result; a created file (typed or uploaded) is the job's own path.
@@ -269,6 +285,26 @@ function opBuilderRoot(path,roots){
 function opBuilderUrl(values){return '/static/lab-builder.html#'+new URLSearchParams(Object.fromEntries(Object.entries(values).filter(([,v])=>v)));}
 // On the builder page itself only the fragment changes, which loads nothing: the page has one editor per load.
 function opBuilderOpen(values){if(location.pathname==='/static/lab-builder.html'&&typeof builderGo==='function')builderGo(Object.fromEntries(Object.entries(values).filter(([,v])=>v)));else location.assign(opBuilderUrl(values));}
+// Returning from the lab builder: the dialog the student left (a VM topology file, or an upload that
+// only ever lived in this browser) is remembered here, so the builder's "← My labs" link and the browser
+// Back button — both a normal navigation back to this page — land on that dialog again, not only Home.
+// A direct visit to the builder (the Build card's "Open the lab builder") sets no marker, so it still
+// returns to My labs exactly as before. Consumed once, by this page's own load-time wiring below.
+const OP_RETURN_KEY='op-return';
+function opRemember(kind,values){try{sessionStorage.setItem(OP_RETURN_KEY,JSON.stringify({kind,...values}));}catch{/* private window or blocked storage: only this convenience is lost */}}
+function opConsumeReturn(){
+ let raw=null;try{raw=sessionStorage.getItem(OP_RETURN_KEY);sessionStorage.removeItem(OP_RETURN_KEY);}catch{return null;}
+ if(!raw)return null;
+ let value;try{value=JSON.parse(raw);}catch{return null;}
+ return value&&typeof value==='object'&&['vm','upload'].includes(value.kind)?value:null;
+}
+// A remembered VM file is reread fresh (so a save made in the builder shows up); a remembered upload
+// puts the same browser text straight back, exactly as it was before the builder was opened.
+function opReopenReturn(value){
+ if(!value)return;
+ if(value.kind==='vm'&&value.path)return opEdit(value.path);
+ if(value.kind==='upload'&&typeof value.text==='string')return opEdit('','',value.path||'',{text:value.text,file:value.name||'',annotations:value.annotations||'',mapNotice:value.mapNotice||''});
+}
 function openDeploy(){return opTask(null,()=>opBrowse());}
 function opNewTab(values){const url='/static/workspace.html#'+new URLSearchParams(values);if(!window.open(url,'_blank'))opDialog('op-open-tab','Open the CLI launcher',`<p>Your browser blocked the new tab. Use this button instead:</p><a class="button primary" href="${esc(url)}" target="_blank" rel="opener">Open CLI launcher <span aria-hidden="true">↗</span></a>`);}
 function opTopologyEntries(entries){return entries.filter(entry=>entry.directory||/\.clab\.ya?ml$/i.test(entry.name));}
@@ -315,11 +351,13 @@ async function opEdit(path,labId='',newPath='',upload=null){
  const value=path?await json('/operations/read','POST',{path}):{text:upload?upload.text:'name: new-lab\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:latest\n',path:newPath};
  const isYaml=/\.ya?ml$/i.test(value.path);
  opEditorContext={path:value.path,labId,isNew:!path};
- const dialog=opDialog('op-editor',path?'Topology file':upload?'Uploaded lab file':'New topology file',`${upload?`<p class="op-notice">Read from <strong>${esc(upload.file)}</strong> on this computer. Nothing is on the lab VM yet: <em>Create file on the VM…</em> shows what will be written and asks you to confirm; afterwards you can deploy it.</p>`:''}<label>File location on the VM<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology (YAML)':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Deploy lab adds this lab to My labs and starts its devices on the VM. Add without starting keeps it in My labs only. Existing files can't be edited as text here — use Edit visually, or edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Create file on the VM…</button>':''}${path&&isYaml?'<button class="button secondary" id="op-build-edit">Edit visually…</button><button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Add to My labs without starting')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
+ const dialog=opDialog('op-editor',path?'Topology file':upload?'Uploaded lab file':'New topology file',`${upload?`<p class="op-notice">Read from <strong>${esc(upload.file)}</strong> on this computer. Nothing is on the lab VM yet: <em>Create file on the VM…</em> shows what will be written and asks you to confirm; afterwards you can deploy it.</p>`:''}${upload&&upload.mapNotice?`<p class="op-notice">${esc(upload.mapNotice)}</p>`:''}<label>File location on the VM<input id="op-edit-path" ${path?'readonly':''}></label><label>${isYaml?'Topology (YAML)':'File contents'}<textarea class="op-code" id="op-edit-text" spellcheck="false" ${path||!isYaml?'readonly':''}></textarea></label><p class="form-help">Deploy lab adds this lab to My labs and starts its devices on the VM. Add without starting keeps it in My labs only. Existing files can't be edited as text here — use Open in Lab Builder…, or edit them on the VM.</p><div class="actions">${isYaml?'<button class="button secondary" id="op-validate">Preview topology</button>':''}${!path?'<button class="button primary" id="op-save-yaml">Create file on the VM…</button>':''}${path&&isYaml?'<button class="button secondary" id="op-build-edit">Open in Lab Builder…</button><button class="button secondary" id="op-add-project">'+(labId?'Link topology':'Add to My labs without starting')+'</button><button class="button primary" id="op-deploy-project">Deploy lab</button>':''}</div>`);
  $('op-edit-path').value=value.path;$('op-edit-text').value=value.text;
- $('op-build-edit')?.addEventListener('click',()=>opBuilderOpen({path}));
+ // Leaving for the builder from a known VM file: remembered so the way back (its "← My labs" link,
+ // or the browser Back button) reopens this same dialog with a fresh read, showing any saved edit.
+ $('op-build-edit')?.addEventListener('click',()=>{opRemember('vm',{path,name:value.path.split('/').pop()});opBuilderOpen({path});});
  $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
- $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value}})));
+ $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value,...(upload&&upload.annotations?{annotations:upload.annotations}:{})}})));
  $('op-add-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
   // Always read the actual VM file; unsaved editor contents are not linked/imported.
   const source=await json('/operations/read','POST',{path}),parsed=await opParse(path,source.text);
@@ -349,16 +387,45 @@ function opUploadProblem(file){
 }
 // <trusted folder>/<lab name>.clab.yaml; the VM only creates files directly inside a lab folder it trusts.
 function opUploadPath(root,name){const safe=String(name||'').replace(/[^A-Za-z0-9_.-]+/g,'-').replace(/^[^A-Za-z0-9_]+/,'').replace(/[-.]+$/,'').slice(0,80)||'uploaded-lab';return String(root||'/srv/containerlab-node-manager/projects').replace(/\/+$/,'')+'/'+safe+'.clab.yaml';}
+// The optional saved map (annotations JSON) that can travel with an uploaded topology: a copied lab
+// often has one beside its .clab.yaml, and without it the devices would land on the default grid.
+const OP_UPLOAD_ANNOTATIONS_LIMIT=1024*1024;
+function opUploadAnnotationsProblem(file){
+ if(!file)return '';
+ if(!/\.json$/i.test(file.name||''))return 'Choose the saved map file: a .json file, usually named <lab>.clab.yaml.annotations.json.';
+ if(!file.size)return 'This map file is empty.';
+ if(file.size>OP_UPLOAD_ANNOTATIONS_LIMIT)return 'This map file is larger than 1 MiB.';
+ return '';
+}
+// Throws in the student's words when the text is not a single JSON object; returns it unchanged otherwise
+// (the helper re-checks this on the VM; this is only the first, faster answer).
+function opUploadAnnotationsParse(text){
+ let value;try{value=JSON.parse(text);}catch{throw new Error('The map file is not valid JSON.');}
+ if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('The map file must hold one JSON object, not a list or a plain value.');
+ return text;
+}
+// The name the map file is written under on the VM: always beside the topology, regardless of what the
+// chosen file on this computer was called (the same name the lab builder and the VS Code extension use).
+function opUploadAnnotationsName(topologyPath){return String(topologyPath||'')+'.annotations.json';}
+function opUploadAnnotationsNotice(file,topologyPath){
+ if(!file)return '';
+ const expected=opUploadAnnotationsName(topologyPath).split('/').pop();
+ return file.name===expected?'':'The map file name does not match the topology name; it will be saved as '+expected+'.';
+}
 function opUpload(){
- const dialog=opDialog('op-upload','Upload a lab file from this computer','<p>Choose the lab\'s containerlab topology file (<code>.clab.yaml</code>) on <strong>this computer</strong>. It is shown to you next, and copied to the <strong>lab VM</strong> only after you confirm.</p><label for="op-upload-file">Topology file</label><div class="upload-field"><input id="op-upload-file" type="file" accept=".yaml,.yml"><small>YAML · up to 1 MiB</small></div><p class="form-help">Only this one file is uploaded. Files it refers to (startup configurations, certificates) have to be on the lab VM already. Is the lab on the VM already? Use <em>Choose a file on the lab VM…</em> instead.</p><div class="dialog-actions"><button class="button secondary" id="op-upload-cancel">Cancel</button><button class="button primary" id="op-upload-next">Continue</button></div>');
+ const dialog=opDialog('op-upload','Upload a lab file from this computer','<p>Choose the lab\'s containerlab topology file (<code>.clab.yaml</code>) on <strong>this computer</strong>. It is shown to you next, and copied to the <strong>lab VM</strong> only after you confirm.</p><label for="op-upload-file">Topology file</label><div class="upload-field"><input id="op-upload-file" type="file" accept=".yaml,.yml"><small>YAML · up to 1 MiB</small></div><label for="op-upload-annotations">Saved map (annotations JSON, optional)</label><div class="upload-field"><input id="op-upload-annotations" type="file" accept=".json"><small>JSON · up to 1 MiB · optional</small></div><p class="form-help">If you copied a lab with its map file, add it here so device positions are kept.</p><p class="form-help">Only this one file is uploaded. Files it refers to (startup configurations, certificates) have to be on the lab VM already. Is the lab on the VM already? Use <em>Choose a file on the lab VM…</em> instead.</p><div class="dialog-actions"><button class="button secondary" id="op-upload-cancel">Cancel</button><button class="button primary" id="op-upload-next">Continue</button></div>');
  $('op-upload-cancel').onclick=()=>dialog.close();
  $('op-upload-next').onclick=()=>opTask(dialog,async()=>{
   const file=$('op-upload-file').files&&$('op-upload-file').files[0],problem=opUploadProblem(file);if(problem)throw new Error(problem);
+  const mapFile=$('op-upload-annotations').files&&$('op-upload-annotations').files[0],mapProblem=opUploadAnnotationsProblem(mapFile);if(mapProblem)throw new Error(mapProblem);
   const text=await file.text();
   if(/\u0000/.test(text))throw new Error('This does not look like a text file. Choose the .clab.yaml topology file.');
   let parsed;try{parsed=await opParse('',text);}catch(error){throw new Error('This file is not a containerlab topology the manager can read: '+error.message);}
+  const annotations=mapFile?opUploadAnnotationsParse(await mapFile.text()):'';
   let roots=[];try{roots=(await opCapabilities()).roots||[];}catch{roots=[];}
-  dialog.close();await opEdit('','',opUploadPath(opBuilderRoot('',roots),parsed.name),{text,file:file.name});
+  const uploadPath=opUploadPath(opBuilderRoot('',roots),parsed.name);
+  const mapNotice=mapFile?opUploadAnnotationsNotice(mapFile,uploadPath):'';
+  dialog.close();await opEdit('','',uploadPath,{text,file:file.name,annotations,mapNotice});
  });
  return dialog;
 }
@@ -436,4 +503,7 @@ if($('import-top')){
  }
  $('labs').addEventListener('contextmenu',e=>{const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}});
  $('labs').addEventListener('keydown',e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){const lab=e.target.closest('[data-lab]');if(lab){e.preventDefault();openLabOperations(lab.dataset.lab);}}});
+ // Coming back from the lab builder (its "← My labs" link, or the browser Back button): both are a
+ // normal navigation to this page, so the dialog the student left is reopened once, here, on load.
+ opTask(null,()=>opReopenReturn(opConsumeReturn()));
 }

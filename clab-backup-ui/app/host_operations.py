@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.30.35'
+VERSION = '1.30.36'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 # The on-demand Grafana of the telemetry stack: deploy/compose.telemetry.yml names the container so
@@ -318,7 +318,9 @@ class HostOperations:
                         else:
                             if '--' + flag not in help_text: raise ValueError('Installed command lacks --' + flag + '.')
                             argv.append('--' + flag)
-                if action in ('deploy', 'redeploy', 'apply'):
+                if action in ('redeploy', 'apply'):
+                    # The deploy review states the same trust plainly in its own wording; repeating this
+                    # sentence there was only clutter (a lab freshly created has nothing running yet).
                     warnings.append('Runs this trusted topology with host privileges, including its configured hooks, mounts and image pulls.')
                 if options.get('cleanup'):
                     directories = sorted({str(r.get('labdir') or (r.get('labels') or {}).get('clab-node-lab-dir') or path.parent / ('clab-' + name)) for r in rows}) or [str(path.parent / ('clab-' + name))]
@@ -327,6 +329,18 @@ class HostOperations:
         if action == 'create':
             text = options.get('text')
             if not isinstance(text, str) or len(text.encode()) > LIMIT: raise ValueError('YAML must be smaller than 1 MiB.')
+            # A saved map file (from a copied lab, or drawn elsewhere) is optional and travels with the
+            # upload; it is written next to the topology under the same name the VS Code extension and
+            # the builder use, so the existing importer picks it up without knowing this is a new file.
+            annotations = options.get('annotations')
+            if annotations is not None:
+                if not isinstance(annotations, str) or len(annotations.encode()) > LIMIT: raise ValueError('The map layout must be text smaller than 1 MiB.')
+                try:
+                    if not isinstance(json.loads(annotations), dict): raise ValueError()
+                except (ValueError, TypeError, RecursionError): raise ValueError('The map layout is not valid JSON.')
+                side = Path(str(path) + ANNOTATIONS_SUFFIX)
+                if side.is_file() and not side.is_symlink():
+                    warnings.append('Replaces the existing map file next to this topology; a recovery copy of it is kept.')
         base = {'action': action, 'name': name, 'source_name': req.get('source_name', name), 'path': str(path) if path else '', 'options': options,
                 'source_hash': source_hash, 'affected': affected, 'argv': argv, 'steps': steps, **extra}
         return {**base, 'digest': digest(base), 'warnings': warnings}
@@ -463,6 +477,28 @@ class HostOperations:
                     os.chmod(path, 0o664 if path.parent.stat().st_mode & stat.S_ISGID else 0o644)
                 finally:
                     if temp.exists(): temp.unlink()
+                # An uploaded map layout is written next to the new topology, the same name the reader
+                # already looks for. A file already there (never expected for a brand new path, but the
+                # plan was reviewed a moment ago) is backed up first: this review is the one place that
+                # is allowed to replace an existing map file, and only because the student was shown that.
+                annotations = plan['options'].get('annotations')
+                if annotations is not None:
+                    side = path.with_name(path.name + ANNOTATIONS_SUFFIX)
+                    if side.is_file() and not side.is_symlink() and side.stat().st_size <= LIMIT:
+                        history = self.path(str(path.parent / '.clab-manager-history'), exists=False)
+                        history.mkdir(mode=0o700, exist_ok=True)
+                        kept = history / (side.name + '.' + uuid.uuid4().hex)
+                        with open(kept, 'xb') as stream_file:
+                            os.chmod(kept, 0o600); stream_file.write(side.read_bytes())
+                        result['layout_recovery_path'] = str(kept)
+                    side_temp = side.with_name('.clab-manager-' + uuid.uuid4().hex)
+                    try:
+                        with open(side_temp, 'xb') as stream_file:
+                            os.chmod(side_temp, 0o600); stream_file.write(annotations.encode())
+                        os.replace(side_temp, side); side_temp = None
+                        os.chmod(side, 0o664 if path.parent.stat().st_mode & stat.S_ISGID else 0o644)
+                    finally:
+                        if side_temp is not None and side_temp.exists(): side_temp.unlink()
             emit({'output': 'VM source ' + ('removed' if action == 'delete' else 'saved') + '.\n'})
         else:
             cwd = str(path.parent) if path else '/'

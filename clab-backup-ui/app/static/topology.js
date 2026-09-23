@@ -3,6 +3,10 @@ let mapKey='', mapRequest=0, mapBounds=[0,0,1000,600], mapBox=[...mapBounds], ma
 const map=$('topology-map');
 const MAP_STATE_KEYS=['ready','starting','attention','unavailable','credentials','working','neutral'];
 const mapPlural=(n,word)=>typeof plural==='function'?plural(n,word):`${n} ${word}${Number(n)===1?'':'s'}`;
+// The one-line hint under the map: the fixed sentence, plus (only when they apply) the skipped-links
+// and schema warnings that used to sit behind a "Details" toggle — a student cannot act on either, but
+// they are worth a sentence, not a click.
+const TOPOLOGY_HINT='Click a device to open it. Click a link to capture its traffic. Right-click for more actions.';
 function setMapBox(){map.setAttribute('viewBox',mapBox.join(' '));}
 function mapZoom(factor){const [x,y,w,h]=mapBox;if(w*factor<50||w*factor>400000)return;mapBox=[x+w*(1-factor)/2,y+h*(1-factor)/2,w*factor,h*factor];setMapBox();}
 $('map-fit').onclick=()=>{mapBox=[...mapBounds];setMapBox();};
@@ -89,16 +93,16 @@ function mapStage(kind){
  const off=kind!=='map';
  for(const id of ['map-fit','map-in','map-out','map-expand'])if($(id)){$(id).disabled=off;$(id).title=off?'No map yet':'';}
  if($('map-edit')){$('map-edit').disabled=off;$('map-edit').title=off?'Import a map first.':'';}
- if(off&&$('map-notes'))$('map-notes').hidden=true;
+ if(off&&$('topology-hint'))$('topology-hint').textContent=TOPOLOGY_HINT;
  if(typeof syncProxies==='function')syncProxies();
 }
-// Caption under the map in plain words; anything a student cannot act on goes under Details.
+// Caption under the map in plain words; anything a student cannot act on goes into the hint (see above).
 function mapCaption(drawing){
  const unmatched=drawing.nodes.filter(n=>!n.inventory_name).length,devices=drawing.nodes.length-unmatched;
  let text=`${mapPlural(devices,'device')} · ${mapPlural(drawing.links.length,'link')}`;
  if(unmatched)text+=` · ${unmatched} drawn but not in this lab`;
  if(!drawing.has_links_source)text+='. Links aren’t shown yet — import the lab topology file with the map to draw them.';
- const notes=['Lines show how the lab is wired, not whether links are up.'];
+ const notes=[];
  if(drawing.skipped_links)notes.push(`${mapPlural(drawing.skipped_links,'link')} could not be drawn (unsupported or one-ended).`);
  if(drawing.schema!==3)notes.push('Some map styling and port labels could not be shown. Re-import the original map files to restore them.');
  return {text,notes};
@@ -111,7 +115,7 @@ async function refreshMap(force=false){
  if(!drawing){map.innerHTML='';$('map-status').textContent='';mapStage('empty');return;}
  mapStage('map');
  const caption=mapCaption(drawing);$('map-status').textContent=caption.text;
- if($('map-notes')){$('map-notes').hidden=!caption.notes.length;if($('map-notes-text'))$('map-notes-text').textContent=caption.notes.join(' ');}
+ if($('topology-hint'))$('topology-hint').textContent=caption.notes.length?TOPOLOGY_HINT+' '+caption.notes.join(' '):TOPOLOGY_HINT;
  map.innerHTML=topologyMarkup(drawing);
  map.classList.toggle('labels-on-select',drawing.settings?.labelMode==='on-select');
  mapBounds=measureTopology(map);mapBox=[...mapBounds];setMapBox();

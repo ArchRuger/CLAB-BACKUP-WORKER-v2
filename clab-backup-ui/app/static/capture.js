@@ -4,7 +4,7 @@ const captureDialog=$('capture-dialog');
 let captureRequest=0,captureTargets=[],captureLab='',captureNode='',captureHint='',captureStarting=false,captureLaunchId='';
 // The saved topology map decides which interfaces a node shows first: the ports it is
 // wired with. Every other live Linux interface waits behind a toggle.
-let captureDrawing,captureMapInterfaces=[];
+let captureDrawing,captureMapInterfaces=[],captureMapCapture={};
 // null until the provider status is known; node/menu Capture actions are disabled
 // only when the manager reports capture disabled, so the toolbar entry and the
 // dialog's setup link stay reachable.
@@ -35,13 +35,36 @@ function mapInterfacesFor(drawing,node){
  const ids=new Set(drawing.nodes.filter(n=>n.inventory_name===node).map(n=>n.id));
  return [...new Set(drawing.links.flatMap(pair=>pair.filter(ep=>ids.has(ep.node)).map(ep=>ep.interface)))];
 }
+// The container veth each of this node's drawn ports maps to, as computed server-side
+// (app/topology.py bind_drawing) from containerlab's own per-kind port order — never guessed
+// here. A port with no recognised mapping (unknown kind, or a shape container_interface does
+// not understand) is simply absent from the result.
+function mapCaptureInterfacesFor(drawing,node){
+ if(!node||!drawing||!Array.isArray(drawing.links)||!Array.isArray(drawing.nodes))return {};
+ const ids=new Set(drawing.nodes.filter(n=>n.inventory_name===node).map(n=>n.id));
+ const result={};
+ for(const pair of drawing.links)for(const ep of pair)if(ids.has(ep.node)&&ep.capture_interface)result[ep.interface]=ep.capture_interface;
+ return result;
+}
 function captureBox(name,checked){return `<label class="capture-interface"><input type="checkbox" value="${esc(name)}" ${checked?'checked':''}> <span>${esc(name)}</span></label>`;}
 function renderCaptureInterfaces(){
  invalidateCapture();const target=captureSelected();
  const live=target?target.interfaces:[],mapped=captureNode?captureMapInterfaces:[];
  const primary=mapped.filter(n=>live.includes(n)),missing=mapped.filter(n=>!live.includes(n));
- // A link endpoint arrives ticked; a node wired with exactly one port starts ticked too.
- const hinted=captureHint?(live.includes(captureHint)?captureHint:''):primary.length===1?primary[0]:'';
+ // The tap device is the VM side of a vJunos-style image's own management link; the veth
+ // (ethN) is what containerlab's Wireshark integration captures on, so a mapped port is never
+ // preselected onto a tapN name even if discovery happens to list one.
+ const isTap=n=>/^tap\d+$/i.test(n);
+ const mappedHint=captureHint?captureMapCapture[captureHint]||'':'';
+ // A link endpoint arrives ticked once its container interface is confirmed live; a node
+ // wired with exactly one port starts ticked too.
+ let hinted='',hintReason='';
+ if(captureHint){
+  if(mappedHint&&!isTap(mappedHint)&&live.includes(mappedHint))hinted=mappedHint;
+  else if(!mappedHint&&live.includes(captureHint))hinted=captureHint;
+  else if(mappedHint)hintReason=`The VM lists no ${mappedHint} for ${captureHint} yet: the node may still be starting, or the topology changed. Tick the interface to use.`;
+  else hintReason=`The diagram calls this port ${captureHint}, but the VM lists no interface with that name. Tick the matching interface below — device port names (ge-0/0/0) often map to eth1, eth2…`;
+ }else if(primary.length===1)hinted=primary[0];
  const usePrimary=primary.length>0,rest=usePrimary?live.filter(n=>!primary.includes(n)):[];
  $('capture-primary-legend').textContent=usePrimary?'Connected interfaces':'Interfaces';captureAdvancedLabel();
  $('capture-interfaces').innerHTML=!target?'<p>Choose a device above, or open Capture traffic from a device on the map.</p>':(usePrimary?primary:live).map(n=>captureBox(n,n===hinted)).join('')||'<p>This device has no interfaces that can be captured.</p>';
@@ -50,8 +73,9 @@ function renderCaptureInterfaces(){
  $('capture-more-label').textContent=`Other interfaces on this device (${rest.length})`;
  updateCapturePrepare(!!hinted);
  if(!target)return;
- if(hinted)$('capture-status').textContent=`${hinted} is selected — start the capture when you are ready.`;
- else if(captureHint)$('capture-status').textContent=`The diagram calls this port ${captureHint}, but the VM lists no interface with that name. Tick the matching interface below — device port names (ge-0/0/0) often map to eth1, eth2…`;
+ if(hinted&&hinted===mappedHint&&hinted!==captureHint)$('capture-status').textContent=`Capturing ${captureNode} port ${captureHint} (container interface ${hinted}) — start the capture when you are ready.`;
+ else if(hinted)$('capture-status').textContent=`${hinted} is selected — start the capture when you are ready.`;
+ else if(hintReason)$('capture-status').textContent=hintReason;
  else if(missing.length)$('capture-status').textContent=`Diagram port${missing.length>1?'s':''} ${missing.join(', ')} ${missing.length>1?'were':'was'} not found on the VM. Choose from the interfaces listed.`;
  else if(primary.length>1)$('capture-status').textContent='Tick the interfaces to capture.';
 }
@@ -86,6 +110,7 @@ async function refreshCaptureTargets(){
   if(!status.enabled){$('capture-status').textContent=status.message;$('capture-search').disabled=false;$('capture-advanced').open=true;captureAdvancedLabel();renderCaptureCaption();return;}
   if(captureDrawing===undefined&&captureLab){try{captureDrawing=await(await api('/labs/'+captureLab+'/topology')).json();}catch{captureDrawing=null;}}
   captureMapInterfaces=mapInterfacesFor(captureDrawing,captureNode);
+  captureMapCapture=mapCaptureInterfacesFor(captureDrawing,captureNode);
   const params=new URLSearchParams();
   if($('capture-scope').value!=='host'&&captureLab){params.set('lab_id',captureLab);if(captureNode)params.set('node',captureNode);}
   const data=await(await api('/capture/targets?'+params)).json();
@@ -98,7 +123,7 @@ async function refreshCaptureTargets(){
  }catch(error){if(request===captureRequest&&captureDialog.open){$('capture-status').textContent=error.message;$('capture-search').disabled=false;$('capture-advanced').open=true;captureAdvancedLabel();}}
 }
 function openCapture(node='',hint='',ends=null){
- captureLab=activeId;captureNode=node;captureHint=hint;captureDrawing=undefined;captureMapInterfaces=[];
+ captureLab=activeId;captureNode=node;captureHint=hint;captureDrawing=undefined;captureMapInterfaces=[];captureMapCapture={};
  if($('details-dialog').open)$('details-dialog').close();
  $('capture-search').value='';$('capture-scope').value='lab';$('capture-advanced').open=false;
  // A link opens on its first endpoint; the endpoint buttons switch to the other side.

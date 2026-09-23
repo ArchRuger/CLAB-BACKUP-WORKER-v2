@@ -114,6 +114,10 @@
   /* vertical chrome above the topology stage: topbar 48 + content pad 16 + lab header 68 + 14
      + tabs 41 + 12 + section heading ≈ 50 + hint ≈ 28 + content pad 32 (banner hidden) */
   --stage-offset: 300px;
+  /* the topology hint's own box below the stage (12px/1.5 line ≈ 18px + 8px top margin): added to
+     --stage-offset so .topology-layout bounds stage + hint together, and the device rail beside it
+     gets the same total height to scroll within. */
+  --topology-hint-h: 28px;
 
   font-family: var(--font);
   color: var(--text);
@@ -850,6 +854,15 @@ footer {
 .banner.danger { border-left-color: var(--danger); background: var(--danger-soft); }
 .banner.ok { border-left-color: var(--ok); background: var(--ok-soft); }
 .banner-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+/* the generic notice close/collapse control (setBanner, app.js): always the last thing in the banner,
+   never inside .banner-actions so it survives regardless of which action buttons that spec shows */
+.notice-close { flex-shrink: 0; margin-left: 4px; min-width: 28px; min-height: 28px; font-size: 18px; }
+/* a running-operation notice collapses to a one-line pill instead of disappearing: the detail and every
+   action but the toggle itself hide, and the headline is clipped rather than wrapping the row taller */
+.banner.banner-collapsed { flex-wrap: nowrap; min-height: 0; padding: 6px 14px; }
+.banner.banner-collapsed > div { overflow: hidden; }
+.banner.banner-collapsed p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banner.banner-collapsed details, .banner.banner-collapsed .banner-actions { display: none; }
 
 /* dark surfaces (only #toast and the capture screen stay dark in-page): re-scope the tokens
    that light-surface rules read, so any .caption/.muted/.timestamp and any focus ring inside
@@ -1302,8 +1315,14 @@ tr:last-child td { border-bottom: 0; }
 /* the device open in the drawer */
 .device-row[aria-current="true"] { box-shadow: inset 3px 0 0 var(--accent); border-color: var(--line-strong); }
 
-.device-rail { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.device-rail h2, .device-rail h3 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
+/* Desktop: the rail matches the stage+hint column's height (align-self: stretch, the grid row is sized
+   by .topology-layout below) and scrolls on its own, so 10+ devices never push the map off screen or
+   grow the whole page. The heading stays put (position: sticky, its own scroll container is the rail)
+   while the list scrolls under it; tabindex makes the rail itself reachable for arrow/Page-key scrolling.
+   overflow-y is the only overflow set here, so scroll chaining to the page at the rail's ends stays the
+   browser default (no overscroll-behavior: contain) instead of trapping the wheel/keys. */
+.device-rail { display: flex; flex-direction: column; gap: 6px; min-width: 0; align-self: stretch; min-height: 0; overflow-y: auto; }
+.device-rail h2, .device-rail h3 { position: sticky; top: 0; z-index: 1; background: var(--bg); font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 4px; padding: 2px 0; }
 /* rail cards are narrow: the name and the state pill share the first line and the network OS badge gets a
    line of its own, so a long platform label (Junos (vJunos-switch)) never runs under the pill */
 .device-rail .device-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name state" "platform platform" "reason reason" "actions actions"; padding: 10px 12px; gap: 0 10px; }
@@ -1316,7 +1335,15 @@ tr:last-child td { border-bottom: 0; }
 .device-rail .empty-state { padding: 24px 16px; }
 .device-rail .caption { margin-top: 8px; }
 
-.topology-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+/* Desktop: bounded to the same viewport math as .topology-stage (--stage-offset), plus the hint's own
+   box below it (--topology-hint-h), so the grid row — and the device rail stretched to it above — never
+   exceeds the space really available at 1366×768 and up. align-items stays "start" for the left column
+   (the map keeps its own height from .topology-stage); only the rail is told to stretch (see above). */
+.topology-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start;
+  height: calc(100dvh - var(--stage-offset) + var(--topology-hint-h));
+  min-height: calc(420px + var(--topology-hint-h));
+  max-height: calc(900px + var(--topology-hint-h));
+}
 
 .node-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 205px; }
 .node-actions button {
@@ -1554,10 +1581,6 @@ dialog.drawer, dialog.node-details {
   background: var(--surface);
 }
 .map-skeleton { width: min(60%, 520px); height: 40%; min-height: 120px; border-radius: var(--radius-lg); }
-/* caption notes (wiring caveat, skipped links, schema warnings) live under the hint, behind Details */
-.map-notes { margin: 6px 0 0; }
-.map-notes summary { cursor: pointer; }
-.map-notes p { margin: 4px 0 0; }
 /* the editor and the deploy preview draw layout, not live state */
 .op-layout-map .device-state-dot, .op-layout-map .device-state-glyph { display: none; }
 /* Note: the absolutely positioned toolbar is a stacking context inside an overflow:hidden stage,
@@ -1699,7 +1722,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 }
 /* the layout grid and its map column become flex columns; align-items must stretch (the grid rule says
    start) or the stage shrinks to the width of its toolbar */
-.map-expanded .topology-layout, .map-expanded .topology-layout > div:first-child { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; align-items: stretch; }
+.map-expanded .topology-layout, .map-expanded .topology-layout > div:first-child { display: flex; flex-direction: column; flex: 1; height: auto; max-height: none; min-height: 0; min-width: 0; align-items: stretch; }
 .map-expanded .topology-stage { flex: 1; height: auto; min-height: 0; }
 .map-expanded #topology-map { min-height: 100px; height: 100%; }
 .map-expanded .device-rail { display: none; }
@@ -2262,12 +2285,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    28. Breakpoints
    -------------------------------------------------------------------------- */
 
-/* ≤1280: the device rail stacks under the map */
+/* ≤1280: the device rail stacks under the map and scrolls with the page again — the bounded, independently
+   scrolling rail is a desktop-width layout only; below it the single column already worked before. */
 @media (max-width: 1280px) {
-  .topology-layout { grid-template-columns: minmax(0, 1fr); }
+  .topology-layout { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; max-height: none; }
+  .device-rail { align-self: auto; overflow-y: visible; max-height: none; gap: 8px; }
+  .device-rail h2, .device-rail h3 { position: static; }
   .device-rail .device-row { grid-template-columns: minmax(96px, 1.4fr) minmax(0, 1fr) auto; }
   .device-rail .device-row .node-actions { grid-column: auto; justify-content: flex-end; }
-  .device-rail { gap: 8px; }
 }
 
 /* ≤1100: tool grid one column, lab grid two columns, denser tables */

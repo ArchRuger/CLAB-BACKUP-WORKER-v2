@@ -37,6 +37,13 @@ profile under Edit connection…. A generic default applies to unmapped
 nodes. Generic SSH does not enable configuration backups for unsupported platforms.
 Changing backup selection does not disable terminal access.
 
+A `ghcr.io/srl-labs/network-multitool` node (any tag, no NOS platform) needs no
+credential profile: the manager applies its documented login from the
+[network-multitool README](https://github.com/srl-labs/network-multitool), the
+same way a NOS kind gets its containerlab default. SSH readiness and **Open
+CLI ↗** work the same as for any other login; configuration backups stay
+unavailable, since this image has no backup driver.
+
 ## Backup download names
 
 A device's configuration downloads as `<type>_<device>_<YYYY-MM-DD>_<HH-mm>UTC.<ext>`,

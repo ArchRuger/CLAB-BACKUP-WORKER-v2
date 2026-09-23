@@ -1,3 +1,30 @@
+# Setup Script Cleanup Log, part 1 — 1.30.36
+
+Prepared on `claude/ui-ux-cleanup` (from `main` `c0851b7`, 1.30.35) on 2026-09-23 on the development VM
+`clab-llm-dev2`. The per-requirement map and the routing/disk record are in `docs/ui-ux-cleanup/`. Live evidence of the
+rebuilt manager (installer path, VM-connection seed, browser checks) is recorded in the follow-up records entry below
+this one once it was run; this entry lists only what was run before the commit.
+
+- **Unit and static (this working tree):** `python -m unittest discover -s tests -t tests` in the venv: see the records
+  entry for the exact total of the committed tree; deploy-script suites with the system `python3`
+  (`test_install_manager` 53, `test_git_onboard` 50, `test_apt_lock` 23, `test_apt_update`, `test_apt_sources`,
+  `test_check_*`, `test_git_registrations`, `test_scaffold_lab`, `test_release_consistency`: OK); `node --test tests/*.js`;
+  `bash -n deploy/*.sh`; `deploy/verify-release.py`; `git diff --check`; `check_links.py`.
+- **Live, before the rebuild:** `apt_lock.py --show` / `--wait --pause-timers` against a real `flock` holder of
+  `/var/lib/dpkg/lock-frontend` (holder named by its live pid and `comm`, released after 12 s, both `apt-daily` timers
+  active again afterwards); lazydocker installed twice into a fresh `HOME` from the upstream release (second run "already
+  current", one PATH block in `.bashrc`, `lazydocker --version` in a fresh login shell) and "already current" for the
+  real account; `gh auth login --web` with stdout piped prints only the one-time code and the official URL (no
+  credential question, no "Press Enter"); the multitool image's documented login verified over SSH against the deployed
+  `ghcr.io/srl-labs/network-multitool:latest` (only that account logs in); the runtime port mapping read from
+  containerlab's deploy log of `restore-square` (vJunos `ge-0/0/N`→`ethN+1`, XRv9k `Gi0/0/0/N`→`ethN+1`, cJunosEvolved
+  `et-0/0/N`→`ethN+4`, cEOS and Linux identity).
+- **Reviews:** an Opus (`claude-opus-5-5`) read-only risk review of the setup, seed, lock and onboarding diffs; its
+  must-fix (the launch step must keep the terminal for the password prompt) and should-fix items (replacement-key box,
+  operation guard before consuming a seed, `HTTPException` in the lazydocker step, the seed re-`lstat` before unlink, an
+  odd image string never blocking a topology parse) were applied and the suites rerun. The `host_operations.py` change
+  (`options.annotations` on `create`) is reviewed in the records entry.
+
 # Student quick start delivered: the PDF, its inspection and two independent replays — 1.30.35
 
 Prepared on `claude/student-quick-start` on 2026-09-22 after 1.30.34 (`2ef98a2`, CI green). **No application code

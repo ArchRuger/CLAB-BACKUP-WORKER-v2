@@ -49,7 +49,7 @@ test('operation output leads with a green success banner and a red failure banne
  // A failure a student can act on is said in words: an image the VM does not have, named as the topology names it.
  const pull='INFO Pulling image image=docker.io/library/cjunosevolved:26.2R1.7-EVO\nERRO Failed to pull image image=docker.io/vrnetlab/juniper_vjunos-switch:23.2R1.14 err="pull access denied"\nERRO Failed to pull image image=docker.io/library/cjunosevolved:26.2R1.7-EVO err="pull access denied"\nERRO Failed to pull image image=ghcr.io/org/x:1 err="denied"\n';
  const hint=context.opJobBanner({action:'deploy',name:'l',status:'failed',exit_code:1,message:'Host command returned an error',output:pull}).hint;
- assert.match(hint,/these images .*: vrnetlab\/juniper_vjunos-switch:23\.2R1\.14, cjunosevolved:26\.2R1\.7-EVO, ghcr\.io\/org\/x:1\./);assert.match(hint,/Edit visually/);
+ assert.match(hint,/these images .*: vrnetlab\/juniper_vjunos-switch:23\.2R1\.14, cjunosevolved:26\.2R1\.7-EVO, ghcr\.io\/org\/x:1\./);assert.match(hint,/Open in Lab Builder…/);
  assert.equal(context.opJobBanner({action:'deploy',name:'l',status:'succeeded',exit_code:0,output:pull}).hint,undefined);assert.equal(bad.hint,undefined);
 });
 test('deploy lab saves the workspace first and reuses one that already tracks the deployment',async()=>{
@@ -223,4 +223,111 @@ test('a finished create or builder save names the file to continue with; nothing
  assert.equal(p({status:'succeeded',action:'publish',path:'',result:{published_path:'/srv/p/x/x.clab.yml'}}),'/srv/p/x/x.clab.yml');
  assert.equal(p({status:'failed',action:'create',path:'/srv/p/bgp.clab.yaml'}),'');assert.equal(p({status:'running',action:'create',path:'/srv/p/bgp.clab.yaml'}),'');
  assert.equal(p({status:'succeeded',action:'deploy',path:'/srv/p/bgp.clab.yaml'}),'','a deployed lab is running: nothing to deploy or add');assert.equal(p({status:'succeeded',action:'delete',path:'/srv/p/bgp.clab.yaml'}),'');assert.equal(p(null),'');
+});
+
+test('an optional saved map for an upload is checked the same plain way as the topology file itself',()=>{
+ assert.equal(context.opUploadAnnotationsProblem(null),'','optional: choosing nothing is never a problem');
+ assert.match(context.opUploadAnnotationsProblem({name:'map.txt',size:5}),/\.json file/);
+ assert.equal(context.opUploadAnnotationsProblem({name:'map.json',size:0}),'This map file is empty.');
+ assert.match(context.opUploadAnnotationsProblem({name:'map.json',size:1024*1024+1}),/larger than 1 MiB/);
+ assert.equal(context.opUploadAnnotationsProblem({name:'map.json',size:1024*1024}),'');
+ assert.throws(()=>context.opUploadAnnotationsParse('not json'),/not valid JSON/);
+ assert.throws(()=>context.opUploadAnnotationsParse('[1,2]'),/one JSON object, not a list/);
+ assert.throws(()=>context.opUploadAnnotationsParse('"text"'),/one JSON object/);
+ assert.equal(context.opUploadAnnotationsParse('{"nodeAnnotations":[]}'),'{"nodeAnnotations":[]}','a valid object is returned unchanged');
+ const path='/srv/containerlab-node-manager/projects/bgp.clab.yaml';
+ assert.equal(context.opUploadAnnotationsName(path),path+'.annotations.json');
+ assert.equal(context.opUploadAnnotationsNotice(null,path),'','nothing chosen: no notice');
+ assert.equal(context.opUploadAnnotationsNotice({name:'bgp.clab.yaml.annotations.json'},path),'','the exact expected name: no notice');
+ assert.equal(context.opUploadAnnotationsNotice({name:'other-name.json'},path),'The map file name does not match the topology name; it will be saved as bgp.clab.yaml.annotations.json.');
+});
+
+test('the dialog left for the lab builder is remembered and reopened once, on this page\'s own load; a plain visit leaves no marker',async()=>{
+ const store=new Map();
+ const page=vm.createContext({$:()=>null,sessionStorage:{setItem:(k,v)=>store.set(k,v),getItem:k=>store.has(k)?store.get(k):null,removeItem:k=>store.delete(k)}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),page);
+ assert.equal(page.opConsumeReturn(),null,'nothing remembered yet');
+ page.opRemember('vm',{path:'/etc/containerlab/demo.clab.yaml',name:'demo.clab.yaml'});
+ const value=page.opConsumeReturn();
+ // Built inside the vm context: compared by content (deepEqual sees a cross-realm object as unequal).
+ assert.equal(JSON.stringify(value),JSON.stringify({kind:'vm',path:'/etc/containerlab/demo.clab.yaml',name:'demo.clab.yaml'}));
+ assert.equal(page.opConsumeReturn(),null,'consumed once: a second read finds nothing, so a later, unrelated load never reopens it');
+ page.opRemember('upload',{path:'/srv/containerlab-node-manager/projects/bgp.clab.yaml',name:'bgp.clab.yaml',text:'name: bgp\n',annotations:'',mapNotice:''});
+ assert.equal(JSON.stringify(page.opConsumeReturn()),JSON.stringify({kind:'upload',path:'/srv/containerlab-node-manager/projects/bgp.clab.yaml',name:'bgp.clab.yaml',text:'name: bgp\n',annotations:'',mapNotice:''}));
+ for(const bad of ['{not json','null','"just text"',JSON.stringify({kind:'other'})]){store.set('op-return',bad);assert.equal(page.opConsumeReturn(),null,bad);}
+ assert.equal(page.opConsumeReturn(),null);
+ // A page that never left for the builder (a direct visit, or storage that refuses reads) never reopens anything.
+ const broken=vm.createContext({$:()=>null,sessionStorage:{getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');},removeItem(){}}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),broken);
+ assert.equal(broken.opConsumeReturn(),null);assert.doesNotThrow(()=>broken.opRemember('vm',{path:'/x'}));
+});
+
+test('reopening a remembered dialog rereads a VM file fresh, and puts an upload\'s text straight back',async()=>{
+ const calls=[];
+ const page=vm.createContext({$:()=>null});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),page);
+ // opEdit is a real function of the script itself; replaced after load, the same way these tests
+ // already replace opDialog, so opReopenReturn's call to it is observed without the dialog machinery.
+ page.opEdit=(...args)=>{calls.push(args);return Promise.resolve();};
+ await page.opReopenReturn(null);assert.equal(calls.length,0,'nothing to reopen: opEdit is not called at all');
+ await page.opReopenReturn({kind:'vm',path:'/etc/containerlab/demo.clab.yaml',name:'demo.clab.yaml'});
+ assert.equal(JSON.stringify(calls[0]),JSON.stringify(['/etc/containerlab/demo.clab.yaml']),'a VM file is reread, not restored from a stale copy');
+ await page.opReopenReturn({kind:'upload',path:'/srv/containerlab-node-manager/projects/bgp.clab.yaml',name:'bgp.clab.yaml',text:'name: bgp\n',annotations:'{"nodeAnnotations":[]}',mapNotice:'moved'});
+ // The 4th argument (the upload object) is built inside the vm context: compared by content, not by realm.
+ assert.equal(JSON.stringify(calls[1]),JSON.stringify(['','','/srv/containerlab-node-manager/projects/bgp.clab.yaml',{text:'name: bgp\n',file:'bgp.clab.yaml',annotations:'{"nodeAnnotations":[]}',mapNotice:'moved'}]));
+ await page.opReopenReturn({kind:'vm',path:''});assert.equal(calls.length,2,'an incomplete marker calls nothing');
+});
+
+test('the deploy review shows the command directly and drops the trust warning and repeat-check caption that other reviews keep',async()=>{
+ const elements=new Map(),el=()=>({value:'',onclick:null,addEventListener(){},querySelector:()=>({textContent:''}),querySelectorAll:()=>[],hidden:false});
+ const dialogs=[];
+ const previews={
+  deploy:{action:'deploy',name:'demo',path:'/etc/containerlab/demo.clab.yaml',token:'a'.repeat(32),warnings:[],affected:[],argv:['/usr/bin/containerlab','deploy','-t','/etc/containerlab/demo.clab.yaml','--name','demo'],steps:[],diff:''},
+  destroy:{action:'destroy',name:'demo',path:'/etc/containerlab/demo.clab.yaml',token:'b'.repeat(32),warnings:['Runs this trusted topology with host privileges, including its configured hooks, mounts and image pulls.'],affected:[{name:'demo-r1',state:'running'}],argv:['/usr/bin/containerlab','destroy','-t','/etc/containerlab/demo.clab.yaml'],steps:[],diff:''},
+ };
+ const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[],operations:[],git_jobs:[]},activeId:'',console,
+  document:{body:{insertAdjacentHTML(){}},querySelectorAll:()=>[],getElementById:()=>null,createElement:()=>el()},
+  location:{pathname:'/'},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},setTimeout:()=>0,clearTimeout(){},notify(){},refresh:async()=>{},current:()=>null,busy:()=>false,
+  json:async(endpoint,method,payload)=>endpoint==='/operations/preview'?previews[payload.action]:{}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],el());const d={id,title,html,open:true,close(){this.open=false;},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};dialogs.push(d);return d;};
+ await c.opReview({action:'deploy',lab_id:'',name:'demo'});
+ const deployHtml=dialogs.at(-1).html;
+ assert.doesNotMatch(deployHtml,/host privileges/,'the deploy review drops the trust warning');
+ assert.doesNotMatch(deployHtml,/this check is repeated/,'the deploy review drops the repeat-check caption');
+ assert.doesNotMatch(deployHtml,/<details><summary>Technical details/,'the command is not folded away');
+ assert.match(deployHtml,/<h4>Command run on the VM<\/h4><pre class="op-output">"\/usr\/bin\/containerlab" "deploy" "-t" "\/etc\/containerlab\/demo\.clab\.yaml" "--name" "demo"<\/pre>/);
+ await c.opReview({action:'destroy',lab_id:'',name:'demo'});
+ const destroyHtml=dialogs.at(-1).html;
+ assert.match(destroyHtml,/host privileges/,'other reviews keep the trust warning');
+ assert.match(destroyHtml,/this check is repeated/,'other reviews keep the repeat-check caption');
+ assert.match(destroyHtml,/<details><summary>Technical details<\/summary>/,'other reviews still fold the command away');
+});
+
+test('the operation output opens the moment Start lab is confirmed, does not pop back up once closed on purpose, and a fresh launch or View output still work',async()=>{
+ const elements=new Map();
+ for(const id of ['op-job-banner','op-job-output','op-job-result'])elements.set(id,{hidden:false,className:'',textContent:'',innerHTML:'',scrollTop:0,scrollHeight:0,clientHeight:0});
+ const jobs={a:{id:'a',action:'deploy',name:'demo',lab_id:'lab1',status:'running',output:''},b:{id:'b',action:'deploy',name:'demo',lab_id:'lab1',status:'running',output:''}};
+ const timers=[];
+ const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[]},activeId:'lab1',console,
+  document:{getElementById:()=>null},setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},
+  api:async url=>({json:async()=>jobs[url.split('/').pop()]}),refresh:async()=>{}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ const dialogs={};
+ c.opDialog=id=>{if(!dialogs[id])dialogs[id]={id,open:true,onclose:null,classList:{toggle(){}},close(){if(this.open){this.open=false;if(typeof this.onclose==='function')this.onclose();}},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};else dialogs[id].open=true;return dialogs[id];};
+ await c.opShowJob('a',{auto:true});
+ assert.equal(dialogs['operation-output'].open,true,'opens right away, no second click');
+ dialogs['operation-output'].close();
+ await c.opShowJob('a',{auto:true});
+ assert.equal(dialogs['operation-output'].open,false,'a deliberately closed dialog is not reopened automatically for the same launch');
+ await c.opShowJob('a');
+ assert.equal(dialogs['operation-output'].open,true,'View output always reopens it');
+ dialogs['operation-output'].close();
+ await c.opShowJob('b',{auto:true});
+ assert.equal(dialogs['operation-output'].open,true,'a fresh launch (a different job id) opens again');
+ // Moving to another lab closes an auto-opened dialog for it, and it does not come back on its own there.
+ const tick=timers.pop();c.activeId='lab2';await tick();
+ assert.equal(dialogs['operation-output'].open,false,'navigating away closes it');
+ c.activeId='lab1';await c.opShowJob('b',{auto:true});
+ assert.equal(dialogs['operation-output'].open,false,'still not reopened for that same job once it left');
 });

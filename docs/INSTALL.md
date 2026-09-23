@@ -50,7 +50,7 @@ Grafana plugin and GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.30.35 — guided setup
+Containerlab Node Manager 1.30.36 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -70,8 +70,21 @@ passwords or GitHub device authorisation keep the terminal attached.
 
 ## What the full installation does
 
-Menu **1** asks four questions (bind/port settings, lab operation access, VS Code
-access, APT media repair), shows the plan and asks once for approval. Then it runs:
+Menu **1** takes the standard, documented choices automatically: an existing
+`clab-backup-ui/.env` is retained unchanged and a missing one gets the defaults (all
+VM interfaces, port 8081); reviewed lab operations are enabled; VS Code /
+Containerlab extension access is set up for your account; obsolete
+installation-media APT entries are backed up and disabled if present. It prints the
+plan below, starts immediately (no "Proceed with this plan?" prompt), and runs
+Git setup as part of the same item once the manager is ready — which is exactly
+what "Install or update manager, then set up Git" says. Add `--advanced` to the
+command that starts the installer to ask every one of those questions again,
+including copying `.env` from a previous source folder and choosing whether to set
+up Git now or later:
+
+```bash
+bash "$HOME/projects/clab-manager/deploy/install.sh" --advanced
+```
 
 | Phase | What happens |
 |---|---|
@@ -81,7 +94,14 @@ access, APT media repair), shows the plan and asks once for approval. Then it ru
 | 4 Browser Wireshark capture stack | Pulls the pinned Wireshark image, builds the session service from this source, starts Edgeshark on localhost 5001/5801, writes the capture settings and recreates the manager so it loads them. |
 | 5 Grafana dashboards and lab maps | Pulls Prometheus and Grafana by digest, installs the pinned Flow panel plugin, writes the scrape configuration for the real UI port, starts both, waits until they answer, stops Grafana again and recreates the manager. Grafana (TCP 3000) is on demand: the manager starts it when you open it from a lab and stops it after 15 minutes without an open dashboard; Prometheus keeps running with 15 minutes of history. |
 | 6 Running manager verification | Checks the Compose container, the application version and the HTTP response on the actual bind address and port. |
-| 7 Engineer access for VS Code | Only when chosen: `docker` and `clab_admins` groups for your account, group-writable trusted lab folders, the containerlab SUID mode. |
+| 7 Engineer access for VS Code | Only when chosen (standard path: always; `--advanced`: on request): `docker` and `clab_admins` groups for your account, group-writable trusted lab folders, the containerlab SUID mode. |
+
+Right after the numbered phases, the installer installs or updates
+[lazydocker](#lazydocker) for your account, as its own ordinary-user step that never
+fails the installation, then runs Git setup. On the VM prerequisites phase, a
+package (dpkg/APT) lock held by another process — commonly `unattended-upgrades` —
+gets its own [recovery menu](#recovering-from-a-package-lock) instead of the
+generic retry choice.
 
 Before APT updates, both installation paths display UTC/NTP status and wait up
 to 30 seconds only for already-active NTP. The check is read-only; the installer
@@ -112,9 +132,14 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The installer ends with `Manager 1.30.35: running; HTTP and version checks passed.`
-and the local address. Open `http://VM_IP:8081` from your workstation (the VM's LAN
-address, not the workstation's `127.0.0.1`).
+The installer ends with `Manager 1.30.36: running; HTTP and version checks passed.`
+and the local address, then exits to the shell (exit code 0); it does not loop back
+to the Setup menu after a successful path. A failed or cancelled step keeps
+today's behaviour instead: completed work stays in place, the affected phase's
+Recovery menu offers **Retry this step** or **Return to menu**, and a
+**Return to menu** choice reopens the Setup menu shown above. Open
+`http://VM_IP:8081` from your workstation (the VM's LAN address, not the
+workstation's `127.0.0.1`).
 
 ## Upgrades
 
@@ -342,6 +367,70 @@ ordinary-user command and stops before running Git as root. The installer uses
 sudo only where the VM needs administrator access. A separate repository owner
 without sudo access can use the advanced administrator/owner workflow in the Git
 guide instead.
+
+## Recovering from a package lock
+
+`apt-get` refuses to run while another process, usually the VM's own
+`unattended-upgrades`, holds the dpkg/APT lock. When the **VM prerequisites**
+phase fails with that specific error, the installer shows who holds it right now
+(never a guessed or hard-coded process ID) and a dedicated menu instead of the
+generic retry choice:
+
+```text
+Package lock held by pid 2230 (unattended-upgr) on /var/lib/dpkg/lock-frontend.
+Never stop unattended-upgrades.service, kill this process, or delete the lock
+file: let the current run finish, or wait it out here.
+Copyable command, in another terminal: sudo python3 /home/you/projects/clab-manager/deploy/apt_lock.py --wait --pause-timers
+
+Package lock recovery
+  1. Wait for the package lock here, then retry this step (recommended)
+  2. Retry this step now
+  3. Return to menu; keep completed work
+```
+
+Choice **1** runs the same wait inside the installer (it already holds sudo, so
+this needs no extra password) and retries the VM prerequisites phase as soon as
+the lock clears, or after 900 seconds, whichever comes first. It optionally pauses
+the `apt-daily` / `apt-daily-upgrade` **timers** for the wait — only preventing a
+*future* scheduled run from starting, never touching the `unattended-upgrades`
+*service*, never killing a process and never deleting a lock file — and always
+restores exactly the timers it paused, including when you cancel with Ctrl+C.
+Before showing the menu again, it re-checks the lock: if it is already free, the
+step just retries. The printed command also works standalone, from any terminal on
+the VM:
+
+```bash
+sudo python3 "$HOME/projects/clab-manager/deploy/apt_lock.py" --wait --pause-timers
+sudo python3 "$HOME/projects/clab-manager/deploy/apt_lock.py" --show   # who holds it, without waiting
+```
+
+It exits 0 once released, 1 on a timeout (`--timeout SECONDS`, default 900), and
+130 on Ctrl+C.
+
+## lazydocker
+
+The standard installation installs or updates
+[lazydocker](https://github.com/jesseduffield/lazydocker) for your own account (never
+as root) to `~/.local/bin/lazydocker`, matching your VM's CPU architecture from its
+latest GitHub release. A download or extraction failure is only a warning; it never
+fails the installation. It is idempotent: if the installed copy already reports the
+latest version, the installer says so and does not download again.
+
+The installer also makes sure a new shell can find it: if `~/.bashrc` does not
+already have `.local/bin` on a `PATH` line, it appends one guarded block (never
+duplicated on a later run):
+
+```bash
+# Added by Containerlab Node Manager setup: user tools such as lazydocker
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$PATH:$HOME/.local/bin";; esac
+```
+
+That takes effect in shells opened after this run. If the installer's own current
+shell does not have `~/.local/bin` on `PATH` yet, it prints the one line to run now:
+
+```bash
+export PATH="$PATH:$HOME/.local/bin"
+```
 
 ## Provider installation notes
 

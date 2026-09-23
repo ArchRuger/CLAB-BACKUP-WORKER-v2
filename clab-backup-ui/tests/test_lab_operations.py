@@ -174,6 +174,45 @@ class HostOperationTests(unittest.TestCase):
                 self.host.execute(req, lambda _: None)
         self.assertEqual(target.read_bytes(), b'operator-created topology')
 
+    # --- create: an optional map file (uploaded alongside the topology) travels with it -------------
+
+    def test_create_with_a_map_file_writes_it_beside_the_topology_and_the_digest_covers_it(self):
+        layout = json.dumps({'nodeAnnotations': [{'id': 'r1', 'position': {'x': 1, 'y': 2}}]})
+        target = self.root / 'mapped.clab.yaml'
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        plan = self.host.plan(req)
+        self.assertEqual(plan['warnings'], [])
+        bare = self.host.plan({**self.request('create', text=YAML.decode()), 'path': str(target)})
+        self.assertNotEqual(plan['digest'], bare['digest'], 'the digest must cover the map layout too')
+        self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        side = target.with_name(target.name + '.annotations.json')
+        self.assertEqual(side.read_text(), layout)
+        self.assertEqual(target.read_bytes(), YAML)
+        # No annotations option at all: nothing is written beside the topology.
+        other = self.root / 'no-map.clab.yaml'
+        plain = {**self.request('create', text=YAML.decode()), 'path': str(other)}
+        self.host.execute({**plain, 'digest': self.host.plan(plain)['digest']}, lambda _: None)
+        self.assertFalse(other.with_name(other.name + '.annotations.json').exists())
+
+    def test_create_rejects_a_map_file_that_is_not_a_json_object_or_is_too_large(self):
+        target = self.root / 'bad-map.clab.yaml'
+        for layout in ('[1]', '"just text"', 'not json at all', 'x' * (1024 * 1024 + 1)):
+            req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+            with self.assertRaises(ValueError): self.host.plan(req)
+        self.assertFalse(target.exists(), 'a refused map file plans no write of the topology either')
+
+    def test_create_never_overwrites_an_existing_map_file_silently(self):
+        target = self.root / 'existing-map.clab.yaml'
+        side = target.with_name(target.name + '.annotations.json')
+        side.write_text('{"nodeAnnotations": [{"id": "old"}]}')
+        layout = json.dumps({'nodeAnnotations': [{'id': 'new'}]})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        plan = self.host.plan(req)
+        self.assertIn('Replaces the existing map file', plan['warnings'][0])
+        result = self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        self.assertEqual(side.read_text(), layout, 'the new map file is written')
+        self.assertEqual(Path(result['layout_recovery_path']).read_text(), '{"nodeAnnotations": [{"id": "old"}]}', 'the previous one is kept, not lost')
+
     # --- lab builder: publish a new lab folder, revise a lab that is not deployed -------------------
     BUILT = b'name: built\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:latest\n'
     LAYOUT = '{"nodeAnnotations":[{"id":"r1","position":{"x":10,"y":20}}]}'
@@ -354,6 +393,17 @@ class OperationAPITests(unittest.TestCase):
             job=self.confirm(ok.json()['token']).json();self.assertEqual((job['action'],job['path']),('publish','/srv/labs/built/built.clab.yml'))
             self.assertNotIn('kind: linux',json.dumps(self.store.state['operations']));submit.assert_called_once()
             self.assertEqual(submit.call_args.args[3]['options']['annotations'],layout)
+
+    def test_create_carries_an_uploaded_map_file_through_the_manager_route_untouched(self):
+        layout=json.dumps({'nodeAnnotations':[{'id':'r1'}]})
+        with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
+            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='create',lab_id='',
+                path='/srv/containerlab-node-manager/projects/new.clab.yaml',
+                options={'text':'name: new\ntopology:\n  nodes:\n    r1: {kind: linux}\n','annotations':layout}))
+            self.assertEqual(response.status_code,200,response.text)
+            self.confirm(response.json()['token'])
+            submit.assert_called_once();self.assertEqual(submit.call_args.args[3]['options']['annotations'],layout)
+            self.assertEqual(submit.call_args.args[3]['action'],'create')
 
     def test_known_images_come_from_the_labs_already_registered(self):
         with self.fixture():

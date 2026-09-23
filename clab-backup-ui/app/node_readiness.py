@@ -30,6 +30,11 @@ AUTH_RETRY = 60      # a node that keeps refusing the saved login is asked again
 REFUSALS_BEFORE_FAILED = 3   # early boot can refuse a valid login; report a failure only when it persists
 MAX_TEST_ATTEMPTS = 3        # automatic login tests per boot cycle before a human has to look
 CLI_COMMAND = 'show version'
+# A node with no NOS platform (a plain Linux image, generic SSH profile or the
+# image-based defaults in inventory.py) has no NOS CLI to answer `show version`;
+# a real, harmless shell command still proves the SSH login answers a real command,
+# without faking readiness for a host that was never a NOS in the first place.
+GENERIC_CLI_COMMAND = 'echo readiness-check'
 CLI_TIMEOUT = 25
 RETRY_LATER = ('already running', 'lab operation', 'manager reset')
 MISSING = object()
@@ -243,7 +248,8 @@ class ReadinessMonitor:
         except Exception: return None
         try:
             connect(client, node, creds)
-            return 'reachable' if cli_answers(client) else 'booting'
+            command = CLI_COMMAND if node.get('platform') else GENERIC_CLI_COMMAND
+            return 'reachable' if cli_answers(client, command) else 'booting'
         except (paramiko.AuthenticationException, ValueError): return 'failed'
         except Exception: return 'booting'
         finally: self.services.release(client)

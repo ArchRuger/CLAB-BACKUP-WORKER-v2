@@ -48,10 +48,12 @@ document.body.insertAdjacentHTML('beforeend', `
  <div class="dialog-head"><h2>VM connection</h2><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
  <p>This is the machine that runs your labs. The manager signs in to it over SSH to find running labs, start them and open device CLIs. Usually set up once by the instructor.</p>
  <p><a href="/vm-connection-guide" target="_blank" rel="noopener">VM setup and troubleshooting guide <span aria-hidden="true">↗</span></a></p>
+ <div id="vm-bootstrap" class="banner info" role="status" hidden><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-info"></use></svg><p id="vm-bootstrap-text"></p></div>
  <div class="form-grid wide"><label>VM address<input id="vm-address" required placeholder="127.0.0.1"></label><label>SSH port<input id="vm-port" type="number" min="1" max="65535" value="22" required></label></div>
  <label>VM username<input id="vm-user" required maxlength="128" autocomplete="off"></label>
  <label>VM password<input id="vm-password" type="password" autocomplete="current-password" maxlength="4096"></label>
  <p class="form-help">Create the clab-discovery password in the VM terminal during setup, then enter it here. Leave blank to keep a saved password for the same account. It is stored encrypted in the VM's persistent manager storage.</p>
+ <p id="vm-password-saved" class="form-help" hidden></p>
  <p id="vm-password-migration" class="form-help" hidden>This connection previously used an SSH key. Run sudo bash deploy/setup-discovery.sh on the VM to create its password, then enter that password here.</p>
  <label>Inspection method<select id="vm-command"><option value="helper">Installed discovery and file helper (recommended)</option><option value="direct">Direct inspection + SFTP (existing VM account)</option></select></label>
  <p class="form-help">Install the supplied VM setup script for the helper. The restricted helper reads deployment state and the original YAML, annotations, generated inventory and topology export. New labs appear for import confirmation. Direct mode reads these files through SFTP with the same VM account. The installed helper supports root-owned lab files.</p>
@@ -161,23 +163,44 @@ $('setup-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,async()
  const result=await(await api('/lab-definitions',{method:'POST',body:new FormData(e.target)})).json();
  $('setup-dialog').close();$('setup-form').reset();await refresh();if(typeof selectLab==='function')selectLab(result.id);else{activeId=result.id;sessionStorage.setItem('activeLab',activeId);}notify('Lab added. Device addresses fill in automatically while the lab is running.');
 });};
+// VM setup can leave a one-time seed that the manager turns into a prefilled connection
+// (bootstrap_*): the password is kept server-side, only whether one is saved reaches here.
+function vmSetupDate(value){const date=new Date(value);return value&&!Number.isNaN(date.getTime())?date.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'';}
+function vmPasswordSavedText(h){
+ if(!h.password_saved)return '';
+ const day=h.bootstrap_at?vmSetupDate(h.bootstrap_at):'';
+ return day?'Saved by VM setup on '+day+' — leave blank to keep it':'A password is saved — leave blank to keep it';
+}
+function vmBootstrapText(h){
+ if(h.bootstrap_pending)return 'Prepared by VM setup. Press Save and test connection to connect once and trust this VM\'s key.'+(h.bootstrap_fingerprint?' Key recorded by setup: '+h.bootstrap_fingerprint:'');
+ if(h.fingerprint&&h.bootstrap_fingerprint&&h.fingerprint!==h.bootstrap_fingerprint)return 'The saved VM fingerprint differs from the key recorded by VM setup ('+h.bootstrap_fingerprint+'). The saved fingerprint stays in force; verify the VM before trusting a replacement key.';
+ return '';
+}
 function openVmDialog(){
  const h=state.discovery?.host||{};$('vm-form').reset();$('vm-form').querySelector('.form-error').textContent='';
  $('vm-address').value=h.address||'127.0.0.1';$('vm-port').value=h.port||22;$('vm-user').value=h.username||'clab-discovery';$('vm-command').value=h.command_mode||'helper';$('vm-enabled').checked=h.enabled!==false;
  // Lab VMs get rebuilt and re-keyed; trusting the replacement key on the next
  // connection is the default so a rebuilt VM reconnects without a second visit here.
  $('vm-reset-key').checked=true;
- $('vm-fingerprint').textContent=h.fingerprint?'Saved fingerprint: '+h.fingerprint:'No VM fingerprint saved yet.';$('vm-password-migration').hidden=h.auth!=='key';$('vm-password').required=!h.auth||h.auth!=='password';$('vm-dialog').showModal();
+ $('vm-fingerprint').textContent=h.fingerprint?'Saved fingerprint: '+h.fingerprint:'No VM fingerprint saved yet.';$('vm-password-migration').hidden=h.auth!=='key';$('vm-password').required=!h.auth||h.auth!=='password';
+ const saved=vmPasswordSavedText(h),notice=vmBootstrapText(h);
+ $('vm-password').placeholder=saved;$('vm-password-saved').textContent=saved;$('vm-password-saved').hidden=!saved;
+ $('vm-bootstrap-text').textContent=notice;$('vm-bootstrap').hidden=!notice;
+ // The first connection of a setup-prepared VM must meet the key setup recorded, so the
+ // replacement-key override stays unticked here; the student may still tick it.
+ if(h.bootstrap_pending||(h.bootstrap_fingerprint&&!h.fingerprint))$('vm-reset-key').checked=false;
+ $('vm-dialog').showModal();
 }
 $('vm-settings').onclick=openVmDialog;
 // The VM connection is what makes discovery, operations and Git work, so prompt for
-// it once on first load when nothing is configured yet. A configured connection, or a
-// connection the viewer dismissed this session, is never reopened automatically.
+// it once on first load when nothing is configured yet, or when VM setup prepared one
+// that still waits for its first confirmed connection. Any other configured connection,
+// or a prompt the viewer dismissed this session, is never reopened automatically.
 let vmPromptShown=false;
 function maybePromptVmConnection(){
  if(vmPromptShown)return;
  const discovery=state.discovery;
- if(!discovery||discovery.configured)return;
+ if(!discovery||(discovery.configured&&!discovery.host?.bootstrap_pending))return;
  vmPromptShown=true;
  if(!$('vm-dialog').open&&!(typeof document.querySelector==='function'&&document.querySelector('dialog[open]')))openVmDialog();
 }

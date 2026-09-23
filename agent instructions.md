@@ -1,3 +1,30 @@
+# Setup Script Cleanup Log, part 1 — 1.30.36
+
+Read `docs/ui-ux-cleanup/PICKUP.md` first (branch, VM state, routing, chunks) and `REQUIREMENTS.md` (PDF page →
+requirement → status). Preserve: (1) the installer's standard path asks nothing routine; every question lives behind
+`install.sh --advanced`, a success exits to the shell, a failure keeps the Recovery menu; only the package step streams
+through a pipe (`command_step(..., tee=True)`) because `setup-password.sh` needs the real terminal. (2) `deploy/apt_lock.py`
+never kills, never deletes a lock, restores only the timers it stopped. (3) `git-onboard.py` runs `gh auth login --web`
+with stdin closed and stdout piped (that is what suppresses gh's questions) and injects the `select_account` hint after the
+device URL; a repository new to the manager registers at its root, `--subfolder` and the "another lab in a registered
+repository" path keep the question; setup never commits or pushes. (4) The VM-connection seed (`host-bootstrap.json`,
+written by `deploy/host_bootstrap_seed.py`, consumed by `discovery.consume_host_bootstrap` at start and each refresh) never
+replaces a pinned fingerprint, sets `bootstrap_pending` so background discovery does not connect before the student's
+first *Save and test connection*, is skipped while `operation_busy`, and is deleted only if it is the file that was read;
+`public()` exposes only `bootstrap_pending/at/fingerprint` and `password_saved`. `start-manager.sh` creates the data
+directory before `setup-discovery.sh --data-dir`. (5) `create` accepts
+`options.annotations` (JSON object ≤1 MiB) written as `<topology>.annotations.json` with a recovery copy of any existing
+file; the digest covers `options`. (6) `opRemember('vm', …)` / `opConsumeReturn()` (sessionStorage `op-return`) is how
+*← My labs* returns to the Topology file dialog; `opShowJob(id, {auto:true})` and the `opClosedOutputs` set implement the
+auto-opened output window. (7) `noticeDismissed`/`dismissNotice` in `shell.js` (sessionStorage, key = lab · banner ·
+digest of the headline) back `setBanner`'s close control; running-operation banners collapse, never hide. (8)
+`IMAGE_DEFAULT_CREDENTIALS` applies to the exact `ghcr.io/srl-labs/network-multitool` repository and `linux` nodes only,
+after profile, inventory and kind defaults; readiness probes such a node with `GENERIC_CLI_COMMAND`. (9)
+`topology.container_interface(kind, name)` / `displayed_interface` share `PORT_RULES` with `exported_interface`; link
+endpoints carry `capture_interface`; `tapN` is never preselected. (10) `#map-notes` is gone; `.topology-layout` is
+bounded at desktop widths and `.device-rail` scrolls on its own; `docs/redesign/tools/verify_after.py` reads
+`notes: !document.getElementById('map-notes')`.
+
 # Student quick start delivered — 1.30.35
 
 The guide is delivered and validated (`docs/student-quick-start/VALIDATION.md` names the inspected PDF's SHA-256 and both

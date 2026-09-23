@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VM connection guide</title><link rel="stylesheet" href="/static/style.css?v=1.30.35"></head><body><main class="vm-guide"><a href="/">← Containerlab Node Manager</a><h1>VM connection — password setup and recovery</h1>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VM connection guide</title><link rel="stylesheet" href="/static/style.css?v=1.30.36"></head><body><main class="vm-guide"><a href="/">← Containerlab Node Manager</a><h1>VM connection — password setup and recovery</h1>
 <p>Create the <code>clab-discovery</code> password <strong>on the VM during host setup, before launching
 the manager</strong>. The image build contains no user password. Each VM has its own
 user-created password, retained across reboots and manager upgrades.</p>
@@ -12,10 +12,11 @@ OpenSSH service are required; see
 <a href="https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2/blob/main/docs/INSTALL.md">the installation guide</a>.</p>
 <pre><code class="language-bash">sudo bash &quot;$HOME/projects/clab-manager/deploy/start-manager.sh&quot; --enable-operations --lab-root /etc/containerlab
 </code></pre>
-<p>Setup prompts twice for the new <code>clab-discovery</code> password without displaying it.
+<p>Setup prompts twice (<code>New password:</code>, <code>Retype new password:</code>) for the new
+<code>clab-discovery</code> password without displaying it; the entries must match and must not be empty.
 This is separate from sudo's prompt for your administrator password. Use a unique
-password. There is no default or generated password, command-line password argument,
-environment variable, or password file. Setup then verifies helpers, builds the image,
+password. There is no default or generated password, command-line password argument or
+environment variable. Setup then verifies helpers, builds the image,
 and recreates the manager with its existing persistent data. Omit <code>--enable-operations</code>
 for discovery/import only on a new VM.</p>
 <p>For an existing key-based installation, this converts the dedicated account to
@@ -23,7 +24,24 @@ password authentication and clears its old <code>authorized_keys</code> entries.
 does not use saved client keys; saving the password removes the old private key and
 passphrase from its encrypted host settings. Existing SSH sessions are not terminated
 by the SSH reload. Other VM accounts and their SSH authentication settings are preserved.</p>
-<p>Open <code>http://VM_IP:8081</code>, then <strong>VM connection</strong>:</p>
+<h3>The prefilled VM connection</h3>
+<p>Right after it sets the password, setup hands the connection to the manager once: a one-time
+seed, <code>/srv/containerlab-node-manager/data/host-bootstrap.json</code> (mode <code>0600</code>, owner
+<code>10001:10001</code>), holds the address, SSH port, account, password, inspection method, the
+automatic-check choice and the fingerprint of the VM's SSH host key. Setup prints <em>VM connection
+prefilled for the manager</em>. The manager moves the seed into its encrypted settings on its next
+check and deletes the file.</p>
+<p>Open <code>http://VM_IP:8081</code>. <strong>VM connection</strong> opens already filled in, with the
+notice <em>Prepared by VM setup</em>. The address, SSH port, username, password, inspection method and
+automatic check are <strong>no longer typed</strong>. The one remaining step is the confirmation:
+choose <strong>Save and test connection</strong> once. Until then the manager does not connect, so no
+host key is trusted in the background. The confirmed first connection must present the key setup
+recorded; a different key is refused with <em>does not match the key recorded by VM setup</em> and
+nothing is trusted. Verify the VM, then run setup again or deliberately tick <em>Trust a replacement
+SSH host key on the next connection</em> (left unticked in the prepared dialog). An already saved
+fingerprint is never replaced by a seed. The password never reaches the browser.</p>
+<p>Without a seed (setup reports that the data directory does not exist yet, or the password was
+kept rather than set), enter the connection by hand in <strong>VM connection</strong>:</p>
 <table>
 <thead>
 <tr>
@@ -58,7 +76,7 @@ by the SSH reload. Other VM accounts and their SSH authentication settings are p
 </tr>
 </tbody>
 </table>
-<p>Choose <strong>Save and test connection</strong>. The manager saves the password encrypted and
+<p>Then choose <strong>Save and test connection</strong>. The manager saves the password encrypted and
 never returns it to the browser. Reopening the dialog shows an empty password field;
 leave it blank to retain the saved password for the same address, port and account.
 Changing any of those requires entering the password again. Saving here updates the
@@ -81,7 +99,11 @@ until independently verified and explicitly accepted in the UI.</p>
 <tbody>
 <tr>
 <td><code>/etc/shadow</code></td>
-<td>Linux account password hash, managed by <code>passwd</code></td>
+<td>Linux account password hash, set by setup through <code>chpasswd</code></td>
+</tr>
+<tr>
+<td><code>/srv/containerlab-node-manager/data/host-bootstrap.json</code></td>
+<td>One-time seed from setup (plain JSON including the password, mode <code>0600</code>, <code>10001:10001</code>); deleted by the manager once moved into <code>state.enc</code></td>
 </tr>
 <tr>
 <td><code>/srv/containerlab-node-manager/data/state.enc</code></td>
@@ -140,7 +162,9 @@ sudo bash deploy/setup-operations.sh --lab-root /etc/containerlab
 To change or recover a forgotten password, use your normal VM administrator account:</p>
 <pre><code class="language-bash">sudo bash deploy/setup-discovery.sh --reset-password
 </code></pre>
-<p>Then enter the new password in <strong>VM connection</strong> and save/test. The previous manager
+<p>The reset hands the new password to the manager through the same one-time seed: open
+<strong>VM connection</strong> and choose <strong>Save and test connection</strong> (the password field can
+stay blank). Without a seed, enter the new password there. The previous manager
 credential cannot reconnect until updated. <code>start-manager.sh --reset-password</code> also
 resets the password before building and launching. No SSH key generation or upload
 is required.</p>

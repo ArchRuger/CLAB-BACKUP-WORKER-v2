@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from app.main import create_app
+from app.inventory import IMAGE_DEFAULT_CREDENTIALS
 
 
 class NodeTests(unittest.TestCase):
@@ -88,6 +89,41 @@ class NodeTests(unittest.TestCase):
         self.assertFalse(self.services.clients)
         with patch('app.node_services.connect'):
             self.assertEqual(self.post('/api/labs/lab/ssh-check', {'name': 'linux'}).json()['status'], 'reachable')
+
+    def test_linux_image_default_login_no_credential_profile_needed(self):
+        multitool = next(iter(IMAGE_DEFAULT_CREDENTIALS))
+        username, password = IMAGE_DEFAULT_CREDENTIALS[multitool]
+        self.lab['nodes'].append({'name': 'host1', 'address': '172.20.20.105', 'port': 22, 'platform': '',
+                                  'image': multitool + ':latest', 'username': '', 'password': '',
+                                  'profile_id': '', 'enabled': False})
+        public = self.client.get('/api/state', headers=self.auth).json()
+        row = next(n for n in public['labs'][0]['nodes'] if n['name'] == 'host1')
+        self.assertEqual(row['image'], multitool + ':latest')
+        self.assertEqual(row['credential_source'], 'default')
+        self.assertTrue(row['login_configured'])
+        self.assertFalse(row['inventory_credentials'])
+        # Backups stay disabled (no NOS platform); the reason is not "needs credentials".
+        self.assertEqual(row['readiness'], 'Choose NOS')
+        self.assertNotEqual(row['readiness'], 'Needs credentials')
+        with patch('app.node_services.connect') as connect:
+            result = self.post('/api/labs/lab/ssh-check', {'name': 'host1'})
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(result.json()['status'], 'reachable')
+        used = connect.call_args.args[2]
+        self.assertEqual((used['username'], used['password']), (username, password))
+        self.assertNotIn(password, result.text)
+        self.assertNotIn(password, self.client.get('/api/logs', headers=self.auth).text)
+
+    def test_a_different_linux_image_still_needs_credentials(self):
+        self.lab['nodes'].append({'name': 'host2', 'address': '172.20.20.106', 'port': 22, 'platform': '',
+                                  'image': 'ghcr.io/library/alpine:latest', 'username': '', 'password': '',
+                                  'profile_id': '', 'enabled': False})
+        public = self.client.get('/api/state', headers=self.auth).json()
+        row = next(n for n in public['labs'][0]['nodes'] if n['name'] == 'host2')
+        self.assertEqual(row['credential_source'], '')
+        self.assertFalse(row['login_configured'])
+        result = self.post('/api/labs/lab/ssh-check', {'name': 'host2'})
+        self.assertEqual(result.status_code, 400)
 
     def ticket(self):
         result = self.post('/api/labs/lab/terminal-ticket', {'name': 'r1'})

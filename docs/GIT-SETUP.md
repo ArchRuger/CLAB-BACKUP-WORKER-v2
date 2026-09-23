@@ -50,23 +50,30 @@ the repository in the UI. A running manager, successful GitHub login, and a clea
 
 The wizard shows the Linux account it will use, then:
 
-- Installs missing Git/GitHub CLI packages through sudo, if you choose to do so.
+- Installs Git if missing, with your confirmation, and GitHub CLI (`gh`) automatically
+  if missing (it prints that it is doing so; no question is asked for `gh`).
 - Offers to clone a repository into `~/labs/REPOSITORY`, or reuse an existing checkout.
-- Asks which repository **subfolder** holds this lab, so one repository can hold many
-  labs (for example `bgp`, `eth`, `ip`). Leave it blank for a single-lab repository.
-  `latest`, `baseline` and `checkpoints` (or `checkpoints/<name>`) are refused as a subfolder:
-  those are the folders Save progress writes inside a lab folder, so choose the folder above
-  them instead.
+  Registering a repository that is new to the manager always uses the **repository
+  root**, without asking; adding another lab to a repository that already has a
+  registration still asks for its subfolder (the root would overlap). See
+  [One repository, one subfolder per lab](#one-repository-one-subfolder-per-lab) below for
+  the advanced `--subfolder` option that answers that question ahead of time.
 - Reuses a GitHub login or opens GitHub's browser authorization flow for that account.
 - Configures the Git credential helper and asks for missing commit author name/email.
-- Checks GitHub repository write permission, then asks to register the displayed checkout.
+- Checks GitHub repository write permission, then registers the displayed checkout
+  automatically once every check below passes (no separate registration question).
 - Registers its current branch after checking ownership, identity, clean managed
   files, remote synchronization and a **push dry run**. Setup does not create or push commits.
 
-**On a VM without a browser:** copy the one-time code, press Enter when prompted,
-and open the displayed URL in your workstation browser. A message about a missing
-browser on the VM is expected. Keep the terminal open until authorization completes;
-do not press Ctrl+C. This is [GitHub CLI's login flow](https://cli.github.com/manual/gh_auth_login).
+**On a VM without a browser:** copy the one-time code and open the displayed URL in
+your workstation browser. If that browser is already signed in to several GitHub
+accounts, open <https://github.com/login/device/select_account> instead and choose
+the account with write access; the wizard prints this URL both before it starts `gh`
+and again right under the device URL. A message about a missing browser on the VM is
+expected. Keep the terminal open until authorization completes; do not press Ctrl+C.
+This is [GitHub CLI's login flow](https://cli.github.com/manual/gh_auth_login), run
+non-interactively so `gh`'s own credential-helper and browser-open questions do not
+appear; only the device code and URL are shown.
 
 **Checkout directory** means the local repository on the VM, for example
 `/home/archtop/labs/my-bgp-lab`. The wizard clones into that directory; subsequent
@@ -130,15 +137,34 @@ configuring first.
 
 ## One repository, one subfolder per lab
 
-To keep every lab of a course in a single repository, for example
-`Patricks-AF-Learning-Labs`, give each lab its own **subfolder**:
+The normal guided path registers a **repository new to the manager** at its root and
+no longer asks a subfolder question. Adding another lab to a repository that already
+has a registration is different: the root would overlap every existing subfolder and
+only fail later, at the registration check, so the wizard still asks for a subfolder
+there unless one is supplied ahead of time. To keep every lab of a course in a single
+repository, for example `Patricks-AF-Learning-Labs`, give each lab its own
+**subfolder**, either by answering that prompt or with the advanced `--subfolder`
+option, still without sudo:
 
-1. Create the one course repository on GitHub with a README, and run guided setup.
-   Clone it once. When setup asks for the repository subfolder, enter this lab's
-   folder, for example `bgp`. It registers `bgp/` as this lab's destination.
-2. For the next lab, run guided setup again and choose the **same** checkout. Because
-   the repository is already registered, setup offers to reuse a saved destination or
-   **register a new subfolder**; choose the new subfolder and enter, for example, `eth`.
+1. Create the one course repository on GitHub with a README, and run guided setup
+   with this lab's subfolder, for example `bgp`:
+
+   ```bash
+   bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --guided --subfolder bgp
+   ```
+
+   It clones the repository once and registers `bgp/` as this lab's destination.
+2. For the next lab, resume the **same** checkout and give the new subfolder, for
+   example `eth`:
+
+   ```bash
+   bash "$HOME/projects/clab-manager/deploy/setup-git.sh" --guided --repo "$HOME/labs/Patricks-AF-Learning-Labs" --subfolder eth
+   ```
+
+   Because the repository is already registered, setup offers to reuse a saved
+   destination or **register a new subfolder**; giving `--subfolder` here skips the
+   prompt, and omitting it makes the wizard ask for one instead (it explains that this
+   repository already holds a lab folder, so the root is not offered as a default).
 3. In the manager, open each lab → **Progress › Save location › Change folder…** and
    select its subfolder registration (each is listed with its subfolder). **Save
    progress** pushes that lab
