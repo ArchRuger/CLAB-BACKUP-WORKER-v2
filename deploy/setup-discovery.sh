@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # Run on the Linux VM: sudo bash deploy/setup-discovery.sh
 set -euo pipefail
-[[ $EUID -eq 0 && $# -le 1 ]] || { echo 'Usage: sudo bash deploy/setup-discovery.sh [--reset-password|--update-helper]' >&2; exit 1; }
-password_args=()
-case "${1:-}" in
-  --reset-password) password_args+=(--reset-password);;
-  ''|--update-helper) ;;
-  *) echo 'Public key setup has been replaced. Run without arguments to create or retain the VM password.' >&2; exit 64;;
-esac
+usage='Usage: sudo bash deploy/setup-discovery.sh [--reset-password|--update-helper] [--data-dir DIR]'
+[[ $EUID -eq 0 && $# -le 3 ]] || { echo "$usage" >&2; exit 1; }
+password_args=(); mode=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --reset-password|--update-helper) [[ -z $mode ]] || { echo "$usage" >&2; exit 1; }; mode=$1
+      [[ $1 == --update-helper ]] || password_args+=(--reset-password); shift;;
+    # The manager's persistent data directory, where setup leaves the one-time VM connection seed.
+    --data-dir) [[ $# -ge 2 && $2 == /* ]] || { echo "$usage" >&2; exit 1; }; password_args+=(--data-dir "$2"); shift 2;;
+    *) echo 'Public key setup has been replaced. Run without arguments to create or retain the VM password.' >&2; exit 64;;
+  esac
+done
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 [[ -x /usr/bin/python3 ]] || { echo 'Install python3 first.' >&2; exit 1; }
 command -v visudo >/dev/null || { echo 'Install sudo first.' >&2; exit 1; }
@@ -53,4 +58,4 @@ fi
 [[ ! -L /usr/local/sbin/clab-manager-gateway ]] || exit 1
 install -o root -g root -m 0755 "$script_dir/clab-manager-gateway" /usr/local/sbin/clab-manager-gateway
 bash "$script_dir/setup-password.sh" "${password_args[@]}"
-echo 'Discovery and file import ready. Enter the clab-discovery password in VM connection.'
+echo 'Discovery and file import ready. Confirm the connection once in the manager: VM connection, Save and test connection.'

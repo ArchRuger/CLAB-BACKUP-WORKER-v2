@@ -13,6 +13,13 @@ from urllib.parse import urlsplit
 
 SOURCE = Path(__file__).resolve().parent.parent
 
+# gh's device-flow login prints this URL; a browser signed in to several GitHub
+# accounts must be sent to select_account, or it silently reuses its active one.
+DEVICE_URL = 'github.com/login/device'
+SELECT_ACCOUNT_NOTE = ('If your browser is signed in to several GitHub accounts, open '
+                        'https://github.com/login/device/select_account and choose the account with write access.')
+LOGIN_ARGS = ['gh', 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web']
+
 
 class SetupCancelled(Exception):
     """A deliberate stop; callers can retain a successfully installed manager."""
@@ -223,23 +230,48 @@ def ask_identity(prompt):
 
 def github_login(env, force=False):
     if not Path('/usr/bin/gh').exists():
-        if not confirm('Install GitHub CLI with sudo apt-get?'):
-            raise ValueError('Install gh as a VM administrator, then rerun setup as the repository owner.')
+        print('Installing GitHub CLI (gh) with sudo apt-get.')
         install_package('gh', env)
     if force or run(['gh', 'auth', 'status', '--hostname', 'github.com'], env, check=False).returncode:
         print('\nGitHub login belongs to this Linux account. Use your GitHub account with write access.')
-        print('Copy the device code below, press Enter, then open the displayed URL in your workstation browser.')
+        print('Copy the device code below, then open the displayed URL in your workstation browser.')
+        print(SELECT_ACCOUNT_NOTE)
         print('A missing VM browser is normal. Keep this terminal running; do not press Ctrl+C.')
-        run(['gh', 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web'], env, interactive=True)
+        stream_login(env)
     run(['gh', 'auth', 'setup-git', '--hostname', 'github.com'], env)
     # Show account selection, not auth status (which can include token details).
     login = run(['gh', 'api', 'user', '--jq', '.login'], env).stdout.strip()
     print('GitHub account: ' + login)
 
 
+def stream_login(env):
+    """Run gh's device-code login and stream it live instead of handing over the terminal.
+
+    A piped, non-TTY stdout makes gh skip its own "Authenticate Git with your GitHub
+    credentials?" and "Press Enter to open a browser" prompts (there is then nothing
+    left to answer), while the device code and URL it prints are streamed through
+    unchanged. stdin stays closed so gh can never block on stray input.
+    """
+    process = subprocess.Popen(LOGIN_ARGS, env=env, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    try:
+        for line in process.stdout:
+            print(line, end='')
+            if DEVICE_URL in line and 'select_account' not in line:
+                print(SELECT_ACCOUNT_NOTE)
+    finally:
+        process.wait()
+    if process.returncode:
+        raise ValueError('gh auth login failed. Check connectivity and the selected account; rerun setup to continue.')
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description='Guided Git setup as the existing VM account.')
     parser.add_argument('--repo', help='Resume guided setup for an existing checkout; no cloning.')
+    parser.add_argument('--subfolder', default='',
+                         help='Advanced: register this lab under a repository subfolder (for example bgp) '
+                              'instead of the repository root, for one repository holding several labs. '
+                              'The normal guided path always uses the repository root. See docs/GIT-SETUP.md.')
     return parser.parse_args(argv)
 
 
@@ -271,52 +303,70 @@ def new_binding(path, prefix=''):
     return {'remote': 'origin', 'prefix': prefix, 'label': label, 'branch': '', 'push_url': ''}
 
 
-def ask_subfolder():
-    """Choose the repository subfolder that holds this one lab's configurations.
+def validate_subfolder(value):
+    """Validate a repository subfolder, whichever way it was supplied.
 
     One repository can hold many labs, each in its own subfolder, so a student keeps
     a single course repository and pushes each lab (bgp, eth, ip, ...) to its folder.
     The value maps to the registration prefix; the host helper validates it again.
+    An empty value is always valid and means the repository root.
+    """
+    value = value.strip().strip('/')
+    if not value:
+        return ''
+    parts = value.split('/')
+    if not (len(value) <= 200 and '\\' not in value
+            and all(re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', part) and part.lower() != '.git'
+                    for part in parts)):
+        raise ValueError('Use letters, numbers, dashes and underscores, with / to nest (for example courses/bgp). '
+                          'No leading slash, no ".." and no .git parts.')
+    # Rule 1 (docs/save-location-fix/PICKUP.md): latest, baseline and checkpoints/<name> are
+    # the folders Save progress writes inside a lab folder, never the lab folder itself.
+    is_checkpoint = len(parts) >= 2 and parts[-2] == 'checkpoints'
+    if parts[-1] in ('latest', 'baseline', 'checkpoints') or is_checkpoint:
+        raise ValueError('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. '
+                          'Choose the folder above them.')
+    return value
+
+
+def ask_subfolder():
+    """Prompt for the advanced --subfolder value; kept for scripted/administrator use.
+
+    The guided wizard's normal path no longer calls this: a fresh registration always
+    uses the repository root, and a subfolder is supplied ahead of time with
+    --subfolder instead of being asked for interactively.
     """
     print('One repository can hold many labs, each in its own subfolder.')
     print('Enter this lab\'s subfolder, for example bgp, eth or ip. Leave blank to use the')
     print('repository root when this repository holds only a single lab.')
     while True:
-        value = ask('Repository subfolder for this lab', '').strip().strip('/')
-        if not value:
-            return ''
-        parts = value.split('/')
-        if not (len(value) <= 200 and '\\' not in value
-                and all(re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', part) and part.lower() != '.git'
-                        for part in parts)):
-            print('Use letters, numbers, dashes and underscores, with / to nest (for example courses/bgp). '
-                  'No leading slash, no ".." and no .git parts.')
-            continue
-        # Rule 1 (docs/save-location-fix/PICKUP.md): latest, baseline and checkpoints/<name> are
-        # the folders Save progress writes inside a lab folder, never the lab folder itself.
-        is_checkpoint = len(parts) >= 2 and parts[-2] == 'checkpoints'
-        if parts[-1] in ('latest', 'baseline', 'checkpoints') or is_checkpoint:
-            print('latest, baseline and checkpoints are the folders Save progress writes inside a lab folder. '
-                  'Choose the folder above them.')
-            continue
-        return value
+        value = ask('Repository subfolder for this lab', '')
+        try:
+            return validate_subfolder(value)
+        except ValueError as error:
+            print(str(error))
 
 
-def selected_registration(account, path, registrations):
+def selected_registration(account, path, registrations, subfolder=''):
     matches = [entry for entry in registrations if entry['path'] == str(path)]
     if any(entry['owner'] != account.pw_name for entry in matches):
         raise ValueError('This checkout is registered to another Linux owner. Continue as its registered owner; setup will not reassign it.')
     if not matches:
-        return new_binding(path, ask_subfolder())
+        return new_binding(path, subfolder)
     if not (path / '.git').is_dir():
         raise ValueError('This path has an existing registration but its checkout is missing. Restore the original checkout including .git, or select a new directory.')
     # An already-registered repository can gain another lab: reuse a saved destination
-    # to repair it, or register a new subfolder alongside the existing ones.
+    # to repair it, or register a new subfolder alongside the existing ones. Unlike a
+    # brand-new registration, the repository root is not a safe default here: it would
+    # overlap every existing prefix and only fail later, at the helper's own check.
     options = [(str(i), entry['label'] + ' — ' + (entry['prefix'] or 'repository root')) for i, entry in enumerate(matches, 1)]
     options.append(('new', 'Register a new subfolder in this repository for another lab'))
     prompt = 'This repository is already registered. Reuse a saved destination, or add a new subfolder:'
     choice = menu(prompt, options, '1') if len(matches) == 1 else menu(prompt, options)
     if choice == 'new':
+        if subfolder:
+            return new_binding(path, subfolder)
+        print('This repository already holds at least one registered lab folder; the repository root would overlap it.')
         return new_binding(path, ask_subfolder())
     binding = matches[int(choice) - 1]
     print('Keeping existing registration: ' + binding['label'])
@@ -324,7 +374,7 @@ def selected_registration(account, path, registrations):
     return binding
 
 
-def choose_checkout(account, existing, env, registrations=()):
+def choose_checkout(account, existing, env, registrations=(), subfolder=''):
     choices = [('clone', 'Clone a repository from GitHub or another HTTPS host'),
                ('existing', 'Use an existing checkout on this VM')]
     saved_paths = list(dict.fromkeys(entry['path'] for entry in registrations if entry['owner'] == account.pw_name))
@@ -354,7 +404,7 @@ def choose_checkout(account, existing, env, registrations=()):
             path = checkout_path(existing or ask('Checkout directory', default))
             if path == SOURCE:
                 raise ValueError('This is the manager source directory. Choose the separate lab-config checkout under your home/labs directory.')
-            binding = selected_registration(account, path, registrations)
+            binding = selected_registration(account, path, registrations, subfolder)
             remote = binding['remote']
             if mode == 'existing':
                 prepare_checkout(path, '', env)
@@ -451,6 +501,7 @@ def success_banner(lines):
 
 def main(argv=None):
     options = parse_args(argv)
+    options.subfolder = validate_subfolder(options.subfolder)
     import pwd
     if os.geteuid() == 0:
         raise ValueError('Run bash deploy/setup-git.sh as the ordinary VM account, without sudo.')
@@ -478,7 +529,7 @@ def main(argv=None):
             return read_registrations(env)
         registrations = step(1, 'Check Git, Linux account and existing registrations', ensure_git, env)
         path, url, binding = step(2, 'Choose the local lab-config repository',
-                                  lambda: choose_checkout(account, options.repo, env, registrations))
+                                  lambda: choose_checkout(account, options.repo, env, registrations, options.subfolder))
         def authenticate():
             if urlsplit(url).hostname == 'github.com':
                 github_login(env)
@@ -495,8 +546,6 @@ def main(argv=None):
         print('Existing registration settings are retained. New checkouts use the current branch.')
         print('Registration checks clean managed files, identity, remote sync and a push dry run.')
         print('Setup does not create or push commits. Server branch rules may still reject future saves.')
-        if not confirm('Register this checkout with the manager?'):
-            raise SetupCancelled()
         step(6, 'Register the checkout with the manager', lambda: register_checkout(account, path, env, binding), env, url)
     except (SetupCancelled, KeyboardInterrupt, EOFError):
         print('\nGit setup cancelled. Completed files and login are retained; readiness has not been confirmed.')

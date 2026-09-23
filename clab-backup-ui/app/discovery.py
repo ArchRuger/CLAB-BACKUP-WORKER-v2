@@ -5,8 +5,10 @@ import hashlib
 import ipaddress
 import json
 import logging
+import os
 import re
 import socket
+import stat
 import threading
 import time
 import uuid
@@ -27,6 +29,13 @@ MAX_OUTPUT = 16 * 1024 * 1024
 # reads; leave headroom for SSH connection setup and a loaded VM.
 INSPECT_DEADLINE = 60
 REFRESH_WAIT = INSPECT_DEADLINE + 15
+# One-time seed that deploy/setup-password.sh leaves in the data directory so the
+# VM connection dialog opens prefilled. It is consumed once and deleted.
+BOOTSTRAP_FILE = 'host-bootstrap.json'
+BOOTSTRAP_MAX = 64 * 1024
+FINGERPRINT = re.compile(r'SHA256:[A-Za-z0-9+/]{43}')
+BOOTSTRAP_WAITING = ('VM connection prepared by VM setup. Open VM connection and choose '
+                     'Save and test connection to trust this VM.')
 
 
 def stamp():
@@ -74,8 +83,15 @@ def parse_definition(raw, deployed_name=''):
         fixed = effective.get('mgmt-ipv4') or effective.get('mgmt-ipv6')
         endpoint = str(ipaddress.ip_interface(fixed).ip) if fixed else full
         platform = ALIASES.get(kind, '')
+        # Carried for image-based defaults (inventory.py IMAGE_DEFAULT_CREDENTIALS); public,
+        # like the kind, and already surfaced elsewhere (lab_operations.known_images reads it
+        # straight from the topology). Not every node names an image explicitly.
+        image = effective.get('image', '')
+        try: image = literal(image, 'Node image', 300) if isinstance(image, str) and image else ''
+        except ValueError: image = ''  # an odd image string never blocks the whole topology
         nodes.append(dict(name=full, short_name=short, definition_node=short,
                           address=address(endpoint), port=22, platform=platform, kind=kind,
+                          image=image,
                           enabled=bool(platform), profile_id='', username='', password='',
                           enable_password='', groups=[], endpoint_mode='auto',
                           discovered=False, runtime_state='unknown'))
@@ -199,21 +215,142 @@ def vm_password(host):
 
 
 class PinnedHostKey(paramiko.MissingHostKeyPolicy):
-    def __init__(self, expected):
+    def __init__(self, expected, recorded_by_setup=False):
         self.expected = expected
+        self.recorded_by_setup = recorded_by_setup
         self.fingerprint = ''
 
     def missing_host_key(self, client, hostname, key):
         self.fingerprint = 'SHA256:' + base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode().rstrip('=')
         if self.expected and self.expected != self.fingerprint:
+            if self.recorded_by_setup:
+                raise ValueError('VM SSH host key does not match the key recorded by VM setup. Verify the VM before trusting it: '
+                                 'run the VM setup again, or tick Trust a replacement SSH host key in VM connection.')
             raise ValueError('VM SSH host key changed. Verify the VM and reset the saved fingerprint in connection settings.')
         client.get_host_keys().add(hostname, key.get_name(), key)
+
+
+def host_key_policy(host):
+    """A pinned key always wins; before the first pin, the key VM setup recorded is expected."""
+    if host.get('fingerprint'): return PinnedHostKey(host['fingerprint'])
+    if host.get('bootstrap_verify'): return PinnedHostKey(host['bootstrap_verify'], recorded_by_setup=True)
+    return PinnedHostKey('')
+
+
+def read_host_bootstrap(path):
+    """Read and validate a setup seed. Errors are controlled text, never the file's content."""
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0))
+    except OSError:
+        raise ValueError('The VM setup seed could not be opened as a regular file.')
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > BOOTSTRAP_MAX:
+            raise ValueError('The VM setup seed is not a small regular file.')
+        raw = bytearray()
+        while len(raw) <= BOOTSTRAP_MAX:
+            chunk = os.read(fd, 65536)
+            if not chunk: break
+            raw.extend(chunk)
+    finally:
+        os.close(fd)
+    if len(raw) > BOOTSTRAP_MAX: raise ValueError('The VM setup seed is not a small regular file.')
+    try: data = json.loads(bytes(raw).decode('utf-8'))
+    except (UnicodeDecodeError, ValueError): raise ValueError('The VM setup seed is not valid JSON.')
+    return validate_host_bootstrap(data)
+
+
+def validate_host_bootstrap(data):
+    """The same rules as the VM connection form (HostSettings and save_host), schema 1 only."""
+    invalid = ValueError('The VM setup seed has an unsupported shape.')
+    if not isinstance(data, dict) or set(data) != {'schema', 'created', 'host', 'password', 'fingerprint'}: raise invalid
+    if type(data['schema']) is not int or data['schema'] != 1: raise invalid
+    host = data['host']
+    if not isinstance(host, dict) or set(host) != {'address', 'port', 'username', 'auth', 'command_mode', 'enabled'}: raise invalid
+    if type(host['port']) is not int or not 1 <= host['port'] <= 65535: raise invalid
+    if type(host['enabled']) is not bool or host['auth'] != 'password' or host['command_mode'] not in COMMANDS: raise invalid
+    if not isinstance(host['address'], str) or not isinstance(host['username'], str): raise invalid
+    try:
+        endpoint = address(host['address'].strip())
+        username = literal(host['username'].strip(), 'VM username', 128)
+    except ValueError: raise invalid
+    if not username: raise invalid
+    password = data['password']
+    if not isinstance(password, str) or not password or len(password) > 4096 or '\x00' in password: raise invalid
+    fingerprint = data['fingerprint']
+    if not isinstance(fingerprint, str) or (fingerprint and not FINGERPRINT.fullmatch(fingerprint)): raise invalid
+    created = data['created']
+    if not isinstance(created, str) or len(created) > 64: raise invalid
+    try: created = datetime.fromisoformat(created.replace('Z', '+00:00')).astimezone(timezone.utc).isoformat()
+    except ValueError: raise invalid
+    return dict(host=dict(address=endpoint, port=host['port'], username=username, auth='password',
+                          command_mode=host['command_mode'], enabled=host['enabled']),
+                password=password, fingerprint=fingerprint, created=created)
+
+
+def consume_host_bootstrap(store, data_dir=None, skip=None):
+    """Merge a one-time VM setup seed into the saved VM connection, then delete it.
+
+    A seed never replaces trust: a pinned fingerprint stays, and without one the
+    connection waits for the student's Save and test connection (bootstrap_pending).
+    Returns the file signature when the seed could not be removed, so the caller
+    does not load the same file again; otherwise None.
+    """
+    path = os.path.join(str(data_dir if data_dir is not None else store.root), BOOTSTRAP_FILE)
+    try: info = os.lstat(path)
+    except FileNotFoundError: return None
+    except OSError: return None
+    signature = (info.st_ino, info.st_mtime_ns, info.st_size)
+    if skip == signature: return signature
+    try:
+        seed = read_host_bootstrap(path); error = ''
+    except ValueError as exc:
+        seed = None; error = 'VM setup seed ignored: ' + str(exc)
+    applied = False
+    if seed:
+        from .git_progress import pending_progress, host_identity
+        from .lab_operations import operation_busy
+        with store.lock:
+            # Never swap the VM identity under a running backup, restore or lab operation:
+            # leave the seed in place and let the next discovery cycle retry.
+            if operation_busy(store.state): return None
+            old = store.state.get('host', {})
+            same = (old.get('address'), old.get('port')) == (seed['host']['address'], seed['host']['port'])
+            host = {**{k: v for k, v in old.items() if k not in ('private_key', 'passphrase', 'bootstrap_verify')},
+                    **seed['host'], 'password': seed['password'], 'revision': uuid.uuid4().hex}
+            # Keep the pinned key only for the endpoint it was pinned for, as save_host does.
+            host['fingerprint'] = old.get('fingerprint', '') if same else ''
+            host.update(bootstrap_fingerprint=seed['fingerprint'], bootstrap_at=seed['created'],
+                        bootstrap_pending=not host['fingerprint'])
+            if pending_progress(store.state) and host_identity(old) != host_identity(host):
+                error = 'VM setup prefill skipped: finish pending Git saves, then enter the VM connection by hand.'
+            else:
+                store.state['host'] = host
+                store.state['discovery'] = dict(ok=False, error=BOOTSTRAP_WAITING if host['bootstrap_pending'] else 'Waiting for a fresh VM inspection.')
+                store.save(); applied = True
+    if error:
+        store.event('discovery.bootstrap', error, level='warning')
+    elif applied:
+        mismatch = host['fingerprint'] and host['bootstrap_fingerprint'] and host['fingerprint'] != host['bootstrap_fingerprint']
+        store.event('discovery.bootstrap', 'VM connection prefilled from setup' +
+                    ('; the saved VM fingerprint differs from the key recorded by setup and stays in force' if mismatch else ''),
+                    level='warning' if mismatch else 'info')
+    try:
+        # Remove only the file that was read: a seed written meanwhile is loaded next cycle.
+        again = os.lstat(path)
+        if (again.st_ino, again.st_mtime_ns, again.st_size) == signature: os.unlink(path)
+    except FileNotFoundError:
+        pass
+    except OSError:
+        store.event('discovery.bootstrap', 'The VM setup seed could not be removed; it is not loaded again until the manager restarts. Check data directory ownership.', level='warning')
+        return signature
+    return None
 
 
 def inspect_host(host, stopping=None):
     password = vm_password(host)
     client = paramiko.SSHClient()
-    policy = PinnedHostKey(host.get('fingerprint', ''))
+    policy = host_key_policy(host)
     client.set_missing_host_key_policy(policy)
     opts = dict(hostname=host['address'], port=host['port'], username=host['username'],
                 timeout=8, auth_timeout=8, banner_timeout=8, allow_agent=False, look_for_keys=False)
@@ -265,12 +402,23 @@ class Discovery:
         self.thread = None
         self.sources = {}
         self.import_previews = {}
+        self.bootstrap_stuck = None
         # A previous process's snapshot is not evidence of current deployment.
         with store.lock:
             if store.state.get('discovery'):
                 store.state['discovery'].update(ok=False, error='Waiting for a fresh VM inspection.')
 
+    def consume_bootstrap(self):
+        try:
+            with self.store.lock: before = self.store.state.get('host', {}).get('revision')
+            self.bootstrap_stuck = consume_host_bootstrap(self.store, skip=self.bootstrap_stuck)
+            with self.store.lock:
+                if self.store.state.get('host', {}).get('revision') != before: self.sources = {}
+        except OSError:
+            logging.getLogger(__name__).warning('The VM setup seed could not be applied; check manager storage.')
+
     def start(self):
+        self.consume_bootstrap()
         self.thread = threading.Thread(target=self.loop, daemon=True)
         self.thread.start()
 
@@ -291,8 +439,12 @@ class Discovery:
         try:
             with self.store.lock:
                 if self.store.reset_pending: return self.public()
+            self.consume_bootstrap()
+            with self.store.lock:
                 host = copy.deepcopy(self.store.state.get('host', {}))
-            if not host.get('enabled'): return self.public()
+            # A connection prepared by VM setup waits for the student's first
+            # Save and test connection: no first-use key pinning in the background.
+            if not host.get('enabled') or host.get('bootstrap_pending'): return self.public()
             error = ''; labs = None; fingerprint = ''
             try:
                 labs, fingerprint = inspect_host(host, self.stopping)
@@ -310,6 +462,7 @@ class Discovery:
                 if not error:
                     info.update(labs=dict(labs), last_success=info['checked_at'], file_reader=getattr(labs, 'reader', 'inspect-only'), helper_version=getattr(labs, 'helper_version', None))
                     self.store.state['host']['fingerprint'] = fingerprint
+                    self.store.state['host'].pop('bootstrap_verify', None)
                 self.store.state['discovery'] = info
                 self.sources = {}
                 if not error:
@@ -395,6 +548,9 @@ class Discovery:
         with self.store.lock:
             state = self.store.state; host = state.get('host', {}); info = state.get('discovery', {})
             public_host = {k: host.get(k) for k in ('address','port','username','auth','command_mode','enabled','fingerprint')}
+            # Setup-prefill markers only; the password itself never leaves the store.
+            public_host.update(bootstrap_pending=bool(host.get('bootstrap_pending')), bootstrap_at=host.get('bootstrap_at'),
+                               bootstrap_fingerprint=host.get('bootstrap_fingerprint'), password_saved=bool(host.get('password')))
             linked = {l.get('deployment_name') for l in state['labs']}
             return dict(host=public_host if host else None, configured=bool(host),
                         connected=discovery_fresh(state), checking=self.lock.locked(),
@@ -445,7 +601,15 @@ class Discovery:
                                 enabled=data.enabled,command_mode=data.command_mode,revision=uuid.uuid4().hex)
                     host['password'] = data.password or (old.get('password','') if same else '')
                     if not host['password']: raise ValueError('Enter the VM password')
-                    host['fingerprint'] = old.get('fingerprint','') if (old.get('address'),old.get('port')) == (endpoint,data.port) and not data.reset_fingerprint else ''
+                    same_endpoint = (old.get('address'),old.get('port')) == (endpoint,data.port)
+                    host['fingerprint'] = old.get('fingerprint','') if same_endpoint and not data.reset_fingerprint else ''
+                    # Setup's key record describes only the endpoint it was written for. Until the
+                    # first pin, the key recorded by setup is expected on this student-confirmed
+                    # connection; ticking Trust a replacement SSH host key drops that expectation.
+                    if same_endpoint and old.get('bootstrap_at'):
+                        host.update(bootstrap_at=old['bootstrap_at'], bootstrap_fingerprint=old.get('bootstrap_fingerprint',''))
+                        verify = old.get('bootstrap_verify') or (old.get('bootstrap_fingerprint','') if old.get('bootstrap_pending') else '')
+                        if verify and not host['fingerprint'] and not data.reset_fingerprint: host['bootstrap_verify'] = verify
                     from .git_progress import pending_progress, host_identity
                     if pending_progress(self.store.state) and host_identity(old) != host_identity(host):
                         raise HTTPException(409, 'Finish pending Git saves or choose Keep snapshot only before changing the VM identity.')

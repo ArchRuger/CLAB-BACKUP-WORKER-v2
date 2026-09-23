@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import hashlib
 import yaml
-from .inventory import PLATFORMS, DEFAULT_CREDENTIALS
+from .inventory import PLATFORMS, DEFAULT_CREDENTIALS, image_default_credentials
 from .discovery import automatic_ready, node_available
 from .downloads import short_name
 
@@ -33,16 +33,21 @@ def effective_credentials(lab, node):
     default = DEFAULT_CREDENTIALS.get(node.get('platform') or '')
     if default:
         return {'username':default[0],'password':default[1],'auth':'password','enable_password':'','default':True}
+    image_default = image_default_credentials(node)
+    if image_default:
+        return {'username':image_default[0],'password':image_default[1],'auth':'password','enable_password':'','default':True}
     return {}
 
 def credential_source(lab, node):
-    """'profile', 'inventory', 'default' (containerlab's documented login) or '' when none applies."""
+    """'profile', 'inventory', 'default' (containerlab's or the image's documented login) or '' when none applies."""
     profile_id = node.get('profile_id') or lab.get('defaults',{}).get(node.get('platform') or 'ssh')
     if profile_id:
         return 'profile' if any(p['id']==profile_id for p in lab['profiles']) else ''
     if node.get('username') and node.get('password'):
         return 'inventory'
-    return 'default' if (node.get('platform') or '') in DEFAULT_CREDENTIALS else ''
+    if (node.get('platform') or '') in DEFAULT_CREDENTIALS or image_default_credentials(node):
+        return 'default'
+    return ''
 
 def readiness(lab,node):
     if node['platform'] not in PLATFORMS:

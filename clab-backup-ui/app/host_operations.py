@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.30.35'
+VERSION = '1.30.38'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 # The on-demand Grafana of the telemetry stack: deploy/compose.telemetry.yml names the container so
@@ -292,9 +292,18 @@ class HostOperations:
                 text, annotations = self.builder_texts(options)
                 opened = options.get('base') or {}
                 if not isinstance(opened, dict) or set(opened) - {'yaml', 'annotations'}: raise ValueError('Invalid saved-version reference.')
-                side = Path(str(path) + ANNOTATIONS_SUFFIX)
-                if side.is_symlink(): raise ValueError('Symlink paths are not supported.')
-                current = hashlib.sha256(side.read_bytes()).hexdigest() if side.is_file() and side.stat().st_size <= LIMIT else ''
+                side_name = path.name + ANNOTATIONS_SUFFIX
+                current = ''
+                folder_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                try:
+                    try:
+                        if stat.S_ISLNK(os.stat(side_name, dir_fd=folder_fd, follow_symlinks=False).st_mode):
+                            raise ValueError('Symlink paths are not supported.')
+                    except FileNotFoundError: pass
+                    try: existing = self.owned_bytes_any(folder_fd, side_name)
+                    except FileNotFoundError: existing = None
+                finally: os.close(folder_fd)
+                if existing is not None: current = hashlib.sha256(existing).hexdigest()
                 if opened.get('yaml') != source_hash or (annotations is not None and opened.get('annotations', '') != current):
                     raise ValueError('The topology changed on the VM after it was opened. Open it again before saving.')
                 extra = {'annotations_hash': current}
@@ -318,7 +327,11 @@ class HostOperations:
                         else:
                             if '--' + flag not in help_text: raise ValueError('Installed command lacks --' + flag + '.')
                             argv.append('--' + flag)
-                if action in ('deploy', 'redeploy', 'apply'):
+                if action in ('redeploy', 'apply'):
+                    # The deploy review's own body text now names the same trust plainly (hooks, mounts,
+                    # image pulls) as ordinary description text, not a warning box; repeating it here as
+                    # a warning would only duplicate that for the one action (deploy) that never reaches
+                    # this branch. redeploy/apply act on an already-running lab, so they keep the warning.
                     warnings.append('Runs this trusted topology with host privileges, including its configured hooks, mounts and image pulls.')
                 if options.get('cleanup'):
                     directories = sorted({str(r.get('labdir') or (r.get('labels') or {}).get('clab-node-lab-dir') or path.parent / ('clab-' + name)) for r in rows}) or [str(path.parent / ('clab-' + name))]
@@ -327,6 +340,39 @@ class HostOperations:
         if action == 'create':
             text = options.get('text')
             if not isinstance(text, str) or len(text.encode()) > LIMIT: raise ValueError('YAML must be smaller than 1 MiB.')
+            # A saved map file (from a copied lab, or drawn elsewhere) is optional and travels with the
+            # upload; it is written next to the topology under the same name the VS Code extension and
+            # the builder use, so the existing importer picks it up without knowing this is a new file.
+            # Its state is bound into the digest exactly like revise's opened['annotations']: a change
+            # to this file between review and confirm must be caught, not silently overwritten.
+            annotations = options.get('annotations')
+            if annotations is not None:
+                if not isinstance(annotations, str) or len(annotations.encode()) > LIMIT: raise ValueError('The map layout must be text smaller than 1 MiB.')
+                try:
+                    if not isinstance(json.loads(annotations), dict): raise ValueError()
+                except (ValueError, TypeError, RecursionError): raise ValueError('The map layout is not valid JSON.')
+                side_name = path.name + ANNOTATIONS_SUFFIX
+                current = ''
+                folder_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                try:
+                    try:
+                        if stat.S_ISLNK(os.stat(side_name, dir_fd=folder_fd, follow_symlinks=False).st_mode):
+                            raise ValueError('Symlink paths are not supported.')
+                    except FileNotFoundError: existing = None
+                    else:
+                        try: existing = self.owned_bytes_any(folder_fd, side_name)
+                        except FileNotFoundError: existing = None
+                        except (OSError, ValueError):
+                            # The recovery-copy promise holds only for a plain, bounded file; anything
+                            # else (a directory, a device file, something oversized) is refused here,
+                            # before the topology itself is written, so a retry never lands on a
+                            # half-finished create.
+                            raise ValueError('The existing ' + side_name + ' next to this topology is not a plain file within 1 MiB and cannot be replaced safely; move or remove it on the VM first.') from None
+                finally: os.close(folder_fd)
+                if existing is not None:
+                    current = hashlib.sha256(existing).hexdigest()
+                    warnings.append('Replaces the existing map file next to this topology; a recovery copy of it is kept.')
+                extra['annotations_hash'] = current
         base = {'action': action, 'name': name, 'source_name': req.get('source_name', name), 'path': str(path) if path else '', 'options': options,
                 'source_hash': source_hash, 'affected': affected, 'argv': argv, 'steps': steps, **extra}
         return {**base, 'digest': digest(base), 'warnings': warnings}
@@ -396,19 +442,16 @@ class HostOperations:
     def revise(self, plan, emit):
         path = Path(plan['path']); text, annotations = self.builder_texts(plan['options'])
         side = path.name + ANNOTATIONS_SUFFIX
-        history = self.path(str(path.parent / '.clab-manager-history'), exists=False)
-        history.mkdir(mode=0o700, exist_ok=True)
         folder_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
-            recovery = {}
+            recovery = {}; contents = {}
             for name in (path.name, side) if annotations is not None else (path.name,):
                 try: previous = self.owned_bytes_any(folder_fd, name)
                 except FileNotFoundError: continue
-                backup = history / (name + '.' + uuid.uuid4().hex)
-                with open(backup, 'xb') as handle:
-                    os.chmod(backup, 0o600); handle.write(previous); handle.flush(); os.fsync(handle.fileno())
-                recovery[name] = str(backup)
-            if hashlib.sha256(Path(path).read_bytes()).hexdigest() != plan['source_hash']: raise ValueError('The topology changed on the VM. Review the save again.')
+                contents[name] = previous
+                recovery[name] = self.history_backup(folder_fd, path.parent, name, previous)
+            # The bytes just backed up, not a second by-path read: one fewer place a race could slip in.
+            if hashlib.sha256(contents.get(path.name, b'')).hexdigest() != plan['source_hash']: raise ValueError('The topology changed on the VM. Review the save again.')
             keep = stat.S_IMODE(os.stat(path.name, dir_fd=folder_fd, follow_symlinks=False).st_mode)
             if annotations is not None: self.place(folder_fd, side, annotations.encode(), keep, replace=True)
             self.place(folder_fd, path.name, text.encode(), keep, replace=True)
@@ -417,12 +460,40 @@ class HostOperations:
         return {'published_path': str(path), 'recovery_path': recovery.get(path.name, ''), 'recovery_paths': recovery}
 
     def owned_bytes_any(self, folder_fd, name):
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=folder_fd)
+        # O_NONBLOCK: a FIFO planted at this name must never make the helper hang waiting for a
+        # writer; fstat below then refuses it (not a regular file) exactly like any other special file.
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder_fd)
         try:
             info = os.fstat(fd)
             if not stat.S_ISREG(info.st_mode) or info.st_size > LIMIT: raise ValueError('The saved lab files cannot be replaced safely.')
             return os.read(fd, LIMIT + 1)
         finally: os.close(fd)
+
+    def history_backup(self, folder_fd, parent, name, data):
+        """Write one recovery copy of `data` under an unpredictable name, private (0600), through an
+        open '.clab-manager-history' directory beside the file it protects -- never opened, chmoded
+        or read by a bare path. Created if absent; refused (never used) if it is a symlink or is not
+        owned by this process, so a directory an attacker pre-planted in a shared folder is never
+        written into."""
+        history_name = '.clab-manager-history'
+        try: os.mkdir(history_name, 0o700, dir_fd=folder_fd)
+        except FileExistsError: pass
+        history_fd = os.open(history_name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=folder_fd)
+        try:
+            if os.fstat(history_fd).st_uid != os.geteuid():
+                raise ValueError('The recovery folder next to this file is not safe to use.')
+            backup_name = name + '.' + uuid.uuid4().hex
+            fd = os.open(backup_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=history_fd)
+            try:
+                with os.fdopen(fd, 'wb') as handle:
+                    handle.write(data); handle.flush(); os.fsync(handle.fileno())
+            except BaseException:
+                try: os.unlink(backup_name, dir_fd=history_fd)
+                except OSError: pass
+                raise
+            os.fsync(history_fd)
+            return str(parent / history_name / backup_name)
+        finally: os.close(history_fd)
 
     def execute(self, req, emit):
         plan = self.plan(req)
@@ -432,37 +503,50 @@ class HostOperations:
         if action == 'publish': result = self.publish(plan, emit)
         elif action == 'revise': result = self.revise(plan, emit)
         elif action in ('create', 'delete'):
-            if action != 'create':
-                history = self.path(str(path.parent / '.clab-manager-history'), exists=False)
-                history.mkdir(mode=0o700, exist_ok=True)
-                backup = history / (path.name + '.' + uuid.uuid4().hex)
-                with open(backup, 'xb') as stream_file:
-                    os.chmod(backup, 0o600); stream_file.write(path.read_bytes())
-                result['recovery_path'] = str(backup)
-            if action == 'delete' and plan.get('layout'):
-                side = Path(plan['layout'])
-                if side.is_file() and not side.is_symlink() and side.stat().st_size <= LIMIT:
-                    kept = history / (side.name + '.' + uuid.uuid4().hex)
-                    with open(kept, 'xb') as stream_file:
-                        os.chmod(kept, 0o600); stream_file.write(side.read_bytes())
-                    side.unlink(); result['layout_recovery_path'] = str(kept)
-            if action == 'delete': path.unlink()
-            else:
-                temp = path.with_name('.clab-manager-' + uuid.uuid4().hex)
-                try:
-                    with open(temp, 'xb') as stream_file:
-                        os.chmod(temp, 0o600); stream_file.write(plan['options']['text'].encode())
-                    # Atomically publish only if the destination is still absent.
-                    # Editors outside our flock may create it after plan().
-                    try: os.link(temp, path)
-                    except FileExistsError:
-                        raise ValueError('The topology path now exists. Creation canceled; the existing file was retained.') from None
-                    # The 0600 temporary guarded the partial write. The published file is
-                    # shared with engineer tooling: group-editable inside a setgid
-                    # engineer lab folder, otherwise readable like hand-uploaded files.
-                    os.chmod(path, 0o664 if path.parent.stat().st_mode & stat.S_ISGID else 0o644)
-                finally:
-                    if temp.exists(): temp.unlink()
+            # Every write below goes through this one open directory descriptor (O_NOFOLLOW), the same
+            # shape place()/owned_bytes_any()/history_backup() give publish() and revise(): a mode is
+            # set with os.fchmod on the still-open file, before it gets its name, so nothing that later
+            # appears at that name (an attacker's symlink, in a group-writable engineer folder) is ever
+            # chmod-by-path, and the final folder mode itself comes from this fd, not a fresh path stat.
+            # A symlink at the topology path itself was already refused when plan() resolved it with
+            # self.path().
+            folder_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                mode = 0o664 if os.fstat(folder_fd).st_mode & stat.S_ISGID else 0o644
+                if action != 'create':
+                    content = self.owned_bytes_any(folder_fd, path.name)
+                    result['recovery_path'] = self.history_backup(folder_fd, path.parent, path.name, content)
+                if action == 'delete' and plan.get('layout'):
+                    side_name = Path(plan['layout']).name
+                    try: side_content = self.owned_bytes_any(folder_fd, side_name)
+                    except FileNotFoundError: side_content = None
+                    if side_content is not None:
+                        result['layout_recovery_path'] = self.history_backup(folder_fd, path.parent, side_name, side_content)
+                        os.unlink(side_name, dir_fd=folder_fd)
+                if action == 'delete':
+                    os.unlink(path.name, dir_fd=folder_fd)
+                else:
+                    annotations = plan['options'].get('annotations')
+                    side = path.name + ANNOTATIONS_SUFFIX
+                    if annotations is not None:
+                        # Re-read the map file exactly as reviewed: a symlink now at its name is refused
+                        # by owned_bytes_any's O_NOFOLLOW open, never followed; any other change (edited,
+                        # replaced, removed) fails the hash bound into the digest above. Checked before
+                        # the topology itself is written, so a rejected save leaves nothing behind.
+                        try: previous = self.owned_bytes_any(folder_fd, side)
+                        except FileNotFoundError: previous = None
+                        current = hashlib.sha256(previous).hexdigest() if previous is not None else ''
+                        if current != plan.get('annotations_hash', ''):
+                            raise ValueError('The map file next to this topology changed after the review; review again.')
+                    # Atomically publish only if the destination is still absent. Editors outside our
+                    # flock may create it after plan(); place() never overwrites in that case.
+                    self.place(folder_fd, path.name, plan['options']['text'].encode(), mode)
+                    if annotations is not None:
+                        if previous is not None:
+                            result['layout_recovery_path'] = self.history_backup(folder_fd, path.parent, side, previous)
+                        self.place(folder_fd, side, annotations.encode(), mode, replace=True)
+            finally:
+                os.close(folder_fd)
             emit({'output': 'VM source ' + ('removed' if action == 'delete' else 'saved') + '.\n'})
         else:
             cwd = str(path.parent) if path else '/'

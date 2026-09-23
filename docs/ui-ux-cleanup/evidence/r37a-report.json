@@ -1,0 +1,362 @@
+{
+ "results": [
+  {
+   "item": "B3 [1920x1080/link-basics-with-map]: dialog size vs viewport (width 94%, height 92%, expect >=80% of both)",
+   "ok": true,
+   "detail": "{'dialogW': 1800, 'dialogH': 993.59375, 'vw': 1920, 'vh': 1080}"
+  },
+  {
+   "item": "B3 [1920x1080/link-basics-with-map]: caption \"Wiring from the topology file...\" is absent",
+   "ok": true,
+   "detail": "Topology preview \u00b7 link-basics\u00d7One link: r1 eth1 - r2 eth1 (10.0.0.0/30)r1:eth1 \u2014 r2:eth1eth1eth1r1 is drawn on the map but is not one of this lab's devicesr1Not in this labr2 is drawn on the map but is not one of this lab's devicesr2Not in this lab"
+  },
+  {
+   "item": "B3 [1920x1080/link-basics-with-map]: svg has a viewBox set",
+   "ok": true,
+   "detail": "146.6796875 25 546.65771484375 263"
+  },
+  {
+   "item": "B3 [1920x1080/link-basics-with-map]: close control ([data-op-close]) is visible",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "B3 [1920x1080/link-basics-with-map]: drawn content bbox is inside the svg viewBox (no clipping)",
+   "ok": true,
+   "detail": "{'viewBox': [146.6796875, 25.0, 546.65771484375, 263.0], 'sceneBBox': {'x': 181.697509765625, 'y': 60, 'w': 476.60498046875, 'h': 192.50186157226562}}"
+  },
+  {
+   "item": "B3 [1920x1080/link-basics-with-map]: resizing the window refits (viewBox present and content still fits, no clipping)",
+   "ok": true,
+   "detail": "{'viewBox_before': '146.6796875 25 546.65771484375 263', 'viewBox_after': '146.71121215820312 25 546.5775451660156 262.3486022949219', 'new_viewport': {'w': 1024, 'h': 700}}"
+  },
+  {
+   "item": "B3 [1920x1080/link-basics-with-map]: Escape closes the preview dialog",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "B3 [1366x768/link-basics-with-map]: dialog size vs viewport (width 96%, height 92%, expect >=80% of both)",
+   "ok": true,
+   "detail": "{'dialogW': 1311.359375, 'dialogH': 706.546875, 'vw': 1366, 'vh': 768}"
+  },
+  {
+   "item": "B3 [1366x768/link-basics-with-map]: caption \"Wiring from the topology file...\" is absent",
+   "ok": true,
+   "detail": "Topology preview \u00b7 link-basics\u00d7One link: r1 eth1 - r2 eth1 (10.0.0.0/30)r1:eth1 \u2014 r2:eth1eth1eth1r1 is drawn on the map but is not one of this lab's devicesr1Not in this labr2 is drawn on the map but is not one of this lab's devicesr2Not in this lab"
+  },
+  {
+   "item": "B3 [1366x768/link-basics-with-map]: svg has a viewBox set",
+   "ok": true,
+   "detail": "146.6796875 25 546.65771484375 263"
+  },
+  {
+   "item": "B3 [1366x768/link-basics-with-map]: close control ([data-op-close]) is visible",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "B3 [1366x768/link-basics-with-map]: drawn content bbox is inside the svg viewBox (no clipping)",
+   "ok": true,
+   "detail": "{'viewBox': [146.6796875, 25.0, 546.65771484375, 263.0], 'sceneBBox': {'x': 181.69956970214844, 'y': 60, 'w': 476.600830078125, 'h': 192.60446166992188}}"
+  },
+  {
+   "item": "B3 [1366x768/link-basics-with-map]: resizing the window refits (viewBox present and content still fits, no clipping)",
+   "ok": true,
+   "detail": "{'viewBox_before': '146.6796875 25 546.65771484375 263', 'viewBox_after': '146.71121215820312 25 546.5775451660156 262.3486022949219', 'new_viewport': {'w': 1024, 'h': 700}}"
+  },
+  {
+   "item": "B3 [1366x768/link-basics-with-map]: Escape closes the preview dialog",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "B3 [390x844/link-basics-with-map]: dialog is full screen on mobile (width 96%, height 98%)",
+   "ok": true,
+   "detail": "{'dialogW': 374, 'dialogH': 828, 'vw': 390, 'vh': 844, 'text': \"Topology preview \u00b7 link-basics\u00d7One link: r1 eth1 - r2 eth1 (10.0.0.0/30)r1:eth1 \u2014 r2:eth1eth1eth1r1 is drawn on the map but is not one of this lab's devicesr1Not in this labr2 is drawn on the map but is not one of this lab's devicesr2Not in this lab\", 'viewBox': '146.6796875 25 546.65771484375 263', 'svgRect': {'x': 19, 'y': 61, 'w': 336, 'h': 748}, 'sceneBBox': {'x': 181.6909942626953, 'y': 60, 'w': 476.61798095703125, 'h': 193.27340698242188}, 'closeVisible': True}"
+  },
+  {
+   "item": "B3 [390x844/link-basics-with-map]: caption \"Wiring from the topology file...\" is absent",
+   "ok": true,
+   "detail": "Topology preview \u00b7 link-basics\u00d7One link: r1 eth1 - r2 eth1 (10.0.0.0/30)r1:eth1 \u2014 r2:eth1eth1eth1r1 is drawn on the map but is not one of this lab's devicesr1Not in this labr2 is drawn on the map but is not one of this lab's devicesr2Not in this lab"
+  },
+  {
+   "item": "B3 [390x844/link-basics-with-map]: svg has a viewBox set",
+   "ok": true,
+   "detail": "146.6796875 25 546.65771484375 263"
+  },
+  {
+   "item": "B3 [390x844/link-basics-with-map]: close control ([data-op-close]) is visible",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "B3 [390x844/link-basics-with-map]: drawn content bbox is inside the svg viewBox (no clipping)",
+   "ok": true,
+   "detail": "{'viewBox': [146.6796875, 25.0, 546.65771484375, 263.0], 'sceneBBox': {'x': 181.6909942626953, 'y': 60, 'w': 476.61798095703125, 'h': 193.27340698242188}}"
+  },
+  {
+   "item": "B3 [390x844/link-basics-with-map]: Escape closes the preview dialog",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "B3 [1920x1080-restore-square/restore-square-no-map]: dialog size vs viewport (width 94%, height 92%, expect >=80% of both)",
+   "ok": true,
+   "detail": "{'dialogW': 1800, 'dialogH': 993.59375, 'vw': 1920, 'vh': 1080}"
+  },
+  {
+   "item": "B3 [1920x1080-restore-square/restore-square-no-map]: caption \"Wiring from the topology file...\" is absent",
+   "ok": true,
+   "detail": "'s devicescjunosevolvedNot in this labvjunos-switch is drawn on the map but is not one of this lab's devicesvjunos-switchNot in this labxrv9k is drawn on the map but is not one of this lab's devicesxrv9kNot in this labhost1 is drawn on the map but is not one of this lab's deviceshost1Not in this lab"
+  },
+  {
+   "item": "B3 [1920x1080-restore-square/restore-square-no-map]: svg has a viewBox set",
+   "ok": true,
+   "detail": "-53.3203125 -35 786.65771484375 150"
+  },
+  {
+   "item": "B3 [1920x1080-restore-square/restore-square-no-map]: close control ([data-op-close]) is visible",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "B3 [1920x1080-restore-square/restore-square-no-map]: drawn content bbox is inside the svg viewBox (no clipping)",
+   "ok": true,
+   "detail": "{'viewBox': [-53.3203125, -35.0, 786.65771484375, 150.0], 'sceneBBox': {'x': -18.312576293945312, 'y': 0, 'w': 716.6251831054688, 'h': 72.70020294189453}}"
+  },
+  {
+   "item": "B3 [1920x1080-restore-square/restore-square-no-map]: resizing the window refits (viewBox present and content still fits, no clipping)",
+   "ok": true,
+   "detail": "{'viewBox_before': '-53.3203125 -35 786.65771484375 150', 'viewBox_after': '-53.26615905761719 -35 786.5322875976562 150', 'new_viewport': {'w': 1024, 'h': 700}}"
+  },
+  {
+   "item": "B3 [1920x1080-restore-square/restore-square-no-map]: Escape closes the preview dialog",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "D2: #rail-test-logins exists beside the Devices heading on the Topology tab",
+   "ok": true,
+   "detail": "{'exists': True, 'title': 'Tests the SSH login of every device again. A successful test makes Open CLI available.', 'text': 'Test logins', 'headingText': 'DevicesTest logins'}"
+  },
+  {
+   "item": "D2: rail button title text matches \"Tests the SSH login of every device again. A successful test makes Open CLI available.\"",
+   "ok": true,
+   "detail": "Tests the SSH login of every device again. A successful test makes Open CLI available."
+  },
+  {
+   "item": "D2: #devices-test-logins exists beside the Devices heading on the Devices tab",
+   "ok": true,
+   "detail": "{'exists': True, 'title': 'Tests the SSH login of every device again. A successful test makes Open CLI available.', 'text': 'Test logins', 'headingText': 'Devices'}"
+  },
+  {
+   "item": "D2: devices-tab button title text matches the same sentence",
+   "ok": true,
+   "detail": "Tests the SSH login of every device again. A successful test makes Open CLI available."
+  },
+  {
+   "item": "D2: two concurrent ssh-check-all calls: exactly one succeeds (200, {started,skipped}) and the other is refused (409)",
+   "ok": true,
+   "detail": "[{'status': 409, 'body': '{\"detail\":\"A login check is already running for this lab.\"}'}, {'status': 200, 'body': '{\"started\":4,\"skipped\":[{\"name\":\"clab-restore-square-host1\",\"reason\":\"disabled\"}],\"at\":\"2026-09-23T02:43:23.493278+00:00\"}'}]"
+  },
+  {
+   "item": "D2: baseline nos_login.at captured for every node before the main pass",
+   "ok": true,
+   "detail": "{'clab-restore-square-ceos': '2026-09-23T02:43:23.638723+00:00', 'clab-restore-square-cjunosevolved': '2026-09-23T02:43:23.679169+00:00', 'clab-restore-square-vjunos-switch': '2026-09-23T02:43:23.604589+00:00', 'clab-restore-square-xrv9k': '2026-09-23T02:43:23.675461+00:00', 'clab-restore-square-host1': '2026-09-23T02:27:18.467373+00:00'}"
+  },
+  {
+   "item": "D2: the real ssh-check-all response ({started, skipped}) for this click",
+   "ok": null,
+   "detail": "{'started': 4, 'skipped': [{'name': 'clab-restore-square-host1', 'reason': 'disabled'}], 'at': '2026-09-23T02:43:24.034786+00:00'}"
+  },
+  {
+   "item": "D2: clicking Test logins immediately disables both buttons and both read \"Testing\u2026\"",
+   "ok": true,
+   "detail": "{'rail': {'text': 'Testing\u2026', 'disabled': True}, 'devices': {'text': 'Testing\u2026', 'disabled': True}}"
+  },
+  {
+   "item": "D2: at least one device card shows the \"Testing login\u2026\" busy pill while the check runs",
+   "ok": true,
+   "detail": "[{'name': 'ceos', 'pill': 'Testing login\u2026'}, {'name': 'cjunosevolved', 'pill': 'Testing login\u2026'}, {'name': 'vjunos-switch', 'pill': 'Testing login\u2026'}, {'name': 'xrv9k', 'pill': 'Needs attention'}, {'name': 'host1', 'pill': 'Ready'}]"
+  },
+  {
+   "item": "D2: both buttons settle back to \"Test logins\" within ~60s",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "D2: nos_login.at updated in /api/state for the tested devices",
+   "ok": true,
+   "detail": "{'before': {'clab-restore-square-ceos': '2026-09-23T02:43:23.638723+00:00', 'clab-restore-square-cjunosevolved': '2026-09-23T02:43:23.679169+00:00', 'clab-restore-square-vjunos-switch': '2026-09-23T02:43:23.604589+00:00', 'clab-restore-square-xrv9k': '2026-09-23T02:43:23.675461+00:00', 'clab-restore-square-host1': '2026-09-23T02:27:18.467373+00:00'}, 'after': {'clab-restore-square-ceos': '2026-09-23T02:43:24.140265+00:00', 'clab-restore-square-cjunosevolved': '2026-09-23T02:43:24.184843+00:00', 'clab-restore-square-vjunos-switch': '2026-09-23T02:43:24.136174+00:00', 'clab-restore-square-xrv9k': '2026-09-23T02:43:26.527368+00:00', 'clab-restore-square-host1': '2026-09-23T02:27:18.467373+00:00'}}"
+  },
+  {
+   "item": "D2: host1 (the multitool) is included among the tested devices (bulk ssh-check-all response and nos_login.at)",
+   "ok": false,
+   "detail": "{'host1_updated': False, 'host1_enabled_flag': False, 'host1_in_skipped_list': {'name': 'clab-restore-square-host1', 'reason': 'disabled'}, 'bulk_response': {'started': 4, 'skipped': [{'name': 'clab-restore-square-host1', 'reason': 'disabled'}], 'at': '2026-09-23T02:43:24.034786+00:00'}}"
+  },
+  {
+   "item": "D2: deviceState() detail for a booting device mentions \"Test logins\"",
+   "ok": true,
+   "detail": "x is still starting. SSH opens automatically when it answers. Use Test logins (above) or this device's Test login to check again now."
+  },
+  {
+   "item": "D2: deviceState() detail for a needs_credentials device mentions \"Test logins\"",
+   "ok": true,
+   "detail": "Add login credentials to open the CLI of x. Add them under Devices, then use Test logins to check again."
+  },
+  {
+   "item": "B5: #lab-banner state at the start of this pass",
+   "ok": null,
+   "detail": "{'hidden': True, 'text': '', 'closeLabel': 'Hide this notice'}"
+  },
+  {
+   "item": "B5: #home-banner state at the start of this pass",
+   "ok": null,
+   "detail": "{'hidden': True, 'text': '', 'closeLabel': 'Hide this notice'}"
+  },
+  {
+   "item": "B5: no banner visible on the lab or home page right now \u2014 nothing to dismiss (the other operator on this lab may cause one later; not waited for)",
+   "ok": null,
+   "detail": "{'lab_banner': {'hidden': True, 'text': '', 'closeLabel': 'Hide this notice'}, 'home_banner': {'hidden': True, 'text': '', 'closeLabel': 'Hide this notice'}}"
+  },
+  {
+   "item": "C2: #builder-status is hidden on the welcome page before any draft exists",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "C3: welcome drop-zone text and picker button are present",
+   "ok": true,
+   "detail": "{'text': 'Drop a lab file here (.clab.yml, optionally with its .annotations.json)', 'pickButton': 'Open lab files\u2026'}"
+  },
+  {
+   "item": "C1: New lab dialog has only \"Lab name\" and \"Lab folder on the VM\" (no Start from / Device type)",
+   "ok": true,
+   "detail": "{'labels': ['Lab name', 'Lab folder on the VM']}"
+  },
+  {
+   "item": "C1: a newly created draft opens on a blank canvas (0 .react-flow__node)",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "item": "C2: #builder-status becomes visible with text once a draft exists",
+   "ok": true,
+   "detail": "{'hidden': False, 'text': 'Draft \u00b7 kept in this browser only \u00b7 not on the VM yet'}"
+  },
+  {
+   "item": "C4 [1366x768]: the YAML panel opens beside the canvas with no overlap",
+   "ok": true,
+   "detail": "{'root_before': {'x': 0, 'y': 52, 'width': 1366, 'height': 694}, 'root_after': {'x': 0, 'y': 52, 'width': 806, 'height': 694}, 'panel': {'x': 806, 'y': 52, 'width': 560, 'height': 694}}"
+  },
+  {
+   "item": "C4: typing a two-node topology and Apply draws two nodes on the canvas",
+   "ok": true,
+   "detail": "{'nodes': ['r1', 'r2'], 'status': 'Applied'}"
+  },
+  {
+   "item": "C4: broken YAML on Apply shows the parser's line message and leaves the nodes unchanged",
+   "ok": true,
+   "detail": "{'status': 'Line 5: Nested mappings are not allowed in compact mappings', 'nodes': ['r1', 'r2']}"
+  },
+  {
+   "item": "C4: Revert restores the applied (valid) text",
+   "ok": true,
+   "detail": "188 chars"
+  },
+  {
+   "item": "C4: a link drawn on the canvas is reflected in the (clean) YAML panel",
+   "ok": true,
+   "detail": "{'status': '', 'has_r1': True, 'has_r2': True}"
+  },
+  {
+   "item": "C4: \"Save to the VM...\" was never pressed in this check (sanity: button still present, untouched)",
+   "ok": true,
+   "detail": "{'save_button_disabled_attr': None}"
+  },
+  {
+   "item": "C1-C4: the draft was discarded (Drafts... -> delete); nothing named for it remains in localStorage",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "C2: #builder-status is hidden on the welcome page before any draft exists",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "C3: welcome drop-zone text and picker button are present",
+   "ok": true,
+   "detail": "{'text': 'Drop a lab file here (.clab.yml, optionally with its .annotations.json)', 'pickButton': 'Open lab files\u2026'}"
+  },
+  {
+   "item": "C1: New lab dialog has only \"Lab name\" and \"Lab folder on the VM\" (no Start from / Device type)",
+   "ok": true,
+   "detail": "{'labels': ['Lab name', 'Lab folder on the VM']}"
+  },
+  {
+   "item": "C1: a newly created draft opens on a blank canvas (0 .react-flow__node)",
+   "ok": true,
+   "detail": "0"
+  },
+  {
+   "item": "C2: #builder-status becomes visible with text once a draft exists",
+   "ok": true,
+   "detail": "{'hidden': False, 'text': 'Draft \u00b7 kept in this browser only \u00b7 not on the VM yet'}"
+  },
+  {
+   "item": "C4 [390x844]: the YAML panel and the canvas are stacked (no overlap)",
+   "ok": true,
+   "detail": "{'root': {'x': 0, 'y': 150, 'width': 390, 'height': 302.40625}, 'panel': {'x': 0, 'y': 452.40625, 'width': 390, 'height': 369.59375}}"
+  },
+  {
+   "item": "C4: typing a two-node topology and Apply draws two nodes on the canvas",
+   "ok": true,
+   "detail": "{'nodes': ['r1', 'r2'], 'status': 'Applied'}"
+  },
+  {
+   "item": "C4: broken YAML on Apply shows the parser's line message and leaves the nodes unchanged",
+   "ok": true,
+   "detail": "{'status': 'Line 5: Nested mappings are not allowed in compact mappings', 'nodes': ['r1', 'r2']}"
+  },
+  {
+   "item": "C4: Revert restores the applied (valid) text",
+   "ok": true,
+   "detail": "187 chars"
+  },
+  {
+   "item": "C4: add a link on the canvas (right-click -> Create Link)",
+   "ok": null,
+   "detail": "skipped: TimeoutError('Locator.click: Timeout 30000ms exceeded.\\nCall log:\\n  - waiting for locator(\"[data-testid=\\\\\"panel-toggle-btn\\\\\"]\").first\\n    - locator resolved to <div aria-label=\"Close panel\" class=\"MuiBox-root css-nkr6g7\" data-testid=\"panel-toggle-btn\">\u2026</div>\\n  - attempting click action\\n    2 "
+  },
+  {
+   "item": "C4: \"Save to the VM...\" was never pressed in this check (sanity: button still present, untouched)",
+   "ok": true,
+   "detail": "{'save_button_disabled_attr': None}"
+  },
+  {
+   "item": "C1-C4: the draft was discarded (Drafts... -> delete); nothing named for it remains in localStorage",
+   "ok": true,
+   "detail": "False"
+  }
+ ],
+ "console_errors": [],
+ "handled_http_errors": [
+  {
+   "tag": "1920x1080-restore-square",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  },
+  {
+   "tag": "1920x1080-d2",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  }
+ ],
+ "page_errors": [],
+ "final_state": {
+  "version": "1.30.37",
+  "helper_version": "1.30.37"
+ }
+}

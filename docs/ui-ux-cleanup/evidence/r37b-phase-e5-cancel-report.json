@@ -1,0 +1,37 @@
+{
+ "phase": "e5-cancel",
+ "results": [
+  {
+   "item": "E5 pre: \"Configuration A\" is listed in Save history",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "E5: the \"Configuration A\" saved version offers \"Apply to running lab\u2026\"",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "E5: review lists each device with a \"N differences\" detail and expandable diff",
+   "ok": true,
+   "detail": "[{'text': 'ceos EOS 6 differences from the running configurationShow differences (saved \u2192 running now) This compares the saved configuration with what the device runs right now. Lines starting with - are saved but missing on the device; lines starting with + are on the device now and will be removed. 4 added \u00b7 2 removedSaved (f12421e615) / Running now@@ -10,12 +10,14 @@1010 system l11111 unsupported speed action error1212 unsupported error-correction action error13+vlan 77714+ name B-ONLY1315 management api gnmi1416 transport grpc default1517 management api netconf1618 transport ssh default1719 interface Ethernet118- description A to-cjunosevolved20+ description B changed1921 no switchport2022 ip address 10.0.12.0/312123 ip ospf network point-to-point@@ -34,9 +36,9 @@3436 interface Management03537 ip address 172.20.20.101/243638 ip routing37-ip prefix-list RESTORE-A seq 10 permit 10.255.0.0/24 le 323839 ip route 0.0.0.0/0 172.20.20.13940 ip route 192.0.2.1/32 Null041+ip route 198.51.100.0/24 Null04042 router multicast4143 ipv44244 software-forwarding kernel', 'hasDiffDetails': True}, {'text': 'cjunosevolved Junos Evolved 5 differences from the running configurationShow differences (saved \u2192 running now) This compares the saved configuration with what the device runs right now. Lines starting with - are saved but missing on the device; lines starting with + are on the device now and will be removed. 3 added \u00b7 2 removedSaved (f12421e615) / Running now@@ -7,16 +7,17 @@77 set system syslog file messages any notice88 set system syslog file messages authorization info99 set system services ssh10-set interfaces et-0/0/0 description \"A to-ceos\"10+set interfaces et-0/0/0 description \"B changed\"1111 set interfaces et-0/0/0 unit 0 family inet address 10.0.12.1/311212 set interfaces et-0/0/1 description \"A to-vjunos-switch\"1313 set interfaces et-0/0/1 unit 0 family inet address 10.0.23.0/311414 set interfaces lo0 unit 0 description \"A loopback\"1515 set interfaces lo0 unit 0 family inet address 10.255.0.2/321616 set interfaces re0:mgmt-0 unit 0 family inet address 172.20.20.102/2417+set policy-options prefix-list B-ONLY 198.51.100.0/241718 set policy-options prefix-list RESTORE-A 10.255.0.0/241819 set routing-options router-id 10.255.0.219-set routing-options static route 192.0.2.2/32 discard20+set routing-options static route 198.51.100.0/24 discard2021 set protocols ospf area 0.0.0.0 interface et-0/0/0.0 interface-type p2p2122 set protocols ospf area 0.0.0.0 interface et-0/0/1.0 interface-type p2p2223 set protocols ospf area 0.0.0.0 interface lo0.0 passive', 'hasDiffDetails': True}, {'text': 'vjunos-switch Junos 5 differences from the running configurationShow differences (saved \u2192 running now) This compares the saved configuration with what the device runs right now. Lines starting with - are saved but missing on the device; lines starting with + are on the device now and will be removed. 3 added \u00b7 2 removedSaved (f12421e615) / Running now@@ -8,7 +8,7 @@88 set system services netconf ssh99 set system management-instance1010 set chassis fpc 0 pic 0 number-of-ports 5611-set interfaces ge-0/0/0 description \"A to-cjunosevolved\"11+set interfaces ge-0/0/0 description \"B changed\"1212 set interfaces ge-0/0/0 unit 0 family inet address 10.0.23.1/311313 set interfaces ge-0/0/1 description \"A to-xrv9k\"1414 set interfaces ge-0/0/1 unit 0 family inet address 10.0.34.0/31@@ -16,11 +16,12 @@1616 set interfaces fxp0 unit 0 family inet6 address 2001:db8::2/641717 set interfaces lo0 unit 0 description \"A loopback\"1818 set interfaces lo0 unit 0 family inet address 10.255.0.3/3219+set policy-options prefix-list B-ONLY 198.51.100.0/241920 set policy-options prefix-list RESTORE-A 10.255.0.0/242021 set routing-instances mgmt_junos routing-options rib mgmt_junos.inet6.0 static route ::/0 next-hop 2001:db8::12122 set routing-instances mgmt_junos routing-options static route 0.0.0.0/0 next-hop 10.0.0.22223 set routing-options router-id 10.255.0.323-set routing-opt"
+  },
+  {
+   "item": "E5: \"Show differences (saved -> running now)\" expands to a real diff",
+   "ok": true,
+   "detail": "{'summary': 'Show differences (saved \u2192 running now)', 'hasTable': True}"
+  },
+  {
+   "item": "F2: the folder browser offers \"Apply to running lab\u2026\" for restore-square/qa-1-30-37 (via its latest/ snapshot)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "F2: clicking it opens the same \"Replace running configuration\" review",
+   "ok": true,
+   "detail": ""
+  }
+ ],
+ "console_errors": [],
+ "page_errors": []
+}

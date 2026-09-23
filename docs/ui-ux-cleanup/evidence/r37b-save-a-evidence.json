@@ -1,0 +1,33 @@
+{
+ "destination_line": "Saving toCLAB-MNGR-DEV-LLM\u203amain\u203arestore-square/qa-1-30-37/latest waiting for your review",
+ "files": [
+  "ceos.cfg added",
+  "ceos.eoscfg added",
+  "cjunosevolved.cfg added",
+  "cjunosevolved.jcfg added",
+  "vjunos-switch.cfg added",
+  "vjunos-switch.jcfg added",
+  "xrv9k.cfg added",
+  "xrv9k.xrcfg added"
+ ],
+ "diff_excerpt": "<table class=\"diff-table\"><caption class=\"sr-only\">Before this save / This save</caption><colgroup><col class=\"diff-col-gutter\"><col class=\"diff-col-gutter\"><col class=\"diff-col-marker\"><col></colgroup><tbody><tr class=\"diff-hunk-head\"><td colspan=\"4\">@@ -0,1 +1,75 @@</td></tr><tr class=\"diff-add\"><td class=\"diff-gutter diff-gutter-old\"></td><td class=\"diff-gutter diff-gutter-new\">1</td><td class=\"diff-marker\" aria-hidden=\"true\">+</td><td class=\"diff-text\">! Command: show running-config</td></tr><tr class=\"diff-add\"><td class=\"diff-gutter diff-gutter-old\"></td><td class=\"diff-gutter diff-gutter-new\">2</td><td class=\"diff-marker\" aria-hidden=\"true\">+</td><td class=\"diff-text\">! device: ceos (cEOSLab, EOS-4.35.0F-44178984.4350F (engineering build))</td></tr><tr class=\"diff-add\"><td class=\"diff-gutter diff-gutter-old\"></td><td class=\"diff-gutter diff-gutter-new\">3</td><td class=\"diff-marker\" aria-hidden=\"true\">+</td><td class=\"diff-text\">!</td></tr><tr class=\"diff-add\"><td class=\"diff-gutter diff-gutter-old\"></td><td class=\"diff-gutter diff-gutter-new\">4</td><td class=\"diff-marker\" aria-hidden=\"true\">+</td><td class=\"diff-text\">no aaa root</td></tr><tr class=\"diff-add\"><td class=\"diff-gutter diff-gutter-old\"></td><td class=\"diff-gutter diff-gutter-new\">5</td><td class=\"diff-marker\" aria-hidden=\"true\">+</td><td class=\"diff-text\">!</td></tr><tr class=\"diff-add\"><td class=\"diff-gutter diff-gutter-old\"></td><td class=\"diff-gutter diff-gutter-new\">6</td><td class=\"diff-marker\" aria-hidden=\"true\">+</td><td class=\"diff-text\">username admin privilege 15 role network-admin secret sha512 $6$NVjYzbRkBbK05Zu3$ZVq0M7p8qCzxzxjwbFwPneWZ1cDES28Wamq.DKTfvBu3lAeqCH68GX1eIH7dNzsBI/buTeH8cSG9dm10SluXy1</td></tr><tr class=\"diff-add\"><td class=\"diff-gutter diff-gutter-old\"></td><td class=\"diff-gutter diff-gutter-new\">7</td><td class=\"diff-marker\" aria-hidden=\"true\">+</td><td class=\"diff-text\">!</td></tr><tr class=\"diff-add\"><td class=\"diff-gutter diff-gutter-old\"></td><td class=\"diff-gutter",
+ "job_detail": {
+  "title": "Saving progress",
+  "badge": "EOS",
+  "rows": {
+   "Destination": "CLAB-MNGR-DEV-LLM \u00b7 main \u00b7 restore-square/qa-1-30-37/latest",
+   "Saved as": "Latest",
+   "Started": "just now",
+   "Label": "Configuration A",
+   "Status": "Pushing to remote",
+   "Message": "Pushing the saved commit.",
+   "Saved target": "latest",
+   "Started (UTC)": "2026-09-23 02:45:43 UTC",
+   "Commit": "f12421e615d13adb938906621f0510b46d874283",
+   "Checkout": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+   "Files changed": "9",
+   "Job id": "43e91697a894431d28ce4e0460920e00"
+  }
+ },
+ "review_title": "Review before uploading"
+}

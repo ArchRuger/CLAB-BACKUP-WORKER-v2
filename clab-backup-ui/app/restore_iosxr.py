@@ -59,6 +59,7 @@ Device output never leaves this module unscrubbed: callers get controlled messag
 ``show configuration changes diff`` diff, which they redact before display or logging.
 """
 import re
+import threading
 
 from .restore_compare import compare_indented, ordered_blocks_differ
 from .restore_shell import PROMPT_TIMEOUT, RestoreError, SessionLost, Shell, close_channel, open_shell
@@ -108,7 +109,10 @@ IOSXR_ORDERED = re.compile(r'^route-policy |^ipv4 access-list |^ipv6 access-list
 # Sessions this process is holding open past a successful apply_candidate(), keyed by the job
 # token: {'client': paramiko.SSHClient, 'channel': ..., 'shell': IosXrShell, 'peer': (ip, port)}.
 # A manager restart loses this table; the node's own timer then rolls back an unconfirmed change.
+# Several nodes are restored at the same time, so every read or change of the table itself happens under
+# _HELD_LOCK; no device I/O ever runs while it is held.
 _HELD = {}
+_HELD_LOCK = threading.Lock()
 
 
 def supports_restore(platform):
@@ -439,7 +443,8 @@ def confirm(client, handle, **_kw):
     channel, shell = _open(client)
     try:
         reach_cli(shell)
-        held = _HELD.get(token)
+        with _HELD_LOCK:
+            held = _HELD.get(token)
         if not held:
             if _last_commit_was_rollback(shell):
                 raise RestoreError('The session that armed this change is gone, and the node has '
@@ -505,7 +510,8 @@ def _release_held(token, already_left=False):
     """Pop and close a held session. `already_left` skips leaving configuration mode again when
     the caller (confirm(), after a successful confirming commit) already did it on the same
     channel -- sending 'end' twice would just draw a harmless but pointless second round trip."""
-    held = _HELD.pop(token, None)
+    with _HELD_LOCK:
+        held = _HELD.pop(token, None)
     if not held:
         return
     if not already_left:
@@ -528,7 +534,9 @@ def pending(client, **_kw):
         if session_conflict(shell) != 'trial':
             return ''
         peer = _peer(client)
-        for token, held in list(_HELD.items()):
+        with _HELD_LOCK:
+            entries = list(_HELD.items())
+        for token, held in entries:
             if peer is not None and held.get('peer') == peer:
                 return token
         return True
@@ -586,11 +594,15 @@ def apply_candidate(client, candidate, confirm_minutes=5, token=None, **_kw):
     except Exception:
         _close(channel)
         raise
-    if token in _HELD:
+    with _HELD_LOCK:
+        reused = token in _HELD
+    if reused:
         # Never expected from the service (its tokens are per-attempt uuids), but a reused token
         # must not silently leak the older held session's channel and client (F6).
         _release_held(token)
-    _HELD[token] = {'client': client, 'channel': channel, 'shell': shell, 'peer': _peer(client)}
+    entry = {'client': client, 'channel': channel, 'shell': shell, 'peer': _peer(client)}
+    with _HELD_LOCK:
+        _HELD[token] = entry
     return result
 
 

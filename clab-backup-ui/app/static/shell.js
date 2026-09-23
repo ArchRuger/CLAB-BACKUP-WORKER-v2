@@ -129,6 +129,11 @@ function rememberHomeTab(tab){return shellSet('sessionStorage','clab.homeTab',St
 function openedAt(id){return id?shellGet('localStorage','clab.opened.'+id)||'':'';}
 function isDismissed(jobId){return !!jobId&&!!shellGet('localStorage','clab.dismissed.'+jobId);}
 function dismissJob(jobId){return !!jobId&&shellSet('localStorage','clab.dismissed.'+jobId,new Date().toISOString());}
+// sessionStorage: notices closed with the generic × (setBanner, app.js builds the key from the lab, the
+// banner id and a digest of the headline). Session-scoped, not localStorage: a notice a student closed
+// reopens next visit rather than staying hidden forever, and closing one never touches a job record.
+function noticeDismissed(key){return !!key&&!!shellGet('sessionStorage','clab.notice.'+key);}
+function dismissNotice(key){return !!key&&shellSet('sessionStorage','clab.notice.'+key,'1');}
 // Failures of header, menu and tool actions: a student sentence in the lab banner with the backend
 // message under Details; a toast when there is no lab page to show it on.
 function shellErrorSentence(message){

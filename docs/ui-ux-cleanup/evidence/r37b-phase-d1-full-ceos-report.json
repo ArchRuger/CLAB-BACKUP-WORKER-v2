@@ -1,0 +1,57 @@
+{
+ "phase": "d1-full-ceos",
+ "results": [
+  {
+   "item": "D1: right-click ceos<->xrv9k, endpoint \"ceos\" preselects eth2",
+   "ok": true,
+   "detail": "{'checked': 'eth2', 'endpoints': ['xrv9k: Gi0/0/0/1', 'ceos: eth2']}"
+  },
+  {
+   "item": "D1: capture launch URL matches the session pattern",
+   "ok": true,
+   "detail": "/static/capture-session.html#def2adb7add9e38903ef051cfae74a5efdaf7b2af24f0bb4633661de618fe469"
+  },
+  {
+   "item": "D1: capture viewer status at t+3.5s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+7.0s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+10.5s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+14.0s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+17.5s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: capture viewer status at t+21.0s",
+   "ok": null,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "D1: ping xrv9k -> 10.0.41.1 while capturing",
+   "ok": false,
+   "detail": "ping 10.0.41.1 count 15\nWed Sep 23 03:24:58.122 UTC\nType escape sequence to abort.\nSending 15, 100-byte ICMP Echos to 10.0.41.1 timeout is 2 seconds:\n!!!!!!!!!!!!!!!\nSuccess rate is 100 percent (15/15), round-trip min/avg/max = 3/5/8 ms\nRP/0/RP0/CPU0:xrv9k#\n"
+  },
+  {
+   "item": "D1: session ended cleanly from the viewer (confirm() accepted, /end returned 2xx)",
+   "ok": true,
+   "detail": "200"
+  }
+ ],
+ "console_errors": [],
+ "page_errors": []
+}

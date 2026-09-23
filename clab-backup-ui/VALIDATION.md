@@ -1,3 +1,150 @@
+# Setup Script Cleanup Log, part 3: Test logins eligibility and the 1.30.37 live records — 1.30.38
+
+Prepared on `claude/ui-ux-cleanup` on 2026-09-23 after 1.30.37 (`96b72d7`, CI green on the push; PR #53). One
+application change (`node_services.bulk_check_targets` no longer skips a backup-excluded node), found by the
+independent browser QA of 1.30.37 (`host1` was reported `skipped: disabled` by `ssh-check-all`).
+
+- **Unit and static:** `test_nodes.py` (14; the three claims that pinned the backup flag as a gate rewritten),
+  full `python -m unittest discover` in the venv, `node --test tests/*.js`, `verify-release.py`, `git diff --check`,
+  `check_links.py`: see the records entry for the totals of the committed tree.
+- **Live (after the 1.30.38 rebuild, `/api/state` 1.30.38, helpers 1.30.38):** `POST /api/labs/<id>/ssh-check-all` on
+  `restore-square` answered `{"started": 5, "skipped": []}` and every node's `nos_login.at`, including `host1`'s,
+  advanced to the run's timestamp within 5 s, all `ready`. `check-install.sh` as the ordinary account: the same two
+  warnings as before (folder coverage cap, the multitool's telemetry row), every other row PASS. Full suites of the
+  committed tree: `python -m unittest discover` 1096 OK (1 skipped), `node --test tests/*.js` 274 OK, deploy-script
+  suites OK, `verify-release.py`, `check_links.py` (130 files, 0 problems), `git diff --check`,
+  `node build.mjs --check` (132 files match). Disk at the end: 50G used / 19G available with the five-node lab running.
+
+**Live records of 1.30.37** (the build of `96b72d7` from its clean worktree, `/api/state` 1.30.37, helpers 1.30.37,
+`clab-capture-service:1.30.37`; two independent Sonnet QA agents, one operator per resource; reports and evidence
+under `docs/ui-ux-cleanup/evidence/`, prefixes `r37a-` and `r37b-`):
+
+- **Browser pass A** (`browser-1.30.37-a.md`, `check_release_1_30_37_a.py`, 62 PASS / 1 FAIL / 5 INFO, 0 console
+  and 0 page errors): B3 preview ≥ 80% of the viewport at 1920×1080 and 1366×768, full screen at 390×844, viewBox
+  fitted (content bbox inside the svg), refit on resize, Escape closes, no caption for a topology with and without a
+  saved map; D2 control on both surfaces with the tooltip text, "Testing…"/busy pills, `nos_login.at` advancing, a
+  real 409 on a concurrent second click; **the FAIL is the multitool exclusion fixed in this release**; B5: the banner
+  "The last save did not complete." (raised by the other pass's failed save) was hidden with its close control and
+  stayed hidden after a reload; C1–C4 on the real manager: New lab with name and folder only, blank canvas, hidden
+  empty pill, drop zone, YAML panel beside the canvas (stacked at phone width), apply of a two-node topology, parser
+  refusal with the line, Revert, a canvas link reflected in the panel (link drawing at 390×844 not possible: the
+  editor's palette covers the canvas there).
+- **Live pass B** (`live-1.30.37-b.md`, `live_1_30_37_b.py`, `isolation_all_four.py`; all steps PASS, two skipped
+  there and run by the lead below): A1 Junos files saved as `<node>.cfg` + `<node>.jcfg`; E1/E3 a new lab folder
+  `restore-square/qa-1-30-37`, the mandatory label (empty refused), the review with the full destination line, the
+  upload (remote commit `f12421e6…` "Configuration A", tree `…/qa-1-30-37/latest/` with `.cfg`/`.jcfg`/`manifest.json`);
+  drift to B; E1/E4 the second save "Configuration B" with unified diffs per platform (EOS, Junos display set, IOS
+  XR hunks recorded, secrets masked); F1 one `latest/` (no nesting), two distinct labels in the history; E2 no
+  stale dialog after *View configuration backup*; E5/F2 the review from the history and from the folder browser
+  with per-device saved → running diffs; **E6/E7** the real four-node restore from the "Configuration A" commit:
+  all four `verified`, `progress 4/4`, four distinct workers, `max(connecting) 1790132109.51 < min(settled)
+  1790132111.65` (overlap proved), per-device intervals 2.2 / 5.6 / 8.2 / 23.6 s, job 28.9 s (apply window 23.6 s),
+  mid-run screenshot with three devices Replaced while one still validated; read-back `A` on all four and 0 missing /
+  0 extra against the exact commit; isolation (`isolation_all_four.py`, xrv9k cut at `applying`): the other three
+  `verified` while xrv9k `failed` "not changed", job `partial`, iptables rule gone; foreign change
+  (`mixed_failure.py`, armed before the victim connected): victim not changed, foreign change left alone; **D1**
+  capture on `xrv9k: Gi0/0/0/0` (preselected `eth1`) and on the cEOS end (`eth2`) showed the ICMP echo generated
+  over the /31 by `nodecli.py`; lab left at A, mesh healthy, no sessions left.
+- **Lead's runs (same build):** the **sequential baseline** with `RESTORE_NODE_WORKERS=1` (temporary compose override
+  on the manager, removed afterwards): all four `verified`, one worker, no overlap, job 46.6 s / apply window 41.3 s
+  against 28.9 s / 23.6 s with four workers (`r37b-restore-all-four-sequential.json`, `…-2.json`); **restart
+  recovery** (`failure_harness.py restart-confirming --node vjunos-switch`): the manager restarted 28 s in while the
+  node was `confirming`, the job was `interrupted` at start-up and re-checked on the node pool, ending `succeeded` /
+  `verified` "Checked after a manager restart" with read-back `A` (`r37b-restart-confirming.json`); **rollback with
+  read-back** (`armed-cut --node cjunosevolved`): the node ended `rolled_back` (read back as `B`, nothing pending),
+  the iptables rule removed, then recovered to `A` by a normal restore (`r37b-armed-cut-cjunosevolved.json`,
+  `…-recovery.json`); final read-back `A` on all four with 0 missing / 0 extra, `square_check` ok.
+- **Not run:** a lab with ten or more devices for the rail (the rail's scrolling was proven with the five-node lab at
+  1366×600 and by a 12-row unit test); a fresh-VM installer run (only the repair/upgrade path of this VM was run).
+
+# Setup Script Cleanup Log, part 2 — 1.30.37
+
+Prepared on `claude/ui-ux-cleanup` on 2026-09-23 after 1.30.36 (`f47d3b8` + records `aa36ea5`). This entry lists what
+was run before the commit; the live evidence of the rebuilt manager (parallel restore, saves and diffs, Test logins,
+the lab builder on the real manager) follows in the records entry added after it.
+
+- **Unit and static (working tree at the commit):** `python -m unittest discover -s tests -t tests` in the venv (total
+  in the records entry), deploy-script suites with the system `python3`, `node --test tests/*.js`, `node --check`,
+  `bash -n deploy/*.sh`, `verify-release.py`, `git diff --check`, `check_links.py`; the editor bundle rebuilt with
+  Node 24 (`node build.mjs`, `node build.mjs --check`: 132 files match).
+- **Reviews (Opus, read-only):** the parallel restore design (`docs/ui-ux-cleanup/design/restore-parallel-design.md`),
+  the E5–E7 diff (items applied: per-node lookups inside the task, secret words in the diff masking, `identical` only
+  on a real match, interrupted targets settled, server-clock durations, `mixed_failure.py` triggered on the target's
+  stage), the helper `create` map-file write (must-fix applied and re-reviewed: the regression tests now reproduce the
+  original bug against `f47d3b8` and pass on the fix; `revise`/`delete` moved to the same pattern).
+- **Fixture browser (real Chromium, fixture manager, before the commit):** the lab builder YAML panel scenario
+  (`docs/ui-ux-cleanup/tools/check_lab_builder_yaml.py`, screenshots `evidence/lab-builder-yaml-*`): 38 of 39 checks
+  PASS at 1366×768 and 390×844 (one skipped at phone width because the editor's own palette covers the canvas);
+  `docs/lab-builder/tools/student_workflow.py` 41/41.
+
+# Setup Script Cleanup Log, part 1 — 1.30.36
+
+Prepared on `claude/ui-ux-cleanup` (from `main` `c0851b7`, 1.30.35) on 2026-09-23 on the development VM
+`clab-llm-dev2`. The per-requirement map and the routing/disk record are in `docs/ui-ux-cleanup/`. Live evidence of the
+rebuilt manager (installer path, VM-connection seed, browser checks) is recorded in the follow-up records entry below
+this one once it was run; this entry lists only what was run before the commit.
+
+- **Unit and static (this working tree):** `python -m unittest discover -s tests -t tests` in the venv: see the records
+  entry for the exact total of the committed tree; deploy-script suites with the system `python3`
+  (`test_install_manager` 53, `test_git_onboard` 50, `test_apt_lock` 23, `test_apt_update`, `test_apt_sources`,
+  `test_check_*`, `test_git_registrations`, `test_scaffold_lab`, `test_release_consistency`: OK); `node --test tests/*.js`;
+  `bash -n deploy/*.sh`; `deploy/verify-release.py`; `git diff --check`; `check_links.py`.
+- **Live, before the rebuild:** `apt_lock.py --show` / `--wait --pause-timers` against a real `flock` holder of
+  `/var/lib/dpkg/lock-frontend` (holder named by its live pid and `comm`, released after 12 s, both `apt-daily` timers
+  active again afterwards); lazydocker installed twice into a fresh `HOME` from the upstream release (second run "already
+  current", one PATH block in `.bashrc`, `lazydocker --version` in a fresh login shell) and "already current" for the
+  real account; `gh auth login --web` with stdout piped prints only the one-time code and the official URL (no
+  credential question, no "Press Enter"); the multitool image's documented login verified over SSH against the deployed
+  `ghcr.io/srl-labs/network-multitool:latest` (only that account logs in); the runtime port mapping read from
+  containerlab's deploy log of `restore-square` (vJunos `ge-0/0/N`→`ethN+1`, XRv9k `Gi0/0/0/N`→`ethN+1`, cJunosEvolved
+  `et-0/0/N`→`ethN+4`, cEOS and Linux identity).
+- **Reviews:** an Opus (`claude-opus-5-5`) read-only risk review of the setup, seed, lock and onboarding diffs; its
+  must-fix (the launch step must keep the terminal for the password prompt) and should-fix items (replacement-key box,
+  operation guard before consuming a seed, `HTTPException` in the lazydocker step, the seed re-`lstat` before unlink, an
+  odd image string never blocking a topology parse) were applied and the suites rerun. The `host_operations.py` change
+  (`options.annotations` on `create`) is reviewed in the records entry.
+
+**Records added after the release commit `f47d3b8` (same VM, 2026-09-23 01:30–02:20 UTC):**
+
+- **Unit and static of the committed tree:** `python -m unittest discover` 1029 OK (1 skipped, the opt-in EOS fixture);
+  `node --test tests/*.js` 228 OK; `verify-release.py`, `check_links.py` (128 files, 0 problems), `git diff --check`, `bash -n`.
+- **Live installer, standard path**, `bash deploy/install.sh` from a clean worktree of `f47d3b8` with the VM's `.env` copied in,
+  driven through a pty (`docs/ui-ux-cleanup/` keeps the driver out of Git): exactly three prompts in 86 s (Setup menu
+  → 1; "Where are your lab configurations going?" → existing checkout; checkout directory), no bind/port, operations,
+  VS Code, APT-media, plan, "Next step", GitHub CLI, subfolder or "Register?" question; the plan printed
+  `lazydocker: install or update for clabllm`; the manager image and the capture session image were rebuilt at 1.30.36
+  and recreated (`/api/state` 1.30.36, helper 1.30.36, capture stack `clab-capture-service:1.30.36`); Git setup ran as
+  part of item 1 and registered the existing checkout at the repository root (`Destination: repository root`); the
+  process exited 0 to the shell after the SUCCESS box and the `check-install.sh` line.
+- **Live VM-connection seed (A7):** `sudo bash deploy/setup-discovery.sh --reset-password --data-dir /srv/containerlab-node-manager/data`
+  from the same worktree, new password typed twice into the pty: seed `host-bootstrap.json` (mode 600, uid 10001)
+  present right after, consumed by the running manager 24 s later (file gone; `bootstrap_at` set, `password_saved`
+  true, the pinned fingerprint kept because address and port were unchanged, `bootstrap_pending` false), and
+  `POST /api/discovery/refresh` reconnected with the new password (`connected: true`, helper 1.30.36). The pending /
+  first-trust path (no fingerprint yet) has unit evidence only (`test_host_bootstrap.py`, 23 tests); the fixture
+  manager overwrites the host after start-up, so it could not show that dialog state.
+- **Health check** as the ordinary account: `check-install.sh` exit 2 with two warnings only (folder coverage capped at
+  20 folders; one telemetry failure on the multitool host, expected: it is not a NOS), every Git, Wireshark, Grafana
+  and helper row PASS.
+- **Multitool login (B6):** after *Sync from VM* of the imported `restore-square`, `host1` carried its image,
+  `credential_source: default`, and the readiness monitor's real SSH probe made it `ready` / `ssh_ready: true`;
+  backups stay unavailable for it (`readiness: Choose NOS`).
+- **Browser QA (independent Sonnet agent, `docs/ui-ux-cleanup/tools/check_release_1_30_36.py`, report and 21
+  screenshots in `docs/ui-ux-cleanup/evidence/`):** 34 PASS / 2 FAIL / 12 INFO, 0 console and 0 page errors, at
+  1920×1080, 1366×768 and 390×844 against the real manager and the live lab: B1, B2 (both *← My labs* and the browser
+  Back reopen the dialog on the same VM path with re-read YAML), B4, B6, B7, D1 (vJunos `ge-0/0/0`→`eth1`, cJunosEvolved
+  `et-0/0/1`→`eth5`, XRv9k `Gi0/0/0/0`→`eth1`, cEOS/Linux identity, `tap` never preselected) PASS. **B3 FAIL**: the
+  preview dialog measured 58%×60% of 1920×1080 and 82%×64% of 1366×768, and the caption was still shown for a
+  topology with a saved map file; fixed in 1.30.37. B5's close control was confirmed by code and unit tests only (no
+  banner was showing on the healthy lab); a live banner check is in the 1.30.37 records.
+- **Second Opus risk review (after the commit)** of the helper's `create` map-file write found a must-fix in this
+  release: the mode was set with `os.chmod` by path after `os.replace`, which follows a symlink planted in a
+  group-writable engineer folder. **1.30.36 must not be installed with engineer access on a shared VM**; the fix
+  (descriptor-based writes, the map file's state bound into the review digest, plan-time refusal of anything but a
+  regular file) ships in 1.30.37, together with the review's other items (trust sentence in the deploy review text,
+  the review naming the map file).
+- **Disk after the rebuild and a build-cache prune:** 49G used, 20G available.
+
 # Student quick start delivered: the PDF, its inspection and two independent replays — 1.30.35
 
 Prepared on `claude/student-quick-start` on 2026-09-22 after 1.30.34 (`2ef98a2`, CI green). **No application code

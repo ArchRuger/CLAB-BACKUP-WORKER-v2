@@ -1,0 +1,82 @@
+{
+ "read_at_utc": "2026-09-23T03:00:03Z",
+ "nodes": {
+  "ceos": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 4,
+   "configuration_lines": 74,
+   "pending_confirmation": false,
+   "boot": "PID 1 up 7120 s",
+   "up_seconds": 7120,
+   "own_sessions_left_pending": 0,
+   "compared_with_saved": {
+    "saved_file": "ceos.cfg",
+    "saved_statements": 48,
+    "active_statements": 48,
+    "missing": 0,
+    "extra": 0,
+    "tolerated_root_authentication": 0
+   },
+   "active": "A"
+  },
+  "cjunosevolved": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 23,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-23 01:08:29 UTC",
+   "up_seconds": null,
+   "compared_with_saved": {
+    "saved_file": "cjunosevolved.cfg",
+    "saved_statements": 21,
+    "active_statements": 22,
+    "missing": 0,
+    "extra": 0,
+    "tolerated_root_authentication": 1
+   },
+   "active": "A"
+  },
+  "vjunos-switch": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 26,
+   "pending_confirmation": false,
+   "boot": "System booted: 2026-09-23 01:03:04 UTC",
+   "up_seconds": null,
+   "compared_with_saved": {
+    "saved_file": "vjunos-switch.cfg",
+    "saved_statements": 25,
+    "active_statements": 25,
+    "missing": 0,
+    "extra": 0,
+    "tolerated_root_authentication": 0
+   },
+   "active": "A"
+  },
+  "xrv9k": {
+   "a_value_present": true,
+   "a_statement_present": true,
+   "b_only_present": 0,
+   "b_only_markers": 3,
+   "configuration_lines": 78,
+   "pending_confirmation": false,
+   "boot": "System uptime is 1 hour 50 minutes",
+   "up_seconds": 6600,
+   "compared_with_saved": {
+    "saved_file": "xrv9k.cfg",
+    "saved_statements": 51,
+    "active_statements": 51,
+    "missing": 0,
+    "extra": 0,
+    "tolerated_root_authentication": 0
+   },
+   "active": "A"
+  }
+ }
+}

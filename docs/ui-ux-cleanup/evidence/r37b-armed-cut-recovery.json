@@ -1,0 +1,398 @@
+{
+ "manager_version": "1.30.37",
+ "build": {
+  "image": "clab-backup:1.30.37 sha256:eb1bf9b0dd438e61fee52b53c8bbec23fa06e8b8664dd97f5608c106b9cd8f48",
+  "container_started": "2026-09-23T03:32:18.676706914Z",
+  "git_head": "96b72d7e9259",
+  "git_dirty_files": 1
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "git",
+  "commit": "f12421e615d13adb938906621f0510b46d874283",
+  "path": "restore-square/qa-1-30-37/latest"
+ },
+ "requested": [
+  "clab-restore-square-cjunosevolved"
+ ],
+ "started_utc": "03:36:57",
+ "device_readback_before": null,
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "git",
+    "commit": "f12421e615d13adb938906621f0510b46d874283",
+    "path": "restore-square/qa-1-30-37/latest",
+    "captured_at": "2026-09-23T02:45:46.602128+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 6,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 1,
+        "old_count": 5,
+        "new_start": 1,
+        "new_count": 6,
+        "lines": [
+         {
+          "type": "context",
+          "old": 1,
+          "new": 1,
+          "text": "set version 26.2R1.7-EVO"
+         },
+         {
+          "type": "context",
+          "old": 2,
+          "new": 2,
+          "text": "set system host-name HOSTNAME"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 3,
+          "text": "set system root-authentication [redacted]"
+         },
+         {
+          "type": "context",
+          "old": 3,
+          "new": 4,
+          "text": "set system login user admin uid 500"
+         },
+         {
+          "type": "context",
+          "old": 4,
+          "new": 5,
+          "text": "set system login user admin class superuser"
+         },
+         {
+          "type": "context",
+          "old": 5,
+          "new": 6,
+          "text": "set system login user admin authentication [redacted]"
+         }
+        ]
+       },
+       {
+        "old_start": 7,
+        "old_count": 16,
+        "new_start": 8,
+        "new_count": 18,
+        "lines": [
+         {
+          "type": "context",
+          "old": 7,
+          "new": 8,
+          "text": "set system syslog file messages any notice"
+         },
+         {
+          "type": "context",
+          "old": 8,
+          "new": 9,
+          "text": "set system syslog file messages authorization info"
+         },
+         {
+          "type": "context",
+          "old": 9,
+          "new": 10,
+          "text": "set system services ssh"
+         },
+         {
+          "type": "del",
+          "old": 10,
+          "new": null,
+          "text": "set interfaces et-0/0/0 description \"A to-ceos\""
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 11,
+          "text": "set system services extension-service request-response grpc clear-text port 32767"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 12,
+          "text": "set interfaces et-0/0/0 description \"B changed\""
+         },
+         {
+          "type": "context",
+          "old": 11,
+          "new": 13,
+          "text": "set interfaces et-0/0/0 unit 0 family inet address 10.0.12.1/31"
+         },
+         {
+          "type": "context",
+          "old": 12,
+          "new": 14,
+          "text": "set interfaces et-0/0/1 description \"A to-vjunos-switch\""
+         },
+         {
+          "type": "context",
+          "old": 13,
+          "new": 15,
+          "text": "set interfaces et-0/0/1 unit 0 family inet address 10.0.23.0/31"
+         },
+         {
+          "type": "context",
+          "old": 14,
+          "new": 16,
+          "text": "set interfaces lo0 unit 0 description \"A loopback\""
+         },
+         {
+          "type": "context",
+          "old": 15,
+          "new": 17,
+          "text": "set interfaces lo0 unit 0 family inet address 10.255.0.2/32"
+         },
+         {
+          "type": "context",
+          "old": 16,
+          "new": 18,
+          "text": "set interfaces re0:mgmt-0 unit 0 family inet address 172.20.20.102/24"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 19,
+          "text": "set policy-options prefix-list B-ONLY 198.51.100.0/24"
+         },
+         {
+          "type": "context",
+          "old": 17,
+          "new": 20,
+          "text": "set policy-options prefix-list RESTORE-A 10.255.0.0/24"
+         },
+         {
+          "type": "context",
+          "old": 18,
+          "new": 21,
+          "text": "set routing-options router-id 10.255.0.2"
+         },
+         {
+          "type": "del",
+          "old": 19,
+          "new": null,
+          "text": "set routing-options static route 192.0.2.2/32 discard"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 22,
+          "text": "set routing-options static route 198.51.100.0/24 discard"
+         },
+         {
+          "type": "context",
+          "old": 20,
+          "new": 23,
+          "text": "set protocols ospf area 0.0.0.0 interface et-0/0/0.0 interface-type p2p"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 24,
+          "text": "set protocols ospf area 0.0.0.0 interface et-0/0/1.0 interface-type p2p"
+         },
+         {
+          "type": "context",
+          "old": 22,
+          "new": 25,
+          "text": "set protocols ospf area 0.0.0.0 interface lo0.0 passive"
+         }
+        ]
+       }
+      ],
+      "added": 5,
+      "removed": 2,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (f12421e615)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    }
+   ],
+   "eligible_count": 1
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "7034de9c28784aefbc6f0f0954a74783"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "03:36:59",
+   "job": "backing_up",
+   "targets": {
+    "cjunosevolved": "backing_up"
+   }
+  },
+  {
+   "utc": "03:37:02",
+   "job": "applying",
+   "targets": {
+    "cjunosevolved": "applying"
+   }
+  },
+  {
+   "utc": "03:37:05",
+   "job": "applying",
+   "targets": {
+    "cjunosevolved": "confirming"
+   }
+  },
+  {
+   "utc": "03:37:06",
+   "job": "verifying",
+   "targets": {
+    "cjunosevolved": "applied"
+   }
+  },
+  {
+   "utc": "03:37:09",
+   "job": "succeeded",
+   "targets": {
+    "cjunosevolved": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "7034de9c28784aefbc6f0f0954a74783",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T03:36:58.999327+00:00",
+  "finished": "2026-09-23T03:37:08.100807+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "f12421e615d13adb938906621f0510b46d874283",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T02:45:46.602128+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 5,
+  "pre_backup_job_id": "3190d34e5ce34b23acbe2b4e50f52f5e",
+  "post_backup_job_id": "5bfa126b16f94bd28191940f9d75d20b",
+  "targets": [
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790134618.9993377,
+     "backing_up": 1790134619.0084388,
+     "backed_up": 1790134621.2204309,
+     "connecting": 1790134621.226132,
+     "applying": 1790134621.3571868,
+     "armed": 1790134624.7849536,
+     "verifying": 1790134624.7879193,
+     "confirming": 1790134625.3474495,
+     "replaced": 1790134625.8791153,
+     "settled": 1790134625.8791153,
+     "checking": 1790134625.8849497,
+     "checked": 1790134628.0978217
+    },
+    "attempts": 1,
+    "worker": "ThreadPoolExecutor-5_0",
+    "diff_sample": [
+     "[edit system services]",
+     "-    extension-service {",
+     "-        request-response {",
+     "-            grpc {",
+     "-                clear-text {",
+     "-                    port 32767;",
+     "-                }",
+     "-            }",
+     "-        }",
+     "-    }",
+     "[edit interfaces et-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-ceos\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options static]",
+     "+    route 192.0.2.2/32 discard;",
+     "-    route 198.51.100.0/24 discard;",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "synthesized",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ],
+  "progress": {
+   "settled": 1,
+   "total": 1
+  },
+  "server_time": 1790134629.045247
+ },
+ "finished_utc": "03:37:09"
+}

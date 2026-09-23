@@ -3,6 +3,10 @@ let mapKey='', mapRequest=0, mapBounds=[0,0,1000,600], mapBox=[...mapBounds], ma
 const map=$('topology-map');
 const MAP_STATE_KEYS=['ready','starting','attention','unavailable','credentials','working','neutral'];
 const mapPlural=(n,word)=>typeof plural==='function'?plural(n,word):`${n} ${word}${Number(n)===1?'':'s'}`;
+// The one-line hint under the map: the fixed sentence, plus (only when they apply) the skipped-links
+// and schema warnings that used to sit behind a "Details" toggle — a student cannot act on either, but
+// they are worth a sentence, not a click.
+const TOPOLOGY_HINT='Click a device to open it. Click a link to capture its traffic. Right-click for more actions.';
 function setMapBox(){map.setAttribute('viewBox',mapBox.join(' '));}
 function mapZoom(factor){const [x,y,w,h]=mapBox;if(w*factor<50||w*factor>400000)return;mapBox=[x+w*(1-factor)/2,y+h*(1-factor)/2,w*factor,h*factor];setMapBox();}
 $('map-fit').onclick=()=>{mapBox=[...mapBounds];setMapBox();};
@@ -27,6 +31,7 @@ function mapStateKey(n,lab){
  return {key,ds};
 }
 function renderMapState(){
+ renderRailTest();
  const lab=typeof current==='function'?current():null;if(!lab||!map||typeof map.querySelectorAll!=='function')return 0;
  let updated=0;
  for(const el of map.querySelectorAll('[data-map-node]')){
@@ -41,6 +46,32 @@ function renderMapState(){
  return updated;
 }
 function applyMapStates(){return renderMapState();}
+// "Test logins": a lab-wide SSH login refresh beside the Devices heading — the rail's sticky h2 and
+// the Devices tab heading both carry it (node_services.py POST …/ssh-check-all). It only starts real
+// login tests and never marks a device ready by itself: deviceState()'s 'checking' pill and the
+// existing 4 s poll are what move a device on to Ready once it actually answers, or back to its
+// previous reason when it does not. Both buttons mirror whichever check is really running, derived
+// from the lab's own devices, so a check started from the other button, another browser tab or the
+// automatic monitor's own probe disables them too.
+function railTestButtons(){return ['rail-test-logins','devices-test-logins'].map(id=>$(id)).filter(Boolean);}
+function railTestActive(lab){return (lab&&lab.nodes||[]).some(n=>n.nos_login&&n.nos_login.status==='checking');}
+function renderRailTest(){
+ const active=railTestActive(typeof current==='function'?current():null);
+ for(const button of railTestButtons()){button.disabled=active;button.textContent=active?'Testing…':'Test logins';}
+ return active;
+}
+async function runRailTest(){
+ const lab=typeof current==='function'?current():null;if(!lab||typeof json!=='function')return;
+ for(const button of railTestButtons()){button.disabled=true;button.textContent='Testing…';}
+ try{
+  const result=await json('/labs/'+lab.id+'/ssh-check-all','POST',{});
+  const started=(result&&result.started)||0,skipped=(result&&result.skipped)||[];
+  if(typeof notify==='function')notify(started?`Testing the SSH login of ${mapPlural(started,'device')}…`+(skipped.length?` ${mapPlural(skipped.length,'device')} skipped — see each device for why.`:''):'No device is ready to test right now. Add credentials under Devices first.');
+ }catch(e){if(typeof notify==='function')notify(e.message);}
+ if(typeof refresh==='function')await refresh().catch(()=>{});
+ renderRailTest();
+}
+for(const id of ['rail-test-logins','devices-test-logins'])if($(id))$(id).onclick=runRailTest;
 const nodeMenu=$('node-context-menu');let contextLab='',contextNode=null;
 function closeNodeMenu(restore=false){nodeMenu.hidden=true;if(restore)contextNode?.focus();contextNode=null;}
 function nodeMenuReason(text){return text?`<small>${esc(text)}</small>`:'';}
@@ -89,16 +120,16 @@ function mapStage(kind){
  const off=kind!=='map';
  for(const id of ['map-fit','map-in','map-out','map-expand'])if($(id)){$(id).disabled=off;$(id).title=off?'No map yet':'';}
  if($('map-edit')){$('map-edit').disabled=off;$('map-edit').title=off?'Import a map first.':'';}
- if(off&&$('map-notes'))$('map-notes').hidden=true;
+ if(off&&$('topology-hint'))$('topology-hint').textContent=TOPOLOGY_HINT;
  if(typeof syncProxies==='function')syncProxies();
 }
-// Caption under the map in plain words; anything a student cannot act on goes under Details.
+// Caption under the map in plain words; anything a student cannot act on goes into the hint (see above).
 function mapCaption(drawing){
  const unmatched=drawing.nodes.filter(n=>!n.inventory_name).length,devices=drawing.nodes.length-unmatched;
  let text=`${mapPlural(devices,'device')} · ${mapPlural(drawing.links.length,'link')}`;
  if(unmatched)text+=` · ${unmatched} drawn but not in this lab`;
  if(!drawing.has_links_source)text+='. Links aren’t shown yet — import the lab topology file with the map to draw them.';
- const notes=['Lines show how the lab is wired, not whether links are up.'];
+ const notes=[];
  if(drawing.skipped_links)notes.push(`${mapPlural(drawing.skipped_links,'link')} could not be drawn (unsupported or one-ended).`);
  if(drawing.schema!==3)notes.push('Some map styling and port labels could not be shown. Re-import the original map files to restore them.');
  return {text,notes};
@@ -111,7 +142,7 @@ async function refreshMap(force=false){
  if(!drawing){map.innerHTML='';$('map-status').textContent='';mapStage('empty');return;}
  mapStage('map');
  const caption=mapCaption(drawing);$('map-status').textContent=caption.text;
- if($('map-notes')){$('map-notes').hidden=!caption.notes.length;if($('map-notes-text'))$('map-notes-text').textContent=caption.notes.join(' ');}
+ if($('topology-hint'))$('topology-hint').textContent=caption.notes.length?TOPOLOGY_HINT+' '+caption.notes.join(' '):TOPOLOGY_HINT;
  map.innerHTML=topologyMarkup(drawing);
  map.classList.toggle('labels-on-select',drawing.settings?.labelMode==='on-select');
  mapBounds=measureTopology(map);mapBox=[...mapBounds];setMapBox();

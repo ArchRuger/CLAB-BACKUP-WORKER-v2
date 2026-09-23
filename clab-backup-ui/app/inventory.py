@@ -3,13 +3,17 @@ import re
 import yaml
 
 # Junos keeps two representations. `command`/`suffix` are the existing human- and
-# diff-friendly display-set backup. `restore`/`restore_format`/`restore_suffix` add a
-# whole-device candidate: the hierarchical (curly-brace) configuration that
-# `load override terminal` can apply as a complete replacement. Display-set output can
+# diff-friendly display-set backup; `suffix` is the internal capture storage extension
+# (runner.py) and stays `.set` there. `snapshot_suffix` is the name that same display-set
+# capture gets inside a Git snapshot: `.cfg`, matching EOS and IOS XR, which already save
+# their human-facing backup as `.cfg` in the repository. `restore`/`restore_format`/
+# `restore_suffix` add a whole-device candidate: the hierarchical (curly-brace) configuration
+# that `load override terminal` can apply as a complete replacement. Display-set output can
 # only be merged with `load set`, so it cannot remove statements a snapshot dropped and
 # is unsuitable for a desired-state restore. Which kinds can be restored is decided by the
 # drivers in restore_drivers.py; a `restore` command here only makes the capture restore-grade.
-JUNOS_DRIVER = {'os': 'junipernetworks.junos.junos', 'command': 'show configuration | display set | no-more', 'suffix': 'set',
+JUNOS_DRIVER = {'os': 'junipernetworks.junos.junos', 'command': 'show configuration | display set | no-more',
+                'suffix': 'set', 'snapshot_suffix': 'cfg',
                 'restore': 'show configuration | no-more', 'restore_format': 'junos-hierarchical', 'restore_suffix': 'jcfg'}
 JUNOS_SWITCHES = ('juniper_vqfx', 'juniper_vjunosswitch')
 JUNOS_PLATFORMS = ('juniper_cjunosevolved', *JUNOS_SWITCHES)
@@ -36,6 +40,37 @@ DEFAULT_CREDENTIALS = {
     'cisco_xrv9k': ('clab', 'clab@123'),
     'arista_ceos': ('admin', 'admin'),
 }
+# Documented logins for a bundled *Linux* support image, not a NOS: no containerlab kind
+# publishes these (kind `linux` carries no platform and no default), so they are keyed by
+# the image repository instead, without its tag. Applies only to a node with no NOS
+# platform; a device kind never reaches this table.
+#   ghcr.io/srl-labs/network-multitool - https://github.com/srl-labs/network-multitool
+#       README documents `ssh admin@<name>` with password `multit00l` (uid 1000, wheel group).
+IMAGE_DEFAULT_CREDENTIALS = {
+    'ghcr.io/srl-labs/network-multitool': ('admin', 'multit00l'),
+}
+
+
+def image_repository(image):
+    """The repository portion of an image reference, with any tag or digest stripped.
+
+    A registry host may itself contain ``host:port/repo``, so only a trailing
+    ``:text`` with no ``/`` after the last ``:`` is treated as a tag.
+    """
+    if not image:
+        return ''
+    image = image.split('@', 1)[0]
+    repo, sep, tail = image.rpartition(':')
+    return repo if sep and '/' not in tail else image
+
+
+def image_default_credentials(node):
+    """The image vendor's documented login, only for a node with no NOS platform."""
+    if node.get('platform'):
+        return None
+    return IMAGE_DEFAULT_CREDENTIALS.get(image_repository(node.get('image') or ''))
+
+
 ALIASES = {'junos': 'juniper_cjunosevolved', 'junipernetworks.junos.junos': 'juniper_cjunosevolved',
            'vr-vqfx': 'juniper_vqfx', 'vqfx': 'juniper_vqfx',
            'vr-vjunosswitch': 'juniper_vjunosswitch', 'vjunosswitch': 'juniper_vjunosswitch',

@@ -1,0 +1,273 @@
+{
+ "results": [
+  {
+   "item": "B1: second file input \"Saved map (annotations JSON, optional)\" exists below the topology input",
+   "ok": true,
+   "detail": "{'labelText': 'Saved map (annotations JSON, optional)', 'hasInput': True, 'helpAfter': 'JSON \u00b7 up to 1 MiB \u00b7 optional', 'order': ['LABEL:Topology file', 'DIV:op-upload-file', 'LABEL:Saved map (annotations JSON, o', 'DIV:op-upload-annotations']}"
+  },
+  {
+   "item": "B2: dialog button label is \"Open in Lab Builder...\" not \"Edit visually...\"",
+   "ok": true,
+   "detail": "['Preview topology', 'Open in Lab Builder\u2026', 'Add to My labs without starting', 'Deploy lab']"
+  },
+  {
+   "item": "B2: Lab Builder opens with the topology (.react-flow__node present)",
+   "ok": true,
+   "detail": "5"
+  },
+  {
+   "item": "B2: builder back link exists and points to /",
+   "ok": true,
+   "detail": "/"
+  },
+  {
+   "item": "B2: \"<- My labs\" reopens the Topology file dialog on the same VM path with YAML content",
+   "ok": true,
+   "detail": "{'path': '/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml', 'text_len': 1931}"
+  },
+  {
+   "item": "B2: browser Back button from the builder also reopens the Topology file dialog",
+   "ok": true,
+   "detail": "{'path': '/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml', 'url': 'http://127.0.0.1:8081/'}"
+  },
+  {
+   "item": "B3 [1920x1080]: preview dialog size vs viewport (width 58%, height 60%, expect >=80% of both, with margins, no clipping)",
+   "ok": false,
+   "detail": "{'width': 1120, 'height': 643.53125, 'vw': 1920, 'vh': 1080, 'text': \"Topology preview \u00b7 restore-square\u00d7ceos:eth1 \u2014 cjunosevolved:et-0/0/0eth1et-0/0/0cjunosevolved:et-0/0/1 \u2014 vjunos-switch:ge-0/0/0et-0/0/1ge-0/0/0vjunos-switch:ge-0/0/1 \u2014 xrv9k:Gi0/0/0/0ge-0/0/1Gi0/0/0/0xrv9k:Gi0/0/0/1 \u2014 ceos:eth2Gi0/0/0/1eth2host1:eth1 \u2014 vjunos-switch:ge-0/0/2eth1ge-0/0/2host1:eth2 \u2014 ceos:eth3eth2eth3ceos is drawn on the map but is not one of this lab's devicesceosNot in this labcjunosevolved is drawn on the map but is not one of this lab's devicescjunosevolvedNot in this labvjunos-switch is drawn on the map but is not one of this lab's devicesvjunos-switchNot in this labxrv9k is drawn on the map but is not one of this lab's devicesxrv9kNot in this labhost1 is drawn on the map but is not one of this lab's deviceshost1Not in this labWiring from the topology file. Devices sit on a default grid \u2014 arrange them later with Edit map.\", 'svgHidden': False, 'svgClient': {'x': 425, 'y': 285.234375, 'width': 1070, 'height': 518.390625, 'top': 285.234375, 'right': 1495, 'bottom': 803.625, 'left': 425}}"
+  },
+  {
+   "item": "B3 [1920x1080]: caption \"Wiring from the topology file; device positions from its saved map file.\" is absent",
+   "ok": true,
+   "detail": "ab's devicesvjunos-switchNot in this labxrv9k is drawn on the map but is not one of this lab's devicesxrv9kNot in this labhost1 is drawn on the map but is not one of this lab's deviceshost1Not in this labWiring from the topology file. Devices sit on a default grid \u2014 arrange them later with Edit map."
+  },
+  {
+   "item": "B4: review title is \"Start restore-square?\"",
+   "ok": true,
+   "detail": "Start restore-square?"
+  },
+  {
+   "item": "B4: no orange \"Runs this trusted topology with host privileges...\" box",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "B4: no \"Runs on the lab VM. If the lab changes before you confirm, this check is repeated.\" caption",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "B4: no \"Technical details\" summary wrapper (command shown directly)",
+   "ok": true,
+   "detail": "['Devices', 'Command run on the VM']"
+  },
+  {
+   "item": "B4: \"Command run on the VM\" with the containerlab argv is visible directly",
+   "ok": true,
+   "detail": "\"/usr/bin/containerlab\" \"deploy\" \"-t\" \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\" \"--name\" \"restore-square\""
+  },
+  {
+   "item": "B5: banner found on the lab or home page (this lab is currently fully healthy, so none may be showing)",
+   "ok": null,
+   "detail": "{'lab_banner': {'hidden': True, 'text': '', 'closeLabel': 'Hide this notice'}, 'home_banner': {'hidden': True, 'text': '', 'closeLabel': 'Hide this notice'}}"
+  },
+  {
+   "item": "B5: no banner visible on lab or home page \u2014 nothing to dismiss",
+   "ok": null,
+   "detail": ""
+  },
+  {
+   "item": "B6: Topology tab device rail row for host1 found",
+   "ok": true,
+   "detail": "{'pill': 'Ready', 'needsCreds': False, 'cliDisabled': False, 'cliTitle': '', 'rowText': 'host1UnmappedReadyOpen CLI \u2197'}"
+  },
+  {
+   "item": "B6: Topology rail row does not say \"Needs credentials\"/\"Add login credentials...\"",
+   "ok": true,
+   "detail": "{'pill': 'Ready', 'needsCreds': False, 'cliDisabled': False, 'cliTitle': '', 'rowText': 'host1UnmappedReadyOpen CLI \u2197'}"
+  },
+  {
+   "item": "B6: Topology rail Open CLI is enabled for host1",
+   "ok": true,
+   "detail": "{'pill': 'Ready', 'needsCreds': False, 'cliDisabled': False, 'cliTitle': '', 'rowText': 'host1UnmappedReadyOpen CLI \u2197'}"
+  },
+  {
+   "item": "B6: Devices tab row for host1 found",
+   "ok": true,
+   "detail": "{'pill': 'Ready', 'needsCreds': False, 'cliDisabled': False, 'cliTitle': '', 'rowText': 'host1UnmappedReadyOpen CLI \u2197Details'}"
+  },
+  {
+   "item": "B6: Devices tab row does not say \"Needs credentials\"/\"Add login credentials...\"",
+   "ok": true,
+   "detail": "{'pill': 'Ready', 'needsCreds': False, 'cliDisabled': False, 'cliTitle': '', 'rowText': 'host1UnmappedReadyOpen CLI \u2197Details'}"
+  },
+  {
+   "item": "B6: Devices tab Open CLI is enabled for host1",
+   "ok": true,
+   "detail": "{'pill': 'Ready', 'needsCreds': False, 'cliDisabled': False, 'cliTitle': '', 'rowText': 'host1UnmappedReadyOpen CLI \u2197Details'}"
+  },
+  {
+   "item": "D1: vjunos-switch<->cjunosevolved endpoint \"vjunos-switch\" (primary endpoint (ge-0/0/0 side)) -> status text and preselected interface",
+   "ok": null,
+   "detail": "{'endpoints': ['cjunosevolved: et-0/0/1', 'vjunos-switch: ge-0/0/0'], 'chosen_idx': 1, 'context': 'Link endpoint: vjunos-switch: ge-0/0/0', 'status': 'Capturing clab-restore-square-vjunos-switch port ge-0/0/0 (container interface eth1) \u2014 start the capture when you are ready.', 'checked_interface': 'eth1'}"
+  },
+  {
+   "item": "D1: vjunos-switch<->cjunosevolved endpoint \"vjunos-switch\" preselects eth1 (not a tapN)",
+   "ok": true,
+   "detail": "{'checked': 'eth1', 'status': 'Capturing clab-restore-square-vjunos-switch port ge-0/0/0 (container interface eth1) \u2014 start the capture when you are ready.'}"
+  },
+  {
+   "item": "D1: vjunos-switch<->cjunosevolved endpoint \"cjunosevolved\" (other endpoint (switch to it)) -> status text and preselected interface",
+   "ok": null,
+   "detail": "{'endpoints': ['cjunosevolved: et-0/0/1', 'vjunos-switch: ge-0/0/0'], 'chosen_idx': 0, 'context': 'Link endpoint: cjunosevolved: et-0/0/1', 'status': 'Capturing clab-restore-square-cjunosevolved port et-0/0/1 (container interface eth5) \u2014 start the capture when you are ready.', 'checked_interface': 'eth5'}"
+  },
+  {
+   "item": "D1: vjunos-switch<->xrv9k endpoint \"xrv9k\" (Gi0/0/0/0 side) -> status text and preselected interface",
+   "ok": null,
+   "detail": "{'endpoints': ['vjunos-switch: ge-0/0/1', 'xrv9k: Gi0/0/0/0'], 'chosen_idx': 1, 'context': 'Link endpoint: xrv9k: Gi0/0/0/0', 'status': 'Capturing clab-restore-square-xrv9k port Gi0/0/0/0 (container interface eth1) \u2014 start the capture when you are ready.', 'checked_interface': 'eth1'}"
+  },
+  {
+   "item": "D1: vjunos-switch<->xrv9k endpoint \"xrv9k\" preselects eth1 (not a tapN)",
+   "ok": true,
+   "detail": "{'checked': 'eth1', 'status': 'Capturing clab-restore-square-xrv9k port Gi0/0/0/0 (container interface eth1) \u2014 start the capture when you are ready.'}"
+  },
+  {
+   "item": "D1: ceos<->xrv9k endpoint \"ceos\" (ceos side of ceos<->xrv9k) -> status text and preselected interface",
+   "ok": null,
+   "detail": "{'endpoints': ['xrv9k: Gi0/0/0/1', 'ceos: eth2'], 'chosen_idx': 1, 'context': 'Link endpoint: ceos: eth2', 'status': 'eth2 is selected \u2014 start the capture when you are ready.', 'checked_interface': 'eth2'}"
+  },
+  {
+   "item": "D1: ceos<->xrv9k endpoint \"ceos\" preselects eth2 (not a tapN)",
+   "ok": true,
+   "detail": "{'checked': 'eth2', 'status': 'eth2 is selected \u2014 start the capture when you are ready.'}"
+  },
+  {
+   "item": "D1: host1<->vjunos-switch endpoint \"host1\" (host1 side (identity mapping)) -> status text and preselected interface",
+   "ok": null,
+   "detail": "{'endpoints': ['host1: eth1', 'vjunos-switch: ge-0/0/2'], 'chosen_idx': 0, 'context': 'Link endpoint: host1: eth1', 'status': 'eth1 is selected \u2014 start the capture when you are ready.', 'checked_interface': 'eth1'}"
+  },
+  {
+   "item": "D1: host1<->vjunos-switch endpoint \"host1\" preselects eth1 (not a tapN)",
+   "ok": true,
+   "detail": "{'checked': 'eth1', 'status': 'eth1 is selected \u2014 start the capture when you are ready.'}"
+  },
+  {
+   "item": "B3 [1366x768]: preview dialog size vs viewport (width 82%, height 64%, expect >=80% of both, with margins, no clipping)",
+   "ok": false,
+   "detail": "{'width': 1120, 'height': 493.765625, 'vw': 1366, 'vh': 768, 'text': \"Topology preview \u00b7 restore-square\u00d7ceos:eth1 \u2014 cjunosevolved:et-0/0/0eth1et-0/0/0cjunosevolved:et-0/0/1 \u2014 vjunos-switch:ge-0/0/0et-0/0/1ge-0/0/0vjunos-switch:ge-0/0/1 \u2014 xrv9k:Gi0/0/0/0ge-0/0/1Gi0/0/0/0xrv9k:Gi0/0/0/1 \u2014 ceos:eth2Gi0/0/0/1eth2host1:eth1 \u2014 vjunos-switch:ge-0/0/2eth1ge-0/0/2host1:eth2 \u2014 ceos:eth3eth2eth3ceos is drawn on the map but is not one of this lab's devicesceosNot in this labcjunosevolved is drawn on the map but is not one of this lab's devicescjunosevolvedNot in this labvjunos-switch is drawn on the map but is not one of this lab's devicesvjunos-switchNot in this labxrv9k is drawn on the map but is not one of this lab's devicesxrv9kNot in this labhost1 is drawn on the map but is not one of this lab's deviceshost1Not in this labWiring from the topology file. Devices sit on a default grid \u2014 arrange them later with Edit map.\", 'svgHidden': False, 'svgClient': {'x': 148, 'y': 204.109375, 'width': 1070, 'height': 368.625, 'top': 204.109375, 'right': 1218, 'bottom': 572.734375, 'left': 148}}"
+  },
+  {
+   "item": "B3 [1366x768]: caption \"Wiring from the topology file; device positions from its saved map file.\" is absent",
+   "ok": true,
+   "detail": "ab's devicesvjunos-switchNot in this labxrv9k is drawn on the map but is not one of this lab's devicesxrv9kNot in this labhost1 is drawn on the map but is not one of this lab's deviceshost1Not in this labWiring from the topology file. Devices sit on a default grid \u2014 arrange them later with Edit map."
+  },
+  {
+   "item": "B7 [1920x1080]: \"Details\" disclosure / \"Lines show how the lab is wired...\" sentence is absent",
+   "ok": true,
+   "detail": "{'hasDetailsWiring': False, 'hint': 'Click a device to open it. Click a link to capture its traffic. Right-click for more actions.'}"
+  },
+  {
+   "item": "B7 [1920x1080]: hint text present",
+   "ok": true,
+   "detail": "Click a device to open it. Click a link to capture its traffic. Right-click for more actions."
+  },
+  {
+   "item": "B7 [1920x1080]: device rail overflow-y is auto/scroll (independently scrollable)",
+   "ok": true,
+   "detail": "{'scrollHeight': 808, 'clientHeight': 808, 'overflowY': 'auto', 'columns': '1116px 300px', 'colCount': 2}"
+  },
+  {
+   "item": "B7 [1920x1080]: rail overflow numbers (scrollHeight 808 vs clientHeight 808, overflowed=False)",
+   "ok": null,
+   "detail": "{'scrollHeight': 808, 'clientHeight': 808, 'overflowY': 'auto', 'columns': '1116px 300px', 'colCount': 2}"
+  },
+  {
+   "item": "B7 [1920x1080]: rail did not overflow at this size even after forcing \u2014 scroll-behaviour not exercised",
+   "ok": null,
+   "detail": "{'scrollHeight': 808, 'clientHeight': 808, 'overflowY': 'auto', 'columns': '1116px 300px', 'colCount': 2}"
+  },
+  {
+   "item": "B7 [1366x768]: \"Details\" disclosure / \"Lines show how the lab is wired...\" sentence is absent",
+   "ok": true,
+   "detail": "{'hasDetailsWiring': False, 'hint': 'Click a device to open it. Click a link to capture its traffic. Right-click for more actions.'}"
+  },
+  {
+   "item": "B7 [1366x768]: hint text present",
+   "ok": true,
+   "detail": "Click a device to open it. Click a link to capture its traffic. Right-click for more actions."
+  },
+  {
+   "item": "B7 [1366x768]: device rail overflow-y is auto/scroll (independently scrollable)",
+   "ok": true,
+   "detail": "{'scrollHeight': 612, 'clientHeight': 496, 'overflowY': 'auto', 'columns': '1002px 300px', 'colCount': 2}"
+  },
+  {
+   "item": "B7 [1366x768]: rail overflow numbers (scrollHeight 612 vs clientHeight 496, overflowed=True)",
+   "ok": null,
+   "detail": "{'scrollHeight': 612, 'clientHeight': 496, 'overflowY': 'auto', 'columns': '1002px 300px', 'colCount': 2}"
+  },
+  {
+   "item": "B7 [1366x768]: scrolling the rail (scrollTop=200) changes only the rail, not the window; heading stays visible; map stays visible",
+   "ok": true,
+   "detail": "{'before': {'railScroll': 0, 'winScroll': 0}, 'after': {'railScroll': 116, 'winScroll': 0, 'headingVisible': True, 'mapVisible': True}}"
+  },
+  {
+   "item": "B7 [390x844]: \"Details\" disclosure / \"Lines show how the lab is wired...\" sentence is absent",
+   "ok": true,
+   "detail": "{'hasDetailsWiring': False, 'hint': 'Click a device to open it. Click a link to capture its traffic. Right-click for more actions.'}"
+  },
+  {
+   "item": "B7 [390x844]: hint text present",
+   "ok": true,
+   "detail": "Click a device to open it. Click a link to capture its traffic. Right-click for more actions."
+  },
+  {
+   "item": "B7 [390x844]: below the 1280px breakpoint the rail scrolls with the page (overflow-y visible), not independently",
+   "ok": true,
+   "detail": "{'scrollHeight': 614, 'clientHeight': 614, 'overflowY': 'visible', 'columns': '358px', 'colCount': 1}"
+  },
+  {
+   "item": "B7 [390x844]: rail overflow numbers (scrollHeight 614 vs clientHeight 614, overflowed=False)",
+   "ok": null,
+   "detail": "{'scrollHeight': 614, 'clientHeight': 614, 'overflowY': 'visible', 'columns': '358px', 'colCount': 1}"
+  },
+  {
+   "item": "B7 [390x844]: rail did not overflow at this size even after forcing \u2014 scroll-behaviour not exercised",
+   "ok": null,
+   "detail": "{'scrollHeight': 614, 'clientHeight': 614, 'overflowY': 'visible', 'columns': '358px', 'colCount': 1}"
+  },
+  {
+   "item": "B7 [390x844]: layout stacks to a single column",
+   "ok": true,
+   "detail": ""
+  }
+ ],
+ "console_errors": [],
+ "handled_http_errors": [
+  {
+   "tag": "1920x1080",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  },
+  {
+   "tag": "1920x1080",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  },
+  {
+   "tag": "1920x1080",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  },
+  {
+   "tag": "1920x1080",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  },
+  {
+   "tag": "1366x768",
+   "type": "error",
+   "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  }
+ ],
+ "page_errors": []
+}

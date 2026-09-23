@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import time
 import sys
@@ -173,6 +174,224 @@ class HostOperationTests(unittest.TestCase):
             with self.assertRaises((ValueError, FileExistsError)):
                 self.host.execute(req, lambda _: None)
         self.assertEqual(target.read_bytes(), b'operator-created topology')
+
+    # --- create: an optional map file (uploaded alongside the topology) travels with it -------------
+
+    def test_create_with_a_map_file_writes_it_beside_the_topology_and_the_digest_covers_it(self):
+        layout = json.dumps({'nodeAnnotations': [{'id': 'r1', 'position': {'x': 1, 'y': 2}}]})
+        target = self.root / 'mapped.clab.yaml'
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        plan = self.host.plan(req)
+        self.assertEqual(plan['warnings'], [])
+        bare = self.host.plan({**self.request('create', text=YAML.decode()), 'path': str(target)})
+        self.assertNotEqual(plan['digest'], bare['digest'], 'the digest must cover the map layout too')
+        self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        side = target.with_name(target.name + '.annotations.json')
+        self.assertEqual(side.read_text(), layout)
+        self.assertEqual(target.read_bytes(), YAML)
+        # No annotations option at all: nothing is written beside the topology.
+        other = self.root / 'no-map.clab.yaml'
+        plain = {**self.request('create', text=YAML.decode()), 'path': str(other)}
+        self.host.execute({**plain, 'digest': self.host.plan(plain)['digest']}, lambda _: None)
+        self.assertFalse(other.with_name(other.name + '.annotations.json').exists())
+
+    def test_create_rejects_a_map_file_that_is_not_a_json_object_or_is_too_large(self):
+        target = self.root / 'bad-map.clab.yaml'
+        for layout in ('[1]', '"just text"', 'not json at all', 'x' * (1024 * 1024 + 1)):
+            req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+            with self.assertRaises(ValueError): self.host.plan(req)
+        self.assertFalse(target.exists(), 'a refused map file plans no write of the topology either')
+
+    def test_create_never_overwrites_an_existing_map_file_silently(self):
+        target = self.root / 'existing-map.clab.yaml'
+        side = target.with_name(target.name + '.annotations.json')
+        side.write_text('{"nodeAnnotations": [{"id": "old"}]}')
+        layout = json.dumps({'nodeAnnotations': [{'id': 'new'}]})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        plan = self.host.plan(req)
+        self.assertIn('Replaces the existing map file', plan['warnings'][0])
+        result = self.host.execute({**req, 'digest': plan['digest']}, lambda _: None)
+        self.assertEqual(side.read_text(), layout, 'the new map file is written')
+        self.assertEqual(Path(result['layout_recovery_path']).read_text(), '{"nodeAnnotations": [{"id": "old"}]}', 'the previous one is kept, not lost')
+        if os.name == 'posix':
+            import stat as st
+            self.assertEqual(st.S_IMODE(Path(result['layout_recovery_path']).stat().st_mode), 0o600, 'the recovery copy is private')
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX file modes')
+    def test_create_with_a_map_file_uses_the_right_final_modes(self):
+        import stat as st
+        target = self.root / 'modes.clab.yaml'
+        layout = json.dumps({'nodeAnnotations': [{'id': 'r1'}]})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        req = {**req, 'digest': self.host.plan(req)['digest']}
+        self.host.execute(req, lambda _: None)
+        side = target.with_name(target.name + '.annotations.json')
+        self.assertEqual(st.S_IMODE(target.stat().st_mode), 0o644)
+        self.assertEqual(st.S_IMODE(side.stat().st_mode), 0o644)
+        engineer = self.root / 'engineer-mapped'; engineer.mkdir(); os.chmod(engineer, 0o2775)
+        if not engineer.stat().st_mode & st.S_ISGID: self.skipTest('setgid not supported on this filesystem')
+        shared = engineer / 'shared-map.clab.yaml'
+        req2 = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(shared)}
+        req2 = {**req2, 'digest': self.host.plan(req2)['digest']}
+        self.host.execute(req2, lambda _: None)
+        shared_side = shared.with_name(shared.name + '.annotations.json')
+        self.assertEqual(st.S_IMODE(shared.stat().st_mode), 0o664)
+        self.assertEqual(st.S_IMODE(shared_side.stat().st_mode), 0o664)
+
+    def test_create_refuses_a_symlink_map_file_at_plan_time(self):
+        target = self.root / 'sym-map.clab.yaml'
+        side = target.with_name(target.name + '.annotations.json')
+        real = self.root / 'elsewhere.json'; real.write_text('{}')
+        try: side.symlink_to(real)
+        except OSError: self.skipTest('Symlink creation requires Windows privilege')
+        layout = json.dumps({'nodeAnnotations': [{'id': 'r1'}]})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        with self.assertRaisesRegex(ValueError, 'Symlink'): self.host.plan(req)
+        self.assertFalse(target.exists(), 'a refused map file plans no write of the topology either')
+
+    def test_create_refuses_a_map_file_that_is_a_directory_or_too_large_before_writing_anything(self):
+        target = self.root / 'blocked-map.clab.yaml'
+        side = target.with_name(target.name + '.annotations.json')
+        side.mkdir()
+        layout = json.dumps({'nodeAnnotations': []})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        with self.assertRaisesRegex(ValueError, re.escape(side.name)): self.host.plan(req)
+        self.assertFalse(target.exists(), 'the topology is never written when the map file cannot be handled safely')
+        side.rmdir(); side.write_bytes(b'x' * (1024 * 1024 + 1))
+        with self.assertRaisesRegex(ValueError, re.escape(side.name)): self.host.plan(req)
+        self.assertFalse(target.exists())
+
+    def test_create_never_chmods_through_a_symlink_planted_between_the_link_and_publishing(self):
+        # The MUST-FIX defect is a chmod *by path*, after the file already exists at that name: an
+        # attacker who can act in the gap between the link syscall succeeding and the chmod syscall
+        # that used to follow it can swap the name for a symlink and have root re-permission whatever
+        # it points to. A symlink planted *before* the link is a different (and already-refused) case
+        # -- os.link/os.replace never overwrite an existing name -- so it would not exercise this path;
+        # this test patches the real syscall to perform the swap in that exact gap instead.
+        target = self.root / 'race-target.clab.yaml'
+        req = {**self.request('create', text=YAML.decode()), 'path': str(target)}
+        req['digest'] = self.host.plan(req)['digest']
+        real = self.root / 'root-owned.txt'; real.write_text('do not touch'); os.chmod(real, 0o600)
+        real_link = os.link
+        def race(src, dst, *a, **k):
+            real_link(src, dst, *a, **k)
+            target.unlink(); target.symlink_to(real)
+        with patch('app.host_operations.os.link', side_effect=race):
+            try: self.host.execute(req, lambda _: None)
+            except (ValueError, OSError, FileNotFoundError): pass
+        self.assertTrue(target.is_symlink(), 'the just-linked file was swapped for a symlink mid-operation, as planned')
+        if os.name == 'posix':
+            import stat as st
+            self.assertEqual(st.S_IMODE(os.stat(real).st_mode), 0o600, 'the symlink target keeps its own mode: never chmod-by-path')
+
+    def test_create_never_chmods_through_a_symlink_planted_between_the_map_files_replace_and_publishing(self):
+        target = self.root / 'sym-map-race.clab.yaml'
+        layout = json.dumps({'nodeAnnotations': [{'id': 'r1'}]})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        req['digest'] = self.host.plan(req)['digest']
+        real = self.root / 'root-owned2.txt'; real.write_text('do not touch'); os.chmod(real, 0o600)
+        side = target.with_name(target.name + '.annotations.json')
+        real_replace = os.replace
+        def race(src, dst, *a, **k):
+            real_replace(src, dst, *a, **k)
+            side.unlink(); side.symlink_to(real)
+        with patch('app.host_operations.os.replace', side_effect=race):
+            try: self.host.execute(req, lambda _: None)
+            except (ValueError, OSError, FileNotFoundError): pass
+        self.assertTrue(target.exists(), 'the topology itself is written normally; only the map file races')
+        self.assertTrue(side.is_symlink(), 'the just-written map file was swapped for a symlink mid-operation, as planned')
+        if os.name == 'posix':
+            import stat as st
+            self.assertEqual(st.S_IMODE(os.stat(real).st_mode), 0o600, 'the symlink target keeps its own mode: never chmod-by-path')
+
+    def test_create_refuses_a_symlink_map_file_planted_before_the_final_plan(self):
+        # A symlink already at the map-file name when execute() runs (not planted mid-syscall) is a
+        # different, simpler case: owned_bytes_any's O_NOFOLLOW open refuses it outright.
+        target = self.root / 'sym-map-preexisting.clab.yaml'
+        layout = json.dumps({'nodeAnnotations': [{'id': 'r1'}]})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        plan = self.host.plan(req); req['digest'] = plan['digest']
+        real = self.root / 'root-owned2b.txt'; real.write_text('do not touch'); os.chmod(real, 0o600)
+        side = target.with_name(target.name + '.annotations.json')
+        def raced_plan(_):
+            try: side.symlink_to(real)
+            except OSError: self.skipTest('Symlink creation requires Windows privilege')
+            return plan
+        with patch.object(self.host, 'plan', side_effect=raced_plan):
+            with self.assertRaises((ValueError, OSError)): self.host.execute(req, lambda _: None)
+        self.assertFalse(target.exists(), 'the topology is never written when the map file check fails')
+        self.assertTrue(side.is_symlink(), 'the symlink itself was never replaced')
+        if os.name == 'posix':
+            import stat as st
+            self.assertEqual(st.S_IMODE(os.stat(real).st_mode), 0o600, 'the symlink target keeps its own mode: never chmod-by-path')
+
+    def test_create_refuses_when_the_map_file_changed_after_the_review(self):
+        target = self.root / 'changed-map.clab.yaml'
+        side = target.with_name(target.name + '.annotations.json')
+        side.write_text('{"nodeAnnotations": [{"id": "old"}]}')
+        layout = json.dumps({'nodeAnnotations': [{'id': 'new'}]})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        plan = self.host.plan(req); req['digest'] = plan['digest']
+        def raced_plan(_):
+            side.write_text('{"nodeAnnotations": [{"id": "edited-after-review"}]}')
+            return plan
+        with patch.object(self.host, 'plan', side_effect=raced_plan):
+            with self.assertRaisesRegex(ValueError, 'changed after the review'): self.host.execute(req, lambda _: None)
+        self.assertFalse(target.exists(), 'nothing is written when the map file no longer matches what was reviewed')
+        self.assertEqual(side.read_text(), '{"nodeAnnotations": [{"id": "edited-after-review"}]}')
+
+    def test_create_map_file_digest_binds_its_reviewed_state(self):
+        target = self.root / 'digest-map.clab.yaml'
+        side = target.with_name(target.name + '.annotations.json')
+        side.write_text('{"nodeAnnotations": [{"id": "old"}]}')
+        layout = json.dumps({'nodeAnnotations': [{'id': 'new'}]})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        with_existing = self.host.plan(req)
+        side.unlink()
+        without_existing = self.host.plan(req)
+        self.assertNotEqual(with_existing['digest'], without_existing['digest'], 'the digest covers the existing map file state, like revise')
+        self.assertNotEqual(with_existing.get('annotations_hash', ''), without_existing.get('annotations_hash', ''))
+
+    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'FIFOs require POSIX')
+    def test_owned_bytes_any_refuses_a_fifo_without_blocking(self):
+        # O_NONBLOCK on the open: a FIFO with no writer must never hang the helper waiting for one.
+        folder = self.root / 'fifo-test'; folder.mkdir()
+        os.mkfifo(folder / 'pipe')
+        folder_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            with self.assertRaisesRegex(ValueError, 'cannot be replaced safely'):
+                self.host.owned_bytes_any(folder_fd, 'pipe')
+        finally:
+            os.close(folder_fd)
+
+    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'FIFOs require POSIX')
+    def test_create_plan_refuses_a_fifo_map_file_without_blocking(self):
+        target = self.root / 'fifo-map.clab.yaml'
+        side = target.with_name(target.name + '.annotations.json')
+        os.mkfifo(side)
+        layout = json.dumps({'nodeAnnotations': []})
+        req = {**self.request('create', text=YAML.decode(), annotations=layout), 'path': str(target)}
+        with self.assertRaisesRegex(ValueError, re.escape(side.name)): self.host.plan(req)
+        self.assertFalse(target.exists())
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX ownership checks')
+    def test_history_backup_creates_a_private_directory_and_refuses_one_it_does_not_own(self):
+        import stat as st
+        folder = self.root / 'hist-owner'; folder.mkdir()
+        folder_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            recovered = self.host.history_backup(folder_fd, folder, 'demo.txt', b'secret')
+            self.assertEqual(Path(recovered).read_bytes(), b'secret')
+            self.assertEqual(st.S_IMODE(Path(recovered).stat().st_mode), 0o600)
+            self.assertEqual(st.S_IMODE((folder / '.clab-manager-history').stat().st_mode), 0o700)
+            # A recovery folder this process does not own (an attacker pre-created it in a shared
+            # engineer folder) is refused outright, never written into.
+            with patch('app.host_operations.os.geteuid', return_value=os.geteuid() + 1):
+                with self.assertRaisesRegex(ValueError, 'not safe to use'):
+                    self.host.history_backup(folder_fd, folder, 'demo2.txt', b'other')
+            self.assertEqual(sorted(p.name for p in (folder / '.clab-manager-history').iterdir()), [Path(recovered).name])
+        finally:
+            os.close(folder_fd)
 
     # --- lab builder: publish a new lab folder, revise a lab that is not deployed -------------------
     BUILT = b'name: built\ntopology:\n  nodes:\n    r1:\n      kind: linux\n      image: alpine:latest\n'
@@ -354,6 +573,17 @@ class OperationAPITests(unittest.TestCase):
             job=self.confirm(ok.json()['token']).json();self.assertEqual((job['action'],job['path']),('publish','/srv/labs/built/built.clab.yml'))
             self.assertNotIn('kind: linux',json.dumps(self.store.state['operations']));submit.assert_called_once()
             self.assertEqual(submit.call_args.args[3]['options']['annotations'],layout)
+
+    def test_create_carries_an_uploaded_map_file_through_the_manager_route_untouched(self):
+        layout=json.dumps({'nodeAnnotations':[{'id':'r1'}]})
+        with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
+            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='create',lab_id='',
+                path='/srv/containerlab-node-manager/projects/new.clab.yaml',
+                options={'text':'name: new\ntopology:\n  nodes:\n    r1: {kind: linux}\n','annotations':layout}))
+            self.assertEqual(response.status_code,200,response.text)
+            self.confirm(response.json()['token'])
+            submit.assert_called_once();self.assertEqual(submit.call_args.args[3]['options']['annotations'],layout)
+            self.assertEqual(submit.call_args.args[3]['action'],'create')
 
     def test_known_images_come_from_the_labs_already_registered(self):
         with self.fixture():

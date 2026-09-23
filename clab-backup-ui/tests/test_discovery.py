@@ -257,3 +257,70 @@ class DiscoveryParserTests(unittest.TestCase):
         PinnedHostKey(policy.fingerprint).missing_host_key(client,'localhost',first)
         with self.assertRaisesRegex(ValueError,'host key changed'):
             PinnedHostKey(policy.fingerprint).missing_host_key(client,'localhost',second)
+
+
+class HostBootstrapDiscoveryTests(unittest.TestCase):
+    """A connection typed in the dialog behaves as before the VM setup seed existed."""
+    setUp = DiscoveryTests.setUp
+    tearDown = DiscoveryTests.tearDown
+    host = DiscoveryTests.host
+    poll = DiscoveryTests.poll
+
+    def test_typed_connection_reports_no_setup_prefill_and_still_connects(self):
+        self.assertIsNone(self.service.public()['host'])
+        public=self.host()['host']
+        self.assertEqual((public['bootstrap_pending'],public['bootstrap_at'],public['bootstrap_fingerprint'],public['password_saved']),
+                         (False,None,None,True))
+        self.assertNotIn('password',public)
+        result=self.poll()
+        self.assertTrue(result['connected'])
+        self.assertEqual(self.store.state['host']['fingerprint'],'SHA256:fixture')
+        self.assertNotIn('bootstrap_verify',self.store.state['host'])
+
+    def test_without_a_seed_the_host_key_rules_are_unchanged(self):
+        from app.discovery import host_key_policy
+        self.assertEqual(host_key_policy({}).expected,'')
+        self.assertFalse(host_key_policy({'fingerprint':'SHA256:pinned'}).recorded_by_setup)
+        self.host();self.poll()
+        self.host(password='');self.assertEqual(self.store.state['host']['fingerprint'],'SHA256:fixture')
+        self.host(password='',reset_fingerprint=True);self.assertEqual(self.store.state['host']['fingerprint'],'')
+        self.assertEqual(host_key_policy(self.store.state['host']).expected,'')
+
+
+class ParsedDefinitionImageTests(unittest.TestCase):
+    """parse_definition carries each node's image, the source image-based logins key on."""
+
+    def test_image_comes_from_the_node_its_kind_or_the_topology_defaults(self):
+        text=(b'name: mixed\ntopology:\n'
+              b'  defaults:\n    image: registry.example/default:1\n'
+              b'  kinds:\n    linux:\n      image: registry.example/kind:1\n'
+              b'  nodes:\n'
+              b'    own:\n      kind: linux\n      image: registry.example/own:1\n'
+              b'    fromkind:\n      kind: linux\n'
+              b'    fromdefaults:\n      kind: cisco_xrv9k\n'
+              b'    noimage:\n      kind: cisco_xrv9k\n      image: ""\n')
+        # "image: ''" is falsy: parse_definition treats it the same as an absent key.
+        nodes={n['short_name']:n for n in parse_definition(text)['nodes']}
+        self.assertEqual(nodes['own']['image'],'registry.example/own:1')
+        self.assertEqual(nodes['fromkind']['image'],'registry.example/kind:1')
+        self.assertEqual(nodes['fromdefaults']['image'],'registry.example/default:1')
+        # An explicit empty image on the node itself overrides the topology default,
+        # the same way containerlab's own settings merge behaves for any other field.
+        self.assertEqual(nodes['noimage']['image'],'')
+
+    def test_a_node_without_any_image_setting_gets_an_empty_string(self):
+        nodes={n['short_name']:n for n in parse_definition(YAML)['nodes']}
+        self.assertEqual(nodes['r1']['image'],'')
+        self.assertEqual(nodes['r2']['image'],'')
+
+    def test_a_non_string_or_template_image_is_rejected_or_dropped(self):
+        # A numeric image setting is not a valid reference; parse_definition treats
+        # anything that is not a non-empty string as no image, rather than failing
+        # the whole upload over an unrelated field.
+        text=YAML.replace(b'    r1: {}\n',b'    r1: {image: 4}\n')
+        nodes={n['short_name']:n for n in parse_definition(text)['nodes']}
+        self.assertEqual(nodes['r1']['image'],'')
+        # A template or oversized image string is dropped the same way: an odd image
+        # value never blocks the whole topology (only the login default is lost).
+        nodes={n['short_name']:n for n in parse_definition(YAML.replace(b'    r1: {}\n',b'    r1: {image: "{{ img }}"}\n'))['nodes']}
+        self.assertEqual(nodes['r1']['image'],'')

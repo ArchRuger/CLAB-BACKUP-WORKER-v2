@@ -98,7 +98,7 @@ def topology(r):
       const bg = map.querySelector('.topology-bg');
       return {bottom: rect.bottom, inner: innerHeight, states, dots: map.querySelectorAll('.device-state-dot').length,
               glyphs: map.querySelectorAll('.device-state-glyph').length, bgFill: bg && bg.getAttribute('fill'),
-              status: document.getElementById('map-status').textContent, notes: document.getElementById('map-notes').hidden,
+              status: document.getElementById('map-status').textContent, notes: !document.getElementById('map-notes'),
               hint: document.querySelector('.topology-hint').textContent, banner: document.getElementById('lab-banner').hidden,
               labels: [...map.querySelectorAll('[data-map-node]')].map(g => g.getAttribute('aria-label')).slice(0, 20),
               title: document.getElementById('title').textContent, pill: document.getElementById('lab-state').textContent, ready: document.getElementById('lab-ready').textContent};
@@ -477,7 +477,7 @@ def pages(r):
     r.shot('57-topology-browser')
     p.locator('#op-file-tree .op-tree-file').first.click(); p.wait_for_selector('#op-editor[open]', timeout=15000); p.wait_for_timeout(300)
     editor = r.js('() => [...document.querySelectorAll("#op-editor .actions button")].map(b => b.textContent)')
-    r.check('topology file dialog: Preview topology / Edit visually / Add to My labs / Deploy lab', editor == ['Preview topology', 'Edit visually…', 'Add to My labs without starting', 'Deploy lab'], editor)
+    r.check('topology file dialog: Preview topology / Open in Lab Builder / Add to My labs / Deploy lab', editor == ['Preview topology', 'Open in Lab Builder…', 'Add to My labs without starting', 'Deploy lab'], editor)
     p.click('#op-validate'); p.wait_for_selector('#op-map-preview[open]', timeout=15000); p.wait_for_timeout(300)
     r.shot('58-topology-preview')
     p.click('#op-map-preview [data-op-close]'); p.click('#op-editor [data-op-close]'); p.click('#op-browser [data-op-close]')

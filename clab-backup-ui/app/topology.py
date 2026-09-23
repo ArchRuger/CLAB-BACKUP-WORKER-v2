@@ -44,15 +44,95 @@ def bounded(value, default, minimum, maximum):
     return min(maximum,max(minimum,number(value,default)))
 
 
+# containerlab wires each supported kind's own port names onto sequential "ethN" container
+# veths in a fixed, documented order — never a "+1" guess. `offset` is how many veths the
+# image reserves for itself before the first data port (so container index = N + offset);
+# `prefix` is the NOS-style name that port N is drawn with. Sources, each kind's own manual
+# page on containerlab.dev:
+#  - juniper_vjunosswitch / vjunosevolved / vjunosrouter: https://containerlab.dev/manual/kinds/vr-vjunosswitch/
+#    (and the vjunosevolved/vjunosrouter pages next to it) — the first data interface is eth1 == ge-0/0/0.
+#  - juniper_cjunosevolved: https://containerlab.dev/manual/kinds/cjunosevolved/ — eth1-eth3 are the
+#    image's own re0-mgmt/fabric/internal interfaces; the first data port et-0/0/0 is eth4 (confirmed
+#    against a live `restore-square` deploy log and matches telemetry_names.nos_interface).
+#  - juniper_vqfx: https://containerlab.dev/manual/kinds/vr-vqfx/ — the first data interface is
+#    eth1 == xe-0/0/0.
+#  - cisco_xrv9k: https://containerlab.dev/manual/kinds/vr-xrv9k/ — the first data interface is
+#    eth1 == Gi0/0/0/0 (also confirmed live and by telemetry_names.nos_interface).
+#  - arista_ceos: https://containerlab.dev/manual/kinds/ceos/ — EthernetN is eth(N) exactly.
+#  - nokia_srlinux (see NOKIA_PORT below): https://containerlab.dev/manual/kinds/srl/ — containerlab
+#    keeps the NOS's own `e1-N` veth name; there is no `ethN` form to reverse.
+PORT_RULES={
+    'juniper_vjunosswitch':('ge-0/0/',re.compile(r'(?i)^ge-0/0/(\d+)$'),1),
+    'juniper_vjunosevolved':('ge-0/0/',re.compile(r'(?i)^ge-0/0/(\d+)$'),1),
+    'juniper_vjunosrouter':('ge-0/0/',re.compile(r'(?i)^ge-0/0/(\d+)$'),1),
+    'juniper_cjunosevolved':('et-0/0/',re.compile(r'(?i)^et-0/0/(\d+)$'),4),
+    'juniper_vqfx':('xe-0/0/',re.compile(r'(?i)^xe-0/0/(\d+)$'),1),
+    'cisco_xrv9k':('Gi0/0/0/',re.compile(r'(?i)^(?:gi|gigabitethernet)0/0/0/(\d+)$'),1),
+    'vr-xrv9k':('Gi0/0/0/',re.compile(r'(?i)^(?:gi|gigabitethernet)0/0/0/(\d+)$'),1),
+    'arista_ceos':('Ethernet',re.compile(r'(?i)^(?:ethernet|et)(\d+)$'),0),
+}
+# A name already shaped like the container's own veth (`eth3`, or the shorter `e3`) passes
+# through unchanged for any kind, including `linux` and kinds with no rule above.
+CONTAINER_NAME=re.compile(r'(?i)^e(?:th)?(\d+)$')
+# nokia_srlinux keeps its own `e1-N` veth name rather than a generic ethN; `ethernet-1/N` is the
+# same port's NOS-displayed alias. https://containerlab.dev/manual/kinds/srl/
+NOKIA_PORT_LONG=re.compile(r'(?i)^ethernet-1/(\d+)$')
+NOKIA_PORT_SHORT=re.compile(r'^e1-(\d+)$')
+
+
+def container_interface(kind, name):
+    """The Linux veth inside the container that carries a NOS-named data port.
+
+    Returns '' when the kind or the port's shape is not recognised, so a stale or invented
+    mapping is never offered; the caller still confirms the result against the runtime
+    interface list before preselecting it. A breakout child or sub-interface (`ge-0/0/1:0`,
+    `et-0/0/0.100`) does not name a single veth and also resolves to ''.
+    """
+    if not isinstance(name,str): return ''
+    value=name.strip()
+    if not value: return ''
+    # Already the container's own veth name (any kind, including `linux` and an unknown kind).
+    match=CONTAINER_NAME.fullmatch(value)
+    if match: return 'eth'+match[1]
+    if not isinstance(kind,str): return ''
+    if kind=='nokia_srlinux':
+        match=NOKIA_PORT_LONG.fullmatch(value) or NOKIA_PORT_SHORT.fullmatch(value)
+        return 'e1-'+match[1] if match else ''
+    _,pattern,offset=PORT_RULES.get(kind,(None,None,None))
+    if not pattern: return ''
+    match=pattern.fullmatch(value)
+    return 'eth'+str(int(match[1])+offset) if match else ''
+
+
+def displayed_interface(kind, name):
+    """The label a container veth shows on the map: the NOS's own port name for that kind's
+    data ports, or the veth name unchanged when there is no rule or the veth belongs to the
+    image itself (reserved below the rule's offset, e.g. cJunosEvolved's own eth1-eth3)."""
+    if not isinstance(name,str): return ''
+    if not isinstance(kind,str): return name
+    if kind=='nokia_srlinux': return name
+    match=re.fullmatch(r'(?i)eth(\d+)',name.strip())
+    if not match: return name
+    index=int(match[1])
+    prefix,_,offset=PORT_RULES.get(kind,(None,None,None))
+    if not prefix or index<offset: return name
+    return prefix+str(index-offset)
+
+
 def exported_interface(interface, kind):
     """Reverse containerlab's XRv9k data-port mapping, not allocation patterns.
 
-    XRv9k reserves eth1 for management; eth2 is Gi0/0/0/1. Native YAML
-    interface names and other kinds must remain unchanged (e.g. Junos eth4).
+    Only XRv9k's own veth-to-port order is reversed here (eth1 == Gi0/0/0/0, from the same
+    `PORT_RULES` table `container_interface` uses). This project's saved topology YAMLs
+    already write Junos and EOS links with containerlab's own `ethN` names (the fixture
+    regression test in test_topology.py pins that), so no other kind is reversed here; native
+    YAML interface names must remain unchanged (e.g. Junos eth4).
     """
+    if kind not in ('cisco_xrv9k','vr-xrv9k'): return interface
+    prefix,_,offset=PORT_RULES[kind]
     match=re.fullmatch(r'eth(\d+)',interface)
-    if kind in ('cisco_xrv9k','vr-xrv9k') and match and int(match[1])>=2:
-        return 'Gi0/0/0/'+str(int(match[1])-1)
+    if match and int(match[1])>=offset:
+        return prefix+str(int(match[1])-offset)
     return interface
 
 
@@ -197,11 +277,19 @@ def bind_drawing(lab):
         prefix='clab-'+lab['name']+'-'
         for alias in {n['name'],n.get('short_name'),n.get('definition_node'),n['name'].removeprefix(prefix)}-{None,''}:
             aliases.setdefault(alias,set()).add(n['name'])
+    platforms={n['name']:n.get('platform','') for n in lab['nodes']}
     from .layout import revision
     result={**drawing,'nodes':[],'revision':revision(drawing)}
+    bound={}
     for n in drawing['nodes']:
         matches=aliases.get(n['alias'],set())
-        result['nodes'].append({**n,'inventory_name':next(iter(matches)) if len(matches)==1 else None})
+        inventory_name=next(iter(matches)) if len(matches)==1 else None
+        result['nodes'].append({**n,'inventory_name':inventory_name})
+        bound[n['id']]=inventory_name
+    # The container veth Wireshark can capture on for this drawn port, or '' when the device's
+    # kind is unknown or the port's own drawn name is not one container_interface recognises;
+    # the browser still confirms it against the live interface list before offering it.
+    result['links']=[[{**ep,'capture_interface':container_interface(platforms.get(bound.get(ep['node']),''),ep['interface'])} for ep in pair] for pair in drawing['links']]
     return result
 
 

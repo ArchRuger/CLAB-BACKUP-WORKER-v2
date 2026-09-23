@@ -114,6 +114,10 @@
   /* vertical chrome above the topology stage: topbar 48 + content pad 16 + lab header 68 + 14
      + tabs 41 + 12 + section heading ≈ 50 + hint ≈ 28 + content pad 32 (banner hidden) */
   --stage-offset: 300px;
+  /* the topology hint's own box below the stage (12px/1.5 line ≈ 18px + 8px top margin): added to
+     --stage-offset so .topology-layout bounds stage + hint together, and the device rail beside it
+     gets the same total height to scroll within. */
+  --topology-hint-h: 28px;
 
   font-family: var(--font);
   color: var(--text);
@@ -850,6 +854,15 @@ footer {
 .banner.danger { border-left-color: var(--danger); background: var(--danger-soft); }
 .banner.ok { border-left-color: var(--ok); background: var(--ok-soft); }
 .banner-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+/* the generic notice close/collapse control (setBanner, app.js): always the last thing in the banner,
+   never inside .banner-actions so it survives regardless of which action buttons that spec shows */
+.notice-close { flex-shrink: 0; margin-left: 4px; min-width: 28px; min-height: 28px; font-size: 18px; }
+/* a running-operation notice collapses to a one-line pill instead of disappearing: the detail and every
+   action but the toggle itself hide, and the headline is clipped rather than wrapping the row taller */
+.banner.banner-collapsed { flex-wrap: nowrap; min-height: 0; padding: 6px 14px; }
+.banner.banner-collapsed > div { overflow: hidden; }
+.banner.banner-collapsed p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banner.banner-collapsed details, .banner.banner-collapsed .banner-actions { display: none; }
 
 /* dark surfaces (only #toast and the capture screen stay dark in-page): re-scope the tokens
    that light-surface rules read, so any .caption/.muted/.timestamp and any focus ring inside
@@ -1302,8 +1315,14 @@ tr:last-child td { border-bottom: 0; }
 /* the device open in the drawer */
 .device-row[aria-current="true"] { box-shadow: inset 3px 0 0 var(--accent); border-color: var(--line-strong); }
 
-.device-rail { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.device-rail h2, .device-rail h3 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
+/* Desktop: the rail matches the stage+hint column's height (align-self: stretch, the grid row is sized
+   by .topology-layout below) and scrolls on its own, so 10+ devices never push the map off screen or
+   grow the whole page. The heading stays put (position: sticky, its own scroll container is the rail)
+   while the list scrolls under it; tabindex makes the rail itself reachable for arrow/Page-key scrolling.
+   overflow-y is the only overflow set here, so scroll chaining to the page at the rail's ends stays the
+   browser default (no overscroll-behavior: contain) instead of trapping the wheel/keys. */
+.device-rail { display: flex; flex-direction: column; gap: 6px; min-width: 0; align-self: stretch; min-height: 0; overflow-y: auto; }
+.device-rail h2, .device-rail h3 { position: sticky; top: 0; z-index: 1; background: var(--bg); font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 0 4px; padding: 2px 0; }
 /* rail cards are narrow: the name and the state pill share the first line and the network OS badge gets a
    line of its own, so a long platform label (Junos (vJunos-switch)) never runs under the pill */
 .device-rail .device-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name state" "platform platform" "reason reason" "actions actions"; padding: 10px 12px; gap: 0 10px; }
@@ -1316,7 +1335,15 @@ tr:last-child td { border-bottom: 0; }
 .device-rail .empty-state { padding: 24px 16px; }
 .device-rail .caption { margin-top: 8px; }
 
-.topology-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+/* Desktop: bounded to the same viewport math as .topology-stage (--stage-offset), plus the hint's own
+   box below it (--topology-hint-h), so the grid row — and the device rail stretched to it above — never
+   exceeds the space really available at 1366×768 and up. align-items stays "start" for the left column
+   (the map keeps its own height from .topology-stage); only the rail is told to stretch (see above). */
+.topology-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start;
+  height: calc(100dvh - var(--stage-offset) + var(--topology-hint-h));
+  min-height: calc(420px + var(--topology-hint-h));
+  max-height: calc(900px + var(--topology-hint-h));
+}
 
 .node-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 205px; }
 .node-actions button {
@@ -1554,10 +1581,6 @@ dialog.drawer, dialog.node-details {
   background: var(--surface);
 }
 .map-skeleton { width: min(60%, 520px); height: 40%; min-height: 120px; border-radius: var(--radius-lg); }
-/* caption notes (wiring caveat, skipped links, schema warnings) live under the hint, behind Details */
-.map-notes { margin: 6px 0 0; }
-.map-notes summary { cursor: pointer; }
-.map-notes p { margin: 4px 0 0; }
 /* the editor and the deploy preview draw layout, not live state */
 .op-layout-map .device-state-dot, .op-layout-map .device-state-glyph { display: none; }
 /* Note: the absolutely positioned toolbar is a stacking context inside an overflow:hidden stage,
@@ -1699,7 +1722,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 }
 /* the layout grid and its map column become flex columns; align-items must stretch (the grid rule says
    start) or the stage shrinks to the width of its toolbar */
-.map-expanded .topology-layout, .map-expanded .topology-layout > div:first-child { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; align-items: stretch; }
+.map-expanded .topology-layout, .map-expanded .topology-layout > div:first-child { display: flex; flex-direction: column; flex: 1; height: auto; max-height: none; min-height: 0; min-width: 0; align-items: stretch; }
 .map-expanded .topology-stage { flex: 1; height: auto; min-height: 0; }
 .map-expanded #topology-map { min-height: 100px; height: 100%; }
 .map-expanded .device-rail { display: none; }
@@ -2262,12 +2285,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    28. Breakpoints
    -------------------------------------------------------------------------- */
 
-/* ≤1280: the device rail stacks under the map */
+/* ≤1280: the device rail stacks under the map and scrolls with the page again — the bounded, independently
+   scrolling rail is a desktop-width layout only; below it the single column already worked before. */
 @media (max-width: 1280px) {
-  .topology-layout { grid-template-columns: minmax(0, 1fr); }
+  .topology-layout { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; max-height: none; }
+  .device-rail { align-self: auto; overflow-y: visible; max-height: none; gap: 8px; }
+  .device-rail h2, .device-rail h3 { position: static; }
   .device-rail .device-row { grid-template-columns: minmax(96px, 1.4fr) minmax(0, 1fr) auto; }
   .device-rail .device-row .node-actions { grid-column: auto; justify-content: flex-end; }
-  .device-rail { gap: 8px; }
 }
 
 /* ≤1100: tool grid one column, lab grid two columns, denser tables */
@@ -2408,3 +2433,79 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .debug-page details summary { cursor: pointer; }
 .git-version-when { color: var(--muted); font-size: 12px; }
 .restore-job-details { margin-top: 6px; }
+
+/* ---- Real line diffs (diff-view.js): the review before an upload, "Compared with…" ---- */
+.diff-file { border: 1px solid var(--line); border-radius: var(--radius); margin: 0 0 8px; background: var(--surface); overflow: hidden; }
+.diff-file > summary { padding: 10px 14px; cursor: pointer; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; color: var(--text); }
+.diff-file > summary .badge { margin-left: 8px; font-weight: 500; }
+.diff-file > .diff-body { border-top: 1px solid var(--line); padding: 8px 0; }
+.diff-summary, .diff-note { margin: 0 14px 8px; font-size: 12px; color: var(--muted); }
+.diff-empty { margin: 0; padding: 12px 14px; color: var(--muted); }
+.diff-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-family: var(--mono, monospace); }
+.diff-col-gutter { width: 44px; }
+.diff-col-marker { width: 18px; }
+.diff-gutter { text-align: right; padding: 1px 6px; color: var(--muted); user-select: none; white-space: nowrap; }
+.diff-marker { text-align: center; font-weight: 700; user-select: none; }
+.diff-text { padding: 1px 8px 1px 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diff-hunk-head td { padding: 4px 8px; background: var(--surface-2); color: var(--muted); font-weight: 600; }
+tr.diff-add { background: var(--ok-soft); }
+tr.diff-add .diff-marker { color: var(--ok-strong); }
+tr.diff-del { background: var(--danger-soft); }
+tr.diff-del .diff-marker { color: var(--danger-strong); }
+tr.diff-ctx .diff-marker { color: var(--muted); }
+@media (max-width: 560px) {
+  .diff-col-gutter { width: 26px; }
+  .diff-gutter { padding: 1px 3px; font-size: 11px; }
+  .diff-table { font-size: 11.5px; }
+}
+
+/* ---- Replace running configuration: per-device stages and the review diff (restore.js) ---- */
+.restore-progress { margin: 8px 0; font-weight: 600; color: var(--ink); }
+.restore-stage-list { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 6px 0 4px; padding: 0; }
+.restore-stage { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0 4px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 12px; line-height: 1.4; }
+.restore-stage-name { font-weight: 600; }
+.restore-stage-time { font-family: var(--mono); font-size: 11px; }
+.restore-stage-glyph { display: inline-block; width: 12px; text-align: center; font-weight: 700; }
+.restore-stage--waiting .restore-stage-glyph::before, .restore-stage--unreached .restore-stage-glyph::before { content: "\25CB"; }
+.restore-stage--unreached { opacity: .75; }
+.restore-stage--done, .restore-stage--outcome-good { border-color: var(--ok); background: var(--ok-soft); color: var(--ok-strong); }
+.restore-stage--done .restore-stage-glyph::before, .restore-stage--outcome-good .restore-stage-glyph::before { content: "\2713"; }
+.restore-stage--current { border-color: var(--accent); color: var(--ink); background: var(--surface-2); }
+.restore-stage--current .restore-stage-glyph { width: 10px; height: 10px; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: restore-stage-spin 1s linear infinite; align-self: center; }
+.restore-stage--stopped, .restore-stage--outcome-warn { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-strong); }
+.restore-stage--stopped .restore-stage-glyph::before, .restore-stage--outcome-warn .restore-stage-glyph::before { content: "!"; }
+.restore-stage--outcome-bad { border-color: var(--danger); background: var(--danger-soft); color: var(--danger-strong); }
+.restore-stage--outcome-bad .restore-stage-glyph::before { content: "\2715"; }
+.restore-stage--outcome-skip { border-color: var(--line); background: var(--surface-2); color: var(--muted); }
+.restore-stage--outcome-skip .restore-stage-glyph::before { content: "\2013"; }
+@keyframes restore-stage-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .restore-stage--current .restore-stage-glyph { animation: none; border-right-color: var(--accent); } }
+.restore-diff { margin: 2px 0 8px 26px; }
+.restore-diff > summary { cursor: pointer; font-size: 13px; }
+.restore-diff-none { margin: 2px 0 8px 26px; }
+.restore-diff-text { max-height: 320px; overflow: auto; margin: 6px 0 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-size: 12px; line-height: 1.45; white-space: pre; }
+.restore-diff-head { color: var(--muted); }
+.restore-diff-add { color: var(--ok-strong); }
+.restore-diff-del { color: var(--danger-strong); }
+@media (max-width: 600px) { .restore-diff, .restore-diff-none { margin-left: 0; } .restore-stage-list { flex-direction: column; } }
+
+/* ---- "Test logins": a lab-wide SSH login refresh beside the Devices heading, in the topology
+   rail's sticky h2 and the Devices tab heading (topology.js, node_services.py ssh-check-all). ---- */
+.rail-tools-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rail-tools-heading .button { margin: 0; flex-shrink: 0; }
+
+/* ---- Topology preview dialog (opMapPreview, operations.js): about as big as the viewport, not the
+   dialog default, so a real map is readable without a separate zoom step. ---- */
+.dialog-viewport {
+  width: min(96vw, 1800px);
+  height: min(92vh, 1200px);
+  max-width: none;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+}
+.dialog-viewport .dialog-head { flex: 0 0 auto; }
+.dialog-viewport .op-layout-map { flex: 1 1 auto; min-height: 0; width: 100%; height: 100%; }
+@media (max-width: 600px) {
+  .dialog-viewport { width: 100vw; height: 100vh; border-radius: 0; margin: 0; }
+}

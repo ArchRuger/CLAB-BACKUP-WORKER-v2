@@ -152,3 +152,119 @@ test('a job target row shows the device-type label, the new status help lines an
  const unknownKind=c.restoreTargetRow({name:'r1',status:'verified',platform:'linux'});
  assert.doesNotMatch(unknownKind,/<span class="caption">/,'an unknown kind shows no device-type label');
 });
+// --- per-device stages (the progress dialog) and the review diff ---------------------------------------
+const stepStates=(c,t,now=1000)=>JSON.parse(JSON.stringify(c.restoreStageSteps(t,now)));
+test('a queued device waits: nothing is highlighted and nothing claims a backup has started',()=>{
+ const c=ctx(),steps=stepStates(c,{name:'r1',status:'pending',stage:'queued',timeline:{queued:990}});
+ assert.equal(steps.length,7);
+ assert.deepEqual(steps.map(s=>s.label),['Queued','Backup','Validate','Replace (timed recovery armed)','Fresh connection & read-back','Confirm','Done']);
+ assert.ok(steps.every(s=>s.state==='waiting'&&s.text==='Waiting'),'queued is waiting, not a spinner');
+ const row=c.restoreTargetRow({name:'r1',status:'pending',stage:'queued',timeline:{queued:990}});
+ assert.doesNotMatch(row,/Backing up/);assert.doesNotMatch(row,/restore-stage--current/);
+});
+test('a running device shows finished steps done, its current step with words and elapsed time, and later steps waiting',()=>{
+ const c=ctx();
+ let steps=stepStates(c,{name:'r1',status:'backing_up',stage:'backing_up',timeline:{queued:980,backing_up:990}});
+ assert.deepEqual(steps.slice(0,3).map(s=>s.state),['done','current','waiting']);
+ assert.equal(steps[1].text,'Backing up the current configuration');assert.equal(steps[1].elapsed,'10 s');
+ steps=stepStates(c,{name:'r1',status:'confirming',stage:'verifying',attempts:3,timeline:{queued:900,backing_up:910,backed_up:922,connecting:930,applying:931,armed:950,verifying:951}},1100);
+ assert.deepEqual(steps.map(s=>s.state),['done','done','done','done','current','waiting','waiting']);
+ assert.equal(steps[1].elapsed,'12 s');assert.equal(steps[2].elapsed,'20 s');assert.equal(steps[3].text,'Armed');
+ assert.equal(steps[4].text,'Reconnecting and reading back (attempt 3)');assert.equal(steps[4].elapsed,'2 min 29 s');
+ assert.ok(steps.every(s=>s.text),'every step says in words where it is; colour is never the only signal');
+});
+test('green only once the device is replaced: confirming and checking are not an outcome yet',()=>{
+ const c=ctx(),base={queued:900,backing_up:901,backed_up:902,connecting:903,applying:904,armed:905,verifying:906,confirming:907};
+ for(const t of [{status:'confirming',stage:'armed'},{status:'confirming',stage:'confirming'},{status:'applied',stage:'checking'}]){
+  const steps=stepStates(c,{name:'r',timeline:{...base,settled:908,checking:909},...t});
+  assert.ok(!steps.some(s=>s.state.startsWith('outcome-')),t.stage);
+ }
+ const checking=stepStates(c,{name:'r',status:'applied',stage:'checking',timeline:{...base,replaced:908,settled:908,checking:909}},915);
+ assert.equal(checking[6].state,'current');assert.equal(checking[6].text,'Checking with a fresh backup');
+ const done=stepStates(c,{name:'r',status:'verified',stage:'replaced',timeline:{...base,replaced:908,settled:908,checking:909,checked:930}});
+ assert.deepEqual(done.map(s=>s.state),['done','done','done','done','done','done','outcome-good']);
+ assert.equal(done[6].text,'Replaced and verified');assert.equal(done[6].elapsed,'total 30 s');
+});
+test('each final outcome is distinct in words and colour, and a stopped device shows where it stopped',()=>{
+ const c=ctx(),outcome=t=>stepStates(c,{name:'r',...t})[6];
+ const all={
+  matched:outcome({status:'verified',stage:'matched',no_op:true,timeline:{queued:1,settled:2}}),
+  skipped:outcome({status:'ineligible',stage:'skipped',timeline:{queued:1,settled:2}}),
+  failed:outcome({status:'failed',stage:'failed',timeline:{queued:1,backing_up:2,backed_up:3,connecting:4,settled:5}}),
+  rolled:outcome({status:'rolled_back',stage:'rolled_back',timeline:{queued:1,armed:3,verifying:4,settled:5}}),
+  uncertain:outcome({status:'uncertain',stage:'uncertain',timeline:{queued:1,settled:2}}),
+  verified:outcome({status:'verified',stage:'replaced',timeline:{queued:1,settled:2}})};
+ assert.equal(all.matched.state,'outcome-good');assert.match(all.matched.text,/Already matched — no change needed/);
+ assert.equal(all.skipped.state,'outcome-skip');assert.equal(all.skipped.text,'Skipped');
+ assert.equal(all.failed.state,'outcome-bad');assert.match(all.failed.text,/not changed/);
+ assert.equal(all.rolled.state,'outcome-warn');assert.match(all.rolled.text,/Rolled back — previous configuration read back/);
+ assert.equal(all.uncertain.state,'outcome-warn');assert.match(all.uncertain.text,/Uncertain/);
+ assert.equal(new Set(Object.values(all).map(o=>o.text)).size,6,'six different sentences');
+ const failed=stepStates(c,{name:'r',status:'failed',stage:'failed',timeline:{queued:1,backing_up:2,backed_up:3,connecting:4,settled:5}});
+ assert.deepEqual(failed.map(s=>s.state),['done','done','stopped','unreached','unreached','unreached','outcome-bad']);
+ const skipped=stepStates(c,{name:'r',status:'ineligible',stage:'skipped',timeline:{queued:1,settled:2}});
+ assert.deepEqual(skipped.map(s=>s.state),['done','unreached','unreached','unreached','unreached','unreached','outcome-skip']);
+ const noOp=stepStates(c,{name:'r',status:'verified',stage:'matched',no_op:true,timeline:{queued:1,armed:3,settled:5}});
+ assert.equal(noOp[3].text,'Armed — no change needed');
+});
+test('the device rows and the progress line are rebuilt from the job document alone (reopen, reload, any settle order)',()=>{
+ const job={id:'j',status:'applying',progress:{settled:2,total:3},targets:[
+  {name:'c',status:'verified',stage:'replaced',timeline:{queued:1,connecting:5,armed:6,verifying:7,confirming:8,replaced:9,settled:9,checked:12}},
+  {name:'a',status:'confirming',stage:'verifying',attempts:1,timeline:{queued:1,connecting:5,armed:6,verifying:7}},
+  {name:'b',status:'failed',stage:'failed',timeline:{queued:1,connecting:5,settled:6}}]};
+ const render=()=>{const c=ctx();const doc=JSON.parse(JSON.stringify(job));return doc.targets.map(t=>c.restoreTargetRow(t,c.restoreJobNow(doc))).join('')+c.restoreProgressLine(doc);};
+ const first=render(),second=render();
+ assert.equal(first,second,'a fresh page renders the same rows from the same document');
+ assert.match(first,/2 of 3 devices settled/);
+ assert.match(first,/restore-stage--outcome-good/);assert.match(first,/restore-stage--outcome-bad/);assert.match(first,/restore-stage--current/);
+ assert.equal(ctx().restoreProgressLine({progress:{settled:0,total:1}}),'<p class="restore-progress" role="status">0 of 1 device settled</p>');
+ assert.equal(ctx().restoreProgressLine({}),'','a job stored before progress existed shows no line');
+ assert.doesNotMatch(ctx().restoreTargetRow({name:'old',status:'verified'}),/restore-stage-list/,'a job stored before stages existed keeps its plain row');
+ assert.doesNotMatch(ctx().restoreTargetRow({name:'<x>',short_name:'<x>',status:'pending',stage:'queued',timeline:{queued:1}}),/<x>/,'escaped');
+});
+test('the review offers each differing device its saved → running now differences before anything is submitted',()=>{
+ const c=ctx(),diff={identical:false,truncated:false,added:1,removed:1,labels:{old:'Saved (Final)',new:'Running now'},
+  hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[{type:'del',old:1,new:null,text:'set snmp contact <A>'},{type:'add',old:null,new:1,text:'set snmp contact B'}]}]};
+ const fallback=c.restoreDiffDetails({name:'r1',eligible:true,diff});
+ assert.match(fallback,/<details class="restore-diff"><summary>Show differences \(saved → running now\)<\/summary>/);
+ assert.match(fallback,/what the device runs right now/);
+ assert.match(fallback,/--- Saved \(Final\)/);assert.match(fallback,/restore-diff-del">- set snmp contact &lt;A&gt;/);assert.match(fallback,/restore-diff-add">\+ set snmp contact B/);
+ const calls=[];c.diffMarkup=(d,labels)=>{calls.push(labels);return '<div class="diff-view">shared</div>';};
+ assert.match(c.restoreDiffDetails({name:'r1',eligible:true,diff}),/<div class="diff-view">shared<\/div>/,'the shared diff view is used when it is loaded');
+ same(calls[0],{oldLabel:'Saved (Final)',newLabel:'Running now'});
+ assert.match(c.restoreDiffDetails({name:'r1',eligible:true,diff:{...diff,truncated:true}}),/only its first part is shown/);
+ assert.equal(c.restoreDiffDetails({name:'r1',eligible:true,diff:{identical:true,hunks:[]}}),'','"Already matches" says it; no empty diff');
+ assert.match(c.restoreDiffDetails({name:'r1',eligible:true}),/The differences are not available for this device\./,'no data says why, never "0 differences"');
+ assert.match(c.restoreDiffDetails({name:'r1',eligible:true,diff_reason:'The differences could not be shown for this device.'}),/could not be shown/);
+ assert.equal(c.restoreDiffDetails({name:'r1',eligible:false,reason:'SSH probe failed'}),'','a skipped device already says why');
+});
+test('the review dialog places the differences beside each device, outside its checkbox label',async()=>{
+ const c=ctx(),dialogs=[];
+ c.opDialog=()=>{const d={innerHTML:'',close(){},querySelector:()=>({onclick:null}),querySelectorAll:()=>[]};dialogs.push(d);return d;};
+ c.$=()=>({checked:false,value:'5',textContent:''});
+ c.json=async()=>({source:{type:'backup',backup_job_id:'b'},targets:[
+  {name:'r1',eligible:true,platform:'arista_ceos',pending_changes:2,diff:{identical:false,labels:{old:'Saved (backup b)',new:'Running now'},hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[{type:'del',text:'hostname A'}]}]}},
+  {name:'r2',eligible:true,platform:'arista_ceos',matches_saved:true,diff:{identical:true,hunks:[]}}]});
+ await c.restoreReview('lab',{type:'backup',backup_job_id:'b'},'Backup');
+ const html=dialogs[0].innerHTML;
+ assert.match(html,/<\/label><details class="restore-diff">/,'the details follow the label, so opening them never ticks the box');
+ assert.equal((html.match(/restore-diff"/g)||[]).length,1,'only the differing device has a diff');
+ assert.match(html,/Already matches — nothing to change/);
+});
+test('elapsed times are measured on the manager\'s clock, never the browser\'s',()=>{
+ const c=ctx();
+ c.Date={now:()=>{throw new Error('the browser clock must not be read');}};
+ vm.runInContext('Date={now:()=>{throw new Error("browser clock")}}',c);
+ const job={id:'j',status:'applying',server_time:1060,targets:[{name:'a',status:'backing_up',stage:'backing_up',timeline:{queued:1000,backing_up:1010}}]};
+ assert.equal(c.restoreJobNow(job),1060);
+ const steps=JSON.parse(JSON.stringify(c.restoreStageSteps(job.targets[0],c.restoreJobNow(job))));
+ assert.equal(steps[1].elapsed,'50 s');
+ assert.equal(c.restoreJobNow({targets:[{timeline:{queued:5,settled:9}},{timeline:{queued:3,backing_up:12}}]}),12,'without server_time: the latest recorded time');
+ assert.match(c.restoreTargetRow(job.targets[0],c.restoreJobNow(job)),/50 s/);
+ assert.match(c.restoreTargetRow(job.targets[0]),/restore-stage--current/,'a row rendered on its own still renders');
+});
+test('a device that differs is never shown as identical: with no lines to show it says why',()=>{
+ const c=ctx();
+ const html=c.restoreDiffDetails({name:'r1',eligible:true,diff:{identical:false,hunks:[],reason:'The comparison found differences in spacing or layout that this line view cannot show.'}});
+ assert.match(html,/differences in spacing or layout/);assert.doesNotMatch(html,/<details/);
+});

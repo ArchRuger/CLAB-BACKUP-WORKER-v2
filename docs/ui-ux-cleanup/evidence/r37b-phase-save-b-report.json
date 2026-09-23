@@ -1,0 +1,52 @@
+{
+ "phase": "save-b",
+ "results": [
+  {
+   "item": "e1-e4-save-b: label dialog \"What changed?\" appears",
+   "ok": true,
+   "detail": "What changed?"
+  },
+  {
+   "item": "e1-e4-save-b: empty label refused with \"Give this save a short label.\"",
+   "ok": true,
+   "detail": "Give this save a short label."
+  },
+  {
+   "item": "e1-e4-save-b: review dialog opened automatically (mandatory review)",
+   "ok": true,
+   "detail": "Review before uploading"
+  },
+  {
+   "item": "e1-e4-save-b: review shows the destination line",
+   "ok": true,
+   "detail": "Saving toCLAB-MNGR-DEV-LLM\u203amain\u203arestore-square/qa-1-30-37/latest waiting for your review"
+  },
+  {
+   "item": "e1-e4-save-b: review lists per-file entries",
+   "ok": true,
+   "detail": "['ceos.cfg changed', 'ceos.eoscfg changed', 'cjunosevolved.cfg changed', 'cjunosevolved.jcfg changed', 'vjunos-switch.cfg changed', 'vjunos-switch.jcfg changed', 'xrv9k.cfg changed', 'xrv9k.xrcfg changed']"
+  },
+  {
+   "item": "e1-e4-save-b: job dialog title is \"Progress saved\"",
+   "ok": true,
+   "detail": "{'title': 'Progress saved', 'badge': 'EOS', 'rows': {'Destination': 'CLAB-MNGR-DEV-LLM \u00b7 main \u00b7 restore-square/qa-1-30-37/latest', 'Saved as': 'Latest', 'Started': 'just now', 'Label': 'Configuration B', 'Status': 'Saved to Git', 'Message': 'Saved commit is included in the verified remote history.', 'Saved target': 'latest', 'Started (UTC)': '2026-09-23 02:47:18 UTC', 'Commit': '795edb28ae04fd9c3420914044c22856aba5d511', 'Checkout': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM', 'Files changed': '9', 'Job id': '8b9935cbcdef7290fecd37b94ceee410'}}"
+  },
+  {
+   "item": "e1-e4-save-b: job dialog has Label row == \"Configuration B\"",
+   "ok": true,
+   "detail": "{'Destination': 'CLAB-MNGR-DEV-LLM \u00b7 main \u00b7 restore-square/qa-1-30-37/latest', 'Saved as': 'Latest', 'Started': 'just now', 'Label': 'Configuration B', 'Status': 'Saved to Git', 'Message': 'Saved commit is included in the verified remote history.', 'Saved target': 'latest', 'Started (UTC)': '2026-09-23 02:47:18 UTC', 'Commit': '795edb28ae04fd9c3420914044c22856aba5d511', 'Checkout': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM', 'Files changed': '9', 'Job id': '8b9935cbcdef7290fecd37b94ceee410'}"
+  },
+  {
+   "item": "e1-e4-save-b: job dialog has Destination row",
+   "ok": true,
+   "detail": "{'Destination': 'CLAB-MNGR-DEV-LLM \u00b7 main \u00b7 restore-square/qa-1-30-37/latest', 'Saved as': 'Latest', 'Started': 'just now', 'Label': 'Configuration B', 'Status': 'Saved to Git', 'Message': 'Saved commit is included in the verified remote history.', 'Saved target': 'latest', 'Started (UTC)': '2026-09-23 02:47:18 UTC', 'Commit': '795edb28ae04fd9c3420914044c22856aba5d511', 'Checkout': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM', 'Files changed': '9', 'Job id': '8b9935cbcdef7290fecd37b94ceee410'}"
+  },
+  {
+   "item": "F1: pending list / history mentions both Configuration A and Configuration B",
+   "ok": true,
+   "detail": "['Latest Progress saved to Git \u00b7 just nowSaved asLatestWhereCLAB-MNGR-DEV-LLM \u203a restore-square/qa-1-30-37Commit795edb28aeUploadUploadedNoteConfiguration BJob id8b9935cbcdef7290fecd37b94ceee410MessageSaved commit is included in the verified remote history.Open', 'Latest Progress saved to Git \u00b7 just nowSaved asLatestWhereCLAB-MNGR-DEV-LLM \u203a restore-square/qa-1-30-37Commitf12421e615UploadUploadedNoteConfiguration AJob id43e91697a894431d28ce4e0460920e00MessageSaved commit is included in the verified remote history.Open', 'Moved to the repository root Moved to folder the repository root \u00b7 6 minutes agoSaved asMoved to the repository rootWhereCLAB-MNGR-DEV-LLM \u203a restore-square/qa-1-30-37Upload\u2014Job idac40940958554516bb1a3d12c65fd688MessageAnother Git operation is already running for this repository.Open']"
+  }
+ ],
+ "console_errors": [],
+ "page_errors": []
+}

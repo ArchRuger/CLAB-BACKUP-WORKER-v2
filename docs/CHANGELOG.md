@@ -4,6 +4,115 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.38
+
+**Test logins includes hosts that are excluded from backups.** The lab-wide *Test logins* skipped a device whose
+backup flag is off, which is every Linux host such as the network-multitool (no NOS platform, never backed up), although
+its login is known and its CLI opens. Eligibility is now an address and a login only; the guide says so
+([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)). Records of the 1.30.37 live checks are added with this release.
+
+## Changes in 1.30.37
+
+**Setup Script Cleanup Log, part 2: saves, diffs, restore progress and parallel restore, Test logins, the lab
+builder, and the helper hardening.** Second release of the stream ([docs/ui-ux-cleanup/PICKUP.md](ui-ux-cleanup/PICKUP.md)).
+
+- **Helper hardening (install this release, not 1.30.36, on a VM with engineer access).** The sudoers helper's
+  `create` wrote the uploaded map file and set its mode by path, which follows a symlink planted in a group-writable
+  engineer folder; every write in `create`, `revise` and `delete` now goes through the descriptor-based pattern
+  `publish` uses (directory opened without following links, modes set on the open file, recovery copies in a history
+  folder the helper owns), the review digest binds the existing map file's state, and anything but a regular file of
+  at most 1 MiB in the map file's place is refused before the topology is written. The deploy review's plain text now
+  says the topology runs as its file describes it (hooks, mounts, image pulls) and names the map file it will write.
+- **Junos backups in the repository are `<node>.cfg`** (display-set text, as EOS and IOS XR already were); the
+  hierarchical restore artifact stays `<node>.jcfg`. Older `<node>.set` saves stay listed, compared (paired per node;
+  the upload review shows the rename as one changed file) and restorable ([GIT-PROGRESS](GIT-PROGRESS.md)).
+- **Topology preview** fills the viewport (96% × 92%, full screen on a phone), fits the map on opening and on resize,
+  and has no caption.
+- **Every save has a label.** *Save progress* asks "What changed?" (required, up to 120 characters, kept as a draft
+  through cancel and retry); the label is the Git commit message and names the save in the pending list, the history,
+  the job window and the review. A new label on Latest still updates the same Latest folder; older saves without a
+  label fall back to their kind and date.
+- **The save destination is complete**: review, job window and details show `<repository> · <branch> · <path>` from
+  the destination frozen on the job (never the current binding), the local checkout path and the commit, and say
+  whether the save is on the VM, waiting for review, uploaded or verified on the remote.
+- **Real diffs**: the upload review and *Compared with your latest save* render unified diffs (line numbers,
+  insertions and deletions marked by colour and sign, hunk headers, per-file disclosure, wrapping on narrow screens)
+  produced by the manager from the exact texts; nothing is normalised away.
+- **"View configuration backup" closes the save windows it came from** (no stale *Saves waiting to be uploaded*
+  under the destination) and moves the focus.
+- **Replace running configuration**: every differing device row expands to the diff between the saved candidate and
+  the running configuration read by the review, before anything is applied ("saved → running now"; devices that
+  already match, or whose artifact or probe is missing, say so instead); the progress window lists each device's
+  stages (Waiting → Backup → Validate → Replace, timed recovery armed → Fresh connection and read-back → Confirm →
+  Done) with the current one highlighted, completed ones green with a check, and distinct Replaced / Already matched
+  / Skipped / Failed / Rolled back / Uncertain outcomes, timed from the server clock and rebuilt on reopen or reload.
+- **Devices are replaced in parallel**: independent devices run on a bounded pool (default 4, `RESTORE_NODE_WORKERS`
+  1–8), each with its own backup check, timed recovery, fresh-connection read-back and confirmation; devices sharing
+  one SSH endpoint run one after another; one device's failure or rollback never touches another's. The job records
+  a per-device timeline that proves the overlap. The safety backup before and the check backup after stay one job each
+  ([multi-platform restore README](multi-platform-restore/README.md)).
+- **Test logins** beside the *Devices* heading (topology rail and Devices tab) runs the real SSH login test for every
+  device with at most four sessions at once, shows "Testing login…" per device and updates the cards as answers come
+  in; a disabled *Open CLI* names the reason and points to it. Nothing is marked ready without a real answer
+  ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)).
+- **Lab builder**: *New lab* asks only for a name and a folder and opens a blank canvas (no starters); the empty status
+  pill is hidden; a `.clab.yml` and its `.annotations.json` can be dropped on the welcome card or the canvas (or picked
+  with *Open lab files…*), in any order, topology-only allowed, with the parser's reason on refusal and a confirmation
+  before an unsaved draft is replaced; *View YAML* became an editable **YAML** panel beside the canvas: edit the text
+  and Apply (Ctrl+Enter) to see it on the map, draw on the canvas and see the text follow, with syntax and shape
+  diagnostics, Revert, and the editor's own Undo covering an apply; invalid text never replaces the last valid graph;
+  a canvas edit reformats hand-written text (content kept) and the guide says so ([LAB-BUILDER](LAB-BUILDER.md)).
+
+## Changes in 1.30.36
+
+**Setup Script Cleanup Log, part 1: setup and onboarding, import, deploy review, layout, capture mapping.** First
+release of the UI/UX cleanup stream ([docs/ui-ux-cleanup/PICKUP.md](ui-ux-cleanup/PICKUP.md); the requirement map with
+PDF page numbers is [REQUIREMENTS.md](ui-ux-cleanup/REQUIREMENTS.md)).
+
+- **Setup takes the routine choices itself** (`bash deploy/install.sh`): all VM interfaces on port 8081 when no `.env`
+  exists (an existing `.env`, credentials, registrations and enabled components are retained), reviewed lab operations,
+  VS Code / Containerlab access for the invoking account, backup of obsolete installation-media APT entries, the plan
+  printed and started; Git setup runs as part of *Install or update manager, then set up Git*; a successful path prints
+  its closing information and exits to the shell. `--advanced` restores every question ([INSTALL](INSTALL.md)).
+- **Package-lock recovery**: when APT/dpkg is locked (typically `unattended-upgrades`), the installer names the process
+  holding it *now*, prints one copyable command (`sudo python3 …/deploy/apt_lock.py --wait --pause-timers`) and offers to
+  wait here and retry. `deploy/apt_lock.py` finds the holder from `/proc`, waits within a bound, optionally pauses the two
+  `apt-daily` timers and restores exactly those it stopped, and never kills a process or deletes a lock file.
+- **Git onboarding condensed**: GitHub CLI is installed when missing, the device login runs without gh's own questions
+  (the one-time code and URL are printed unchanged, followed by
+  `https://github.com/login/device/select_account` for browsers signed in to several accounts), a repository new to the
+  manager registers at its root without the subfolder question (`--subfolder` and the "another lab in a registered
+  repository" path still take one), and registration completes by itself once its checks pass. Setup still creates no
+  commit and no push ([GIT-SETUP](GIT-SETUP.md)).
+- **lazydocker** is installed for the invoking account from the upstream release for the VM's architecture into
+  `~/.local/bin`, with one guarded PATH block in `~/.bashrc` (never duplicated).
+- **VM connection prefilled from setup**: `setup-password.sh` hands the new `clab-discovery` password once to the manager
+  through a one-time seed in the data directory (root and the manager account only); the manager stores it encrypted,
+  fills address, port, account, inspection method and automatic check, and waits for one *Save and test connection*,
+  which is the explicit first-use trust of the VM key (the key the installer recorded is shown for comparison; a
+  different key is refused unless the replacement-key box is ticked) ([VM-CONNECTION](VM-CONNECTION.md)).
+- **Upload a lab file** takes an optional saved map (`.annotations.json`) next to the topology; the pair goes through the
+  same reviewed `create`, an existing map file is never replaced silently (the review says so and a recovery copy is
+  kept), and the imported lab opens with its positions.
+- **Open in Lab Builder…** (was *Edit visually…*); returning with *← My labs* or the browser's Back reopens the Topology
+  file dialog on the same VM file, re-read from the VM.
+- **Topology preview** is sized to the viewport and fits the map; its wiring caption is gone.
+- **Start lab review** shows the command run on the VM directly (no *Technical details* toggle, no host-privilege
+  warning box for a deploy, no "Runs on the lab VM…" caption), and the live output window opens by itself when the
+  start is accepted; a window the student closed is not reopened by polling.
+- **Notices can be hidden**: lab and home banners have an accessible close control; a hidden notice stays hidden across
+  rerenders for that lab and text and returns when the text changes; a running-operation banner collapses to one line
+  instead of disappearing. Hiding never acknowledges a job or enables an unavailable action.
+- **network-multitool** nodes (`ghcr.io/srl-labs/network-multitool`, kind `linux`) use the image's documented login
+  after profiles and inventory logins, so a stock node no longer asks for credentials; other Linux images are unchanged
+  ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)).
+- **Topology tab**: the *Details* disclosure ("Lines show how the lab is wired…") is gone; the Devices column scrolls on
+  its own beside the map at desktop widths (sticky heading, keyboard reachable).
+- **Capture on the displayed port**: right-clicking a link and choosing an endpoint such as `ge-0/0/35` preselects the
+  container interface containerlab created for it (per-kind rules for vJunos, cJunosEvolved, vQFX, XRv9k, cEOS, Linux),
+  confirmed against the VM's live interface list; an unresolved port keeps the manual list with the reason
+  ([CAPTURE](CAPTURE.md)).
+
 ## Changes in 1.30.35
 
 **Student quick start delivered: the illustrated PDF guide, validated end to end.** Closing release of the stream

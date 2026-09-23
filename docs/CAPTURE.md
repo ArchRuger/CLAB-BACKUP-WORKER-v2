@@ -92,9 +92,24 @@ are deduplicated with aliases; node/lab views retain exact container-name matchi
 Multiple interfaces in one namespace share a PCAPNG stream. Separate namespaces
 use separate sessions. Either link endpoint captures that side's traffic.
 
-NOS aliases can differ from Linux interface names. DOWN interfaces omitted by
-Edgeshark, stopped containers, and traffic hidden inside nested router VMs remain
-outside this view. Guest capture or mirroring is needed for unexposed traffic.
+NOS aliases can differ from Linux interface names. Right-clicking a link (or its endpoint
+buttons) resolves this automatically: containerlab wires each supported kind's own port
+names onto sequential `ethN` container veths in a fixed, documented order (never a "+1"
+guess), so `ge-0/0/0` preselects `eth1` on a vJunos-switch, `et-0/0/0` preselects `eth4` on
+cJunosEvolved (its own `eth1`-`eth3` are reserved), and `Gi0/0/0/0` preselects `eth1` on an
+XRv9k; EOS and Linux port names already are the container name. The mapping (`app/topology.py`
+`container_interface`, cited to each kind's page on containerlab.dev) is always confirmed
+against the live Edgeshark interface list before *Start capture* is enabled — a name that is
+not (yet) live keeps the manual list open with the reason instead of guessing. **The tap
+device is never preselected**: a vJunos-style image's own management VM exposes both a
+`tapN` (its side of the link) and the `ethN` veth next to it; only the veth is what
+containerlab's Wireshark integration captures, so a mapped port only ever preselects `ethN`.
+An unrecognised kind or port shape (a breakout child, a `.unit` sub-interface, or a kind with
+no rule) falls back to the manual interface list exactly as before.
+
+DOWN interfaces omitted by Edgeshark, stopped containers, and traffic hidden inside nested
+router VMs remain outside this view. Guest capture or mirroring is needed for unexposed
+traffic.
 
 ## Architecture and maintenance
 
@@ -179,6 +194,10 @@ survives token rotation. Do not remove unrelated containers or manager data.
 - [noVNC API](https://github.com/novnc/noVNC/blob/master/docs/API.md)
 - [Packetflix API](https://github.com/siemens/packetflix/blob/main/api.md)
 - [Containerlab capture coverage](https://containerlab.dev/manual/wireshark/)
+- Per-kind veth order behind the automatic mapping: [vr-vjunosswitch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/),
+  [cjunosevolved](https://containerlab.dev/manual/kinds/cjunosevolved/),
+  [vr-vqfx](https://containerlab.dev/manual/kinds/vr-vqfx/), [vr-xrv9k](https://containerlab.dev/manual/kinds/vr-xrv9k/),
+  [ceos](https://containerlab.dev/manual/kinds/ceos/), [srl](https://containerlab.dev/manual/kinds/srl/)
 
 The unit tests (`test_capture*.py`, `test_capture_ui.js`) run with the rest of the
 suites; see the README's development section. On an isolated Linux Docker host,

@@ -19,13 +19,19 @@ class GitOnboardTests(unittest.TestCase):
                          '/home/owner/labs/lab with spaces')
         self.assertIsNone(onboard.parse_args([]).repo)
 
-    def test_guided_resume_skips_clone_prompt_and_checks_identity_before_registration(self):
+    def test_subfolder_argument_defaults_to_repository_root(self):
+        self.assertEqual(onboard.parse_args([]).subfolder, '')
+        self.assertEqual(onboard.parse_args(['--subfolder', 'bgp']).subfolder, 'bgp')
+
+    def test_guided_resume_skips_clone_prompt_subfolder_and_confirmation_then_registers(self):
         with tempfile.TemporaryDirectory() as folder:
             account = SimpleNamespace(pw_name='owner', pw_dir=folder)
             url = 'https://github.com/owner/lab.git'
             def run(args, *unused, **kwargs):
                 output = url if args[1] == 'remote' else 'true'
                 return subprocess.CompletedProcess(args, 0, output)
+            def confirm_fails(prompt):
+                raise AssertionError('confirm() must not run on the condensed normal path: ' + prompt)
             with patch.dict('sys.modules', {'pwd': SimpleNamespace(getpwuid=lambda uid: account)}), \
                     patch.object(onboard.os, 'geteuid', return_value=1000, create=True), \
                     patch.object(onboard.sys.stdin, 'isatty', return_value=True), \
@@ -35,16 +41,21 @@ class GitOnboardTests(unittest.TestCase):
                     patch.object(onboard, 'read_registrations', return_value=[]), \
                     patch.object(onboard, 'github_login'), patch.object(onboard, 'identity') as identity, \
                     patch.object(onboard, 'run', side_effect=run) as commands, \
-                    patch.object(onboard, 'ask', return_value='') as ask, patch.object(onboard, 'confirm', return_value=False):
-                onboard.main(['--repo', folder])
-            # Resume does not re-prompt for the checkout directory (supplied with --repo);
-            # a fresh registration may still ask which repository subfolder holds this lab.
-            self.assertTrue(all(call.args[0] != 'Checkout directory' for call in ask.call_args_list))
+                    patch.object(onboard, 'ask', return_value='') as ask, \
+                    patch.object(onboard, 'confirm', side_effect=confirm_fails):
+                self.assertEqual(onboard.main(['--repo', folder]), 0)
+            # Resume does not re-prompt for the checkout directory (supplied with --repo), and the
+            # normal path no longer asks for a repository subfolder or a registration confirmation
+            # (a fresh registration uses the repository root and registers automatically).
+            self.assertTrue(all(call.args[0] not in ('Checkout directory', 'Repository subfolder for this lab')
+                                for call in ask.call_args_list))
             identity.assert_called_once()
             self.assertEqual(identity.call_args.args[0], Path(folder))
             self.assertEqual(prepare.call_args_list[0].args[1], '')
-            self.assertFalse(any(call.args[0][0] == 'sudo' or 'clone' in call.args[0]
-                                 for call in commands.call_args_list))
+            registration_calls = [call.args[0] for call in commands.call_args_list if call.args[0][0] == 'sudo']
+            self.assertEqual(len(registration_calls), 1)
+            self.assertEqual(registration_calls[0][-6:],
+                             ['--remote', 'origin', '--prefix', '', '--label', Path(folder).name])
 
     def test_empty_identity_reprompts(self):
         with patch.object(onboard, 'ask', side_effect=['', 'bad\x7fvalue', 'Lab Author']):
@@ -154,24 +165,42 @@ class GitOnboardTests(unittest.TestCase):
             self.assertEqual(path, Path(folder) / 'labs' / 'b')
             self.assertEqual(chosen, url)
             self.assertEqual(binding['remote'], 'origin')
-            # A blank subfolder answer keeps the whole repository (single-lab repository).
+            # The normal path never asks for a subfolder: a fresh registration keeps
+            # the whole repository (repository root).
             self.assertEqual(binding['prefix'], '')
+            self.assertFalse(any(call.args[0] == 'Repository subfolder for this lab' for call in ask.call_args_list))
             checkout_call = next(call for call in ask.call_args_list if call.args[0] == 'Checkout directory')
             self.assertEqual(checkout_call.args[1], str(path))
 
-    def test_fresh_registration_prompts_for_a_repository_subfolder(self):
+    def test_fresh_registration_uses_repository_root_without_prompting(self):
         with tempfile.TemporaryDirectory() as folder:
             account = SimpleNamespace(pw_name='owner', pw_dir=folder)
             path = Path(folder) / 'labs' / 'af-learning-labs'
-            with patch.object(onboard, 'ask', return_value='bgp'):
+            with patch.object(onboard, 'ask') as ask:
                 binding = onboard.selected_registration(account, path, [])
+            ask.assert_not_called()
+            self.assertEqual(binding['prefix'], '')
+            self.assertEqual(binding['label'], path.name)
+            self.assertEqual(binding['push_url'], '')
+
+    def test_subfolder_option_registers_a_new_registration_at_that_prefix(self):
+        # The advanced --subfolder option still reaches a fresh registration without
+        # any interactive prompt (docs/GIT-SETUP.md, one repository/one subfolder per lab).
+        with tempfile.TemporaryDirectory() as folder:
+            account = SimpleNamespace(pw_name='owner', pw_dir=folder)
+            path = Path(folder) / 'labs' / 'af-learning-labs'
+            with patch.object(onboard, 'ask') as ask:
+                binding = onboard.selected_registration(account, path, [], subfolder='bgp')
+            ask.assert_not_called()
             self.assertEqual(binding['prefix'], 'bgp')
             self.assertIn('bgp', binding['label'])
             self.assertEqual(binding['push_url'], '')
 
     def test_ask_subfolder_refuses_reserved_snapshot_shapes_and_reprompts(self):
-        # Rule 1 (docs/save-location-fix/PICKUP.md): latest, baseline and checkpoints/<name> are
-        # the folders Save progress writes inside a lab folder, never the lab folder itself.
+        # ask_subfolder() itself (the advanced, --subfolder-adjacent prompt) keeps its
+        # validation and its tests. Rule 1 (docs/save-location-fix/PICKUP.md): latest,
+        # baseline and checkpoints/<name> are the folders Save progress writes inside a
+        # lab folder, never the lab folder itself.
         for bad in ('latest', 'baseline', 'checkpoints', 'course/latest', 'course/baseline',
                     'course/checkpoints', 'working/checkpoints/one'):
             with patch.object(onboard, 'ask', side_effect=[bad, 'bgp']), \
@@ -183,6 +212,15 @@ class GitOnboardTests(unittest.TestCase):
         with patch.object(onboard, 'ask', return_value='course/latest/working'):
             self.assertEqual(onboard.ask_subfolder(), 'course/latest/working')
 
+    def test_validate_subfolder_matches_ask_subfolder_rules(self):
+        # --subfolder shares ask_subfolder()'s validation exactly, without prompting.
+        self.assertEqual(onboard.validate_subfolder(''), '')
+        self.assertEqual(onboard.validate_subfolder('  bgp/  '), 'bgp')
+        self.assertEqual(onboard.validate_subfolder('courses/latest/working'), 'courses/latest/working')
+        for bad in ('latest', 'baseline', 'checkpoints', 'course/checkpoints/one', '../escape', 'a\\b', '.git'):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                onboard.validate_subfolder(bad)
+
     def test_registered_repository_can_add_a_new_subfolder_for_another_lab(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)
@@ -192,11 +230,34 @@ class GitOnboardTests(unittest.TestCase):
                         'push_url': 'https://github.com/owner/af.git', 'revision': 'r1'}
             account = SimpleNamespace(pw_name='owner', pw_dir=folder)
             with patch.object(onboard, 'menu', return_value='new'), \
-                    patch.object(onboard, 'ask', return_value='eth'):
-                binding = onboard.selected_registration(account, path, [existing])
+                    patch.object(onboard, 'ask') as ask:
+                binding = onboard.selected_registration(account, path, [existing], subfolder='eth')
+            ask.assert_not_called()
             self.assertEqual(binding['prefix'], 'eth')
             self.assertNotIn('id', binding)
             self.assertEqual(binding['push_url'], '')
+
+    def test_registered_repository_new_choice_without_subfolder_option_still_prompts(self):
+        # Unlike a brand-new registration, the repository root is not a safe default
+        # for an additional lab folder in an already-registered repository (it would
+        # overlap every existing prefix and fail later, at the helper's own check), so
+        # this choice still falls back to ask_subfolder() when --subfolder is not given.
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)
+            (path / '.git').mkdir()
+            existing = {'id': 'one', 'path': str(path), 'owner': 'owner', 'label': 'AF Labs / bgp',
+                        'remote': 'origin', 'branch': 'main', 'prefix': 'bgp',
+                        'push_url': 'https://github.com/owner/af.git', 'revision': 'r1'}
+            account = SimpleNamespace(pw_name='owner', pw_dir=folder)
+            with patch.object(onboard, 'menu', return_value='new'), \
+                    patch.object(onboard, 'ask', return_value='eth') as ask, \
+                    patch('builtins.print') as output:
+                binding = onboard.selected_registration(account, path, [existing])
+            ask.assert_called_once()
+            self.assertEqual(ask.call_args.args[0], 'Repository subfolder for this lab')
+            self.assertEqual(binding['prefix'], 'eth')
+            messages = [call.args[0] for call in output.call_args_list if call.args]
+            self.assertTrue(any('already holds at least one registered lab folder' in message for message in messages))
 
     def test_resume_command_points_to_existing_checkout_after_cancellation(self):
         with tempfile.TemporaryDirectory(prefix='lab with spaces ') as folder:
@@ -482,9 +543,54 @@ class GitOnboardTests(unittest.TestCase):
             code = 1 if args[1:3] == ['auth', 'status'] else 0
             return subprocess.CompletedProcess(args, code, 'github-engineer')
         env = onboard.service_env('linux-engineer', '/home/linux-engineer')
-        with patch.object(onboard.Path, 'exists', return_value=True), patch.object(onboard, 'run', side_effect=run):
+        fake_process = unittest.mock.Mock(returncode=0)
+        fake_process.stdout = iter(['! First copy your one-time code: ABCD-1234\n',
+                                    'Open this URL to continue in your web browser: https://github.com/login/device\n'])
+        with patch.object(onboard.Path, 'exists', return_value=True), patch.object(onboard, 'run', side_effect=run), \
+                patch.object(onboard.subprocess, 'Popen', return_value=fake_process) as popen:
             onboard.github_login(env)
-        self.assertIn(['gh', 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web'], [args for args, _ in calls])
+        self.assertEqual(popen.call_args.args[0],
+                         ['gh', 'auth', 'login', '--hostname', 'github.com', '--git-protocol', 'https', '--web'])
+        self.assertEqual(popen.call_args.kwargs['stdin'], subprocess.DEVNULL)
+        self.assertEqual(popen.call_args.kwargs['stdout'], subprocess.PIPE)
+        self.assertEqual(popen.call_args.kwargs['env'], env)
+        fake_process.wait.assert_called_once()
         self.assertIn(['gh', 'auth', 'setup-git', '--hostname', 'github.com'], [args for args, _ in calls])
         self.assertTrue(all(e['HOME'] == '/home/linux-engineer' for _, e in calls))
         self.assertFalse(any(args[0] == 'sudo' for args, _ in calls))
+
+    def test_github_cli_installs_without_confirmation_when_missing(self):
+        env = onboard.service_env('owner', '/home/owner')
+        def confirm_fails(prompt):
+            raise AssertionError('confirm() must not run for gh installation: ' + prompt)
+        fake_process = unittest.mock.Mock(returncode=0)
+        fake_process.stdout = iter([])
+        with patch.object(onboard.Path, 'exists', return_value=False), \
+                patch.object(onboard, 'install_package') as install, \
+                patch.object(onboard, 'confirm', side_effect=confirm_fails), \
+                patch.object(onboard, 'run', return_value=subprocess.CompletedProcess([], 0, 'engineer')), \
+                patch.object(onboard.subprocess, 'Popen', return_value=fake_process):
+            onboard.github_login(env, force=True)
+        install.assert_called_once_with('gh', env)
+
+    def test_login_stream_injects_select_account_note_after_device_url(self):
+        env = onboard.service_env('owner', '/home/owner')
+        fake_process = unittest.mock.Mock(returncode=0)
+        fake_process.stdout = iter(['\n', '! First copy your one-time code: ABCD-1234\n',
+                                    'Open this URL to continue in your web browser: https://github.com/login/device\n'])
+        with patch.object(onboard.subprocess, 'Popen', return_value=fake_process), patch('builtins.print') as output:
+            onboard.stream_login(env)
+        printed = [call.args[0] for call in output.call_args_list if call.args]
+        device_index = next(i for i, line in enumerate(printed) if onboard.DEVICE_URL in line)
+        self.assertIn('select_account', printed[device_index + 1])
+        # gh's own now-suppressed prompts never reach the terminal as separate lines.
+        self.assertFalse(any('Authenticate Git with your GitHub credentials' in line for line in printed))
+        self.assertFalse(any('Press Enter to open' in line for line in printed))
+
+    def test_login_stream_failure_raises_and_still_waits(self):
+        fake_process = unittest.mock.Mock(returncode=1)
+        fake_process.stdout = iter([])
+        with patch.object(onboard.subprocess, 'Popen', return_value=fake_process), \
+                self.assertRaisesRegex(ValueError, 'gh auth login failed'):
+            onboard.stream_login({})
+        fake_process.wait.assert_called_once()

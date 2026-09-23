@@ -183,6 +183,16 @@ test('storage helpers remember when a lab was opened and dismissed jobs, and nev
  assert.equal(blocked.context.goHome(),true);
 });
 
+test('noticeDismissed/dismissNotice: a notice key is remembered for the session, a different key is unaffected, and neither throws when storage is blocked',()=>{
+ const h=harness();
+ assert.equal(h.context.noticeDismissed('a.lab-banner.abc'),false);
+ assert.equal(h.context.dismissNotice('a.lab-banner.abc'),true);
+ assert.equal(h.context.noticeDismissed('a.lab-banner.abc'),true);
+ assert.equal(h.context.noticeDismissed('a.lab-banner.def'),false,'a materially different headline digest is its own key');
+ const blocked=harness({throwStorage:true});
+ assert.equal(blocked.context.dismissNotice('x'),false);assert.equal(blocked.context.noticeDismissed('x'),false);
+});
+
 test('showActionError renders the lab banner on a lab page and falls back to a toast elsewhere',()=>{
  const h=harness();
  assert.equal(h.context.showActionError('Request failed'),false);assert.deepEqual(h.calls.notify,['Request failed']);
@@ -228,6 +238,107 @@ test('style.css: the device lists carry no list indent and the Devices tab is on
  assert.match(css,/@supports \(grid-template-columns: subgrid\) \{ #device-list \.device-row \{ grid-template-columns: subgrid; \} \}/);
  assert.match(css,/\.device-row, #device-list, #device-list \.device-row \{ grid-template-columns: 1fr; \}/,'one column below 760px');
  assert.match(css,/\.device-rail \.device-row \{ grid-template-columns: minmax\(0, 1fr\) auto; grid-template-areas: "name state" "platform platform" "reason reason" "actions actions";/,'the Topology rail keeps its own named-area grid');
+});
+
+test('index.html: the Topology tab keeps the hint, the controls and the badge; the wiring caveat and its Details toggle are gone; the device rail is a focusable, labelled region',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ const view=html.slice(html.indexOf('id="topology-view"'),html.indexOf('</section>',html.indexOf('id="topology-view"')));
+ assert.doesNotMatch(view,/map-notes/,'the Details disclosure and its note text are removed, not just hidden');
+ assert.doesNotMatch(view,/Lines show how the lab is wired, not whether links are up\./);
+ assert.match(view,/<p id="topology-hint" class="topology-hint caption">Click a device to open it\. Click a link to capture its traffic\. Right-click for more actions\.<\/p>/,'the one-line hint stays, now addressable so notes can join it');
+ for(const id of ['map-fit','map-in','map-out','map-expand','map-edit'])assert.match(view,new RegExp('id="'+id+'"'),id+' stays on the map toolbar');
+ assert.match(view,/id="map-status" class="caption" role="status"/,'the "N devices · M links" badge stays');
+ assert.match(view,/<aside class="device-rail" aria-labelledby="topology-devices-title" tabindex="0">/,'the rail is keyboard-focusable so Page keys can scroll it directly');
+});
+
+test('style.css: the topology layout is bounded to the same viewport math as the map stage (plus the hint), the rail stretches to it and scrolls on its own with a sticky heading, and both reset to the old stacked, page-scrolling layout at 1280px',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
+ assert.match(css,/--topology-hint-h: 28px;/);
+ assert.match(css,/\.topology-layout \{ display: grid; grid-template-columns: minmax\(0, 1fr\) 300px; gap: 16px; align-items: start;\n {2}height: calc\(100dvh - var\(--stage-offset\) \+ var\(--topology-hint-h\)\);\n {2}min-height: calc\(420px \+ var\(--topology-hint-h\)\);\n {2}max-height: calc\(900px \+ var\(--topology-hint-h\)\);\n\}/);
+ assert.match(css,/\.device-rail \{ display: flex; flex-direction: column; gap: 6px; min-width: 0; align-self: stretch; min-height: 0; overflow-y: auto; \}/,'no overscroll-behavior: contain — the page must still scroll once the rail reaches its end');
+ assert.doesNotMatch(css,/\.device-rail[^{]*\{[^}]*overscroll-behavior/,'scrolling never traps at the rail');
+ assert.match(css,/\.device-rail h2, \.device-rail h3 \{ position: sticky; top: 0;/,'the Devices heading stays put while the list scrolls under it');
+ assert.match(css,/@media \(max-width: 1280px\) \{\n {2}\.topology-layout \{ grid-template-columns: minmax\(0, 1fr\); height: auto; min-height: 0; max-height: none; \}\n {2}\.device-rail \{ align-self: auto; overflow-y: visible; max-height: none; gap: 8px; \}/,'below 1280px the rail stacks under the map and scrolls with the page again');
+ assert.match(css,/\.map-expanded \.topology-layout, \.map-expanded \.topology-layout > div:first-child \{ display: flex; flex-direction: column; flex: 1; height: auto; max-height: none;/,'Expand never gets clamped by the bounded-height rule');
+});
+
+test('the topology rail renders one row per device however many there are, so a scrollable rail actually has something to scroll',()=>{
+ const elements=new Map();
+ function element(){return {dataset:{},value:'',innerHTML:'',textContent:'',title:'',open:false,disabled:false,listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},showModal(){this.open=true;},appendChild(){},remove(){},click(){}};}
+ const document={getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},querySelectorAll(){return [];},createElement:element,body:element()};
+ const context=vm.createContext({document,sessionStorage:{getItem(){return null;},setItem(){}},setTimeout:()=>0,clearTimeout(){},setInterval(){},URL:{createObjectURL:()=>'blob:fixture',revokeObjectURL(){}},URLSearchParams,Blob,console});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),context);
+ const nodes=Array.from({length:12},(_,i)=>({name:'r'+i,short_name:'R'+i,ssh_ready:i%2===0,readiness:'Ready',nos_login:{status:i%2===0?'ready':'booting'}}));
+ vm.runInContext(`activeId='lab';state={labs:[{id:'lab',name:'Lab',nodes:${JSON.stringify(nodes)},profiles:[],defaults:{}}],jobs:[],platforms:{}};renderDeviceList();`,context);
+ const html=document.getElementById('topology-devices').innerHTML;
+ assert.equal((html.match(/class="device-row /g)||[]).length,12,'every device gets its own row; nothing is truncated client-side for a long list');
+});
+
+// setBanner (app.js) needs shell.js's noticeDismissed/dismissNotice, so this harness loads status.js,
+// shell.js and app.js in production order; fetch is left undefined so app.js's own startup refresh()
+// fails immediately (caught by its own .catch) instead of racing this test with a real render().
+function bannerHarness(){
+ const elements=new Map();
+ function element(){
+  const classes=new Set();
+  return {dataset:{},value:'',innerHTML:'',textContent:'',title:'',open:false,disabled:false,hidden:false,className:'',attrs:{},listeners:{},
+   addEventListener(name,fn){(this.listeners[name]=this.listeners[name]||[]).push(fn);},
+   setAttribute(n,v){this.attrs[n]=String(v);},getAttribute(n){return n in this.attrs?this.attrs[n]:null;},removeAttribute(n){delete this.attrs[n];},
+   classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c),toggle(c,force){const on=force===undefined?!classes.has(c):!!force;if(on)classes.add(c);else classes.delete(c);return on;}},
+   showModal(){this.open=true;},close(){this.open=false;},appendChild(){},remove(){},click(){},reset(){},querySelector(){return null;},querySelectorAll(){return [];}};
+ }
+ const document={getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},addEventListener(){},querySelectorAll(){return [];},querySelector(){return null;},createElement:element,body:element()};
+ const session=new Map();
+ const context=vm.createContext({document,sessionStorage:{getItem:k=>session.has(k)?session.get(k):null,setItem:(k,v)=>session.set(k,String(v)),removeItem:k=>session.delete(k)},localStorage:{getItem(){return null;},setItem(){},removeItem(){}},setTimeout:()=>0,clearTimeout(){},setInterval(){},URL:{createObjectURL:()=>'blob:fixture',revokeObjectURL(){}},URLSearchParams,Blob,console,location:{hash:'',pathname:'/',search:''},history:{pushState(){},replaceState(){}}});
+ context.window=context;context.addEventListener=()=>{};
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/shell.js'),'utf8'),context);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),context);
+ return {context,$:id=>document.getElementById(id)};
+}
+
+test('setBanner: a notice hides once closed and stays hidden across rerenders of the same headline; a materially different headline is shown again',()=>{
+ const h=bannerHarness();
+ const spec={tone:'warn',icon:'alert',text:'3 devices need login credentials before you can open their CLI.',actions:{'banner-credentials':{label:'Add credentials',run:()=>{}}}};
+ h.context.setBanner('lab-banner',spec);
+ const banner=h.$('lab-banner'),close=h.$('lab-banner-close');
+ assert.equal(banner.hidden,false);assert.equal(close.hidden,false);
+ close.onclick();
+ h.context.setBanner('lab-banner',spec);
+ assert.equal(banner.hidden,true,'the same headline stays hidden across the next poll\'s rerender');
+ h.context.setBanner('lab-banner',{...spec,text:'5 devices need login credentials before you can open their CLI.'});
+ assert.equal(banner.hidden,false,'a materially different headline reopens the notice');
+ assert.equal(h.$('banner-credentials').disabled,false,'closing a notice never makes an unavailable feature look ready, and never disables an available one either');
+});
+
+test('setBanner: a running-operation notice collapses to a one-line pill instead of disappearing, keeps collapsed through detail-only updates, and reappears in full once its headline changes',()=>{
+ const h=bannerHarness();
+ const running={tone:'info',icon:'clock',running:true,text:'Redeploying…',detail:'Copying files…',actions:{'banner-output':{label:'View output',run:()=>{}}}};
+ h.context.setBanner('lab-banner',running);
+ const banner=h.$('lab-banner'),close=h.$('lab-banner-close');
+ assert.equal(banner.hidden,false);assert.equal(banner.classList.contains('banner-collapsed'),false);
+ close.onclick();
+ assert.equal(banner.hidden,false,'a running operation is never fully removed, only collapsed');
+ assert.equal(banner.classList.contains('banner-collapsed'),true);
+ h.context.setBanner('lab-banner',{...running,detail:'Copying files… 80%'});
+ assert.equal(banner.classList.contains('banner-collapsed'),true,'a detail-only change (the same headline) keeps it collapsed');
+ h.context.setBanner('lab-banner',{...running,text:'Starting…'});
+ assert.equal(banner.classList.contains('banner-collapsed'),false,'a new headline (the operation moved on) reappears in full');
+});
+
+test('setBanner: the close control carries the documented accessible name and toggles it between collapse and expand for a running notice',()=>{
+ const h=bannerHarness();
+ h.context.setBanner('home-banner',{tone:'info',icon:'info',text:'Lab operation'});
+ assert.equal(h.$('home-banner-close').getAttribute('aria-label'),'Hide this notice');
+ const running={tone:'info',icon:'clock',running:true,text:'Starting lab…'};
+ h.context.setBanner('lab-banner',running);
+ const close=h.$('lab-banner-close');
+ assert.equal(close.getAttribute('aria-label'),'Collapse this notice');
+ close.onclick();
+ assert.equal(close.getAttribute('aria-label'),'Show this notice');
+ close.onclick();
+ assert.equal(close.getAttribute('aria-label'),'Collapse this notice');
 });
 
 test('the Home list tab is kept for the browser session and never throws when storage is blocked',()=>{

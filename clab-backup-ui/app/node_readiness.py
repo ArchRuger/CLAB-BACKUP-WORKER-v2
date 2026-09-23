@@ -30,6 +30,11 @@ AUTH_RETRY = 60      # a node that keeps refusing the saved login is asked again
 REFUSALS_BEFORE_FAILED = 3   # early boot can refuse a valid login; report a failure only when it persists
 MAX_TEST_ATTEMPTS = 3        # automatic login tests per boot cycle before a human has to look
 CLI_COMMAND = 'show version'
+# A node with no NOS platform (a plain Linux image, generic SSH profile or the
+# image-based defaults in inventory.py) has no NOS CLI to answer `show version`;
+# a real, harmless shell command still proves the SSH login answers a real command,
+# without faking readiness for a host that was never a NOS in the first place.
+GENERIC_CLI_COMMAND = 'echo readiness-check'
 CLI_TIMEOUT = 25
 RETRY_LATER = ('already running', 'lab operation', 'manager reset')
 MISSING = object()
@@ -64,6 +69,10 @@ def login_state(lab, node, available, check):
     if not effective_credentials(lab, node).get('username'):
         return {'status': 'needs_credentials', 'message': 'Assign NOS credentials to this node first.'}
     status = (check or {}).get('status')
+    # 'checking': a manual Test login or a lab-wide "Test logins" refresh is in flight for this
+    # node right now (node_services.py); never a real answer, so it never marks a device ready.
+    if status == 'checking':
+        return {'status': 'checking', 'message': check.get('message', ''), 'at': check.get('at')}
     if status == 'reachable':
         return {'status': 'ready', 'message': check.get('message', ''), 'at': check.get('at')}
     if status == 'failed':
@@ -72,9 +81,15 @@ def login_state(lab, node, available, check):
 
 
 def summarize(states):
-    """Lab-level readiness for the deployment bar: ready, booting, failed or idle."""
-    monitored = [s for s in states if s['status'] in ('ready', 'booting', 'failed')]
-    counts = {key: sum(s['status'] == key for s in monitored) for key in ('ready', 'booting', 'failed')}
+    """Lab-level readiness for the deployment bar: ready, booting, failed or idle.
+
+    A node being tested right now ('checking') is neither ready nor failed; it counts
+    alongside 'booting' so the deployment bar's total keeps every monitored device
+    while a "Test logins" refresh is in flight, instead of the total briefly shrinking.
+    """
+    bucket = lambda s: 'booting' if s['status'] == 'checking' else s['status']
+    monitored = [s for s in states if bucket(s) in ('ready', 'booting', 'failed')]
+    counts = {key: sum(bucket(s) == key for s in monitored) for key in ('ready', 'booting', 'failed')}
     if not monitored: status = 'idle'
     elif counts['ready'] == len(monitored): status = 'ready'
     elif counts['booting']: status = 'booting'
@@ -243,7 +258,8 @@ class ReadinessMonitor:
         except Exception: return None
         try:
             connect(client, node, creds)
-            return 'reachable' if cli_answers(client) else 'booting'
+            command = CLI_COMMAND if node.get('platform') else GENERIC_CLI_COMMAND
+            return 'reachable' if cli_answers(client, command) else 'booting'
         except (paramiko.AuthenticationException, ValueError): return 'failed'
         except Exception: return 'booting'
         finally: self.services.release(client)

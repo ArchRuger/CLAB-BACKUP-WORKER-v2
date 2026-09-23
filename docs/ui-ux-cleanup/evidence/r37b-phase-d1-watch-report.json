@@ -1,0 +1,37 @@
+{
+ "phase": "d1-watch",
+ "results": [
+  {
+   "item": "D1: capture viewer status at t+4s",
+   "ok": null,
+   "detail": "Capture session not found in this browser."
+  },
+  {
+   "item": "D1: capture viewer status at t+8s",
+   "ok": null,
+   "detail": "Capture session not found in this browser."
+  },
+  {
+   "item": "D1: capture viewer status at t+12s",
+   "ok": null,
+   "detail": "Capture session not found in this browser."
+  },
+  {
+   "item": "D1: capture viewer status at t+16s",
+   "ok": null,
+   "detail": "Capture session not found in this browser."
+  },
+  {
+   "item": "D1: capture viewer status at t+20s",
+   "ok": null,
+   "detail": "Capture session not found in this browser."
+  },
+  {
+   "item": "D1: session ended cleanly from the viewer",
+   "ok": true,
+   "detail": ""
+  }
+ ],
+ "console_errors": [],
+ "page_errors": []
+}

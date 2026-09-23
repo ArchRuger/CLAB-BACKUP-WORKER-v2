@@ -12,8 +12,11 @@ The saved configuration becomes the active one, and anything configured after th
 A paste or a merge of saved commands over the current configuration is not a restore. Every driver
 therefore uses the NOS's own whole-configuration transaction, arms the NOS's own timed recovery before
 management can be lost, and the manager confirms from a **fresh** SSH connection (which is the proof
-that management survived). Devices are not rebooted. Nodes are applied one after another: there is no
-atomicity across nodes, and a mixed result is reported per node.
+that management survived). Devices are not rebooted. Several nodes are changed at the same time (up to
+`RESTORE_NODE_WORKERS`, 1 to 8, default 4; 1 changes them one after another), each with its own token, undo
+window and read-back; two targets behind the same SSH address and port are always changed one after another.
+There is no atomicity across nodes, and a mixed result is reported per node. The safety backup before and the
+check backup after stay one backup job each, covering every node.
 
 | | Junos (cJunosEvolved, vJunos-switch) | Arista cEOS | Cisco IOS XR (XRv9k) |
 |---|---|---|---|
@@ -57,6 +60,19 @@ anything was sent), `rolled_back` (the change was not confirmed and the manager 
 configuration back**), `uncertain` (the manager could not establish what is active), `ineligible`,
 `interrupted`. `rollback_expected` exists only on jobs stored by releases before 1.30.27.
 
+Beside that outcome every node carries a `stage` for the progress view, and `timeline`, the time each stage
+was first entered: `queued`, `backing_up`, `backed_up`, `connecting`, `applying` (the driver validates, loads
+and arms in one call), `armed` (the timed recovery is running), `verifying` (a fresh connection reads the node
+back; `attempts` counts the passes), `confirming`, then `replaced` or `matched` (the device reported nothing to
+change; still counted as verified), `checking` while the check backup compares, or `skipped`, `failed`,
+`rolled_back`, `uncertain`. `timeline.settled` is the first final outcome, so the job document alone shows
+whether nodes overlapped; the job's `progress` counts settled nodes. The stage is a label only: restart
+recovery and the job's result read the outcome above. Jobs stored before stages existed have none.
+
+The review shows, for every device that differs, a unified diff of the saved configuration against the one it
+runs right now, in the comparison form (`display set` on Junos, running-config on EOS and IOS XR), with comment
+lines left out, every line cut at its first secret keyword and at most 400 lines sent.
+
 The manager keeps trying to reconnect and confirm for the whole recovery window (and 90 s beyond:
 Junos was seen rolling back 35 s late). It confirms a pending change only when the node shows it
 under this job's token; "something is pending" proves nothing about whose it is. After a manager
@@ -97,7 +113,7 @@ Tools (all in [`tools/`](tools/); all but `manager_restore.py` need `clab-backup
 | `readback.py` | The devices' own answer, sanitized for Git: is A or B active (one marker per kind of drift), is anything awaiting confirmation, is a manager session left over, the NOS boot identity. Booleans only. `manager_restore.py --readback` and `browser_restore.py` embed it before and after a run, together with the identity of the build that was running. |
 | `interruption.py` | 0.2 s probes on management and data-plane paths around one manager restore that really changes configuration; lost probes and the longest gap. |
 | `persistence_check.py` | Restart the NOS the normal way (Junos `request system reboot`, IOS XR `reload`, cEOS `containerlab restart --node`), prove from the NOS that it restarted, wait for management and both edges, compare the configuration independently. A containerlab redeploy is not a restart. |
-| `mixed_failure.py` | All four nodes selected, a foreign timed change armed mid-job on the node applied last: three verified, one "not changed", job `partial`, the foreign change left alone, recovery afterwards. |
+| `mixed_failure.py` | All four nodes selected and changed side by side; a foreign timed change is armed on xrv9k as soon as that target's `stage` in the job reaches `backing_up`/`backed_up` (after the manager's submit-time check, before its driver connects; the evidence records whether that held, and whether the other nodes overlapped): three verified, xrv9k "not changed", job `partial`, the foreign change left alone, recovery afterwards. |
 | `driver_junos_live.py` | Driver-layer proof of `restore_junos.py` on a real Junos node: token identity, `commit check` confirmation, the refusals that protect other people's edits and pending changes, a dropped session, no reboot. |
 
 Rerun one platform: apply the drift file with `nodecli.py <node> --file lab/drift/<node>-B.cli`, take a

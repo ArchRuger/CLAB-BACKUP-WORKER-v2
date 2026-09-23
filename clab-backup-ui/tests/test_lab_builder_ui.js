@@ -4,31 +4,23 @@ const read=name=>fs.readFileSync(path.join(__dirname,'../app/static',name),'utf8
 function storage(){const map=new Map();return {getItem:k=>map.has(k)?map.get(k):null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k),key:i=>[...map.keys()][i]??null,get length(){return map.size;}};}
 function load(){const context=vm.createContext({console,crypto:require('node:crypto').webcrypto,TextEncoder,URLSearchParams,document:{getElementById:()=>null}});vm.runInContext(read('lab-builder-page.js'),context);vm.runInContext(read('operations.js'),context);
  // top-level const is not a property of the context; expose the tables the tests read
- for(const name of ['BUILDER_TEMPLATES','BUILDER_STARTERS','opLabels','opReviewCopy'])context[name]=vm.runInContext(name,context);
+ for(const name of ['BUILDER_TEMPLATES','opLabels','opReviewCopy'])context[name]=vm.runInContext(name,context);
  return context;}
-// The starters are a fixed, small YAML shape; read them without a YAML library so this file has no dependencies.
-function starterShape(text){const nodes={},links=[];let node='';for(const line of text.split('\n')){let m;if((m=/^    ([A-Za-z0-9_.-]+):$/.exec(line))){node=m[1];nodes[node]={};}else if((m=/^      (kind|image): (.+)$/.exec(line)))nodes[node][m[1]]=m[2];else if((m=/^    - endpoints: \["([^"]+)", "([^"]+)"\]$/.exec(line)))links.push([m[1],m[2]]);}return {name:/^name: (.+)$/m.exec(text)[1],nodes,links};}
 
 test('lab names follow the literal rule of the VM helper and stay short',()=>{
  const c=load();
  for(const good of ['lab1','My_Lab.v2','a','0start'])assert.equal(c.builderName(good),true,good);
  for(const bad of ['','-lead','.hidden','has space','a/b','../x','x'.repeat(61),7,null])assert.equal(c.builderName(bad),false,String(bad));
 });
-test('interface patterns count from one, or from the start the pattern names',()=>{
+test('a new draft is a blank topology with the lab name, and the templates list still names every kind and image',()=>{
  const c=load();
- assert.equal(c.builderInterface('eth{n}',0),'eth1');assert.equal(c.builderInterface('eth{n}',2),'eth3');
- assert.equal(c.builderInterface('et-0/0/{n:0}',0),'et-0/0/0');assert.equal(c.builderInterface('Gi0/0/0/{n:0}',3),'Gi0/0/0/3');assert.equal(c.builderInterface('',1),'eth2');
-});
-test('starters are valid topologies whose links use each device interface once',()=>{
- const c=load();
- assert.equal(c.builderStarter('blank','empty').yaml,'name: empty\ntopology:\n  nodes: {}\n');assert.equal(c.builderStarter('blank','empty').annotations,'');
- for(const [id,nodes,links] of [['pair',2,1],['triangle',3,3]])for(const template of c.BUILDER_TEMPLATES){
-  const made=c.builderStarter(id,'lab',template),doc={topology:starterShape(made.yaml)},ends=doc.topology.links.flat();
-  assert.equal(Object.keys(doc.topology.nodes).length,nodes);assert.equal(doc.topology.links.length,links);assert.equal(new Set(ends).size,ends.length,'an interface is used twice: '+ends);
-  for(const node of Object.values(doc.topology.nodes))assert.deepEqual(node,{kind:template.kind,image:template.image});
-  assert.deepEqual(JSON.parse(made.annotations).nodeAnnotations.map(n=>n.id),Object.keys(doc.topology.nodes));
+ assert.deepEqual(JSON.parse(JSON.stringify(c.builderBlank('empty'))),{yaml:'name: empty\ntopology:\n  nodes: {}\n',annotations:''});
+ assert.deepEqual(JSON.parse(JSON.stringify(c.builderBlank('lab2'))),{yaml:'name: lab2\ntopology:\n  nodes: {}\n',annotations:''});
+ // the starters are gone, but the device palette still needs a template for every driver the manager has,
+ // each with a name and an image (the New lab dialog no longer chooses one; dragging the palette does)
+ for(const kind of ['arista_ceos','juniper_cjunosevolved','juniper_vjunosswitch','cisco_xrv9k','linux']){
+  const t=c.BUILDER_TEMPLATES.find(x=>x.kind===kind);assert.ok(t,kind);assert.ok(t.name&&t.image,kind);
  }
- assert.match(c.builderStarter('triangle','x',c.BUILDER_TEMPLATES[1]).yaml,/"ptx1:et-0\/0\/0", "ptx2:et-0\/0\/0"/);
 });
 test('templates take the image this site already uses for their kind',()=>{
  const c=load(),list=c.builderTemplateList({arista_ceos:['n24l/ceos:4.35.0F','ceos:old'],nokia_srlinux:['ghcr.io/nokia/srlinux']});
@@ -59,6 +51,17 @@ test('the status line tells a draft from a saved lab and from unsaved changes',(
  assert.match(c.draftStatus({yaml:'a'}).text,/not on the VM yet/);
  assert.equal(c.draftStatus({yaml:'a',annotations:'b',vm:vmCopy}).text,'Saved on the VM');assert.equal(c.draftStatus({yaml:'a',annotations:'b',vm:vmCopy}).detail,vmCopy.path);
  assert.match(c.draftStatus({yaml:'changed',annotations:'b',vm:vmCopy}).text,/not saved to the VM yet/);assert.match(c.draftStatus({yaml:'a',annotations:'moved',vm:vmCopy}).text,/not saved/);
+ // the pill next to "Lab builder" carries this text; it is empty only while no draft is open, never for a real state
+ assert.equal(c.draftStatus(null).text,'');assert.equal(c.draftStatus(null).tone,'neutral');
+ for(const s of [c.draftStatus({yaml:'a'}),c.draftStatus({yaml:'a'},{yaml:'a',annotations:''}),c.draftStatus({yaml:'a',annotations:'b',vm:vmCopy}),c.draftStatus({yaml:'changed',annotations:'b',vm:vmCopy})])assert.notEqual(s.text,'');
+});
+test('the status pill is hidden with no text while no draft is open, and shown with its state otherwise',()=>{
+ const p=page({answer:()=>({})});
+ p.run('builderRenderBar()');
+ assert.equal(p.el('builder-status').hidden,true);assert.equal(p.el('builder-status').textContent,'');
+ p.run(`builderDraft=draftWrite(builderStore,{id:'new:lab1',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)}},undefined);builderRenderBar();`);
+ assert.equal(p.el('builder-status').hidden,false);assert.match(p.el('builder-status').textContent,/not on the VM yet/);
+ assert.ok(read('lab-builder.html').includes('id="builder-status" role="status" hidden'),'hidden by default in the markup too, before the page\'s own script runs');
 });
 test('the first save publishes a new folder; later saves revise the versions that were opened',async()=>{
  const c=load(),hash=async t=>'sha:'+t;
@@ -185,6 +188,58 @@ test('a downloaded draft is checked before it becomes a draft, and takes the nam
  // the manager being away does not stop a student from opening their own file
  const offline=page({answer:()=>new Error('down')});assert.equal((await offline.run(`builderImportDraft(${JSON.stringify(file('x',TOPOLOGY))},'/srv/labs')`)).draft.name,'lab1');
 });
+test('a dropped topology/map pair is paired order-independently, and bad pairs are refused with the reason',()=>{
+ const c=load(),f=(name,text)=>({name,size:text.length,text});
+ const a=c.builderDropPair([f('lab.clab.yml','name: t\ntopology: {}\n'),f('lab.clab.yml.annotations.json','{}')]);
+ assert.deepEqual(JSON.parse(JSON.stringify(a)),{yaml:'name: t\ntopology: {}\n',annotations:'{}',notice:''});
+ // order independent: the map first, then the topology, gives the same pair
+ assert.deepEqual(JSON.parse(JSON.stringify(c.builderDropPair([f('lab.clab.yml.annotations.json','{}'),f('lab.clab.yml','name: t\ntopology: {}\n')]))),JSON.parse(JSON.stringify(a)));
+ // topology-only works: no map, no notice
+ const onlyTopology=c.builderDropPair([f('lab.yaml','name: t\ntopology: {}\n')]);assert.deepEqual(JSON.parse(JSON.stringify(onlyTopology)),{yaml:'name: t\ntopology: {}\n',annotations:'',notice:''});
+ // a map whose base name differs is used anyway, with a notice
+ const mismatched=c.builderDropPair([f('lab.clab.yml','name: t\ntopology: {}\n'),f('other.annotations.json','{}')]);assert.match(mismatched.notice,/does not match/);
+ // two topologies, no files, an unrelated file, two maps
+ assert.throws(()=>c.builderDropPair([f('a.clab.yml','x'),f('b.clab.yml','y')]),/Drop one topology file at a time/);
+ assert.throws(()=>c.builderDropPair([]),/Drop a lab file/);
+ assert.throws(()=>c.builderDropPair([f('readme.txt','x')]),/containerlab topology file/);
+ assert.throws(()=>c.builderDropPair([f('a.clab.yml','x'),f('a.annotations.json','{}'),f('b.annotations.json','{}')]),/up to two files/);
+ // oversize: either file over 1 MiB is refused, named
+ const big={name:'a.clab.yml',size:1024*1024+1,text:'x'};assert.throws(()=>c.builderDropPair([big]),/"a\.clab\.yml" is larger than 1 MiB/);
+ // malformed JSON, and JSON that is not a single object, are refused with the parser's reason — unlike a
+ // downloaded draft's annotations (builderImportDraft), a dropped pair's map is checked before it opens
+ assert.throws(()=>c.builderDropPair([f('a.clab.yml','x'),f('a.annotations.json','not json')]),/not valid JSON/);
+ assert.throws(()=>c.builderDropPair([f('a.clab.yml','x'),f('a.annotations.json','[1,2]')]),/one JSON object/);
+});
+test('dropping a lab file replaces the open draft only after a confirm when it has unsaved work, and needs none on the welcome page',async()=>{
+ const file=(name,text)=>({name,size:text.length,text:async()=>text});
+ const p=page({answer:(url,body)=>url.endsWith('/operations/parse-yaml')?{name:'lab2'}:{}});
+ p.run(`builderDraft=draftWrite(builderStore,{id:'new:lab1',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)},vm:{path:'${VM_PATH}',yaml:${JSON.stringify(TOPOLOGY)},annotations:''}},undefined);builderPage.persist(${JSON.stringify(TOPOLOGY+'# edit\n')},'')`);
+ let asked=0;p.c.confirm=()=>{asked++;return false;};
+ p.c.dropped=[file('lab2.clab.yml','name: lab2\ntopology:\n  nodes: {}\n')];
+ await p.run('builderDropOpen(dropped)');
+ assert.equal(asked,1,'a draft with unsaved work is never replaced without asking');
+ assert.equal(p.c.draftList(p.store).some(d=>d.name==='lab2'),false,'declined: nothing new is written');
+ p.c.confirm=()=>true;await p.run('builderDropOpen(dropped)');
+ const made=p.c.draftList(p.store).find(d=>d.name==='lab2');
+ assert.ok(made,'accepted: the dropped pair becomes a draft, exactly like an imported one');
+ assert.equal(made.yaml,'name: lab2\ntopology:\n  nodes: {}\n');assert.equal(made.annotations,'');
+ assert.ok(p.calls.includes('reload'),'the result opens in the editor like opening any other draft');
+ // the welcome page (no draft open) has nothing to lose: dropping there needs no confirmation
+ const q=page({answer:(url,body)=>url.endsWith('/operations/parse-yaml')?{name:'fresh'}:{}});
+ let asked2=0;q.c.confirm=()=>{asked2++;return true;};
+ q.c.dropped=[file('fresh.clab.yml','name: fresh\ntopology:\n  nodes: {}\n')];
+ await q.run('builderDropOpen(dropped)');
+ assert.equal(asked2,0);assert.ok(q.c.draftList(q.store).some(d=>d.name==='fresh'));
+});
+test('a dropped topology the manager cannot read is refused with the reason, and an unreachable manager does not stop it opening',async()=>{
+ const file=(name,text)=>({name,size:text.length,text:async()=>text});
+ const bad='name: lab1\ntopology:\n  nodes:\n   - [unclosed\n';
+ const p=page({answer:(url,body)=>url.endsWith('/operations/parse-yaml')?{refused:'Enter a valid literal Containerlab topology.'}:{}});
+ p.c.dropped=[file('lab1.clab.yml',bad)];
+ await assert.rejects(p.run('builderDropOpen(dropped)'),/cannot be read/);
+ const offline=page({answer:()=>new Error('down')});offline.c.dropped=[file('lab1.clab.yml',TOPOLOGY)];
+ await offline.run('builderDropOpen(dropped)');assert.ok(offline.c.draftList(offline.store).some(d=>d.name==='lab1'));
+});
 test('Save is never off without the reason being on the page',()=>{
  const p=page({answer:()=>({})});p.run(`builderDraft=draftWrite(builderStore,{id:'new:lab1',name:'lab1',root:'/srv/labs',yaml:${JSON.stringify(TOPOLOGY)}},undefined);builderCapsError='The VM connection is not configured.';builderRenderBar();`);
  assert.equal(p.el('builder-save').disabled,true);assert.match(p.el('builder-note-text').textContent,/not available right now: The VM connection is not configured\./);assert.equal(p.el('builder-note').hidden,false);assert.equal(p.el('builder-note-retry').hidden,false);assert.equal(p.el('builder-save').title,p.el('builder-note-text').textContent);
@@ -273,4 +328,42 @@ test('the committed assets are the ones the manifest names, and the page loads o
  assert.match(fs.readFileSync(path.join(dir,'clab-ui.LICENSE'),'utf8'),/Apache License/);assert.match(fs.readFileSync(path.join(dir,'THIRD-PARTY-NOTICES.txt'),'utf8'),/elkjs .*EPL-2\.0/);
  const html=read('lab-builder.html');assert.doesNotMatch(html,/ style=|<style|\son[a-z]+=|https?:\/\//);
  for(const ref of html.matchAll(/(?:src|href)="(\/static\/[^"]+)"/g))if(!ref[1].endsWith('.svg')&&!ref[1].endsWith('.txt'))assert.match(ref[1],/\?v=\d+\.\d+\.\d+$/,ref[1]);
+});
+// C4: "View YAML" was a read-only dialog; the bar's YAML button now toggles the editable panel
+// (lab-builder-yaml.js), which still shows exactly the draft's topology text: the newest one, unstored first.
+test('the YAML button opens the editable panel, and the panel shows the draft’s own topology text',()=>{
+ const html=read('lab-builder.html'),page=read('lab-builder-page.js');
+ assert.ok(html.indexOf('lab-builder-page.js')<html.indexOf('lab-builder-yaml.js')&&html.indexOf('lab-builder-yaml.js')<html.indexOf('lab-builder/assets/main.js'),'the panel script loads after the page and before the editor');
+ assert.match(html,/<button class="button secondary" id="builder-yaml" aria-expanded="false" aria-controls="builder-yaml-panel"[^>]*>YAML<\/button>/);
+ assert.doesNotMatch(page+html,/builderYamlDialog|builder-yaml-text|View YAML/,'the read-only dialog is gone');
+ assert.match(page,/\['builder-yaml',\(\)=>builderYamlPanelToggle\(\)\]/);assert.match(page,/\$\('root'\)\.insertAdjacentHTML\('afterend',builderYamlPanelMarkup\(\)\)/);
+ const c=load();vm.runInContext(read('lab-builder-yaml.js'),c);const inits=[];c.builderYamlPanelInit=o=>inits.push(o);
+ const editor={applyYaml(){},getYaml:()=>'',subscribe:()=>()=>{}};vm.runInContext('builderPage',c).attach(editor);
+ assert.equal(inits.length,1);assert.equal(inits[0].editor,editor);
+ assert.equal(inits[0].getDraftYaml(),'','no draft, no text');
+ vm.runInContext("builderDraft={id:'new:lab',name:'lab',yaml:'name: lab\\ntopology: {}\\n',annotations:''};builderUnstored=null;",c);
+ assert.equal(inits[0].getDraftYaml(),'name: lab\ntopology: {}\n','the text is the draft’s yaml');
+ vm.runInContext("builderUnstored={yaml:'name: lab\\n# newer\\n',annotations:''};",c);
+ assert.equal(inits[0].getDraftYaml(),'name: lab\n# newer\n','what the editor holds but could not store comes first');
+ // The panel's open state reaches the bar button and the layout, from any way it closes.
+ const attrs={},classes=new Set();c.document.getElementById=id=>id==='builder-yaml'?{setAttribute:(k,v)=>{attrs[k]=v;}}:{classList:{toggle:(n,on)=>on?classes.add(n):classes.delete(n)}};
+ inits[0].onToggle(true);assert.equal(attrs['aria-expanded'],'true');assert.ok(classes.has('yaml-open'));
+ inits[0].onToggle(false);assert.equal(attrs['aria-expanded'],'false');assert.ok(!classes.has('yaml-open'));
+ const css=read('lab-builder.css');assert.match(css,/\.builder-stage\.yaml-open #root\{right:/);assert.match(css,/\.builder-yaml-gutter,\.builder-yaml-editor\{[^}]*font:13px\/20px var\(--mono\)/,'gutter and text share their font metrics');
+});
+// The file drop zone listens on the whole stage. A device dragged from the editor's palette crosses the
+// stage too: taking that drag over (preventDefault, dropEffect 'copy' against the palette's 'move') made
+// the browser cancel the palette's drop, so no device could be dragged onto the canvas.
+test('the file drop zone takes file drags only and leaves the palette’s drags to the editor',()=>{
+ const c=load(),els={},tasks=[];
+ c.document.getElementById=id=>els[id]||(els[id]={listeners:{},addEventListener(t,f){this.listeners[t]=f;}});
+ c.opTask=(_,fn)=>tasks.push(fn);vm.runInContext('builderDropWire()',c);
+ const drag=types=>({prevented:false,dataTransfer:{types,dropEffect:'move',files:types.includes('Files')?['f']:[]},preventDefault(){this.prevented=true;}});
+ for(const id of ['builder-welcome','builder-stage']){
+  const palette=drag(['application/reactflow','text/plain']);els[id].listeners.dragover(palette);els[id].listeners.drop(palette);
+  assert.equal(palette.prevented,false,id+': a palette drag is not the page’s');assert.equal(palette.dataTransfer.dropEffect,'move');
+  const file=drag(['Files']);els[id].listeners.dragover(file);assert.equal(file.prevented,true);assert.equal(file.dataTransfer.dropEffect,'copy');
+  els[id].listeners.drop(file);assert.equal(file.prevented,true);
+ }
+ assert.equal(tasks.length,2,'only the two file drops open anything');
 });

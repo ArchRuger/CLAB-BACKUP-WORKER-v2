@@ -1,5 +1,6 @@
 import base64
 import copy
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -12,7 +13,9 @@ from fastapi import HTTPException
 
 from app import __version__
 from app.git_progress import (GitProgress, base_folder, captured_snapshot, decoded_snapshot, pending_progress,
-                              PROTOCOL, snapshot_conflict, version_label, resolve_version_path)
+                              PROTOCOL, snapshot_conflict, snapshot_diff, version_label, resolve_version_path,
+                              annotated_compare, file_label, job_destination, pair_renamed_files,
+                              repository_display_name, strip_credentials)
 from app.store import Store
 import test_discovery as discovery_tests
 
@@ -70,6 +73,150 @@ class VersionPathTests(unittest.TestCase):
         self.assertEqual(snapshot_conflict(files, 'Final/latest'), 'Final/latest')
         self.assertEqual(snapshot_conflict(files, 'Elsewhere'), '')
         self.assertEqual(snapshot_conflict(files, ''), '')
+
+
+class DestinationTests(unittest.TestCase):
+    """E3: the destination a job freezes at save time, built from the binding, never re-derived."""
+
+    def test_repository_display_name_prefers_the_remote_url_leaf(self):
+        self.assertEqual(repository_display_name({'push_url': 'https://github.com/ben/BENS-BGP-LAB.git', 'path': '/x/checkout'}), 'BENS-BGP-LAB')
+        self.assertEqual(repository_display_name({'push_url': '', 'path': '/home/ben/labs/bgp'}), 'bgp')
+        self.assertEqual(repository_display_name({'push_url': '', 'path': '', 'label': 'Bens lab'}), 'Bens lab')
+        self.assertEqual(repository_display_name({}), 'repository')
+
+    def test_strip_credentials_removes_userinfo_only(self):
+        self.assertEqual(strip_credentials('https://token@github.com/ben/lab.git'), 'https://github.com/ben/lab.git')
+        self.assertEqual(strip_credentials('https://user:pass@github.com/ben/lab.git'), 'https://github.com/ben/lab.git')
+        self.assertEqual(strip_credentials('https://github.com/ben/lab.git'), 'https://github.com/ben/lab.git')
+        self.assertEqual(strip_credentials(''), '')
+
+    def test_job_destination_freezes_repository_branch_path_and_checkout(self):
+        binding = {'repository': {'path': '/home/ben/labs/bgp', 'prefix': 'Gtel-100G-G8032/Working',
+                                  'branch': 'main', 'push_url': 'https://user:pass@github.com/ben/Course-Labs.git'}}
+        latest = job_destination(binding, 'latest')
+        self.assertEqual(latest, {'repository': 'Course-Labs', 'remote': 'https://github.com/ben/Course-Labs.git',
+                                  'branch': 'main', 'path': 'Gtel-100G-G8032/Working/latest', 'checkout': '/home/ben/labs/bgp'})
+        checkpoint = job_destination(binding, 'checkpoint', 'day-1')
+        self.assertEqual(checkpoint['path'], 'Gtel-100G-G8032/Working/checkpoints/day-1')
+        root = job_destination({'repository': {'path': '/x', 'prefix': '', 'branch': 'main', 'push_url': ''}}, 'baseline')
+        self.assertEqual(root['path'], 'baseline')
+        self.assertEqual(root['repository'], 'x')
+
+
+class RenamedFileCompareTests(unittest.TestCase):
+    """The VM helper's `compare` mode pairs files by name; a device whose human backup extension
+    moved between saves (Junos `.set` to `.cfg`) must still read as one changed file."""
+
+    def test_a_suffix_renamed_file_is_folded_into_one_changed_entry(self):
+        files = [dict(name='r2.set', status='removed', before='OLD\n', after=''),
+                 dict(name='r2.cfg', status='added', before='', after='NEW\n')]
+        result = pair_renamed_files(files)
+        self.assertEqual(len(result), 1, result)
+        self.assertEqual(result[0]['status'], 'changed')
+        self.assertEqual(result[0]['name'], 'r2.cfg')
+        self.assertEqual(result[0]['renamed_from'], 'r2.set')
+        self.assertEqual(result[0]['before'], 'OLD\n')
+        self.assertEqual(result[0]['after'], 'NEW\n')
+
+    def test_an_unrelated_removed_and_added_pair_is_left_alone(self):
+        files = [dict(name='r2.set', status='removed', before='OLD\n', after=''),
+                 dict(name='r3.cfg', status='added', before='', after='NEW\n')]
+        result = pair_renamed_files(files)
+        self.assertEqual({f['name'] for f in result}, {'r2.set', 'r3.cfg'})
+        self.assertEqual({f['status'] for f in result}, {'removed', 'added'})
+
+    def test_an_ambiguous_stem_match_is_never_guessed(self):
+        files = [dict(name='r2.set', status='removed', before='OLD\n', after=''),
+                 dict(name='r2.cfg', status='added', before='', after='A\n'),
+                 dict(name='r2-abcdef123456.cfg', status='added', before='', after='B\n')]
+        # Only one candidate matches the stem 'r2' exactly; the hashed-collision name is a
+        # different stem and is left as its own added file, never guessed at.
+        result = pair_renamed_files(files)
+        self.assertEqual(len(result), 2, result)
+        changed = next(f for f in result if f['status'] == 'changed')
+        self.assertEqual(changed['name'], 'r2.cfg')
+        self.assertEqual(changed['renamed_from'], 'r2.set')
+        added = next(f for f in result if f['status'] == 'added')
+        self.assertEqual(added['name'], 'r2-abcdef123456.cfg')
+
+    def test_an_ordinary_changed_file_is_unaffected(self):
+        files = [dict(name='r1.cfg', status='changed', before='a\n', after='b\n')]
+        self.assertEqual(pair_renamed_files(files), files)
+
+    def test_annotated_compare_adds_a_diff_and_a_label_after_folding_a_rename(self):
+        files = [dict(name='r2.set', status='removed', before='set a\n', after=''),
+                 dict(name='r2.cfg', status='added', before='', after='set b\n')]
+        result = annotated_compare(files)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['label'], 'r2')
+        self.assertFalse(result[0]['diff']['identical'])
+        self.assertGreaterEqual(result[0]['diff']['added'], 1)
+
+
+class FileLabelTests(unittest.TestCase):
+    def test_file_label_strips_the_saved_extension(self):
+        self.assertEqual(file_label('r2.cfg'), 'r2')
+        self.assertEqual(file_label('r2.jcfg'), 'r2')
+        self.assertEqual(file_label('manifest'), 'manifest')
+        self.assertEqual(file_label(''), '')
+
+
+class SnapshotDiffTests(unittest.TestCase):
+    """`snapshot_diff` pairs two saved snapshots by manifest node, not by filename, so a device's
+    human backup can change extension between saves (Junos `.set` to `.cfg`) without appearing as a
+    removed file plus an added one."""
+
+    @staticmethod
+    def manifest_and_files(node, suffix, text, restore_text=None, restore_suffix='jcfg'):
+        entry = {'path': f'{node}.{suffix}', 'node': node, 'platform': 'juniper_cjunosevolved',
+                 'format': 'junos-display-set'}
+        files = {entry['path']: text.encode('utf-8')}
+        if restore_text is not None:
+            entry.update(restore_artifact=f'{node}.{restore_suffix}', restore_format='junos-hierarchical',
+                        restore_capable=True)
+            files[entry['restore_artifact']] = restore_text.encode('utf-8')
+        return {'files': [entry]}, files
+
+    def test_renamed_and_changed_file_pairs_as_one_changed_entry(self):
+        before_manifest, before_files = self.manifest_and_files('r2', 'set', 'set system host-name OLD\n')
+        after_manifest, after_files = self.manifest_and_files('r2', 'cfg', 'set system host-name NEW\n')
+        result = snapshot_diff(before_manifest, before_files, after_manifest, after_files)
+        self.assertEqual(len(result), 1, result)
+        self.assertEqual(result[0]['status'], 'changed')
+        self.assertEqual(result[0]['name'], 'r2.cfg')  # shown under its current name
+        self.assertIn('OLD', result[0]['before'])
+        self.assertIn('NEW', result[0]['after'])
+        self.assertFalse(any(f['status'] in ('added', 'removed') for f in result))
+
+    def test_unchanged_restore_artifact_with_a_renamed_config_only_reports_the_config(self):
+        before_manifest, before_files = self.manifest_and_files('r2', 'set', 'OLD\n', restore_text='hier\n')
+        after_manifest, after_files = self.manifest_and_files('r2', 'cfg', 'NEW\n', restore_text='hier\n')
+        result = snapshot_diff(before_manifest, before_files, after_manifest, after_files)
+        self.assertEqual([f['name'] for f in result], ['r2.cfg'])
+
+    def test_changed_restore_artifact_is_paired_by_node_too(self):
+        before_manifest, before_files = self.manifest_and_files('r2', 'cfg', 'same\n', restore_text='OLD-HIER\n')
+        after_manifest, after_files = self.manifest_and_files('r2', 'cfg', 'same\n', restore_text='NEW-HIER\n')
+        result = snapshot_diff(before_manifest, before_files, after_manifest, after_files)
+        self.assertEqual(len(result), 1, result)
+        self.assertEqual(result[0]['name'], 'r2.jcfg')
+        self.assertEqual(result[0]['status'], 'changed')
+
+    def test_node_only_in_before_is_removed_not_paired(self):
+        before_manifest, before_files = self.manifest_and_files('r2', 'set', 'OLD\n')
+        after_manifest, after_files = {'files': []}, {}
+        result = snapshot_diff(before_manifest, before_files, after_manifest, after_files)
+        self.assertEqual(result, [{'name': 'r2.set', 'status': 'removed', 'before': 'OLD\n', 'after': ''}])
+
+    def test_node_only_in_after_is_added_not_paired(self):
+        before_manifest, before_files = {'files': []}, {}
+        after_manifest, after_files = self.manifest_and_files('r3', 'cfg', 'NEW\n')
+        result = snapshot_diff(before_manifest, before_files, after_manifest, after_files)
+        self.assertEqual(result, [{'name': 'r3.cfg', 'status': 'added', 'before': '', 'after': 'NEW\n'}])
+
+    def test_identical_snapshot_reports_no_files(self):
+        manifest, files = self.manifest_and_files('r2', 'cfg', 'same\n', restore_text='same-hier\n')
+        self.assertEqual(snapshot_diff(manifest, files, manifest, files), [])
 
 
 class GitProgressTests(unittest.TestCase):
@@ -140,7 +287,7 @@ class GitProgressTests(unittest.TestCase):
         return copy.deepcopy(job)
 
     def save(self, **fields):
-        data = dict(request_id=uuid.uuid4().hex, target='latest', push=True)
+        data = dict(request_id=uuid.uuid4().hex, target='latest', push=True, note='Fixture save')
         data.update(fields)
         result = self.client.post(self.url+'/save', json=data)
         self.assertEqual(result.status_code, 200, result.text)
@@ -191,6 +338,11 @@ class GitProgressTests(unittest.TestCase):
         self.assertTrue(entry['restore_capable'])
         self.assertEqual(entry['restore_format'], 'junos-hierarchical')
         self.assertIn(entry['restore_artifact'], snapshot['files'])
+        # The Junos human-facing Git snapshot file is `.cfg` (display-set text, matching EOS and
+        # IOS XR there); the internal capture storage extension (`.set`, the fixture's own file
+        # above) never leaks into the repository. The restore artifact keeps its own `.jcfg` name.
+        self.assertTrue(entry['path'].endswith('.cfg'), entry['path'])
+        self.assertTrue(entry['restore_artifact'].endswith('.jcfg'), entry['restore_artifact'])
         # A full validation round-trip keeps every artifact and matches the manifest keys.
         _, files = decoded_snapshot({'snapshot': snapshot})
         self.assertIn(entry['restore_artifact'], files)
@@ -242,6 +394,57 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(self.dispatch.call_count, 1)
         data['push'] = False
         self.assertEqual(self.client.post(self.url+'/save', json=data).status_code, 409)
+
+    def test_a_save_without_a_short_label_is_refused(self):
+        for note in ('', '   '):
+            response = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex, target='latest', note=note))
+            self.assertEqual(response.status_code, 400, note)
+            self.assertIn('Give this save a short label.', response.json()['detail'])
+        self.assertEqual(len(self.store.state['git_jobs']), 0)
+        ok = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex, target='latest', note='OSPF adjacencies up'))
+        self.assertEqual(ok.status_code, 200, ok.text)
+
+    def test_a_save_freezes_its_destination_and_the_commit_message_is_the_label(self):
+        job, _ = self.save(note='OSPF adjacencies up on every router')
+        self.assertEqual(job['destination'], {'repository': 'bgp', 'remote': '', 'branch': 'main',
+                                               'path': 'latest', 'checkout': '/home/ben/labs/bgp'})
+        outcome, _ = self.run_save(job)
+        publish = next(r for r in self.sent if r['mode'] == 'publish')
+        self.assertEqual(publish['message'], 'OSPF adjacencies up on every router')
+        # The binding moving to a different folder afterwards never rewrites a destination already
+        # frozen on an earlier job: only a fresh save picks up the new binding.
+        with self.store.lock:
+            self.store.lab(self.lab['id'])['git_binding']['repository']['prefix'] = 'moved'; self.store.save()
+        refreshed = self.client.get('/api/git/jobs/'+job['id']).json()
+        self.assertEqual(refreshed['destination']['path'], 'latest')
+        moved, _ = self.save(note='After the move')
+        self.assertEqual(moved['destination']['path'], 'moved/latest')
+
+    def test_retry_reuses_the_same_job_and_never_recaptures_or_rewrites_the_commit(self):
+        job, _ = self.save(push=False); outcome, submit = self.run_save(job)
+        self.assertEqual(outcome['status'], 'committed'); first_commit = outcome['commit']
+        outcome, submit = self.review_and_upload(job)
+        self.assertEqual(outcome['id'], job['id']); self.assertEqual(outcome['commit'], first_commit)
+        self.assertEqual(outcome['status'], 'synced'); submit.assert_not_called()
+        self.assertEqual(sum(r['mode'] == 'publish' for r in self.sent), 1, 'the capture and commit were never repeated')
+
+    def test_compare_by_job_id_folds_a_renamed_file_and_annotates_every_file(self):
+        original_remote = self.remote
+        def remote(host, request, stopping=None):
+            if request['mode'] == 'compare':
+                return {'files': [dict(name='r1.set', status='removed', before='set old\n', after=''),
+                                  dict(name='r1.cfg', status='added', before='', after='set new\n')]}
+            return original_remote(host, request, stopping)
+        self.helper.side_effect = remote
+        job, _ = self.save(); self.run_save(job)
+        diff = self.client.post(self.url+'/compare', json={'job_id': job['id']})
+        self.assertEqual(diff.status_code, 200, diff.text)
+        files = diff.json()['files']
+        self.assertEqual(len(files), 1, files)
+        self.assertEqual(files[0]['status'], 'changed')
+        self.assertEqual(files[0]['renamed_from'], 'r1.set')
+        self.assertEqual(files[0]['label'], 'r1')
+        self.assertGreaterEqual(files[0]['diff']['added'], 1)
 
     def test_partial_capture_keeps_git_untouched(self):
         backup = self.capture(); self.store.state['jobs'][0]['status'] = 'partial'
@@ -574,6 +777,64 @@ class GitProgressTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()['versions'][0]['label'], 'Final')
 
+    def test_history_lists_a_legacy_and_a_fresh_save_and_compare_pairs_them_per_node(self):
+        """A repository saved before this change holds `r2.set` + `r2.jcfg`; a fresh save after it
+        holds `r2.cfg` + `r2.jcfg` for the same node. History still lists both saved versions,
+        comparing the older one against the fresh one pairs the human file as one changed entry
+        (never removed+added) despite the extension change, and either manifest still names its
+        `.jcfg` restore artifact."""
+        old_raw, old_hier = b'set system host-name OLD\n', b'system { host-name OLD; }\n'
+        new_raw, new_hier = b'set system host-name NEW\n', b'system { host-name NEW; }\n'
+
+        def manifest_for(raw, hier, suffix):
+            return {'schema': 2, 'lab_id': self.lab['id'], 'lab_name': self.lab['name'], 'node_names': ['r2'],
+                    'files': [{'path': f'r2.{suffix}', 'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(),
+                               'node': 'r2', 'platform': 'juniper_cjunosevolved', 'format': 'junos-display-set',
+                               'restore_artifact': 'r2.jcfg', 'restore_size': len(hier),
+                               'restore_sha256': hashlib.sha256(hier).hexdigest(),
+                               'restore_format': 'junos-hierarchical', 'restore_capable': True}]}
+        old_snap = {'manifest': manifest_for(old_raw, old_hier, 'set'),
+                   'files': {'r2.set': base64.b64encode(old_raw).decode(), 'r2.jcfg': base64.b64encode(old_hier).decode()}}
+        new_snap = {'manifest': manifest_for(new_raw, new_hier, 'cfg'),
+                   'files': {'r2.cfg': base64.b64encode(new_raw).decode(), 'r2.jcfg': base64.b64encode(new_hier).decode()}}
+        old_commit, new_commit = 'a'*40, 'b'*40
+        self.history_versions = [dict(name='latest', path='latest', commit=new_commit, connected=True)]
+        reads = {(old_commit, 'latest'): old_snap, (new_commit, 'latest'): new_snap}
+
+        def remote(host, request, stopping=None):
+            self.sent.append(copy.deepcopy(request))
+            mode = request['mode']
+            if mode == 'list': return dict(protocol=PROTOCOL, version=__version__, repositories=[self.repo])
+            if mode == 'status': return dict(repository=self.repo, ready=True, head=new_commit, baseline_revision='', latest_manifest=None)
+            if mode == 'history': return dict(commits=[], versions=self.history_versions)
+            if mode == 'read-version': return {'snapshot': reads[(request['commit'], request['path'])]}
+            raise AssertionError(mode)
+        self.helper.side_effect = remote
+
+        # History lists the one saved version regardless of which naming its files use.
+        history = self.client.get(self.url + '/history').json()
+        self.assertEqual(history['versions'][0]['label'], 'latest')
+
+        # Comparing the legacy commit against the fresh latest pairs the human file per node.
+        diff = self.client.post(self.url+'/compare', json={'commit': old_commit, 'path': 'latest'})
+        self.assertEqual(diff.status_code, 200, diff.text)
+        files = diff.json()['files']
+        # The renamed human file (`r2.set` -> `r2.cfg`) and the restore artifact (`r2.jcfg`,
+        # unchanged name, changed content) each appear exactly once, paired by node.
+        self.assertEqual([f['name'] for f in files], ['r2.cfg', 'r2.jcfg'])
+        self.assertTrue(all(f['status'] == 'changed' for f in files), files)
+        config = next(f for f in files if f['name'] == 'r2.cfg')
+        self.assertIn('OLD', config['before']); self.assertIn('NEW', config['after'])
+        self.assertFalse(any(f['status'] in ('added', 'removed') for f in files),
+                         'a renamed human file must not appear as removed+added')
+
+        # Both the legacy and the fresh manifest still name their restore artifact explicitly.
+        _, old_files = decoded_snapshot({'snapshot': old_snap})
+        _, new_files = decoded_snapshot({'snapshot': new_snap})
+        self.assertIn('r2.jcfg', old_files); self.assertIn('r2.jcfg', new_files)
+        self.assertEqual(old_snap['manifest']['files'][0]['restore_artifact'], 'r2.jcfg')
+        self.assertEqual(new_snap['manifest']['files'][0]['restore_artifact'], 'r2.jcfg')
+
     def test_active_save_blocks_mutations_and_capture_can_ignore_own_reservation(self):
         job, _ = self.save()
         self.assertEqual(self.client.post(self.url+'/unlink', json={}).status_code, 409)
@@ -589,7 +850,7 @@ class GitProgressTests(unittest.TestCase):
     def test_failed_request_persistence_does_not_dispatch(self):
         before = len(self.store.state['git_jobs'])
         with patch.object(self.store, 'save', side_effect=OSError('disk')):
-            response = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex))
+            response = self.client.post(self.url+'/save', json=dict(request_id=uuid.uuid4().hex, note='Fixture save'))
             self.assertEqual(response.status_code, 500)
         self.assertEqual(len(self.store.state['git_jobs']), before)
         self.dispatch.assert_not_called()

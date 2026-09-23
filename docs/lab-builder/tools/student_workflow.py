@@ -55,10 +55,19 @@ def run(p):
     if taken:
         pg.fill('#builder-new-name', taken); pg.click('#builder-new-create'); pg.wait_for_timeout(400)
         check('the name of a lab already in My labs is refused', 'already in My labs' in pg.inner_text('#builder-new .form-error'))
-    pg.fill('#builder-new-name', LAB); pg.select_option('#builder-new-starter', 'triangle')
-    pg.select_option('#builder-new-template', str(pg.evaluate(f"[...document.querySelectorAll('#builder-new-template option')].findIndex(o => o.textContent.startsWith('{args.template}'))"))); pg.click('#builder-new-create')
-    pg.wait_for_selector('.react-flow__node', timeout=20000); pg.wait_for_timeout(1500)
-    check('triangle starter: three devices, three links', nodes() == 3 and edges() == 3, f'{nodes()} nodes, {edges()} edges')
+    # A new lab always starts blank; the triangle this workflow needs from here on is built by hand,
+    # dragging the chosen device template from the palette three times and linking the devices in a ring.
+    pg.fill('#builder-new-name', LAB); pg.click('#builder-new-create')
+    pg.wait_for_selector('[data-testid="navbar-layout"]', timeout=20000); pg.wait_for_timeout(1000)
+    check('a new lab starts as a blank canvas', nodes() == 0 and edges() == 0, f'{nodes()} nodes, {edges()} edges')
+    template = pg.get_by_text(args.template, exact=True).first
+    for x, y in ((360, 220), (620, 220), (490, 420)):
+        bx = template.bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(x, y, steps=12); pg.mouse.up(); pg.wait_for_timeout(700)
+    check('three devices dragged from the palette are added', nodes() == 3, f'{nodes()} nodes')
+    menu(node(N1), 'Create Link'); x, y = center(node(N2)); pg.mouse.click(x, y); pg.wait_for_timeout(700)
+    menu(node(N2), 'Create Link'); x, y = center(node(N3)); pg.mouse.click(x, y); pg.wait_for_timeout(700)
+    menu(node(N3), 'Create Link'); x, y = center(node(N1)); pg.mouse.click(x, y); pg.wait_for_timeout(700)
+    check('a triangle of links can be built by hand from the palette', nodes() == 3 and edges() == 3, f'{nodes()} nodes, {edges()} edges')
     check('links are visible (not collapsed by the manager stylesheet)', pg.evaluate("getComputedStyle(document.querySelector('.react-flow__edge').closest('svg')).width") != '0px')
     check('status says the draft is only in this browser', 'not on the VM yet' in pg.inner_text('#builder-status'))
     for tid in ('navbar-deploy', 'navbar-deploy-menu', 'navbar-split-view'):
@@ -68,19 +77,23 @@ def run(p):
     check('YAML and JSON editor tabs are absent', pg.get_by_role('tab', name='YAML').count() == 0 and pg.get_by_role('tab', name='JSON').count() == 0); shot('03-editor')
 
     # 2. Build: add a device, link it, edit it, delete and undo
-    bx = pg.get_by_text('Linux host', exact=True).bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(640, 520, steps=12); pg.mouse.up(); pg.wait_for_timeout(900)
+    # After a link is made the editor's side panel shows the Link Editor; its Nodes tab brings the palette back.
+    if not pg.get_by_text('Linux host', exact=True).first.is_visible(): pg.click('[data-testid="panel-tab-nodes"]'); pg.wait_for_timeout(400)
+    bx = pg.get_by_text('Linux host', exact=True).first.bounding_box(); pg.mouse.move(bx['x'] + 10, bx['y'] + 8); pg.mouse.down(); pg.mouse.move(640, 520, steps=12); pg.mouse.up(); pg.wait_for_timeout(900)
     check('a device dragged from the palette is added', nodes() == 4 and ADDED in draft()['yaml'])
     known = pg.evaluate("fetch('/api/operations/known-images').then(r => r.json()).then(v => (v.images.linux || [])[0] || '')")
     if known: check('a device from the palette carries the image this site already uses for its kind', f'image: {known}' in draft()['yaml'].split(ADDED + ':')[1], known)
     menu(node(ADDED), 'Create Link'); x, y = center(node(N1)); pg.mouse.click(x, y); pg.wait_for_timeout(900)
     check('a link is drawn with allocated interfaces', edges() == 4 and f'"{ADDED}:eth1", "{N1}:' in draft()['yaml'], draft()['yaml'][-200:])
-    menu(node(ADDED), 'Edit Node'); pg.get_by_label('Node Name').fill('pc1'); pg.get_by_role('button', name='Apply', exact=True).first.click(); pg.wait_for_timeout(900)
+    menu(node(ADDED), 'Edit Node')
+    if not pg.get_by_label('Node Name').is_visible(): pg.click('[data-testid="panel-tab-edit"]'); pg.wait_for_timeout(400)  # the Nodes tab chosen above stays in front
+    pg.get_by_label('Node Name').fill('pc1'); pg.get_by_role('button', name='Apply', exact=True).first.click(); pg.wait_for_timeout(900)
     check('renaming a device updates its links', 'pc1:eth1' in draft()['yaml'] and (ADDED + ':') not in draft()['yaml'])
     before = draft()['yaml']; menu(node(N3), 'Delete Node'); pg.wait_for_timeout(700)
     check('deleting a device removes it and its links', nodes() == 3 and N3 not in draft()['yaml'])
     pg.click('[data-testid="navbar-undo"]'); pg.wait_for_timeout(900)
     check('undo restores the device and its links', nodes() == 4 and draft()['yaml'].count(N3) == before.count(N3))
-    pg.click('#builder-yaml'); pg.wait_for_selector('#builder-yaml-text'); check('View YAML shows the topology read-only', f'name: {LAB}' in pg.inner_text('#builder-yaml-text')); shot('04-view-yaml'); pg.click('#builder-yaml-dialog [data-op-close]')
+    pg.click('#builder-yaml'); pg.wait_for_selector('#builder-yaml-editor', state='visible'); check('the YAML panel shows the draft\'s topology text', pg.input_value('#builder-yaml-editor') == draft()['yaml'] and f'name: {LAB}' in draft()['yaml']); shot('04-view-yaml'); pg.click('#builder-yaml-close'); pg.wait_for_timeout(300)
     with pg.expect_download() as dl: pg.click('#builder-download')
     exported = json.load(open(dl.value.path())); check('Download draft gives a portable draft file', exported['format'] == 'clab-manager-lab-draft' and exported['name'] == LAB)
 

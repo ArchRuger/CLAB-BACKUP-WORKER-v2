@@ -2,19 +2,25 @@
 """Interactive Ubuntu installer; privileged work stays in the existing helpers."""
 import argparse
 import importlib.util
+import io
 import ipaddress
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shlex
 import stat
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 from urllib.request import ProxyHandler, build_opener
 
 SOURCE = Path(__file__).resolve().parents[1]
+APT_LOCK_SCRIPT = SOURCE / 'deploy/apt_lock.py'
+LOCK_SIGNATURE = re.compile(r'could not get lock|unable to acquire the dpkg frontend lock|held by process', re.I)
 
 
 class Cancelled(Exception):
@@ -47,8 +53,21 @@ def environment(account):
             'LANG': 'C.UTF-8', 'TERM': os.environ.get('TERM', 'dumb')}
 
 
-def run(args, env, capture=False):
-    # Password and GitHub device login prompts must keep the real terminal.
+def run(args, env, capture=False, tee=False):
+    # Password and GitHub device login prompts must keep the real terminal in
+    # every mode: stdin is never redirected except the bounded `capture` checks.
+    if tee:
+        # A long package/build step: stream it live and also return its combined
+        # output, so a caller can look for a specific error signature (never a
+        # persisted log; the text is used in memory only, for this one decision).
+        lines = []
+        with subprocess.Popen(args, cwd=SOURCE, env=env, text=True, stdin=None,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as process:
+            for line in process.stdout:
+                print(line, end='', flush=True)
+                lines.append(line)
+            code = process.wait()
+        return subprocess.CompletedProcess(args, code, stdout=''.join(lines))
     return subprocess.run(args, cwd=SOURCE, env=env, text=True,
                           stdin=subprocess.DEVNULL if capture else None,
                           stdout=subprocess.PIPE if capture else None,
@@ -127,7 +146,7 @@ def check_manager(env, version, wait_seconds=45):
         time.sleep(2)
 
 
-def phase(title, action):
+def phase(title, action, env=None):
     while True:
         print('\n' + title)
         try:
@@ -136,14 +155,81 @@ def phase(title, action):
             return
         except (ValueError, OSError, subprocess.SubprocessError) as error:
             print('Needs attention: ' + str(error))
+            if env is not None and getattr(error, 'lock_signature', False):
+                if lock_recovery(env):
+                    continue
+                raise Cancelled()
             if menu('Recovery', [('1', 'Retry this step after fixing the error'),
                                  ('2', 'Return to menu; keep completed work')], default='2') == '2':
                 raise Cancelled()
 
 
-def command_step(args, env):
-    if run(args, env).returncode:
-        raise ValueError('The command above failed. Completed setup and existing data are retained.')
+def command_step(args, env, tee=False):
+    # Only the package step streams through a pipe (to spot the dpkg lock signature);
+    # every other step keeps the real terminal: setup-password.sh reads the new
+    # clab-discovery password from it and refuses to run without one.
+    result = run(args, env, tee=tee)
+    if result.returncode:
+        error = ValueError('The command above failed. Completed setup and existing data are retained.')
+        error.lock_signature = bool(LOCK_SIGNATURE.search(getattr(result, 'stdout', '') or ''))
+        raise error
+
+
+def lock_free(env):
+    # timeout 0: an immediate check, never an actual wait.
+    try:
+        result = run(['sudo', '-n', 'python3', str(APT_LOCK_SCRIPT), '--wait', '--timeout', '0'], env, capture=True)
+    except subprocess.TimeoutExpired:
+        return False
+    return result.returncode == 0
+
+
+def lock_holder_text(env):
+    try:
+        result = run(['sudo', '-n', 'python3', str(APT_LOCK_SCRIPT), '--show'], env, capture=True)
+    except subprocess.TimeoutExpired:
+        return ''
+    return (result.stdout or '') if result.returncode == 0 else ''
+
+
+def lock_recovery(env):
+    """A package step failed with the dpkg/apt lock signature. Show the live holder and let the
+    operator wait here, retry immediately, or return to the menu. True retries the failed step."""
+    manual_command = ['sudo', 'python3', str(APT_LOCK_SCRIPT), '--wait', '--pause-timers']
+    while True:
+        if lock_free(env):
+            print('The package lock is now released.')
+            return True
+        report = lock_holder_text(env)
+        if report:
+            print(report)
+        print('Copyable command, in another terminal: ' + shlex.join(manual_command))
+        choice = menu('Package lock recovery', [
+            ('1', 'Wait for the package lock here, then retry this step (recommended)'),
+            ('2', 'Retry this step now'),
+            ('3', 'Return to menu; keep completed work')], default='1')
+        if choice == '3':
+            return False
+        if choice == '2':
+            return True
+        result = run(['sudo', 'python3', str(APT_LOCK_SCRIPT), '--wait', '--pause-timers'], env)
+        if result.returncode == 0:
+            print('The package lock is released.')
+            return True
+        print('The wait ended without releasing the package lock; checking again.')
+
+
+def default_env_choice():
+    """Standard path: no bind/port menu. An existing .env is retained unchanged; a missing one
+    gets the documented defaults (all VM interfaces, port 8081) with no file written here."""
+    target = SOURCE / 'clab-backup-ui/.env'
+    if target.is_symlink():
+        raise ValueError('The source .env is a symlink. Use a regular settings file before setup.')
+    if target.exists():
+        print('Existing clab-backup-ui/.env will be retained unchanged.')
+    else:
+        print('No existing clab-backup-ui/.env: using the defaults (all VM interfaces, port 8081).')
+    return None
 
 
 def choose_env_copy():
@@ -195,6 +281,124 @@ def git_setup(env):
     return result.returncode
 
 
+LAZYDOCKER_ARCH = {'x86_64': 'x86_64', 'aarch64': 'arm64', 'arm64': 'arm64',
+                   'armv7l': 'armv7', 'armv6l': 'armv6'}
+LAZYDOCKER_PATH_BLOCK = ('# Added by Containerlab Node Manager setup: user tools such as lazydocker\n'
+                        'case ":$PATH:" in *":$HOME/.local/bin:"*) ;; '
+                        '*) export PATH="$PATH:$HOME/.local/bin";; esac\n')
+
+
+def lazydocker_arch(machine=None):
+    return LAZYDOCKER_ARCH.get(platform.machine() if machine is None else machine)
+
+
+def lazydocker_latest_tag(timeout=20):
+    opener = build_opener(ProxyHandler({}))
+    with opener.open('https://api.github.com/repos/jesseduffield/lazydocker/releases/latest', timeout=timeout) as response:
+        data = json.loads(response.read(1024 * 1024))
+    tag = data.get('tag_name') if isinstance(data, dict) else None
+    if not isinstance(tag, str) or not re.fullmatch(r'v?\d+\.\d+\.\d+', tag):
+        raise ValueError('Unexpected lazydocker release tag.')
+    return tag
+
+
+def download_lazydocker_tarball(tag, arch, timeout=20):
+    version = tag[1:] if tag.startswith('v') else tag
+    url = (f'https://github.com/jesseduffield/lazydocker/releases/download/{tag}/'
+          f'lazydocker_{version}_Linux_{arch}.tar.gz')
+    opener = build_opener(ProxyHandler({}))
+    with opener.open(url, timeout=timeout) as response:
+        return response.read(64 * 1024 * 1024)
+
+
+def _lazydocker_member(archive):
+    # Only the exact top-level file, never a nested or traversal path such as
+    # 'sub/lazydocker' or '../lazydocker' (those never equal 'lazydocker' below).
+    for candidate in archive.getmembers():
+        name = candidate.name[2:] if candidate.name.startswith('./') else candidate.name
+        if name == 'lazydocker' and candidate.isfile():
+            return candidate
+    return None
+
+
+def install_lazydocker_binary(tarball_bytes, destination):
+    with tarfile.open(fileobj=io.BytesIO(tarball_bytes), mode='r:gz') as archive:
+        member = _lazydocker_member(archive)
+        if member is None:
+            raise ValueError("The lazydocker archive did not contain a 'lazydocker' file.")
+        extracted = archive.extractfile(member)
+        if extracted is None:
+            raise ValueError('Could not read the lazydocker archive member.')
+        data = extracted.read()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix='.lazydocker-', dir=str(destination.parent))
+    try:
+        with os.fdopen(descriptor, 'wb') as stream:
+            stream.write(data)
+        os.chmod(temporary, 0o755)
+        os.replace(temporary, destination)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def lazydocker_up_to_date(path, version, env):
+    if not path.is_file():
+        return False
+    try:
+        result = subprocess.run([str(path), '--version'], env=env, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0 and version in result.stdout
+
+
+def _local_bin_path_line(text):
+    return any('.local/bin' in line and 'PATH' in line for line in text.splitlines())
+
+
+def ensure_local_bin_on_path(home):
+    # Never another user's file: home is always the invoking account's own $HOME.
+    bashrc = Path(home) / '.bashrc'
+    text = bashrc.read_text() if bashrc.exists() else ''
+    if _local_bin_path_line(text):
+        return False
+    if text and not text.endswith('\n'):
+        text += '\n'
+    text += '\n' + LAZYDOCKER_PATH_BLOCK
+    bashrc.write_text(text)
+    return True
+
+
+def setup_lazydocker(env):
+    # Ordinary-user convenience tool; never installed as root, and a failure here
+    # never fails the installation, only prints a warning.
+    print('\nlazydocker (optional; browse/manage Docker from the terminal)')
+    machine = platform.machine()
+    arch = lazydocker_arch(machine)
+    if arch is None:
+        print(f'lazydocker: unsupported architecture ({machine}); skipping.')
+        return
+    home = Path(env['HOME'])
+    destination = home / '.local' / 'bin' / 'lazydocker'
+    try:
+        tag = lazydocker_latest_tag()
+        version = tag[1:] if tag.startswith('v') else tag
+        if lazydocker_up_to_date(destination, version, env):
+            print(f'lazydocker {version} is already current.')
+        else:
+            tarball = download_lazydocker_tarball(tag, arch)
+            install_lazydocker_binary(tarball, destination)
+            print(f'lazydocker {version} installed to {destination}.')
+        if ensure_local_bin_on_path(home):
+            print('Added ~/.local/bin to PATH in ~/.bashrc (new shells only).')
+        if str(destination.parent) not in os.environ.get('PATH', '').split(os.pathsep):
+            print('This shell does not have that directory on PATH yet; to use it now, run:')
+            print('  export PATH="$PATH:$HOME/.local/bin"')
+    except Exception as error:  # optional tool: any failure is a warning, never the installation's
+        print(f'lazydocker setup skipped: {error}')
+
+
 def engineer_access(env):
     # Groups, group-writable trusted lab folders and containerlab SUID for the
     # installing account. Privileged work stays in the dedicated helper script.
@@ -220,8 +424,8 @@ def telemetry_stack(env):
 
 
 def stacks(env):
-    phase('Browser Wireshark capture stack', lambda: capture_stack(env))
-    phase('Grafana dashboards and lab maps', lambda: telemetry_stack(env))
+    phase('Browser Wireshark capture stack', lambda: capture_stack(env), env)
+    phase('Grafana dashboards and lab maps', lambda: telemetry_stack(env), env)
     print('Wireshark opens from the map (Capture packets); Grafana starts on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM when you open it from a lab and stops itself when nobody reads it.')
 
 
@@ -239,20 +443,26 @@ def health_report(env):
     return result.returncode
 
 
-def install(env, version):
-    env_source = choose_env_copy()
-    operations = menu('Lab operation access', [('1', 'Enable reviewed lab operations (standard standalone setup)'),
-                     ('2', 'Discovery/import only; retain any previously enabled operations'), ('3', 'Back')])
-    if operations == '3':
-        raise Cancelled()
-    engineer = '2'
-    if operations == '1':
-        # The manager works without this; VS Code Remote - SSH with the Containerlab
-        # extension does not (groups, writable lab folders, containerlab SUID).
-        engineer = menu('VS Code / Containerlab extension access for ' + env['USER'],
-                        [('1', 'Set up now: docker and clab_admins groups, group-writable lab folders, containerlab SUID (standard)'),
-                         ('2', 'Skip; the manager does not need it')])
-    repair = confirm('Back up and disable obsolete installation-media APT entries if present?')
+def install(env, version, advanced=False):
+    # Standard path: the routine choices are automatic (A2). --advanced restores every
+    # question, including copying .env from a previous source folder.
+    if advanced:
+        env_source = choose_env_copy()
+        operations = menu('Lab operation access', [('1', 'Enable reviewed lab operations (standard standalone setup)'),
+                         ('2', 'Discovery/import only; retain any previously enabled operations'), ('3', 'Back')])
+        if operations == '3':
+            raise Cancelled()
+        engineer = '2'
+        if operations == '1':
+            # The manager works without this; VS Code Remote - SSH with the Containerlab
+            # extension does not (groups, writable lab folders, containerlab SUID).
+            engineer = menu('VS Code / Containerlab extension access for ' + env['USER'],
+                            [('1', 'Set up now: docker and clab_admins groups, group-writable lab folders, containerlab SUID (standard)'),
+                             ('2', 'Skip; the manager does not need it')])
+        repair = confirm('Back up and disable obsolete installation-media APT entries if present?')
+    else:
+        env_source = default_env_choice()
+        operations, engineer, repair = '1', '1', True
     print('\nInstallation plan')
     print('  Source: ' + str(SOURCE) + ' (' + version + ')')
     print('  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.')
@@ -267,31 +477,41 @@ def install(env, version):
     print('  Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'))
     print('  Settings: ' + ('copy ' + str(env_source) if env_source else 'retain current .env or use defaults'))
     print('  Installation-media APT repair: ' + ('enabled with backup' if repair else 'not selected'))
-    print('  Check running version/HTTP, then offer Git setup under ' + env['USER'] + '.')
-    if not confirm('Proceed with this plan?'):
-        raise Cancelled()
+    print('  lazydocker: install or update for ' + env['USER'] + ' (never fails the installation).')
+    print('  Check running version/HTTP, then set up Git under ' + env['USER'] + '.')
+    if advanced:
+        if not confirm('Proceed with this plan?'):
+            raise Cancelled()
+    else:
+        print('Starting now; the standard path runs these steps without further confirmation.')
     total = '7' if engineer == '1' else '6'
-    phase('1/' + total + ' Administrator access and settings', lambda: command_step(['sudo', '-v'], env))
+    phase('1/' + total + ' Administrator access and settings', lambda: command_step(['sudo', '-v'], env), env)
     copy_env(env_source)
     prereqs = ['sudo', 'bash', str(SOURCE / 'deploy/install-prerequisites.sh'), '--docker', '--containerlab']
     if repair:
         prereqs.append('--repair-install-media')
-    phase('2/' + total + ' VM prerequisites', lambda: command_step(prereqs, env))
+    phase('2/' + total + ' VM prerequisites', lambda: command_step(prereqs, env, tee=True), env)
     # The two stacks are separate phases so a failed image pull or plugin download is retried
     # on its own instead of repeating the password, helper and image-build step.
     launch = ['sudo', 'env', 'DOCKER_HOST=unix:///var/run/docker.sock',
               'bash', str(SOURCE / 'deploy/start-manager.sh'), '--manager-only']
     if operations == '1':
         launch.append('--enable-operations')
-    phase('3/' + total + ' Password, helpers, image and manager', lambda: command_step(launch, env))
-    phase('4/' + total + ' Browser Wireshark capture stack', lambda: capture_stack(env))
-    phase('5/' + total + ' Grafana dashboards and lab maps', lambda: telemetry_stack(env))
-    phase('6/' + total + ' Running manager verification', lambda: verify_manager(env, version))
+    phase('3/' + total + ' Password, helpers, image and manager', lambda: command_step(launch, env), env)
+    phase('4/' + total + ' Browser Wireshark capture stack', lambda: capture_stack(env), env)
+    phase('5/' + total + ' Grafana dashboards and lab maps', lambda: telemetry_stack(env), env)
+    phase('6/' + total + ' Running manager verification', lambda: verify_manager(env, version), env)
     if engineer == '1':
-        phase('7/7 Engineer access for VS Code', lambda: engineer_access(env))
+        phase('7/7 Engineer access for VS Code', lambda: engineer_access(env), env)
+    setup_lazydocker(env)
     print('\nManager installation is ready. Git is a separate setup step under your ordinary account.')
     print('Wireshark opens from the map (Capture packets); Grafana starts on TCP 3000 (or TELEMETRY_GRAFANA_PORT) of the VM when you open it from a lab and stops itself when nobody reads it.')
-    if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
+    if advanced:
+        # Item 1 says "then set up Git"; the standard path always runs it, the advanced
+        # path keeps the choice of doing it now or later.
+        if menu('Next step', [('1', 'Set up or repair Git now'), ('2', 'Finish; set up Git later')]) == '1':
+            git_setup(env)
+    else:
         git_setup(env)
     print('In VM connection use clab-discovery and the password you created. Verify the host fingerprint.')
     print('After browser setup, run the full installation health report (without sudo):\n  '
@@ -301,6 +521,10 @@ def install(env, version):
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Guided manager install/update and Git setup for Ubuntu 24.04.')
     parser.add_argument('--git', action='store_true', help='Open Git setup directly (manager already installed)')
+    parser.add_argument('--advanced', action='store_true',
+                        help='Ask every setup question again (bind/port, lab operations, VS Code access, '
+                             'APT installation-media repair, plan confirmation, Git now/later) instead of '
+                             'the standard defaults.')
     args = parser.parse_args(argv)
     if sys.platform != 'linux' or os.geteuid() == 0:
         raise ValueError('Run on the Ubuntu VM as its ordinary account, without sudo.')
@@ -325,16 +549,25 @@ def main(argv=None):
         if choice == '6':
             return 0
         try:
+            # A5: a successful path prints its completion information (already done by
+            # each step above) and exits to the shell rather than looping back here. A
+            # failure or cancellation keeps today's behaviour: retained work, the
+            # Recovery menu inside phase(), and this Setup menu.
             if choice == '1':
-                install(env, version)
+                install(env, version, advanced=args.advanced)
+                return 0
             elif choice == '2':
-                git_setup(env)
+                if git_setup(env) == 0:
+                    return 0
             elif choice == '3':
-                phase('Engineer access for VS Code', lambda: engineer_access(env))
+                phase('Engineer access for VS Code', lambda: engineer_access(env), env)
+                return 0
             elif choice == '4':
                 stacks(env)
+                return 0
             else:
-                health_report(env)
+                if health_report(env) == 0:
+                    return 0
         except Cancelled:
             print('Returned to menu. Existing data and completed steps are retained.')
 

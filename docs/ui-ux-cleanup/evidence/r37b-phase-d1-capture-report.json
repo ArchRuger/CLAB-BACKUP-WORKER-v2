@@ -1,0 +1,17 @@
+{
+ "phase": "d1-capture",
+ "results": [
+  {
+   "item": "D1: right-click vjunos-switch<->xrv9k, endpoint \"xrv9k\" preselects eth1",
+   "ok": true,
+   "detail": "{'checked': 'eth1', 'endpoints': ['vjunos-switch: ge-0/0/1', 'xrv9k: Gi0/0/0/0']}"
+  },
+  {
+   "item": "D1: capture launch URL matches the session pattern",
+   "ok": true,
+   "detail": "/static/capture-session.html#365f61af5c16dd311469f83623cbdce56dd5f0989f217b2b0d047087c037a336"
+  }
+ ],
+ "console_errors": [],
+ "page_errors": []
+}

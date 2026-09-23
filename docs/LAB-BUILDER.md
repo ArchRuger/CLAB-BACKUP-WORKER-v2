@@ -1,6 +1,7 @@
 # Lab builder
 
-Draw a new Containerlab lab in the browser, save it to the VM and deploy it, without writing YAML.
+Draw a new Containerlab lab in the browser, or write it as YAML beside the drawing, then save it to the VM
+and deploy it.
 The builder is a page of the manager; saving and deploying go through the same reviewed lab
 operations as everything else, so nothing about the manager's security boundary changes.
 
@@ -8,20 +9,28 @@ operations as everything else, so nothing about the manager's security boundary 
 
 1. On Home, **Build › Open the lab builder** (or **Manager ▾ › Deploy a new lab…**, then
    **Build a lab visually…**).
-2. Give the lab a name. The name becomes the lab folder on the VM and part of every device's
-   container name, so it is limited to letters, digits, dot, dash and underscore. Choose a starter
-   (blank, two devices with a link, three devices in a triangle), the device type for it and the lab
-   folder on the VM. The image shown with each device type is a suggestion (see *Device templates and
-   images*); the builder does not check that it is installed on the VM.
+2. Give the lab a name and the lab folder on the VM. The name becomes the lab folder on the VM and
+   part of every device's container name, so it is limited to letters, digits, dot, dash and
+   underscore. A new lab always starts as a blank canvas.
 3. Drag devices from *Node Templates* onto the canvas, or Shift+click the canvas for the starred
-   template. Right-click a device for **Create Link** (then click the other device), **Edit Node** and
-   **Delete Node**; right-click a link to edit its interfaces or delete it. Interfaces are allocated
-   from the template's pattern (`eth1`, `et-0/0/0`, `ge-0/0/0`, `Gi0/0/0/0`). Undo, redo, layouts,
-   groups, notes and shapes are in the editor's toolbar. An empty canvas shows how to begin.
-4. **View YAML** shows what the editor has built, read-only.
+   template. The image shown with each device type is a suggestion (see *Device templates and
+   images*); the builder does not check that it is installed on the VM. Right-click a device for
+   **Create Link** (then click the other device), **Edit Node** and **Delete Node**; right-click a
+   link to edit its interfaces or delete it. Interfaces are allocated from the template's pattern
+   (`eth1`, `et-0/0/0`, `ge-0/0/0`, `Gi0/0/0/0`). Undo, redo, layouts, groups, notes and shapes are in
+   the editor's toolbar. An empty canvas shows how to begin.
+4. **YAML** opens the topology as editable text beside the canvas (see *Edit the topology as YAML*).
 5. **Save to the VM…** opens the usual review: the lab folder that will be created and the YAML that
    will be written. After it succeeds, **Deploy or add this lab…** opens the normal *Topology file*
    dialog with *Deploy lab* and *Add to My labs without starting*.
+
+Instead of starting blank, bring in an existing lab: drop its topology file onto the welcome page (or
+onto the canvas, once a draft is open), or use **Open lab files…** to pick it from a file dialog. Add
+its saved map alongside it (a `<file>.annotations.json` file) in the same drop or picker selection, in
+either order, and device positions come with it. The pair is checked and opened exactly like a
+downloaded draft (below): the topology is read by the manager before it opens, and a map that is not
+valid JSON is refused rather than silently dropped. Dropping a file over a draft that has changes not
+yet on the VM asks before replacing it; the welcome page, with nothing open to lose, does not.
 
 The editor's *Lab settings* (the gear button) can rename the lab. A draft that is not on the VM yet
 takes the new name, in the bar, in *Drafts…* and for the folder it will be saved to. A lab that is
@@ -37,6 +46,38 @@ The builder changes a topology only while the lab is **not deployed**. To rearra
 map of a lab in My labs, deployed or not, use **Edit map** in the lab instead: it is this same editor
 restricted to the drawing, and it never writes the topology or anything on the VM (see
 [Lab operations](LAB-OPERATIONS.md#the-map-and-its-editor)).
+
+## Edit the topology as YAML
+
+**YAML** in the bar opens a panel with the draft's topology text: to the right of the canvas on a wide
+window, below it on a narrow one. Edit the text, then **Apply** (or Ctrl+Enter): the canvas redraws
+from it. Nothing reaches the canvas or the draft until you apply; **Revert** throws your edits away and
+shows the editor's text again.
+
+- **It is the same editor, not a copy.** Apply hands the whole text to the editor's engine as one
+  step, so the toolbar's **Undo** takes an apply back (and **Redo** repeats it), exactly like a
+  drawing edit. The draft is stored after every apply as after every drawing edit.
+- **A text the editor cannot use is refused, and the drawing stays as it was.** While you type, the
+  line under the text names the first problem and its line after a short pause (a YAML syntax error,
+  the same key twice, `topology.nodes` written as a list, no `topology:` section). Apply refuses such a
+  text with the same message and puts the cursor on that line; your text stays in the panel to be
+  corrected. A link to a device that is not in `topology.nodes` is only a warning: the editor keeps it
+  in the file but cannot draw it, and containerlab would refuse it at deploy.
+- **Drawing while the panel is open.** With no edits of your own in the panel, every change on the
+  canvas shows in the text at once. While you have edits that are not applied, the text is never
+  replaced: the panel says *Canvas changed · Revert to load it*. Applying then replaces the canvas
+  change with your text (Undo brings it back).
+- **Your text is kept as you wrote it until the next drawing edit.** An apply stores the text exactly
+  as typed: comments, key order, keys the editor has no field for (`x-…`, `startup-config`,
+  `topology.defaults`, `kinds`, `mgmt`) and both link forms. The next change made on the canvas makes
+  the editor write the whole file again in its own layout: the content is kept, but flow lists and
+  maps get inner spaces (`{lesson: 3}` becomes `{ lesson: 3 }`), a comment after a key moves onto
+  its own line, and runs of spaces before a comment shrink to one. The panel then shows the editor's
+  text.
+- **Renaming a device** in the text renames it on the canvas; its position follows when it is the
+  only device renamed in that apply.
+- **Keyboard.** Escape closes the panel only when it holds no unapplied edits; the close button hides
+  it and keeps them for the next opening. Tab moves to the next control (indent with spaces).
 
 ## Drafts live in this browser
 
@@ -121,7 +162,7 @@ identical content as already done. A save interrupted half way is completed by s
 ## Limits of this version
 
 - Topology only: no startup-configuration files, no Git destination, no image management.
-- The editor's YAML and JSON tabs, Geo layout, split view, Grafana export and its own deploy menu are
+- The editor's own YAML and JSON tabs (the **YAML** panel replaces the first), Geo layout, split view, Grafana export and its own deploy menu are
   not available; the manager's review and deploy replace the last one.
 - Saving needs the VM helpers of the same release as the manager. After an upgrade run
   `sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh"`; until then the page says that

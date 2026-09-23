@@ -1,3 +1,65 @@
+# Setup Script Cleanup Log, part 3 — 1.30.38
+
+Closing release of the stream: read `docs/ui-ux-cleanup/PICKUP.md` (environment, routing, chunks, follow-ups) and the
+1.30.36/1.30.37 sections below. Preserve: `bulk_check_targets` in `node_services.py` skips a node only for a missing
+address or a missing login; the backup flag (`enabled`) never gates a login test (the multitool host has no NOS platform
+and is never backed up, but its login is tested and its CLI opens). The parallel restore default (4 workers) is now
+proven live on the four images (overlap, isolation, foreign change, restart recovery, rollback read-back, sequential
+baseline); keep `RESTORE_NODE_WORKERS` as the only knob and rerun `docs/ui-ux-cleanup/tools/isolation_all_four.py`,
+`failure_harness.py` and `mixed_failure.py` after any change to `restore.py`.
+
+# Setup Script Cleanup Log, part 2 — 1.30.37
+
+Read `docs/ui-ux-cleanup/PICKUP.md` first. Preserve: (1) Helper writes: `create`, `revise` and `delete` in
+`host_operations.py` write only through `place()` / `owned_bytes_any()` / `history_backup()` (directory fd opened
+`O_DIRECTORY|O_NOFOLLOW`, `fchmod` on the open file, `O_NONBLOCK` reads, a history folder the helper owns); the `create`
+digest carries `annotations_hash`; never reintroduce `os.chmod`/`open()` by path in the helper. (2) Git snapshots: Junos
+human file `<label>.cfg` (`snapshot_suffix` in `inventory.py`, read only by `git_progress.captured_snapshot`); internal
+storage keeps `suffix` (`.set`); readers go through `manifest.json`; `snapshot_diff` / `pair_renamed_files` pair an old
+`.set` with a new `.cfg` per node. (3) Saves: `note` is required for `latest`/`checkpoint`/`baseline` (≤120, "Give this
+save a short label."), it is the commit message; `job['destination']` (`repository`, `remote` without credentials,
+`branch`, `path`, `checkout`) is frozen at creation and in `PUBLIC_JOB`; `textdiff.unified()` is the one diff
+producer and `diff-view.js` (`diffMarkup`, `diffFileMarkup`, loaded before `git-progress.js` and `restore.js`) the one
+renderer; `closeDialogsExcept()` runs before every navigation out of a save dialog. (4) Restore: `status` values,
+`IN_FLIGHT`, `_verify` and `_finalize` are unchanged; `stage`, `timeline`, `attempts`, `worker`, `progress` and
+`server_time` are labels beside them; node tasks run on `node_pool` (never `pool`), grouped by `(address, port)`;
+`_HELD` in `restore_iosxr.py` is guarded by `_HELD_LOCK`; `SECRET_WORD` masks every diff line; `mixed_failure.py`
+triggers on the victim's stage. (5) `POST /api/labs/{id}/ssh-check-all` stores results exactly like `ssh-check`
+(`BULK_CHECK_WORKERS` = 4, 409 while any check of the lab runs); `login_state` knows `checking`; never mark a device
+ready without a probe answer. (6) Lab builder: `builderBlank()` is the only starter; `#builder-status` hides when empty;
+`builderDropPair()`/`builderDropOpen()` take file drags only (palette drags must not be intercepted); the adapter's edit-mode
+`attach({applyYaml, getYaml, checkYaml, subscribe})` drives `lab-builder-yaml.js` (`builderYamlPanelInit`); `setYamlContent`
+is sent from that one place, never from the map editor; the Monaco stub stays; a canvas edit reformats YAML text (content
+kept). (7) `docs/student-quick-start/tools/capture_scenario_b.py` still waits for the removed `#builder-yaml-text`; the
+guide is a separate stream.
+
+# Setup Script Cleanup Log, part 1 — 1.30.36
+
+Read `docs/ui-ux-cleanup/PICKUP.md` first (branch, VM state, routing, chunks) and `REQUIREMENTS.md` (PDF page →
+requirement → status). Preserve: (1) the installer's standard path asks nothing routine; every question lives behind
+`install.sh --advanced`, a success exits to the shell, a failure keeps the Recovery menu; only the package step streams
+through a pipe (`command_step(..., tee=True)`) because `setup-password.sh` needs the real terminal. (2) `deploy/apt_lock.py`
+never kills, never deletes a lock, restores only the timers it stopped. (3) `git-onboard.py` runs `gh auth login --web`
+with stdin closed and stdout piped (that is what suppresses gh's questions) and injects the `select_account` hint after the
+device URL; a repository new to the manager registers at its root, `--subfolder` and the "another lab in a registered
+repository" path keep the question; setup never commits or pushes. (4) The VM-connection seed (`host-bootstrap.json`,
+written by `deploy/host_bootstrap_seed.py`, consumed by `discovery.consume_host_bootstrap` at start and each refresh) never
+replaces a pinned fingerprint, sets `bootstrap_pending` so background discovery does not connect before the student's
+first *Save and test connection*, is skipped while `operation_busy`, and is deleted only if it is the file that was read;
+`public()` exposes only `bootstrap_pending/at/fingerprint` and `password_saved`. `start-manager.sh` creates the data
+directory before `setup-discovery.sh --data-dir`. (5) `create` accepts
+`options.annotations` (JSON object ≤1 MiB) written as `<topology>.annotations.json` with a recovery copy of any existing
+file; the digest covers `options`. (6) `opRemember('vm', …)` / `opConsumeReturn()` (sessionStorage `op-return`) is how
+*← My labs* returns to the Topology file dialog; `opShowJob(id, {auto:true})` and the `opClosedOutputs` set implement the
+auto-opened output window. (7) `noticeDismissed`/`dismissNotice` in `shell.js` (sessionStorage, key = lab · banner ·
+digest of the headline) back `setBanner`'s close control; running-operation banners collapse, never hide. (8)
+`IMAGE_DEFAULT_CREDENTIALS` applies to the exact `ghcr.io/srl-labs/network-multitool` repository and `linux` nodes only,
+after profile, inventory and kind defaults; readiness probes such a node with `GENERIC_CLI_COMMAND`. (9)
+`topology.container_interface(kind, name)` / `displayed_interface` share `PORT_RULES` with `exported_interface`; link
+endpoints carry `capture_interface`; `tapN` is never preselected. (10) `#map-notes` is gone; `.topology-layout` is
+bounded at desktop widths and `.device-rail` scrolls on its own; `docs/redesign/tools/verify_after.py` reads
+`notes: !document.getElementById('map-notes')`.
+
 # Student quick start delivered — 1.30.35
 
 The guide is delivered and validated (`docs/student-quick-start/VALIDATION.md` names the inspected PDF's SHA-256 and both

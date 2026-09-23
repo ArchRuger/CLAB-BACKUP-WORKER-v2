@@ -1,0 +1,82 @@
+{
+ "phase": "connect-save-a",
+ "results": [
+  {
+   "item": "E1/E3 pre: Progress tab shows a save-location card",
+   "ok": true,
+   "detail": "Choose a save location"
+  },
+  {
+   "item": "E1: repository CLAB-MNGR-DEV-LLM listed as a save location option",
+   "ok": true,
+   "detail": "ea54cc8842384a72b4d1c72ac8ad7cda"
+  },
+  {
+   "item": "E1 (environment note): a folder registration for \"restore-square/qa-1-30-37\" already exists (idempotent rerun) \u2014 reconnecting to it directly",
+   "ok": null,
+   "detail": "{'useDisabled': True, 'useTitle': 'This repository already has lab folders for other labs. Pick a free one or create a new folder.', 'createDisabled': False, 'createTitle': 'Create a folder here'}"
+  },
+  {
+   "item": "E1: \"Choose this folder\" is enabled on the already-registered target folder",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "item": "E1: all four supported devices are checked by default",
+   "ok": true,
+   "detail": "['clab-restore-square-ceos', 'clab-restore-square-cjunosevolved', 'clab-restore-square-vjunos-switch', 'clab-restore-square-xrv9k']"
+  },
+  {
+   "item": "E1: after Connect, the card switches to \"Save location\" (binding active)",
+   "ok": true,
+   "detail": "{'title': 'Save location', 'form_error': ''}"
+  },
+  {
+   "item": "E1/F1: destination line now names the new folder \"restore-square/qa-1-30-37\" (never a nested latest/latest)",
+   "ok": true,
+   "detail": "Saving to CLAB-MNGR-DEV-LLM \u203a restore-square/qa-1-30-37"
+  },
+  {
+   "item": "e1-e3-save-a: label dialog \"What changed?\" appears",
+   "ok": true,
+   "detail": "What changed?"
+  },
+  {
+   "item": "e1-e3-save-a: empty label refused with \"Give this save a short label.\"",
+   "ok": true,
+   "detail": "Give this save a short label."
+  },
+  {
+   "item": "e1-e3-save-a: review dialog opened automatically (mandatory review)",
+   "ok": true,
+   "detail": "Review before uploading"
+  },
+  {
+   "item": "e1-e3-save-a: review shows the destination line",
+   "ok": true,
+   "detail": "Saving toCLAB-MNGR-DEV-LLM\u203amain\u203arestore-square/qa-1-30-37/latest waiting for your review"
+  },
+  {
+   "item": "e1-e3-save-a: review lists per-file entries",
+   "ok": true,
+   "detail": "['ceos.cfg added', 'ceos.eoscfg added', 'cjunosevolved.cfg added', 'cjunosevolved.jcfg added', 'vjunos-switch.cfg added', 'vjunos-switch.jcfg added', 'xrv9k.cfg added', 'xrv9k.xrcfg added']"
+  },
+  {
+   "item": "e1-e3-save-a: job dialog title is \"Progress saved\"",
+   "ok": false,
+   "detail": "{'title': 'Saving progress', 'badge': 'EOS', 'rows': {'Destination': 'CLAB-MNGR-DEV-LLM \u00b7 main \u00b7 restore-square/qa-1-30-37/latest', 'Saved as': 'Latest', 'Started': 'just now', 'Label': 'Configuration A', 'Status': 'Pushing to remote', 'Message': 'Pushing the saved commit.', 'Saved target': 'latest', 'Started (UTC)': '2026-09-23 02:45:43 UTC', 'Commit': 'f12421e615d13adb938906621f0510b46d874283', 'Checkout': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM', 'Files changed': '9', 'Job id': '43e91697a894431d28ce4e0460920e00'}}"
+  },
+  {
+   "item": "e1-e3-save-a: job dialog has Label row == \"Configuration A\"",
+   "ok": true,
+   "detail": "{'Destination': 'CLAB-MNGR-DEV-LLM \u00b7 main \u00b7 restore-square/qa-1-30-37/latest', 'Saved as': 'Latest', 'Started': 'just now', 'Label': 'Configuration A', 'Status': 'Pushing to remote', 'Message': 'Pushing the saved commit.', 'Saved target': 'latest', 'Started (UTC)': '2026-09-23 02:45:43 UTC', 'Commit': 'f12421e615d13adb938906621f0510b46d874283', 'Checkout': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM', 'Files changed': '9', 'Job id': '43e91697a894431d28ce4e0460920e00'}"
+  },
+  {
+   "item": "e1-e3-save-a: job dialog has Destination row",
+   "ok": true,
+   "detail": "{'Destination': 'CLAB-MNGR-DEV-LLM \u00b7 main \u00b7 restore-square/qa-1-30-37/latest', 'Saved as': 'Latest', 'Started': 'just now', 'Label': 'Configuration A', 'Status': 'Pushing to remote', 'Message': 'Pushing the saved commit.', 'Saved target': 'latest', 'Started (UTC)': '2026-09-23 02:45:43 UTC', 'Commit': 'f12421e615d13adb938906621f0510b46d874283', 'Checkout': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM', 'Files changed': '9', 'Job id': '43e91697a894431d28ce4e0460920e00'}"
+  }
+ ],
+ "console_errors": [],
+ "page_errors": []
+}

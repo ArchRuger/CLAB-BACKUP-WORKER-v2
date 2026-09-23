@@ -31,11 +31,32 @@ timestamps. The manager collects no host CPU or memory metrics; network telemetr
   **Edit connection…** (short name used in backup file names, address, port, NOS,
   profile, *Include in backups*).
 
+**Test logins**, beside the Devices heading on both the topology rail and the Devices
+tab, repeats **Test login** for every device of the lab at once instead of one at a
+time (bounded to 4 SSH sessions together, so it never opens more than that). A device
+is skipped, not attempted, when it has no saved address (*no address*) or no login to
+try (*needs credentials*); being excluded from backups (a Linux host such as the
+multitool, which has no NOS platform) does not exclude it from the login test; the notification
+after starting says how many devices were skipped. While it runs the button reads
+*Testing…* and is disabled, and so is the other copy of it; each device being tested
+reads *Testing login…* until it answers. A refresh only ever reports what the device
+actually did: it never marks a device ready by itself and never opens a terminal, and
+it does not touch backups. While a device is starting or missing credentials, its
+disabled **Open CLI ↗** explains why and points back at **Test logins** (or that
+device's own **Test login**) to check again once it is ready.
+
 For Linux or unmapped nodes, add credentials (Advanced › Credentials › **Add
 credentials**) with the type **Linux host (CLI only, no backups)** and assign the
 profile under Edit connection…. A generic default applies to unmapped
 nodes. Generic SSH does not enable configuration backups for unsupported platforms.
 Changing backup selection does not disable terminal access.
+
+A `ghcr.io/srl-labs/network-multitool` node (any tag, no NOS platform) needs no
+credential profile: the manager applies its documented login from the
+[network-multitool README](https://github.com/srl-labs/network-multitool), the
+same way a NOS kind gets its containerlab default. SSH readiness and **Open
+CLI ↗** work the same as for any other login; configuration backups stay
+unavailable, since this image has no backup driver.
 
 ## Backup download names
 

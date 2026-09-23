@@ -149,7 +149,14 @@ BENS-BGP-LAB/
 ```
 
 Names above illustrate the layout; the exporter chooses stable filenames from
-node identity and configuration format. The folder a lab saves to (its **lab
+node identity and configuration format: `<node>.cfg` for Junos (display-set text), EOS and
+IOS XR alike, plus the machine restore artifact beside it on a restore-capable platform
+(Junos `<node>.jcfg`, EOS `<node>.eoscfg`, IOS XR `<node>.xrcfg`) — never the extension the
+manager keeps for that same capture in its own internal storage. A folder saved before
+Junos moved to `.cfg` may still hold `<node>.set`; it keeps listing, comparing (paired with
+a later save of the same node whatever its extension) and restoring exactly like a `.cfg`
+save, since every reader works from the version's `manifest.json`, never from a filename
+guess. The folder a lab saves to (its **lab
 folder**, `BENS-BGP-LAB/` above, or a subfolder of a shared repository) is where Save
 progress writes `latest/`, `baseline/` and `checkpoints/`; those three are the
 **snapshot folders** inside it. Repeated saves update the same `latest/` in place:
@@ -184,13 +191,21 @@ this VM only, Saved versions & history, Save location settings…) that explains
 under the pointer or the keyboard focus: what it does and where its result goes; the **Progress** tab
 repeats them on its status card, whose **More ▾** adds the rest.
 
+Every save asks a short question first — **What changed?** — before it reads a single device.
+That label (up to 120 characters, one line, required) becomes the Git commit message and is how
+the save is named everywhere afterwards: the pending list ("waiting to be uploaded"), *Recent
+saves*, the save window and the commit history. A cancelled or interrupted save keeps its typed
+label ready to offer again the next time you save; it is only forgotten once the save is actually
+created. A save made before this label was required (or the checkpoint/baseline dialogs, which ask
+for the same label under **What changed?**) falls back to its plain status sentence and date.
+
 | Action | Result |
 |---|---|
-| **Save progress** | Capture the configured device selection, export `latest`, commit changes on the VM, then open **Review before uploading**: what the save changed, with **Upload these changes** and **Not now — keep it on the VM**. Nothing is pushed without that choice (the manager refuses an upload that does not state the review, whatever an older save location setting said), and declining leaves the save on the VM as *Waiting for your review*. The save window opens on its own when something else needs you. A save that finds nothing new since a save that was already uploaded ends as *Saved to Git* with *Nothing changed since your last save*: there is nothing to review or upload, and it does not hold up a folder change. While the last save is still waiting for its review, a save with nothing new waits with it. |
+| **Save progress** | Ask for the save's label, then capture the configured device selection, export `latest`, commit changes on the VM, then open **Review before uploading**: what the save changed, with **Upload these changes** and **Not now — keep it on the VM**. Nothing is pushed without that choice (the manager refuses an upload that does not state the review, whatever an older save location setting said), and declining leaves the save on the VM as *Waiting for your review*. The save window opens on its own when something else needs you. A save that finds nothing new since a save that was already uploaded ends as *Saved to Git* with *Nothing changed since your last save*: there is nothing to review or upload, and it does not hold up a folder change. While the last save is still waiting for its review, a save with nothing new waits with it. |
 | **Save on this VM only** | Capture and commit without pushing. |
 | **Create checkpoint…** | Capture a named milestone in `checkpoints/<name>`. |
 | **Set baseline…** | Select a complete recorded capture for `baseline`; replacing one is reviewed explicitly. |
-| **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it and everything else in the repository. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* diffs it against the lab's `latest/` (never against the running devices); *Apply to running lab…* replaces the running configuration of the selected devices (Junos, EOS or IOS XR) with that version (no reboot; backed up first) without changing where the lab saves. |
+| **Saved versions** (View / Compare with my latest save / Apply to running lab…) | The card lists *Latest*, *Checkpoints*, *Baseline*, the *Instructor and reference versions* kept in other folders of the repository and, folded, the other labs saving to it and everything else in the repository. *View* shows a version's files and offers the ZIP download; *Compare with my latest save* shows a real line-by-line diff of every changed file against the lab's `latest/` (never against the running devices), a device whose saved file changed extension between releases still reads as one changed file; *Apply to running lab…* replaces the running configuration of the selected devices (Junos, EOS or IOS XR) with that version (no reboot; backed up first) without changing where the lab saves. |
 | **Full history…** | Every commit of the lab's folder with its versions. |
 | **Upload saved progress** / **Review and upload…** | Publish a saved commit without recapturing devices, through the same review (a save reviewed before, whose upload failed, reads **Upload now**). |
 | **Update from the repository** | Update an eligible clean checkout using a fast-forward; no merge/rebase conflict resolution. |
@@ -199,6 +214,14 @@ repeats them on its status card, whose **More ▾** adds the rest.
 | **Save this lab here** | Move this lab to the selected folder of its repository, optionally with the files already saved. |
 | **New folder…** | Create a folder in the repository for this lab (or for a later lab). |
 | **Use a different repository…** / **Connect by URL…** | Switch to another registered checkout, or connect a repository by its HTTPS URL. |
+
+Every save window, the review before an upload and the pending-saves list show where a save is
+going as `<repository> · <branch> · <path>` (for example `Course-Labs · main ·
+Gtel-100G-G8032/Working/latest`), frozen at the moment the save is captured — moving the lab to a
+different folder afterwards never rewrites an earlier save's own destination line. Beside it is one
+of four plain states: *saved on this VM*, *waiting for your review*, *uploaded to `<remote>`* or
+*verified on remote* (a save whose commit was carried along by a later upload of the same
+folder). The Details under a save keep the exact checkout path on the VM and the commit.
 
 <a id="where-this-lab-lives"></a>
 

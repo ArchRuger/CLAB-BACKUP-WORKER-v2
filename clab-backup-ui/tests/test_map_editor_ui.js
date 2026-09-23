@@ -63,7 +63,9 @@ test('a lab without a topology text is told why, and Edit map only goes to the m
  const html=read('map-editor.html');assert.match(html,/map-editor-page\.js\?v=/);assert.match(html,/lab-builder\/assets\/main\.js\?v=/);assert.doesNotMatch(html,/operations\.js|lab-builder-page\.js/,'the map editor page loads nothing that can start a VM operation or touch the builder\'s drafts');
  const adapter=fs.readFileSync(path.join(__dirname,'../lab-builder/src/main.tsx'),'utf8');
  for(const allowed of ['savePositions','setAnnotations','setAnnotationsWithMemberships','setEdgeAnnotations','setViewerSettings','setNodeGroupMembership'])assert.ok(adapter.includes('"'+allowed+'"'),allowed);
- assert.match(adapter,/command: "setAnnotationsContent"/,'the page-level history replaces the annotations document, nothing else');assert.doesNotMatch(adapter,/command: "(undo|redo|setYamlContent)"/,'the engine\'s own undo restores both files and is never used');
+ assert.match(adapter,/command: "setAnnotationsContent"/,'the page-level history replaces the annotations document, nothing else');assert.doesNotMatch(adapter,/command: "(undo|redo)"/,'the engine\'s own undo restores both files and is never used');
+ const mapStart=adapter.indexOf('if (mapOnly && page.attach)'),mapHandle=adapter.slice(mapStart,adapter.indexOf('\n  });',mapStart));assert.ok(mapHandle.includes('applyAnnotations')&&!mapHandle.includes('setYamlContent'),'the map editor\'s handle never replaces the topology');
+ assert.equal(adapter.split('command: "setYamlContent"').length,2,'setYamlContent is sent from one place');assert.ok(adapter.indexOf('command: "setYamlContent"')>adapter.indexOf('if (!mapOnly && page.attach)'),'only the lab builder\'s YAML handle sends setYamlContent');
  for(const refused of ['addNode','editNode','deleteNode','addLink','editLink','deleteLink','setYamlContent','setLabSettings','undo','redo'])assert.ok(!new RegExp('MAP_COMMANDS[^;]*"'+refused+'"').test(adapter),refused+' must never be in the map editor\'s whitelist');
 });
 

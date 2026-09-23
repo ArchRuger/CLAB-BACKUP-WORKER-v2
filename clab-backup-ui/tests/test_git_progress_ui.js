@@ -1,5 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../app/static/git-progress.js'),'utf8');
+const diffViewSource=fs.readFileSync(path.join(__dirname,'../app/static/diff-view.js'),'utf8');
 // Objects returned from the vm context are not reference-equal to a literal built in this realm even
 // when they have the same shape, so deepStrictEqual on them needs a structural comparison instead.
 const same=(actual,expected)=>assert.equal(JSON.stringify(actual),JSON.stringify(expected));
@@ -11,7 +12,7 @@ function makeContext(){
   crypto:{getRandomValues:bytes=>bytes.fill(++sequence)},
   sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},
   refresh:async()=>{},notify(){},clearTimeout:()=>{},setTimeout:()=>0});
- vm.runInContext(source,context);return context;
+ vm.runInContext(diffViewSource,context);vm.runInContext(source,context);return context;
 }
 test('Git progress scope is exact, complete and independent of scheduled backup selection',()=>{
  const context=makeContext(),node=name=>({name,status:'succeeded'}),base={id:'capture',lab_id:'lab',operation:'backup',status:'succeeded',nodes:[node('r1'),node('r2')]};
@@ -34,8 +35,13 @@ test('save commands are structured and baseline replacement is explicit',()=>{
 });
 test('diffs and job output escape configuration, filenames, notes and labels',()=>{
  const context=makeContext(),attack='<img src=x onerror=alert(1)>';
- const markup=context.gitDiffMarkup([{name:attack,status:attack,before:'</pre><script>bad()</script>',after:'router <peer> & policy'}],attack,'Saved');
+ // The compare route's real diff (textdiff.unified()) lands here as file.diff; the file list's
+ // markup escapes the filename and every diff line's text, whatever a saved configuration contains.
+ const diff={identical:false,added:1,removed:1,truncated:false,hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[
+  {type:'del',old:1,new:null,text:'</pre><script>bad()</script>'},{type:'add',old:null,new:1,text:'router <peer> & policy'}]}]};
+ const markup=context.gitFilesDiffMarkup([{name:attack,status:'changed',diff}],attack,'Saved');
  assert.doesNotMatch(markup,/<script>|<img/);assert.match(markup,/&lt;script&gt;/);assert.match(markup,/router &lt;peer&gt; &amp; policy/);
+ assert.match(markup,/&lt;img src=x onerror=alert\(1\)&gt;/,'the filename itself is escaped too');
  const output=context.gitJobMarkup({status:'push_pending',message:attack,target:attack,commit:attack,created:'2026-09-11T12:00:00Z'});
  assert.doesNotMatch(output,/<img/);assert.match(output,/push pending/);
 });
@@ -125,12 +131,41 @@ test('gitOpenCommit fast path sends the job\'s own snapshot_path with the wire\'
  await context.gitOpenCommit('lab',{commit:'c2'},[]);
  assert.deepEqual(opened,['/course/lab-a/checkpoints/day-1','/course/lab-a/baseline'],'the job\'s own recorded path is preferred and never doubles the leading slash; a job saved before that field existed falls back to the binding\'s prefix');
 });
-test('one-click save captures fresh configurations and delegates review preference to server',async()=>{
- const context=makeContext(),calls=[];
+test('one-click save asks for a label first (E1), then captures fresh configurations and delegates review preference to server',async()=>{
+ const context=makeContext(),calls=[],elements=new Map(),dialogs=new Map();
+ const element=()=>({value:'',oninput:null,onclick:null});
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
+ context.opTask=async(dialog,fn)=>fn();
  context.gitLoadContext=async()=>({binding:{node_names:['r1'],review_before_push:true}});
  context.gitSubmitSave=async(id,request)=>calls.push({id,request});
- await context.gitSaveProgress();assert.equal(calls.length,1);assert.equal(calls[0].id,'lab');assert.equal(calls[0].request.target,'latest');assert.equal(calls[0].request.push,true);assert.equal(calls[0].request.node_names,undefined);
+ await context.gitSaveProgress();
+ assert.equal(calls.length,0,'nothing is saved before the label is confirmed');
+ elements.get('git-label-input').value='OSPF adjacencies up';
+ await elements.get('git-label-confirm').onclick();
+ assert.equal(calls.length,1);assert.equal(calls[0].id,'lab');assert.equal(calls[0].request.target,'latest');assert.equal(calls[0].request.push,true);
+ assert.equal(calls[0].request.note,'OSPF adjacencies up');assert.equal(calls[0].request.node_names,undefined);
+ assert.equal(dialogs.get('git-label-dialog').open,false,'the label dialog closes once the save is created');
  let opened=0;context.gitLoadContext=async()=>({binding:null});context.gitFirstSave=async()=>{opened++;};await context.gitSaveProgress();assert.equal(opened,1,'an unbound lab goes to the first-save flow');assert.equal(calls.length,1,'and nothing is saved yet');
+});
+test('an empty or over-length label is refused before the save is sent, and the draft survives a cancel',async()=>{
+ const context=makeContext(),calls=[],elements=new Map(),dialogs=new Map();
+ const element=()=>({value:'',oninput:null,onclick:null});
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
+ const errors=[];context.opTask=async(dialog,fn)=>{try{await fn();}catch(e){errors.push(e.message);}};
+ context.gitLoadContext=async()=>({binding:{node_names:['r1']}});
+ context.gitSubmitSave=async(id,request)=>calls.push({id,request});
+ await context.gitSaveProgress();
+ elements.get('git-label-input').value='   ';
+ await elements.get('git-label-confirm').onclick();
+ assert.deepEqual(errors,['Give this save a short label.']);assert.equal(calls.length,0);assert.equal(dialogs.get('git-label-dialog').open,true,'the dialog stays open on a refused label');
+ elements.get('git-label-input').value='a'.repeat(121);
+ await elements.get('git-label-confirm').onclick();
+ assert.equal(errors[1],'Keep the label to 120 characters or fewer.');
+ elements.get('git-label-cancel').onclick();
+ assert.equal(dialogs.get('git-label-dialog').open,false);
+ assert.equal(calls.length,0,'cancelling never saves anything');
 });
 test('the review before an upload is mandatory: every upload of an unreviewed save goes through the review window, and only its button uploads',async()=>{
  const context=makeContext(),elements=new Map(),dialogs=new Map(),calls=[],toasts=[];
@@ -197,7 +232,7 @@ test('save options close their own modal and one job poll continues after the ou
  const job={id:'save-job',lab_id:'lab',target:'latest',status:'queued',created:'2026-09-11T12:00:00Z'};
  context.json=async()=>job;
  context.api=async endpoint=>{assert.equal(endpoint,'/git/jobs/save-job');polls++;return {json:async()=>({...job,status:stage})};};
- await context.gitSaveOptions('local','lab');await elements.get('git-save-confirm').onclick();
+ await context.gitSaveOptions('local','lab');elements.get('git-save-note').value='Local save label';await elements.get('git-save-confirm').onclick();
  assert.equal(dialogs.get('git-save-options').open,false);assert.equal(dialogs.get('git-job-dialog'),undefined,'a plain save is quiet: no job window opens');assert.equal(timers.size,1,'the save is watched in the background');
  await context.gitShowJob('save-job',job);assert.equal(dialogs.get('git-job-dialog').open,true);assert.equal(timers.size,1,'opening the window reuses the running watch');
  const tick=async()=>{const [id,fn]=timers.entries().next().value;timers.delete(id);await fn();};
@@ -383,4 +418,84 @@ test('a legacy binding shows the notice on the Save location card right under th
  assert.match(container.innerHTML,/<\/p><p class="op-notice" id="git-legacy-notice">This lab saves to JunOS-TEST-2\/working\/latest, a folder named like a saved state/);
  context.gitRenderRepository('lab',{binding:{binding_id:'repo',node_names:['r1'],repository:{label:'x',path:'/p',branch:'main',prefix:'bgp',owner:'ben'}},supported_nodes:[]},{repositories:[]});
  assert.doesNotMatch(container.innerHTML,/git-legacy-notice/,'an ordinary lab folder never shows the notice');
+});
+test('closeDialogsExcept closes every other open dialog layer, keeping only the named destination',()=>{
+ const context=makeContext();
+ const a={id:'a',open:true,close(){this.open=false;}},b={id:'b',open:true,close(){this.open=false;}},c={id:'c',open:false,close(){this.open=false;}};
+ context.document={querySelectorAll:sel=>{assert.equal(sel,'dialog[open]');return [a,b,c].filter(d=>d.open);}};
+ context.closeDialogsExcept('b');
+ assert.equal(a.open,false);assert.equal(b.open,true,'the destination stays open');
+ context.closeDialogsExcept();
+ assert.equal(b.open,false,'nothing is kept when no destination is named');
+});
+test('E2 repro: opening the pending dialog, then a save\'s job window, then "View configuration backup" leaves no stale dialog open',async()=>{
+ const context=makeContext(),dialogs=new Map(),elements=new Map();
+ const plain=()=>({onclick:null,innerHTML:'',querySelectorAll:()=>[]});
+ const actionsElement=()=>({
+  dataset:{},_html:'',get innerHTML(){return this._html;},
+  set innerHTML(v){this._html=v;this._buttons=[...v.matchAll(/data-git-job-action="(\w+)"/g)].map(m=>({dataset:{gitJobAction:m[1]},onclick:null}));},
+  querySelectorAll(sel){return sel==='[data-git-job-action]'?(this._buttons||[]):[];},
+ });
+ const capture={dataset:{job:'bk'},open:false,scrollIntoView(){},focused:false,querySelector(sel){return sel==='summary'?{focus(){capture.focused=true;}}:null;}};
+ elements.set('git-job-detail',plain());elements.set('git-job-actions',actionsElement());
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;
+ context.opDialog=(id,title,html)=>{
+  for(const m of html.matchAll(/ id="([\w-]+)"/g))if(!elements.has(m[1]))elements.set(m[1],plain());
+  let dialog=dialogs.get(id);if(!dialog){dialog={id,open:false,close(){this.open=false;this.onclose?.();},querySelector:()=>null,querySelectorAll:()=>[]};dialogs.set(id,dialog);}
+  dialog.title=title;dialog.open=true;return dialog;
+ };
+ context.document={querySelectorAll:sel=>{
+  if(sel==='dialog[open]')return [...dialogs.values()].filter(d=>d.open);
+  if(sel==='.job')return [capture];
+  return [];
+ }};
+ context.opTask=async(dialog,fn)=>fn();context.refresh=async()=>{};context.notify=()=>{};
+ context.selectLab=()=>{};context.showTab=()=>{};
+ const pendingJob={id:'b',lab_id:'lab',status:'push_pending',commit:'d'.repeat(40),target:'latest',created:'2026-09-11T12:00:00Z',backup_job_id:'bk'};
+ // A pending dialog, opened first (the reported repro's starting point).
+ context.gitLoadContext=async()=>({binding:{},jobs:[]});
+ context.state.git_jobs=[{...pendingJob,id:'a'},pendingJob];
+ await context.gitPushPending('lab');
+ assert.equal(dialogs.get('git-pending-dialog').open,true);
+ // Picking a save opens its job window: the pending dialog must not stay open underneath it.
+ await context.gitShowJob(pendingJob.id,pendingJob);
+ assert.equal(dialogs.get('git-pending-dialog').open,false,'the pending dialog is closed once the job window opens');
+ assert.equal(dialogs.get('git-job-dialog').open,true);
+ // "View configuration backup" navigates to the Backups tab: the job window must not stay open underneath it.
+ const button=elements.get('git-job-actions').querySelectorAll('[data-git-job-action]').find(b=>b.dataset.gitJobAction==='backup');
+ assert.ok(button,'the backup action is offered for a job with a capture');
+ await button.onclick();
+ assert.equal(dialogs.get('git-job-dialog').open,false,'the job window is closed once "View configuration backup" navigates away (E2)');
+ assert.equal([...dialogs.values()].filter(d=>d.open).length,0,'no dialog is left open under the destination');
+ assert.equal(capture.open,true);assert.equal(capture.focused,true,'focus moves to the destination');
+});
+test('E3: a save\'s frozen destination is shown in the job window as repository · branch · path, with its state, and the checkout path under Details',()=>{
+ const context=makeContext();
+ const job={id:'j',lab_id:'lab',status:'review_pending',commit:'c'.repeat(40),target:'latest',created:'2026-09-11T12:00:00Z',note:'OSPF up',
+  destination:{repository:'Course-Labs',branch:'main',path:'Gtel-100G-G8032/Working/latest',checkout:'/home/ben/labs/bgp'}};
+ const html=context.gitJobMarkup(job);
+ assert.match(html,/Saving to<\/span><code>Course-Labs<\/code>.*<code>main<\/code>.*<code>Gtel-100G-G8032\/Working\/latest<\/code>/s);
+ assert.match(html,/waiting for your review/);
+ assert.match(html,/<dt>Destination<\/dt><dd>Course-Labs · main · Gtel-100G-G8032\/Working\/latest<\/dd>/);
+ assert.match(html,/<dt>Checkout<\/dt><dd class="mono">\/home\/ben\/labs\/bgp<\/dd>/);
+ assert.match(html,/<dt>Label<\/dt><dd>OSPF up<\/dd>/,'the label row is named Label, not Note');
+ const synced=context.gitJobMarkup({...job,status:'synced',pushed:true,message:'Saved commit is included in the verified remote history.'});
+ assert.match(synced,/verified on remote/);
+ const uploaded=context.gitJobMarkup({...job,status:'synced',pushed:true,message:'Saved to Git.'});
+ assert.match(uploaded,/uploaded to the remote/);
+ assert.doesNotMatch(context.gitJobMarkup({...job,destination:undefined}),/Saving to|<dt>Destination<\/dt>/,'a job saved before this release has no destination row');
+});
+test('E1: pending list rows read as label · when, with the status as a secondary pill',async()=>{
+ const context=makeContext(),dialogs=new Map(),elements=new Map();
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;
+ context.opDialog=(id,title,html)=>{const dialog={id,title,html,open:true,close(){this.open=false;},querySelectorAll:()=>[]};dialogs.set(id,dialog);return dialog;};
+ context.document={querySelectorAll:()=>[]};
+ const withLabel={id:'a',lab_id:'lab',status:'review_pending',commit:'c'.repeat(40),target:'latest',created:'2026-09-11T12:00:00Z',note:'OSPF adjacencies up'};
+ const withoutLabel={id:'b',lab_id:'lab',status:'push_pending',commit:'d'.repeat(40),target:'checkpoint',checkpoint:'day-1',created:'2026-09-11T12:00:00Z'};
+ context.gitLoadContext=async()=>({binding:{},jobs:[withLabel,withoutLabel]});
+ await context.gitPushPending('lab');
+ const html=dialogs.get('git-pending-dialog').html;
+ assert.match(html,/<strong>OSPF adjacencies up<\/strong>/);
+ assert.match(html,/<strong>Saved on this VM — upload needs attention<\/strong>/,'an older job without a label falls back to the status sentence');
+ assert.match(html,/<span class="pill \w+">Saved on this VM — upload needs attention<\/span>/);
 });

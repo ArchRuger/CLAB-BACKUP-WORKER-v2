@@ -1,0 +1,12 @@
+{
+ "phase": "e2",
+ "results": [
+  {
+   "item": "E2: after \"View configuration backup\" no stale git-job-dialog/git-diff-dialog/git-pending-dialog remains open",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "console_errors": [],
+ "page_errors": []
+}
