@@ -7,8 +7,13 @@ independent browser QA of 1.30.37 (`host1` was reported `skipped: disabled` by `
 - **Unit and static:** `test_nodes.py` (14; the three claims that pinned the backup flag as a gate rewritten),
   full `python -m unittest discover` in the venv, `node --test tests/*.js`, `verify-release.py`, `git diff --check`,
   `check_links.py`: see the records entry for the totals of the committed tree.
-- **Live (after the 1.30.38 rebuild):** `POST /api/labs/<id>/ssh-check-all` on `restore-square` reports
-  `started: 5` and no `disabled` skip; `host1`'s `nos_login.at` advances: in the records entry.
+- **Live (after the 1.30.38 rebuild, `/api/state` 1.30.38, helpers 1.30.38):** `POST /api/labs/<id>/ssh-check-all` on
+  `restore-square` answered `{"started": 5, "skipped": []}` and every node's `nos_login.at`, including `host1`'s,
+  advanced to the run's timestamp within 5 s, all `ready`. `check-install.sh` as the ordinary account: the same two
+  warnings as before (folder coverage cap, the multitool's telemetry row), every other row PASS. Full suites of the
+  committed tree: `python -m unittest discover` 1096 OK (1 skipped), `node --test tests/*.js` 274 OK, deploy-script
+  suites OK, `verify-release.py`, `check_links.py` (130 files, 0 problems), `git diff --check`,
+  `node build.mjs --check` (132 files match). Disk at the end: 50G used / 19G available with the five-node lab running.
 
 **Live records of 1.30.37** (the build of `96b72d7` from its clean worktree, `/api/state` 1.30.37, helpers 1.30.37,
 `clab-capture-service:1.30.37`; two independent Sonnet QA agents, one operator per resource; reports and evidence

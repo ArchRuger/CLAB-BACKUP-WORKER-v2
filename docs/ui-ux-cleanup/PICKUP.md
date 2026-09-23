@@ -45,7 +45,7 @@ not committed). Read this file first, then `REQUIREMENTS.md` (page → requireme
 | 0 | baseline, cleanup, routing, requirement map | none (no shipped content) | (in 1.30.36) | done |
 | 1 | A2–A7, B1, B2, B4–B7, D1 (setup, onboarding, import, deploy review, notices, multitool, device rail, capture mapping) | 1.30.36 | `f47d3b8` + records commit | done; B3 and a helper must-fix carried to 1.30.37 |
 | 2 | A1, B3, helper hardening, E1–E7, D2, C1–C4 (Junos .cfg, preview size, save labels/destination/diff, restore diff/stages/parallel, Test logins, lab builder) | 1.30.37 | `96b72d7` (CI green, PR #53) | done; live records in the 1.30.38 entry |
-| 3 | D2 eligibility fix (backup-excluded hosts are login-tested) + 1.30.37 live records | 1.30.38 | | in progress |
+| 3 | D2 eligibility fix (backup-excluded hosts are login-tested) + 1.30.37 live records | 1.30.38 | `af6497f` + records commit | done (D2 live recheck: 5 started, none skipped) |
 
 ## Live validation resources (2026-09-23)
 
@@ -70,5 +70,8 @@ not committed). Read this file first, then `REQUIREMENTS.md` (page → requireme
 
 ## Exact next action
 
-Build 1.30.38 from its worktree, run the D2 live recheck (`ssh-check-all` includes `host1`), add the records commit,
-push, check CI, update PR #53's description; then remove the older worktrees. The stream is complete after that.
+The stream is complete: PR #53 carries 1.30.36–1.30.38 (CI green on every push). The VM runs the 1.30.38 build from
+`~/projects/clab-manager-1.30.38` (worktree of `af6497f`; the older worktrees were removed). If the stream is picked up
+again: the only items without live evidence are a real file drop into the lab builder (unit-tested) and a pair upload
+through *Upload a lab file* to the VM (helper unit-tested, reviewed twice); the quick-start tool
+`capture_scenario_b.py` needs the YAML panel ids; a fresh-VM installer run was not possible here (repair path proven).
