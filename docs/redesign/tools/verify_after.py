@@ -98,7 +98,7 @@ def topology(r):
       const bg = map.querySelector('.topology-bg');
       return {bottom: rect.bottom, inner: innerHeight, states, dots: map.querySelectorAll('.device-state-dot').length,
               glyphs: map.querySelectorAll('.device-state-glyph').length, bgFill: bg && bg.getAttribute('fill'),
-              status: document.getElementById('map-status').textContent, notes: !document.getElementById('map-notes'),
+              status: document.getElementById('map-status').textContent, mapNotesAbsent: !document.getElementById('map-notes'), hintPresent: !!document.getElementById('topology-hint'),
               hint: document.querySelector('.topology-hint').textContent, banner: document.getElementById('lab-banner').hidden,
               labels: [...map.querySelectorAll('[data-map-node]')].map(g => g.getAttribute('aria-label')).slice(0, 20),
               title: document.getElementById('title').textContent, pill: document.getElementById('lab-state').textContent, ready: document.getElementById('lab-ready').textContent};
@@ -109,7 +109,7 @@ def topology(r):
     r.check('topology: ready, starting and attention states are all shown', all(k in info['states'] for k in ('state-ready', 'state-starting', 'state-attention')), info['states'])
     r.check('topology: imported background colour is kept', info['bgFill'] and info['bgFill'].startswith('#'), info['bgFill'])
     r.check('topology: caption in student words', info['status'].endswith('links') or ' link' in info['status'], info['status'])
-    r.check('topology: notes expander shown', info['notes'] is False)
+    r.check('topology: the old #map-notes expander is gone and the current #topology-hint line is present (both since 1.30.36)', info['mapNotesAbsent'] and info['hintPresent'], info)
     r.check('topology: aria-labels carry the state when not ready', any(' · ' in (l or '') for l in info['labels']), info['labels'])
     r.check('topology: header pill uses the student vocabulary', info['pill'] in ('Running', 'Starting', 'Needs attention'), info['pill'])
     r.shot('10-topology')
@@ -300,8 +300,15 @@ def progress(r):
     places = r.js('() => ({use: document.querySelector("[data-git-places-action=use]")?.textContent, crumbs: [...document.querySelectorAll(".git-crumbs button")].map(b => b.textContent), select: document.getElementById("git-binding-id")?.value, heading: document.querySelector("#git-change-folder h3")?.textContent})')
     r.check('save location: folder browser with Save this lab here and the heading', places['use'] == 'Save this lab here' and places['heading'] == 'Folders in this repository', places)
     r.shot('31-save-location', full=True)
-    # Save progress (quiet): the header carries the phases
+    # Save progress (quiet): every plain save opens the mandatory "What changed?" label dialog first
+    # (since 1.30.37); fill and confirm it the way docs/ui-ux-cleanup/tools/live_1_30_37_b.py does,
+    # then the header carries the phases.
     p.click('#git-save-progress')
+    p.wait_for_selector('#git-label-dialog[open]', timeout=10000)
+    r.check('save: the "What changed?" label dialog appears before every plain save', r.js('() => document.querySelector("#git-label-dialog h2")?.textContent') == 'What changed?')
+    p.fill('#git-label-input', 'verify_after regression pass')
+    p.click('#git-label-confirm')
+    p.wait_for_selector('#git-label-dialog[open]', state='detached', timeout=10000)
     p.wait_for_function('() => document.getElementById("git-save-progress").textContent === "Saving…"', timeout=10000)
     r.check('save: header button reads Saving…', True)
     r.check('save: no job window for a plain save', r.js('() => !document.getElementById("git-job-dialog")?.open'))

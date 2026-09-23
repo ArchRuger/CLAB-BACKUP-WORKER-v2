@@ -1,3 +1,4 @@
+'use strict';
 // noVNC is provided by the pinned VM image; no CDN or workstation installation.
 const $=id=>document.getElementById(id),sid=location.hash.slice(1);
 let rfb,rfbConnected=false,ended=false,heartbeat;

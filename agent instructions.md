@@ -1,3 +1,16 @@
+# Technical audit, part 2: frontend, tooling and guides — 1.30.40
+
+Read `docs/technical-audit/PICKUP.md` first. Preserve: (1) the favourite star's states come from
+`.icon-button use[href="#i-star"]` rules keyed on `aria-pressed` in `style.css`; never add `fill="none"` to the
+shared `#i-star` symbol (a presentation attribute on a `use`-referenced path wins over every stylesheet rule, so the
+pressed state could not fill it); `app.js`'s always-filled star in the lab switcher has no `aria-pressed` and stays
+solid. (2) The base `.topology-wire path` stroke rule carries `:not(.capture-hit)`; `fill: none` still applies to
+both paths (a solid hit path would paint black). (3) `gitWhen` in `git-progress.js` is the one "when" helper of the
+Progress tab; `git-places.js` never loads without it. (4) `docs/redesign/tools/verify_after.py` fills
+`#git-label-dialog` before a plain *Save progress* and asserts `#map-notes` absent and `#topology-hint` present; run
+it against the fixture manager on a fresh `FIXTURE_DATA` (97 checks per viewport). (5) The guides state
+vJunos-switch's requirement (nested virtualisation), not a "cannot run in a VM" limitation.
+
 # Technical audit, part 1: telemetry and Grafana retired — 1.30.39
 
 Read `docs/technical-audit/PICKUP.md` first (branch, environment, chunks, routing), then `AUDIT.md`,

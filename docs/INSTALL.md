@@ -50,7 +50,7 @@ GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.30.39 — guided setup
+Containerlab Node Manager 1.30.40 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -129,7 +129,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The installer ends with `Manager 1.30.39: running; HTTP and version checks passed.`
+The installer ends with `Manager 1.30.40: running; HTTP and version checks passed.`
 and the local address, then exits to the shell (exit code 0); it does not loop back
 to the Setup menu after a successful path. A failed or cancelled step keeps
 today's behaviour instead: completed work stays in place, the affected phase's

@@ -132,7 +132,6 @@ function gitFolderTag(dir,current,long=false){
  if(registration.lab)return '<b class="git-tag other">'+esc(registration.lab.name)+(long?' saves here':'')+'</b>';
  return '<b class="git-tag other">Lab folder'+(long?' · available':'')+'</b>';
 }
-function gitPlacesWhen(value){if(!value)return '';const relative=typeof relativeTime==='function'?relativeTime(value):'';return relative||utcDisplay(value);}
 function gitPlacesMarkup(model,view){
  const dir=model.nodes.get(view.selected)||model.root,repoName=view.repoName||'Repository';
  const chips=gitPathChips(dir.path).map((chip,index)=>`${index?'<span aria-hidden="true">›</span>':''}<button type="button" data-git-place="${esc(chip.path)}" ${chip.path===dir.path?'aria-current="page"':''}>${esc(chip.name||repoName)}</button>`).join('');
@@ -147,7 +146,7 @@ function gitPlacesMarkup(model,view){
   ...dir.files.map(file=>`<tr class="row"><td><span class="name"><i class="git-file-icon"></i>${esc(file.name)}</span></td><td class="desc">${esc(file.name==='manifest.json'?'Save details (which devices, when they were saved)':/\.(cfg|conf|txt|set)$/i.test(file.name)?'Device configuration':/\.(?:jcfg|eoscfg|xrcfg)$/i.test(file.name)?'Device configuration (can be applied to a running lab)':'File')}</td><td class="size">${esc(gitSize(file.size))}</td></tr>`)];
  const choice=gitFolderChoice(model,dir.path,view.current),creatable=gitCanCreateIn(model,dir.path,view.current);
  const savedAt=view.saved?.latest?view.saved.latest*1000:0;
- const saved=savedAt?'Last saved '+gitPlacesWhen(savedAt):own?'Not saved yet':'';
+ const saved=savedAt?'Last saved '+gitWhen(savedAt):own?'Not saved yet':'';
  // Browsing is not saving: say where the lab saves whenever another folder is being looked at.
  const elsewhere=own&&own.path!==dir.path?'This lab saves to '+(own.path||'the top of the repository')+'. Looking at other folders does not change that.':'';
  const technical=[view.head?'Showing the repository as of commit '+esc(String(view.head).slice(0,10)):'',view.truncated?'Large repository: list shortened to the first 4000 files':'',savedAt?'Last save '+esc(utcDisplay(savedAt)):''].filter(Boolean);

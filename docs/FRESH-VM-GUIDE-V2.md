@@ -118,10 +118,11 @@ For VM-backed images such as cJunosEvolved or XRv9k, check the physical host's
 nested KVM setting. Ordinary Linux containers and the manager itself do not need
 nested virtualization.
 
-**vJunos-switch requires a different deployment plan:** Containerlab documents
-that it cannot run inside a VM because its architecture already uses nested
-virtualization. A Proxmox Ubuntu guest with `/dev/kvm` does not remove that
-limitation. Use a host supported by the image's requirements; the manager's new
+**vJunos-switch needs nested virtualization inside the VM:** like vJunos Evolved
+and XRv9k, it is a VM-based image that needs hardware virtualization available
+inside the guest — nested virtualization enabled on the hypervisor (Proxmox: CPU
+type `host` and nested virtualization on) — and enough memory. A Proxmox Ubuntu
+guest with `/dev/kvm` and those settings has run it (since 1.28.0); the manager's
 Junos adapter only adds node login/backup handling.
 [Containerlab vJunos-switch requirements](https://containerlab.dev/manual/kinds/vr-vjunosswitch/)
 
@@ -706,8 +707,9 @@ manifests report `junos-display-set`, and individual downloads use
 node ([GIT-PROGRESS.md](GIT-PROGRESS.md#apply-a-saved-configuration-to-a-running-node)) is available for vJunos-switch, not for vQFX.
 See the [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
 [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) requirements,
-including the vJunos-switch VM limitation in step 1. Live login and backup of
-these images must still be verified on your deployment.
+including the nested-virtualization requirement in step 1. vJunos-switch's live login,
+backup and restore are part of every release's validation record; vQFX's live login and
+backup must still be verified on your deployment.
 
 No initial inventory upload is normally needed for a deployed lab whose files
 the helper can read. Keep YAML, annotations and startup files in their lasting

@@ -4,6 +4,30 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.40
+
+**Technical audit, part 2: frontend, tooling and guide debt** ([docs/technical-audit/AUDIT.md](technical-audit/AUDIT.md),
+findings F-001 to F-006, T-001, T-002, D-001, D-002).
+
+- **The favourite star is an outline until pressed.** It rendered solid in both states (the colour was the only
+  difference); it now follows the design contract. The fix is a stylesheet rule keyed on the button's pressed state,
+  because a fill attribute on the shared symbol would block any per-state override.
+- **The topology wire's stroke rule excludes the capture hit path explicitly** instead of relying on the order the
+  rules happen to appear in the stylesheet (the invariant in `CLAUDE.md`); wires and link clicks are unchanged.
+- **Dead code removed:** three stylesheet rule groups of the pre-redesign side-by-side diff layout that no script
+  produces any more, the always-hidden `#subtitle` element, and a byte-identical duplicate of `gitWhen` in
+  `git-places.js` (which always loads after `git-progress.js`); `capture-session.js` gains the `'use strict'`
+  directive every other script had.
+- **The after-redesign Playwright tool works again.** `docs/redesign/tools/verify_after.py` still read the
+  `#map-notes` id removed in 1.30.36 and never filled the mandatory "What changed?" label dialog added in 1.30.37,
+  so one check failed and four more never ran at every viewport; it now passes 97 of 97 checks at three viewports
+  against the fixture manager.
+- **Guides corrected.** The fresh VM guide and the Wiki guide claimed vJunos-switch "cannot run inside a VM"; the
+  project's own validation record has run it on the dev VM since 1.28.0. Both now state the real requirement (nested
+  virtualisation on the hypervisor, enough memory). The Wiki guide's "Edit the map and export" section described the
+  pre-builder editor; it now describes the current one (Undo, Redo, Device look…, Link labels…, Import map file…,
+  Download map file, Export to draw.io, Save map) and the simple dialog for a lab without a topology text.
+
 ## Changes in 1.30.39
 
 **Network telemetry and the Grafana dashboards are retired.** An intentional product change, decided by the

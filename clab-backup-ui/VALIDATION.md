@@ -1,3 +1,19 @@
+# Technical audit, part 2: frontend, tooling and guides — 1.30.40
+
+Prepared on `claude/technical-audit` on 2026-09-23 after 1.30.39 (`73c6712`, records `dbd10e9`; PR #54, CI green).
+Stylesheet, markup, two scripts, one browser test, the after-redesign Playwright tool and two guides; no Python
+change, so the manager was not rebuilt for this release (the final integrated pass runs on the last build).
+
+- **Unit and static:** `node --test tests/*.js` 281 OK; `node --check` on every static script; `verify-release.py`;
+  `check_links.py` (135 files, 0 problems); `git diff --check`. The Python suite is unchanged by this release and
+  is recorded with 1.30.41.
+- **Fixture and browser (Sonnet builder, fresh `FIXTURE_DATA`, Chromium):** favourite star pixel-sampled in both
+  states (outline when not favourited, `currentColor` when pressed; the lab switcher's star still solid); 16 wires
+  drawn with the intended computed styles (`capture-hit` transparent 16 px, visible path 2 px) and a link click
+  opening the capture dialog; `verify_after.py` 97 of 97 checks at 1920×1080, 1440×900 and 1366×768, 0 console
+  and 0 page errors (screenshots and `report.json` in the builder's scratch, not committed).
+- **Guides (docs auditor):** `check_links.py` and `verify-release.py --docs` clean after the rewrites.
+
 # Technical audit, part 1: telemetry and Grafana retired — 1.30.39
 
 Prepared on `claude/technical-audit` (from `main` `b1ced1d`) on 2026-09-23. The full audit record is

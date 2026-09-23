@@ -8,7 +8,7 @@ deploy a topology, watch the devices boot, open SSH to every node, capture packe
 Wireshark from the browser, back up device configurations and save lab progress to
 Git. Nothing is installed on your workstation; you only need a browser.
 
-Current release: **1.30.39** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
+Current release: **1.30.40** · [changelog](docs/CHANGELOG.md) · [all documentation](docs/README.md)
 
 ## What it does
 
@@ -71,7 +71,7 @@ command in this project works from any directory; the guides keep the source in
    defaults; say `y` to the plan, enter your sudo password, and create a password for
    `clab-discovery` when asked (write it down). Choose `2` at *Next step* to set up
    Git later. The image build and the capture stack take a few minutes; the installer
-   ends with `Manager 1.30.39: running; HTTP and version checks passed.`
+   ends with `Manager 1.30.40: running; HTTP and version checks passed.`
 
 3. Open `http://VM_IP:8081`. The VM connection dialog opens on its own: enter the
    `clab-discovery` password and click **Save and test connection**.

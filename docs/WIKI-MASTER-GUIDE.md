@@ -184,7 +184,7 @@ sudo systemctl enable --now ssh
 
 VM-based NOS images, including cJunosEvolved, need virtualization support inside the Ubuntu guest. Containerlab and Node Manager themselves do not require nested KVM merely to run ordinary containers.
 
-> **vJunos-switch deployment limitation:** Containerlab documents that vJunos-switch cannot run inside a VM because its architecture already nests virtualization. The Proxmox settings below do not remove that limitation; choose a host supported by the image requirements. The manager's vJunos-switch adapter adds SSH login/backup handling, not a change to how the NOS boots. [Containerlab vJunos-switch requirements](https://containerlab.dev/manual/kinds/vr-vjunosswitch/)
+> **vJunos-switch needs nested virtualization:** like vJunos Evolved and XRv9k, it is a VM-based image that needs hardware virtualization available inside the guest, so it needs the settings below — nested virtualization enabled on the hypervisor (CPU type `host`) — and enough memory. The manager's vJunos-switch adapter adds SSH login/backup handling, not a change to how the NOS boots. [Containerlab vJunos-switch requirements](https://containerlab.dev/manual/kinds/vr-vjunosswitch/)
 {.is-warning}
 
 ```text
@@ -913,11 +913,10 @@ under **Progress › Save settings**.
 
 Wait for the NOS to finish booting, then verify login and one configuration
 capture. Manager support does not prove an image can boot on the chosen host;
-the vJunos-switch VM limitation is explained in [Part 2](#part-2). Consult the
+vJunos-switch's nested-virtualization requirement is explained in [Part 2](#part-2). Consult the
 [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
 [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) kind guides
-for image and runtime requirements. Live SSH/backup of these images has not
-been verified here. Loading a saved version downloads files; **Apply to running
+for image and runtime requirements. Loading a saved version downloads files; **Apply to running
 lab…** (Progress tab) is offered for cJunosEvolved and vJunos-switch, not for
 vQFX (see LAB-OPERATIONS.md for the full list of restorable platforms).
 
@@ -999,27 +998,33 @@ All lab operations…** for the complete list, or right-click a lab card on Home
 ## Edit the map and export
 
 Choose **Edit map** on the Topology tab, under **Lab actions ▾ › Advanced options** or on the
-**Tools › Map** card. Select a device or annotation on the canvas or from the item
-list. Drag it to move it, or enter coordinates. Add text, boxes, circles or lines;
-edit text, size, colors, opacity and border style in the properties panel.
-**Undo** reverses edits and **Fit** fits the current content.
+**Tools › Map** card. For a lab whose topology file the manager holds, this opens the same editor
+as the lab builder, restricted to the lab's own map and its drawing only: drag devices, apply a
+generated layout, add and style text, rectangles, circles, lines and groups (drag devices into a
+group), copy and paste annotations, and set link label offsets, the link label mode and the grid.
+The toolbar above the canvas offers **Undo** and **Redo** (Ctrl+Z, Ctrl+Shift+Z; map changes only),
+**Device look…** (a device's icon, colours and label), **Link labels…** (how far a link's interface
+names sit from its devices), **Import map file…**, **Download map file**, **Export to draw.io** and
+**Save map**. Devices and links cannot be added, changed or removed there, nothing is deployed and the
+running lab is not touched; the editor cannot send anything but the map to the manager. A lab without
+a topology file in the manager (imported from an inventory) opens a simpler dialog instead, with text,
+boxes, circles, lines and Undo only.
 
 **Save map** persists positions and annotations in the manager's data.
-Closing with unsaved edits offers **Keep editing** or **Discard changes**. If
+Closing with unsaved edits offers **Keep editing**, **Discard changes** or **Save map and leave**. If
 another session changed the saved map, saving is rejected; reopen the editor
 to load that version before editing again.
 
-**Download map file (.annotations.json)** exports the `.clab.yaml.annotations.json`
-format for use alongside the VM topology in VS Code. **Export to draw.io** exports editable
-XML with nodes, connections, interface labels, notes, groups and shapes. Both
-exports include current unsaved edits without saving them to the manager.
-Open `.drawio` files in diagrams.net or its desktop application.
+**Download map file** exports the full `.clab.yaml.annotations.json`
+document for use alongside the VM topology in VS Code. **Export to draw.io** exports editable
+XML with nodes, connections, interface labels, notes, groups and shapes, using the current map
+including unsaved edits. Open `.drawio` files in diagrams.net or its desktop application.
 
-This is a basic visual editor. Structural lab changes still belong in the
-original VM YAML. Saving or exporting does not rewrite VM files. To reuse the
-JSON on the VM, retain a copy of its original annotations file, then transfer
+This is the manager's layout editor, not an embedded copy of the full diagrams.net application.
+Structural lab changes still belong in the original VM YAML. Saving or exporting does not rewrite VM
+files. To reuse the JSON on the VM, retain a copy of its original annotations file, then transfer
 the downloaded JSON alongside the matching YAML using your normal VM account.
-A later **Import map…** or **Sync topology from VM** can replace the manager's edited map.
+A later **Import map file…** or **Sync topology from VM** can replace the manager's edited map.
 
 Contained nodes are grouped with their surrounding annotation in draw.io.
 Router, switch and server symbols use native editable elements; unsupported

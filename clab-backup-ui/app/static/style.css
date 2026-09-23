@@ -435,6 +435,12 @@ footer {
 .lab-card .icon-button { font-size: 18px; min-width: 30px; min-height: 30px; }
 .icon-button[aria-pressed="true"] { color: var(--accent); }
 .icon-button[aria-pressed="true"]:hover { background: var(--accent-soft); color: var(--accent-strong); }
+/* #i-star (the favourite toggle) has no fill on its own path, so an outline-vs-filled star is drawn
+   through the referencing use element's inherited fill, not an attribute on the shared symbol —
+   an SVG <use> instance tree only takes a per-instance shape from inheritance, never from a selector
+   reaching into another instance's shadow content, so the symbol itself must stay unset. */
+.icon-button use[href="#i-star"] { fill: none; }
+.icon-button[aria-pressed="true"] use[href="#i-star"] { fill: currentColor; }
 
 .vm-labs .side-button { width: 100%; margin: 8px 0 0; }
 .vm-labs .side-hint { padding: 0; margin: 16px 0 0; }
@@ -1135,7 +1141,7 @@ dl.kv, .kv {
 .health-grid .mono { font-size: 12px; }
 
 /* disclosure defaults inside cards/dialogs; component rules override via higher specificity */
-:where(dialog, .drawer, .card, .panel, .tool-card, .lab-card, .vm-labs, .device-row, .drawer-section, .job-body, .git-repository-card, .git-saves, .git-binding-form, .banner) details > summary {
+:where(dialog, .drawer, .card, .panel, .tool-card, .lab-card, .vm-labs, .device-row, .drawer-section, .job-body, .git-saves, .git-binding-form, .banner) details > summary {
   font-size: 13px;
   font-weight: 600;
   color: var(--accent-strong);
@@ -1653,7 +1659,8 @@ dialog.drawer, dialog.node-details {
 .topology-bg:not([fill]), .op-layout-map .topology-bg:not([fill]) { fill: var(--surface); }
 .topology-grid-dot:not([fill]), .op-layout-map .topology-grid-dot:not([fill]) { fill: var(--line); }
 .topology-annotation { pointer-events: none; }
-.topology-wire path { stroke: var(--wire); stroke-width: 2; fill: none; }
+.topology-wire path { fill: none; }
+.topology-wire path:not(.capture-hit) { stroke: var(--wire); stroke-width: 2; }
 .interface-label rect { fill: var(--surface); fill-opacity: .95; }
 .interface-label text { fill: var(--muted); font-size: 11px; }
 .map-device { cursor: pointer; }
@@ -1983,14 +1990,14 @@ details.git-saved-job > :last-child { padding-bottom: 12px; }
 #git-job-actions { flex-wrap: wrap; }
 #git-job-actions .button, #git-save-options .dialog-actions .button { white-space: normal; }
 #git-job-actions .form-help { width: 100%; margin: 8px 0; }
-.git-version-files details, .git-diff-file {
+.git-version-files details {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-2);
   margin-top: 8px;
 }
-.git-version-files summary, .git-diff-file > summary { padding: 12px 14px; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; color: var(--text); }
-.git-file-content, .git-diff-columns pre {
+.git-version-files summary { padding: 12px 14px; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; color: var(--text); }
+.git-file-content {
   white-space: pre;
   overflow: auto;
   max-height: 52vh;
@@ -2003,11 +2010,6 @@ details.git-saved-job > :last-child { padding-bottom: 12px; }
   border-radius: 0 0 var(--radius) var(--radius);
   tab-size: 4;
 }
-.git-diff-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1px; background: var(--line); }
-.git-diff-columns section { min-width: 0; background: var(--surface); }
-.git-diff-columns h3 { font-size: 12px; margin: 12px 16px; color: var(--muted); }
-.git-diff-columns pre { min-height: 140px; }
-.git-diff-file .badge { margin-left: 8px; }
 .git-destination-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; margin: 12px 0; }
 .git-destination-line code { background: var(--surface-2); padding: 2px 6px; border-radius: var(--radius); font-size: 12px; }
 .git-destination-line span[aria-hidden] { color: var(--muted); }
@@ -2330,7 +2332,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* ≤760: single columns, full-width dialogs and drawer, horizontal table scroll */
 @media (max-width: 760px) {
   h1 { font-size: 20px; }
-  .lab-grid, .tool-grid, .profile-grid, .form-grid, .git-diff-columns, .git-node-scope, .diagram-workspace, .job-result, .diagram-fields, .debug-card dl { grid-template-columns: minmax(0, 1fr); }
+  .lab-grid, .tool-grid, .profile-grid, .form-grid, .git-node-scope, .diagram-workspace, .job-result, .diagram-fields, .debug-card dl { grid-template-columns: minmax(0, 1fr); }
   .form-grid.wide { grid-template-columns: 2fr 1fr; }
   .job-result p { grid-column: auto; }
   .metrics { grid-template-columns: repeat(2, 1fr); }
