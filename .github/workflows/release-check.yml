@@ -18,6 +18,7 @@ jobs:
           python3 -m unittest discover -s tests -p test_helper_preflight.py -v
           python3 -m unittest discover -s tests -p test_gateway_preflight.py -v
           python3 -m unittest discover -s tests -p test_install_manager.py -v
+          python3 -m unittest discover -s tests -p test_recreate_manager.py -v
           python3 -m unittest discover -s tests -p test_retire_telemetry.py -v
           python3 -m unittest discover -s tests -p test_git_onboard.py -v
           python3 -m unittest discover -s tests -p test_git_registrations.py -v

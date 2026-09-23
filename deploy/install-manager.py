@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Interactive Ubuntu installer; privileged work stays in the existing helpers."""
 import argparse
+import hashlib
 import importlib.util
 import io
 import ipaddress
@@ -311,6 +312,34 @@ def download_lazydocker_tarball(tag, arch, timeout=20):
         return response.read(64 * 1024 * 1024)
 
 
+def lazydocker_tarball_filename(tag, arch):
+    version = tag[1:] if tag.startswith('v') else tag
+    return f'lazydocker_{version}_Linux_{arch}.tar.gz'
+
+
+def download_lazydocker_checksums(tag, timeout=20):
+    # Same release, same asset lazydocker itself publishes; mirrors the official
+    # containerlab .deb verification in install-prerequisites.sh.
+    url = f'https://github.com/jesseduffield/lazydocker/releases/download/{tag}/checksums.txt'
+    opener = build_opener(ProxyHandler({}))
+    with opener.open(url, timeout=timeout) as response:
+        return response.read(1024 * 1024).decode('utf-8', 'replace')
+
+
+def verify_lazydocker_checksum(data, checksums_text, filename):
+    """Exactly one checksums.txt line for `filename`, whose SHA-256 matches `data`.
+    False for a mismatched digest, an absent or duplicated entry, or an empty checksums
+    file — every one of those is treated as a verification failure by the caller."""
+    matches = []
+    for line in checksums_text.splitlines():
+        match = re.fullmatch(r'([0-9a-fA-F]{64})\s+\*?(.+)', line.strip())
+        if match and match[2] == filename:
+            matches.append(match[1].lower())
+    if len(matches) != 1:
+        return False
+    return hashlib.sha256(data).hexdigest() == matches[0]
+
+
 def _lazydocker_member(archive):
     # Only the exact top-level file, never a nested or traversal path such as
     # 'sub/lazydocker' or '../lazydocker' (those never equal 'lazydocker' below).
@@ -388,6 +417,11 @@ def setup_lazydocker(env):
             print(f'lazydocker {version} is already current.')
         else:
             tarball = download_lazydocker_tarball(tag, arch)
+            filename = lazydocker_tarball_filename(tag, arch)
+            checksums_text = download_lazydocker_checksums(tag)
+            if not verify_lazydocker_checksum(tarball, checksums_text, filename):
+                raise ValueError(f'lazydocker checksum verification failed for {filename}; '
+                                 'the release asset may be incomplete or compromised.')
             install_lazydocker_binary(tarball, destination)
             print(f'lazydocker {version} installed to {destination}.')
         if ensure_local_bin_on_path(home):

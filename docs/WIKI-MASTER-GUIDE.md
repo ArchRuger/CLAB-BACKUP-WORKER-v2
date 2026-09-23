@@ -1498,20 +1498,25 @@ status, logs, stop, start, backups and upgrades. Continue with Part 11 to save
 the VM password in the manager. Do not run the source-build launcher offline.
 
 **Browser Wireshark on a prepared-image installation.** The setup script writes its settings
-to `clab-backup-ui/.env` and normally finishes by recreating the manager from the source-build
-Compose file, which is the wrong file here. Run it with `--no-recreate`, copy its settings into
-`deploy/image.env`, and recreate the manager with the image Compose file yourself. The stack
-needs its container image (pulled by the script, or loaded beforehand on a VM without internet
-access).
+only to `clab-backup-ui/.env`, which the source-build Compose file reads. Run it with
+`--no-recreate`, copy its settings into `deploy/image.env`, then let
+`deploy/recreate-manager.sh` finish the job: it detects a prepared-image installation (an
+existing `deploy/image.env` that sets `MANAGER_IMAGE`, matched against the running container's
+current image, or the absence of a locally built `clab-backup:<VERSION>` image) and recreates
+from `deploy/compose.image.yml` instead of the source-build file, printing which route it chose.
+The stack needs its container image (pulled by the script, or loaded beforehand on a VM without
+internet access).
 
 ```bash
 cd "$HOME/projects/clab-manager"
 sudo bash deploy/setup-capture.sh --no-recreate
 sudo grep -E '^CAPTURE_' clab-backup-ui/.env | sudo tee -a deploy/image.env >/dev/null
-sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml \
-  up -d --no-build --pull never --force-recreate
+sudo bash deploy/recreate-manager.sh
 ```
 
+Confirm its output names the prepared-image installation before trusting the recreate; if a
+stray locally built `clab-backup:<VERSION>` image also happens to exist, use the explicit image
+Compose command from the "Prepared-image upgrades" section above instead.
 `deploy/image.env` now holds the capture session token: keep it readable by the installing
 account only (`chmod 600 deploy/image.env`). After a later rerun of the setup script, replace
 those lines in `deploy/image.env` rather than appending a second copy. Then run the health check.

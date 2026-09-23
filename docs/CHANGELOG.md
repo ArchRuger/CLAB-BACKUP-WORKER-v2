@@ -4,6 +4,32 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.41
+
+**Technical audit, part 3: deployment and dependency debt** ([docs/technical-audit/AUDIT.md](technical-audit/AUDIT.md),
+findings S-001, S-002, S-005, D-003).
+
+- **The lab builder's bundled dependencies carry no known advisory.** `npm audit` reported a critical XSS advisory in
+  `maplibre-gl` 5.24.0 (GHSA-jrc7-96c5-q579) and moderate ones in `markdown-it` and `dompurify`, all reached only
+  through the exactly pinned `@containerlab/clab-ui` 0.3.2. The build project now overrides the three packages
+  (`maplibre-gl` ≥ 6.4.1 < 7, resolved 6.11.1; `markdown-it` 14.3.2; `dompurify` 3.4.15), the committed bundle is
+  rebuilt from that lockfile (132 files, +0.5 %, audit 0 of 0) and reproduces byte for byte; the editor's drag, link,
+  YAML panel and map editing were exercised in a browser on the new bundle (Geo layout, the only user of maplibre,
+  stays hidden). The bundle is cached `immutable`, so this release number is what brings it to browsers.
+- **lazydocker is verified before it is installed.** The optional tool's release tarball is now checked against the
+  upstream `checksums.txt` (SHA-256), the same way `install-prerequisites.sh` checks the containerlab package; a
+  mismatch, a missing entry or an unreachable checksum file skips the tool with a warning, as any other lazydocker
+  failure did, and never fails the installation.
+- **`recreate-manager.sh` detects a prepared-image installation.** When `deploy/image.env` names a `MANAGER_IMAGE`
+  and the existing manager runs that image (or no source-built image exists locally), the script recreates from
+  `deploy/compose.image.yml`; otherwise from the source compose file as before. It prints the route it chose. This
+  closes an item open since the maintenance audit (a settings change on a prepared-image install recreated the
+  wrong image or failed). A stdlib test drives the script with a fake `docker` and runs in CI.
+- **The capture services are loopback-only by design.** `deploy/compose.capture.yml` published Edgeshark with
+  `CAPTURE_BIND`/`CAPTURE_PORT` variables that the setup never honoured; both published ports are now fixed to
+  `127.0.0.1` (the session service holds the Docker socket and is reached only through the manager's same-origin
+  relay), a test pins it, and the CI smoke no longer sets the inert variables ([CAPTURE.md](CAPTURE.md)).
+
 ## Changes in 1.30.40
 
 **Technical audit, part 2: frontend, tooling and guide debt** ([docs/technical-audit/AUDIT.md](technical-audit/AUDIT.md),

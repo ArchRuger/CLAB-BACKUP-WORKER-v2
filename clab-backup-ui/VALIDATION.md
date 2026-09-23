@@ -1,3 +1,26 @@
+# Technical audit, part 3: deployment and dependencies — 1.30.41
+
+Prepared on `claude/technical-audit` on 2026-09-23 after 1.30.40 (`f21125e`, CI green). Deploy tooling, the editor's
+dependency overrides with the rebuilt bundle, two guides; no manager Python change (rebuilt and validated on the VM
+with the next release, which carries the backend chunk).
+
+- **Editor bundle (Node 24.21.0, `~/.local/node24`):** `npm install --package-lock-only`, `npm ci`, `node build.mjs`
+  (132 files, 7,210,348 bytes, 77 packages), `node build.mjs --check` (committed assets match a fresh build);
+  `npm audit --package-lock-only` 0 vulnerabilities (5 before: 2 critical, 3 moderate); `npm ls` resolves
+  `maplibre-gl@6.11.1`, `markdown-it@14.3.2`, `dompurify@3.4.15` (monaco-editor's nested copy deduplicated; monaco is
+  stubbed out of the build anyway). The manifest of the committed rebuild is byte-identical to the scratch build the
+  Sonnet builder smoke-tested in Chromium on a scratch copy of the app (blank lab, two devices dragged from the
+  palette, linked, YAML panel read; `map-editor.html` on the map fixture; 9 of 9 checks, 0 console and 0 page errors).
+- **Unit and static (system `python3` for the deploy suites):** `test_install_manager.py` 57 OK, `test_recreate_manager.py`
+  7 OK (new; the script runs as a copy with its root guard replaced and a fake `docker` on `PATH`),
+  `test_release_consistency.py` 15 OK, `test_check_install.py` 38 OK; `node --test tests/*.js` 281 OK; `bash -n` on
+  every deploy script; `docker compose -f deploy/compose.capture.yml config --quiet` with a dummy token;
+  `verify-release.py`; `check_links.py` (135 files, 0 problems); `git diff --check`.
+- **Not exercised live in this release:** the prepared-image route of `recreate-manager.sh` (no prepared image on
+  the dev VM; the stdlib test covers both routes), the lazydocker checksum path against GitHub (unit-tested with the
+  upstream file format). The capture stack's loopback binding is the binding the dev VM already ran with
+  (`127.0.0.1:5001`, `127.0.0.1:5801`, health check PASS in 1.30.39).
+
 # Technical audit, part 2: frontend, tooling and guides — 1.30.40
 
 Prepared on `claude/technical-audit` on 2026-09-23 after 1.30.39 (`73c6712`, records `dbd10e9`; PR #54, CI green).

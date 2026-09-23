@@ -1,3 +1,16 @@
+# Technical audit, part 3: deployment and dependencies — 1.30.41
+
+Read `docs/technical-audit/PICKUP.md` first. Preserve: (1) `clab-backup-ui/lab-builder/package.json` carries an
+`overrides` block (`maplibre-gl`, `markdown-it`, `dompurify`) beside the exact `@containerlab/clab-ui` pin; a bump of
+the editor needs `npm audit --package-lock-only` clean, `node build.mjs` then `--check` with Node 24
+(`~/.local/node24` on the dev VM), the builder tests and a browser smoke of drag, link, YAML and the map editor, and a
+release number (the bundle is cached immutable). (2) `install-manager.py` verifies lazydocker against
+`checksums.txt`; a failure of that step is a printed warning, never an installation failure. (3) `recreate-manager.sh`
+chooses `deploy/compose.image.yml` only when `deploy/image.env` sets `MANAGER_IMAGE` and the existing container runs
+it (or no local `clab-backup:<VERSION>` exists); `tests/test_recreate_manager.py` drives a copy of the script with the
+root guard replaced and a fake `docker` on `PATH`. (4) `compose.capture.yml` binds 5001 and 5801 to `127.0.0.1` with
+no override variable.
+
 # Technical audit, part 2: frontend, tooling and guides — 1.30.40
 
 Read `docs/technical-audit/PICKUP.md` first. Preserve: (1) the favourite star's states come from

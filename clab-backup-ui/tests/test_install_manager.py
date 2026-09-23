@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import io
 import json
@@ -9,6 +10,7 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+from urllib.error import URLError
 
 spec = importlib.util.spec_from_file_location('install_manager', Path(__file__).resolve().parents[2] / 'deploy/install-manager.py')
 install = importlib.util.module_from_spec(spec)
@@ -437,20 +439,92 @@ class LazydockerTests(unittest.TestCase):
         tag_fetch.assert_not_called()
         self.assertIn('unsupported', out.getvalue().lower())
 
-    def test_successful_install_reports_version_and_path(self):
+    def _checksums_line(self, tarball, filename, digest=None):
+        return (digest or hashlib.sha256(tarball).hexdigest()) + '  ' + filename + '\n'
+
+    def test_successful_install_verifies_the_checksum_then_reports_version_and_path(self):
+        tarball = self._make_tarball([('lazydocker', 'BIN')])
+        filename = install.lazydocker_tarball_filename('v0.23.3', 'x86_64')
+        checksums = self._checksums_line(tarball, filename)
+        with tempfile.TemporaryDirectory() as folder:
+            printed = io.StringIO()
+            with patch.object(install, 'lazydocker_arch', return_value='x86_64'), \
+                    patch.object(install, 'lazydocker_latest_tag', return_value='v0.23.3'), \
+                    patch.object(install, 'download_lazydocker_tarball', return_value=tarball), \
+                    patch.object(install, 'download_lazydocker_checksums', return_value=checksums) as checksums_fetch, \
+                    patch('sys.stdout', new=printed):
+                install.setup_lazydocker({'HOME': folder})
+            checksums_fetch.assert_called_once_with('v0.23.3')
+            destination = Path(folder) / '.local/bin/lazydocker'
+            self.assertEqual(destination.read_bytes(), b'BIN')
+            self.assertIn('0.23.3', printed.getvalue())
+            home_bashrc = Path(folder) / '.bashrc'
+            self.assertIn('.local/bin', home_bashrc.read_text())
+
+    def test_checksum_mismatch_skips_the_install_with_a_warning(self):
+        tarball = self._make_tarball([('lazydocker', 'BIN')])
+        filename = install.lazydocker_tarball_filename('v0.23.3', 'x86_64')
+        wrong_checksums = self._checksums_line(tarball, filename, digest='0' * 64)
+        with tempfile.TemporaryDirectory() as folder:
+            printed = io.StringIO()
+            with patch.object(install, 'lazydocker_arch', return_value='x86_64'), \
+                    patch.object(install, 'lazydocker_latest_tag', return_value='v0.23.3'), \
+                    patch.object(install, 'download_lazydocker_tarball', return_value=tarball), \
+                    patch.object(install, 'download_lazydocker_checksums', return_value=wrong_checksums), \
+                    patch('sys.stdout', new=printed):
+                install.setup_lazydocker({'HOME': folder})
+            destination = Path(folder) / '.local/bin/lazydocker'
+            self.assertFalse(destination.exists(), 'a mismatched checksum must never be installed')
+            self.assertIn('skipped', printed.getvalue())
+            self.assertIn('checksum', printed.getvalue().lower())
+
+    def test_checksum_missing_entry_skips_the_install_with_a_warning(self):
+        tarball = self._make_tarball([('lazydocker', 'BIN')])
+        # A checksums.txt that exists but never lists this release's filename (for
+        # example a differently named platform asset only).
+        unrelated = self._checksums_line(tarball, 'lazydocker_0.23.3_Linux_arm64.tar.gz')
+        with tempfile.TemporaryDirectory() as folder:
+            printed = io.StringIO()
+            with patch.object(install, 'lazydocker_arch', return_value='x86_64'), \
+                    patch.object(install, 'lazydocker_latest_tag', return_value='v0.23.3'), \
+                    patch.object(install, 'download_lazydocker_tarball', return_value=tarball), \
+                    patch.object(install, 'download_lazydocker_checksums', return_value=unrelated), \
+                    patch('sys.stdout', new=printed):
+                install.setup_lazydocker({'HOME': folder})
+            destination = Path(folder) / '.local/bin/lazydocker'
+            self.assertFalse(destination.exists())
+            self.assertIn('skipped', printed.getvalue())
+
+    def test_checksums_file_unavailable_skips_the_install_with_a_warning_never_raises(self):
         tarball = self._make_tarball([('lazydocker', 'BIN')])
         with tempfile.TemporaryDirectory() as folder:
             printed = io.StringIO()
             with patch.object(install, 'lazydocker_arch', return_value='x86_64'), \
                     patch.object(install, 'lazydocker_latest_tag', return_value='v0.23.3'), \
                     patch.object(install, 'download_lazydocker_tarball', return_value=tarball), \
+                    patch.object(install, 'download_lazydocker_checksums',
+                                side_effect=URLError('HTTP Error 404: Not Found')), \
+                    patch.object(install, 'install_lazydocker_binary') as install_binary, \
                     patch('sys.stdout', new=printed):
                 install.setup_lazydocker({'HOME': folder})
+            install_binary.assert_not_called()
             destination = Path(folder) / '.local/bin/lazydocker'
-            self.assertEqual(destination.read_bytes(), b'BIN')
-            self.assertIn('0.23.3', printed.getvalue())
-            home_bashrc = Path(folder) / '.bashrc'
-            self.assertIn('.local/bin', home_bashrc.read_text())
+            self.assertFalse(destination.exists())
+            self.assertIn('skipped', printed.getvalue())
+
+    def test_verify_lazydocker_checksum_matches_mismatches_and_missing_entries(self):
+        data = b'lazydocker binary content'
+        digest = hashlib.sha256(data).hexdigest()
+        filename = 'lazydocker_0.23.3_Linux_x86_64.tar.gz'
+        self.assertTrue(install.verify_lazydocker_checksum(data, f'{digest}  {filename}\n', filename))
+        self.assertTrue(install.verify_lazydocker_checksum(data, f'{digest} *{filename}\n', filename),
+                        'the binary-mode "*" marker used by sha256sum must still match')
+        self.assertFalse(install.verify_lazydocker_checksum(data, f'{"0" * 64}  {filename}\n', filename))
+        self.assertFalse(install.verify_lazydocker_checksum(data, '', filename))
+        self.assertFalse(install.verify_lazydocker_checksum(data, f'{digest}  other-file.tar.gz\n', filename))
+        # An ambiguous checksums file (two lines for the same filename) is never trusted.
+        duplicated = f'{digest}  {filename}\n{"1" * 64}  {filename}\n'
+        self.assertFalse(install.verify_lazydocker_checksum(data, duplicated, filename))
 
 
 class MainLoopTests(unittest.TestCase):

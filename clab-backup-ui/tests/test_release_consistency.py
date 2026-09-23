@@ -137,6 +137,16 @@ class ReleaseConsistencyTests(unittest.TestCase):
         self.assertIn('--no-recreate', retire_text)
         self.assertNotIn('--remove', retire_text)
 
+    def test_capture_compose_publishes_only_loopback_ports_with_no_bind_or_port_variable(self):
+        # The session service holds the Docker socket and must never be reachable from the
+        # LAN; both published ports are hard-coded to 127.0.0.1 by design (D-003), reached
+        # only through the manager's same-origin relay or a local browser on the VM itself.
+        capture_compose = (ROOT / 'deploy/compose.capture.yml').read_text()
+        self.assertIn('"127.0.0.1:5801:5801"', capture_compose, 'the session service (Docker socket) stays loopback-only')
+        self.assertIn('"127.0.0.1:5001:5001"', capture_compose, 'the discovery/relay service stays loopback-only')
+        self.assertNotIn('CAPTURE_BIND', capture_compose)
+        self.assertNotIn('CAPTURE_PORT', capture_compose)
+
     # ---- documentation ------------------------------------------------------------------
 
     def test_documentation_names_only_the_current_release(self):
