@@ -129,7 +129,11 @@ and echo it only to a browser that offered it; the pinned image's websockify rej
 a handshake without it.
 
 The session service alone mounts the Docker socket, which gives it host-level
-administrative power. Keep it restricted to trusted VM operators. The manager
+administrative power. Keep it restricted to trusted VM operators. Both published
+ports (`5001`, `5801`) are hard-coded to `127.0.0.1` in `deploy/compose.capture.yml`
+— there is no `CAPTURE_BIND`/`CAPTURE_PORT` override — so they are reached only
+through the manager's same-origin relay (`app/capture_sessions.py`) or a browser on
+the VM itself, never directly from the LAN. The manager
 never receives that socket, privileged mode or new host-gateway commands. API
 clients cannot specify images, commands, mounts, networks, ports or service URLs.
 Wireshark containers have no host mounts or Docker socket. The browser receives

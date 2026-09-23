@@ -1,0 +1,89 @@
+{
+  "labs": [],
+  "jobs": [],
+  "platforms": {
+    "juniper_cjunosevolved": {
+      "label": "Junos",
+      "os": "junipernetworks.junos.junos",
+      "command": "show configuration | display set | no-more",
+      "suffix": "set",
+      "snapshot_suffix": "cfg",
+      "restore": "show configuration | no-more",
+      "restore_format": "junos-hierarchical",
+      "restore_suffix": "jcfg"
+    },
+    "juniper_vqfx": {
+      "label": "Junos (vQFX)",
+      "os": "junipernetworks.junos.junos",
+      "command": "show configuration | display set | no-more",
+      "suffix": "set",
+      "snapshot_suffix": "cfg",
+      "restore": "show configuration | no-more",
+      "restore_format": "junos-hierarchical",
+      "restore_suffix": "jcfg"
+    },
+    "juniper_vjunosswitch": {
+      "label": "Junos (vJunos-switch)",
+      "os": "junipernetworks.junos.junos",
+      "command": "show configuration | display set | no-more",
+      "suffix": "set",
+      "snapshot_suffix": "cfg",
+      "restore": "show configuration | no-more",
+      "restore_format": "junos-hierarchical",
+      "restore_suffix": "jcfg"
+    },
+    "cisco_xrv9k": {
+      "label": "IOS-XR",
+      "os": "cisco.iosxr.iosxr",
+      "command": "show running-config",
+      "suffix": "cfg",
+      "restore": "show running-config",
+      "restore_format": "iosxr-running-config",
+      "restore_suffix": "xrcfg"
+    },
+    "arista_ceos": {
+      "label": "EOS",
+      "os": "arista.eos.eos",
+      "command": "show running-config",
+      "suffix": "cfg",
+      "restore": "show running-config",
+      "restore_format": "eos-running-config",
+      "restore_suffix": "eoscfg"
+    }
+  },
+  "version": "1.30.42",
+  "discovery": {
+    "host": {
+      "address": "127.0.0.1",
+      "port": 22,
+      "username": "clab-discovery",
+      "auth": "password",
+      "command_mode": "helper",
+      "enabled": true,
+      "fingerprint": "",
+      "bootstrap_pending": true,
+      "bootstrap_at": "2026-09-23T12:46:38+00:00",
+      "bootstrap_fingerprint": "SHA256:EKVxb8cjEu43z/3TvNmi4Xs4mGSM/6R+/Zj3yr+7EnE",
+      "password_saved": true
+    },
+    "configured": true,
+    "connected": false,
+    "checking": false,
+    "checked_at": null,
+    "last_success": null,
+    "error": "Waiting for a fresh VM inspection.",
+    "interval": 30,
+    "file_import_supported": false,
+    "file_reader": "inspect-only",
+    "helper_version": null,
+    "helper_update_required": false,
+    "pending_imports": {},
+    "file_reports": {},
+    "file_errors": {},
+    "ignored_labs": [],
+    "discovered": []
+  },
+  "git_jobs": [],
+  "restore_jobs": [],
+  "operations": []
+}

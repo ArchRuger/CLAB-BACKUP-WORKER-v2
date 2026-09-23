@@ -61,7 +61,6 @@ Engineer workstation
                                         |          Git helper -> engineer-owned checkout -> HTTPS Git remote
                                         |
                                         +-- SSH --> network nodes
-                                        +-- gNMI --> network nodes --> Prometheus + Grafana (TCP 3000)
                                         +-- HTTP --> Edgeshark + Wireshark sessions (browser capture)
 
 Proxmox --> Ubuntu VM --> Docker / Containerlab --> training devices
@@ -185,7 +184,7 @@ sudo systemctl enable --now ssh
 
 VM-based NOS images, including cJunosEvolved, need virtualization support inside the Ubuntu guest. Containerlab and Node Manager themselves do not require nested KVM merely to run ordinary containers.
 
-> **vJunos-switch deployment limitation:** Containerlab documents that vJunos-switch cannot run inside a VM because its architecture already nests virtualization. The Proxmox settings below do not remove that limitation; choose a host supported by the image requirements. The manager's vJunos-switch adapter adds SSH login/backup handling, not a change to how the NOS boots. [Containerlab vJunos-switch requirements](https://containerlab.dev/manual/kinds/vr-vjunosswitch/)
+> **vJunos-switch needs nested virtualization:** like vJunos Evolved and XRv9k, it is a VM-based image that needs hardware virtualization available inside the guest, so it needs the settings below — nested virtualization enabled on the hypervisor (CPU type `host`) — and enough memory. The manager's vJunos-switch adapter adds SSH login/backup handling, not a change to how the NOS boots. [Containerlab vJunos-switch requirements](https://containerlab.dev/manual/kinds/vr-vjunosswitch/)
 {.is-warning}
 
 ```text
@@ -477,8 +476,8 @@ bash "$HOME/projects/clab-manager/deploy/install.sh"
 
 Choose **Install or update manager, then set up Git**. The menu combines missing
 prerequisites, approved APT media repair with backups, password/helpers, persistent
-storage, image build/start, the browser Wireshark stack, the Grafana dashboards and
-running-container/HTTP checks. It then opens Git
+storage, image build/start, the browser Wireshark stack and running-container/HTTP
+checks. It then opens Git
 setup as the same ordinary owner. Existing `.env` is retained; a new source
 folder offers to copy your previous `.env`. Existing passwords/data are kept.
 
@@ -685,8 +684,9 @@ sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" 
 sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" logs --tail=50 backup-ui
 ```
 
-The launcher refreshes and verifies the host helpers, prepares persistent
-storage, installs the browser Wireshark and Grafana stacks, builds the manager
+The launcher runs `retire-telemetry.sh --no-recreate` to tear down any leftover
+telemetry stack, then refreshes and verifies the host helpers, prepares persistent
+storage, installs the browser Wireshark stack, builds the manager
 image and recreates the manager. It retains an
 existing `clab-discovery` password. If Parts 7–9 were skipped, the first launch
 prompts for the password before building or starting the container.
@@ -913,11 +913,10 @@ under **Progress › Save settings**.
 
 Wait for the NOS to finish booting, then verify login and one configuration
 capture. Manager support does not prove an image can boot on the chosen host;
-the vJunos-switch VM limitation is explained in [Part 2](#part-2). Consult the
+vJunos-switch's nested-virtualization requirement is explained in [Part 2](#part-2). Consult the
 [vQFX](https://containerlab.dev/manual/kinds/vr-vqfx/) and
 [vJunos-switch](https://containerlab.dev/manual/kinds/vr-vjunosswitch/) kind guides
-for image and runtime requirements. Live SSH/backup of these images has not
-been verified here. Loading a saved version downloads files; **Apply to running
+for image and runtime requirements. Loading a saved version downloads files; **Apply to running
 lab…** (Progress tab) is offered for cJunosEvolved and vJunos-switch, not for
 vQFX (see LAB-OPERATIONS.md for the full list of restorable platforms).
 
@@ -948,16 +947,6 @@ The browser CLI is an SSH session from the manager to the device. Test the saved
 | **Save device configurations** (**Lab actions ▾ › All lab operations…**) | Separate containerlab host operation; behavior depends on the device kind |
 
 Review readiness, choose a backup, then inspect its outcome under **Tools › Configuration backups › Backups on this VM** and download a configuration. Set the automatic interval only after a manual backup works. Linked discovery pauses automatic work when its lab is unavailable; a running container alone is not proof of SSH readiness.
-
-## Live telemetry (network dashboard)
-
-With automatic telemetry on (the default for labs created since 1.23.0), the manager
-configures gNMI on supported devices once they answer `show version` and streams
-interface rates, link state and BGP neighbours; **Open lab map ↗** (or **Open network
-dashboard ↗** for a lab without a map) under **Tools › Telemetry** opens the lab's
-Grafana dashboards and generated map on TCP 3000 of the VM, starting Grafana on the
-VM when needed. Settings, device states and the acceptance procedure are in
-[TELEMETRY.md](TELEMETRY.md) and [GRAFANA-MAP.md](GRAFANA-MAP.md).
 
 ## Wireshark in the browser
 
@@ -1009,27 +998,33 @@ All lab operations…** for the complete list, or right-click a lab card on Home
 ## Edit the map and export
 
 Choose **Edit map** on the Topology tab, under **Lab actions ▾ › Advanced options** or on the
-**Tools › Map** card. Select a device or annotation on the canvas or from the item
-list. Drag it to move it, or enter coordinates. Add text, boxes, circles or lines;
-edit text, size, colors, opacity and border style in the properties panel.
-**Undo** reverses edits and **Fit** fits the current content.
+**Tools › Map** card. For a lab whose topology file the manager holds, this opens the same editor
+as the lab builder, restricted to the lab's own map and its drawing only: drag devices, apply a
+generated layout, add and style text, rectangles, circles, lines and groups (drag devices into a
+group), copy and paste annotations, and set link label offsets, the link label mode and the grid.
+The toolbar above the canvas offers **Undo** and **Redo** (Ctrl+Z, Ctrl+Shift+Z; map changes only),
+**Device look…** (a device's icon, colours and label), **Link labels…** (how far a link's interface
+names sit from its devices), **Import map file…**, **Download map file**, **Export to draw.io** and
+**Save map**. Devices and links cannot be added, changed or removed there, nothing is deployed and the
+running lab is not touched; the editor cannot send anything but the map to the manager. A lab without
+a topology file in the manager (imported from an inventory) opens a simpler dialog instead, with text,
+boxes, circles, lines and Undo only.
 
 **Save map** persists positions and annotations in the manager's data.
-Closing with unsaved edits offers **Keep editing** or **Discard changes**. If
+Closing with unsaved edits offers **Keep editing**, **Discard changes** or **Save map and leave**. If
 another session changed the saved map, saving is rejected; reopen the editor
 to load that version before editing again.
 
-**Download map file (.annotations.json)** exports the `.clab.yaml.annotations.json`
-format for use alongside the VM topology in VS Code. **Export to draw.io** exports editable
-XML with nodes, connections, interface labels, notes, groups and shapes. Both
-exports include current unsaved edits without saving them to the manager.
-Open `.drawio` files in diagrams.net or its desktop application.
+**Download map file** exports the full `.clab.yaml.annotations.json`
+document for use alongside the VM topology in VS Code. **Export to draw.io** exports editable
+XML with nodes, connections, interface labels, notes, groups and shapes, using the current map
+including unsaved edits. Open `.drawio` files in diagrams.net or its desktop application.
 
-This is a basic visual editor. Structural lab changes still belong in the
-original VM YAML. Saving or exporting does not rewrite VM files. To reuse the
-JSON on the VM, retain a copy of its original annotations file, then transfer
+This is the manager's layout editor, not an embedded copy of the full diagrams.net application.
+Structural lab changes still belong in the original VM YAML. Saving or exporting does not rewrite VM
+files. To reuse the JSON on the VM, retain a copy of its original annotations file, then transfer
 the downloaded JSON alongside the matching YAML using your normal VM account.
-A later **Import map…** or **Sync topology from VM** can replace the manager's edited map.
+A later **Import map file…** or **Sync topology from VM** can replace the manager's edited map.
 
 Contained nodes are grouped with their surrounding annotation in draw.io.
 Router, switch and server symbols use native editable elements; unsupported
@@ -1144,8 +1139,9 @@ undo an intentional stop on reboot. [Docker restart policies](https://docs.docke
 sudo bash "$HOME/projects/clab-manager/deploy/start-manager.sh" --enable-operations --lab-root /etc/containerlab
 ```
 
-This updates and verifies the helpers, refreshes the browser Wireshark and Grafana
-stacks, builds the matching image and recreates the manager using the existing
+This runs `retire-telemetry.sh --no-recreate` to tear down any leftover telemetry
+stack, updates and verifies the helpers, refreshes the browser Wireshark stack,
+builds the matching image and recreates the manager using the existing
 persistent data. Existing passwords are retained.
 If Git repositories are already registered, the launcher also refreshes and
 verifies the Git helper while preserving those registrations.
@@ -1501,26 +1497,28 @@ For image-only installations use these same env-file/Compose arguments for
 status, logs, stop, start, backups and upgrades. Continue with Part 11 to save
 the VM password in the manager. Do not run the source-build launcher offline.
 
-**Browser Wireshark and the Grafana dashboards on a prepared-image installation.** The two
-setup scripts write their settings to `clab-backup-ui/.env` and normally finish by recreating
-the manager from the source-build Compose file, which is the wrong file here. Run them with
-`--no-recreate`, copy their settings into `deploy/image.env`, and recreate the manager with the
-image Compose file yourself. Both stacks need their container images (pulled by the scripts, or
-loaded beforehand on a VM without internet access). If `UI_PORT` is not 8081, put the same
-`UI_PORT` line into `clab-backup-ui/.env` first: the dashboards setup reads the manager's port
-from that file for the Prometheus scrape target.
+**Browser Wireshark on a prepared-image installation.** The setup script writes its settings
+only to `clab-backup-ui/.env`, which the source-build Compose file reads. Run it with
+`--no-recreate`, copy its settings into `deploy/image.env`, then let
+`deploy/recreate-manager.sh` finish the job: it detects a prepared-image installation (an
+existing `deploy/image.env` that sets `MANAGER_IMAGE`, matched against the running container's
+current image, or the absence of a locally built `clab-backup:<VERSION>` image) and recreates
+from `deploy/compose.image.yml` instead of the source-build file, printing which route it chose.
+The stack needs its container image (pulled by the script, or loaded beforehand on a VM without
+internet access).
 
 ```bash
 cd "$HOME/projects/clab-manager"
 sudo bash deploy/setup-capture.sh --no-recreate
-sudo bash deploy/setup-telemetry.sh --no-recreate
-sudo grep -E '^(CAPTURE_|TELEMETRY_)' clab-backup-ui/.env | sudo tee -a deploy/image.env >/dev/null
-sudo docker compose --env-file deploy/image.env -f deploy/compose.image.yml \
-  up -d --no-build --pull never --force-recreate
+sudo grep -E '^CAPTURE_' clab-backup-ui/.env | sudo tee -a deploy/image.env >/dev/null
+sudo bash deploy/recreate-manager.sh
 ```
 
+Confirm its output names the prepared-image installation before trusting the recreate; if a
+stray locally built `clab-backup:<VERSION>` image also happens to exist, use the explicit image
+Compose command from the "Prepared-image upgrades" section above instead.
 `deploy/image.env` now holds the capture session token: keep it readable by the installing
-account only (`chmod 600 deploy/image.env`). After a later rerun of either setup script, replace
+account only (`chmod 600 deploy/image.env`). After a later rerun of the setup script, replace
 those lines in `deploy/image.env` rather than appending a second copy. Then run the health check.
 
 ## Engineer handoff record

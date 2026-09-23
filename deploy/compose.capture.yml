@@ -10,7 +10,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/capture/Dockerfile
-    image: clab-capture-service:1.30.38
+    image: clab-capture-service:1.30.42
     restart: unless-stopped
     read_only: true
     environment:
@@ -48,4 +48,4 @@ services:
     cap_add: [SYS_ADMIN, SYS_CHROOT, SYS_PTRACE, NET_ADMIN, NET_RAW]
     security_opt: ["apparmor:unconfined"]
     ports:
-      - "${CAPTURE_BIND:-127.0.0.1}:${CAPTURE_PORT:-5001}:5001"
+      - "127.0.0.1:5001:5001"

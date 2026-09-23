@@ -18,6 +18,8 @@ jobs:
           python3 -m unittest discover -s tests -p test_helper_preflight.py -v
           python3 -m unittest discover -s tests -p test_gateway_preflight.py -v
           python3 -m unittest discover -s tests -p test_install_manager.py -v
+          python3 -m unittest discover -s tests -p test_recreate_manager.py -v
+          python3 -m unittest discover -s tests -p test_retire_telemetry.py -v
           python3 -m unittest discover -s tests -p test_git_onboard.py -v
           python3 -m unittest discover -s tests -p test_git_registrations.py -v
           python3 -m unittest discover -s tests -p test_scaffold_lab.py -v
@@ -29,7 +31,7 @@ jobs:
           python3 -m unittest discover -s tests -p test_check_git.py -v
       - name: Check installer shell syntax
         run: |
-          for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh deploy/setup-capture.sh deploy/setup-telemetry.sh deploy/recreate-manager.sh deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-operations.sh deploy/setup-password.sh deploy/migrate-worker-data.sh; do
+          for script in deploy/install.sh deploy/install-prerequisites.sh deploy/setup-git.sh deploy/start-manager.sh deploy/check-install.sh deploy/setup-engineer-access.sh deploy/setup-capture.sh deploy/retire-telemetry.sh deploy/recreate-manager.sh deploy/setup-vm.sh deploy/setup-discovery.sh deploy/setup-operations.sh deploy/setup-password.sh deploy/migrate-worker-data.sh; do
             bash -n "$script"
           done
       - name: Install application test dependencies
@@ -67,7 +69,8 @@ jobs:
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -p test_logging.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_node_readiness.py -v
           "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_vm_files.py -v
-          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_grafana_control.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_telemetry_retirement.py -v
+          "$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p test_telemetry_absence.py -v
       - name: Check the backup pipeline, downloads, maps, import confirmation, removal and reset
         working-directory: clab-backup-ui
         run: |
@@ -80,12 +83,9 @@ jobs:
           python -m unittest discover -s tests -t tests -p test_remove_lab.py -v
           python -m unittest discover -s tests -t tests -p test_manager_reset.py -v
           python -m unittest discover -s tests -t tests -p test_vm_password.py -v
-      - name: Check network telemetry
-        working-directory: clab-backup-ui
-        run: '"$RUNNER_TEMP/clab-test-venv/bin/python" -m unittest discover -s tests -t tests -p "test_telemetry*.py" -v'
       - name: Check browser regressions
         working-directory: clab-backup-ui
-        run: node --test tests/test_lab_builder_ui.js tests/test_map_editor_ui.js tests/test_operations_ui.js tests/test_debug_ui.js tests/test_capture_ui.js tests/test_capture_session_ui.js tests/test_topology_ui.js tests/test_vm_password_ui.js tests/test_readiness_ui.js tests/test_download_ui.js tests/test_grafana_ui.js tests/test_git_progress_ui.js tests/test_git_places_ui.js tests/test_restore_ui.js tests/test_status_ui.js tests/test_shell_ui.js tests/test_home_ui.js tests/test_diagram_editor_ui.js tests/test_topology_menu_ui.js tests/test_diff_view_ui.js tests/test_lab_builder_yaml_ui.js
+        run: node --test tests/test_lab_builder_ui.js tests/test_map_editor_ui.js tests/test_operations_ui.js tests/test_debug_ui.js tests/test_capture_ui.js tests/test_capture_session_ui.js tests/test_topology_ui.js tests/test_vm_password_ui.js tests/test_readiness_ui.js tests/test_download_ui.js tests/test_git_progress_ui.js tests/test_git_places_ui.js tests/test_restore_ui.js tests/test_status_ui.js tests/test_shell_ui.js tests/test_home_ui.js tests/test_diagram_editor_ui.js tests/test_topology_menu_ui.js tests/test_diff_view_ui.js tests/test_lab_builder_yaml_ui.js tests/test_telemetry_retired_ui.js
       - name: Check that the committed lab builder assets match their source
         # The editor bundle under app/static/lab-builder is built here, never on a lab VM. A fresh build
         # from the lockfile must reproduce the committed manifest byte for byte.
@@ -104,13 +104,6 @@ jobs:
         env:
           CAPTURE_SESSION_TOKEN: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
         run: docker compose -f deploy/compose.capture.yml config --quiet
-      - name: Validate telemetry dashboards deployment
-        env:
-          TELEMETRY_GRAFANA_ADMIN_PASSWORD: fixture-password-not-secret
-        run: docker compose -f deploy/compose.telemetry.yml config --quiet
-      - name: Start the real Grafana dashboards stack against a fixture manager
-        timeout-minutes: 10
-        run: python3 deploy/telemetry/smoke.py
       - name: Exercise browser Wireshark and real loopback packets
         timeout-minutes: 15
         run: '"$RUNNER_TEMP/clab-test-venv/bin/python" deploy/capture/smoke.py'

@@ -1,3 +1,197 @@
+# Technical audit, part 4: backend and state — 1.30.42
+
+Prepared on `claude/technical-audit` on 2026-09-23 after 1.30.41 (`e192ead`, CI green). Backend changes in
+`runner.py`, `git_progress.py`, `restore.py`, `main.py`, `node_readiness.py`, `diagnostics.py`, `lab_operations.py`,
+implemented by a Sonnet builder and, for the secret redaction, the Opus specialist; reviewed independently by the
+Opus `risk-reviewer`, whose one must-fix (a pending save's capture could be evicted by the first draft's global cap,
+reproduced with the real `submit()`) and six should-fix items (live-log lag from the carry-over, a stale git lock
+after a timeout, restore candidates kept for ever, the `unchanged` reference save, read slices hiding protected
+entries, wording) were all applied before this commit.
+
+- **Unit and static:** `python -m unittest discover` 1134 OK (1 skipped): 28 tests added (bounds per list and per
+  lab, protected ids, the retry of a pending save after the cap, the interrupted restore's backups, the `unchanged`
+  reference, the redaction window: a secret at the cut, split across chunks, repeated thousands of times, multi-line,
+  the lag claim that every line that cannot begin a secret is published at once, and a randomised claim over 3,000
+  chunkings and cuts; the git timeout with a real `git` and a planted `index.lock`; the scheduler join; the
+  restart-recheck branches for a missing candidate and a missing lab; the ASCII arrow); `node --test tests/*.js` 281
+  OK; every deploy-script suite OK; `verify-release.py`; `check_links.py` (135 files); `git diff --check`;
+  `python -W error -c "import app.main"`.
+- **Measured (Opus, scratch scripts):** redaction cost 65 µs per 4 KiB chunk with 42 secrets including a 2.9 KB
+  key, flat from an empty to a 2 MiB window; 120 of 120 lines visible live with the key stored (the first draft
+  showed 63); 80,000 fuzz cases equal to redacting the whole output first; the reviewer's own fuzz (3 × 20,000)
+  clean. Restore state after 200 four-node restores with 30 KiB configurations: 50 MB and 334 ms per save before,
+  bounded after.
+- **Live upgrade of the dev VM (already-retired case):** `start-manager.sh` from the 1.30.42 worktree: both teardown
+  passes reported nothing to retire, capture stack refreshed to 1.30.42, manager and helpers 1.30.42, state intact
+  (1 lab, 38 jobs, 5 Git jobs, 12 restore jobs, 44 operations), 5 of 5 nodes ready; idle 53 MiB / 10 threads; the
+  image holds 30 Python packages (494 MB); superseded local images removed afterwards.
+- **Integrated live QA (independent Sonnet QA, `docs/technical-audit/tools/check_release_1_30_42.py`, report
+  `docs/technical-audit/evidence/r42-live-qa.md`, 149 checks: 0 FAIL, 1 INFO):** absence and presence at three
+  viewports with 0 console and 0 page errors and no retired request; the favourite star an outline until pressed
+  (computed `fill` read in both states); wires drawn and a link click opening the capture dialog; a lab-wide backup
+  (four NOS nodes `succeeded`, ZIP downloaded) with `jobs` bounded per lab and the other lists returned whole;
+  *Show running devices* with streamed output equal in the window and in the API, no `password` line; *Save
+  progress* on an unchanged lab → "Progress saved to Git — nothing had changed" (`unchanged`, no upload), then a
+  real drift on cEOS → review → upload `3f9bf62` on the remote (one transient VM-side Git lock resolved by the
+  product's own *Upload now*, recorded as INFO); **the two gaps left open by the earlier stream are closed:** a
+  topology + annotations pair uploaded through *Upload a lab file* to the real VM through the reviewed `create`
+  (both files on the VM, YAML read back through the manager) and a pair dropped into the blank lab builder (nodes
+  and positions from the fixture); `qa42-builder` published, revised while undeployed, imported through the preview
+  and removed from the manager only; *Edit map* move, save, reload, persisted, moved back; *Test logins* 5 started,
+  a terminal to cJunosEvolved, Diagnostics PASS rows, a capture session started and ended. Then the real four-node
+  restore from "Configuration A" `f12421e` (all `verified`, overlap `max(connecting) < min(settled)`,
+  `evidence/r42-restore-all-four-to-a.json`) and a save "Configuration A (audit 1.30.42)" → `27ccd71` on the remote.
+- **Fresh install (independent Sonnet QA, a brand-new Ubuntu 24.04 nested VM under QEMU/KVM on the dev VM,
+  `docs/technical-audit/tools/fresh_install_vm.py`, `evidence/r42-fresh-install*.md/.txt/.json`, 19 minutes):**
+  Docker, containerlab and the manager absent before; the guided installer's standard path (menu 1, the
+  `clab-discovery` password, six phases, `Manager 1.30.42: running; HTTP and version checks passed.`), stopped at the
+  Git wizard's first prompt by design (GitHub login is a separate step; the installer's closing lines recorded);
+  `check-install.sh` 31 PASS / 0 FAIL before a VM connection and 54 PASS / 0 FAIL / 3 WARN / 3 INFO after it
+  (WARNs: Git helper and registry not set up, the folder-coverage cap); *Retired telemetry stack* PASS; only the
+  manager and the three capture containers, no grafana/prometheus image, no `TELEMETRY_` key, no `telemetry`
+  folder, `retire-telemetry.sh --dry-run` "nothing to retire" (never-installed case); a second `start-manager.sh`
+  idempotent; a reboot brought the manager and the capture stack back with no telemetry container; the fresh
+  manager connected to its own VM with the seeded password (`discovery.connected`, helper 1.30.42). Note: a bare
+  `sudo -v` prompts on a NOPASSWD account that is also in the `sudo` group (the quick-install guide's own
+  `[sudo] password` row), not a manager defect.
+- **Restore harnesses (lead, `docs/multi-platform-restore/tools/`, `docs/ui-ux-cleanup/tools/`, evidence under
+  `docs/technical-audit/evidence/r42-*.json`):** independent read-back of all four nodes at A before and after;
+  `mixed_failure.py` (a foreign `commit confirmed` armed on XRv9k during the four-node restore): armed before the
+  victim's driver connected, three nodes replaced and verified, the victim refused with "Configuration was not
+  changed", job `partial`, the foreign change left alone and rolled back by itself, the recovery restore of that
+  node alone `verified`; `isolation_all_four.py --victim xrv9k` (management cut the instant the victim reached
+  `applying`): the other three verified independently, the victim `failed` with a connectivity message and no
+  change, the cut lifted, iptables clean; `failure_harness.py armed-cut --node cjunosevolved --minutes 2`
+  (management cut the instant the confirm reconnect opened): the driver kept the arming session, waited in
+  `confirming` for the 174 s of the cut and confirmed on the fresh connection after it, inside the 5-minute
+  `commit confirmed` window (`verified`, no pending change on read-back): a late confirmation, not a rollback.
+  `failure_harness.py restart-confirming --node ceos` (the manager container restarted the instant the target
+  reached `confirming`, 3.9 s into the job): the manager was back as 1.30.42 within a second, the job `interrupted`
+  with "Manager restarted during a restore. It is checking the devices that were being changed…", the recheck
+  found the saved configuration active with nothing pending, job `succeeded` / `verified` (this is the restart path
+  that reads the candidate before finalisation, the one the risk review examined), read-back A
+  (`r42-restart-confirming-ceos.json`). Rollback read-back (`armed-cut --node cjunosevolved --minutes 7` after the
+  node was drifted to B with `lab/drift/cjunosevolved-B.cli`, read back as B): the restore of A loaded and armed,
+  management cut the instant the confirm reconnect opened and kept cut for 474 s, longer than the 5-minute
+  `commit confirmed` timer; the device undid the change by itself; when the cut lifted the manager read the device
+  back and reported the target `rolled_back` ("The change was not confirmed in time and the device undid it.
+  Checked: the configuration from before the restore is active."), job `failed` ("No node was restored. Existing
+  configurations were preserved by the safety backup."); the independent read-back shows B active with nothing
+  pending (`r42-armed-cut-cjunosevolved-rollback.json`). Final restore of all four nodes to A `succeeded`, read-back
+  A with 0 missing and 0 extra statements against the saved folder, no iptables rule left behind
+  (`r42-final-restore-to-a.json`).
+
+# Technical audit, part 3: deployment and dependencies — 1.30.41
+
+Prepared on `claude/technical-audit` on 2026-09-23 after 1.30.40 (`f21125e`, CI green). Deploy tooling, the editor's
+dependency overrides with the rebuilt bundle, two guides; no manager Python change (rebuilt and validated on the VM
+with the next release, which carries the backend chunk).
+
+- **Editor bundle (Node 24.21.0, `~/.local/node24`):** `npm install --package-lock-only`, `npm ci`, `node build.mjs`
+  (132 files, 7,210,348 bytes, 77 packages), `node build.mjs --check` (committed assets match a fresh build);
+  `npm audit --package-lock-only` 0 vulnerabilities (5 before: 2 critical, 3 moderate); `npm ls` resolves
+  `maplibre-gl@6.11.1`, `markdown-it@14.3.2`, `dompurify@3.4.15` (monaco-editor's nested copy deduplicated; monaco is
+  stubbed out of the build anyway). The manifest of the committed rebuild is byte-identical to the scratch build the
+  Sonnet builder smoke-tested in Chromium on a scratch copy of the app (blank lab, two devices dragged from the
+  palette, linked, YAML panel read; `map-editor.html` on the map fixture; 9 of 9 checks, 0 console and 0 page errors).
+- **Unit and static (system `python3` for the deploy suites):** `test_install_manager.py` 57 OK, `test_recreate_manager.py`
+  7 OK (new; the script runs as a copy with its root guard replaced and a fake `docker` on `PATH`),
+  `test_release_consistency.py` 15 OK, `test_check_install.py` 38 OK; `node --test tests/*.js` 281 OK; `bash -n` on
+  every deploy script; `docker compose -f deploy/compose.capture.yml config --quiet` with a dummy token;
+  `verify-release.py`; `check_links.py` (135 files, 0 problems); `git diff --check`.
+- **Not exercised live in this release:** the prepared-image route of `recreate-manager.sh` (no prepared image on
+  the dev VM; the stdlib test covers both routes), the lazydocker checksum path against GitHub (unit-tested with the
+  upstream file format). The capture stack's loopback binding is the binding the dev VM already ran with
+  (`127.0.0.1:5001`, `127.0.0.1:5801`, health check PASS in 1.30.39).
+
+# Technical audit, part 2: frontend, tooling and guides — 1.30.40
+
+Prepared on `claude/technical-audit` on 2026-09-23 after 1.30.39 (`73c6712`, records `dbd10e9`; PR #54, CI green).
+Stylesheet, markup, two scripts, one browser test, the after-redesign Playwright tool and two guides; no Python
+change, so the manager was not rebuilt for this release (the final integrated pass runs on the last build).
+
+- **Unit and static:** `node --test tests/*.js` 281 OK; `node --check` on every static script; `verify-release.py`;
+  `check_links.py` (135 files, 0 problems); `git diff --check`. The Python suite is unchanged by this release and
+  is recorded with 1.30.41.
+- **Fixture and browser (Sonnet builder, fresh `FIXTURE_DATA`, Chromium):** favourite star pixel-sampled in both
+  states (outline when not favourited, `currentColor` when pressed; the lab switcher's star still solid); 16 wires
+  drawn with the intended computed styles (`capture-hit` transparent 16 px, visible path 2 px) and a link click
+  opening the capture dialog; `verify_after.py` 97 of 97 checks at 1920×1080, 1440×900 and 1366×768, 0 console
+  and 0 page errors (screenshots and `report.json` in the builder's scratch, not committed).
+- **Guides (docs auditor):** `check_links.py` and `verify-release.py --docs` clean after the rewrites.
+
+# Technical audit, part 1: telemetry and Grafana retired — 1.30.39
+
+Prepared on `claude/technical-audit` (from `main` `b1ced1d`) on 2026-09-23. The full audit record is
+`docs/technical-audit/` (AUDIT, FEATURE-PARITY, TELEMETRY-REMOVAL, VALIDATION, PICKUP).
+
+- **Baseline (unit, at `b1ced1d`):** `python -m unittest discover` 1096 OK (1 skipped), `node --test tests/*.js`
+  274 OK, `verify-release.py` and `check_links.py` (132 files) clean, CI green on `main`.
+- **Unit and static (the integrated tree after the risk review's fixes, at the release bump):** `python -m unittest
+  discover` 1078 OK (1 skipped): 93 telemetry-only tests and the Grafana helper-mode test removed with the feature,
+  31 (`test_telemetry_retirement.py`), 9 (`test_telemetry_absence.py`), one `operation_busy` test and the rewritten
+  helper-mode test added; `node --test tests/*.js` 281 OK (`test_grafana_ui.js` removed, `test_telemetry_retired_ui.js`
+  added); every deploy-script suite with the system `python3` OK (`test_retire_telemetry.py` 33, `test_check_install.py` 38,
+  `test_install_manager.py` 53, `test_release_consistency.py` 14, the APT, host, Git, onboarding and scaffold suites);
+  `bash -n` on every deploy script; `node --check` on every static script; `verify-release.py` (runtime and
+  documentation); `check_links.py` 129 files, 0 problems; `git diff --check`.
+- **Upgrade rehearsal (isolated copy of the real pre-change data, `docs/technical-audit/tools/upgrade_rehearsal.py`):**
+  PASS: every protected field identical before and after the migration (labs, profiles and secrets, Git bindings,
+  30 jobs, 3 Git jobs, 11 restore jobs, 44 operations, host trust), the `telemetry` key gone, one ledger kept
+  (`clab-restore-square-cjunosevolved`, 1 line), the second run a no-op, the event carries names and counts only.
+- **Independent review (Opus 5.5 `risk-reviewer`, read-only):** two must-fix and seven should-fix findings, all
+  applied before this commit: the new browser test added to CI; the teardown acts only on the two fixed feature
+  folders (resolved path equal, no symlink in any component; a `.env` value pointing elsewhere is skipped), reads and
+  validates everything before the first destructive step, archives the removed `.env` lines before rewriting the
+  file as bytes (CRLF and control characters preserved), and runs a second time after the manager is recreated;
+  Junos removal refuses when deleting the routing-instance would leave foreign gRPC leaves; an entry recorded
+  before the lab's last deploy is cleared without touching the device (identical text such as containerlab's cEOS
+  template is not proof of authorship); a `removing` flag makes `operation_busy` refuse restores, backups, saves and
+  operations during a removal; permanent entries and unreadable records can be forgotten; a second entry point under
+  Advanced options; the weakened `End`-key claim in `test_shell_ui.js` restored. Notes accepted as is: the
+  four-worker pool is more than a one-off needs; *Remove lab* and *Start fresh* drop the record with the lab; a
+  1.30.38 manager started on migrated data would show the record in its lab view (see the rollback note).
+- **Live upgrade of the dev VM (an installation that had the stack: Prometheus running with restart
+  `unless-stopped`, Grafana exited, two tmpfs volumes, eight `TELEMETRY_*` keys, the Flow panel and one generated
+  lab-map dashboard on disk).** `deploy/retire-telemetry.sh --dry-run` from the 1.30.39 worktree listed exactly the
+  two labelled containers, the two volumes, the two image digests, the two folders and the eight keys. `sudo bash
+  deploy/start-manager.sh` then removed them (log kept in the audit record), refreshed the capture stack to
+  `clab-capture-service:1.30.39`, built `clab-backup:1.30.39` (494 MB, down from 525 MB; the pip step no longer
+  installs pygnmi, grpcio, protobuf or dictdiffer) and recreated the manager; the second teardown pass after the
+  recreate found and archived `data/telemetry` again, which the old manager's loop had recreated during the build
+  (the risk review's case). Afterwards: no container or volume with the project label, `grafana/grafana-oss` and
+  `prom/prometheus` gone (1.85 GB freed), ports 3000 and 9090 closed, 8081/5001/5801 as before, `.env` holds only the
+  `CAPTURE_*` keys (byte-identical), archives `/srv/containerlab-node-manager/telemetry-retired-20260923T111011Z`
+  (config, plugins, dashboards, `env-telemetry.txt` mode 600) and `…-20260923T111103Z`; `/api/state` 1.30.39, helpers
+  1.30.39, `{"mode":"grafana"}` to the installed operations helper answers `Unknown request mode.`, capabilities
+  list unchanged otherwise; the lab record has no `telemetry` key and carries `telemetry_retired` for
+  `cjunosevolved` (1 line) with the `telemetry.retired` event; a repeated `retire-telemetry.sh` reports nothing to
+  retire. `check-install.sh` as the ordinary account: 61 PASS, 1 WARN (the folder-coverage cap, as before), 0 FAIL,
+  *Retired telemetry stack* PASS, *Browser Wireshark capture* PASS (9 targets). Idle manager: 52 MiB and 10 threads
+  (1.30.38: 72 MiB and 44 threads with the collector); disk 51G → 50G used.
+- **Live device-line removal and retained workflows (independent Sonnet QA, `docs/technical-audit/tools/check_release_1_30_39.py`,
+  report `docs/technical-audit/evidence/r39-live-qa.md`, 142 PASS / 0 FAIL / 3 INFO):** at 1920×1080, 1366×768 and
+  390×844 no retired id, text, page or route remains (`grafana.html` and every `/api/telemetry*` route 404), no
+  request to `/telemetry` during the whole navigation except `/telemetry-retired`, 0 console and 0 page errors, every
+  retained control present; the lab notice read exactly `Configuration lines added by the retired telemetry feature
+  are still on: cjunosevolved.`, *Review and remove…* opened the dialog with the recorded line, **Remove from
+  devices** answered `cjunosevolved: removed — Removed the lines the manager had added and read the device back: they
+  are gone.`, the record, the banner and the Advanced-options item disappeared, the `telemetry.retired.removed` event
+  carries no configuration text, and *Test logins* started right after (the lab was not left busy). Independent
+  read-back by the lead over SSH (`nodecli.py`): `set system services ssh` is the only service line and the
+  extension-service is empty. Retained workflows: lab-wide backup (four NOS nodes `succeeded`, host1 excluded by
+  design) and the ZIP download with the documented names; `ssh-check-all` 5 started, 0 skipped; a real terminal to
+  cEOS; *Save progress* with the label `Technical audit 1.30.39 live check` → review → upload, commit
+  `a46b9569…` on `pruger-dev/CLAB-MNGR-DEV-LLM` `main` verified with `git fetch` and `git ls-tree` (a repeat save
+  reported `unchanged`); browser Wireshark on the ceos↔cjunosevolved link with 5 ICMP pairs generated from the ceos
+  terminal (Wireshark's status bar: 13 packets), session ended and gone from the list; Diagnostics probe PASS rows.
+  Then a real restore by the lead: cEOS drifted (`description AUDIT-DRIFT-1-30-39`), `manager_restore.py --commit
+  a46b956…` restored it in 6 s (`backing_up → applying → confirming → applied → verified`, job `succeeded`,
+  `evidence/r39-restore-ceos.json`) and the read-back shows the saved description again.
+- **Not exercised live in this chunk (unchanged code, covered by the unit suites):** the four-node parallel restore,
+  the mixed-failure and isolation harnesses, the lab builder's publish/revise, the map editor; they are scheduled for
+  the final integrated pass of the audit.
+
 # Setup Script Cleanup Log, part 3: Test logins eligibility and the 1.30.37 live records — 1.30.38
 
 Prepared on `claude/ui-ux-cleanup` on 2026-09-23 after 1.30.37 (`96b72d7`, CI green on the push; PR #53). One

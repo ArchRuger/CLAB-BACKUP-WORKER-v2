@@ -99,7 +99,7 @@ Evidence column: what validation exists, by class; "fixture" rows were re-run in
 | Edit map | `map-editor.html`, `map-editor-page.js`, `GET`/`PUT …/map-document` | Map only; page-level undo; device look; link labels; arrows, rounded text backgrounds and nested groups are kept but not drawn on the Topology tab | [Lab operations](../LAB-OPERATIONS.md), [map parity](../ui-review-001/MAP-PARITY.md) | unit, fixture, live on a QA lab |
 | Exports | `drawio_export.py`, `topology.py` | draw.io, annotations JSON, SuperPuTTY XML with opt-in passwords | [Node features](../../clab-backup-ui/NODE-FEATURES.md) | unit |
 | Browser Wireshark | `capture.py`, `capture_sessions.py`, `capture_service.py` | Sessions in the pinned VM image | [Browser Wireshark](../CAPTURE.md) | unit, CI smoke with real packets, live |
-| Telemetry and Grafana | `telemetry*.py`, `grafana_control.py` | Automatic collection, Grafana started on demand | [Telemetry](../TELEMETRY.md), [Grafana map](../GRAFANA-MAP.md) | unit, CI smoke, live on cEOS |
+| Telemetry and Grafana | `telemetry*.py`, `grafana_control.py` | Automatic collection, Grafana started on demand | [Telemetry](../TELEMETRY.md), `GRAFANA-MAP.md` (removed as of 1.30.39; see [TELEMETRY.md](../TELEMETRY.md)) | unit, CI smoke, live on cEOS |
 | Install, upgrade, recover | `deploy/install-manager.py`, `start-manager.sh`, `check_install.py` | Seven phases, both stacks included | [Install](../INSTALL.md), [Health check](../HEALTH-CHECK.md) | unit; live in the validation record |
 
 ## 5. Remaining debt

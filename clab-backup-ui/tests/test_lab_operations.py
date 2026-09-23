@@ -1,21 +1,40 @@
 import copy
+from contextlib import redirect_stdout
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
+import random
 import re
 import tempfile
 import time
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
+import app.host_operations as host_operations
+import app.lab_operations as lab_operations
 from app.host_operations import HostOperations, LIFECYCLE, digest, capture, stream
-from app.lab_operations import LabOperations, scrub, drawio
+from app.lab_operations import LabOperations, OutputWindow, scrub, drawio
 from app.store import Store
 import test_discovery as discovery_tests
 from test_discovery import YAML
+
+# A 49-character VM password (the length of the audit's reproducer) whose three-character pieces occur nowhere else in
+# an operation record, so any piece of it found in stored or served output is a leak.
+SECRET = 'QXZJVWKPYGFMBNRTLDHCZQJXWVPKGYMFNBTRDLCHXJQZVKWPY'
+# A stored 2,910-character private key: the longest secret, so the longest possible wait for the rest of a secret.
+KEY = ('-----BEGIN OPENSSH PRIVATE KEY-----\n' + ''.join(hashlib.sha256(b'%d' % i).hexdigest() + hashlib.sha256(b'key%d' % i).hexdigest()[:6] + '\n' for i in range(40))
+       + '-----END OPENSSH PRIVATE KEY-----\n')
+LIMIT = 512 * 1024
+
+
+def waiting(text, secrets):
+    """The longest tail of the text that is a proper prefix of a secret: what may wait for the next chunk."""
+    return next((text[p:] for p in range(len(text)) if any(len(text) - p < len(s) and text[p] == s[0] and s.startswith(text[p:]) for s in secrets)), '')
 
 
 class HostOperationTests(unittest.TestCase):
@@ -29,7 +48,7 @@ class HostOperationTests(unittest.TestCase):
             if '--help' in argv: return (1, '') if argv[1] in self.missing else (0, '--name --cleanup --graceful help')
             if argv[1:2] == ['inspect']: return 0, json.dumps(self.rows)
             return 0, 'fixture'
-        self.host = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', git='/usr/bin/git', roots=[str(self.root)], projects=str(self.root), network=True), run)
+        self.host = HostOperations(dict(clab='/usr/bin/containerlab', git='/usr/bin/git', roots=[str(self.root)], projects=str(self.root), network=True), run)
 
     def tearDown(self): self.tmp.cleanup()
 
@@ -53,32 +72,26 @@ class HostOperationTests(unittest.TestCase):
         self.missing.add('apply'); self.assertFalse(self.host.capabilities()['actions']['apply']['available'])
         with self.assertRaisesRegex(ValueError,'does not support'): self.host.plan(self.request('apply'))
 
-    def test_grafana_mode_starts_stops_and_inspects_the_named_container_only(self):
-        from app.host_operations import GRAFANA_CONTAINER
-        states = {'inspect': (0, 'exited\n')}
-        def run(argv):
-            self.calls.append(argv)
-            if argv[1] == 'start': states['inspect'] = (0, 'running\n'); return 0, ''
-            if argv[1] == 'stop': states['inspect'] = (0, 'exited\n'); return 0, ''
-            if argv[1] == 'inspect': return states['inspect']
-            return 1, ''
-        host = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', roots=[str(self.root)], projects=str(self.root)), run)
-        self.assertEqual(host.grafana('status'), {'container': GRAFANA_CONTAINER, 'state': 'exited'})
-        self.assertEqual(host.grafana('start'), {'container': GRAFANA_CONTAINER, 'state': 'running'})
-        self.assertEqual(host.grafana('stop'), {'container': GRAFANA_CONTAINER, 'state': 'exited'})
-        self.assertEqual([a[1:] for a in self.calls], [
-            ['inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER],
-            ['start', GRAFANA_CONTAINER], ['inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER],
-            ['stop', '-t', '10', GRAFANA_CONTAINER], ['inspect', '--type', 'container', '--format', '{{.State.Status}}', GRAFANA_CONTAINER]])
-        self.assertTrue(all(a[0] == '/usr/bin/docker' for a in self.calls))
-        states['inspect'] = (1, '')
-        self.assertEqual(host.grafana('status')['state'], 'missing')
-        states['inspect'] = (0, 'running; rm -rf /\n')
-        self.assertEqual(host.grafana('status')['state'], 'missing', 'only a plain word is reported')
-        for action in ('restart', 'rm', '', None, ['start']):
-            with self.assertRaisesRegex(ValueError, 'Unsupported Grafana action'): host.grafana(action)
-        failing = HostOperations(dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', roots=[str(self.root)], projects=str(self.root)), lambda argv: (1, ''))
-        with self.assertRaisesRegex(ValueError, 'Could not start the Grafana container'): failing.grafana('start')
+    def test_grafana_mode_is_gone_and_the_helper_answers_unknown_request_mode(self):
+        config = dict(clab='/usr/bin/containerlab', docker='/usr/bin/docker', roots=[str(self.root)], projects=str(self.root))
+        real_path = host_operations.Path
+        class ConfigFile:
+            def read_text(self): return json.dumps(config)
+        def fake_path(value): return ConfigFile() if value == '/etc/clab-manager/operations.json' else real_path(value)
+        stdin = SimpleNamespace(buffer=io.BytesIO(json.dumps({'mode': 'grafana', 'action': 'start'}).encode() + b'\n'))
+        output = io.StringIO()
+        with patch.object(host_operations, 'Path', side_effect=fake_path), \
+             patch.object(host_operations, 'signal'), \
+             patch.object(host_operations.sys, 'stdin', stdin), \
+             patch.object(host_operations.subprocess, 'Popen') as popen, \
+             redirect_stdout(output):
+            code = host_operations.main()
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(output.getvalue()), {'error': 'Unknown request mode.'})
+        popen.assert_not_called()
+        self.assertFalse(hasattr(host_operations, 'GRAFANA_CONTAINER'))
+        self.assertFalse(hasattr(host_operations, 'GRAFANA_ACTIONS'))
+        self.assertFalse(hasattr(HostOperations, 'grafana'))
 
     def test_redeploy_fallback_order_cleanup_and_name(self):
         self.missing.add('redeploy')
@@ -505,6 +518,84 @@ class HostOperationTests(unittest.TestCase):
         self.assertFalse(marker.exists())
 
 
+class OutputWindowTests(unittest.TestCase):
+    """B-002: an operation's streamed output is redacted before its 512 KiB window can cut a secret."""
+    def stream(self, chunks, secrets=(SECRET,)):
+        window = OutputWindow(); secrets = sorted(secrets, key=len, reverse=True); longest = len(secrets[0]) - 1 if secrets else 0; recent = ''
+        for chunk in chunks:
+            window.add(chunk, secrets); recent = (recent + chunk)[-longest:] if longest else ''
+            self.assertEqual(window.carry, waiting(recent, secrets), 'only the longest tail that can still become a secret waits, at most the longest secret less one character')
+        window.add('', secrets, True); self.assertEqual(window.carry, ''); return window.text()
+
+    def test_only_a_tail_that_can_still_become_a_secret_is_held_back(self):
+        window = OutputWindow(); secrets = [KEY, SECRET]; received = ''
+        for i in range(40):
+            line = 'INFO[%04d] Creating container: "clab-training-r%d" -\n' % (i, i); window.add(line, secrets); received += line
+            self.assertEqual((window.carry, window.text()), ('', received), 'a line that cannot begin a secret is not held back')
+        for tail, rest in (('prefix ' + SECRET[:20], ' was not the password\n'), ('x Q', 'uiet\n'), ('-----BEG', 'IN OPENSSH PUBLIC KEY-----\n'), ('dashes -----', '\n')):
+            window.add(tail, secrets); self.assertEqual(window.text(), received + tail[:tail.index(waiting(tail, secrets))], tail)
+            self.assertTrue(window.carry and waiting(tail, secrets) == window.carry, 'the start of a secret waits')
+            window.add(rest, secrets); received += tail + rest; self.assertEqual((window.carry, window.text()), ('', received), 'released once it cannot be one')
+        window.add(KEY[:1500], secrets); self.assertEqual((window.carry, window.text()), (KEY[:1500], received), 'a key waits across its line breaks')
+        window.add(KEY[1500:] + 'after\n', secrets); self.assertEqual((window.carry, window.text()), ('', received + '[redacted]after\n'))
+
+    def test_a_secret_split_at_any_point_between_chunks_is_redacted_whole(self):
+        for at in range(1, len(SECRET)):
+            self.assertEqual(self.stream(['before ' + SECRET[:at], SECRET[at:] + ' after\n']), 'before [redacted] after\n', at)
+            self.assertEqual(self.stream(['a' * 5000 + SECRET[:at], SECRET[at:], ' after\n']), 'a' * 5000 + '[redacted] after\n', at)
+        self.assertEqual(self.stream(list('x ' + SECRET + ' y')), 'x [redacted] y', 'one character per chunk')
+        self.assertEqual(self.stream(['x ' + SECRET[:10], SECRET[10:20], SECRET[20:30], SECRET[30:] + ' y']), 'x [redacted] y')
+        self.assertEqual(self.stream([SECRET[:20], SECRET[20:] + SECRET[:5], SECRET[5:]]), '[redacted][redacted]', 'back to back, split twice')
+
+    def test_overlapping_secrets_leave_no_character_of_either(self):
+        # Every occurrence of every secret is redacted, so a shorter secret that overlaps a longer one cannot leave its tail.
+        self.assertEqual(self.stream(['zxab', 'cdefz'], ('abcdef', 'xabc')), 'z[redacted]z')
+        self.assertEqual(self.stream(['aaa', 'a'], ('aa',)), '[redacted]')
+
+    def test_text_without_a_secret_passes_unchanged(self):
+        text = ''.join('line %04d of plain helper output\n' % i for i in range(300))
+        for size in (1, 7, 4096, len(text)):
+            self.assertEqual(self.stream([text[i:i + size] for i in range(0, len(text), size)]), text, size)
+        self.assertEqual(self.stream([text], ()), text, 'no stored secret at all')
+
+    def test_any_chunking_and_any_cut_match_redacting_the_whole_output_first(self):
+        # Randomised against a reference that redacts every occurrence in the whole raw output and only then keeps the last
+        # LIMIT characters (from a whole line): chunk sizes, cut positions and overlapping secrets all vary.
+        def reference(text, secrets, limit):
+            spans = sorted((at, at + len(s)) for s in secrets for at in range(len(text)) if text.startswith(s, at)); runs = []
+            for begin, end in spans:
+                if runs and begin < runs[-1][1]: runs[-1][1] = max(runs[-1][1], end)
+                else: runs.append([begin, end])
+            done = 0; out = ''
+            for begin, end in runs: out += text[done:begin] + '[redacted]'; done = end
+            out += text[done:]
+            if len(out) <= limit: return out
+            kept = out[-limit:]
+            return kept.partition('\n')[2] if out[-limit - 1] != '\n' and '\n' in kept else kept
+        rng = random.Random(2026)
+        for case in range(3000):
+            alphabet = rng.choice(('ab', 'ab\n')); length = 20 if rng.random() < .2 else 6
+            secrets = sorted({''.join(rng.choice(alphabet) for _ in range(rng.randint(1, length))) for _ in range(rng.randint(0, 3))}, key=len, reverse=True)
+            text = ''.join(rng.choice('ab\n') for _ in range(rng.randint(0, 90))); limit = rng.randint(1, 40); sizes = []
+            while sum(sizes) < len(text): sizes.append(rng.randint(1, 12))
+            with patch.object(lab_operations, 'OUTPUT_LIMIT', limit):
+                got = self.stream([text[sum(sizes[:i]):sum(sizes[:i + 1])] for i in range(len(sizes))], secrets)
+            self.assertEqual(got, reference(text, secrets, limit), (text, secrets, limit, sizes))
+
+    def test_a_cut_line_or_private_key_is_still_omitted(self):
+        # The window starts at a whole line, so scrub()'s line rules still see a line whose keyword the cut would have
+        # removed, and a private key whose BEGIN line was cut off is omitted up to its END line.
+        state = {'labs': [], 'host': {'password': SECRET}}; filler = ('b' * 99 + '\n') * (LIMIT // 100 + 2)
+        head = 'x' * 10 + '\n' + '  snmp-server community: wxyzvalue\n'; cut = head.index('community') + 4
+        raw = head + filler[:LIMIT + cut - len(head)]
+        out = scrub(self.stream([raw[i:i + 4096] for i in range(0, len(raw), 4096)]), state)
+        self.assertNotIn('wxyzvalue', out); self.assertTrue(out.startswith('b' * 99 + '\n')); self.assertTrue(raw.endswith(out))
+        key = '-----BEGIN RSA PRIVATE KEY-----\n' + ''.join('KEYBODY%02dvwxy\n' % i for i in range(30)) + '-----END RSA PRIVATE KEY-----\n'
+        head = 'x\n' + key; cut = head.index('KEYBODY10') + 3; raw = head + filler[:LIMIT + cut - len(head)]
+        out = scrub(self.stream([raw[i:i + 4096] for i in range(0, len(raw), 4096)]), state)
+        self.assertNotIn('KEYBODY', out); self.assertNotIn('vwxy', out); self.assertTrue(out.startswith('[sensitive output omitted]\nbbb'), 'omitted as scrub() omits a whole key block')
+
+
 class OperationAPITests(unittest.TestCase):
     setUp = discovery_tests.DiscoveryTests.setUp
     register = discovery_tests.DiscoveryTests.register
@@ -620,6 +711,16 @@ class OperationAPITests(unittest.TestCase):
             self.assertEqual(response.status_code,409)
             with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
 
+    def test_a_removal_of_retired_telemetry_lines_holds_the_lab(self):
+        from app.lab_operations import operation_busy
+        with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
+            preview=self.preview();self.store.lab(self.lab_id)['telemetry_retired']={'applied':{},'removing':'2026-09-23T10:00:00+00:00'}
+            self.assertTrue(operation_busy(self.store.state,self.lab_id));self.assertTrue(operation_busy(self.store.state))
+            self.assertFalse(operation_busy(self.store.state,'another-lab'))
+            self.assertEqual(self.confirm(preview['token']).status_code,409);submit.assert_not_called()
+            with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
+            del self.store.lab(self.lab_id)['telemetry_retired']['removing'];self.assertFalse(operation_busy(self.store.state,self.lab_id))
+
     def test_last_deployed_is_the_real_time_of_a_succeeded_deploy_and_never_invented(self):
         from app.lab_operations import last_deployed
         public=lambda:next(l for l in self.client.get('/api/state',headers=self.auth).json()['labs'] if l['id']==self.lab_id)
@@ -676,6 +777,93 @@ class OperationAPITests(unittest.TestCase):
         result=scrub('verysecret\n-----BEGIN RSA PRIVATE KEY-----\nabc\ndef\n-----END RSA PRIVATE KEY-----\nokay',state)
         self.assertNotIn('abc',result);self.assertNotIn('verysecret',result);self.assertIn('okay',result)
         self.assertLessEqual(len(scrub('x'*600000,state)),512*1024)
+
+    def run_streamed(self, chunks, private_key=''):
+        """One deploy whose helper streams these chunks, publishing after every chunk. Returns the stored job, its
+        /api/operations/{id} view and every output the job published while it ran; the job saved on disk must match."""
+        published = []; clock = iter(range(1000, 10 ** 9))
+        with self.fixture() as remote, patch.object(self.service, 'refresh'), patch.object(self.app.state.operations.pool, 'submit') as submit:
+            self.store.state['host'].update(password=SECRET, private_key=private_key)
+            def run(host, req, *args):
+                for chunk in chunks: args[0](chunk)
+                return dict(exit_code=0)
+            remote.side_effect = (lambda inner: lambda host, req, *a: run(host, req, *a) if req['mode'] == 'run' else inner(host, req, *a))(remote.side_effect)
+            job = self.confirm(self.preview()['token']).json(); args = submit.call_args.args; save = self.store.save
+            def record(): published.append(next(j for j in self.store.state['operations'] if j['id'] == job['id'])['output']); save()
+            with patch.object(self.store, 'save', side_effect=record), patch.object(lab_operations, 'time', SimpleNamespace(monotonic=lambda: next(clock))):
+                args[0](*args[1:])
+        saved = next(j for j in self.store.state['operations'] if j['id'] == job['id'])
+        view = self.client.get('/api/operations/' + job['id'], headers=self.auth); self.assertEqual(view.status_code, 200, view.text)
+        disk = next(j for j in Store(self.tmp.name).state['operations'] if j['id'] == job['id'])
+        self.assertEqual(saved['status'], 'succeeded'); self.assertEqual(json.loads(view.text)['output'], saved['output']); self.assertEqual(disk['output'], saved['output'])
+        self.assertGreater(len(published), len(chunks), 'the job published after every chunk')
+        return saved, view.text, published
+
+    def assertNoFragment(self, *texts):
+        pieces = sorted({SECRET[i:i + 3] for i in range(len(SECRET) - 2)})
+        for text in texts: self.assertEqual([piece for piece in pieces if piece in text], [], 'no three consecutive characters of the secret survive')
+
+    def test_a_secret_at_the_512_kib_cut_leaves_no_fragment(self):
+        # B-002: the window used to be cut before scrub(), so a secret straddling the cut kept up to 48 of its 49 characters.
+        # The tails put the raw cut 1, 24, 40, 44 and 48 characters into the secret; after redaction the same tails put the
+        # window's cut before, inside and at the end of '[redacted]'.
+        for lines in (False, True):
+            for tail in (LIMIT - 48, LIMIT - 25, LIMIT - 9, LIMIT - 5, LIMIT - 1):
+                with self.subTest(lines=lines, tail=tail):
+                    filler = (('\n' + 'b' * 99) * (LIMIT // 100 + 2) if lines else 'b' * LIMIT)[:tail]
+                    head = 'a' * 999 + ('\n' if lines else 'a') + SECRET[:30]; rest = SECRET[30:] + filler
+                    saved, view, published = self.run_streamed([head] + [rest[i:i + 65536] for i in range(0, len(rest), 65536)])
+                    self.assertTrue(saved['output'].endswith(filler[-1000:])); self.assertGreater(len(saved['output']), LIMIT - 100, 'the window was full and cut')
+                    self.assertNoFragment(saved['output'], view, *published)
+
+    def test_a_secret_split_across_chunks_never_reaches_a_publication(self):
+        for at in (1, 17, 30, 48):
+            with self.subTest(at=at):
+                saved, view, published = self.run_streamed(['first line\nsecond ' + SECRET[:at], SECRET[at:] + ' end\n', 'last line\n'])
+                self.assertEqual(saved['output'], 'first line\nsecond [redacted] end\nlast line\n'); self.assertNoFragment(view, *published)
+
+    def test_every_line_that_cannot_begin_a_secret_is_published_at_once(self):
+        # While the helper pauses the student sees every finished line, even with a 2.9 KB key stored.
+        lines = ['INFO[%04d] Creating container: "clab-training-r%d"\n' % (i, i) for i in range(120)]
+        saved, view, published = self.run_streamed(lines, private_key=KEY)
+        self.assertEqual(published[1:-1], [''.join(lines[:i + 1])[:-1] for i in range(len(lines))]); self.assertEqual(saved['output'], ''.join(lines))
+
+    def test_a_multi_line_secret_split_across_chunks_is_not_published_in_part(self):
+        secret = SECRET[:20] + '\n' + SECRET[20:40] + '\n' + SECRET[40:]
+        saved, view, published = self.run_streamed(['line one\n' + secret[:30], secret[30:] + '\nline two\n'], private_key=secret)
+        self.assertEqual(published[1], 'line one', 'the complete lines of a secret that is still arriving wait for the rest of it')
+        self.assertEqual(saved['output'], 'line one\n[redacted]\nline two\n'); self.assertNoFragment(view, *published)
+
+    def test_a_secret_repeated_thousands_of_times_is_redacted_every_time(self):
+        text = ''.join('item %05d %s done\n' % (i, SECRET) for i in range(20000))  # still over 512 KiB once redacted
+        saved, view, published = self.run_streamed([text[i:i + 32749] for i in range(0, len(text), 32749)])
+        self.assertNoFragment(view, *published)
+        lines = saved['output'].split('\n'); self.assertEqual(lines.pop(), '')
+        self.assertEqual([line for line in lines if not re.fullmatch(r'item \d{5} \[redacted\] done', line)], [], 'every kept line, the first one included, is whole and redacted')
+        self.assertEqual(lines[-1], 'item 19999 [redacted] done'); self.assertEqual(len(lines), LIMIT // len(lines[-1] + '\n'), 'the window holds redacted lines, not raw ones')
+
+    def test_output_without_a_secret_is_stored_unchanged(self):
+        text = ''.join('INFO[%04d] Creating container clab-training-r%d\n' % (i, i % 7) for i in range(3000))
+        saved, view, published = self.run_streamed([text[i:i + 4093] for i in range(0, len(text), 4093)])
+        self.assertEqual(saved['output'], text)
+        for output in published[1:-1]: self.assertTrue(text.startswith(output + '\n'), 'a publication is a run of complete lines')
+
+    def test_the_end_of_an_operation_survives_its_record_being_trimmed_away(self):
+        # B-005: the finally block reads the operation's lab under the store lock and logs '' once the record is gone.
+        owned = []; lock = self.store.lock
+        class Watched(list):
+            def __iter__(self): owned.append(lock._is_owned()); return super().__iter__()
+        with self.fixture(), patch.object(self.service, 'refresh') as refresh, patch.object(self.app.state.operations.pool, 'submit') as submit:
+            job = self.confirm(self.preview()['token']).json(); args = submit.call_args.args; save = self.store.save
+            def trim():
+                save(); jobs = self.store.state['operations']
+                if next(j for j in jobs if j['id'] == job['id'])['status'] == 'succeeded':
+                    self.store.state['operations'] = Watched(j for j in jobs if j['id'] != job['id'])
+            with patch.object(self.store, 'save', side_effect=trim): args[0](*args[1:])
+            refresh.assert_called_once(); self.assertEqual(self.app.state.operations.active, set(), 'the active guard is released')
+        self.assertTrue(owned); self.assertTrue(all(owned), 'the operations list is read under the store lock')
+        finished = [e for e in self.store.events() if e['action'] == 'lab.operation' and e['message'].startswith('Lab operation finished')]
+        self.assertEqual([e['lab_id'] for e in finished], [''])
 
     def test_failed_persistent_save_keeps_review_and_does_not_submit(self):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:

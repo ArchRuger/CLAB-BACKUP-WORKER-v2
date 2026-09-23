@@ -63,8 +63,7 @@ you to acknowledge before *Replace configurations*.
 
 ![Apply a saved state](images/ui/36-restore-review.png)
 
-**Tools.** Packet capture, telemetry (the live lab map and dashboards in Grafana, started
-on the VM when needed) and the manager's own configuration backups, with *Open all
+**Tools.** Packet capture and the manager's own configuration backups, with *Open all
 CLIs* and *Edit map* (where the map file download and the draw.io export are) under *More tools*.
 
 ![Tools](images/ui/40-tools.png)
@@ -79,7 +78,7 @@ list of lab operations and the danger zone.
 ## Every lab operation is reviewed before it runs
 
 **Lab actions ▾** starts, stops, restarts, redeploys and destroys the lab; its *Advanced
-options* group holds *Import map…*, *Edit map*, *Telemetry settings…* and *Operation history…*. The review
+options* group holds *Import map…*, *Edit map* and *Operation history…*. The review
 names the action, says what happens to the devices, warns that unsaved configuration
 changes are lost, shows when progress was last saved (in red when it never was) and
 offers *Save progress first*; the exact containerlab command sits under *Technical

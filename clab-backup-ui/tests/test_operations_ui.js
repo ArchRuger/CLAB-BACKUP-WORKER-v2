@@ -107,50 +107,6 @@ test('browse renders before capabilities settle, survives failure and retries fo
  assert.equal(folderCalls,2);assert.equal(folder.children[1].children[0].textContent,'◇ lab.clab.yaml');
 });
 
-test('telemetry settings dialog reads the lab view, saves the setting and retries failed nodes',async()=>{
- const calls=[],elements=new Map();
- // Only the dialog and its controls exist; the workspace elements operations.js wires at load time do not.
- const el=id=>{if(!/^tele/.test(id))return null;if(!elements.has(id))elements.set(id,{id,innerHTML:'',checked:false,value:'',open:false,disabled:false,textContent:'',querySelector(){return {textContent:'',onclick:null};},querySelectorAll(){return [];},showModal(){this.open=true;},close(){this.open=false;}});return elements.get(id);};
- const view={enabled:true,linked:true,unavailable:'',settings:{auto:true,decided:true,profile_id:'p'},password_profiles:[{id:'p',label:'Ops',platform:'arista_ceos'}],
-  summary:{total:2,streaming:1,failed:1},nodes:[{name:'clab-demo-r1',short_name:'r1',state:'streaming',message:'ok'},{name:'clab-demo-r2',short_name:'r2',state:'failed',message:'gNMI login refused'}]};
- const c=vm.createContext({$:el,esc:context.esc,activeId:'lab',state:{labs:[{id:'lab',name:'demo'}]},console,JSON,
-  document:{createElement(){return el('created');},body:{append(){}},querySelectorAll(){return [];}},
-  api:async url=>{calls.push(url);if(url==='/telemetry/grafana'&&grafana instanceof Error)throw grafana;return {json:async()=>url==='/telemetry/grafana'?grafana:view};},
-  json:async(url,method,data)=>{calls.push([url,method,data]);return url==='/telemetry/grafana/stop'?{enabled:true,port:3000,running:false,idle_minutes:15}:{started:[]};},
-  notify(){},refresh:async()=>{calls.push('refresh');},confirm:()=>true});
- let grafana={enabled:true,port:3000,running:true,idle_minutes:15};
- vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
- const dialog=await c.openTelemetrySettings('lab');
- assert.equal(calls[0],'/labs/lab/telemetry');assert.equal(calls[1],'/telemetry/grafana');
- assert.match(dialog.innerHTML,/Telemetry is on: 2 supported devices · 1 streaming · 1 failed\. Open the network dashboard to see the data\./);
- assert.match(dialog.innerHTML,/<strong>r2<\/strong> \(failed\): gNMI login refused/);assert.doesNotMatch(dialog.innerHTML,/<strong>r1<\/strong>/);
- assert.match(dialog.innerHTML,/<option value="p" selected>Ops · arista_ceos<\/option>/);assert.match(dialog.innerHTML,/id="tele-retry"/);
- assert.match(dialog.innerHTML,/id="tele-remove" disabled/,'removal needs automatic telemetry off first');
- assert.match(dialog.innerHTML,/Dashboard: running \(port 3000\); stops automatically after 15 minutes without a viewer\./);assert.match(dialog.innerHTML,/id="tele-grafana-stop"/);
- await el('tele-grafana-stop').onclick();
- assert.equal(JSON.stringify(calls[2]),JSON.stringify(['/telemetry/grafana/stop','POST',{}]));
- assert.equal(el('tele-grafana').textContent,'Dashboard: stopped; it starts when you open it from Tools › Telemetry.');
- el('tele-auto').checked=false;el('tele-profile').value='';
- await el('tele-save').onclick();
- assert.equal(JSON.stringify(calls[3]),JSON.stringify(['/labs/lab/telemetry/settings','PUT',{auto:false,profile_id:''}]));assert.equal(calls[4],'refresh');assert.equal(dialog.open,false);
- await el('tele-retry').onclick();
- assert.equal(JSON.stringify(calls[5]),JSON.stringify(['/labs/lab/telemetry/retry','POST',{}]));
- grafana={enabled:true,port:3000,running:false,idle_minutes:0};
- assert.match((await c.openTelemetrySettings('lab')).innerHTML,/Dashboard: stopped; it starts when you open it from Tools › Telemetry\./);
- assert.doesNotMatch((await c.openTelemetrySettings('lab')).innerHTML,/tele-grafana-stop/);
- grafana=new Error('manager restarting');
- assert.match((await c.openTelemetrySettings('lab')).innerHTML,/Dashboard: status unavailable\./,'the dialog still opens when the Grafana state cannot be read');
- assert.equal(c.telemetryGrafanaText({enabled:true,port:3000,running:true,idle_minutes:0}),'Dashboard: running (port 3000); automatic stop is off.');
- assert.equal(c.telemetryGrafanaText({enabled:false}),'Dashboard: not installed on this VM.');
- assert.equal(c.telemetryGrafanaText({enabled:true,running:null}),'Dashboard: not checked yet.');
- grafana={enabled:true,port:3000,running:true,idle_minutes:15};
- view.settings={auto:false,decided:false};view.summary={total:0};view.nodes=[];
- const undecided=await c.openTelemetrySettings('lab');
- assert.match(undecided.innerHTML,/hasn’t been set up for this lab/);assert.doesNotMatch(undecided.innerHTML,/tele-retry/);
- view.enabled=false;view.unavailable='pygnmi is not installed in this image.';
- assert.match((await c.openTelemetrySettings('lab')).innerHTML,/pygnmi is not installed/);
- assert.match((await c.openTelemetrySettings('lab')).innerHTML,/id="tele-save" disabled/);
-});
 test('destroy asks for cleanup unless the installed containerlab is known to lack it',()=>{
  assert.equal(JSON.stringify(context.opDestroyOptions({actions:{destroy:{available:true,cleanup:true}}})),'{"cleanup":true}');
  assert.equal(JSON.stringify(context.opDestroyOptions(null)),'{"cleanup":true}','unknown capabilities still ask; the helper refuses an unsupported flag itself');

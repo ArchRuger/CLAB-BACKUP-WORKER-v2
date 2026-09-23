@@ -32,6 +32,11 @@ test('cards read the lab state, the ready count, the last save and the deploymen
  assert.match(cards,/data-lab="run">Open lab/);assert.match(cards,/data-lab="stop">Open lab/);
  assert.match(cards,/data-lab-favorite="stop" aria-pressed="true" aria-label="Remove from favourites"/);
  assert.match(cards,/data-lab-favorite="run" aria-pressed="false" aria-label="Add to favourites"/);
+ // the favourite glyph is a class="icon-button" wrapping <use href="#i-star">: style.css keys the
+ // filled-vs-outline look off this exact shape (.icon-button[aria-pressed="true"] use[href="#i-star"]),
+ // so both the class and the glyph reference must survive together, in both pressed states.
+ assert.match(cards,/<button type="button" class="icon-button" data-lab-favorite="stop" aria-pressed="true"[^>]*><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-star"><\/use><\/svg><\/button>/);
+ assert.match(cards,/<button type="button" class="icon-button" data-lab-favorite="run" aria-pressed="false"[^>]*><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-star"><\/use><\/svg><\/button>/);
  assert.match(cards,/data-lab-more="run" aria-label="More actions for BGP core"/);
  assert.doesNotMatch(cards,/container|discover|NOS|worker|Unlinked/i);assert.doesNotMatch(cards,/Continue where you left off/);
  const attention=harness({labs:[{...running,id:'att',name:'Att'}],git_jobs:[{id:'g2',lab_id:'att',status:'push_pending',target:'latest',created:'2026-09-16T11:50:00Z'}]});

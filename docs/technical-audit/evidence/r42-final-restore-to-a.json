@@ -1,0 +1,542 @@
+{
+ "manager_version": "1.30.42",
+ "build": {
+  "image": "clab-backup:1.30.42 sha256:e1548cc105f4f70f98ac6d51567f0fc704c8b32eb5af8fca768311ec4c6c5bf2",
+  "container_started": "2026-09-23T13:30:05.941606272Z",
+  "git_head": "0cd18a7891d0",
+  "git_dirty_files": 0
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "git",
+  "commit": "27ccd717aa5556ac4992dbff056258cd67ddb365",
+  "path": "restore-square/qa-1-30-37/latest"
+ },
+ "requested": [
+  "clab-restore-square-ceos",
+  "clab-restore-square-cjunosevolved",
+  "clab-restore-square-vjunos-switch",
+  "clab-restore-square-xrv9k"
+ ],
+ "started_utc": "13:48:26",
+ "device_readback_before": null,
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "git",
+    "commit": "27ccd717aa5556ac4992dbff056258cd67ddb365",
+    "path": "restore-square/qa-1-30-37/latest",
+    "captured_at": "2026-09-23T13:13:03.491803+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0,
+     "diff": {
+      "hunks": [],
+      "added": 0,
+      "removed": 0,
+      "truncated": false,
+      "identical": true,
+      "labels": {
+       "old": "Saved (27ccd717aa)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 5,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 8,
+        "old_count": 16,
+        "new_start": 8,
+        "new_count": 17,
+        "lines": [
+         {
+          "type": "context",
+          "old": 8,
+          "new": 8,
+          "text": "set system syslog file messages any notice"
+         },
+         {
+          "type": "context",
+          "old": 9,
+          "new": 9,
+          "text": "set system syslog file messages authorization info"
+         },
+         {
+          "type": "context",
+          "old": 10,
+          "new": 10,
+          "text": "set system services ssh"
+         },
+         {
+          "type": "del",
+          "old": 11,
+          "new": null,
+          "text": "set interfaces et-0/0/0 description \"A to-ceos\""
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 11,
+          "text": "set interfaces et-0/0/0 description \"B changed\""
+         },
+         {
+          "type": "context",
+          "old": 12,
+          "new": 12,
+          "text": "set interfaces et-0/0/0 unit 0 family inet address 10.0.12.1/31"
+         },
+         {
+          "type": "context",
+          "old": 13,
+          "new": 13,
+          "text": "set interfaces et-0/0/1 description \"A to-vjunos-switch\""
+         },
+         {
+          "type": "context",
+          "old": 14,
+          "new": 14,
+          "text": "set interfaces et-0/0/1 unit 0 family inet address 10.0.23.0/31"
+         },
+         {
+          "type": "context",
+          "old": 15,
+          "new": 15,
+          "text": "set interfaces lo0 unit 0 description \"A loopback\""
+         },
+         {
+          "type": "context",
+          "old": 16,
+          "new": 16,
+          "text": "set interfaces lo0 unit 0 family inet address 10.255.0.2/32"
+         },
+         {
+          "type": "context",
+          "old": 17,
+          "new": 17,
+          "text": "set interfaces re0:mgmt-0 unit 0 family inet address 172.20.20.102/24"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 18,
+          "text": "set policy-options prefix-list B-ONLY 198.51.100.0/24"
+         },
+         {
+          "type": "context",
+          "old": 18,
+          "new": 19,
+          "text": "set policy-options prefix-list RESTORE-A 10.255.0.0/24"
+         },
+         {
+          "type": "context",
+          "old": 19,
+          "new": 20,
+          "text": "set routing-options router-id 10.255.0.2"
+         },
+         {
+          "type": "del",
+          "old": 20,
+          "new": null,
+          "text": "set routing-options static route 192.0.2.2/32 discard"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 21,
+          "text": "set routing-options static route 198.51.100.0/24 discard"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 22,
+          "text": "set protocols ospf area 0.0.0.0 interface et-0/0/0.0 interface-type p2p"
+         },
+         {
+          "type": "context",
+          "old": 22,
+          "new": 23,
+          "text": "set protocols ospf area 0.0.0.0 interface et-0/0/1.0 interface-type p2p"
+         },
+         {
+          "type": "context",
+          "old": 23,
+          "new": 24,
+          "text": "set protocols ospf area 0.0.0.0 interface lo0.0 passive"
+         }
+        ]
+       }
+      ],
+      "added": 3,
+      "removed": 2,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (27ccd717aa)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0,
+     "diff": {
+      "hunks": [],
+      "added": 0,
+      "removed": 0,
+      "truncated": false,
+      "identical": true,
+      "labels": {
+       "old": "Saved (27ccd717aa)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": true,
+     "pending_changes": 0,
+     "diff": {
+      "hunks": [],
+      "added": 0,
+      "removed": 0,
+      "truncated": false,
+      "identical": true,
+      "labels": {
+       "old": "Saved (27ccd717aa)",
+       "new": "Running now"
+      }
+     }
+    }
+   ],
+   "eligible_count": 4
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "045795d3f58c46c6af97a88401598ce4"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "13:48:34",
+   "job": "backing_up",
+   "targets": {
+    "ceos": "backing_up",
+    "cjunosevolved": "backing_up",
+    "vjunos-switch": "backing_up",
+    "xrv9k": "backing_up"
+   }
+  },
+  {
+   "utc": "13:48:37",
+   "job": "applying",
+   "targets": {
+    "ceos": "applying",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "13:48:38",
+   "job": "applying",
+   "targets": {
+    "ceos": "confirming",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "applying"
+   }
+  },
+  {
+   "utc": "13:48:39",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "confirming"
+   }
+  },
+  {
+   "utc": "13:48:40",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applying",
+    "vjunos-switch": "applying",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "13:48:41",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "confirming",
+    "vjunos-switch": "applying",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "13:48:43",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "applying",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "13:49:02",
+   "job": "applying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "confirming",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "13:49:05",
+   "job": "verifying",
+   "targets": {
+    "ceos": "applied",
+    "cjunosevolved": "applied",
+    "vjunos-switch": "applied",
+    "xrv9k": "applied"
+   }
+  },
+  {
+   "utc": "13:49:08",
+   "job": "succeeded",
+   "targets": {
+    "ceos": "verified",
+    "cjunosevolved": "verified",
+    "vjunos-switch": "verified",
+    "xrv9k": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "045795d3f58c46c6af97a88401598ce4",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T13:48:34.727683+00:00",
+  "finished": "2026-09-23T13:49:08.146974+00:00",
+  "status": "succeeded",
+  "message": "All 4 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "27ccd717aa5556ac4992dbff056258cd67ddb365",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T13:13:03.491803+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 10,
+  "pre_backup_job_id": "09b25b7285d848bcb297d4f518c30d0a",
+  "post_backup_job_id": "f968861b788b4f51b4c98fa035596250",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "matched",
+    "timeline": {
+     "queued": 1790171314.7276936,
+     "backing_up": 1790171314.7418818,
+     "backed_up": 1790171317.3715594,
+     "connecting": 1790171317.39458,
+     "applying": 1790171317.5095384,
+     "armed": 1790171318.6960886,
+     "verifying": 1790171318.7008116,
+     "confirming": 1790171319.065037,
+     "matched": 1790171319.631853,
+     "settled": 1790171319.631853,
+     "checking": 1790171345.4915333,
+     "checked": 1790171348.1215458
+    },
+    "attempts": 1,
+    "worker": "restore-node_0",
+    "diff_sample": [],
+    "no_op": true,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   },
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "short_name": "cjunosevolved",
+    "platform": "juniper_cjunosevolved",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790171314.727695,
+     "backing_up": 1790171314.7458498,
+     "backed_up": 1790171317.3766174,
+     "connecting": 1790171317.3990915,
+     "applying": 1790171317.586376,
+     "armed": 1790171321.592177,
+     "verifying": 1790171321.5975237,
+     "confirming": 1790171322.2146394,
+     "replaced": 1790171322.8335912,
+     "settled": 1790171322.8335912,
+     "checking": 1790171345.4956512,
+     "checked": 1790171348.1291423
+    },
+    "attempts": 1,
+    "worker": "restore-node_3",
+    "diff_sample": [
+     "[edit interfaces et-0/0/0]",
+     "-   description \"B changed\";",
+     "+   description \"A to-ceos\";",
+     "[edit policy-options]",
+     "-   prefix-list B-ONLY {",
+     "-       198.51.100.0/24;",
+     "-   }",
+     "[edit routing-options static]",
+     "+    route 192.0.2.2/32 discard;",
+     "-    route 198.51.100.0/24 discard;",
+     "[edit]"
+    ],
+    "no_op": false,
+    "root_authentication": "present",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   },
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "short_name": "vjunos-switch",
+    "platform": "juniper_vjunosswitch",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "matched",
+    "timeline": {
+     "queued": 1790171314.7276964,
+     "backing_up": 1790171314.7498312,
+     "backed_up": 1790171317.3812132,
+     "connecting": 1790171317.4041202,
+     "applying": 1790171317.6933038,
+     "armed": 1790171342.5543482,
+     "verifying": 1790171342.5594215,
+     "confirming": 1790171343.1173465,
+     "matched": 1790171345.4817097,
+     "settled": 1790171345.4817097,
+     "checking": 1790171345.4996564,
+     "checked": 1790171348.1352305
+    },
+    "attempts": 1,
+    "worker": "restore-node_1",
+    "diff_sample": [
+     "[edit]"
+    ],
+    "no_op": true,
+    "root_authentication": "present",
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   },
+   {
+    "name": "clab-restore-square-xrv9k",
+    "short_name": "xrv9k",
+    "platform": "cisco_xrv9k",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "matched",
+    "timeline": {
+     "queued": 1790171314.7276971,
+     "backing_up": 1790171314.7536254,
+     "backed_up": 1790171317.3857436,
+     "connecting": 1790171317.4093664,
+     "applying": 1790171317.6107314,
+     "armed": 1790171319.4343047,
+     "verifying": 1790171319.4394474,
+     "matched": 1790171320.7533548,
+     "settled": 1790171320.7533548,
+     "checking": 1790171345.5034394,
+     "checked": 1790171348.1414006
+    },
+    "attempts": 1,
+    "worker": "restore-node_2",
+    "diff_sample": [
+     "Wed Sep 23 13:48:37.292 UTC",
+     "!! Building configuration...",
+     "!! IOS XR Configuration 24.3.1",
+     "end"
+    ],
+    "no_op": true,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ],
+  "progress": {
+   "settled": 4,
+   "total": 4
+  },
+  "server_time": 1790171348.871975
+ },
+ "finished_utc": "13:49:08"
+}

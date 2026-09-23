@@ -213,6 +213,17 @@ class AppTests(unittest.TestCase):
         self.assertEqual(len(other.state.store.state['labs']),1)
         self.assertEqual(other.state.store.token,self.app.state.store.token)
         other.state.runner.close()
+    def test_state_reflects_storage_without_re_slicing_any_job_list(self):
+        # Risk review 2, item 2 (finding 7): jobs/git_jobs/restore_jobs/operations are all bounded
+        # in storage at write time now (per lab for jobs); /api/state must not slice any of them
+        # again on read, since a fixed read-window can cut off a protected entry the write-time
+        # trim deliberately kept further back (git_jobs/restore_jobs/operations are oldest-first).
+        lab=self.upload()
+        jobs=[dict(id=str(i),lab_id=lab['id'],operation='backup',status='succeeded',nodes=[]) for i in range(5)]
+        self.app.state.store.state['jobs']=jobs
+        self.app.state.store.save()
+        data=self.client.get('/api/state',headers=self.auth).json()
+        self.assertEqual([j['id'] for j in data['jobs']],['0','1','2','3','4'])
     def test_topology_custom_groups_and_alias_rejection(self):
         custom=b'all:\n  children:\n    custom:\n      hosts:\n        router1:\n          ansible_host: 192.0.2.1\n'
         nodes=parse_inventory(custom,b'{"nodes":{"router1":{"kind":"arista_ceos"}}}')

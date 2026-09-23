@@ -46,7 +46,7 @@ function harness({hash='',session={},local={},throwStorage=false,labs=[{id:'a',n
  const managerList=el('div',{id:'manager-menu-list',class:'menu-list'},[item('vm-settings',{},'VM connection…'),item('vm-refresh',{disabled:true},'Refresh lab list'),item('inspect-all',{},'Running labs on the VM…')]);
  const managerButton=el('button',{id:'manager-button',class:'button secondary menu-button','aria-expanded':'false',text:'Manager'});
  const manager=el('span',{id:'manager-menu',class:'menu'},[managerButton,managerList]);
- const labList=el('div',{id:'lab-actions-menu',class:'menu-list'},[item('lab-start',{},'Start lab'),item('menu-destroy',{},'Destroy lab…'),item('lab-actions-advanced-toggle',{'data-menu-group':'lab-actions-advanced','aria-expanded':'false'},'Advanced options'),el('div',{id:'lab-actions-advanced','data-menu-panel':'',role:'group',hidden:true},[item('menu-import-map',{},'Import map…'),item('menu-map-edit',{disabled:true},'Edit map'),item('menu-telemetry',{},'Telemetry settings…'),item('menu-operation-history',{},'Operation history…')])]);
+ const labList=el('div',{id:'lab-actions-menu',class:'menu-list'},[item('lab-start',{},'Start lab'),item('menu-destroy',{},'Destroy lab…'),item('lab-actions-advanced-toggle',{'data-menu-group':'lab-actions-advanced','aria-expanded':'false'},'Advanced options'),el('div',{id:'lab-actions-advanced','data-menu-panel':'',role:'group',hidden:true},[item('menu-import-map',{},'Import map…'),item('menu-map-edit',{disabled:true},'Edit map'),item('menu-telemetry-retired',{hidden:true},'Retired telemetry configuration…'),item('menu-operation-history',{},'Operation history…')])]);
  const labButton=el('button',{id:'lab-actions-button',class:'button secondary menu-button','aria-expanded':'false',text:'Lab actions'});
  const labActions=el('span',{class:'menu'},[labButton,labList]);
  const gitSummary=el('summary',{text:'▾'});const gitSave=el('details',{id:'git-save-menu',class:'git-save-menu'},[gitSummary,el('div',{class:'git-save-options'},[item('',{'data-git-action':'checkpoint'},'Create checkpoint…')])]);
@@ -131,18 +131,19 @@ test('initMenu: open focuses the first enabled item, arrows rove, Escape closes 
 });
 
 test('an expandable menu group: the toggle never closes the menu, collapsed items are skipped, arrows open and close it, reopening collapses it',()=>{
- const h=harness();const [start,destroy,toggle,panel]=h.labList.children,[importMap,editMap,telemetry,history]=panel.children;
+ const h=harness();const [start,destroy,toggle,panel]=h.labList.children,[importMap,editMap,retiredItem,history]=panel.children;
+ assert.equal(retiredItem.id,'menu-telemetry-retired');assert.equal(retiredItem.hidden,true,'hidden by default, matching the real markup until the active lab has a record');
  h.labButton.dispatch('click');assert.equal(panel.hidden,true);assert.equal(toggle.getAttribute('aria-expanded'),'false');
  h.labList.dispatch('keydown',{key:'End'});assert.equal(h.doc.activeElement,toggle,'items of the collapsed group are not reachable by the arrow keys');
  toggle.dispatch('click');assert.equal(h.labList.hidden,false,'the toggle keeps the menu open');assert.equal(panel.hidden,false);assert.equal(toggle.getAttribute('aria-expanded'),'true');
  h.labList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,importMap);
- h.labList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,telemetry,'a disabled item in the group is skipped');
- h.labList.dispatch('keydown',{key:'End'});assert.equal(h.doc.activeElement,history);
+ h.labList.dispatch('keydown',{key:'ArrowDown'});assert.equal(h.doc.activeElement,history,'a disabled item (map-edit) and a hidden one (retired telemetry) are both skipped');
+ importMap.focus();h.labList.dispatch('keydown',{key:'End'});assert.equal(h.doc.activeElement,history,'End reaches the last reachable item from elsewhere in the group, not only because it was already there');
  const left=h.labList.dispatch('keydown',{key:'ArrowLeft'});assert.equal(panel.hidden,true);assert.equal(h.doc.activeElement,toggle,'ArrowLeft collapses and returns to the toggle');assert.equal(left.prevented,true);
  h.labList.dispatch('keydown',{key:'ArrowRight'});assert.equal(panel.hidden,false);assert.equal(h.doc.activeElement,importMap,'ArrowRight expands and enters the group');
  start.focus();const ignored=h.labList.dispatch('keydown',{key:'ArrowRight'});assert.equal(ignored.prevented,false,'the arrows mean nothing on an ordinary item');assert.equal(panel.hidden,false);
- let ran=0;telemetry.onclick=()=>{ran++;assert.equal(h.labList.hidden,true,'a group item closes the menu before its handler runs');};
- telemetry.dispatch('click');assert.equal(ran,1);assert.equal(h.doc.activeElement,h.labButton);
+ let ran=0;history.onclick=()=>{ran++;assert.equal(h.labList.hidden,true,'a group item closes the menu before its handler runs');};
+ history.dispatch('click');assert.equal(ran,1);assert.equal(h.doc.activeElement,h.labButton);
  h.labButton.dispatch('click');assert.equal(panel.hidden,true,'the group is collapsed again when the menu opens');assert.equal(toggle.getAttribute('aria-expanded'),'false');
  toggle.dispatch('click');toggle.dispatch('click');assert.equal(panel.hidden,true,'a second click collapses it');assert.equal(h.labList.hidden,false);assert.ok(destroy);
 });
@@ -218,17 +219,18 @@ test('closing the drawer clears the device from the route; Home links go home; t
  assert.equal(quick.context.activeId,'');assert.equal(quick.calls.render,1,'an empty hash goes home');
 });
 
-test('index.html: Lab actions ends with an Advanced options group holding exactly the four reviewed items; nothing else moved or vanished',()=>{
+test('index.html: Lab actions ends with an Advanced options group holding the four reviewed items, one of them hidden until a lab has a retired-telemetry record; nothing else moved or vanished',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
  const menu=html.slice(html.indexOf('id="lab-actions-menu"'),html.indexOf('</header>',html.indexOf('id="lab-actions-menu"')));
  const at=menu.indexOf('id="lab-actions-advanced" data-menu-panel'),outside=menu.slice(0,at),group=menu.slice(at);
  assert.ok(at>0);assert.match(menu,/id="lab-actions-advanced-toggle" data-menu-group="lab-actions-advanced" aria-expanded="false" aria-controls="lab-actions-advanced"><span>Advanced options<\/span>/);
  assert.match(group,/^id="lab-actions-advanced" data-menu-panel role="group" aria-labelledby="lab-actions-advanced-toggle" hidden>/);
- assert.deepEqual([...group.matchAll(/role="menuitem" id="([\w-]+)"/g)].map(m=>m[1]),['menu-import-map','menu-map-edit','menu-telemetry','menu-operation-history']);
+ assert.deepEqual([...group.matchAll(/role="menuitem" id="([\w-]+)"/g)].map(m=>m[1]),['menu-import-map','menu-map-edit','menu-telemetry-retired','menu-operation-history']);
  assert.match(group,/id="menu-import-map" data-proxy="import-map"/);assert.match(group,/id="menu-map-edit" data-proxy="map-edit"/);
+ assert.match(group,/id="menu-telemetry-retired" hidden><span>Retired telemetry configuration…<\/span><\/button>/,'present in the markup, but hidden until the render path shows it');
  for(const id of ['lab-start','menu-sync-vm','menu-capture','menu-lab-files','lab-actions','menu-destroy','menu-remove-lab','lab-actions-advanced-toggle'])assert.match(outside,new RegExp('id="'+id+'"'),id+' stays in the main list');
  assert.ok(outside.indexOf('class="menu-danger"')<outside.indexOf('lab-actions-advanced-toggle'),'the group is the last thing in the menu, after the destructive actions');
- assert.match(html,/id="map-edit" class="button secondary small">Edit map</,'Edit map stays on the map toolbar');assert.match(html,/id="tools-telemetry-settings"/);assert.match(html,/id="advanced-operation-history"/);assert.match(html,/role="menuitem" id="import-map"/);
+ assert.match(html,/id="map-edit" class="button secondary small">Edit map</,'Edit map stays on the map toolbar');assert.match(html,/id="advanced-operation-history"/);assert.match(html,/role="menuitem" id="import-map"/);
 });
 
 test('style.css: the device lists carry no list indent and the Devices tab is one grid whose rows are subgrids, single column on a narrow window',()=>{
@@ -297,6 +299,18 @@ function bannerHarness(){
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),context);
  return {context,$:id=>document.getElementById(id)};
 }
+// bannerHarness plus operations.js (production order), for renderLabOperations()'s menu-item wiring.
+function menuHarness(){
+ const h=bannerHarness();
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),h.context);
+ return h;
+}
+// app.js declares `let state`/`let activeId`: a plain property assignment on the context object does
+// not reach that lexical binding (see setLab in test_telemetry_retired_ui.js), so the active lab is
+// set by running an assignment inside the context itself.
+function setActiveLab(context,lab){
+ vm.runInContext(`activeId='lab';state=${JSON.stringify({labs:[lab],jobs:[],operations:[],restore_jobs:[],git_jobs:[],platforms:{},loaded:true})};`,context);
+}
 
 test('setBanner: a notice hides once closed and stays hidden across rerenders of the same headline; a materially different headline is shown again',()=>{
  const h=bannerHarness();
@@ -339,6 +353,22 @@ test('setBanner: the close control carries the documented accessible name and to
  assert.equal(close.getAttribute('aria-label'),'Show this notice');
  close.onclick();
  assert.equal(close.getAttribute('aria-label'),'Collapse this notice');
+});
+
+test('the Advanced options group\'s retired-telemetry item is hidden without a record and shown once the active lab has one',()=>{
+ const h=menuHarness();
+ const lab={id:'lab',name:'demo',nodes:[],deployment:{status:'Not deployed'}};
+ setActiveLab(h.context,lab);
+ h.context.renderLabOperations();
+ assert.equal(h.$('menu-telemetry-retired').hidden,true);
+ lab.telemetry_retired={nodes:[{name:'clab-demo-r1',short_name:'r1'}],total:1,malformed:false};
+ setActiveLab(h.context,lab);
+ h.context.renderLabOperations();
+ assert.equal(h.$('menu-telemetry-retired').hidden,false);
+ delete lab.telemetry_retired;
+ setActiveLab(h.context,lab);
+ h.context.renderLabOperations();
+ assert.equal(h.$('menu-telemetry-retired').hidden,true,'hides again once the record is gone (removed or forgotten)');
 });
 
 test('the Home list tab is kept for the browser session and never throws when storage is blocked',()=>{

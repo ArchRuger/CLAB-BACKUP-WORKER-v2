@@ -15,7 +15,8 @@ from app import __version__
 from app.git_progress import (GitProgress, base_folder, captured_snapshot, decoded_snapshot, pending_progress,
                               PROTOCOL, snapshot_conflict, snapshot_diff, version_label, resolve_version_path,
                               annotated_compare, file_label, job_destination, pair_renamed_files,
-                              repository_display_name, strip_credentials)
+                              repository_display_name, strip_credentials, job_pending, GIT_JOB_CAP,
+                              _append_git_job)
 from app.store import Store
 import test_discovery as discovery_tests
 
@@ -217,6 +218,64 @@ class SnapshotDiffTests(unittest.TestCase):
     def test_identical_snapshot_reports_no_files(self):
         manifest, files = self.manifest_and_files('r2', 'cfg', 'same\n', restore_text='same-hier\n')
         self.assertEqual(snapshot_diff(manifest, files, manifest, files), [])
+
+
+class GitJobCapTests(unittest.TestCase):
+    """B-001: 'git_jobs' is bounded like 'operations', never dropping a save still pending review,
+    a retry, capture, export or push (job_pending; a pending save is compared by digest later)."""
+
+    def test_job_pending_matches_the_terminal_status_vocabulary(self):
+        self.assertTrue(job_pending(dict(status='queued')))
+        self.assertTrue(job_pending(dict(status='review_pending')))
+        self.assertTrue(job_pending(dict(status='push_pending')))
+        self.assertTrue(job_pending(dict(status='export_pending')))
+        self.assertTrue(job_pending(dict(status='interrupted')))
+        self.assertTrue(job_pending(dict(status='unchanged', pushed=False)))
+        self.assertFalse(job_pending(dict(status='synced')))
+        self.assertFalse(job_pending(dict(status='dismissed')))
+        self.assertFalse(job_pending(dict(status='capture_incomplete')))
+        self.assertFalse(job_pending(dict(status='failed')))
+        self.assertFalse(job_pending(dict(status='unchanged', pushed=True)))
+
+    def test_append_caps_at_the_newest_but_keeps_a_pending_save_beyond_it(self):
+        state = {'git_jobs': [dict(id=str(i), status='synced') for i in range(GIT_JOB_CAP)]}
+        state['git_jobs'][0]['status'] = 'review_pending'  # oldest entry; first to fall out of the window
+        _append_git_job(state, dict(id='new', status='queued'))
+        self.assertEqual(len(state['git_jobs']), GIT_JOB_CAP + 1)  # the newest cap, plus the survivor
+        ids = [j['id'] for j in state['git_jobs']]
+        self.assertIn('0', ids)
+        self.assertIn('new', ids)
+        # Append order (oldest to newest) is preserved; the survivor still sits before the newest job.
+        self.assertLess(ids.index('0'), ids.index('new'))
+
+    def test_append_drops_only_terminal_jobs_once_over_cap(self):
+        state = {'git_jobs': [dict(id=str(i), status='synced') for i in range(GIT_JOB_CAP)]}
+        _append_git_job(state, dict(id='newest', status='synced'))
+        self.assertEqual(len(state['git_jobs']), GIT_JOB_CAP)
+        self.assertNotIn('0', [j['id'] for j in state['git_jobs']])  # the oldest terminal job was dropped
+        self.assertIn('newest', [j['id'] for j in state['git_jobs']])
+
+    # Risk review 2, item 3: finish()'s 'unchanged' detection compares a fresh commit against the
+    # newest pushed=True entry of the same binding; that entry must survive the cap too, even
+    # though its own status ('synced') is not job_pending.
+    def test_append_keeps_the_newest_pushed_entry_per_binding_beyond_the_cap(self):
+        state = {'git_jobs': [dict(id=str(i), status='synced', pushed=(i == 0), binding_digest='b1')
+                              for i in range(GIT_JOB_CAP)]}
+        _append_git_job(state, dict(id='new', status='synced', pushed=True, binding_digest='other-binding'))
+        self.assertEqual(len(state['git_jobs']), GIT_JOB_CAP + 1)
+        ids = [j['id'] for j in state['git_jobs']]
+        self.assertIn('0', ids)     # the last uploaded save of binding 'b1' survives the cap
+        self.assertIn('new', ids)  # and so does the newest save of the unrelated binding
+        self.assertLess(ids.index('0'), ids.index('new'))
+
+    def test_append_lets_an_older_pushed_entry_go_once_a_newer_one_of_the_same_binding_exists(self):
+        state = {'git_jobs': [dict(id=str(i), status='synced', pushed=(i in (0, 1)), binding_digest='b1')
+                              for i in range(GIT_JOB_CAP)]}
+        # Only the *newest* pushed entry per binding is protected, not every one of them.
+        _append_git_job(state, dict(id='new', status='synced', pushed=False, binding_digest='b1'))
+        ids = [j['id'] for j in state['git_jobs']]
+        self.assertNotIn('0', ids)   # superseded by '1' as the newest pushed save of binding 'b1'
+        self.assertIn('1', ids)
 
 
 class GitProgressTests(unittest.TestCase):
@@ -741,6 +800,79 @@ class GitProgressTests(unittest.TestCase):
             self.assertEqual(restored['status'], 'interrupted')
             self.assertTrue(restored['backup_job_id']); self.assertTrue(restored['snapshot_digest'])
         finally: restarted.close()
+
+    def later_jobs(self, count):
+        """`count` later backup/test jobs through the real Runner.submit() (and its trim), each
+        finished at once, as a scheduled backup or Test logins run would produce over time."""
+        runner = self.app.state.runner
+        with patch.object(runner.pool, 'submit'), patch('app.runner.node_available', return_value=True):
+            for _ in range(count):
+                job = runner.submit(self.lab['id'], 'test')
+                with self.store.lock:
+                    next(j for j in self.store.state['jobs'] if j['id'] == job['id'])['status'] = 'succeeded'
+
+    def test_export_pending_saves_capture_survives_the_jobs_cap_and_its_retry_still_finds_it(self):
+        # Risk review 2, item 1: a pending save's capture must not be evicted by unrelated later
+        # backup/login jobs (a 1-minute schedule reaches JOB_CAP in a few hours).
+        job, _ = self.save(push=False)
+        self.publish_error = 'VM Git helper unreachable'
+        outcome, _ = self.run_save(job)
+        self.assertEqual(outcome['status'], 'export_pending')
+        capture = outcome['backup_job_id']; self.assertTrue(capture)
+        with patch('app.runner.JOB_CAP', 3):
+            self.later_jobs(3)
+        self.assertIn(capture, [j['id'] for j in self.store.state['jobs']],
+                      "a pending save's capture must survive the jobs cap")
+        self.publish_error = ''
+        self.assertEqual(self.client.post('/api/git/jobs/' + job['id'] + '/retry', json={'push': False}).status_code, 200)
+        outcome, _ = self.run_save(job)
+        self.assertNotIn('original capture is unavailable', outcome['message'])
+        self.assertNotEqual(outcome['status'], 'export_pending')
+
+    def test_an_interrupted_restores_pre_and_post_backups_survive_the_jobs_cap(self):
+        # Risk review 2, item 1: a restart-recheck reads a still-interrupted restore's own safety
+        # backups back by id (pre_backup_job_id/post_backup_job_id); they must not be evicted by
+        # unrelated later backup/login jobs. 'interrupted' (unlike RESTORE_BUSY) does not block new
+        # backups on any lab, so this is exactly the state in which other jobs keep accumulating
+        # around it while it waits to be reconciled.
+        pre = self.capture(); post = self.capture()
+        restore_job = dict(id=uuid.uuid4().hex, lab_id=self.lab['id'], lab_name=self.lab['name'],
+                           created='2026-09-11T10:00:00+00:00', status='interrupted', confirm_minutes=5,
+                           source={}, pre_backup_job_id=pre['id'], post_backup_job_id=post['id'],
+                           targets=[], progress={'settled': 0, 'total': 0})
+        with self.store.lock:
+            self.store.state.setdefault('restore_jobs', []).append(restore_job); self.store.save()
+        with patch('app.runner.JOB_CAP', 3):
+            self.later_jobs(3)
+        stored_ids = [j['id'] for j in self.store.state['jobs']]
+        self.assertIn(pre['id'], stored_ids); self.assertIn(post['id'], stored_ids)
+
+    def test_unchanged_detection_survives_the_git_jobs_cap(self):
+        # Risk review 2, item 3: finish()'s 'unchanged' detection needs the last uploaded save of
+        # this binding still in 'git_jobs' (same commit, same binding_digest, pushed=True); many
+        # later saves of an unrelated lab must not evict it from the cap.
+        job, _ = self.save(push=False); outcome, _ = self.run_save(job)
+        outcome, _ = self.review_and_upload(job); self.assertEqual(outcome['status'], 'synced')
+        with self.store.lock, patch('app.git_progress.GIT_JOB_CAP', 3):
+            for _ in range(3):   # later terminal entries (another lab's saves, folder moves, 'update' markers)
+                _append_git_job(self.store.state, dict(id=uuid.uuid4().hex, lab_id='other', status='dismissed'))
+        self.assertIn(job['id'], [j['id'] for j in self.store.state['git_jobs']])
+        self.nothing_new = True
+        again, _ = self.save(push=False); outcome, _ = self.run_save(again)
+        self.assertEqual(outcome['status'], 'unchanged')
+
+    def test_state_no_longer_slices_away_a_protected_pending_save(self):
+        # Risk review 2, item 2 (finding 7): /api/state used to slice git_jobs to its last 200,
+        # which could cut off a pending save the write-time trim deliberately kept further back
+        # (in front, since git_jobs is oldest-to-newest). Storage is now the only place this is
+        # bounded, so the read must not slice at all.
+        job, _ = self.save(push=False); self.publish_error = 'down'; self.run_save(job)
+        with self.store.lock, patch('app.git_progress.GIT_JOB_CAP', 200):
+            for _ in range(200):
+                _append_git_job(self.store.state, dict(id=uuid.uuid4().hex, lab_id='other', status='dismissed'))
+        self.assertIn(job['id'], [j['id'] for j in self.store.state['git_jobs']])
+        shown = [j['id'] for j in self.client.get('/api/state').json()['git_jobs']]
+        self.assertIn(job['id'], shown)
 
     def test_version_view_download_and_path_validation(self):
         job, _ = self.save(); self.run_save(job)

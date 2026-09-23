@@ -21,7 +21,7 @@ from .runner import Runner, readiness, now, effective_credentials, credential_so
 from .node_services import NodeServices
 from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
-from .discovery import Discovery, lab_status, node_available
+from .discovery import Discovery, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
 from .lab_operations import LabOperations, last_deployed, operation_busy
 from .git_progress import GitProgress, public_job as public_git_job
@@ -29,15 +29,14 @@ from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
 from .diagnostics import Diagnostics
 from .capture import Captures
-from .telemetry import TelemetryManager
-from .telemetry_settings import default_settings
-from .grafana_control import GrafanaControl
+from .telemetry_retirement import TelemetryRetirement, migrate_retired_telemetry, public_retired_telemetry
 
 APP=Path(__file__).parent
 
 def create_app(data_dir=None):
     store=Store(data_dir or os.environ.get('DATA_DIR','/data'))
     migrate_download_metadata(store)
+    migrate_retired_telemetry(store)
     runner=Runner(store)
     services=NodeServices(store)
     readiness_monitor=ReadinessMonitor(store,services,runner)
@@ -45,8 +44,7 @@ def create_app(data_dir=None):
     operations=LabOperations(store,discovery)
     git_progress=GitProgress(store,runner)
     restore=RestoreService(store,runner,git_progress)
-    telemetry=TelemetryManager(store,services)
-    grafana=GrafanaControl(store,operations,telemetry)
+    telemetry_retirement=TelemetryRetirement(store,services)
     @asynccontextmanager
     async def lifespan(app):
         print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
@@ -54,11 +52,8 @@ def create_app(data_dir=None):
         restore.start()
         discovery.start()
         readiness_monitor.start()
-        telemetry.start()
-        grafana.run()
         yield
-        grafana.close()
-        telemetry.close()
+        telemetry_retirement.close()
         restore.close()
         git_progress.close()
         operations.close()
@@ -84,10 +79,8 @@ def create_app(data_dir=None):
     topology.install(app,store)
     app.state.captures = Captures(store)
     app.state.captures.install(app)
-    app.state.telemetry=telemetry
-    telemetry.install(app)
-    app.state.grafana=grafana
-    grafana.install(app)
+    app.state.telemetry_retirement=telemetry_retirement
+    telemetry_retirement.install(app)
     @app.middleware('http')
     async def guard(request, call_next):
         if request.url.path.startswith('/api/'):
@@ -112,7 +105,7 @@ def create_app(data_dir=None):
                     matched=next((j for j in store.state['jobs'] if j['id']==job_id),None)
                     if matched: lab_id=matched['lab_id']
             route=request.scope.get('route')
-            store.event('api.request',f'{request.method} {getattr(route, "path", "/api/unknown")} â†’ {response.status_code} ({time.monotonic()-started:.3f}s)',
+            store.event('api.request',f'{request.method} {getattr(route, "path", "/api/unknown")} -> {response.status_code} ({time.monotonic()-started:.3f}s)',
                         level='error' if response.status_code>=400 else 'info',lab_id=lab_id,job_id=job_id)
         response.headers['X-Content-Type-Options']='nosniff'
         response.headers['Referrer-Policy']='no-referrer'
@@ -135,7 +128,7 @@ def create_app(data_dir=None):
         if not lab: raise HTTPException(404,'Lab not found')
         return lab
     def public_lab(lab):
-        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','annotations','annotations_for')}
+        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','telemetry_retired','annotations','annotations_for')}
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
         result['nodes']=[]
         with services.lock: checks={k:copy.deepcopy(v) for k,v in services.checks.items() if k[0]==lab['id']}
@@ -150,14 +143,14 @@ def create_app(data_dir=None):
             # deployment keep offering SSH whenever a login is configured.
             row['nos_login']=login_state(lab,n,row['available'],checks.get((lab['id'],n['name'])))
             row['ssh_ready']=row['login_configured'] and row['nos_login']['status'] in ('ready','unmonitored')
-            row['telemetry']=telemetry.node_status(lab,n)
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)
         result['last_deployed']=last_deployed(store.state,lab)
         # Edit map opens the full map editor when the manager has the lab's topology text and a map; otherwise the simple dialog.
         result['map_editor']=bool(lab.get('definition_yaml') and lab.get('drawing'))
         result['nos_readiness']=summarize([row['nos_login'] for row in result['nodes']])
-        result['telemetry']=telemetry.lab_summary(lab)
+        retired=public_retired_telemetry(lab)
+        if retired: result['telemetry_retired']=retired
         return result
     discovery.install(app,public_lab)
     class ResetManager(BaseModel):
@@ -177,7 +170,7 @@ def create_app(data_dir=None):
                     raise HTTPException(409, 'Close SSH sessions and wait for connection checks before resetting.')
                 try: store.reset()
                 except OSError: raise HTTPException(500, 'Storage reset could not finish. Check data directory permissions and free space, then retry Start fresh or restart the manager.')
-                services.checks.clear(); services.tickets.clear(); readiness_monitor.reset(); telemetry.reset()
+                services.checks.clear(); services.tickets.clear(); readiness_monitor.reset()
                 discovery.sources.clear(); discovery.import_previews.clear()
                 operations.previews.clear(); operations.cap_cache = None
             discovery.wake.set()
@@ -186,12 +179,17 @@ def create_app(data_dir=None):
     @app.get('/api/state')
     def state():
         with store.lock:
+            # jobs, git_jobs, restore_jobs and operations are all bounded in storage at write time
+            # now (Runner.submit()/_append_git_job()/_append_restore_job()/the operations preview
+            # confirm, each per lab or globally with its own protected entries); reading is never
+            # sliced again here, because a fixed-window read slice (the previous '[-200:]') can cut
+            # off a protected entry the write-time trim deliberately kept in front of it.
             return {'labs':[public_lab(l) for l in store.state['labs']],
                     'jobs':[decorate_job(copy.deepcopy(j)) for j in store.state['jobs']],
                     'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
-                    'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])[-200:]],
-                    'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])[-200:]],
-                    'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])[-200:]]}
+                    'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])],
+                    'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])],
+                    'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])]}
     class RemoveLab(BaseModel):
         model_config = ConfigDict(extra='forbid')
         name: str = Field(min_length=1, max_length=120)
@@ -224,7 +222,6 @@ def create_app(data_dir=None):
                 store.state = previous
                 raise HTTPException(500, 'Could not save the removal. The workspace was retained.')
             discovery.sources.pop(name, None)
-            telemetry.forget_lab(lab_id)
             with services.lock:
                 services.checks = {k:v for k,v in services.checks.items() if k[0] != lab_id}
                 services.tickets = {k:v for k,v in services.tickets.items() if v[1] != lab_id}
@@ -264,7 +261,7 @@ def create_app(data_dir=None):
             else:
                 lab={'id':uuid.uuid4().hex,'name':name,'nodes':nodes,'profiles':[],
                      'defaults':{},'interval':0,'next_run':None,'created':now(),'updated':now(),
-                     'source':Path(inventory.filename or 'inventory.yml').name,'telemetry':default_settings()}
+                     'source':Path(inventory.filename or 'inventory.yml').name}
                 store.state['labs'].append(lab)
             if lab['interval'] and any(readiness(lab,n)!='Ready' for n in lab['nodes'] if n['enabled']):
                 lab.update(interval=0,next_run=None)
@@ -305,7 +302,6 @@ def create_app(data_dir=None):
             node.update(address=endpoint,port=ssh_port,platform=edit.platform,
                         profile_id=edit.profile_id,enabled=edit.enabled and bool(edit.platform))
             if edit.endpoint_mode=='auto':
-                from .discovery import reconcile
                 reconcile(store.state)
             store.save()
             return public_lab(lab)

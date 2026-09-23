@@ -1,0 +1,265 @@
+{
+ "manager_version": "1.30.39",
+ "build": {
+  "image": "clab-backup:1.30.39 sha256:b183c685804561b42698bfe2056c58756d76e76e190210012536969d65899df4",
+  "container_started": "2026-09-23T11:11:03.284559967Z",
+  "git_head": "73c6712e8c42",
+  "git_dirty_files": 11
+ },
+ "lab": "restore-square",
+ "source": {
+  "type": "git",
+  "commit": "a46b956915bcfb3d745581b4c41046fd2de52da0",
+  "path": "restore-square/qa-1-30-37/latest"
+ },
+ "requested": [
+  "clab-restore-square-ceos"
+ ],
+ "started_utc": "11:40:43",
+ "device_readback_before": null,
+ "preflight": {
+  "http": 200,
+  "body": {
+   "source": {
+    "type": "git",
+    "commit": "a46b956915bcfb3d745581b4c41046fd2de52da0",
+    "path": "restore-square/qa-1-30-37/latest",
+    "captured_at": "2026-09-23T11:27:36.412810+00:00",
+    "lab_name": "restore-square",
+    "restore_capable_nodes": 4,
+    "saved_nodes": [
+     "clab-restore-square-ceos",
+     "clab-restore-square-cjunosevolved",
+     "clab-restore-square-vjunos-switch",
+     "clab-restore-square-xrv9k"
+    ]
+   },
+   "targets": [
+    {
+     "name": "clab-restore-square-ceos",
+     "short_name": "ceos",
+     "platform": "arista_ceos",
+     "running_platform": "arista_ceos",
+     "eligible": true,
+     "reason": "",
+     "requested": true,
+     "reachable": true,
+     "matches_saved": false,
+     "pending_changes": 2,
+     "diff": {
+      "hunks": [
+       {
+        "old_start": 17,
+        "old_count": 7,
+        "new_start": 17,
+        "new_count": 7,
+        "lines": [
+         {
+          "type": "context",
+          "old": 17,
+          "new": 17,
+          "text": "management api netconf"
+         },
+         {
+          "type": "context",
+          "old": 18,
+          "new": 18,
+          "text": "   transport ssh default"
+         },
+         {
+          "type": "context",
+          "old": 19,
+          "new": 19,
+          "text": "interface Ethernet1"
+         },
+         {
+          "type": "del",
+          "old": 20,
+          "new": null,
+          "text": "   description B changed"
+         },
+         {
+          "type": "add",
+          "old": null,
+          "new": 20,
+          "text": "   description AUDIT-DRIFT-1-30-39"
+         },
+         {
+          "type": "context",
+          "old": 21,
+          "new": 21,
+          "text": "   no switchport"
+         },
+         {
+          "type": "context",
+          "old": 22,
+          "new": 22,
+          "text": "   ip address 10.0.12.0/31"
+         },
+         {
+          "type": "context",
+          "old": 23,
+          "new": 23,
+          "text": "   ip ospf network point-to-point"
+         }
+        ]
+       }
+      ],
+      "added": 1,
+      "removed": 1,
+      "truncated": false,
+      "identical": false,
+      "labels": {
+       "old": "Saved (a46b956915)",
+       "new": "Running now"
+      }
+     }
+    },
+    {
+     "name": "clab-restore-square-cjunosevolved",
+     "short_name": "cjunosevolved",
+     "platform": "juniper_cjunosevolved",
+     "running_platform": "juniper_cjunosevolved",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-vjunos-switch",
+     "short_name": "vjunos-switch",
+     "platform": "juniper_vjunosswitch",
+     "running_platform": "juniper_vjunosswitch",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    },
+    {
+     "name": "clab-restore-square-xrv9k",
+     "short_name": "xrv9k",
+     "platform": "cisco_xrv9k",
+     "running_platform": "cisco_xrv9k",
+     "eligible": true,
+     "reason": "",
+     "requested": false
+    }
+   ],
+   "eligible_count": 1
+  }
+ },
+ "submit": {
+  "http": 200,
+  "body": {
+   "id": "23bd558a416a4881b390db0d6d97c11d"
+  }
+ },
+ "double_submit": {
+  "http": 200,
+  "same_job": true
+ },
+ "timeline": [
+  {
+   "utc": "11:40:44",
+   "job": "backing_up",
+   "targets": {
+    "ceos": "backing_up"
+   }
+  },
+  {
+   "utc": "11:40:46",
+   "job": "applying",
+   "targets": {
+    "ceos": "applying"
+   }
+  },
+  {
+   "utc": "11:40:47",
+   "job": "applying",
+   "targets": {
+    "ceos": "confirming"
+   }
+  },
+  {
+   "utc": "11:40:48",
+   "job": "verifying",
+   "targets": {
+    "ceos": "applied"
+   }
+  },
+  {
+   "utc": "11:40:50",
+   "job": "succeeded",
+   "targets": {
+    "ceos": "verified"
+   }
+  }
+ ],
+ "job": {
+  "id": "23bd558a416a4881b390db0d6d97c11d",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "created": "2026-09-23T11:40:44.894649+00:00",
+  "finished": "2026-09-23T11:40:50.279682+00:00",
+  "status": "succeeded",
+  "message": "All 1 node(s) restored and verified against the saved state.",
+  "source": {
+   "type": "git",
+   "commit": "a46b956915bcfb3d745581b4c41046fd2de52da0",
+   "path": "restore-square/qa-1-30-37/latest",
+   "captured_at": "2026-09-23T11:27:36.412810+00:00",
+   "lab_name": "restore-square",
+   "restore_capable_nodes": 4,
+   "saved_nodes": [
+    "clab-restore-square-ceos",
+    "clab-restore-square-cjunosevolved",
+    "clab-restore-square-vjunos-switch",
+    "clab-restore-square-xrv9k"
+   ]
+  },
+  "confirm_minutes": 8,
+  "pre_backup_job_id": "e84c6132e7d44033ab0d6e61147232d5",
+  "post_backup_job_id": "54b43533dd3c4f3f943757bc608bf054",
+  "targets": [
+   {
+    "name": "clab-restore-square-ceos",
+    "short_name": "ceos",
+    "platform": "arista_ceos",
+    "status": "verified",
+    "message": "Configuration replaced and verified against the saved desired state.",
+    "stage": "replaced",
+    "timeline": {
+     "queued": 1790163644.8946593,
+     "backing_up": 1790163644.90462,
+     "backed_up": 1790163646.5155015,
+     "connecting": 1790163646.520523,
+     "applying": 1790163646.625288,
+     "armed": 1790163647.795539,
+     "verifying": 1790163647.7981083,
+     "confirming": 1790163648.1553898,
+     "replaced": 1790163648.6620948,
+     "settled": 1790163648.6620948,
+     "checking": 1790163648.6672168,
+     "checked": 1790163650.2770834
+    },
+    "attempts": 1,
+    "worker": "ThreadPoolExecutor-5_0",
+    "diff_sample": [
+     "--- system:/running-config",
+     "+++ session:/clabmgr-062c2fdf-session-config",
+     "interface Ethernet1",
+     "-   description AUDIT-DRIFT-1-30-39",
+     "+   description B changed"
+    ],
+    "no_op": false,
+    "persistence": "saved",
+    "missing_statements": 0,
+    "extra_statements": 0
+   }
+  ],
+  "progress": {
+   "settled": 1,
+   "total": 1
+  },
+  "server_time": 1790163650.929898
+ },
+ "finished_utc": "11:40:50"
+}

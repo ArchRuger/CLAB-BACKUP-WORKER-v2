@@ -1,3 +1,0 @@
-# No app plugins are provisioned; the file exists so Grafana finds the folder it expects.
-apiVersion: 1
-apps: []

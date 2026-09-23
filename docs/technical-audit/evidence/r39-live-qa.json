@@ -1,0 +1,878 @@
+{
+ "results": [
+  {
+   "item": "A [lab-home]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-home]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [lab-home]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [topology]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [topology]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [topology]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [devices]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [devices]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [devices]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [progress]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [progress]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [progress]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [tools]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [tools]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [tools]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-menu]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-menu]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [lab-actions-menu]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-advanced]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-advanced]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [lab-actions-advanced]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A: Lab actions \u25be retained items present (start/stop/restart/redeploy/destroy/remove)",
+   "ok": true,
+   "detail": "{'lab-start': {'present': True, 'hidden': False, 'disabled': True, 'reason': 'The lab is already running'}, 'menu-sync-vm': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-capture': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-lab-files': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-destroy': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-remove-lab': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-import-map': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-map-edit': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-telemetry-retired': {'present': True, 'hidden': True, 'disabled': False, 'reason': ''}, 'menu-operation-history': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'stop (data-op-action)': {'present': True, 'disabled': False}, 'restart (data-op-action)': {'present': True, 'disabled': False}, 'redeploy (data-op-action)': {'present': True, 'disabled': False}}"
+  },
+  {
+   "item": "A: Advanced options items present (import-map, map-edit, telemetry-retired [present in the DOM; hidden here because section B already removed this lab's only retired-telemetry record before this Section-A pass ran -- see section B for the live visible->hidden transition], operation-history)",
+   "ok": true,
+   "detail": "{'lab-start': {'present': True, 'hidden': False, 'disabled': True, 'reason': 'The lab is already running'}, 'menu-sync-vm': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-capture': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-lab-files': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-destroy': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-remove-lab': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-import-map': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-map-edit': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-telemetry-retired': {'present': True, 'hidden': True, 'disabled': False, 'reason': ''}, 'menu-operation-history': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'stop (data-op-action)': {'present': True, 'disabled': False}, 'restart (data-op-action)': {'present': True, 'disabled': False}, 'redeploy (data-op-action)': {'present': True, 'disabled': False}}"
+  },
+  {
+   "item": "A [manager-menu]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [manager-menu]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [manager-menu]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A: Manager \u25be menu text has no telemetry/Grafana wording",
+   "ok": true,
+   "detail": "VM connection\u2026\nRefresh lab list\nDeploy a new lab\u2026\nImport lab files\u2026\nImport an Ansible inventory\u2026\nLabs found on the VM\u2026\nRunning labs on the VM\u2026\nOperation history\u2026\nManager settings\u2026\nDiagnostics\n\nLab VM: connected\n\nv1.30.39 \u00b7 Works with Junos, IOS-XR and Arista EOS"
+  },
+  {
+   "item": "A: Tools cards Packet capture (#capture-open) and Configuration backups (#backup) present",
+   "ok": true,
+   "detail": "{'capture-open': {'present': True, 'disabled': False, 'title': '', 'text': 'Capture traffic\u2026'}, 'backup': {'present': True, 'disabled': False, 'title': '', 'text': 'Back up now'}, 'tools-ssh-all': {'present': True, 'disabled': False, 'title': '', 'text': 'Open all CLIs \u2197'}, 'tools-map-edit': {'present': True, 'disabled': False, 'title': '', 'text': 'Edit map'}}"
+  },
+  {
+   "item": "A: More tools Open all CLIs (#tools-ssh-all) present",
+   "ok": true,
+   "detail": "{'present': True, 'disabled': False, 'title': '', 'text': 'Open all CLIs \u2197'}"
+  },
+  {
+   "item": "A: Test logins present on rail (#rail-test-logins) and Devices tab (#devices-test-logins)",
+   "ok": true,
+   "detail": "{'rail-test-logins': {'present': True, 'disabled': False, 'title': 'Tests the SSH login of every device again. A successful test makes Open CLI available.'}, 'devices-test-logins': {'present': True, 'disabled': False, 'title': 'Tests the SSH login of every device again. A successful test makes Open CLI available.'}}"
+  },
+  {
+   "item": "A: Edit map (#map-edit) present on the Topology tab map toolbar",
+   "ok": true,
+   "detail": "{'present': True, 'disabled': False}"
+  },
+  {
+   "item": "A: Progress tab Save progress (#progress-save) present",
+   "ok": true,
+   "detail": "{'present': True, 'disabled': False, 'title': 'Save every device\u2019s configuration to CLAB-MNGR-DEV-LLM \u203a restore-square/qa-1-30-37 \u203a latest/ \u00b7 main'}"
+  },
+  {
+   "item": "A: static/API surfaces answer 404",
+   "ok": true,
+   "detail": "{'/static/grafana.html': 404, '/static/grafana.js': 404, '/api/telemetry/health': 404, '/api/telemetry/metrics': 404, '/api/telemetry/grafana': 404, '/api/labs/174386ec12ee496190c585c5796b2662/telemetry': 404}"
+  },
+  {
+   "item": "A [lab-home]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-home]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [lab-home]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [topology]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [topology]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [topology]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [devices]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [devices]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [devices]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [progress]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [progress]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [progress]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [tools]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [tools]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [tools]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-menu]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-menu]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [lab-actions-menu]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-advanced]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-advanced]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [lab-actions-advanced]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A: Lab actions \u25be retained items present (start/stop/restart/redeploy/destroy/remove)",
+   "ok": true,
+   "detail": "{'lab-start': {'present': True, 'hidden': False, 'disabled': True, 'reason': 'The lab is already running'}, 'menu-sync-vm': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-capture': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-lab-files': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-destroy': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-remove-lab': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-import-map': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-map-edit': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-telemetry-retired': {'present': True, 'hidden': True, 'disabled': False, 'reason': ''}, 'menu-operation-history': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'stop (data-op-action)': {'present': True, 'disabled': False}, 'restart (data-op-action)': {'present': True, 'disabled': False}, 'redeploy (data-op-action)': {'present': True, 'disabled': False}}"
+  },
+  {
+   "item": "A: Advanced options items present (import-map, map-edit, telemetry-retired [present in the DOM; hidden here because section B already removed this lab's only retired-telemetry record before this Section-A pass ran -- see section B for the live visible->hidden transition], operation-history)",
+   "ok": true,
+   "detail": "{'lab-start': {'present': True, 'hidden': False, 'disabled': True, 'reason': 'The lab is already running'}, 'menu-sync-vm': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-capture': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-lab-files': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-destroy': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-remove-lab': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-import-map': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-map-edit': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-telemetry-retired': {'present': True, 'hidden': True, 'disabled': False, 'reason': ''}, 'menu-operation-history': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'stop (data-op-action)': {'present': True, 'disabled': False}, 'restart (data-op-action)': {'present': True, 'disabled': False}, 'redeploy (data-op-action)': {'present': True, 'disabled': False}}"
+  },
+  {
+   "item": "A [manager-menu]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [manager-menu]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [manager-menu]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A: Manager \u25be menu text has no telemetry/Grafana wording",
+   "ok": true,
+   "detail": "VM connection\u2026\nRefresh lab list\nDeploy a new lab\u2026\nImport lab files\u2026\nImport an Ansible inventory\u2026\nLabs found on the VM\u2026\nRunning labs on the VM\u2026\nOperation history\u2026\nManager settings\u2026\nDiagnostics\n\nLab VM: connected\n\nv1.30.39 \u00b7 Works with Junos, IOS-XR and Arista EOS"
+  },
+  {
+   "item": "A: Tools cards Packet capture (#capture-open) and Configuration backups (#backup) present",
+   "ok": true,
+   "detail": "{'capture-open': {'present': True, 'disabled': False, 'title': '', 'text': 'Capture traffic\u2026'}, 'backup': {'present': True, 'disabled': False, 'title': '', 'text': 'Back up now'}, 'tools-ssh-all': {'present': True, 'disabled': False, 'title': '', 'text': 'Open all CLIs \u2197'}, 'tools-map-edit': {'present': True, 'disabled': False, 'title': '', 'text': 'Edit map'}}"
+  },
+  {
+   "item": "A: More tools Open all CLIs (#tools-ssh-all) present",
+   "ok": true,
+   "detail": "{'present': True, 'disabled': False, 'title': '', 'text': 'Open all CLIs \u2197'}"
+  },
+  {
+   "item": "A: Test logins present on rail (#rail-test-logins) and Devices tab (#devices-test-logins)",
+   "ok": true,
+   "detail": "{'rail-test-logins': {'present': True, 'disabled': False, 'title': 'Tests the SSH login of every device again. A successful test makes Open CLI available.'}, 'devices-test-logins': {'present': True, 'disabled': False, 'title': 'Tests the SSH login of every device again. A successful test makes Open CLI available.'}}"
+  },
+  {
+   "item": "A: Edit map (#map-edit) present on the Topology tab map toolbar",
+   "ok": true,
+   "detail": "{'present': True, 'disabled': False}"
+  },
+  {
+   "item": "A: Progress tab Save progress (#progress-save) present",
+   "ok": true,
+   "detail": "{'present': True, 'disabled': False, 'title': 'Save every device\u2019s configuration to CLAB-MNGR-DEV-LLM \u203a restore-square/qa-1-30-37 \u203a latest/ \u00b7 main'}"
+  },
+  {
+   "item": "A: static/API surfaces answer 404",
+   "ok": true,
+   "detail": "{'/static/grafana.html': 404, '/static/grafana.js': 404, '/api/telemetry/health': 404, '/api/telemetry/metrics': 404, '/api/telemetry/grafana': 404, '/api/labs/174386ec12ee496190c585c5796b2662/telemetry': 404}"
+  },
+  {
+   "item": "A [lab-home]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-home]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [lab-home]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [topology]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [topology]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [topology]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [devices]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [devices]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [devices]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [progress]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [progress]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [progress]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [tools]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [tools]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [tools]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-menu]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-menu]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [lab-actions-menu]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-advanced]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [lab-actions-advanced]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [lab-actions-advanced]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A: Lab actions \u25be retained items present (start/stop/restart/redeploy/destroy/remove)",
+   "ok": true,
+   "detail": "{'lab-start': {'present': True, 'hidden': False, 'disabled': True, 'reason': 'The lab is already running'}, 'menu-sync-vm': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-capture': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-lab-files': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-destroy': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-remove-lab': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-import-map': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-map-edit': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-telemetry-retired': {'present': True, 'hidden': True, 'disabled': False, 'reason': ''}, 'menu-operation-history': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'stop (data-op-action)': {'present': True, 'disabled': False}, 'restart (data-op-action)': {'present': True, 'disabled': False}, 'redeploy (data-op-action)': {'present': True, 'disabled': False}}"
+  },
+  {
+   "item": "A: Advanced options items present (import-map, map-edit, telemetry-retired [present in the DOM; hidden here because section B already removed this lab's only retired-telemetry record before this Section-A pass ran -- see section B for the live visible->hidden transition], operation-history)",
+   "ok": true,
+   "detail": "{'lab-start': {'present': True, 'hidden': False, 'disabled': True, 'reason': 'The lab is already running'}, 'menu-sync-vm': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-capture': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-lab-files': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-destroy': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-remove-lab': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-import-map': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-map-edit': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'menu-telemetry-retired': {'present': True, 'hidden': True, 'disabled': False, 'reason': ''}, 'menu-operation-history': {'present': True, 'hidden': False, 'disabled': False, 'reason': ''}, 'stop (data-op-action)': {'present': True, 'disabled': False}, 'restart (data-op-action)': {'present': True, 'disabled': False}, 'redeploy (data-op-action)': {'present': True, 'disabled': False}}"
+  },
+  {
+   "item": "A [manager-menu]: none of ['menu-telemetry', 'grafana-open', 'tools-telemetry-settings', 'telemetry-line', 'grafana-caption'] present in the DOM",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A [manager-menu]: no symbol #i-telemetry",
+   "ok": true,
+   "detail": "False"
+  },
+  {
+   "item": "A [manager-menu]: none of ['Telemetry settings', 'Open lab map', 'Open network dashboard', 'Grafana'] appear in document.body.innerText",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "A: Manager \u25be menu text has no telemetry/Grafana wording",
+   "ok": true,
+   "detail": "VM connection\u2026\nRefresh lab list\nDeploy a new lab\u2026\nImport lab files\u2026\nImport an Ansible inventory\u2026\nLabs found on the VM\u2026\nRunning labs on the VM\u2026\nOperation history\u2026\nManager settings\u2026\nDiagnostics\n\nLab VM: connected\n\nv1.30.39 \u00b7 Works with Junos, IOS-XR and Arista EOS"
+  },
+  {
+   "item": "A: Tools cards Packet capture (#capture-open) and Configuration backups (#backup) present",
+   "ok": true,
+   "detail": "{'capture-open': {'present': True, 'disabled': False, 'title': '', 'text': 'Capture traffic\u2026'}, 'backup': {'present': True, 'disabled': False, 'title': '', 'text': 'Back up now'}, 'tools-ssh-all': {'present': True, 'disabled': False, 'title': '', 'text': 'Open all CLIs \u2197'}, 'tools-map-edit': {'present': True, 'disabled': False, 'title': '', 'text': 'Edit map'}}"
+  },
+  {
+   "item": "A: More tools Open all CLIs (#tools-ssh-all) present",
+   "ok": true,
+   "detail": "{'present': True, 'disabled': False, 'title': '', 'text': 'Open all CLIs \u2197'}"
+  },
+  {
+   "item": "A: Test logins present on rail (#rail-test-logins) and Devices tab (#devices-test-logins)",
+   "ok": true,
+   "detail": "{'rail-test-logins': {'present': True, 'disabled': False, 'title': 'Tests the SSH login of every device again. A successful test makes Open CLI available.'}, 'devices-test-logins': {'present': True, 'disabled': False, 'title': 'Tests the SSH login of every device again. A successful test makes Open CLI available.'}}"
+  },
+  {
+   "item": "A: Edit map (#map-edit) present on the Topology tab map toolbar",
+   "ok": true,
+   "detail": "{'present': True, 'disabled': False}"
+  },
+  {
+   "item": "A: Progress tab Save progress (#progress-save) present",
+   "ok": true,
+   "detail": "{'present': True, 'disabled': False, 'title': 'Save every device\u2019s configuration to CLAB-MNGR-DEV-LLM \u203a restore-square/qa-1-30-37 \u203a latest/ \u00b7 main'}"
+  },
+  {
+   "item": "A: static/API surfaces answer 404",
+   "ok": true,
+   "detail": "{'/static/grafana.html': 404, '/static/grafana.js': 404, '/api/telemetry/health': 404, '/api/telemetry/metrics': 404, '/api/telemetry/grafana': 404, '/api/labs/174386ec12ee496190c585c5796b2662/telemetry': 404}"
+  },
+  {
+   "item": "C1: POST /jobs {operation: backup} accepted",
+   "ok": true,
+   "detail": "{'id': '7d131b22cfa54b1daec5f9165059636d', 'lab_id': '174386ec12ee496190c585c5796b2662', 'lab_name': 'restore-square', 'operation': 'backup', 'source': 'manual', 'created': '2026-09-23T11:34:02.177572+00:00', 'status': 'queued', 'message': 'Waiting for SSH worker', 'nodes': [{'name': 'clab-restore-square-ceos', 'status': 'queued'}, {'name': 'clab-restore-square-cjunosevolved', 'status': 'queued'}, {'name': 'clab-restore-square-vjunos-switch', 'status': 'queued'}, {'name': 'clab-restore-square-xrv9k', 'status': 'queued'}]}"
+  },
+  {
+   "item": "C1: backup job reaches a final status within 60s",
+   "ok": true,
+   "detail": "{'id': '7d131b22cfa54b1daec5f9165059636d', 'lab_id': '174386ec12ee496190c585c5796b2662', 'lab_name': 'restore-square', 'operation': 'backup', 'source': 'manual', 'created': '2026-09-23T11:34:02.177572+00:00', 'status': 'succeeded', 'message': '4/4 NOS sessions completed successfully', 'nodes': [{'name': 'clab-restore-square-ceos', 'status': 'succeeded', 'file': 'clab-restore-square-ceos-d9b93278.cfg', 'platform': 'arista_ceos', 'sha256': 'f66bfe93c97525d87bbabbdc84594b758f3793efd4410554ef4e3b684e35c4c5', 'short_name': 'ceos', 'captured_at': '2026-09-23T11:34:03.685701+00:00', 'capture_time_source': 'NOS command completed', 'download_metadata_version': 1, 'restore_file': 'clab-restore-square-ceos-d9b93278.eoscfg', 'restore_sha256': 'f66bfe93c97525d87bbabbdc84594b758f3793efd4410554ef4e3b684e35c4c5', 'restore_format': 'eos-running-config', 'message': 'Configuration saved', 'download_name': 'CEOS_ceos_2026-09-23_11-34UTC.conf'}, {'name': 'clab-restore-square-cjunosevolved', 'status': 'succeeded', 'file': 'clab-restore-square-cjunosevolved-c4a865f2.set', 'platform': 'juniper_cjunosevolved', 'sha256': '049da592c7482c5e879f8d6bb58c270c4d6ff383ee71feac0a12c6c2861640e2', 'short_name': 'cjunosevolved', 'captured_at': '2026-09-23T11:34:04.213768+00:00', 'capture_time_source': 'NOS command completed', 'download_metadata_version': 1, 'restore_file': 'clab-restore-square-cjunosevolved-c4a865f2.jcfg', 'restore_sha256': '2b2d55a44074ce4a587572b3c68711d15c8861bb945a1adc1efc2eff8e99d87c', 'restore_format': 'junos-hierarchical', 'message': 'Configuration saved', 'download_name': 'cjunosevo_cjunosevolved_2026-09-23_11-34UTC.cfg'}, {'name': 'clab-restore-square-vjunos-switch', 'status': 'succeeded', 'file': 'clab-restore-square-vjunos-switch-7964f017.set', 'platform': 'juniper_vjunosswitch', 'sha256': 'b32e5160f90c6df3aafb71e35d301c38665b8c88a31342f98b30a8747ea582cb', 'short_name': 'vjunos-switch', 'captured_at': '2026-09-23T11:34:04.194723+00:00', 'capture_time_source': 'NOS command co"
+  },
+  {
+   "item": "C1: every non-host1 node succeeded",
+   "ok": true,
+   "detail": "{'clab-restore-square-ceos': 'succeeded', 'clab-restore-square-cjunosevolved': 'succeeded', 'clab-restore-square-vjunos-switch': 'succeeded', 'clab-restore-square-xrv9k': 'succeeded'}"
+  },
+  {
+   "item": "C1: host1 excluded from the backup job nodes",
+   "ok": true,
+   "detail": "{'clab-restore-square-ceos': 'succeeded', 'clab-restore-square-cjunosevolved': 'succeeded', 'clab-restore-square-vjunos-switch': 'succeeded', 'clab-restore-square-xrv9k': 'succeeded'}"
+  },
+  {
+   "item": "C1: ZIP download succeeded and lists members",
+   "ok": true,
+   "detail": "['CEOS_ceos_2026-09-23_11-34UTC.conf', 'cjunosevo_cjunosevolved_2026-09-23_11-34UTC.cfg', 'vJunos-switch_vjunos-switch_2026-09-23_11-34UTC.cfg', 'IOS-XR_xrv9k_2026-09-23_11-34UTC.txt', 'manifest.json']"
+  },
+  {
+   "item": "C1: ZIP contains manifest.json",
+   "ok": true,
+   "detail": "['CEOS_ceos_2026-09-23_11-34UTC.conf', 'cjunosevo_cjunosevolved_2026-09-23_11-34UTC.cfg', 'vJunos-switch_vjunos-switch_2026-09-23_11-34UTC.cfg', 'IOS-XR_xrv9k_2026-09-23_11-34UTC.txt', 'manifest.json']"
+  },
+  {
+   "item": "C1: per-device extensions observed in the ZIP (informational \u2014 compare with NODE-FEATURES.md \"Backup download names\")",
+   "ok": null,
+   "detail": "{'names': ['CEOS_ceos_2026-09-23_11-34UTC.conf', 'cjunosevo_cjunosevolved_2026-09-23_11-34UTC.cfg', 'vJunos-switch_vjunos-switch_2026-09-23_11-34UTC.cfg', 'IOS-XR_xrv9k_2026-09-23_11-34UTC.txt', 'manifest.json'], 'extensions': ['.cfg', '.conf', '.txt']}"
+  },
+  {
+   "item": "C2: ssh-check-all started=5, skipped=[]",
+   "ok": true,
+   "detail": "{'started': 5, 'skipped': [], 'at': '2026-09-23T11:34:06.312511+00:00'}"
+  },
+  {
+   "item": "C2: every node's nos_login.at advanced",
+   "ok": true,
+   "detail": "{'before': {'clab-restore-square-ceos': '2026-09-23T11:27:20.218768+00:00', 'clab-restore-square-cjunosevolved': '2026-09-23T11:27:20.295105+00:00', 'clab-restore-square-vjunos-switch': '2026-09-23T11:27:20.219944+00:00', 'clab-restore-square-xrv9k': '2026-09-23T11:27:20.322213+00:00', 'clab-restore-square-host1': '2026-09-23T11:27:20.312254+00:00'}, 'after': {'clab-restore-square-ceos': '2026-09-23T11:34:06.420128+00:00', 'clab-restore-square-cjunosevolved': '2026-09-23T11:34:06.520151+00:00', 'clab-restore-square-vjunos-switch': '2026-09-23T11:34:06.444271+00:00', 'clab-restore-square-xrv9k': '2026-09-23T11:34:06.492883+00:00', 'clab-restore-square-host1': '2026-09-23T11:34:06.510999+00:00'}}"
+  },
+  {
+   "item": "C3: terminal reaches a prompt (> or #) within 30s",
+   "ok": true,
+   "detail": "Last login: Wed Sep 23 11:34:03 2026 from 172.20.20.1\nceos> "
+  },
+  {
+   "item": "C4: review dialog appeared before upload (mandatory review)",
+   "ok": null,
+   "detail": "no review dialog observed within 20s (may be \"unchanged\")"
+  },
+  {
+   "item": "C4: the save job reaches a final status within 150s",
+   "ok": true,
+   "detail": "{'id': '9f24d5ce4a976d6e53bce4bc3480fc21', 'lab_id': '174386ec12ee496190c585c5796b2662', 'lab_name': 'restore-square', 'created': '2026-09-23T11:34:09.213399+00:00', 'finished': '2026-09-23T11:34:12.819590+00:00', 'status': 'unchanged', 'message': 'Nothing changed since the last save, which was uploaded.', 'backup_job_id': 'b27e9e3694d3467f82e77d964ec38e1b', 'commit': 'a46b956915bcfb3d745581b4c41046fd2de52da0', 'pushed': True, 'target': 'latest', 'checkpoint': '', 'changed_files': [], 'snapshot_path': 'restore-square/qa-1-30-37/latest', 'note': 'Technical audit 1.30.39 live check', 'review_before_push': True, 'destination': {'repository': 'CLAB-MNGR-DEV-LLM', 'remote': 'https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git', 'branch': 'main', 'path': 'restore-square/qa-1-30-37/latest', 'checkout': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM'}}"
+  },
+  {
+   "item": "C4: final status is succeeded/synced or unchanged",
+   "ok": true,
+   "detail": "unchanged"
+  },
+  {
+   "item": "C4: destination and commit id recorded from the job",
+   "ok": true,
+   "detail": "{'destination': {'repository': 'CLAB-MNGR-DEV-LLM', 'remote': 'https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git', 'branch': 'main', 'path': 'restore-square/qa-1-30-37/latest', 'checkout': '/home/clabllm/labs/CLAB-MNGR-DEV-LLM'}, 'commit': 'a46b956915bcfb3d745581b4c41046fd2de52da0', 'status': 'unchanged'}"
+  },
+  {
+   "item": "C5: capture target list includes a ceos device",
+   "ok": true,
+   "detail": "[{'value': '', 'text': 'Choose a device\u2026'}, {'value': 'b4ee7a26df7553c0da84a9e3688f57e2d85c68ba460b5dfb49a7bab6a9cfff4c', 'text': 'clab-restore-square-ceos \u00b7 18 interfaces'}]"
+  },
+  {
+   "item": "C5: eth1 (ceos<->cjunosevolved link) is selected for capture",
+   "ok": true,
+   "detail": "[{'value': 'arpinject', 'checked': False}, {'value': 'arpsnoop', 'checked': False}, {'value': 'cpu', 'checked': False}, {'value': 'eth0', 'checked': False}, {'value': 'eth1', 'checked': False}, {'value': 'eth2', 'checked': False}, {'value': 'eth3', 'checked': False}, {'value': 'fabric', 'checked': False}, {'value': 'fabric1', 'checked': False}, {'value': 'fabric2', 'checked': False}, {'value': 'fabric3', 'checked': False}, {'value': 'fwd0', 'checked': False}, {'value': 'lo', 'checked': False}, {'value': 'lo0', 'checked': False}, {'value': 'mirror0', 'checked': False}, {'value': 'mirror1', 'checked': False}, {'value': 'mirror2', 'checked': False}, {'value': 'mirror3', 'checked': False}]"
+  },
+  {
+   "item": "C5: capture session started (Open Wireshark link present)",
+   "ok": true,
+   "detail": "/static/capture-session.html#5c215d7f01d7e2dc7cc4fc6f7e0b1ea37743923d9be7ad2287b04beefed400e4"
+  },
+  {
+   "item": "C5: /api/capture/sessions (read via this browser context, which owns the session) lists at least one session",
+   "ok": true,
+   "detail": "{'sessions': [{'id': '5c215d7f01d7e2dc7cc4fc6f7e0b1ea37743923d9be7ad2287b04beefed400e4', 'name': 'clab-restore-square-ceos', 'interfaces': ['eth1'], 'remaining_seconds': 7199, 'idle_seconds': 900}]}"
+  },
+  {
+   "item": "C5: no packet-count field exists on the session record (documented gap vs the brief's expectation)",
+   "ok": null,
+   "detail": "{'sessions': [{'id': '5c215d7f01d7e2dc7cc4fc6f7e0b1ea37743923d9be7ad2287b04beefed400e4', 'name': 'clab-restore-square-ceos', 'interfaces': ['eth1'], 'remaining_seconds': 7199, 'idle_seconds': 900}]}"
+  },
+  {
+   "item": "C5: capture session page renders the noVNC canvas (status: Connected to Wireshark on the VM.)",
+   "ok": true,
+   "detail": "Connected to Wireshark on the VM."
+  },
+  {
+   "item": "C5: read \"show ip interface brief\" from ceos over the terminal",
+   "ok": true,
+   "detail": "Last login: Wed Sep 23 11:34:10 2026 from 172.20.20.1\nceos>show ip interface brief\n                                                                                 Address\nInterface         IP Address             Status       Protocol            MTU    Owner  \n----------------- ---------------------- ------------ -------------- ----------- -------\nEthernet1         10.0.12.0/31           up           up                 1500           \nEthernet2         10.0.41.1/31           up           up                 1500           \nLoopback0         10.255.0.1/32          up           up                65535           \nManagement0       172.20.20.101/24       up           up                 1500           \nceos> "
+  },
+  {
+   "item": "C5: ran ping 10.0.12.1 from ceos over the terminal (generates traffic on the captured link)",
+   "ok": true,
+   "detail": "   \nEthernet2         10.0.41.1/31           up           up                 1500           \nLoopback0         10.255.0.1/32          up           up                65535           \nManagement0       172.20.20.101/24       up           up                 1500           \nceos>ping 10.0.12.1\nPING 10.0.12.1 (10.0.12.1) 72(100) bytes of data.\n80 bytes from 10.0.12.1: icmp_seq=1 ttl=64 time=1.31 ms\n80 bytes from 10.0.12.1: icmp_seq=2 ttl=64 time=0.794 ms\n80 bytes from 10.0.12.1: icmp_seq=3 ttl=64 time=0.677 ms\n80 bytes from 10.0.12.1: icmp_seq=4 ttl=64 time=0.937 ms\n80 bytes from 10.0.12.1: icmp_seq=5 ttl=64 time=0.795 ms\n--- 10.0.12.1 ping statistics ---\n5 packets transmitted, 5 received, 0% packet loss, time 4ms\nrtt min/avg/max/mdev = 0.677/0.902/1.311/0.220 ms, ipg/ewma 1.095/1.101 ms\nceos> "
+  },
+  {
+   "item": "C5: End session button reports the session ended",
+   "ok": true,
+   "detail": "Session ended. Its capture files were removed from the VM."
+  },
+  {
+   "item": "C5: session removed from /api/capture/sessions after ending",
+   "ok": true,
+   "detail": "{'sessions': []}"
+  },
+  {
+   "item": "C6: debug page renders three cards",
+   "ok": true,
+   "detail": "3"
+  },
+  {
+   "item": "C6: #debug-probe answers with PASS rows",
+   "ok": true,
+   "detail": "Folder listing \u2014 PASSED \u00b7 2 entries \u00b7 280 ms\n\nVM commands \u2014 PASSED \u00b7 VM helper 1.30.39 \u00b7 454 ms \u2014 Helper matches the manager.\n\nChecked 2026-09-23T11:34:51.059434+00:00"
+  },
+  {
+   "item": "GLOBAL: no request URL contains /telemetry except /telemetry-retired across the whole run",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "GLOBAL: zero unhandled console errors across the whole run",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "GLOBAL: zero page errors across the whole run",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "item": "B: lab banner text matches the expected retirement notice exactly",
+   "ok": true,
+   "detail": "{'hidden': False, 'text': 'Configuration lines added by the retired telemetry feature are still on: cjunosevolved.', 'reviewVisible': True}"
+  },
+  {
+   "item": "B: banner Review and remove\u2026 (#banner-retired-review) is visible",
+   "ok": true,
+   "detail": "{'hidden': False, 'text': 'Configuration lines added by the retired telemetry feature are still on: cjunosevolved.', 'reviewVisible': True}"
+  },
+  {
+   "item": "B: Advanced options \u203a Retired telemetry configuration\u2026 (#menu-telemetry-retired) visible",
+   "ok": true,
+   "detail": "{'present': True, 'hidden': False, 'text': 'Retired telemetry configuration\u2026'}"
+  },
+  {
+   "item": "B: dialog title is \"Retired telemetry configuration\"",
+   "ok": true,
+   "detail": "{'title': 'Retired telemetry configuration', 'nodeHeading': 'cjunosevolved Junos', 'line': 'set system services extension-service request-response grpc clear-text port 32767', 'removeEnabled': True}"
+  },
+  {
+   "item": "B: device row names cjunosevolved with its kind badge",
+   "ok": true,
+   "detail": "cjunosevolved Junos"
+  },
+  {
+   "item": "B: device row shows the exact retired line",
+   "ok": true,
+   "detail": "set system services extension-service request-response grpc clear-text port 32767"
+  },
+  {
+   "item": "B: Remove from devices (#op-retired-remove) is enabled",
+   "ok": true,
+   "detail": "{'title': 'Retired telemetry configuration', 'nodeHeading': 'cjunosevolved Junos', 'line': 'set system services extension-service request-response grpc clear-text port 32767', 'removeEnabled': True}"
+  },
+  {
+   "item": "B: results area (#op-retired-results) filled within 150s",
+   "ok": true,
+   "detail": "cjunosevolved: removed \u2014 Removed the lines the manager had added and read the device back: they are gone."
+  },
+  {
+   "item": "B: removal result text matches expected exactly",
+   "ok": true,
+   "detail": "cjunosevolved: removed \u2014 Removed the lines the manager had added and read the device back: they are gone."
+  },
+  {
+   "item": "B: notification (toast) text recorded",
+   "ok": true,
+   "detail": "Removed telemetry configuration on 1 of 1 device."
+  },
+  {
+   "item": "B: /api/state lab has no telemetry_retired key",
+   "ok": true,
+   "detail": "['id', 'name', 'defaults', 'interval', 'next_run', 'created', 'deployment_name', 'container_prefix', 'updated', 'source', 'vm_source', 'vm_project_path', 'git_binding', 'profiles', 'nodes', 'deployment', 'last_deployed', 'map_editor', 'nos_readiness'] (re-verified live again after this run, still true)"
+  },
+  {
+   "item": "B: GET telemetry-retired now answers 404",
+   "ok": true,
+   "detail": "404 (re-verified live again after this run, still true)"
+  },
+  {
+   "item": "B: the banner is gone after the next render",
+   "ok": true,
+   "detail": "{'hidden': True, 'text': 'Configuration lines added by the retired telemetry feature are still on: cjunosevolved.'}"
+  },
+  {
+   "item": "B: #menu-telemetry-retired is hidden again",
+   "ok": true,
+   "detail": "{'hidden': True}"
+  },
+  {
+   "item": "B: /api/logs shows telemetry.retired.removed for the node",
+   "ok": true,
+   "detail": "[{'time': '2026-09-23T11:23:03.654113+00:00', 'action': 'telemetry.retired.removed', 'message': 'Removed the lines the manager had added and read the device back: they are gone.', 'level': 'info', 'lab_id': '174386ec12ee496190c585c5796b2662', 'job_id': '', 'node': 'clab-restore-square-cjunosevolved'}] -- NOTE: the script's FIRST attempt at this check read the wrong JSON key (logs.get('logs', []) instead of logs.get('events', [])) and wrongly reported FAIL; fixed in check_release_1_30_39.py and the corrected read (shown here) was verified with a one-off query against the same, real /api/logs response (this section was not re-run, since it is the one mutating, one-time step)."
+  },
+  {
+   "item": "B: log message carries no configuration text",
+   "ok": true,
+   "detail": "Removed the lines the manager had added and read the device back: they are gone."
+  },
+  {
+   "item": "B: lab not marked busy \u2014 POST ssh-check-all {} starts (200)",
+   "ok": true,
+   "detail": "{'started': 5, 'skipped': [], 'at': '2026-09-23T11:23:09.324523+00:00'}"
+  }
+ ],
+ "console_errors": [],
+ "handled_http_errors": [],
+ "page_errors": [],
+ "telemetry_requests_seen": [],
+ "section_b_removal_result_text": "cjunosevolved: removed \u2014 Removed the lines the manager had added and read the device back: they are gone.",
+ "section_b_toast": "Removed telemetry configuration on 1 of 1 device.",
+ "backup_job": {
+  "id": "7d131b22cfa54b1daec5f9165059636d",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "lab_name": "restore-square",
+  "operation": "backup",
+  "source": "manual",
+  "created": "2026-09-23T11:34:02.177572+00:00",
+  "status": "succeeded",
+  "message": "4/4 NOS sessions completed successfully",
+  "nodes": [
+   {
+    "name": "clab-restore-square-ceos",
+    "status": "succeeded",
+    "file": "clab-restore-square-ceos-d9b93278.cfg",
+    "platform": "arista_ceos",
+    "sha256": "f66bfe93c97525d87bbabbdc84594b758f3793efd4410554ef4e3b684e35c4c5",
+    "short_name": "ceos",
+    "captured_at": "2026-09-23T11:34:03.685701+00:00",
+    "capture_time_source": "NOS command completed",
+    "download_metadata_version": 1,
+    "restore_file": "clab-restore-square-ceos-d9b93278.eoscfg",
+    "restore_sha256": "f66bfe93c97525d87bbabbdc84594b758f3793efd4410554ef4e3b684e35c4c5",
+    "restore_format": "eos-running-config",
+    "message": "Configuration saved",
+    "download_name": "CEOS_ceos_2026-09-23_11-34UTC.conf"
+   },
+   {
+    "name": "clab-restore-square-cjunosevolved",
+    "status": "succeeded",
+    "file": "clab-restore-square-cjunosevolved-c4a865f2.set",
+    "platform": "juniper_cjunosevolved",
+    "sha256": "049da592c7482c5e879f8d6bb58c270c4d6ff383ee71feac0a12c6c2861640e2",
+    "short_name": "cjunosevolved",
+    "captured_at": "2026-09-23T11:34:04.213768+00:00",
+    "capture_time_source": "NOS command completed",
+    "download_metadata_version": 1,
+    "restore_file": "clab-restore-square-cjunosevolved-c4a865f2.jcfg",
+    "restore_sha256": "2b2d55a44074ce4a587572b3c68711d15c8861bb945a1adc1efc2eff8e99d87c",
+    "restore_format": "junos-hierarchical",
+    "message": "Configuration saved",
+    "download_name": "cjunosevo_cjunosevolved_2026-09-23_11-34UTC.cfg"
+   },
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "status": "succeeded",
+    "file": "clab-restore-square-vjunos-switch-7964f017.set",
+    "platform": "juniper_vjunosswitch",
+    "sha256": "b32e5160f90c6df3aafb71e35d301c38665b8c88a31342f98b30a8747ea582cb",
+    "short_name": "vjunos-switch",
+    "captured_at": "2026-09-23T11:34:04.194723+00:00",
+    "capture_time_source": "NOS command completed",
+    "download_metadata_version": 1,
+    "restore_file": "clab-restore-square-vjunos-switch-7964f017.jcfg",
+    "restore_sha256": "6c155d55e44bf3b4e5a67b1d76254b8c6865792aa4403c42991039601f7508be",
+    "restore_format": "junos-hierarchical",
+    "message": "Configuration saved",
+    "download_name": "vJunos-switch_vjunos-switch_2026-09-23_11-34UTC.cfg"
+   },
+   {
+    "name": "clab-restore-square-xrv9k",
+    "status": "succeeded",
+    "file": "clab-restore-square-xrv9k-60be980c.cfg",
+    "platform": "cisco_xrv9k",
+    "sha256": "0c9c2628cc4eadd879d4b7a1fc8d5c269d9513e694f4caa7eb60fbd230a95050",
+    "short_name": "xrv9k",
+    "captured_at": "2026-09-23T11:34:04.050804+00:00",
+    "capture_time_source": "NOS command completed",
+    "download_metadata_version": 1,
+    "restore_file": "clab-restore-square-xrv9k-60be980c.xrcfg",
+    "restore_sha256": "0c9c2628cc4eadd879d4b7a1fc8d5c269d9513e694f4caa7eb60fbd230a95050",
+    "restore_format": "iosxr-running-config",
+    "message": "Configuration saved",
+    "download_name": "IOS-XR_xrv9k_2026-09-23_11-34UTC.txt"
+   }
+  ],
+  "started": "2026-09-23T11:34:02.180653+00:00",
+  "finished": "2026-09-23T11:34:05.226137+00:00",
+  "archive_name": "restore-square_2026-09-23_11-34.zip",
+  "download_timezone": "UTC"
+ },
+ "save_job": {
+  "first_save_this_session": {
+   "id": "caa7ca3349cfc92f02c391444c442020",
+   "status": "synced",
+   "pushed": true,
+   "commit": "a46b956915bcfb3d745581b4c41046fd2de52da0",
+   "note": "Technical audit 1.30.39 live check",
+   "destination": {
+    "repository": "CLAB-MNGR-DEV-LLM",
+    "remote": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+    "branch": "main",
+    "path": "restore-square/qa-1-30-37/latest",
+    "checkout": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM"
+   },
+   "changed_files": [
+    "restore-square/qa-1-30-37/latest/cjunosevolved.cfg",
+    "restore-square/qa-1-30-37/latest/cjunosevolved.jcfg",
+    "restore-square/qa-1-30-37/latest/vjunos-switch.cfg",
+    "restore-square/qa-1-30-37/latest/vjunos-switch.jcfg",
+    "restore-square/qa-1-30-37/latest/xrv9k.cfg",
+    "restore-square/qa-1-30-37/latest/xrv9k.xrcfg",
+    "restore-square/qa-1-30-37/latest/manifest.json"
+   ],
+   "remote_verification": {
+    "git_fetch": "From https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM  73c8112..a46b956  main -> origin/main",
+    "git_log_oneline_-3_origin_main": [
+     "a46b956 Technical audit 1.30.39 live check",
+     "795edb2 Configuration B",
+     "f12421e Configuration A"
+    ],
+    "manifest_in_tree": "restore-square/qa-1-30-37/latest/manifest.json (confirmed via git ls-tree -r origin/main)",
+    "note": "The diff also included interface/prefix-list/static-route lines unrelated to the telemetry removal: these are real drift from a restore (\"Configuration replaced\") recorded 8 hours before this session (visible in the Progress tab: \"Last configuration change: Configuration replaced - 8 hours ago\"), not caused by this QA session; no Save Progress had run since then."
+   }
+  },
+  "second_save_this_session": {
+   "id": "9f24d5ce4a976d6e53bce4bc3480fc21",
+   "status": "unchanged",
+   "message": "Nothing changed since the last save, which was uploaded.",
+   "note": "Run again during the consolidated A/C1-C6 pass; confirms \"unchanged\" as the correct, valid outcome when nothing has changed since the previous save (brief C4 note)."
+  }
+ },
+ "capture_evidence": {
+  "sessions": {
+   "sessions": [
+    {
+     "id": "5c215d7f01d7e2dc7cc4fc6f7e0b1ea37743923d9be7ad2287b04beefed400e4",
+     "name": "clab-restore-square-ceos",
+     "interfaces": [
+      "eth1"
+     ],
+     "remaining_seconds": 7199,
+     "idle_seconds": 900
+    }
+   ]
+  },
+  "launch_href": "/static/capture-session.html#5c215d7f01d7e2dc7cc4fc6f7e0b1ea37743923d9be7ad2287b04beefed400e4",
+  "session_id": "5c215d7f01d7e2dc7cc4fc6f7e0b1ea37743923d9be7ad2287b04beefed400e4",
+  "interfaces_output_tail": " Status       Protocol            MTU    Owner  \n----------------- ---------------------- ------------ -------------- ----------- -------\nEthernet1         10.0.12.0/31           up           up                 1500           \nEthernet2         10.0.41.1/31           up           up                 1500           \nLoopback0         10.255.0.1/32          up           up                65535           \nManagement0       172.20.20.101/24       up           up                 1500           \nceos> ",
+  "ping_output_tail": ".12.1 (10.0.12.1) 72(100) bytes of data.\n80 bytes from 10.0.12.1: icmp_seq=1 ttl=64 time=1.31 ms\n80 bytes from 10.0.12.1: icmp_seq=2 ttl=64 time=0.794 ms\n80 bytes from 10.0.12.1: icmp_seq=3 ttl=64 time=0.677 ms\n80 bytes from 10.0.12.1: icmp_seq=4 ttl=64 time=0.937 ms\n80 bytes from 10.0.12.1: icmp_seq=5 ttl=64 time=0.795 ms\n--- 10.0.12.1 ping statistics ---\n5 packets transmitted, 5 received, 0% packet loss, time 4ms\nrtt min/avg/max/mdev = 0.677/0.902/1.311/0.220 ms, ipg/ewma 1.095/1.101 ms\nceos> "
+ },
+ "final_state": {
+  "version": "1.30.39"
+ }
+}

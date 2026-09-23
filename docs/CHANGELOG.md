@@ -4,6 +4,127 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.42
+
+**Technical audit, part 4: backend and state debt** ([docs/technical-audit/AUDIT.md](technical-audit/AUDIT.md), findings
+A-001, B-001 to B-006, T-003 and the risk review's items RR-201 to RR-207).
+
+- **Job lists are bounded.** Backup and login jobs are kept per lab, the newest 300, and Git saves and restore jobs
+  the newest 200 each, mirroring the existing cap on operations; a queued or running job, a pending save (and the
+  backup capture it still references), a busy or interrupted restore (and its pre- and post-restore backups) and
+  the last uploaded save of each save location are never dropped. A state saved before this release is trimmed at the
+  next append to each list, not at load, and the backup files on disk are never touched. A record that leaves the
+  list can no longer be downloaded, chosen as a restore source, used as a Save-progress baseline or shown as a node's
+  last backup ([NODE-FEATURES](../clab-backup-ui/NODE-FEATURES.md)). `/api/state` no longer slices any list on read
+  (the read window could hide a protected older entry), and finished restore jobs no longer keep their candidate
+  configuration text in the state (200 restores of four devices held tens of megabytes).
+- **Operation output is redacted before it is cut.** The streamed output of a lab operation had stored secrets
+  replaced only after the 512 KiB window was trimmed, so a VM or device password cut by the window could leave a
+  fragment in `/api/operations/{id}` and the saved record (the audit reproduced 48 of 49 characters). Secrets are now
+  replaced as each chunk arrives, with a carry-over that holds back only a tail that could still become a secret,
+  so live lines are not delayed; a full window starts at a whole line; the final pass on the whole buffer stays.
+- **Backups cannot hang on Git and do not leave a lock behind.** The post-backup `git` commands share a 120 s deadline
+  like the Ansible run; on a timeout the job ends with its files saved and the history step marked failed, and a
+  stale `index.lock` or `config.lock` the killed process left is removed so the next backup's history step works.
+- **Runner shutdown joins its scheduler thread** like the discovery and readiness monitors; the end of a lab
+  operation reads the store under its lock with a default; two late imports moved to module level (the third,
+  `runner.py` → `lab_operations`, guards a real cycle through `topology.py` and stays); the audit log's request arrow
+  is plain ASCII (`->`) instead of mojibake; the restart-recheck branch for a lab or candidate that disappeared is now
+  covered by tests (it already behaved correctly).
+
+## Changes in 1.30.41
+
+**Technical audit, part 3: deployment and dependency debt** ([docs/technical-audit/AUDIT.md](technical-audit/AUDIT.md),
+findings S-001, S-002, S-005, D-003).
+
+- **The lab builder's bundled dependencies carry no known advisory.** `npm audit` reported a critical XSS advisory in
+  `maplibre-gl` 5.24.0 (GHSA-jrc7-96c5-q579) and moderate ones in `markdown-it` and `dompurify`, all reached only
+  through the exactly pinned `@containerlab/clab-ui` 0.3.2. The build project now overrides the three packages
+  (`maplibre-gl` ≥ 6.4.1 < 7, resolved 6.11.1; `markdown-it` 14.3.2; `dompurify` 3.4.15), the committed bundle is
+  rebuilt from that lockfile (132 files, +0.5 %, audit 0 of 0) and reproduces byte for byte; the editor's drag, link,
+  YAML panel and map editing were exercised in a browser on the new bundle (Geo layout, the only user of maplibre,
+  stays hidden). The bundle is cached `immutable`, so this release number is what brings it to browsers.
+- **lazydocker is verified before it is installed.** The optional tool's release tarball is now checked against the
+  upstream `checksums.txt` (SHA-256), the same way `install-prerequisites.sh` checks the containerlab package; a
+  mismatch, a missing entry or an unreachable checksum file skips the tool with a warning, as any other lazydocker
+  failure did, and never fails the installation.
+- **`recreate-manager.sh` detects a prepared-image installation.** When `deploy/image.env` names a `MANAGER_IMAGE`
+  and the existing manager runs that image (or no source-built image exists locally), the script recreates from
+  `deploy/compose.image.yml`; otherwise from the source compose file as before. It prints the route it chose. This
+  closes an item open since the maintenance audit (a settings change on a prepared-image install recreated the
+  wrong image or failed). A stdlib test drives the script with a fake `docker` and runs in CI.
+- **The capture services are loopback-only by design.** `deploy/compose.capture.yml` published Edgeshark with
+  `CAPTURE_BIND`/`CAPTURE_PORT` variables that the setup never honoured; both published ports are now fixed to
+  `127.0.0.1` (the session service holds the Docker socket and is reached only through the manager's same-origin
+  relay), a test pins it, and the CI smoke no longer sets the inert variables ([CAPTURE.md](CAPTURE.md)).
+
+## Changes in 1.30.40
+
+**Technical audit, part 2: frontend, tooling and guide debt** ([docs/technical-audit/AUDIT.md](technical-audit/AUDIT.md),
+findings F-001 to F-006, T-001, T-002, D-001, D-002).
+
+- **The favourite star is an outline until pressed.** It rendered solid in both states (the colour was the only
+  difference); it now follows the design contract. The fix is a stylesheet rule keyed on the button's pressed state,
+  because a fill attribute on the shared symbol would block any per-state override.
+- **The topology wire's stroke rule excludes the capture hit path explicitly** instead of relying on the order the
+  rules happen to appear in the stylesheet (the invariant in `CLAUDE.md`); wires and link clicks are unchanged.
+- **Dead code removed:** three stylesheet rule groups of the pre-redesign side-by-side diff layout that no script
+  produces any more, the always-hidden `#subtitle` element, and a byte-identical duplicate of `gitWhen` in
+  `git-places.js` (which always loads after `git-progress.js`); `capture-session.js` gains the `'use strict'`
+  directive every other script had.
+- **The after-redesign Playwright tool works again.** `docs/redesign/tools/verify_after.py` still read the
+  `#map-notes` id removed in 1.30.36 and never filled the mandatory "What changed?" label dialog added in 1.30.37,
+  so one check failed and four more never ran at every viewport; it now passes 97 of 97 checks at three viewports
+  against the fixture manager.
+- **Guides corrected.** The fresh VM guide and the Wiki guide claimed vJunos-switch "cannot run inside a VM"; the
+  project's own validation record has run it on the dev VM since 1.28.0. Both now state the real requirement (nested
+  virtualisation on the hypervisor, enough memory). The Wiki guide's "Edit the map and export" section described the
+  pre-builder editor; it now describes the current one (Undo, Redo, Device look…, Link labels…, Import map file…,
+  Download map file, Export to draw.io, Save map) and the simple dialog for a lab without a topology text.
+
+## Changes in 1.30.39
+
+**Network telemetry and the Grafana dashboards are retired.** An intentional product change, decided by the
+maintainer for the technical audit ([docs/technical-audit/](technical-audit/AUDIT.md)): the feature was never
+used. Removed from the product: automatic gNMI collection and the device provisioning of the gNMI service, the
+Prometheus exposition (`/api/telemetry/metrics`), the Grafana dashboards and generated lab maps (Flow panel),
+the on-demand Grafana control and its `grafana` helper mode, the Tools › Telemetry card and *Telemetry
+settings…*, `/static/grafana.html`, the `TELEMETRY_*` settings, `deploy/setup-telemetry.sh`,
+`compose.telemetry.yml`, `deploy/telemetry/`, the installer phase "Grafana dashboards and lab maps" (menu 4 is
+now *Browser Wireshark stack only*), the two health-check rows, the CI Grafana smoke test, the `pygnmi`
+dependency with its exclusive transitives, and the two guides (`docs/TELEMETRY.md` stays as a short retirement
+notice). Ports 3000 and 9090 are no longer used. Browser Wireshark, readiness and *Test logins*, terminals,
+backups and downloads, Save progress, restore on all four platforms, the topology tab, the lab builder and the
+map editor are unchanged ([FEATURE-PARITY.md](technical-audit/FEATURE-PARITY.md)).
+
+- **Upgrading an installation that had the stack.** `start-manager.sh` (and therefore `install.sh`) now runs
+  `deploy/retire-telemetry.sh --no-recreate` before building the manager: it removes only the containers,
+  volumes and networks whose Compose labels prove the old project `clab-manager-telemetry`, removes the two
+  pinned images when nothing else uses them, moves the feature's files
+  (`/srv/containerlab-node-manager/telemetry`, `…/data/telemetry`) into
+  `/srv/containerlab-node-manager/telemetry-retired-<UTC stamp>/` (`--purge` deletes instead) and strips every
+  `TELEMETRY_*` line from `clab-backup-ui/.env` (archived as `env-telemetry.txt`, mode 600). Idempotent, a
+  no-op on a VM that never had the stack, a failed step exits non-zero. The health check gains the row *Retired
+  telemetry stack*, which warns while leftovers exist. Manager data, credentials, VM trust, Git registrations and
+  every other setting are untouched ([TELEMETRY.md](TELEMETRY.md)).
+- **Manager state migration.** The first start of this release drops each lab's stored telemetry setting. Where
+  the removed feature had added configuration lines to a device (Arista cEOS, Cisco XRv9k or Juniper
+  cJunosEvolved; on the dev VM one line on the Junos Evolved node), the record is kept and the lab shows the
+  notice *Configuration lines added by the retired telemetry feature are still on: …* with **Review and remove…**:
+  the dialog lists the lines and **Remove from devices** deletes exactly those lines inside the device's own
+  configuration session, reads the device back and reports `removed`, `absent`, `failed` or `skipped`; it never
+  removes what the manager did not add and never disables gRPC/gNMI as a whole. A malformed stored value is kept
+  for review and reported in the log instead of being replaced by a default. Downgrading after the migration needs
+  the pre-upgrade data copy ([technical-audit/TELEMETRY-REMOVAL.md](technical-audit/TELEMETRY-REMOVAL.md)).
+- **Tests.** 93 telemetry-only tests and the Grafana helper-mode test are gone with the feature; 56 new tests
+  cover the migration (`test_telemetry_retirement.py`), the absence of every retired surface
+  (`test_telemetry_absence.py`, `test_telemetry_retired_ui.js`), the teardown (`test_retire_telemetry.py`) and the
+  rewritten installer, health-check and release-consistency claims. Every retained claim of a mixed test kept its
+  assertion. CI runs the new files explicitly.
+- The operations helper no longer reads the `docker` path of `/etc/clab-manager/operations.json` (the retired
+  Grafana mode was its only user); `setup-operations.sh` stops validating and writing it, and older files that
+  still carry the key are tolerated.
+
 ## Changes in 1.30.38
 
 **Test logins includes hosts that are excluded from backups.** The lab-wide *Test logins* skipped a device whose
@@ -1141,7 +1262,7 @@ and [GIT-SETUP.md](GIT-SETUP.md#connect-or-switch-a-repository-from-the-manager)
 The map takes its node positions from the annotations file, destroy cleans up, and
 Grafana runs only while someone reads it, with fifteen minutes of history everywhere.
 See [LAB-OPERATIONS.md](LAB-OPERATIONS.md), [TELEMETRY.md](TELEMETRY.md) and
-[GRAFANA-MAP.md](GRAFANA-MAP.md).
+`GRAFANA-MAP.md` (removed with the feature as of 1.30.39; see [TELEMETRY.md](TELEMETRY.md)).
 
 - **Map positions come from the annotations file.** *Deploy lab* and *Save to manager*
   registered the workspace from the topology YAML alone, so every node landed on the
@@ -1244,7 +1365,7 @@ and [REPOSITORY-MAINTENANCE.md](REPOSITORY-MAINTENANCE.md).
 ## Changes in 1.24.0
 
 A Grafana weathermap for every lab, generated by the manager. See
-[GRAFANA-MAP.md](GRAFANA-MAP.md).
+`GRAFANA-MAP.md` (removed with the feature as of 1.30.39; see [TELEMETRY.md](TELEMETRY.md)).
 
 - **Lab map dashboards.** For each lab with a drawing the manager renders an SVG of the
   topology (positions, icons, labels, groups and notes as on its own map) and a Flow

@@ -94,7 +94,7 @@ Browser validation without a VM: `docs/redesign/tools/fixture_manager.py` (the r
 fixture after any `app/*.py` change.
 
 **CI runs an explicit list, not `discover`.** `.github/workflows/release-check.yml` names each Python
-test file with `-p` (only `test_telemetry*.py` and `test_capture*.py` are globs) and each browser test
+test file with `-p` (only `test_capture*.py` is a glob) and each browser test
 file in one `node --test` line. A new test file that is not appended there never runs in CI. The
 deploy-script tests (`test_install_manager.py`, `test_check_*.py`, `test_git_onboard.py`, …) run with the
 system `python3` before the venv is created, so they must stay stdlib-only.
@@ -103,11 +103,11 @@ system `python3` before the venv is created, so they must stay stdlib-only.
 
 **Composition.** `create_app(data_dir)` in `app/main.py` builds one `Store`, then the service objects
 in dependency order (`Runner`, `NodeServices`, `ReadinessMonitor`, `Discovery`, `LabOperations`,
-`GitProgress`, `RestoreService`, `TelemetryManager`, `GrafanaControl`, `Captures`, `Diagnostics`).
+`GitProgress`, `RestoreService`, `TelemetryRetirement`, `Captures`, `Diagnostics`).
 Each feature module owns its routes through an `install(app)` method and reaches its peers through
 `app.state.<name>`; `main.py` itself keeps only inventory, profiles, jobs, downloads and the public lab
-view. The lifespan starts the background threads (runner → discovery → readiness → telemetry →
-Grafana monitor) and closes everything in reverse. Tests call `create_app(<temp dir>)` with `httpx`;
+view. The lifespan starts the background threads (runner → restore → discovery → readiness) and closes
+everything in reverse. Tests call `create_app(<temp dir>)` with `httpx`;
 constructing a `Store` writes startup state, so never point one at live data.
 
 **Public views strip secrets.** Every module that exposes a job or lab has a `public_*` function
@@ -127,14 +127,14 @@ never reach `/api/state`.
    readers wait for stream EOF rather than exit status (keep new readers identical in shape). Helper
    `VERSION` must equal the manager's; the launcher refuses a mixed tree, and
    `deploy/setup-*.sh --refresh` reinstalls a helper.
-2. *The nodes directly*: Ansible `network_cli` (`runner.py`), Paramiko shells (`node_services.py`,
-   `node_readiness.py`, `telemetry_provision.py`, `restore_junos.py`) and gNMI dial-in
-   (`telemetry_collector.py`). Every Ansible run gets its own `HOME` and host-key checking off
+2. *The nodes directly*: Ansible `network_cli` (`runner.py`) and Paramiko shells (`node_services.py`,
+   `node_readiness.py`, `restore_shell.py`, `telemetry_retirement.py`). Every Ansible run gets its own `HOME` and host-key checking off
    (`runner.job_environment`); lab containers regenerate host keys on each deploy.
-3. *The side stacks*: browser Wireshark (`capture.py` discovery → `capture_sessions.py` same-origin
-   relay → `capture_service.py`, the separate container that alone holds the Docker socket) and
-   telemetry (Prometheus scrapes `/api/telemetry/metrics`; Grafana is provisioned from
-   `deploy/telemetry/` and started on demand by `grafana_control.py`).
+3. *The side stack*: browser Wireshark (`capture.py` discovery → `capture_sessions.py` same-origin
+   relay → `capture_service.py`, the separate container that alone holds the Docker socket). The
+   telemetry and Grafana stack was retired as of 1.30.39: `telemetry_retirement.py` is the only remnant
+   (the startup migration of the old lab setting and the removal of the configuration lines the old
+   provisioner added to devices), and `deploy/retire-telemetry.sh` tears the old stack down on a VM.
 
 **Concurrency is one process, one lock.** `store.py` holds a single encrypted JSON document under a
 reentrant lock; the runner is a one-worker pool; `lab_operations.operation_busy` is the shared guard
@@ -151,7 +151,7 @@ queued/running work `interrupted`. There is no multi-instance coordination.
    `window`/`location`/`history`/`localStorage`/document listeners here so the other files still load
    in Node), `app.js` (state, `render`, `PANELS`), then the feature files (`topology-render`,
    `topology`, `home`, `management`, `operations`, `diagram-editor`, `git-progress`, `git-places`,
-   `restore`, `capture`). Standalone pages (`terminal`, `workspace`, `grafana`, `debug`,
+   `restore`, `capture`). Standalone pages (`terminal`, `workspace`, `debug`,
    `vm-connection`, `capture-setup`, `capture-session`, `lab-builder`, `map-editor`) have their own
    small scripts. Because globals are shared, "no reference in this file" never proves a function
    unused: check the other scripts, the HTML, the tests and the Playwright tools.
@@ -279,18 +279,21 @@ One line each; the handoff section named in the routing table has the reasoning 
 - No stroke rule on `.topology-wire path` without excluding `path.capture-hit`.
 - `lab-builder.css` keeps `.lab-builder #root svg{max-width:none}`.
 
-*Side stacks*
-- Prometheus boolean flags are `--flag` / `--no-flag`, never `=true/false`; the hidden TSDB block
-  flags stay together with the pinned image. `PLUGIN`/`PLUGIN_VERSION` are identical in
-  `setup_telemetry.py` and `telemetry_map.py`.
-- Telemetry state `streaming` is set only by an accepted record; the store is memory only; device
-  writes happen only for a decided setting, after real readiness, never during an operation.
+*Side stack and the retired one*
+- Telemetry and Grafana are retired (the one intentional feature removal, decided by the maintainer
+  on 2026-09-23): never reintroduce a collector, dashboard route, provisioning or a Grafana helper mode.
+  What remains is the migration: `telemetry_retirement.py` keeps a lab's ledger of manager-added device
+  lines under the private `telemetry_retired` key until they are removed and read back, and
+  `deploy/retire-telemetry.sh` removes only containers, volumes and networks whose Compose labels prove
+  the old project (`clab-manager-telemetry`), the two pinned images by digest when unused, and the two
+  fixed feature folders (archived by default); `.env` values pointing elsewhere are skipped. Older handoff sections and the
+  redesign inventories that list telemetry capabilities are history, not a contract to restore.
 - Capture: offer the `binary` VNC subprotocol upstream and echo it only when the client offered it;
   `/pcaps` is a labelled tmpfs-backed *volume*, never a container tmpfs mount (the Docker archive API
   cannot see those); `setup-capture.sh` keeps `--force-recreate
   --remove-orphans`; the HMAC identity excludes the interface list.
-- Browser Wireshark and the Grafana dashboards are part of every installation: the installer sets both
-  up and the health check warns when either is disabled.
+- Browser Wireshark is part of every installation: the installer sets it up and the health check warns
+  when it is disabled; the health check also warns while leftovers of the retired telemetry stack exist.
 
 ## Routing table: what to read before touching an area
 
@@ -307,7 +310,7 @@ Sections are headings of `agent instructions.md`, named by their release.
 | Discovery, import, sync, VM connection, helpers' transport | 1.30.17 item 12; 1.26.0 (1); 1.22.0 (2)–(3); 1.19.3; 1.19.1; 1.13.0 and 1.10.0–1.7.0 addenda | `docs/VM-CONNECTION.md`, `docs/DEBUG-PANEL.md` | `test_discovery*.py`, `test_vm_files.py`, `test_import_confirmation.py` |
 | Inventory import, readiness, logins, backups, logging, downloads | 1.22.0; baseline §6–§11 | `clab-backup-ui/NODE-FEATURES.md` | `test_node_readiness.py`, `test_app.py`, `test_downloads.py`, `test_readiness_ui.js` |
 | Terminals, CLI launcher | 1.12.0 and 1.4.0 addenda | `clab-backup-ui/NODE-FEATURES.md` | `test_nodes.py` |
-| Telemetry, Grafana, lab map | 1.26.0 (3); 1.25.0 (1); 1.24.0; 1.23.1; 1.23.0 | `docs/TELEMETRY.md`, `docs/GRAFANA-MAP.md` | `test_telemetry*.py`, `test_grafana_ui.js`, `deploy/telemetry/smoke.py` |
+| Retired telemetry (migration only) | 1.30.39; history in 1.26.0 (3), 1.25.0 (1), 1.24.0, 1.23.x | `docs/TELEMETRY.md` (retirement notice), `docs/technical-audit/TELEMETRY-REMOVAL.md` | `test_telemetry_retirement.py`, `test_telemetry_absence.py`, `test_retire_telemetry.py`, `test_telemetry_retired_ui.js` |
 | Browser Wireshark | 1.22.0 (5); 1.21.1; 1.21.0; 1.20.x | `docs/CAPTURE.md` | `test_capture*.py`, `test_capture_ui.js`, `test_capture_session_ui.js`, `deploy/capture/smoke.py` |
 | Installer, health check, engineer access | 1.25.0 (2); 1.19.4; 1.19.3; 1.19.2; 1.16.0 | `docs/INSTALL.md`, `docs/HEALTH-CHECK.md`, `docs/FRESH-VM-GUIDE-V2.md` | `test_install_manager.py`, `test_check_*.py`, `test_git_onboard.py` |
 | Course structure, lab scaffold | 1.29.0 (live facts) | `docs/NAMING.md` | `test_scaffold_lab.py` |

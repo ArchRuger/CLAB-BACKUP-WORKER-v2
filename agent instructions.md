@@ -1,3 +1,61 @@
+# Technical audit, part 4: backend and state — 1.30.42
+
+Read `docs/technical-audit/PICKUP.md` first. Preserve: (1) list bounds are enforced at write time only:
+`runner.trim_jobs_per_lab` (300 per lab) with `protected_job_ids(state)` (queued/running, captures of pending saves,
+backups of busy or interrupted restores), `git_progress._append_git_job` (200; pending saves and the newest pushed
+entry per binding digest kept), `restore._append_restore_job` (200; `RESTORE_BUSY` and `interrupted` kept); never
+reintroduce a read slice in `/api/state`, and `_finalize()` drops `_candidates`. (2) `lab_operations.OutputWindow`
+is the one path for streamed operation output: secrets replaced per chunk with the longest proper-prefix carry-over,
+only redacted text enters the 512 KiB window, a full window starts at a whole line, `scrub()` still runs on the whole
+buffer at the end; keep the fuzz test that any chunking and cut equals redacting the whole output first. (3) The
+git timeout branch in `runner.py` removes `index.lock`/`config.lock` (single writer). (4) `runner.py`'s late import
+of `lab_operations` guards a real cycle (`runner → lab_operations → topology → runner`); do not move it.
+
+# Technical audit, part 3: deployment and dependencies — 1.30.41
+
+Read `docs/technical-audit/PICKUP.md` first. Preserve: (1) `clab-backup-ui/lab-builder/package.json` carries an
+`overrides` block (`maplibre-gl`, `markdown-it`, `dompurify`) beside the exact `@containerlab/clab-ui` pin; a bump of
+the editor needs `npm audit --package-lock-only` clean, `node build.mjs` then `--check` with Node 24
+(`~/.local/node24` on the dev VM), the builder tests and a browser smoke of drag, link, YAML and the map editor, and a
+release number (the bundle is cached immutable). (2) `install-manager.py` verifies lazydocker against
+`checksums.txt`; a failure of that step is a printed warning, never an installation failure. (3) `recreate-manager.sh`
+chooses `deploy/compose.image.yml` only when `deploy/image.env` sets `MANAGER_IMAGE` and the existing container runs
+it (or no local `clab-backup:<VERSION>` exists); `tests/test_recreate_manager.py` drives a copy of the script with the
+root guard replaced and a fake `docker` on `PATH`. (4) `compose.capture.yml` binds 5001 and 5801 to `127.0.0.1` with
+no override variable.
+
+# Technical audit, part 2: frontend, tooling and guides — 1.30.40
+
+Read `docs/technical-audit/PICKUP.md` first. Preserve: (1) the favourite star's states come from
+`.icon-button use[href="#i-star"]` rules keyed on `aria-pressed` in `style.css`; never add `fill="none"` to the
+shared `#i-star` symbol (a presentation attribute on a `use`-referenced path wins over every stylesheet rule, so the
+pressed state could not fill it); `app.js`'s always-filled star in the lab switcher has no `aria-pressed` and stays
+solid. (2) The base `.topology-wire path` stroke rule carries `:not(.capture-hit)`; `fill: none` still applies to
+both paths (a solid hit path would paint black). (3) `gitWhen` in `git-progress.js` is the one "when" helper of the
+Progress tab; `git-places.js` never loads without it. (4) `docs/redesign/tools/verify_after.py` fills
+`#git-label-dialog` before a plain *Save progress* and asserts `#map-notes` absent and `#topology-hint` present; run
+it against the fixture manager on a fresh `FIXTURE_DATA` (97 checks per viewport). (5) The guides state
+vJunos-switch's requirement (nested virtualisation), not a "cannot run in a VM" limitation.
+
+# Technical audit, part 1: telemetry and Grafana retired — 1.30.39
+
+Read `docs/technical-audit/PICKUP.md` first (branch, environment, chunks, routing), then `AUDIT.md`,
+`FEATURE-PARITY.md` and `TELEMETRY-REMOVAL.md`. The retirement is final and intentional (maintainer decision,
+2026-09-23): never reintroduce a collector, a dashboard route, device provisioning, a Grafana helper mode or the
+`TELEMETRY_*` settings; the redesign inventories and older handoff sections that list telemetry are history.
+Preserve: (1) `app/telemetry_retirement.py` is the only remnant: the startup migration keeps a lab's ledger of
+manager-added device lines under the private `telemetry_retired` key (merged, never overwritten; a malformed
+value kept under `malformed`), `public_lab` strips `telemetry` and `telemetry_retired` and exposes names and
+counts only, and the removal route deletes only recorded lines, refuses foreign statements, pending changes and
+exclusive sessions, reads the device back before clearing an entry, and is guarded by `operation_busy`, in-flight
+restores, running backups and one removal per lab. (2) `deploy/retire-telemetry.sh` finds resources by the Compose
+label `com.docker.compose.project=clab-manager-telemetry` only, validates the two paths under the data root, archives
+by default and refuses a mixed tree; `start-manager.sh` runs it before every build; the health-check row
+`Retired telemetry stack` warns on leftovers. (3) CI names `test_telemetry_retirement.py`, `test_telemetry_absence.py`
+and `test_telemetry_retired_ui.js` in the venv-backed steps and `test_retire_telemetry.py` (stdlib) in the
+system-python step. (4) `docs/technical-audit/` is a history folder for the release check; the audit tooling
+(`tools/upgrade_rehearsal.py`) runs only against a copy of the data directory.
+
 # Setup Script Cleanup Log, part 3 — 1.30.38
 
 Closing release of the stream: read `docs/ui-ux-cleanup/PICKUP.md` (environment, routing, chunks, follow-ups) and the

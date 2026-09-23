@@ -30,8 +30,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 APP_ROOT = HERE.parents[2] / 'clab-backup-ui'
 sys.path.insert(0, str(APP_ROOT))
-os.environ.setdefault('TELEMETRY_COLLECTOR', 'disabled')
-os.environ.setdefault('TELEMETRY_STACK', 'disabled')
 os.environ.setdefault('CAPTURE_PROVIDER', 'disabled')
 
 from fastapi.testclient import TestClient  # noqa: E402

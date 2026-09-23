@@ -13,9 +13,8 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -f /etc/ssh/clab-manager-password.conf && -f /etc/sudoers.d/clab-manager-discovery ]] || { echo 'Set up the discovery account first.' >&2; exit 1; }
 clab_bin=$(readlink -f "$(command -v containerlab)")
-docker_bin=$(readlink -f "$(command -v docker)")
 git_bin=$(command -v git || true)
-for binary in "$clab_bin" "$docker_bin" ${git_bin:+"$git_bin"}; do
+for binary in "$clab_bin" ${git_bin:+"$git_bin"}; do
   [[ "$binary" =~ ^/usr/(local/)?bin/[A-Za-z0-9._-]+$ && $(stat -c %u "$binary") == 0 ]] || { echo 'Use root-owned binaries in /usr/bin or /usr/local/bin.' >&2; exit 1; }
   binary_mode=$(stat -c %a "$binary")
   (( (8#$binary_mode & 8#022) == 0 )) || exit 1
@@ -24,18 +23,18 @@ done
 [[ ! -L /etc/clab-manager && ! -L /etc/clab-manager/operations.json && ! -L /usr/local/sbin/clab-manager-operate && ! -L /usr/local/sbin/clab-manager-gateway && ! -L /usr/local/lib/clab-manager/host_operations.py ]] || exit 1
 install -d -o root -g root -m 0700 /etc/clab-manager
 install -d -o root -g root -m 0755 /srv/containerlab-node-manager/projects
-/usr/bin/python3 - "$clab_bin" "$docker_bin" "$git_bin" "$network" "${roots[@]}" <<'PY'
+/usr/bin/python3 - "$clab_bin" "$git_bin" "$network" "${roots[@]}" <<'PY'
 import json, os, pathlib, sys
 path=pathlib.Path('/etc/clab-manager/operations.json')
 old=json.loads(path.read_text()) if path.exists() else {}
 roots=set(old.get('roots', ['/etc/containerlab','/srv/containerlab-node-manager/projects']))
-for value in sys.argv[5:]:
+for value in sys.argv[4:]:
     p=pathlib.Path(value)
     if not p.is_absolute() or '..' in p.parts or str(p)=='/' or any(q.is_symlink() for q in (p,*p.parents)):
         sys.exit('Use absolute trusted project roots without symlinks; filesystem root is not allowed.')
     roots.add(str(p))
-value=dict(clab=sys.argv[1],docker=sys.argv[2],git=sys.argv[3] or '/usr/bin/git',roots=sorted(roots),
-           projects='/srv/containerlab-node-manager/projects',network=old.get('network',False) or sys.argv[4]=='true',
+value=dict(clab=sys.argv[1],git=sys.argv[2] or '/usr/bin/git',roots=sorted(roots),
+           projects='/srv/containerlab-node-manager/projects',network=old.get('network',False) or sys.argv[3]=='true',
            )
 tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(value));os.chmod(tmp,0o600);os.replace(tmp,path)
 PY

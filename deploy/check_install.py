@@ -206,7 +206,7 @@ class Context:
         return shlex.join(['bash', str(self.source / 'deploy' / script), *args])
 
     def compose(self, stack):
-        """The Compose command line of the capture or telemetry stack, usable from any directory."""
+        """The Compose command line of the capture stack, usable from any directory."""
         return shlex.join(['sudo', 'docker', 'compose', '--env-file', str(self.source / 'clab-backup-ui/.env'),
                            '-f', str(self.source / 'deploy' / f'compose.{stack}.yml')])
 
@@ -613,130 +613,43 @@ def check_capture(ctx):
             + str(ctx.source / 'clab-backup-ui/.env') + ', then run ' + ctx.repair('setup-capture.sh') + '.')
 
 
-def check_telemetry(ctx):
-    """Read-only: the gNMI collector's availability and each linked lab's telemetry verdict."""
-    title = 'Network telemetry'
-    if not ctx.base_url:
-        ctx.add('telemetry', 'SKIP', title, 'Manager HTTP is unavailable; the telemetry collector could not be queried.')
-        return
-    result, health = ctx.http('/api/telemetry/health')
-    if not result.ok or not isinstance(health, dict):
-        ctx.add('telemetry', 'WARN', title, 'The manager did not report a telemetry collector status.',
-                'Update to a release with network telemetry (1.23.0 or later) and rerun.')
-        return
-    if not health.get('enabled'):
-        ctx.add('telemetry', 'INFO', title, 'Disabled; nothing is collected and Grafana stays empty. ' + safe_text(health.get('message') or '', 300),
-                'Rebuild the manager from this source so pygnmi is installed (' + ctx.repair('start-manager.sh') + '), or remove TELEMETRY_COLLECTOR=disabled from '
-                + str(ctx.source / 'clab-backup-ui/.env') + ' and run ' + ctx.repair('recreate-manager.sh') + '.')
-        return
-    result, state = ctx.http('/api/state')
-    labs = [l for l in (state or {}).get('labs', []) if isinstance(l, dict) and l.get('deployment_name')] if result.ok and isinstance(state, dict) else None
-    if labs is None:
-        ctx.add('telemetry', 'WARN', title, 'The collector is ready but the lab list could not be read through the manager.',
-                'Rerun after the manager answers /api/state; check its logs if this persists.')
-        return
-    ctx.manual.append('Telemetry: in Grafana, generate traffic across a wired link and confirm the Interfaces dashboard and the lab map follow it; '
-                      'shut an interface and confirm the map link turns red; check a BGP neighbour state change where BGP runs.')
-    if not labs:
-        ctx.add('telemetry', 'PASS', title, 'gNMI dial-in collector ready (' + safe_text(health.get('library') or 'pygnmi', 40)
-                + '); no deployed lab is linked yet, so nothing is being collected.')
-        return
-    verdicts = {}
-    for lab in labs:
-        status = (lab.get('telemetry') or {}).get('status') if isinstance(lab.get('telemetry'), dict) else None
-        verdicts[status if isinstance(status, str) else 'unknown'] = verdicts.get(status if isinstance(status, str) else 'unknown', 0) + 1
-    summary = ', '.join(f'{count} {name}' for name, count in sorted(verdicts.items()))
-    if verdicts.get('failed'):
-        ctx.add('telemetry', 'WARN', title, f'{len(labs)} linked lab(s): {summary}. At least one node reports a telemetry failure.',
-                'Open Telemetry in the manager for the failure reason (credentials, gNMI port or NOS service), fix it and use Retry now.')
-        return
-    ctx.add('telemetry', 'PASS', title, f'gNMI dial-in collector ready; {len(labs)} linked lab(s): {summary}. '
-            'Streaming means usable samples arrived; waiting labs are still booting or have telemetry turned off.')
+def check_retired_telemetry(ctx):
+    """Read-only: the Grafana/Prometheus telemetry stack was retired; confirm nothing of it remains.
 
-
-def scrape_problem(text):
-    """A controlled description of a Prometheus scrape error; the raw text is never printed."""
-    lowered = str(text or '').lower()
-    if 'status 404' in lowered:
-        return 'the manager answered 404 for /api/telemetry/metrics (a release before 1.23.0, or another service on UI_PORT)'
-    if 'connection refused' in lowered or 'no such host' in lowered or 'timeout' in lowered or 'deadline' in lowered:
-        return 'the manager port did not answer'
-    if 'status' in lowered:
-        return 'the manager answered with an unexpected HTTP status'
-    return 'the scrape failed'
-
-
-def check_telemetry_dashboards(ctx):
-    """Read-only: the optional Grafana stack, when the manager announces it."""
-    title = 'Grafana telemetry dashboards'
-    if not ctx.base_url:
-        ctx.add('telemetry-dashboards', 'SKIP', title, 'Manager HTTP is unavailable; the dashboard settings could not be read.')
+    Ownership is by the Compose project label only, never by container name: a container merely
+    named clab-manager-grafana without the label is not this stack and is left out of the report.
+    """
+    title = 'Retired telemetry stack'
+    docker = ['docker', '--host', 'unix:///var/run/docker.sock']
+    probe = ctx.run([*docker, 'info', '--format', '{{json .ServerVersion}}'], privileged=True)
+    if not probe.ok:
+        ctx.add('telemetry-retired', 'SKIP', title, 'Docker is unavailable; the retired telemetry stack could not be inspected.')
         return
-    result, health = ctx.http('/api/telemetry/health')
-    grafana = health.get('grafana') if result.ok and isinstance(health, dict) else None
-    if not isinstance(grafana, dict) or not grafana.get('enabled'):
-        ctx.add('telemetry-dashboards', 'WARN', title, 'Not installed. Grafana is where telemetry is shown; without it live rates, link state and the lab maps are not visible anywhere.',
-                'Run ' + ctx.repair('setup-telemetry.sh') + ': it starts Prometheus, provisions Grafana (started on request from a lab) with the Flow panel and recreates the manager. See docs/TELEMETRY.md.')
+    label = 'label=com.docker.compose.project=clab-manager-telemetry'
+    containers = ctx.run([*docker, 'ps', '-a', '--filter', label, '--format', '{{.Names}}'], privileged=True)
+    volumes = ctx.run([*docker, 'volume', 'ls', '--filter', label, '--format', '{{.Name}}'], privileged=True)
+    remaining = []
+    if containers.ok and containers.stdout.strip():
+        remaining.append('container(s) ' + ', '.join(sorted(containers.stdout.strip().splitlines())))
+    if volumes.ok and volumes.stdout.strip():
+        remaining.append('volume(s) ' + ', '.join(sorted(volumes.stdout.strip().splitlines())))
+    env_result = ctx.run(['cat', str(ctx.source / 'clab-backup-ui/.env')], privileged=True)
+    leftover_keys = set()
+    if env_result.ok:
+        for line in env_result.stdout.splitlines():
+            match = re.match(r'^\s*(TELEMETRY_[A-Z0-9_]*)\s*=', line)
+            if match:
+                leftover_keys.add(match[1])
+    if leftover_keys:
+        remaining.append('.env key(s) ' + ', '.join(sorted(leftover_keys)))
+    for path in ('/srv/containerlab-node-manager/telemetry', '/srv/containerlab-node-manager/data/telemetry'):
+        if ctx.run(['test', '-e', path], privileged=True).ok:
+            remaining.append('folder ' + path)
+    if remaining:
+        ctx.add('telemetry-retired', 'WARN', title, 'Still present: ' + '; '.join(remaining) + '.',
+                'Run ' + ctx.repair('retire-telemetry.sh') + ' to remove the retired Grafana/Prometheus stack.')
         return
-    port, prometheus = grafana.get('port'), grafana.get('prometheus_port')
-    if not all(isinstance(v, int) and 1 <= v <= 65535 for v in (port, prometheus)):
-        ctx.add('telemetry-dashboards', 'FAIL', title, 'The manager announces Grafana with an invalid port.',
-                'Check TELEMETRY_GRAFANA_PORT and TELEMETRY_PROMETHEUS_PORT in ' + str(ctx.source / 'clab-backup-ui/.env') + ' and rerun ' + ctx.repair('setup-telemetry.sh') + '.')
-        return
-    # Grafana is on demand: stopped until someone opens it from a lab, stopped again after the idle
-    # time. A stopped Grafana is the normal state, not a failure; this check stays read-only and
-    # verifies what it can (Prometheus, the scrape, the lab maps), leaving the Flow panel to a run.
-    control_result, control = ctx.http('/api/telemetry/grafana')
-    control = control if control_result.ok and isinstance(control, dict) else {}
-    stopped = control.get('running') is False
-    if not stopped:
-        ready_result, ready = ctx.http('/api/health', base=f'http://127.0.0.1:{port}')
-        if not ready_result.ok or not isinstance(ready, dict) or ready.get('database') != 'ok':
-            ctx.add('telemetry-dashboards', 'FAIL', title, f'The manager reports Grafana as running, but it did not answer /api/health on 127.0.0.1:{port}.',
-                    'Inspect: ' + ctx.compose('telemetry') + ' ps; then logs --tail=80 grafana; then rerun ' + ctx.repair('setup-telemetry.sh') + '.')
-            return
-    targets_result, targets = ctx.http('/api/v1/targets', base=f'http://127.0.0.1:{prometheus}')
-    if not targets_result.ok:
-        ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana answers, but Prometheus on 127.0.0.1:{prometheus} does not: every dashboard panel shows an error.',
-                'Inspect: ' + ctx.compose('telemetry') + ' ps; then logs --tail=40 prometheus (a restarting container names the rejected flag or file); then rerun ' + ctx.repair('setup-telemetry.sh') + '.')
-        return
-    active = targets.get('data', {}).get('activeTargets', []) if isinstance(targets, dict) and isinstance(targets.get('data'), dict) else None
-    if not isinstance(active, list) or not any(isinstance(t, dict) and t.get('health') == 'up' for t in active):
-        errors = sorted({scrape_problem(t.get('lastError')) for t in (active or []) if isinstance(t, dict) and t.get('lastError')})
-        ctx.add('telemetry-dashboards', 'FAIL', title, f'Grafana and Prometheus answer, but Prometheus on 127.0.0.1:{prometheus} is not scraping the manager'
-                + (': ' + '; '.join(errors) if errors else '') + '.',
-                'Rerun ' + ctx.repair('setup-telemetry.sh') + ': it rewrites the scrape target for the current UI_PORT and recreates the manager with the current .env (the manager must be release 1.23.0 or later).')
-        return
-    maps = health.get('maps') if isinstance(health.get('maps'), dict) else {}
-    if stopped:
-        if maps.get('error'):
-            ctx.add('telemetry-dashboards', 'WARN', title, 'Prometheus is healthy and Grafana is provisioned (stopped until opened), but the manager cannot write its lab maps: ' + safe_text(maps['error'], 200),
-                    'Rerun ' + ctx.repair('setup-telemetry.sh') + ' (it creates TELEMETRY_MAPS_DIR for the manager user and recreates the manager).')
-            return
-        idle = control.get('idle_minutes')
-        ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana is provisioned and stopped until someone opens it: the manager starts it on TCP {port} from a lab\'s Tools tab (Open network dashboard or Open lab map)'
-                + (f' and stops it after {idle} minute{"" if idle == 1 else "s"} without an open dashboard' if isinstance(idle, int) and idle else '')
-                + '. Prometheus scrapes the manager metrics endpoint'
-                + (f' and {maps["dashboards"]} lab map(s) are provisioned.' if isinstance(maps.get('dashboards'), int) else '.'))
-        ctx.manual.append('Grafana: choose Open lab map ↗ or Open network dashboard ↗ (Tools › Telemetry) in a deployed lab, confirm it starts within a minute and shows the Lab overview and the lab map '
-                          '(the Flow panel is verified while Grafana runs; rerun this check then for the full dashboard check).')
-        return
-    settings_result, settings = ctx.http('/api/frontend/settings', base=f'http://127.0.0.1:{port}')
-    panels = settings.get('panels') if settings_result.ok and isinstance(settings, dict) else None
-    if not isinstance(panels, dict) or 'andrewbmchugh-flow-panel' not in panels:
-        ctx.add('telemetry-dashboards', 'WARN', title, f'Grafana on TCP {port} is healthy and Prometheus scrapes the manager, but the Flow panel '
-                '(andrewbmchugh-flow-panel) is not loaded, so the generated lab maps render empty.',
-                'Rerun ' + ctx.repair('setup-telemetry.sh') + ' with access to grafana.com (it installs the pinned plugin into TELEMETRY_CONFIG_DIR/plugins), '
-                'then check: ' + ctx.compose('telemetry') + ' logs --tail=40 grafana')
-        return
-    if maps.get('error'):
-        ctx.add('telemetry-dashboards', 'WARN', title, 'Grafana and Prometheus are healthy, but the manager cannot write its lab maps: ' + safe_text(maps['error'], 200),
-                'Rerun ' + ctx.repair('setup-telemetry.sh') + ' (it creates TELEMETRY_MAPS_DIR for the manager user and recreates the manager).')
-        return
-    ctx.add('telemetry-dashboards', 'PASS', title, f'Grafana on TCP {port} is healthy, Prometheus scrapes the manager metrics endpoint, the Flow panel is loaded'
-            + (f' and {maps["dashboards"]} lab map(s) are provisioned.' if isinstance(maps.get('dashboards'), int) else '.'))
-    ctx.manual.append(f'Grafana: open http://VM_IP:{port}/ from the workstation and confirm the Lab overview dashboard shows the deployed lab and the '
-                      'Lab maps folder holds a map per lab with links coloured by traffic.')
+    ctx.add('telemetry-retired', 'PASS', title, 'No retired telemetry containers, volumes, .env keys or leftover folders were found.')
 
 
 def valid_path(path):
@@ -830,8 +743,7 @@ def main(argv=None):
               ('Installed helper files and sudoers', check_helper_files), ('Restricted helper execution', check_helpers),
               ('Manager SSH and topology folders', check_manager_routes), ('Git helper over saved SSH', check_git_route),
               ('Registered Git checkouts', lambda c: module('check_git').check_git(c)),
-              ('Browser Wireshark capture', check_capture), ('Network telemetry', check_telemetry),
-              ('Grafana telemetry dashboards', check_telemetry_dashboards)]
+              ('Browser Wireshark capture', check_capture), ('Retired telemetry stack', check_retired_telemetry)]
     for title, fn in groups:
         if time.monotonic() >= ctx.deadline:
             ctx.add('deadline', 'SKIP', 'Remaining checks', 'Overall report time budget expired.',

@@ -1,10 +1,9 @@
 # Architecture
 
 The manager is one container on the lab VM. It talks to the VM through a single
-restricted SSH account, to the lab nodes through SSH, Ansible and gNMI, and to the
-browser capture stack through localhost; the Grafana stack beside it scrapes the
-manager's metrics. This page shows those relationships, the sequence that turns a
-topology file into a usable lab, and which module owns what.
+restricted SSH account, to the lab nodes through SSH and Ansible, and to the
+browser capture stack through localhost. This page shows those relationships, the
+sequence that turns a topology file into a usable lab, and which module owns what.
 
 ## System overview
 
@@ -19,18 +18,15 @@ flowchart LR
         C["containerlab + Docker Engine"]
         N[("Lab nodes<br/>cEOS · Junos · XRv9k · Linux")]
         W["Browser capture stack<br/>gostwire · packetflix · session service<br/>Wireshark containers"]
-        T["Telemetry stack<br/>Prometheus (loopback 9090) · Grafana (3000)<br/>dashboards and generated lab maps"]
         K[("Registered Git checkout<br/>owned by a VM account")]
     end
     R[("Git remote<br/>GitHub over HTTPS")]
     B -- "HTTP + WebSocket" --> M
-    B -- "HTTP :3000, read-only viewer" --> T
-    T -- "scrapes /api/telemetry/metrics every 10 s" --> M
     M --- D
     M -- "SSH, password, pinned host key" --> G --> H
     H --> C --> N
     H --> K -- "push with the owner's login" --> R
-    M -- "SSH terminals · readiness probes · Ansible network_cli · gNMI dial-in" --> N
+    M -- "SSH terminals · readiness probes · Ansible network_cli" --> N
     M -- "127.0.0.1:5001 discovery<br/>127.0.0.1:5801 sessions" --> W
     W -. "captures inside the node namespaces" .-> N
 ```
@@ -101,37 +97,6 @@ A node that stops or is redeployed goes back to *booting* and has to answer
 again. Every Ansible run gets its own empty `known_hosts`, because lab containers
 generate new SSH host keys on each deploy.
 
-## Network telemetry
-
-```mermaid
-flowchart LR
-    R["Readiness monitor<br/>show version answered"]
-    T["Telemetry manager<br/>state machine per node"]
-    P["Provisioning (SSH shell)<br/>read service · add missing lines · scoped commit"]
-    C["Collector thread per node<br/>pygnmi dial-in · capabilities · subscriptions"]
-    S[("Session store<br/>memory only · 15 min rings<br/>rates from counter deltas")]
-    X["/api/telemetry/metrics<br/>Prometheus text: names, states, rates"]
-    A["/api/labs/{id}/telemetry<br/>settings · retry · remove-config"]
-    U["Lab actions ▾ › Advanced options › Telemetry settings…<br/>Tools › Open lab map ↗ / Open network dashboard ↗"]
-    MP["Map publisher<br/>one provisioned dashboard per lab<br/>data/telemetry/dashboards"]
-    G["Prometheus scrapes every 10 s, keeps 15 min<br/>Grafana on demand (started from the lab, stopped when idle):<br/>Lab overview · Interfaces · BGP · Lab maps"]
-    N[("NOS gNMI<br/>6030 · 57400 · 32767")]
-    R --> T --> P --> N
-    T --> C <--> N
-    C --> S --> X --> G
-    S --> A --> U
-    T --> MP --> G
-    T -. "stop, destroy, redeploy, removal, reset clear the lab" .-> S
-```
-
-Only the per-lab setting and the exact configuration lines the manager added are
-persisted, in the lab record. Samples never reach `state.enc`, the backups or Git;
-the only files the feature writes are the generated lab-map dashboards under the
-data directory. The manager UI draws no charts: Grafana is where telemetry is read.
-Details, per-NOS support and the live acceptance procedure are in
-[TELEMETRY.md](TELEMETRY.md); the map generator is described in
-[GRAFANA-MAP.md](GRAFANA-MAP.md).
-
 ## Browser packet capture
 
 ```mermaid
@@ -164,10 +129,8 @@ security notes are in [CAPTURE.md](CAPTURE.md).
 | `/etc/clab-manager/` | root | `operations.json` (trusted roots, download permission), `git.json` (registered checkouts), `engineer.json` (VS Code account) |
 | `/usr/local/lib/clab-manager/`, `/usr/local/sbin/clab-manager-*` | root | Installed helper copies and launchers |
 | `/etc/ssh/clab-manager-password.conf`, `/etc/sudoers.d/clab-manager-*` | root | The `clab-discovery` SSH policy and the exact helper permissions |
-| `/srv/containerlab-node-manager/telemetry/` | root; `plugins/` owned by Grafana's user (472) | `prometheus.yml` rendered for the manager's port; the pinned Flow panel plugin |
-| `/srv/containerlab-node-manager/data/telemetry/dashboards/` | UID 10001 | One generated lab-map dashboard per lab, provisioned read-only into Grafana |
 | A registered checkout, for example `~/labs/<repo>` | the VM account that owns it | Saved lab progress; pushed with that account's own Git login |
-| `clab-backup-ui/.env` in the source folder | the installing account | Capture settings (`CAPTURE_*`) and telemetry settings (`TELEMETRY_*`) written by the two setup scripts, read when the manager is created or recreated |
+| `clab-backup-ui/.env` in the source folder | the installing account | Capture settings (`CAPTURE_*`) written by the setup script, read when the manager is created or recreated |
 
 Credentials never leave the encrypted state; API responses and logs scrub
 passwords, keys and passphrases, and helper output is published only in complete
@@ -188,11 +151,10 @@ lines.
 | `app/runner.py` | Ansible `network_cli` backups and login tests, per-job environment and `known_hosts`, output validation, Git history of backups; backups of restore-capable platforms (Junos, EOS, IOS XR) also capture a restore-grade candidate (Junos hierarchical, EOS/IOS XR running-config) |
 | `app/node_services.py` | SSH login checks and browser terminals over WebSocket |
 | `app/node_readiness.py` | Readiness monitor: login and `show version` probes, SSH gating, the automatic login test |
-| `app/telemetry.py`, `app/telemetry_adapters.py`, `app/telemetry_provision.py`, `app/telemetry_collector.py`, `app/telemetry_store.py`, `app/telemetry_names.py`, `app/telemetry_settings.py`, `app/telemetry_metrics.py`, `app/telemetry_map.py` | Automatic network telemetry: the per-node state machine and APIs, the EOS/IOS XR/Junos Evolved adapters (service lines, paths, encodings), the SSH provisioning driver, the pygnmi dial-in collector and normaliser, the bounded in-memory session store, wiring-name mapping, the persistent setting, the Prometheus exposition and the lab-map generator/publisher for the Grafana stack (`deploy/compose.telemetry.yml`, `deploy/setup-telemetry.sh`, `deploy/telemetry/`) |
-| `app/grafana_control.py` | Grafana on demand: starts the dashboards container through the operations helper when a dashboard is opened and stops it after the idle time |
+| `app/telemetry_retirement.py` | Startup migration of a lab's stored telemetry setting: keeps a non-empty ledger of configuration lines the retired feature added to a device as a private `telemetry_retired` record, and the *Remove from devices* action that deletes exactly those lines on the running device, reads it back, and reports `removed`, `absent`, `failed` or `skipped` |
 | `app/capture.py`, `app/capture_sessions.py`, `app/capture_service.py` | Edgeshark discovery and identity checks, the manager-side relay, and the separate session service that owns the Docker socket |
 | `app/topology.py`, `app/layout.py`, `app/drawio_export.py` | Maps from annotations and YAML, layout persistence, draw.io and SuperPuTTY exports |
 | `app/diagnostics.py` | The debug panel and its VM probes |
 | `app/inventory.py` | Ansible inventory parsing, supported kinds and their documented default logins |
-| `app/static/` | The manager UI, plain scripts loaded by `index.html` in a fixed order with no build step: `status.js` (student status vocabulary), `shell.js` (hash router, menus, browser storage), `app.js` (state, rendering, the Grafana link), `topology-render.js` and `topology.js` (the map and its menu), `home.js` (Home: the Deploy and Build cards, Recent labs), `management.js` (VM connection, labs found on the VM, import), `operations.js` (lab commands, topology browser, upload, Telemetry settings), `diagram-editor.js` (the basic map editor for a lab without a topology text), `git-progress.js` and `git-places.js` (the Progress tab and the repository folder browser), `restore.js` (*Apply to running lab*), `capture.js` (Wireshark). Standalone pages with their own scripts: `terminal`, `workspace` (CLI launcher), `grafana`, `debug` (Diagnostics), `vm-connection`, `capture-setup`, `capture-session`, and `map-editor.html` with `map-editor-page.js` (*Edit map*: the lab builder's editor restricted to the map, saving through the map-document API) |
-| `deploy/` | `install.sh` and `install-manager.py` (guided installer), `start-manager.sh` and `recreate-manager.sh`, the `setup-*.sh` VM scripts (discovery, operations, engineer access, Git, capture, telemetry), `check-install.sh` with `check_*.py`, the two stack Compose files with `capture/smoke.py` and `telemetry/smoke.py`, `verify-release.py` and `set-release.py` |
+| `app/static/` | The manager UI, plain scripts loaded by `index.html` in a fixed order with no build step: `status.js` (student status vocabulary), `shell.js` (hash router, menus, browser storage), `app.js` (state, rendering), `topology-render.js` and `topology.js` (the map and its menu), `home.js` (Home: the Deploy and Build cards, Recent labs), `management.js` (VM connection, labs found on the VM, import), `operations.js` (lab commands, topology browser, upload), `diagram-editor.js` (the basic map editor for a lab without a topology text), `git-progress.js` and `git-places.js` (the Progress tab and the repository folder browser), `restore.js` (*Apply to running lab*), `capture.js` (Wireshark). Standalone pages with their own scripts: `terminal`, `workspace` (CLI launcher), `debug` (Diagnostics), `vm-connection`, `capture-setup`, `capture-session`, and `map-editor.html` with `map-editor-page.js` (*Edit map*: the lab builder's editor restricted to the map, saving through the map-document API) |
+| `deploy/` | `install.sh` and `install-manager.py` (guided installer), `start-manager.sh` (runs `retire-telemetry.sh --no-recreate` before building the manager) and `recreate-manager.sh`, the `setup-*.sh` VM scripts (discovery, operations, engineer access, Git, capture), `retire-telemetry.sh` (one-time teardown of a leftover telemetry stack), `check-install.sh` with `check_*.py`, the capture stack Compose file with `capture/smoke.py`, `verify-release.py` and `set-release.py` |

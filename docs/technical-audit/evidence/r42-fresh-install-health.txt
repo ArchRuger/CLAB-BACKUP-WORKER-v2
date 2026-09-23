@@ -1,0 +1,152 @@
+Containerlab Node Manager - installation health report
+==============================================================
+NEEDS ATTENTION
+PASS: 54 | FAIL: 0 | WARN: 3 | SKIP: 0 | INFO: 3
+Source: 1.30.42
+
+[PASS] Administrator inspection access
+  The health-check command runner can execute administrator queries.
+[PASS] Source release
+  Matching source metadata: 1.30.42
+[PASS] Supported installer platform
+  Ubuntu 24.04 on a supported architecture.
+[PASS] VM clock synchronization
+  VM reports 2026-09-23 12:53:57 UTC. NTP reports synchronized; no external time comparison was made.
+[PASS] Source filesystem free space
+  23.0 GiB free (82%) on its current backing filesystem; lab image needs vary.
+[PASS] Default manager data filesystem free space
+  23.0 GiB free (82%) on its current backing filesystem; lab image needs vary.
+[PASS] SSH configuration syntax
+  sshd validates its configuration.
+[PASS] Manager SSH account and restrictions
+  clab-discovery has a set password and the restricted gateway policy for local and sample remote addresses; no password login was attempted.
+[PASS] SSH TCP listener
+  Loopback TCP port 22 accepts connections. SSH socket activation is supported; remote firewall access is not tested.
+[PASS] Ordinary account SFTP configuration
+  SFTP subsystem and ordinary password policy are present; verify a real WinSCP login and upload as your Ubuntu account.
+[PASS] Optional WinSCP root file access
+  Effective sudoers rule permits passwordless root SFTP. WinSCP must use sudo -n /usr/lib/openssh/sftp-server; this grants root file access.
+[INFO] Optional Proxmox guest agent
+  QEMU guest agent is not confirmed installed; the manager does not require it.
+[PASS] KVM device for VM-based network images
+  /dev/kvm is present. Image-specific permissions and successful guest boot remain to be tested.
+[PASS] Engineer access for VS Code / Containerlab extension
+  Configured for student: docker and clab_admins groups, group-writable clab_admins lab folders (/etc/containerlab, /srv/containerlab-node-manager/projects) and the SUID containerlab binary. Group changes need a fresh login.
+[PASS] Docker daemon
+  Local rootful Docker responds on /var/run/docker.sock.
+[PASS] Docker Compose
+  Compose plugin is available.
+[PASS] Manager container
+  The backup-ui container is running.
+[PASS] Restart policy
+  Automatic restart configured.
+[PASS] Manager network
+  Host networking is configured.
+[PASS] Running application version
+  Matches this source release.
+[PASS] Persistent data and encryption key
+  Persistent writable mount, UID 10001 and decryptable saved state verified; no data was written.
+[PASS] Manager HTTP
+  Version response passed at http://127.0.0.1:8081. Workstation access is a separate check.
+[PASS] Containerlab
+  Installed CLI responds.
+[PASS] Deployed lab inspection
+  0 node(s) discovered; 0 not reported running. No deployed labs is normal before the first deployment.
+[PASS] inspect helper installation
+  Root ownership, permissions, regular files and source content match.
+[PASS] operate helper installation
+  Root ownership, permissions, regular files and source content match.
+[WARN] git helper installation
+  Missing, unsafe or stale helper files; privileged helper execution will be skipped: /usr/local/sbin/clab-manager-git, /usr/local/lib/clab-manager/host_git.py, /etc/sudoers.d/clab-manager-git
+  Next: sudo bash /home/student/projects/clab-manager/deploy/setup-git.sh --refresh
+[PASS] Sudoers syntax
+  Sudoers validation passed.
+[PASS] Discovery helper through restricted account
+  Gateway and passwordless helper execution succeeded as clab-discovery; protocol/version are valid.
+[PASS] Operations helper through restricted account
+  Actual gateway/sudo execution as clab-discovery returned matching capabilities.
+[PASS] Core lab commands
+  Deploy, destroy and inspect are available.
+[INFO] Online lab downloads
+  Disabled intentionally by default; this does not break folder browsing.
+[PASS] Saved VM connection settings
+  An enabled connection and host fingerprint are saved; no password was read or printed.
+[PASS] Last discovery result
+  The manager reports discovery connected.
+[PASS] Topology browser over saved SSH connection
+  An uncached request reached the operations helper using the manager saved SSH connection.
+[PASS] Browse folder: /etc/containerlab
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /srv/containerlab-node-manager/projects
+  0 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples
+  42 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/asav01
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/br01
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/cert01
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/ciena_saos
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/clos01
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/clos02
+  3 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/cvx01
+  3 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/cvx02
+  3 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/f5bigipve01
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/fortigate
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/freebsd01
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/frr01
+  4 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/ftdv01
+  0 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/generic_vm01
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/ixiac01
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/k8s_kind01
+  1 visible entry/entries; empty folders are valid.
+[PASS] Browse folder: /etc/containerlab/lab-examples/openbsd01
+  0 visible entry/entries; empty folders are valid.
+[WARN] Folder coverage
+  Stopped after 20 folders; more folders remain unchecked.
+  Next: Rerun with --lab-path /absolute/problem/folder or increase --max-folders.
+[INFO] Git registry through saved SSH connection
+  Local Git helper files are missing or unverified; the SSH request was skipped.
+[WARN] Git repository registry
+  No Git checkout is registered. Git export and push are not configured.
+  Next: As your normal VM account, run: bash /home/student/projects/clab-manager/deploy/setup-git.sh
+[PASS] Browser Wireshark capture
+  Edgeshark discovery through the manager listed 4 capture target(s); the browser session service and pinned image are ready. No capture was started.
+[PASS] Retired telemetry stack
+  No retired telemetry containers, volumes, .env keys or leftover folders were found.
+
+MANUAL VERIFICATION STILL REQUIRED
+  - From the workstation: open the manager using the VM LAN address and configured port.
+  - WinSCP: authenticate as the normal VM user, upload and download a small file; for administrative SFTP test the intended destination.
+  - Devices: verify a real login and configuration capture on the intended NOS nodes.
+  - Git: use Save progress and confirm Pushed plus the expected files on the remote. Remote-read checks cannot prove push permission or branch-rule acceptance.
+  - Wireshark: start a browser capture, confirm live packets, save in /pcaps, download the archive and end the session.
+
+NEEDS ATTENTION (exit 2)
+This report did not install packages, change configuration, start labs or push Git commits.
+
+--- stderr ---
+Checking Source release...
+Checking Ubuntu, clock and SSH/SFTP...
+Checking Docker, manager and persistent storage...
+Checking Containerlab...
+Checking Installed helper files and sudoers...
+Checking Restricted helper execution...
+Checking Manager SSH and topology folders...
+Checking Git helper over saved SSH...
+Checking Registered Git checkouts...
+Checking Browser Wireshark capture...
+Checking Retired telemetry stack...

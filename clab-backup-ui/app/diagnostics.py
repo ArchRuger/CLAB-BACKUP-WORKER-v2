@@ -80,7 +80,7 @@ class Diagnostics:
         with self.store.lock:
             state = self.store.state
             host = state.get('host', {})
-            counts = {name: len(state.get(name, [])) for name in ('labs', 'jobs', 'operations', 'git_jobs')}
+            counts = {name: len(state.get(name, [])) for name in ('labs', 'jobs', 'operations', 'git_jobs', 'restore_jobs')}
             connection = {'configured': bool(host), 'enabled': bool(host.get('enabled')),
                           'password_saved': bool(host.get('password')), 'fingerprint_saved': bool(host.get('fingerprint'))}
         connection.update({key: bool(public.get(key)) for key in ('connected', 'checking', 'file_import_supported')})
@@ -108,8 +108,7 @@ class Diagnostics:
                 return response
             finally:
                 route = getattr(request.scope.get('route'), 'path', '/api/unknown')
-                if status >= 400 or route not in ('/api/state', '/api/debug', '/api/debug/probe', '/api/telemetry/metrics',
-                                                  '/api/labs/{lab_id}/telemetry', '/api/labs/{lab_id}/telemetry/series', '/api/labs/{lab_id}/telemetry/bgp-series'):
+                if status >= 400 or route not in ('/api/state', '/api/debug', '/api/debug/probe'):
                     with self.lock:
                         self.requests.append({'time': timestamp(), 'id': request_id,
                             'method': request.method if request.method in ('GET','POST','PUT','PATCH','DELETE','OPTIONS','HEAD') else 'OTHER',

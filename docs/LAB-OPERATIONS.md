@@ -13,7 +13,7 @@ sudo docker compose -f "$HOME/projects/clab-manager/clab-backup-ui/compose.yml" 
 ```
 
 The launcher first checks source release consistency, refreshes and verifies the
-host helpers, refreshes the browser Wireshark and Grafana stacks, builds the manager
+host helpers, refreshes the browser Wireshark stack, builds the manager
 image without cache and recreates the manager. Open `http://VM_IP:8081`; no UI login
 is required. Linux host networking uses this port directly, without `-p` forwarding.
 Data stays in `/srv/containerlab-node-manager/data` (UID/GID 10001, mode 700).
@@ -31,7 +31,8 @@ actions — **Start lab** (or *Start stopped devices*), **Stop devices**, **Rest
 devices**, **Redeploy lab…**, **Destroy lab…** — and **All lab operations…** opens the
 complete list in three groups: *Deployment*, *Lab tools* and *Danger*. **Advanced options**
 at the bottom of the menu unfolds in place (click, Enter or ArrowRight) and holds **Import map…**,
-**Edit map**, **Telemetry settings…** and **Operation history…**. A disabled item
+**Edit map**, **Operation history…** and, only while the lab still records configuration lines the
+retired telemetry feature added, **Retired telemetry configuration…** (see [TELEMETRY.md](TELEMETRY.md)). A disabled item
 says why underneath it (the VM is not connected, the lab is not running, another
 operation is running, the lab has no topology file on the VM). The **Manager ▾** menu in
 the top bar holds the actions that are not about one lab: **Deploy a new lab…**,
@@ -47,7 +48,6 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Open all CLIs ↗ | A launcher page with one row per device (state pill, Open CLI ↗) and *Open all ready CLIs*. Allow pop-ups; at most 32 CLIs at once. |
 | Add to / Remove from favourites | Sorts the lab first under *All labs* on Home; *Recent labs* is ordered by the last successful deploy or redeploy this manager ran, and nothing else (visits, saves and favourites do not reorder it). |
 | Edit map | Move devices and notes, add text, boxes, circles, lines and groups, style, undo and redo, save and export the map as JSON or draw.io; never changes devices, links or the topology file (see *The map and its editor*). |
-| Telemetry settings… | Telemetry on or off for this lab, the login used for gNMI, why a device is not streaming, retry, removal of the lines the manager added, and the network dashboard's state. |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the lab is running. |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
 | Upload a file from this computer… (Home › Deploy, and the link in the topology browser) | For a topology file that is on your computer: the browser reads it, the manager checks that it is a topology it can read, you see the text and where it will be written, **Create file on the VM…** runs as a reviewed operation, and **Deploy or add this lab…** continues as for any file on the VM. Only that one file is uploaded (up to 1 MiB); files it refers to must be on the VM. A copied lab's saved map (`<topology>.annotations.json`, up to 1 MiB) can be added at the same time so devices keep their positions; it travels through the same review and is written beside the topology under its own name regardless of what the file on your computer was called, with a notice when that name differs and, if a map file is already there, a "Replaces the existing map file" notice in the review. |
@@ -78,7 +78,10 @@ in the lab banner (*Stopping devices…* with **View output**); confirming *Star
 instead opens its live output immediately, with no second click — closing that window on
 purpose does not bring it back on its own, and **View output** or a new *Start lab* still
 open it again. The result window otherwise opens on its own only for actions that produce
-something to read, such as *Show running devices*.
+something to read, such as *Show running devices*. The same banner also carries standing
+notices that are not tied to one operation, such as configuration lines the retired
+telemetry feature left on a device, with a **Review and remove…** action (see
+[TELEMETRY.md](TELEMETRY.md)).
 
 ## Device readiness after deployment
 
@@ -98,19 +101,6 @@ login refused three times in a row reads *Needs attention* with the remedy (add 
 the credentials); **Test login now** in the device panel stays available for a manual
 retry. Every backup or login check runs with its own empty `known_hosts`, so a
 redeployed lab (new SSH host keys) never fails with *host key mismatch*.
-
-## Telemetry after readiness
-
-With telemetry on (the default for labs created since 1.23.0; earlier labs turn it on
-once under **Lab actions ▾ › Advanced options › Telemetry settings…**), every device that has answered
-`show version` is checked over SSH for its gNMI service, missing lines are added with
-the NOS's scoped commit, and a gNMI subscription streams interface rates, link state and
-BGP neighbours into memory for Prometheus to scrape. **Open lab map ↗** (or **Open
-network dashboard ↗**) on the Tools tab opens the lab's Grafana map or dashboards,
-starting Grafana on the VM first when it is stopped (it stops itself after 15 minutes
-without a viewer; *Telemetry settings…* shows its state and can stop it now). A stop,
-destroy, redeploy or removal clears the session. Details, per-NOS support and the
-acceptance procedure are in [TELEMETRY.md](TELEMETRY.md).
 
 ## The map and its editor
 

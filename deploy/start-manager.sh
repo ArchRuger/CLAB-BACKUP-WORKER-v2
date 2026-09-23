@@ -10,7 +10,7 @@ while [[ $# -gt 0 ]]; do
     --lab-root) [[ $# -ge 2 ]] || exit 64; operation_args+=("$1" "$2"); operations=true; shift 2;;
     --allow-downloads) operation_args+=("$1"); operations=true; shift;;
     --manager-only) manager_only=true; shift;;
-    *) echo 'Options: --reset-password, --enable-operations, --lab-root PATH, --allow-downloads, --manager-only (skip the browser Wireshark and Grafana stacks). Public keys are no longer used.' >&2; exit 64;;
+    *) echo 'Options: --reset-password, --enable-operations, --lab-root PATH, --allow-downloads, --manager-only (skip the browser Wireshark stack). Public keys are no longer used.' >&2; exit 64;;
   esac
 done
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -52,10 +52,13 @@ fi
 # Root-only helper checks cannot prove the account's forced gateway can invoke
 # them. Exercise the same read-only requests under clab-discovery before build.
 /usr/bin/python3 "$script_dir/verify-gateway.py" "$expected" "${gateway_args[@]}"
-# The browser Wireshark stack and the Grafana dashboards are part of every installation and
-# follow the release (the session service image carries the version), so an upgrade refreshes
-# them before the manager is created with the settings they write into clab-backup-ui/.env.
-# An explicit 'disabled' written by setup-capture.sh --remove or setup-telemetry.sh --remove is respected.
+# The browser Wireshark stack is part of every installation and follows the release (the
+# session service image carries the version), so an upgrade refreshes it before the manager is
+# created with the settings it writes into clab-backup-ui/.env. An explicit 'disabled' written
+# by setup-capture.sh --remove is respected. The retired Grafana/Prometheus telemetry stack is
+# always cleaned up too (a no-op once nothing of it remains); it runs once here, before the
+# image build, and again below after the new manager is up, since the old manager's own
+# background loop can recreate its data folder while it is still running.
 env_file="$repo_dir/clab-backup-ui/.env"
 env_value() { local value=''; if [[ -f "$env_file" ]]; then value=$(grep -E "^$1=" "$env_file" | tail -n 1 | cut -d= -f2- || true); fi; printf '%s' "$value"; }
 if ! $manager_only; then
@@ -64,12 +67,8 @@ if ! $manager_only; then
   else
     bash "$script_dir/setup-capture.sh" --no-recreate
   fi
-  if [[ $(env_value TELEMETRY_STACK) == disabled ]]; then
-    echo 'Grafana dashboards are disabled in clab-backup-ui/.env; their stack is left alone (sudo bash deploy/setup-telemetry.sh re-enables them).'
-  else
-    bash "$script_dir/setup-telemetry.sh" --no-recreate
-  fi
 fi
+bash "$script_dir/retire-telemetry.sh" --no-recreate
 cd -- "$repo_dir"
 docker compose -f clab-backup-ui/compose.yml build --pull --no-cache
 # Avoid starting a second manager over data owned by a docker-run installation.
@@ -89,9 +88,13 @@ print("yes" if any(m.get("Source", "").rstrip("/") == "/srv/containerlab-node-ma
   fi
 done
 docker compose -f clab-backup-ui/compose.yml up -d --force-recreate
+# The old manager's own telemetry loop can recreate its data folder every few seconds while it
+# runs; repeat the retirement now that the new manager (which has no such loop) is up, so nothing
+# reappears after the early call above. Idempotent: a no-op once nothing of the old stack remains.
+bash "$script_dir/retire-telemetry.sh" --no-recreate
 docker compose -f clab-backup-ui/compose.yml ps
 echo 'Open the manager on TCP 8081 (or your configured UI_PORT). Saved data and existing discovery password are retained.'
-$manager_only || echo 'Wireshark opens from the map (Capture packets); Grafana (dashboards and lab maps, TCP 3000 or TELEMETRY_GRAFANA_PORT) starts when you open it from a lab and stops itself when nobody reads it.'
+$manager_only || echo 'Wireshark opens from the map (Capture packets).'
 printf 'Optional Git setup: as your ordinary VM account, run (without sudo):\n  bash %q\n' "$script_dir/setup-git.sh"
 echo 'Use the guided prompts to configure commit name/email and GitHub login, then register. See docs/GIT-SETUP.md.'
 echo 'The UI opens directly without a login. VM and device SSH credentials remain in persistent storage.'

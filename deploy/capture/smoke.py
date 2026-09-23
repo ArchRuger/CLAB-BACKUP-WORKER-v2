@@ -67,7 +67,7 @@ def main():
     if command('docker', 'ps', '-aq', '--filter', 'label=' + LABEL,
                capture_output=True, text=True).stdout.strip():
         sys.exit('Refusing to touch existing capture session containers. Use an isolated Docker host.')
-    env = {**os.environ, 'CAPTURE_SESSION_TOKEN': secrets.token_hex(32), 'CAPTURE_BIND': '127.0.0.1', 'CAPTURE_PORT': '5001'}
+    env = {**os.environ, 'CAPTURE_SESSION_TOKEN': secrets.token_hex(32)}
     compose = ['docker', 'compose', '-f', str(ROOT / 'deploy/compose.capture.yml')]
     headers = {'Authorization': 'Bearer ' + env['CAPTURE_SESSION_TOKEN'], 'X-Capture-Owner': secrets.token_hex(32)}
     client = httpx.Client(base_url='http://127.0.0.1:5801', headers=headers, timeout=45, trust_env=False)

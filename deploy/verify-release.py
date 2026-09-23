@@ -15,8 +15,8 @@ written as ``since 1.19.3`` or ``1.22.0 or later``, which is allowed anywhere; t
 (``docs/CHANGELOG.md``, ``clab-backup-ui/VALIDATION.md``, ``agent instructions.md``),
 ``docs/archive/``, the design notes under ``docs/redesign/``, the per-release review log under
 ``docs/ui-review-001/`` and the acceptance records under ``docs/multi-platform-restore/``, ``docs/save-location-fix/`` and the student quick start under
-``docs/student-quick-start/`` (its guide states the release it was tested with) may name any release. A third-party version that shares the manager's major
-number (the Flow panel, for example) is recognised by the component name before it.
+``docs/student-quick-start/`` (its guide states the release it was tested with) and the technical audit under ``docs/technical-audit/`` may name any release. A third-party version that shares the manager's major
+number (xterm, for example) is recognised by the component name before it.
 
 ``python3 deploy/verify-release.py`` runs both checks (CI does the same);
 ``python3 deploy/set-release.py NEW`` moves every marker to the next release.
@@ -37,7 +37,7 @@ FIELDS = {
     # Footer fallback shown before the first /api/state response arrives.
     'clab-backup-ui/app/static/app.js': r"state\.version\|\|'([^']+)'",
 }
-for name in ('index.html', 'terminal.html', 'workspace.html', 'vm-connection.html', 'debug.html', 'capture-setup.html', 'capture-session.html', 'grafana.html', 'lab-builder.html', 'map-editor.html'):
+for name in ('index.html', 'terminal.html', 'workspace.html', 'vm-connection.html', 'debug.html', 'capture-setup.html', 'capture-session.html', 'lab-builder.html', 'map-editor.html'):
     FIELDS['clab-backup-ui/app/static/' + name] = r'/static/[^"\s?]+\?v=([^"\s]+)'
 
 # Living documentation: what a user or an agent reads for the current release.
@@ -46,7 +46,7 @@ DOC_ROOTS = ('README.md', 'docs', 'deploy', 'clab-backup-ui/README.md', 'clab-ba
 # Release history: may name any release.
 HISTORY_FILES = ('docs/CHANGELOG.md', 'clab-backup-ui/VALIDATION.md', 'agent instructions.md')
 HISTORY_DIRS = ('docs/archive/', 'docs/redesign/', 'docs/ui-review-001/', 'docs/multi-platform-restore/', 'docs/save-location-fix/', 'docs/ui-ux-cleanup/',
-                'docs/student-quick-start/')
+                'docs/student-quick-start/', 'docs/technical-audit/')
 # Where the current release must be named first, and how.
 LEADS = {
     'README.md': r'Current release: \*\*(\d+\.\d+\.\d+)\*\*',
@@ -62,8 +62,8 @@ HISTORY_BEFORE = re.compile(r'(?:since|before|until|introduced in|added in|new i
 HISTORY_AFTER = re.compile(r'^\**\s+(?:or|and)\s+(?:later|earlier|newer|older)\b', re.I)
 # A component whose own version can share the manager's major number, named shortly before it,
 # or the file name of an archived guide (docs/archive/UI-UPDATE-1.12.1.md) in a link.
-THIRD_PARTY = re.compile(r'(?:flow[- ]panel|andrewbmchugh|xterm|addon-fit|novnc|packetflix|edgeshark|gostwire|ghostwire|'
-                         r'pygnmi|grpcio|protobuf|dictdiffer|paramiko|websockify|cshargextcap|plugin|archive/)[^\n]{0,40}$', re.I)
+THIRD_PARTY = re.compile(r'(?:xterm|addon-fit|novnc|packetflix|edgeshark|gostwire|ghostwire|'
+                         r'paramiko|websockify|cshargextcap|plugin|archive/)[^\n]{0,40}$', re.I)
 VERSIONED_PATH = re.compile(r'projects/v\d+\.\d+\.\d+')
 VERSIONED_IMAGE = re.compile(r'clab-(?:backup|capture-service):\d+\.\d+\.\d+')
 

@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 import paramiko
 
 from .discovery import discovery_fresh, lab_status, node_available
+from .lab_operations import operation_busy
 from .node_services import connect
 from .runner import CLI_ERROR, effective_credentials, now
 
@@ -142,7 +143,6 @@ class ReadinessMonitor:
 
     def scan(self):
         """One pass: drop stale results, launch due probes and run pending login tests."""
-        from .lab_operations import operation_busy
         if self.store.reset_pending: return
         state = self.store.snapshot()
         fresh = discovery_fresh(state)
