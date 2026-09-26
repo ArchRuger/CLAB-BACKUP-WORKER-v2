@@ -1,0 +1,8545 @@
+{
+  "attributes": {
+    "bfd": {
+      "global": {
+        "min_echo_rx": {
+          "min_value": 0,
+          "type": "int"
+        },
+        "min_rx": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "min_tx": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "multiplier": {
+          "min_value": 0,
+          "type": "int"
+        }
+      },
+      "link": {
+        "min_echo_rx": {
+          "min_value": 0,
+          "type": "int"
+        },
+        "min_rx": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "min_tx": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "multiplier": {
+          "min_value": 0,
+          "type": "int"
+        }
+      },
+      "node": {
+        "min_echo_rx": {
+          "min_value": 0,
+          "type": "int"
+        },
+        "min_rx": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "min_tx": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "multiplier": {
+          "min_value": 0,
+          "type": "int"
+        }
+      }
+    },
+    "bgp": {
+      "_inherit_community": {
+        "localas_ibgp": "ibgp"
+      },
+      "as_list": {
+        "_keytype": "int",
+        "_subtype": {
+          "members": {
+            "_required": true,
+            "_subtype": "str",
+            "type": "list"
+          },
+          "name": "str",
+          "rr": {
+            "_subtype": "str",
+            "type": "list"
+          }
+        },
+        "type": "dict"
+      },
+      "global": {
+        "activate": {
+          "ipv4": {
+            "_subtype": "bgp_session_type",
+            "type": "list"
+          },
+          "ipv6": {
+            "_subtype": "bgp_session_type",
+            "type": "list"
+          }
+        },
+        "advertise_loopback": "bool",
+        "advertise_roles": "list",
+        "as": "asn",
+        "as_list": "dict",
+        "community": {
+          "_value_to_dict": {
+            "ebgp": "{value}",
+            "ibgp": "{value}"
+          },
+          "ebgp": {
+            "_subtype": "bgp_community_type",
+            "type": "list"
+          },
+          "ibgp": {
+            "_subtype": "bgp_community_type",
+            "type": "list"
+          }
+        },
+        "confederation": {
+          "_keytype": "asn",
+          "_subtype": {
+            "members": {
+              "_subtype": "asn",
+              "type": "list"
+            }
+          },
+          "type": "dict"
+        },
+        "ebgp_role": "str",
+        "next_hop_self": "bool",
+        "replace_global_as": "bool",
+        "rr_cluster_id": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "rr_list": "list",
+        "rr_mesh": "bool",
+        "sessions": {
+          "ipv4": {
+            "_subtype": "bgp_session_type",
+            "type": "list"
+          },
+          "ipv6": {
+            "_subtype": "bgp_session_type",
+            "type": "list"
+          }
+        }
+      },
+      "interface": {
+        "local_as": "asn",
+        "replace_global_as": "bool"
+      },
+      "link": {
+        "advertise": {
+          "_intra_as": true,
+          "type": "bool"
+        }
+      },
+      "loopback": {
+        "advertise": "bool"
+      },
+      "node": {
+        "activate": {
+          "ipv4": {
+            "_subtype": "bgp_session_type",
+            "type": "list"
+          },
+          "ipv6": {
+            "_subtype": "bgp_session_type",
+            "type": "list"
+          }
+        },
+        "advertise": "bgp_prefix_list",
+        "advertise_loopback": "bool",
+        "as": {
+          "_required": true,
+          "type": "asn"
+        },
+        "community": {
+          "_value_to_dict": {
+            "ebgp": "{value}",
+            "ibgp": "{value}"
+          },
+          "ebgp": {
+            "_subtype": "bgp_community_type",
+            "type": "list"
+          },
+          "ibgp": {
+            "_subtype": "bgp_community_type",
+            "type": "list"
+          }
+        },
+        "import": "_r_import",
+        "local_as": "asn",
+        "next_hop_self": "bool",
+        "originate": "bgp_prefix_list",
+        "replace_global_as": "bool",
+        "router_id": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "rr": "bool",
+        "rr_cluster_id": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "rr_mesh": "bool",
+        "sessions": {
+          "ipv4": {
+            "_subtype": "bgp_session_type",
+            "type": "list"
+          },
+          "ipv6": {
+            "_subtype": "bgp_session_type",
+            "type": "list"
+          }
+        }
+      },
+      "vrf": {
+        "advertise": "bgp_prefix_list",
+        "import": "_r_import",
+        "originate": "bgp_prefix_list",
+        "router_id": {
+          "type": "ipv4",
+          "use": "id"
+        }
+      }
+    },
+    "dhcp": {
+      "interface": {
+        "client": {
+          "default": "bool",
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "server": {
+          "_subtype": "node_id",
+          "type": "list"
+        },
+        "vrf": "str"
+      },
+      "link": {
+        "client": {
+          "default": "bool",
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "subnet": {
+          "ipv4": "bool",
+          "ipv6": "bool"
+        }
+      },
+      "node": {
+        "server": "bool",
+        "vrf": "bool"
+      }
+    },
+    "eigrp": {
+      "global": {
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "as": "asn"
+      },
+      "link": {
+        "passive": "bool"
+      },
+      "node": {
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "as": "asn"
+      }
+    },
+    "evpn": {
+      "global": {
+        "as": "asn",
+        "session": [
+          "ibgp",
+          "ebgp"
+        ],
+        "start_transit_vni": {
+          "max_value": 16777215,
+          "min_value": 1,
+          "type": "int"
+        },
+        "transport": {
+          "type": "str",
+          "valid_values": [
+            "vxlan",
+            "mpls",
+            "sr"
+          ]
+        },
+        "vlans": "list",
+        "vrfs": "list"
+      },
+      "node": {
+        "domain": "str",
+        "session": [
+          "ibgp",
+          "ebgp"
+        ],
+        "vlans": "list",
+        "vrfs": "list"
+      },
+      "node_vlan": {
+        "export": "list",
+        "import": "list"
+      },
+      "vlan": {
+        "evi": "rd",
+        "export": "list",
+        "import": "list",
+        "rd": "rd"
+      },
+      "vrf": {
+        "bundle": {
+          "type": "str",
+          "valid_values": [
+            "vlan_aware",
+            "vlan",
+            "port",
+            "port_vlan"
+          ]
+        },
+        "transit_vni": {
+          "_alt_types": [
+            "str",
+            "bool"
+          ],
+          "max_value": 16777215,
+          "min_value": 1,
+          "type": "int"
+        }
+      }
+    },
+    "gateway": {
+      "global": {
+        "anycast": {
+          "mac": "mac",
+          "unicast": "bool"
+        },
+        "id": "int",
+        "protocol": {
+          "type": "str",
+          "valid_values": [
+            "anycast",
+            "vrrp"
+          ]
+        },
+        "vrrp": {
+          "group": "int",
+          "preempt": "bool",
+          "priority": "int"
+        }
+      },
+      "link": {
+        "anycast": {
+          "mac": "mac",
+          "unicast": "bool"
+        },
+        "id": "int",
+        "ipv4": {
+          "type": "ipv4",
+          "use": "interface"
+        },
+        "ipv6": {
+          "type": "ipv6",
+          "use": "interface"
+        },
+        "protocol": {
+          "type": "str",
+          "valid_values": [
+            "anycast",
+            "vrrp"
+          ]
+        },
+        "vrrp": {
+          "group": "int",
+          "preempt": "bool",
+          "priority": "int"
+        }
+      },
+      "node": {
+        "anycast": {
+          "mac": "mac",
+          "unicast": "bool"
+        },
+        "vrrp": {
+          "group": "int",
+          "preempt": "bool",
+          "priority": "int"
+        }
+      }
+    },
+    "isis": {
+      "global": {
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "area": "net",
+        "bfd": {
+          "_alt_types": [
+            "bool"
+          ],
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "instance": "str",
+        "type": {
+          "type": "str",
+          "valid_values": [
+            "level-1",
+            "level-2",
+            "level-1-2"
+          ]
+        }
+      },
+      "link": {
+        "bfd": {
+          "_alt_types": [
+            "bool"
+          ],
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "cost": {
+          "max_value": 16777215,
+          "min_value": 1,
+          "type": "int"
+        },
+        "metric": {
+          "max_value": 16777215,
+          "min_value": 1,
+          "type": "int"
+        },
+        "network_type": {
+          "_alt_types": [
+            "bool"
+          ],
+          "type": "str",
+          "valid_values": [
+            "point-to-point"
+          ]
+        },
+        "passive": "bool",
+        "type": {
+          "type": "str",
+          "valid_values": [
+            "level-1",
+            "level-2",
+            "level-1-2"
+          ]
+        }
+      },
+      "loopback": {
+        "cost": {
+          "max_value": 16777215,
+          "min_value": 1,
+          "type": "int"
+        },
+        "metric": {
+          "max_value": 16777215,
+          "min_value": 1,
+          "type": "int"
+        },
+        "type": {
+          "type": "str",
+          "valid_values": [
+            "level-1",
+            "level-2",
+            "level-1-2"
+          ]
+        }
+      },
+      "node": {
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "area": "net",
+        "bfd": {
+          "_alt_types": [
+            "bool"
+          ],
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "import": "_r_import",
+        "instance": "str",
+        "net": "net",
+        "type": {
+          "type": "str",
+          "valid_values": [
+            "level-1",
+            "level-2",
+            "level-1-2"
+          ]
+        }
+      },
+      "vrf": {
+        "active": "bool",
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        }
+      }
+    },
+    "lag": {
+      "global": {
+        "lacp": {
+          "type": "str",
+          "valid_values": [
+            "off",
+            "slow",
+            "fast"
+          ]
+        },
+        "lacp_mode": {
+          "type": "str",
+          "valid_values": [
+            "passive",
+            "active"
+          ]
+        },
+        "mode": {
+          "type": "str",
+          "valid_values": [
+            "802.3ad",
+            "balance-xor"
+          ]
+        }
+      },
+      "interface": {
+        "lacp_system_id": {
+          "_alt_types": [
+            "int"
+          ],
+          "type": "mac"
+        }
+      },
+      "lag_l2_linkattr": {
+        "bandwidth": null,
+        "lacp_system_id": null,
+        "mtu": null
+      },
+      "lag_member_linkattr": {
+        "_linkname": null,
+        "bandwidth": null,
+        "interfaces": null,
+        "mtu": null
+      },
+      "lag_no_propagate": {
+        "_linkname": null,
+        "ifindex": null,
+        "interfaces": null,
+        "name": null
+      },
+      "link": {
+        "ifindex": {
+          "max_value": 10000,
+          "min_value": 0,
+          "type": "int"
+        },
+        "lacp": {
+          "type": "str",
+          "valid_values": [
+            "off",
+            "slow",
+            "fast"
+          ]
+        },
+        "lacp_mode": {
+          "type": "str",
+          "valid_values": [
+            "passive",
+            "active"
+          ]
+        },
+        "members": null,
+        "mlag": {
+          "mac": "mac",
+          "peergroup": {
+            "_alt_types": [
+              "bool"
+            ],
+            "min_value": 1,
+            "type": "int"
+          }
+        },
+        "mode": {
+          "type": "str",
+          "valid_values": [
+            "802.3ad",
+            "balance-xor"
+          ]
+        }
+      },
+      "node": {
+        "lacp": {
+          "type": "str",
+          "valid_values": [
+            "off",
+            "slow",
+            "fast"
+          ]
+        },
+        "lacp_mode": {
+          "type": "str",
+          "valid_values": [
+            "passive",
+            "active"
+          ]
+        },
+        "mlag": {
+          "mac": "mac"
+        },
+        "mode": {
+          "type": "str",
+          "valid_values": [
+            "802.3ad",
+            "balance-xor"
+          ]
+        }
+      }
+    },
+    "mpls": {
+      "global": {
+        "6pe": {
+          "true_value": [
+            "ibgp"
+          ],
+          "type": "list",
+          "valid_values": [
+            "ibgp",
+            "ebgp"
+          ]
+        },
+        "bgp": {
+          "_alt_types": [
+            "bool",
+            "BoxList"
+          ],
+          "disable_unlabeled": "bool",
+          "explicit_null": "bool",
+          "ipv4": {
+            "true_value": [
+              "ibgp",
+              "ebgp"
+            ],
+            "type": "list"
+          },
+          "ipv6": {
+            "true_value": [
+              "ibgp",
+              "ebgp"
+            ],
+            "type": "list"
+          }
+        },
+        "ldp": {
+          "_alt_types": [
+            "bool"
+          ],
+          "advertise": "list",
+          "explicit_null": "bool",
+          "igp_sync": "bool",
+          "router_id": {
+            "type": "ipv4",
+            "use": "id"
+          }
+        },
+        "vpn": {
+          "_alt_types": [
+            "bool",
+            "BoxList"
+          ],
+          "ipv4": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list"
+          },
+          "ipv6": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list"
+          }
+        }
+      },
+      "link": {
+        "ldp": "bool"
+      },
+      "node": {
+        "6pe": {
+          "true_value": [
+            "ibgp"
+          ],
+          "type": "list",
+          "valid_values": [
+            "ibgp",
+            "ebgp"
+          ]
+        },
+        "bgp": {
+          "_alt_types": [
+            "bool",
+            "BoxList"
+          ],
+          "disable_unlabeled": "bool",
+          "explicit_null": "bool",
+          "ipv4": {
+            "true_value": [
+              "ibgp",
+              "ebgp"
+            ],
+            "type": "list"
+          },
+          "ipv6": {
+            "true_value": [
+              "ibgp",
+              "ebgp"
+            ],
+            "type": "list"
+          }
+        },
+        "ldp": {
+          "_alt_types": [
+            "bool"
+          ],
+          "advertise": "list",
+          "explicit_null": "bool",
+          "igp_sync": "bool",
+          "router_id": {
+            "type": "ipv4",
+            "use": "id"
+          }
+        },
+        "vpn": {
+          "_alt_types": [
+            "bool",
+            "BoxList"
+          ],
+          "ipv4": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list"
+          },
+          "ipv6": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list"
+          }
+        }
+      }
+    },
+    "ospf": {
+      "global": {
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "area": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "bfd": {
+          "_alt_types": [
+            "bool"
+          ],
+          "ipv4": "bool",
+          "ipv6": "bool",
+          "strict": "bool",
+          "strict_delay": {
+            "max_value": 600,
+            "min_value": 0,
+            "type": "int"
+          }
+        },
+        "passive": "bool",
+        "password": "str",
+        "process": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "reference_bandwidth": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "timers": {
+          "dead": {
+            "max_value": 8192,
+            "min_value": 3,
+            "type": "int"
+          },
+          "hello": {
+            "max_value": 8192,
+            "min_value": 1,
+            "type": "int"
+          }
+        }
+      },
+      "interface": {
+        "priority": {
+          "max_value": 255,
+          "min_value": 0,
+          "type": "int"
+        }
+      },
+      "link": {
+        "area": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "bfd": "bool",
+        "cost": {
+          "max_value": 65534,
+          "min_value": 1,
+          "type": "int"
+        },
+        "digest": {
+          "type": "dict"
+        },
+        "network_type": {
+          "type": "str",
+          "valid_values": [
+            "point-to-point",
+            "point-to-multipoint",
+            "broadcast",
+            "non-broadcast"
+          ]
+        },
+        "passive": "bool",
+        "password": "str",
+        "timers": {
+          "dead": {
+            "max_value": 8192,
+            "min_value": 3,
+            "type": "int"
+          },
+          "hello": {
+            "max_value": 8192,
+            "min_value": 1,
+            "type": "int"
+          }
+        }
+      },
+      "loopback": {
+        "area": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "cost": {
+          "max_value": 65534,
+          "min_value": 1,
+          "type": "int"
+        }
+      },
+      "node": {
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "area": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "bfd": {
+          "_alt_types": [
+            "bool"
+          ],
+          "ipv4": "bool",
+          "ipv6": "bool",
+          "strict": "bool",
+          "strict_delay": {
+            "max_value": 600,
+            "min_value": 0,
+            "type": "int"
+          }
+        },
+        "default": {
+          "_alt_types": [
+            "bool"
+          ],
+          "_keys": {
+            "always": "bool",
+            "cost": "int",
+            "policy": "id",
+            "type": {
+              "type": "str",
+              "valid_values": [
+                "e1",
+                "e2"
+              ]
+            }
+          },
+          "type": "dict"
+        },
+        "digest": {
+          "type": "dict"
+        },
+        "gr": {
+          "_remove_when_false": true,
+          "_value_to_dict": {
+            "restart": "{value}"
+          },
+          "helper": {
+            "_keys": {
+              "grace_period": {
+                "max_value": 1800,
+                "min_value": 10,
+                "type": "int"
+              }
+            },
+            "_remove_when_false": true,
+            "true_value": {},
+            "type": "dict"
+          },
+          "restart": {
+            "_keys": {
+              "grace_period": {
+                "max_value": 1800,
+                "min_value": 1,
+                "type": "int"
+              }
+            },
+            "_remove_when_false": true,
+            "true_value": {},
+            "type": "dict"
+          }
+        },
+        "import": "_r_import",
+        "passive": "bool",
+        "password": "str",
+        "priority": {
+          "max_value": 255,
+          "min_value": 0,
+          "type": "int"
+        },
+        "process": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "reference_bandwidth": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "router_id": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "timers": {
+          "dead": {
+            "max_value": 8192,
+            "min_value": 3,
+            "type": "int"
+          },
+          "hello": {
+            "max_value": 8192,
+            "min_value": 1,
+            "type": "int"
+          }
+        }
+      },
+      "vrf": {
+        "active": "bool",
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "area": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "default": {
+          "_alt_types": [
+            "bool"
+          ],
+          "_keys": {
+            "always": "bool",
+            "cost": "int",
+            "policy": "id",
+            "type": {
+              "type": "str",
+              "valid_values": [
+                "e1",
+                "e2"
+              ]
+            }
+          },
+          "type": "dict"
+        },
+        "digest": {
+          "type": "dict"
+        },
+        "gr": {
+          "_remove_when_false": true,
+          "_value_to_dict": {
+            "restart": "{value}"
+          },
+          "helper": {
+            "_keys": {
+              "grace_period": {
+                "max_value": 1800,
+                "min_value": 10,
+                "type": "int"
+              }
+            },
+            "_remove_when_false": true,
+            "true_value": {},
+            "type": "dict"
+          },
+          "restart": {
+            "_keys": {
+              "grace_period": {
+                "max_value": 1800,
+                "min_value": 1,
+                "type": "int"
+              }
+            },
+            "_remove_when_false": true,
+            "true_value": {},
+            "type": "dict"
+          }
+        },
+        "import": "_r_import",
+        "passive": "bool",
+        "password": "str",
+        "router_id": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "timers": {
+          "dead": {
+            "max_value": 8192,
+            "min_value": 3,
+            "type": "int"
+          },
+          "hello": {
+            "max_value": 8192,
+            "min_value": 1,
+            "type": "int"
+          }
+        }
+      }
+    },
+    "ripv2": {
+      "global": {
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "bfd": {
+          "_alt_types": [
+            "bool"
+          ],
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "timers": {
+          "garbage": {
+            "max_value": 600,
+            "min_value": 5,
+            "type": "int"
+          },
+          "timeout": {
+            "max_value": 3600,
+            "min_value": 5,
+            "type": "int"
+          },
+          "update": {
+            "max_value": 60,
+            "min_value": 5,
+            "type": "int"
+          }
+        },
+        "version": {
+          "max_value": 2,
+          "min_value": 2,
+          "type": "int"
+        }
+      },
+      "link": {
+        "passive": "bool"
+      },
+      "node": {
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "import": "_r_import",
+        "timers": {
+          "garbage": {
+            "max_value": 600,
+            "min_value": 5,
+            "type": "int"
+          },
+          "timeout": {
+            "max_value": 3600,
+            "min_value": 5,
+            "type": "int"
+          },
+          "update": {
+            "max_value": 60,
+            "min_value": 5,
+            "type": "int"
+          }
+        },
+        "version": {
+          "max_value": 2,
+          "min_value": 2,
+          "type": "int"
+        }
+      },
+      "vrf": {
+        "active": "bool",
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "timers": {
+          "garbage": {
+            "max_value": 600,
+            "min_value": 5,
+            "type": "int"
+          },
+          "timeout": {
+            "max_value": 3600,
+            "min_value": 5,
+            "type": "int"
+          },
+          "update": {
+            "max_value": 60,
+            "min_value": 5,
+            "type": "int"
+          }
+        }
+      }
+    },
+    "routing": {
+      "global": {
+        "acl": {
+          "_keytype": "id",
+          "_subtype": {
+            "_subtype": "acl_entry",
+            "type": "list"
+          },
+          "type": "dict"
+        },
+        "aspath": {
+          "_keytype": "id",
+          "_subtype": {
+            "_subtype": "aspath_entry",
+            "make_list": true,
+            "type": "list"
+          },
+          "type": "dict"
+        },
+        "community": {
+          "_keytype": "id",
+          "_subtype": {
+            "_keys": {
+              "type": {
+                "_default": "standard",
+                "_required": true,
+                "type": "str",
+                "valid_values": [
+                  "standard",
+                  "extended",
+                  "large"
+                ]
+              },
+              "value": {
+                "_subtype": "community_entry",
+                "make_list": true,
+                "type": "list"
+              }
+            },
+            "type": "dict"
+          },
+          "type": "dict"
+        },
+        "policy": {
+          "_keytype": "id",
+          "_subtype": {
+            "_subtype": "rp_entry",
+            "make_list": true,
+            "type": "list"
+          },
+          "type": "dict"
+        },
+        "prefix": {
+          "_keytype": "id",
+          "_subtype": {
+            "_subtype": "pfx_entry",
+            "make_list": true,
+            "type": "list"
+          },
+          "type": "dict"
+        },
+        "static": {
+          "_keytype": "id",
+          "_subtype": {
+            "_subtype": "static_entry",
+            "make_list": true,
+            "type": "list"
+          },
+          "type": "dict"
+        }
+      },
+      "link": {
+        "acl": {
+          "in": {
+            "_alt_types": [
+              "id"
+            ],
+            "_keys": {
+              "ipv4": "id",
+              "ipv6": "id"
+            },
+            "type": "dict"
+          },
+          "out": {
+            "_alt_types": [
+              "id"
+            ],
+            "_keys": {
+              "ipv4": "id",
+              "ipv6": "id"
+            },
+            "type": "dict"
+          }
+        }
+      },
+      "node": {
+        "acl": {
+          "_keytype": "id",
+          "_subtype": {
+            "_alt_types": [
+              "NoneType"
+            ],
+            "_subtype": "acl_entry",
+            "type": "list"
+          },
+          "type": "dict"
+        },
+        "aspath": {
+          "_keytype": "id",
+          "_subtype": {
+            "_alt_types": [
+              "NoneType"
+            ],
+            "_subtype": "aspath_entry",
+            "make_list": true,
+            "type": "list"
+          },
+          "type": "dict"
+        },
+        "community": {
+          "_keytype": "id",
+          "_subtype": {
+            "_alt_types": [
+              "NoneType"
+            ],
+            "_keys": {
+              "type": {
+                "_default": "standard",
+                "_required": true,
+                "type": "str",
+                "valid_values": [
+                  "standard",
+                  "extended",
+                  "large"
+                ]
+              },
+              "value": {
+                "_subtype": "community_entry",
+                "make_list": true,
+                "type": "list"
+              }
+            },
+            "type": "dict"
+          },
+          "type": "dict"
+        },
+        "policy": {
+          "_keytype": "id",
+          "_subtype": {
+            "_alt_types": [
+              "NoneType"
+            ],
+            "_subtype": "rp_entry",
+            "make_list": true,
+            "type": "list"
+          },
+          "type": "dict"
+        },
+        "prefix": {
+          "_keytype": "id",
+          "_subtype": {
+            "_alt_types": [
+              "NoneType"
+            ],
+            "_subtype": "pfx_entry",
+            "make_list": true,
+            "type": "list"
+          },
+          "type": "dict"
+        },
+        "static": {
+          "_subtype": "static_entry",
+          "type": "list"
+        }
+      },
+      "route_map": {
+        "match": [
+          "prefix",
+          "nexthop",
+          "aspath"
+        ],
+        "set": [
+          "locpref",
+          "med",
+          "weight",
+          "prepend"
+        ]
+      }
+    },
+    "sr": {
+      "_proto_map": {
+        "isis": {
+          "af": [
+            "ipv4",
+            "ipv6"
+          ],
+          "module": "isis"
+        },
+        "ospfv2": {
+          "af": [
+            "ipv4"
+          ],
+          "module": "ospf"
+        }
+      },
+      "global": {
+        "_migrate": {
+          "ipv6_sid_offset": "node_sid_offset.ipv6"
+        },
+        "_obsolete": {
+          "srgb_range_size": "The SRGB range is device-specific and must be set on node or device",
+          "srgb_range_start": "The SRGB range is device-specific and must be set on node or device"
+        },
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "node_sid_offset": {
+          "ipv4": {
+            "min_value": 0,
+            "type": "int"
+          },
+          "ipv6": {
+            "min_value": 0,
+            "type": "int"
+          }
+        },
+        "protocol": {
+          "_subtype": {
+            "type": "str",
+            "valid_values": [
+              "isis",
+              "ospfv2"
+            ]
+          },
+          "create_empty": true,
+          "empty": false,
+          "type": "list"
+        }
+      },
+      "node": {
+        "_migrate": {
+          "srgb_range_size": "srgb.size",
+          "srgb_range_start": "srgb.start"
+        },
+        "_obsolete": {
+          "ipv6_sid_offset": "The SR SID offset must be set globally to be consistent across nodes"
+        },
+        "af": {
+          "_alt_types": [
+            "NoneType"
+          ],
+          "_list_to_dict": true,
+          "ipv4": "bool",
+          "ipv6": "bool"
+        },
+        "node_sid": {
+          "ipv4": {
+            "_alt_types": [
+              "NoneType"
+            ],
+            "min_value": 1,
+            "type": "int"
+          },
+          "ipv6": {
+            "_alt_types": [
+              "NoneType"
+            ],
+            "min_value": 1,
+            "type": "int"
+          }
+        },
+        "protocol": {
+          "_subtype": {
+            "type": "str",
+            "valid_values": [
+              "isis",
+              "ospfv2"
+            ]
+          },
+          "create_empty": true,
+          "empty": false,
+          "type": "list"
+        },
+        "srgb": {
+          "dyn_size": {
+            "min_value": 1,
+            "type": "int"
+          },
+          "dyn_start": {
+            "min_value": 1,
+            "type": "int"
+          },
+          "size": {
+            "min_value": 1,
+            "type": "int"
+          },
+          "start": {
+            "min_value": 1,
+            "type": "int"
+          }
+        }
+      }
+    },
+    "srv6": {
+      "global": {
+        "_obsolete": {
+          "allocate_loopback": "This attribute is obsolete and does nothing"
+        },
+        "bgp": {
+          "_alt_types": [
+            "bool",
+            "BoxList"
+          ],
+          "ipv4": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list",
+            "valid_values": [
+              "ibgp"
+            ]
+          },
+          "ipv6": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list",
+            "valid_values": [
+              "ibgp"
+            ]
+          }
+        },
+        "igp": {
+          "type": "list",
+          "valid_values": [
+            "isis",
+            "ospf"
+          ]
+        },
+        "locator_pool": {
+          "type": "ipv6",
+          "use": "subnet_prefix"
+        },
+        "vpn": {
+          "_alt_types": [
+            "bool",
+            "BoxList"
+          ],
+          "ipv4": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list",
+            "valid_values": [
+              "ibgp"
+            ]
+          },
+          "ipv6": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list",
+            "valid_values": [
+              "ibgp"
+            ]
+          }
+        }
+      },
+      "node": {
+        "_obsolete": {
+          "allocate_loopback": "This attribute is obsolete and does nothing"
+        },
+        "bgp": {
+          "_alt_types": [
+            "bool",
+            "BoxList"
+          ],
+          "ipv4": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list",
+            "valid_values": [
+              "ibgp"
+            ]
+          },
+          "ipv6": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list",
+            "valid_values": [
+              "ibgp"
+            ]
+          }
+        },
+        "igp": {
+          "type": "list",
+          "valid_values": [
+            "isis",
+            "ospf"
+          ]
+        },
+        "locator": {
+          "type": "ipv6",
+          "use": "subnet_prefix"
+        },
+        "transit_only": "bool",
+        "vpn": {
+          "_alt_types": [
+            "bool",
+            "BoxList"
+          ],
+          "ipv4": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list",
+            "valid_values": [
+              "ibgp"
+            ]
+          },
+          "ipv6": {
+            "true_value": [
+              "ibgp"
+            ],
+            "type": "list",
+            "valid_values": [
+              "ibgp"
+            ]
+          }
+        }
+      }
+    },
+    "stp": {
+      "global": {
+        "enable": "bool",
+        "port_type": {
+          "type": "str",
+          "valid_values": [
+            "normal",
+            "edge",
+            "network",
+            "auto"
+          ]
+        },
+        "protocol": {
+          "type": "str",
+          "valid_values": [
+            "stp",
+            "rstp",
+            "mstp",
+            "pvrst"
+          ]
+        },
+        "stub_port_type": {
+          "type": "str",
+          "valid_values": [
+            "normal",
+            "edge",
+            "network",
+            "auto",
+            "none"
+          ]
+        }
+      },
+      "interface": {
+        "enable": "bool",
+        "port_priority": {
+          "max_value": 15,
+          "min_value": 0,
+          "type": "int"
+        },
+        "port_type": {
+          "type": "str",
+          "valid_values": [
+            "normal",
+            "edge",
+            "network",
+            "auto"
+          ]
+        }
+      },
+      "link": {
+        "enable": "bool",
+        "port_type": {
+          "type": "str",
+          "valid_values": [
+            "normal",
+            "edge",
+            "network",
+            "auto"
+          ]
+        }
+      },
+      "node": {
+        "enable": "bool",
+        "port_type": {
+          "type": "str",
+          "valid_values": [
+            "normal",
+            "edge",
+            "network",
+            "auto"
+          ]
+        },
+        "priority": {
+          "max_value": 61440,
+          "min_value": 0,
+          "type": "int"
+        },
+        "protocol": {
+          "type": "str",
+          "valid_values": [
+            "stp",
+            "rstp",
+            "mstp",
+            "pvrst"
+          ]
+        }
+      }
+    },
+    "top": {
+      "_prefix": {
+        "allocation": {
+          "type": "str",
+          "valid_values": [
+            "p2p",
+            "sequential",
+            "id_based"
+          ]
+        },
+        "ipv4": {
+          "type": "ipv4",
+          "use": "prefix"
+        },
+        "ipv6": {
+          "type": "ipv6",
+          "use": "prefix"
+        },
+        "pool": {
+          "_valid_with": [
+            "allocation"
+          ],
+          "type": "str"
+        }
+      },
+      "_r_import": {
+        "_description": "Routing protocol import specification. Each entry specifies a protocol to\nimport. Values might contain routing policies\n",
+        "_keytype": "r_proto",
+        "_list_to_dict": true,
+        "_subtype": {
+          "_alt_types": [
+            "NoneType",
+            "bool"
+          ],
+          "policy": {
+            "_requires": [
+              "routing"
+            ],
+            "type": "id"
+          }
+        },
+        "type": "dict"
+      },
+      "acl_address": {
+        "interface": {
+          "_invalid_with": [
+            "role"
+          ],
+          "_subtype": "str",
+          "_valid_with": [
+            "node"
+          ],
+          "type": "list"
+        },
+        "ipv4": {
+          "_subtype": {
+            "type": "ipv4",
+            "use": "prefix_or_host"
+          },
+          "type": "list"
+        },
+        "ipv6": {
+          "_subtype": {
+            "type": "ipv6",
+            "use": "prefix_or_host"
+          },
+          "type": "list"
+        },
+        "node": {
+          "_subtype": "node_id",
+          "type": "list"
+        },
+        "pool": {
+          "_subtype": "addr_pool",
+          "type": "list"
+        },
+        "port": {
+          "eq": {
+            "_subtype": "acl_port",
+            "type": "list"
+          },
+          "gt": {
+            "_invalid_with": [
+              "neq",
+              "in",
+              "not_in"
+            ],
+            "type": "acl_port"
+          },
+          "in": {
+            "_invalid_with": [
+              "neq",
+              "not_in"
+            ],
+            "_subtype": "acl_port",
+            "max_length": 2,
+            "min_length": 2,
+            "type": "list"
+          },
+          "lt": {
+            "_invalid_with": [
+              "neq",
+              "in",
+              "not_in"
+            ],
+            "type": "acl_port"
+          },
+          "neq": "acl_port",
+          "not_in": {
+            "_invalid_with": [
+              "neq"
+            ],
+            "_subtype": "acl_port",
+            "max_length": 2,
+            "min_length": 2,
+            "type": "list"
+          }
+        },
+        "prefix": {
+          "_subtype": "prefixset",
+          "type": "list"
+        },
+        "role": {
+          "_invalid_with": [
+            "interface"
+          ],
+          "_subtype": "str",
+          "_valid_with": [
+            "node"
+          ],
+          "type": "list"
+        }
+      },
+      "acl_entry": {
+        "action": {
+          "_default": "permit",
+          "type": "str",
+          "valid_values": [
+            "permit",
+            "deny"
+          ]
+        },
+        "description": {
+          "type": "str"
+        },
+        "dst": {
+          "_default": {
+            "prefix": [
+              "any"
+            ]
+          },
+          "_required": true,
+          "type": "acl_address"
+        },
+        "established": {
+          "type": "bool",
+          "valid_values": [
+            true
+          ]
+        },
+        "log": {
+          "type": "bool",
+          "valid_values": [
+            true
+          ]
+        },
+        "protocol": {
+          "_alt_types": [
+            "int"
+          ],
+          "_required": true,
+          "type": "str",
+          "valid_values": [
+            "ahp",
+            "esp",
+            "icmp",
+            "ip",
+            "ipv6",
+            "tcp",
+            "udp"
+          ]
+        },
+        "sequence": {
+          "_default": 0,
+          "max_value": 2147483647,
+          "min_value": 1,
+          "type": "int"
+        },
+        "src": {
+          "_default": {
+            "prefix": [
+              "any"
+            ]
+          },
+          "_required": true,
+          "type": "acl_address"
+        }
+      },
+      "acl_port": {
+        "max_value": 65535,
+        "min_value": 1,
+        "type": "int"
+      },
+      "aspath_entry": {
+        "action": {
+          "type": "str",
+          "valid_values": [
+            "permit",
+            "deny"
+          ]
+        },
+        "path": {
+          "_alt_types": [
+            "str",
+            "asn"
+          ],
+          "_subtype": "asn",
+          "type": "list"
+        },
+        "sequence": {
+          "max_value": 32767,
+          "min_value": 1,
+          "type": "int"
+        }
+      },
+      "bgp_community_type": {
+        "_description": "BGP community types",
+        "type": "str",
+        "valid_values": {
+          "2octet": null,
+          "extended": null,
+          "large": null,
+          "standard": null
+        }
+      },
+      "bgp_prefix_list": {
+        "_description": "BGP prefix list",
+        "_subtype": {
+          "_alt_types": [
+            "prefix_str"
+          ],
+          "ipv4": {
+            "type": "ipv4",
+            "use": "subnet_prefix"
+          },
+          "ipv6": {
+            "type": "ipv6",
+            "use": "subnet_prefix"
+          }
+        },
+        "type": "list"
+      },
+      "bgp_session_type": {
+        "_description": "BGP session types",
+        "type": "str",
+        "valid_values": {
+          "ebgp": null,
+          "ibgp": null,
+          "localas_ibgp": null
+        }
+      },
+      "community_entry": {
+        "action": {
+          "type": "str",
+          "valid_values": [
+            "permit",
+            "deny"
+          ]
+        },
+        "list": {
+          "_valid_with": [
+            "action",
+            "sequence"
+          ],
+          "type": "list"
+        },
+        "path": {
+          "_valid_with": [
+            "action",
+            "sequence"
+          ],
+          "type": "list"
+        },
+        "regexp": {
+          "_valid_with": [
+            "action",
+            "sequence"
+          ],
+          "type": "str"
+        },
+        "sequence": {
+          "max_value": 32767,
+          "min_value": 1,
+          "type": "int"
+        }
+      },
+      "global": {
+        "addressing": {
+          "_keytype": "id",
+          "type": "dict"
+        },
+        "frr": {
+          "daemons": {
+            "_subtype": "str",
+            "type": "list"
+          },
+          "debug": {
+            "split_lines": true,
+            "type": "list"
+          },
+          "logfile": "str"
+        },
+        "groups": null,
+        "ios": {
+          "debug": {
+            "split_lines": true,
+            "type": "list"
+          }
+        },
+        "links": null,
+        "module": null,
+        "name": {
+          "_help": "Topology name should be no longer than 16 characters. It should start with a letter\nand contain letters, underscores or numbers. netlab derives it from the directory name\nwhen it's not specified in the lab topology file.\n",
+          "type": "id"
+        },
+        "nodes": null,
+        "prefix": {
+          "_keytype": "id",
+          "_subtype": "_prefix",
+          "type": "dict"
+        },
+        "provider": "id",
+        "version": null,
+        "vlans": {
+          "_keytype": "id",
+          "_requires": [
+            "vlan"
+          ],
+          "_subtype": "vlan",
+          "type": "dict"
+        },
+        "vrfs": {
+          "_keytype": "id",
+          "_requires": [
+            "vrf"
+          ],
+          "_subtype": "vrf",
+          "type": "dict"
+        }
+      },
+      "interface": {
+        "ifindex": "int",
+        "ifname": "str",
+        "ipv4": {
+          "type": "ipv4",
+          "use": "interface"
+        },
+        "ipv6": {
+          "type": "ipv6",
+          "use": "interface"
+        },
+        "linkid": "id",
+        "node": "node_id"
+      },
+      "link": {
+        "bandwidth": "int",
+        "bridge": "id",
+        "disable": "bool",
+        "interfaces": null,
+        "linkid": "id",
+        "mtu": {
+          "max_value": 9216,
+          "min_value": 64,
+          "type": "int"
+        },
+        "name": "str",
+        "pool": "id",
+        "prefix": {
+          "_alt_types": [
+            "bool_false",
+            "prefix_str",
+            "named_pfx"
+          ],
+          "_keys": {
+            "_name": "str",
+            "allocation": {
+              "type": "str",
+              "valid_values": [
+                "p2p",
+                "sequential",
+                "id_based"
+              ]
+            },
+            "ipv4": {
+              "type": "ipv4",
+              "use": "subnet_prefix"
+            },
+            "ipv6": {
+              "type": "ipv6",
+              "use": "subnet_prefix"
+            }
+          },
+          "type": "dict"
+        },
+        "ra": {
+          "dhcp": {
+            "type": "str",
+            "valid_values": [
+              "all",
+              "other"
+            ]
+          },
+          "disable": "bool",
+          "onlink": "bool",
+          "slaac": "bool"
+        },
+        "role": "id",
+        "shutdown": "bool",
+        "tc": {
+          "corrupt": {
+            "max_value": 100,
+            "min_value": 0,
+            "type": "float"
+          },
+          "delay": "time",
+          "duplicate": {
+            "max_value": 100,
+            "min_value": 0,
+            "type": "float"
+          },
+          "jitter": "time",
+          "loss": {
+            "max_value": 100,
+            "min_value": 0,
+            "type": "float"
+          },
+          "rate": {
+            "min_value": 1,
+            "type": "int"
+          },
+          "reorder": {
+            "max_value": 100,
+            "min_value": 0,
+            "type": "float"
+          }
+        },
+        "type": {
+          "type": "str",
+          "valid_values": [
+            "lan",
+            "p2p",
+            "stub",
+            "loopback",
+            "tunnel",
+            "vlan_member"
+          ]
+        },
+        "unnumbered": "bool",
+        "vlan_name": "id"
+      },
+      "link_internal": {
+        "linkindex": "int",
+        "parentindex": "int"
+      },
+      "link_module_no_propagate": [
+        "vlan",
+        "dhcp"
+      ],
+      "link_no_propagate": [
+        "prefix",
+        "interfaces",
+        "gateway"
+      ],
+      "loopback": {
+        "ipv4": {
+          "_alt_types": [
+            "bool"
+          ],
+          "type": "ipv4",
+          "use": "host_prefix"
+        },
+        "ipv6": {
+          "_alt_types": [
+            "bool"
+          ],
+          "type": "ipv6",
+          "use": "host_prefix"
+        },
+        "pool": "addr_pool"
+      },
+      "node": {
+        "box": "str",
+        "cat8000v": {
+          "license": {
+            "type": "str",
+            "valid_values": [
+              "none",
+              "essential",
+              "advantage",
+              "premier"
+            ]
+          }
+        },
+        "config": {
+          "_alt_types": [
+            "list"
+          ],
+          "_subtype": {
+            "_err_msg": "Enable \"files\" plugin to use the inline node/group configuration template(s)",
+            "type": "error"
+          },
+          "type": "dict"
+        },
+        "control_plane": {
+          "type": "str",
+          "valid_values": [
+            "bird",
+            "frr"
+          ]
+        },
+        "cpu": null,
+        "device": "device",
+        "eos": {
+          "serialnumber": "str",
+          "systemmacaddr": "mac"
+        },
+        "frr": {
+          "daemons": {
+            "_subtype": "str",
+            "type": "list"
+          },
+          "debug": {
+            "split_lines": true,
+            "type": "list"
+          },
+          "logfile": "str"
+        },
+        "group": "list",
+        "id": {
+          "max_value": "MAX_NODE_ID",
+          "min_value": 1,
+          "type": "int"
+        },
+        "interfaces": "list",
+        "ios": {
+          "debug": {
+            "split_lines": true,
+            "type": "list"
+          }
+        },
+        "kind": {
+          "workers": "int"
+        },
+        "loopback": {
+          "_alt_types": [
+            "bool"
+          ],
+          "type": "dict"
+        },
+        "memory": "int",
+        "mgmt": {
+          "ifname": "str",
+          "ipv4": {
+            "type": "ipv4",
+            "use": "interface"
+          },
+          "ipv6": {
+            "type": "ipv6",
+            "use": "interface"
+          },
+          "mac": "str"
+        },
+        "module": {
+          "_subtype": "id",
+          "type": "list"
+        },
+        "mtu": {
+          "max_value": 9216,
+          "min_value": 64,
+          "type": "int"
+        },
+        "name": "str",
+        "provider": "id",
+        "role": {
+          "type": "str",
+          "valid_values": [
+            "router",
+            "host",
+            "bridge",
+            "gateway"
+          ]
+        },
+        "router_id": {
+          "type": "ipv4",
+          "use": "id"
+        },
+        "skip_config": "list",
+        "unmanaged": "bool",
+        "vlans": {
+          "_keytype": "id",
+          "_requires": [
+            "vlan"
+          ],
+          "_subtype": "node_vlan",
+          "type": "dict"
+        },
+        "vrfs": {
+          "_keytype": "id",
+          "_requires": [
+            "vrf"
+          ],
+          "_subtype": "vrf",
+          "type": "dict"
+        }
+      },
+      "node_extra_ns": [
+        "providers",
+        "tools",
+        "outputs"
+      ],
+      "node_group": {
+        "_description": "Node groups",
+        "_namespace": [
+          "node"
+        ],
+        "config": "list",
+        "device": "device",
+        "members": {
+          "_subtype": {
+            "max_length": "MAX_NODE_ID_LENGTH",
+            "type": "id"
+          },
+          "type": "list"
+        },
+        "module": "list",
+        "node_data": {
+          "true_value": {},
+          "type": "dict"
+        },
+        "vars": "dict"
+      },
+      "node_vlan": {
+        "_description": "Node VLAN definition",
+        "_namespace": [
+          "link",
+          "interface"
+        ],
+        "id": {
+          "max_value": 4095,
+          "min_value": 1,
+          "type": "int"
+        },
+        "links": "list",
+        "mode": {
+          "type": "str",
+          "valid_values": [
+            "bridge",
+            "irb",
+            "route"
+          ]
+        },
+        "prefix": null,
+        "stp": {
+          "enable": "bool",
+          "priority": {
+            "max_value": 61440,
+            "min_value": 0,
+            "type": "int"
+          }
+        },
+        "vni": {
+          "max_value": 16777215,
+          "min_value": 1,
+          "type": "int"
+        }
+      },
+      "pfx_entry": {
+        "action": {
+          "type": "str",
+          "valid_values": [
+            "permit",
+            "deny"
+          ]
+        },
+        "ipv4": {
+          "_subtype": {
+            "type": "ipv4",
+            "use": "prefix"
+          },
+          "type": "list"
+        },
+        "ipv6": {
+          "_subtype": {
+            "type": "ipv6",
+            "use": "prefix"
+          },
+          "type": "list"
+        },
+        "max": {
+          "_alt_types": [
+            "int"
+          ],
+          "ipv4": {
+            "max_value": 32,
+            "min_value": 0,
+            "type": "int"
+          },
+          "ipv6": {
+            "max_value": 128,
+            "min_value": 0,
+            "type": "int"
+          }
+        },
+        "min": {
+          "_alt_types": [
+            "int"
+          ],
+          "ipv4": {
+            "max_value": 32,
+            "min_value": 0,
+            "type": "int"
+          },
+          "ipv6": {
+            "max_value": 128,
+            "min_value": 0,
+            "type": "int"
+          }
+        },
+        "pool": {
+          "_subtype": "addr_pool",
+          "type": "list"
+        },
+        "prefix": {
+          "_subtype": "prefixset",
+          "type": "list"
+        },
+        "sequence": {
+          "max_value": 32767,
+          "min_value": 1,
+          "type": "int"
+        }
+      },
+      "pool": {
+        "allocation": {
+          "type": "str",
+          "valid_values": [
+            "p2p",
+            "sequential",
+            "id_based"
+          ]
+        },
+        "ipv4": {
+          "type": "ipv4",
+          "use": "subnet_prefix"
+        },
+        "ipv6": {
+          "type": "ipv6",
+          "use": "subnet_prefix"
+        },
+        "mac": "mac",
+        "prefix": {
+          "max_value": 32,
+          "min_value": 1,
+          "type": "int"
+        },
+        "prefix6": {
+          "max_value": 128,
+          "min_value": 1,
+          "type": "int"
+        },
+        "start": {
+          "min_value": 0,
+          "type": "int"
+        },
+        "unnumbered": "bool"
+      },
+      "pool_no_copy": [
+        "start",
+        "prefix",
+        "prefix6",
+        "mac"
+      ],
+      "prefix": {
+        "allocation": {
+          "type": "str",
+          "valid_values": [
+            "p2p",
+            "sequential",
+            "id_based"
+          ]
+        },
+        "ipv4": {
+          "type": "ipv4",
+          "use": "subnet_prefix"
+        },
+        "ipv6": {
+          "type": "ipv6",
+          "use": "subnet_prefix"
+        }
+      },
+      "rp_entry": {
+        "_description": "Routing policy entry",
+        "action": {
+          "type": "str",
+          "valid_values": [
+            "permit",
+            "deny"
+          ]
+        },
+        "delete": {
+          "_invalid_with": {
+            "action": "deny"
+          },
+          "community": {
+            "extended": "list",
+            "large": "list",
+            "list": {
+              "_valid_with": [],
+              "extended": "str",
+              "large": "str",
+              "standard": "str"
+            },
+            "standard": "list"
+          }
+        },
+        "match": {
+          "aspath": "str",
+          "community": {
+            "extended": "str",
+            "large": "str",
+            "standard": "str"
+          },
+          "nexthop": "str",
+          "prefix": "str"
+        },
+        "sequence": {
+          "max_value": 32767,
+          "min_value": 1,
+          "type": "int"
+        },
+        "set": {
+          "_invalid_with": {
+            "action": "deny"
+          },
+          "community": {
+            "append": {
+              "_valid_with": [
+                "standard",
+                "extended",
+                "large"
+              ],
+              "type": "bool"
+            },
+            "delete": {
+              "_valid_with": [
+                "standard",
+                "extended",
+                "large"
+              ],
+              "type": "bool"
+            },
+            "delete_list": {
+              "_valid_with": [],
+              "type": "str"
+            },
+            "extended": "list",
+            "large": "list",
+            "standard": "list"
+          },
+          "locpref": {
+            "max_value": 4294967295,
+            "min_value": 0,
+            "type": "int"
+          },
+          "med": {
+            "max_value": 32767,
+            "min_value": 0,
+            "type": "int"
+          },
+          "prepend": {
+            "count": {
+              "max_value": 32,
+              "min_value": 1,
+              "type": "int"
+            },
+            "path": "str"
+          },
+          "weight": {
+            "max_value": 65535,
+            "min_value": 0,
+            "type": "int"
+          }
+        }
+      },
+      "static_entry": {
+        "include": {
+          "_valid_with": [
+            "nexthop",
+            "vrf"
+          ],
+          "type": "id"
+        },
+        "ipv4": {
+          "type": "ipv4",
+          "use": "prefix"
+        },
+        "ipv6": {
+          "type": "ipv6",
+          "use": "prefix"
+        },
+        "nexthop": {
+          "discard": {
+            "_valid_with": [
+              "none"
+            ],
+            "type": "bool",
+            "valid_values": [
+              true
+            ]
+          },
+          "gateway": {
+            "_valid_with": [
+              "vrf",
+              "link"
+            ],
+            "type": "bool"
+          },
+          "ipv4": {
+            "type": "ipv4",
+            "use": "address"
+          },
+          "ipv6": {
+            "type": "ipv6",
+            "use": "address"
+          },
+          "link": "str",
+          "node": {
+            "_valid_with": [
+              "vrf",
+              "link"
+            ],
+            "type": "node_id"
+          },
+          "vrf": {
+            "_alt_types": "NoneType",
+            "type": "id"
+          }
+        },
+        "node": {
+          "_valid_with": [
+            "nexthop",
+            "vrf"
+          ],
+          "type": "node_id"
+        },
+        "pool": {
+          "_valid_with": [
+            "nexthop",
+            "vrf"
+          ],
+          "type": "addr_pool"
+        },
+        "prefix": {
+          "_valid_with": [
+            "nexthop",
+            "vrf"
+          ],
+          "type": "named_pfx"
+        },
+        "vrf": {
+          "type": "id"
+        }
+      },
+      "vlan": {
+        "_description": "Global VLAN definition",
+        "_namespace": [
+          "link"
+        ],
+        "id": {
+          "max_value": 4095,
+          "min_value": 1,
+          "type": "int"
+        },
+        "links": "list",
+        "mode": {
+          "type": "str",
+          "valid_values": [
+            "bridge",
+            "irb",
+            "route"
+          ]
+        },
+        "prefix": null,
+        "vni": {
+          "max_value": 16777215,
+          "min_value": 1,
+          "type": "int"
+        }
+      },
+      "vlan_group": {
+        "_description": "VLAN groups",
+        "_namespace": [
+          "vlan",
+          "link"
+        ],
+        "members": {
+          "_subtype": "id",
+          "type": "list"
+        },
+        "type": "str"
+      },
+      "vrf": {
+        "_description": "Global or node-level VRF definition",
+        "_namespace": [
+          "link"
+        ],
+        "export": "list",
+        "id": {
+          "min_value": 1,
+          "type": "int"
+        },
+        "import": "list",
+        "links": "list",
+        "loopback": {
+          "_alt_types": [
+            "bool",
+            "prefix_str",
+            "NoneType"
+          ],
+          "type": "dict"
+        },
+        "rd": "rd"
+      },
+      "vrf_group": {
+        "_description": "VRF groups",
+        "_namespace": [
+          "vrf"
+        ],
+        "members": {
+          "_subtype": "id",
+          "type": "list"
+        },
+        "type": "str"
+      }
+    },
+    "vlan": {
+      "copy_vlan_to_intf": {
+        "gateway": null,
+        "ipv4": null,
+        "ipv6": null
+      },
+      "global": {
+        "mode": {
+          "type": "str",
+          "valid_values": [
+            "bridge",
+            "irb",
+            "route"
+          ]
+        }
+      },
+      "keep_subif": {
+        "ifindex": null,
+        "ifname": null,
+        "type": null,
+        "virtual_interface": null,
+        "vlan": null
+      },
+      "link": {
+        "access": "id",
+        "mode": {
+          "type": "str",
+          "valid_values": [
+            "route"
+          ]
+        },
+        "native": "id",
+        "trunk": null
+      },
+      "node": {
+        "mode": null
+      },
+      "phy_ifattr": {
+        "_selfloop_ifindex": null,
+        "bandwidth": null,
+        "bridge": null,
+        "evpn": null,
+        "ifindex": null,
+        "ifname": null,
+        "lag": null,
+        "linkindex": null,
+        "mtu": null,
+        "parentindex": null,
+        "stp": null,
+        "type": null,
+        "virtual_interface": null,
+        "vlan": null
+      },
+      "vlan_no_propagate": {
+        "evpn": null,
+        "id": null,
+        "lag": null,
+        "mode": null,
+        "prefix": null,
+        "stp": null,
+        "vni": null
+      }
+    },
+    "vrf": {
+      "global": {
+        "as": "asn",
+        "loopback": "bool"
+      },
+      "node": {
+        "as": "asn",
+        "loopback": "bool"
+      }
+    },
+    "vxlan": {
+      "global": {
+        "domain": "id",
+        "flooding": {
+          "type": "str",
+          "valid_values": [
+            "static",
+            "evpn"
+          ]
+        },
+        "use_v6_vtep": "bool",
+        "vlans": "list"
+      },
+      "link": {
+        "vtep": "bool"
+      },
+      "node": {
+        "domain": "id",
+        "flooding": {
+          "type": "str",
+          "valid_values": [
+            "static",
+            "evpn"
+          ]
+        },
+        "vlans": "list"
+      }
+    }
+  },
+  "device_features": {
+    "eos": {
+      "bfd": {},
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "int",
+          "out": "int"
+        },
+        "bfd": true,
+        "community": {
+          "2octet": [
+            "standard"
+          ],
+          "extended": [
+            "extended"
+          ],
+          "large": [
+            "large"
+          ],
+          "standard": [
+            "standard",
+            "large"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "gr": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": true,
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace",
+            "ingress",
+            "ingress-replace"
+          ]
+        },
+        "rs_client": true,
+        "tcp_ao": [
+          "libvirt",
+          "external"
+        ],
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "client": {
+          "ipv4": true
+        },
+        "relay": true,
+        "server": true,
+        "vrf": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "bundle": [
+          "vlan_aware"
+        ],
+        "ipv6": true,
+        "irb": true,
+        "transport": [
+          "vxlan",
+          "mpls",
+          "sr"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "initial": {
+        "collect": true,
+        "config_mode": [
+          "netmiko"
+        ],
+        "generate_mac": [
+          "ethernet"
+        ],
+        "ipv4": {
+          "unnumbered": true
+        },
+        "ipv6": {
+          "lla": true,
+          "use_ra": true
+        },
+        "max_mtu": 9194,
+        "mgmt_vrf": true,
+        "min_mtu": 68,
+        "normalize": true,
+        "ra": true,
+        "reload": true,
+        "roles": [
+          "host",
+          "router",
+          "bridge"
+        ],
+        "system_mtu": true
+      },
+      "isis": {
+        "caveats": true,
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "lag": {
+        "mlag": {
+          "peer": {
+            "ifindex": 4094,
+            "ip": "169.254.127.0/31",
+            "vlan": 4094
+          }
+        },
+        "passive": true
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": {
+          "external_filter": "Arista EOS cannot suppress NSSA type-7 ranges",
+          "external_range": "Arista EOS cannot configure NSSA type-7 ranges"
+        },
+        "default": {
+          "policy": true
+        },
+        "import": [
+          "bgp",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "ipv4": true,
+        "ipv6": false,
+        "passive": false
+      },
+      "routing": {
+        "acl": true,
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": true,
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": true,
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "stp": {
+        "enable_per_port": true,
+        "port_type": true,
+        "supported_protocols": [
+          "stp",
+          "rstp",
+          "mstp",
+          "pvrst"
+        ]
+      },
+      "tunnel": {
+        "gre": [
+          "ipv4",
+          "vrf"
+        ]
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{subif_index}",
+        "svi_interface_name": "Vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {
+        "vtep6": true
+      }
+    },
+    "iosxr": {
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "confederation": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "caveats": {
+            "all": "caveats-iosxr",
+            "replace": "caveats-iosxr"
+          },
+          "valid": [
+            "on",
+            "all",
+            "replace",
+            "ingress",
+            "ingress-all"
+          ]
+        },
+        "rs_client": true,
+        "tcp_ao": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": false,
+        "transport": {
+          "cp_vxlan": [
+            "ibgp"
+          ],
+          "mpls": [
+            "ibgp"
+          ],
+          "sr": [
+            "ibgp"
+          ]
+        }
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "initial": {
+        "collect": true,
+        "ipv4": {
+          "unnumbered": true
+        },
+        "ipv6": {
+          "lla": true
+        },
+        "max_mtu": 9216,
+        "min_mtu": 68,
+        "min_phy_mtu": 1500,
+        "reload": true
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "ospf",
+          "bgp",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "mpls": {
+        "6pe": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "default": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": {
+          "caveats": "caveats-iosxr"
+        },
+        "community": {
+          "caveats": "caveats-iosxr",
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": {
+              "large": true,
+              "list": true,
+              "standard": true
+            }
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": {
+          "caveats": "caveats-iosxr"
+        },
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "srv6": {
+        "bgp": true,
+        "isis": true,
+        "vpn": true
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      }
+    },
+    "vjunos-switch": {
+      "bfd": {},
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "bundle": [
+          "vlan_aware"
+        ],
+        "irb": true,
+        "multi_rt": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "initial": {
+        "collect": true,
+        "ipv4": {
+          "unnumbered": true
+        },
+        "ipv6": {
+          "lla": true
+        },
+        "reload": true
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "lag": {
+        "passive": true
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "irb.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {}
+    },
+    "vptx": {
+      "bfd": {},
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "bundle": [
+          "vlan_aware"
+        ],
+        "irb": true,
+        "multi_rt": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "initial": {
+        "collect": true,
+        "ipv4": {
+          "unnumbered": true
+        },
+        "ipv6": {
+          "lla": true
+        },
+        "reload": true
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "lag": {
+        "passive": true
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "irb.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {
+        "requires": [
+          "evpn"
+        ]
+      }
+    }
+  },
+  "engine_version": "26.09",
+  "module_support": {
+    "arcos": {
+      "bfd": true,
+      "bgp": {
+        "activate_af": true,
+        "import": [
+          "connected",
+          "ospf",
+          "isis",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": false,
+        "local_as": true
+      },
+      "dhcp": {
+        "relay": true,
+        "vrf": true
+      },
+      "evpn": {
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "caveats": true,
+        "circuit_type": true,
+        "import": [
+          "static"
+        ]
+      },
+      "lag": {
+        "passive": false
+      },
+      "mpls": {
+        "ldp": true
+      },
+      "ospf": {
+        "bfd": true,
+        "priority": true,
+        "timers": true
+      },
+      "routing": {
+        "community": {
+          "large": [
+            "standard",
+            "expanded"
+          ],
+          "standard": [
+            "standard",
+            "expanded"
+          ]
+        },
+        "policy": {
+          "delete": {
+            "community": "clist"
+          },
+          "match": {
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "srv6": {
+        "isis": true
+      },
+      "stp": {
+        "enable_per_port": false,
+        "supported_protocols": [
+          "pvrst"
+        ]
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": true
+    },
+    "arubacx": {
+      "bfd": true,
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "bfd": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": false,
+        "multihop": {
+          "vrf": true
+        },
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "bundle": [
+          "vlan_aware"
+        ],
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "lag": {
+        "mlag": {
+          "peer": {
+            "ifindex": 255,
+            "mac": "0600.0000.0000"
+          }
+        },
+        "passive": true
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "default": true,
+        "import": [
+          "bgp",
+          "connected",
+          "vrf",
+          "static"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": {
+              "standard": true
+            }
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "caveats": "caveats-aruba",
+          "discard": true,
+          "inter_vrf": {
+            "caveats": "caveats-aruba"
+          },
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": true
+      },
+      "stp": {
+        "enable_per_port": true,
+        "supported_protocols": [
+          "mstp",
+          "pvrst",
+          "stp"
+        ]
+      },
+      "vlan": {
+        "model": "switch",
+        "svi_interface_name": "vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": true
+    },
+    "asav": {
+      "bgp": true,
+      "isis": {
+        "caveats": true,
+        "circuit_type": true
+      },
+      "ospf": {
+        "caveats": {
+          "core": "caveats-asav"
+        },
+        "import": false,
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": false
+      }
+    },
+    "bird": {
+      "bfd": true,
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "bfd": true,
+        "community": {
+          "2octet": [
+            "standard"
+          ],
+          "extended": [
+            "extended"
+          ],
+          "large": [
+            "large"
+          ],
+          "standard": [
+            "standard",
+            "large"
+          ]
+        },
+        "confederation": true,
+        "default_originate": "static",
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": false,
+        "local_as": true,
+        "local_as_ibgp": true,
+        "passive": true,
+        "password": true,
+        "remove_private_as": true,
+        "rfc8950": true,
+        "role": true,
+        "rs": true,
+        "rs_client": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "libvirt": {
+          "client": {
+            "ipv4": true,
+            "ipv6": true
+          },
+          "relay": {
+            "ipv4": true
+          },
+          "server": true
+        }
+      },
+      "evpn": {
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast"
+        ]
+      },
+      "lag": {
+        "passive": false
+      },
+      "ospf": {
+        "areas": true,
+        "caveats": {
+          "core": true,
+          "unnumbered": true
+        },
+        "default": true,
+        "gr": [
+          "ipv4",
+          "ipv6"
+        ],
+        "import": [
+          "bgp",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "clab": {
+          "dns": {
+            "ipv4": true,
+            "ipv6": true,
+            "transport_vrf": false
+          }
+        }
+      },
+      "vlan": {
+        "clab": {
+          "mixed_trunk": true,
+          "model": "router",
+          "native_routed": true,
+          "subif_name": "{ifname}.{vlan.access_id}",
+          "svi_interface_name": "vlan{vlan}"
+        }
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {
+        "vtep6": true
+      }
+    },
+    "cat8000v": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "auto"
+        },
+        "bfd": true,
+        "community": {
+          "extended": [
+            "extended"
+          ],
+          "standard": [
+            "standard"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "caveats": {
+            "all": "caveats-ios",
+            "replace": "caveats-ios"
+          },
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rs": true,
+        "rs_client": true,
+        "tcp_ao": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "client": {
+          "ipv4": true,
+          "ipv6": true,
+          "routing": true
+        },
+        "relay": true,
+        "server": true,
+        "vrf": true
+      },
+      "eigrp": true,
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan",
+          "mpls",
+          "sr"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "ripv2",
+          "connected",
+          "static"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": {
+          "external_filter": "Cisco IOS cannot suppress NSSA type-7 ranges",
+          "external_range": "Cisco IOS cannot configure NSSA type-7 ranges"
+        },
+        "default": {
+          "policy": true
+        },
+        "import": [
+          "bgp",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "import": [
+          "bgp",
+          "isis",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "acl": true,
+        "aspath": true,
+        "community": {
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "caveats": "yes",
+            "community": "clist"
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": {
+          "strict": true
+        },
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": true,
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "srv6": {
+        "bgp": false,
+        "isis": true,
+        "vpn": true
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{subif_index}",
+        "svi_interface_name": "BDI{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true,
+        "ripng": true,
+        "ripv2": true
+      },
+      "vxlan": true
+    },
+    "cisco8000v": {
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "confederation": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "caveats": {
+            "all": "caveats-iosxr",
+            "replace": "caveats-iosxr"
+          },
+          "valid": [
+            "on",
+            "all",
+            "replace",
+            "ingress",
+            "ingress-all"
+          ]
+        },
+        "rs_client": true,
+        "tcp_ao": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": false,
+        "transport": {
+          "cp_vxlan": [
+            "ibgp"
+          ],
+          "mpls": [
+            "ibgp"
+          ],
+          "sr": [
+            "ibgp"
+          ]
+        }
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "ospf",
+          "bgp",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "mpls": {
+        "6pe": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "default": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": {
+          "caveats": "caveats-iosxr"
+        },
+        "community": {
+          "caveats": "caveats-iosxr",
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": {
+              "large": true,
+              "list": true,
+              "standard": true
+            }
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": {
+          "caveats": "caveats-iosxr"
+        },
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": false,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "BVI{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      }
+    },
+    "crpd": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "irb": true,
+        "transport": []
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": false,
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      }
+    },
+    "csr": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "auto"
+        },
+        "bfd": true,
+        "community": {
+          "extended": [
+            "extended"
+          ],
+          "standard": [
+            "standard"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "caveats": {
+            "all": "caveats-ios",
+            "replace": "caveats-ios"
+          },
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rs": true,
+        "rs_client": true,
+        "tcp_ao": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "client": {
+          "ipv4": true,
+          "ipv6": true,
+          "routing": true
+        },
+        "relay": true,
+        "server": true,
+        "vrf": true
+      },
+      "eigrp": true,
+      "evpn": {
+        "transport": [
+          "mpls",
+          "sr"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "ripv2",
+          "connected",
+          "static"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": {
+          "external_filter": "Cisco IOS cannot suppress NSSA type-7 ranges",
+          "external_range": "Cisco IOS cannot configure NSSA type-7 ranges"
+        },
+        "default": {
+          "policy": true
+        },
+        "import": [
+          "bgp",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "import": [
+          "bgp",
+          "isis",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "acl": true,
+        "aspath": true,
+        "community": {
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "caveats": "yes",
+            "community": "clist"
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": {
+          "strict": true
+        },
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": true,
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{subif_index}",
+        "svi_interface_name": "BDI{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true,
+        "ripng": true,
+        "ripv2": true
+      },
+      "vxlan": true
+    },
+    "csrx": {
+      "routing": {
+        "static": {
+          "discard": true,
+          "vrf": false
+        }
+      }
+    },
+    "cumulus": {
+      "bfd": {
+        "caveats": "caveats-frr"
+      },
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "int",
+          "out": "int"
+        },
+        "bfd": true,
+        "community": {
+          "2octet": [
+            "standard"
+          ],
+          "extended": [
+            "extended"
+          ],
+          "large": [
+            "large"
+          ],
+          "standard": [
+            "standard",
+            "large"
+          ]
+        },
+        "default_originate": true,
+        "description": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": true,
+        "local_as": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rfc8950": true,
+        "rs": true,
+        "rs_client": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "client": {
+          "ipv4": true,
+          "ipv6": true,
+          "routing": true
+        },
+        "relay": {
+          "ipv4": true
+        }
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "lag": {
+        "passive": false
+      },
+      "ospf": {
+        "default": true,
+        "import": [
+          "bgp",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "import": [
+          "bgp",
+          "isis",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "standard": true
+        },
+        "policy": {
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "stp": {
+        "enable_per_port": true,
+        "port_type": true,
+        "supported_protocols": [
+          "stp",
+          "rstp"
+        ]
+      },
+      "vlan": {
+        "model": "switch",
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ripng": true,
+        "ripv2": true
+      },
+      "vxlan": true
+    },
+    "cumulus_nvue": {
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "import": [
+          "connected",
+          "ospf",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": true,
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": true,
+        "rfc8950": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "lag": {
+        "mlag": {
+          "peer": {
+            "backup_ip": "loopback.ipv4",
+            "global": true,
+            "ip": "linklocal",
+            "mac": "44:38:39:ff:00:00",
+            "vlan": 4094
+          }
+        },
+        "passive": false
+      },
+      "ospf": {
+        "areas": true,
+        "caveats": {
+          "core": "caveats-cumulus-nvue"
+        },
+        "default": true,
+        "import": [
+          "bgp",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "stp": {
+        "enable_per_port": true,
+        "port_type": true,
+        "supported_protocols": [
+          "stp",
+          "rstp",
+          "pvrst"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true
+      },
+      "vxlan": true
+    },
+    "dellos10": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": true,
+        "local_as": true,
+        "local_as_ibgp": false,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": false,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "lag": {
+        "mlag": {
+          "peer": {
+            "ip": "loopback.ipv4",
+            "mac": "0200.01a9.0000"
+          }
+        },
+        "passive": true,
+        "reserved_ifindex_range": [
+          1000
+        ]
+      },
+      "ospf": {
+        "areas": {
+          "external_filter": "Dell OS10 cannot suppress NSSA type-7 ranges",
+          "external_range": "Dell OS10 cannot configure NSSA type-7 ranges"
+        },
+        "caveats": {
+          "core": "caveats-os10"
+        },
+        "default": true,
+        "import": [
+          "bgp",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "standard": [
+            "standard"
+          ]
+        },
+        "policy": {
+          "delete": {
+            "community": false
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": false,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "stp": {
+        "enable_per_port": true,
+        "port_type": true,
+        "supported_protocols": [
+          "stp",
+          "rstp",
+          "mstp",
+          "pvrst"
+        ]
+      },
+      "vlan": {
+        "model": "switch",
+        "svi_interface_name": "vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true
+      },
+      "vxlan": true
+    },
+    "dnsmasq": {
+      "dhcp": {
+        "libvirt": {
+          "client": {
+            "ipv4": true,
+            "ipv6": true
+          },
+          "relay": {
+            "ipv4": true
+          },
+          "server": true
+        },
+        "server": true
+      },
+      "lag": {
+        "passive": false
+      },
+      "routing": {
+        "static": true
+      },
+      "services": {
+        "clab": {
+          "dns": {
+            "ipv4": true,
+            "ipv6": true,
+            "transport_vrf": false
+          }
+        },
+        "dns": true,
+        "server": {
+          "dns": true,
+          "syslog": true
+        }
+      },
+      "vlan": {
+        "clab": {
+          "mixed_trunk": true,
+          "model": "router",
+          "native_routed": true,
+          "subif_name": "{ifname}.{vlan.access_id}",
+          "svi_interface_name": "vlan{vlan}"
+        }
+      }
+    },
+    "eos": {
+      "bfd": true,
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "int",
+          "out": "int"
+        },
+        "bfd": true,
+        "community": {
+          "2octet": [
+            "standard"
+          ],
+          "extended": [
+            "extended"
+          ],
+          "large": [
+            "large"
+          ],
+          "standard": [
+            "standard",
+            "large"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "gr": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": true,
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace",
+            "ingress",
+            "ingress-replace"
+          ]
+        },
+        "rs_client": true,
+        "tcp_ao": [
+          "libvirt",
+          "external"
+        ],
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "clab": {
+          "client": {
+            "ipv4": false,
+            "ipv6": false
+          }
+        },
+        "client": {
+          "ipv4": true
+        },
+        "relay": true,
+        "server": true,
+        "vrf": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "bundle": [
+          "vlan_aware"
+        ],
+        "ipv6": true,
+        "irb": true,
+        "transport": [
+          "vxlan",
+          "mpls",
+          "sr"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "caveats": true,
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "lag": {
+        "mlag": {
+          "peer": {
+            "ifindex": 4094,
+            "ip": "169.254.127.0/31",
+            "vlan": 4094
+          }
+        },
+        "passive": true
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": {
+          "external_filter": "Arista EOS cannot suppress NSSA type-7 ranges",
+          "external_range": "Arista EOS cannot configure NSSA type-7 ranges"
+        },
+        "default": {
+          "policy": true
+        },
+        "import": [
+          "bgp",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "ipv4": true,
+        "ipv6": false,
+        "passive": false
+      },
+      "routing": {
+        "acl": true,
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": true,
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": true,
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "stp": {
+        "enable_per_port": true,
+        "port_type": true,
+        "supported_protocols": [
+          "stp",
+          "rstp",
+          "mstp",
+          "pvrst"
+        ]
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{subif_index}",
+        "svi_interface_name": "Vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {
+        "vtep6": true
+      }
+    },
+    "exos": {
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "ospf": {
+        "loopback": {
+          "passive": true
+        },
+        "priority": true,
+        "timers": true
+      },
+      "vlan": {
+        "model": "switch",
+        "svi_interface_name": "vlan{vlan}"
+      }
+    },
+    "fortios": {
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "community": {
+          "extended": [
+            "extended"
+          ],
+          "standard": [
+            "standard"
+          ]
+        },
+        "description": true,
+        "gr": {
+          "caveats": true,
+          "valid": [
+            "enable",
+            "disable"
+          ]
+        },
+        "import": [
+          "ospf",
+          "connected",
+          "static"
+        ],
+        "passive": true,
+        "password": true,
+        "rs": false,
+        "timers": true
+      },
+      "ospf": {
+        "default": true,
+        "gr": [
+          "ipv4",
+          "ipv6"
+        ],
+        "import": [
+          "bgp",
+          "connected",
+          "static"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true
+      },
+      "routing": {
+        "static": {
+          "discard": true
+        }
+      }
+    },
+    "frr": {
+      "bfd": {
+        "caveats": "caveats-frr"
+      },
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "int",
+          "out": "int"
+        },
+        "bfd": true,
+        "community": {
+          "2octet": [
+            "standard"
+          ],
+          "extended": [
+            "extended"
+          ],
+          "large": [
+            "large"
+          ],
+          "standard": [
+            "standard",
+            "large"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "description": true,
+        "gr": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "ripv2",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": true,
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rfc8950": true,
+        "role": true,
+        "rs": true,
+        "rs_client": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "ipv6": true,
+        "irb": true,
+        "multi_rt": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp",
+          "anycast"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ripv2",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "lag": {
+        "passive": false
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": {
+          "ipv4": true
+        }
+      },
+      "ospf": {
+        "areas": true,
+        "default": true,
+        "gr": [
+          "ipv4",
+          "ipv6"
+        ],
+        "import": [
+          "bgp",
+          "ripv2",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "import": [
+          "bgp",
+          "isis",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "caveats": "yes",
+            "community": "clist"
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "clab": {
+          "dns": {
+            "ipv4": true,
+            "ipv6": true,
+            "transport_vrf": false
+          }
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "srv6": {
+        "bgp": true,
+        "isis": true,
+        "vpn": true
+      },
+      "stp": {
+        "enable_per_port": false,
+        "supported_protocols": [
+          "stp"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "keep_module": true,
+        "ospfv2": true,
+        "ospfv3": true,
+        "ripng": true,
+        "ripv2": true
+      },
+      "vxlan": {
+        "vtep6": true
+      }
+    },
+    "iol": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "auto"
+        },
+        "bfd": true,
+        "community": {
+          "extended": [
+            "extended"
+          ],
+          "standard": [
+            "standard"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "caveats": {
+            "all": "caveats-ios",
+            "replace": "caveats-ios"
+          },
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rs": true,
+        "rs_client": true,
+        "tcp_ao": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "client": {
+          "ipv4": true,
+          "ipv6": true,
+          "routing": true
+        },
+        "relay": true,
+        "server": true,
+        "vrf": true
+      },
+      "eigrp": true,
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan",
+          "mpls",
+          "sr"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "ripv2",
+          "connected",
+          "static"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": {
+          "external_filter": "Cisco IOS cannot suppress NSSA type-7 ranges",
+          "external_range": "Cisco IOS cannot configure NSSA type-7 ranges"
+        },
+        "default": {
+          "policy": true
+        },
+        "import": [
+          "bgp",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "import": [
+          "bgp",
+          "isis",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "acl": true,
+        "aspath": true,
+        "community": {
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "caveats": "yes",
+            "community": "clist"
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": {
+          "strict": true
+        },
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": true,
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "srv6": {
+        "bgp": false,
+        "isis": true,
+        "vpn": true
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{subif_index}",
+        "svi_interface_name": "BDI{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true,
+        "ripng": true,
+        "ripv2": true
+      },
+      "vxlan": {
+        "requires": [
+          "evpn"
+        ]
+      }
+    },
+    "ioll2": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "auto"
+        },
+        "bfd": true,
+        "community": {
+          "extended": [
+            "extended"
+          ],
+          "standard": [
+            "standard"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "caveats": {
+            "all": "caveats-ios",
+            "replace": "caveats-ios"
+          },
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rs": true,
+        "rs_client": true,
+        "tcp_ao": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "client": {
+          "ipv4": true,
+          "ipv6": true,
+          "routing": true
+        },
+        "relay": true,
+        "server": true,
+        "vrf": true
+      },
+      "eigrp": true,
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan",
+          "mpls",
+          "sr"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "ripv2",
+          "connected",
+          "static"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "lag": {
+        "mlag": false,
+        "passive": true
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": {
+          "external_filter": "Cisco IOS cannot suppress NSSA type-7 ranges",
+          "external_range": "Cisco IOS cannot configure NSSA type-7 ranges"
+        },
+        "default": {
+          "policy": true
+        },
+        "import": [
+          "bgp",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "import": [
+          "bgp",
+          "isis",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "acl": true,
+        "aspath": true,
+        "community": {
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "caveats": "yes",
+            "community": "clist"
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": {
+          "strict": true
+        },
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": true,
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "srv6": {
+        "bgp": false,
+        "isis": true,
+        "vpn": true
+      },
+      "stp": {
+        "enable_per_port": true,
+        "port_type": true,
+        "supported_protocols": [
+          "stp",
+          "rstp",
+          "mstp",
+          "pvrst"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": false,
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{subif_index}",
+        "svi_interface_name": "Vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true,
+        "ripng": true,
+        "ripv2": true
+      },
+      "vxlan": {
+        "requires": [
+          "evpn"
+        ]
+      }
+    },
+    "iosv": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "auto"
+        },
+        "bfd": true,
+        "community": {
+          "extended": [
+            "extended"
+          ],
+          "standard": [
+            "standard"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "caveats": {
+            "all": "caveats-ios",
+            "replace": "caveats-ios"
+          },
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rs": true,
+        "rs_client": true,
+        "tcp_ao": false,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "client": {
+          "ipv4": true,
+          "ipv6": true,
+          "routing": true
+        },
+        "relay": true,
+        "server": true,
+        "vrf": true
+      },
+      "eigrp": true,
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "ripv2",
+          "connected",
+          "static"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": {
+          "external_filter": "Cisco IOS cannot suppress NSSA type-7 ranges",
+          "external_range": "Cisco IOS cannot configure NSSA type-7 ranges"
+        },
+        "default": {
+          "policy": true
+        },
+        "import": [
+          "bgp",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "import": [
+          "bgp",
+          "isis",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "acl": true,
+        "aspath": true,
+        "community": {
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "caveats": "yes",
+            "community": "clist"
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": {
+          "strict": true
+        },
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": true,
+        "syslog": true
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}.{subif_index}",
+        "svi_interface_name": "BVI{bvi}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true,
+        "ripng": true,
+        "ripv2": true
+      }
+    },
+    "iosvl2": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "auto"
+        },
+        "bfd": true,
+        "community": {
+          "extended": [
+            "extended"
+          ],
+          "standard": [
+            "standard"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "caveats": {
+            "all": "caveats-ios",
+            "replace": "caveats-ios"
+          },
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rs": false,
+        "rs_client": true,
+        "tcp_ao": false,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "dhcp": {
+        "client": {
+          "ipv4": true,
+          "ipv6": true,
+          "routing": true
+        },
+        "relay": true,
+        "server": true,
+        "vrf": true
+      },
+      "eigrp": true,
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "ripv2",
+          "connected",
+          "static"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "lag": {
+        "mlag": false,
+        "passive": true
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": {
+          "external_filter": "Cisco IOS cannot suppress NSSA type-7 ranges",
+          "external_range": "Cisco IOS cannot configure NSSA type-7 ranges"
+        },
+        "default": {
+          "policy": true
+        },
+        "import": [
+          "bgp",
+          "isis",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "import": [
+          "bgp",
+          "isis",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "acl": true,
+        "aspath": true,
+        "community": {
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "caveats": "yes",
+            "community": "clist"
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": {
+          "strict": true
+        },
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": true
+      },
+      "stp": {
+        "enable_per_port": true,
+        "port_type": true,
+        "supported_protocols": [
+          "stp",
+          "rstp",
+          "mstp",
+          "pvrst"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": false,
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{subif_index}",
+        "svi_interface_name": "Vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true,
+        "ripng": true,
+        "ripv2": true
+      }
+    },
+    "iosxr": {
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "confederation": true,
+        "default_originate": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "caveats": {
+            "all": "caveats-iosxr",
+            "replace": "caveats-iosxr"
+          },
+          "valid": [
+            "on",
+            "all",
+            "replace",
+            "ingress",
+            "ingress-all"
+          ]
+        },
+        "rs_client": true,
+        "tcp_ao": true,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": false,
+        "transport": {
+          "cp_vxlan": [
+            "ibgp"
+          ],
+          "mpls": [
+            "ibgp"
+          ],
+          "sr": [
+            "ibgp"
+          ]
+        }
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "ospf",
+          "bgp",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "mpls": {
+        "6pe": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "default": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": {
+          "caveats": "caveats-iosxr"
+        },
+        "community": {
+          "caveats": "caveats-iosxr",
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": {
+              "large": true,
+              "list": true,
+              "standard": true
+            }
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": {
+          "caveats": "caveats-iosxr"
+        },
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis",
+          "ospfv2"
+        ]
+      },
+      "srv6": {
+        "bgp": true,
+        "isis": true,
+        "vpn": true
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      }
+    },
+    "kind": {
+      "dhcp": {
+        "libvirt": {
+          "client": {
+            "ipv4": true,
+            "ipv6": true
+          },
+          "relay": {
+            "ipv4": true
+          },
+          "server": true
+        }
+      },
+      "lag": {
+        "passive": false
+      },
+      "routing": {
+        "static": true
+      },
+      "services": {
+        "clab": {
+          "dns": false
+        }
+      }
+    },
+    "linux": {
+      "dhcp": {
+        "libvirt": {
+          "client": {
+            "ipv4": true,
+            "ipv6": true
+          },
+          "relay": {
+            "ipv4": true
+          },
+          "server": true
+        }
+      },
+      "lag": {
+        "passive": false
+      },
+      "routing": {
+        "static": true
+      },
+      "services": {
+        "clab": {
+          "dns": {
+            "ipv4": true,
+            "ipv6": true,
+            "transport_vrf": false
+          }
+        }
+      },
+      "vlan": {
+        "clab": {
+          "mixed_trunk": true,
+          "model": "router",
+          "native_routed": true,
+          "subif_name": "{ifname}.{vlan.access_id}",
+          "svi_interface_name": "vlan{vlan}"
+        }
+      }
+    },
+    "nxos": {
+      "bfd": true,
+      "bgp": {
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "default_originate": true,
+        "gtsm": true,
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true
+      },
+      "eigrp": true,
+      "evpn": {
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "ospf": {
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": true,
+        "syslog": true
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{subif_index}",
+        "svi_interface_name": "vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true
+      },
+      "vxlan": true
+    },
+    "openbsd": {
+      "bgp": {
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "community": {
+          "2octet": [
+            "standard"
+          ],
+          "extended": [
+            "extended"
+          ],
+          "large": [
+            "large"
+          ],
+          "standard": [
+            "standard",
+            "large"
+          ]
+        },
+        "default_originate": true,
+        "description": true,
+        "gtsm": true,
+        "local_as": true,
+        "passive": true,
+        "password": true,
+        "rs": true,
+        "rs_client": true,
+        "timers": true
+      },
+      "ospf": {
+        "caveats": {
+          "core": true
+        },
+        "default": true,
+        "import": [
+          "connected",
+          "static"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": false
+      },
+      "ripv2": {
+        "import": [
+          "connected",
+          "static"
+        ],
+        "ipv4": true,
+        "ipv6": true,
+        "passive": false
+      },
+      "routing": {
+        "static": {
+          "discard": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        }
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "vlan{vlan.access_id}{ifname[-1]}",
+        "svi_interface_name": "vport{vlan}"
+      },
+      "vxlan": {
+        "vtep6": true
+      }
+    },
+    "routeros": {
+      "bgp": true,
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "caveats": {
+          "core": "caveats-routeros6"
+        }
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}-{vlan.access_id}",
+        "svi_interface_name": "bridge{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true
+      }
+    },
+    "routeros7": {
+      "bfd": true,
+      "bgp": {
+        "activate_af": true,
+        "allowas_in": true,
+        "as_override": true,
+        "default_originate": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on"
+          ]
+        }
+      },
+      "lag": {
+        "passive": true
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "caveats": {
+          "bfd": true
+        }
+      },
+      "routing": {
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": true,
+        "syslog": true
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}-{vlan.access_id}",
+        "svi_interface_name": "vlan{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {
+        "vtep6": true
+      }
+    },
+    "sonic": {
+      "bfd": {
+        "caveats": "caveats-frr"
+      },
+      "bgp": {
+        "_default_locpref": true,
+        "activate_af": true,
+        "advertise": true,
+        "aggregate": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "int",
+          "out": "int"
+        },
+        "bfd": true,
+        "community": {
+          "2octet": [
+            "standard"
+          ],
+          "extended": [
+            "extended"
+          ],
+          "large": [
+            "large"
+          ],
+          "standard": [
+            "standard",
+            "large"
+          ]
+        },
+        "confederation": true,
+        "default_originate": true,
+        "description": true,
+        "gr": true,
+        "gtsm": true,
+        "import": [
+          "ospf",
+          "ripv2",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": true,
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": false,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rfc8950": true,
+        "role": false,
+        "rs": true,
+        "rs_client": true,
+        "timers": false,
+        "vrf_local_as": false
+      },
+      "evpn": {
+        "clab": {
+          "irb": true,
+          "multihoming": {
+            "lag": true
+          },
+          "transport": [
+            "vxlan",
+            "mpls"
+          ]
+        }
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ripv2",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "ospf": {
+        "areas": true,
+        "default": true,
+        "gr": [
+          "ipv4",
+          "ipv6"
+        ],
+        "import": [
+          "bgp",
+          "ripv2",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "caveats": "yes",
+            "community": "clist"
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "nexthop": false,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": false,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true,
+            "weight": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      }
+    },
+    "srlinux": {
+      "bfd": true,
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "caveats": {
+          "import": true,
+          "vrf_import": true
+        },
+        "community": {
+          "2octet": [
+            "standard"
+          ],
+          "extended": [
+            "extended"
+          ],
+          "large": [
+            "large"
+          ],
+          "standard": [
+            "standard",
+            "large"
+          ]
+        },
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf",
+          "no_policy"
+        ],
+        "ipv6_lla": true,
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "rs_client": true,
+        "tcp_ao": false,
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "ospf",
+          "bgp",
+          "connected",
+          "static",
+          "vrf",
+          "no_policy"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": true
+        }
+      },
+      "mpls": {
+        "_platforms": [
+          "ixr-6",
+          "ixr-10",
+          "ixr-18",
+          "ixr-x",
+          "sxr-"
+        ],
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "caveats": {
+          "default": "caveats-srlinux",
+          "import": "caveats-srlinux"
+        },
+        "default": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf",
+          "no_policy"
+        ],
+        "unnumbered": true
+      },
+      "routing": {
+        "policy": {
+          "match": {
+            "prefix": true
+          },
+          "set": {
+            "locpref": true,
+            "med": true
+          }
+        },
+        "prefix": {
+          "caveats": "caveats-srlinux"
+        },
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": true
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "irb0.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "keep_module": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {
+        "requires": [
+          "evpn"
+        ]
+      }
+    },
+    "sros": {
+      "bfd": true,
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "auto",
+          "out": "auto"
+        },
+        "caveats": {
+          "import": "caveats-sros",
+          "vrf_import": "caveats-sros"
+        },
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf",
+          "no_policy"
+        ],
+        "ipv6_lla": false,
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "password": true,
+        "tcp_ao": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "ospf",
+          "bgp",
+          "connected",
+          "static",
+          "vrf",
+          "no_policy"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": false
+        }
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf",
+          "no_policy"
+        ],
+        "strict_bfd": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "policy": {
+          "set": {
+            "locpref": true,
+            "med": true
+          }
+        },
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}/1_{vlan.access_id}",
+        "svi_interface_name": "svi.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": true
+    },
+    "srsim": {
+      "bfd": true,
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bandwidth": {
+          "in": "auto",
+          "out": "auto"
+        },
+        "caveats": {
+          "import": "caveats-sros",
+          "vrf_import": "caveats-sros"
+        },
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf",
+          "no_policy"
+        ],
+        "ipv6_lla": false,
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "password": true,
+        "tcp_ao": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "circuit_type": true,
+        "import": [
+          "ospf",
+          "bgp",
+          "connected",
+          "static",
+          "vrf",
+          "no_policy"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true,
+          "network": false
+        }
+      },
+      "mpls": {
+        "6pe": true,
+        "bgp": true,
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf",
+          "no_policy"
+        ],
+        "strict_bfd": true,
+        "unnumbered": true
+      },
+      "ripv2": {
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "policy": {
+          "set": {
+            "locpref": true,
+            "med": true
+          }
+        },
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}/1_{vlan.access_id}",
+        "svi_interface_name": "svi.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": true
+    },
+    "vjunos-router": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "bundle": [
+          "vlan_aware"
+        ],
+        "irb": true,
+        "multi_rt": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "irb.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": true
+    },
+    "vjunos-switch": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "bundle": [
+          "vlan_aware"
+        ],
+        "irb": true,
+        "multi_rt": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "lag": {
+        "passive": true
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "irb.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": true
+    },
+    "vmx": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": true,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "irb.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      }
+    },
+    "vpp": {
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "connected",
+          "static",
+          "vrf",
+          "ripv2",
+          "isis"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "vlan": {
+        "clab": {
+          "mixed_trunk": true,
+          "model": "router",
+          "native_routed": true,
+          "subif_name": "{ifname}.{vlan.access_id}",
+          "svi_interface_name": "vlan{vlan}"
+        },
+        "model": "router",
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "vlan{vlan}"
+      }
+    },
+    "vptx": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "bundle": [
+          "vlan_aware"
+        ],
+        "irb": true,
+        "multi_rt": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "anycast",
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "lag": {
+        "passive": true
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "irb.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {
+        "requires": [
+          "evpn"
+        ]
+      }
+    },
+    "vsrx": {
+      "bfd": true,
+      "bgp": {
+        "_default_locpref": false,
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "bfd": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "local_as": true,
+        "local_as_ibgp": true,
+        "multihop": {
+          "vrf": true
+        },
+        "passive": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on",
+            "all",
+            "replace"
+          ]
+        },
+        "timers": true,
+        "vrf_local_as": true
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "caveats": "caveats-junos",
+        "circuit_type": true,
+        "import": [
+          "bgp",
+          "ospf",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      "lag": {
+        "passive": true
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": true
+      },
+      "ospf": {
+        "areas": true,
+        "import": [
+          "bgp",
+          "isis",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "password": true,
+        "priority": true,
+        "timers": true,
+        "unnumbered": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "large": true,
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": true
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "large": true,
+              "standard": true
+            },
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "transport_vrf": false
+        }
+      },
+      "sr": {
+        "af": [
+          "ipv4",
+          "ipv6"
+        ],
+        "protocol": [
+          "isis"
+        ]
+      },
+      "vlan": {
+        "mixed_trunk": false,
+        "model": "router",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}"
+      },
+      "vrf": {
+        "bgp": true,
+        "isis": true,
+        "ospfv2": true,
+        "ospfv3": true
+      }
+    },
+    "vyos": {
+      "bfd": {
+        "caveats": true
+      },
+      "bgp": {
+        "activate_af": true,
+        "advertise": true,
+        "allowas_in": true,
+        "as_override": true,
+        "confederation": true,
+        "default_originate": true,
+        "import": [
+          "ospf",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "ipv6_lla": true,
+        "local_as": true,
+        "password": true,
+        "remove_private_as": {
+          "valid": [
+            "on"
+          ]
+        },
+        "vrf_local_as": true
+      },
+      "evpn": {
+        "asymmetrical_irb": true,
+        "irb": true,
+        "transport": [
+          "vxlan"
+        ]
+      },
+      "gateway": {
+        "protocol": [
+          "vrrp"
+        ]
+      },
+      "isis": {
+        "caveats": true,
+        "circuit_type": true
+      },
+      "lag": {
+        "passive": false
+      },
+      "mpls": {
+        "ldp": true,
+        "vpn": {
+          "ipv4": true
+        }
+      },
+      "ospf": {
+        "caveats": {
+          "bfd": true
+        },
+        "default": true,
+        "import": [
+          "bgp",
+          "ripv2",
+          "connected",
+          "static",
+          "vrf"
+        ],
+        "unnumbered": true
+      },
+      "ripv2": {
+        "ipv4": true,
+        "ipv6": true,
+        "passive": true
+      },
+      "routing": {
+        "aspath": true,
+        "community": {
+          "standard": true
+        },
+        "policy": {
+          "delete": {
+            "community": false
+          },
+          "match": {
+            "aspath": true,
+            "community": {
+              "standard": true
+            },
+            "nexthop": true,
+            "prefix": true
+          },
+          "set": {
+            "community": {
+              "append": true,
+              "extended": true,
+              "large": true,
+              "standard": true
+            },
+            "locpref": true,
+            "med": true,
+            "prepend": true
+          }
+        },
+        "prefix": true,
+        "static": {
+          "discard": true,
+          "inter_vrf": true,
+          "vrf": true
+        }
+      },
+      "services": {
+        "dns": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": false
+        },
+        "syslog": {
+          "ipv4": true,
+          "ipv6": true,
+          "transport_vrf": true
+        }
+      },
+      "vlan": {
+        "model": "l3-switch",
+        "native_routed": true,
+        "subif_name": "{ifname}.{vlan.access_id}",
+        "svi_interface_name": "br0.{vlan}"
+      },
+      "vrf": {
+        "bgp": true,
+        "ospfv2": true,
+        "ospfv3": true
+      },
+      "vxlan": {
+        "vtep6": true
+      }
+    }
+  },
+  "modules": [
+    "bfd",
+    "bgp",
+    "dhcp",
+    "eigrp",
+    "evpn",
+    "gateway",
+    "isis",
+    "lag",
+    "mpls",
+    "ospf",
+    "ripv2",
+    "routing",
+    "sr",
+    "srv6",
+    "stp",
+    "vlan",
+    "vrf",
+    "vxlan"
+  ]
+}

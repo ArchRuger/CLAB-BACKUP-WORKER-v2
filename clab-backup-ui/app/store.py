@@ -69,7 +69,7 @@ class Store:
         fresh = json.loads(self.cipher.decrypt(payload))
         current = json.loads(self.cipher.decrypt(self.path.read_bytes())) if self.path.exists() else {}
         if current.get('reset_id') != fresh['reset_id']:
-            for name in ('backups', 'events.jsonl', 'events.jsonl.1', 'events.jsonl.2', 'events.jsonl.3', 'ui.token'):
+            for name in ('backups', 'network-design', 'events.jsonl', 'events.jsonl.1', 'events.jsonl.2', 'events.jsonl.3', 'ui.token'):
                 source = self.root/name
                 if source.exists():
                     self.checked_tree(source)
@@ -89,7 +89,7 @@ class Store:
         with self.lock:
             if self.reset_pending:
                 self.finish_reset(); return
-            for name in ('backups', 'events.jsonl', 'events.jsonl.1', 'events.jsonl.2', 'events.jsonl.3', 'ui.token'):
+            for name in ('backups', 'network-design', 'events.jsonl', 'events.jsonl.1', 'events.jsonl.2', 'events.jsonl.3', 'ui.token'):
                 self.checked_tree(self.root/name)
             host = copy.deepcopy(self.state.get('host', {}))
             if host: host['revision'] = uuid.uuid4().hex

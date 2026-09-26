@@ -30,6 +30,7 @@ from . import __version__
 from .diagnostics import Diagnostics
 from .capture import Captures
 from .telemetry_retirement import TelemetryRetirement, migrate_retired_telemetry, public_retired_telemetry
+from .network_design import NetworkDesign, public_design
 
 APP=Path(__file__).parent
 
@@ -45,6 +46,7 @@ def create_app(data_dir=None):
     git_progress=GitProgress(store,runner)
     restore=RestoreService(store,runner,git_progress)
     telemetry_retirement=TelemetryRetirement(store,services)
+    network_design=NetworkDesign(store)
     @asynccontextmanager
     async def lifespan(app):
         print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
@@ -53,6 +55,7 @@ def create_app(data_dir=None):
         discovery.start()
         readiness_monitor.start()
         yield
+        network_design.close()
         telemetry_retirement.close()
         restore.close()
         git_progress.close()
@@ -81,6 +84,8 @@ def create_app(data_dir=None):
     app.state.captures.install(app)
     app.state.telemetry_retirement=telemetry_retirement
     telemetry_retirement.install(app)
+    app.state.network_design=network_design
+    network_design.install(app)
     @app.middleware('http')
     async def guard(request, call_next):
         if request.url.path.startswith('/api/'):
@@ -128,7 +133,7 @@ def create_app(data_dir=None):
         if not lab: raise HTTPException(404,'Lab not found')
         return lab
     def public_lab(lab):
-        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','telemetry_retired','annotations','annotations_for')}
+        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','telemetry_retired','annotations','annotations_for','network_design','network_generations')}
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
         result['nodes']=[]
         with services.lock: checks={k:copy.deepcopy(v) for k,v in services.checks.items() if k[0]==lab['id']}
@@ -151,6 +156,9 @@ def create_app(data_dir=None):
         result['nos_readiness']=summarize([row['nos_login'] for row in result['nodes']])
         retired=public_retired_telemetry(lab)
         if retired: result['telemetry_retired']=retired
+        # Network design: presence, revision and the newest plan only; the intent and the plans have their own routes.
+        design=public_design(lab)
+        if design: result['design']=design
         return result
     discovery.install(app,public_lab)
     class ResetManager(BaseModel):
@@ -166,6 +174,7 @@ def create_app(data_dir=None):
             with store.lock, services.lock:
                 operations.guard()
                 git_progress.guard_pending()
+                network_design.guard_idle()
                 if services.clients or services.checking:
                     raise HTTPException(409, 'Close SSH sessions and wait for connection checks before resetting.')
                 try: store.reset()
@@ -200,6 +209,7 @@ def create_app(data_dir=None):
         with store.lock:
             lab = get_lab(lab_id)
             git_progress.guard_pending(lab_id)
+            network_design.guard_idle(lab_id)
             if data.name != lab['name']:
                 raise HTTPException(409, 'The lab name changed. Reopen Remove lab and try again.')
             if any(j['lab_id'] == lab_id and j['status'] in ('queued', 'running') for j in store.state['jobs']):
@@ -225,7 +235,9 @@ def create_app(data_dir=None):
             with services.lock:
                 services.checks = {k:v for k,v in services.checks.items() if k[0] != lab_id}
                 services.tickets = {k:v for k,v in services.tickets.items() if v[1] != lab_id}
-            store.event('lab.remove', 'Removed saved workspace and history entries; backup files and audit logs retained; automatic import '+('excluded' if data.prevent_reimport else 'allowed'), lab_id=lab_id)
+            # The lab's generated design plans (plain-text copies of its intent and configuration) go with the workspace.
+            network_design.forget_lab(lab_id)
+            store.event('lab.remove', 'Removed saved workspace, history entries and generated design plans; backup files and audit logs retained; automatic import '+('excluded' if data.prevent_reimport else 'allowed'), lab_id=lab_id)
             return {'removed': lab_id, 'name': lab['name'], 'prevent_reimport': data.prevent_reimport}
 
     @app.get('/api/logs')

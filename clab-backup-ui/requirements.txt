@@ -7,3 +7,6 @@ httpx>=0.27,<1
 python-multipart>=0.0.20,<1
 cryptography>=43
 PyYAML>=6,<7
+# Network design engine (netlab): exact pin, upgraded deliberately with its contract tests
+# (docs/netlab-integration/DECISIONS.md D1.1). Its dependencies do not touch the Ansible stack.
+networklab==26.9

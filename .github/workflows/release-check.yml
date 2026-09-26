@@ -83,6 +83,16 @@ jobs:
           python -m unittest discover -s tests -t tests -p test_remove_lab.py -v
           python -m unittest discover -s tests -t tests -p test_manager_reset.py -v
           python -m unittest discover -s tests -t tests -p test_vm_password.py -v
+      - name: Check network design (the pinned netlab engine on PATH)
+        working-directory: clab-backup-ui
+        run: |
+          export PATH="$RUNNER_TEMP/clab-test-venv/bin:$PATH"
+          netlab version
+          python -m unittest discover -s tests -t tests -p test_design_engine.py -v
+          python -m unittest discover -s tests -t tests -p test_design_capabilities.py -v
+          python -m unittest discover -s tests -t tests -p test_design_intent.py -v
+          python -m unittest discover -s tests -t tests -p test_design_adapter.py -v
+          python -m unittest discover -s tests -t tests -p test_network_design.py -v
       - name: Check browser regressions
         working-directory: clab-backup-ui
         run: node --test tests/test_lab_builder_ui.js tests/test_map_editor_ui.js tests/test_operations_ui.js tests/test_debug_ui.js tests/test_capture_ui.js tests/test_capture_session_ui.js tests/test_topology_ui.js tests/test_vm_password_ui.js tests/test_readiness_ui.js tests/test_download_ui.js tests/test_git_progress_ui.js tests/test_git_places_ui.js tests/test_restore_ui.js tests/test_status_ui.js tests/test_shell_ui.js tests/test_home_ui.js tests/test_diagram_editor_ui.js tests/test_topology_menu_ui.js tests/test_diff_view_ui.js tests/test_lab_builder_yaml_ui.js tests/test_telemetry_retired_ui.js

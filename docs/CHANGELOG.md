@@ -4,6 +4,45 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.43
+
+**Network design, part 1: engine boundary and data model** (the netlab integration stream,
+[docs/netlab-integration/PICKUP.md](netlab-integration/PICKUP.md), [DECISIONS.md](netlab-integration/DECISIONS.md),
+[LEDGER.md](netlab-integration/LEDGER.md); guide [docs/NETWORK-DESIGN.md](NETWORK-DESIGN.md)). API only in this
+release: the student-facing page follows; nothing changes for a lab without a design.
+
+- **A pinned design engine in the image.** `networklab==26.9` (netlab, MIT) is a dependency of the manager and is
+  installed with the image; nothing is installed on the VM or a workstation. It is run as `netlab create` in a
+  private per-job directory with a fixed command line, a fresh `HOME`, a four-variable environment, a timeout,
+  bounded output and netlab's own usage-statistics opt-out seeded; it is never run as a lab lifecycle tool. The
+  runner is the only module that runs netlab (`design_engine.py`).
+- **Network intent on a lab.** A schema-versioned, data-only document (`network_design` on the lab record: address
+  families, pools, modules, per-device and per-link settings, VLANs, VRFs, interface overrides and the allocation
+  ledger) with two layers of validation: the manager's rules (allowlisted keys, prefixes, pool overlap including
+  the lab's management network, duplicates, references, bounds) and the engine's own attribute schema for every
+  module setting, checked by a generic type checker that fails closed. Keys that run code, load files or belong to
+  the manager are refused by name. Saves carry a revision; a stale page is refused.
+- **Explicit identities.** The adapter maps every containerlab kind to a netlab profile from an evidence-carrying
+  table (cEOS and vJunos-switch exact; cJunosEvolved → `vptx` and XRv9k → `iosxr` as declared stand-ins; `linux`
+  hosts generated only) and every link end from the kinds' documented port rules or a student's override; an end
+  that cannot be mapped blocks its devices instead of being guessed. Devices and links are emitted in a sorted
+  order, so the same intent gives byte-identical files whatever the order of the topology file.
+- **Stable allocations.** Node ids, loopbacks, link prefixes and router ids of a plan are pinned in the intent's
+  ledger and reused by the next plan, so an unrelated change does not renumber devices; unavoidable renumbering is
+  listed; *Renumber* forgets the ledger explicitly. netlab's allocator does not skip pinned prefixes, so a
+  collision is detected and fixed with a second engine pass; an overlapping plan fails instead of being shown.
+- **A shared capability model.** For every requested capability and containerlab kind: engine support read from
+  the pinned engine into a committed data file (a contract test regenerates it), image limits, and the
+  integration's own validation level (`verified_on_image`, `generated_not_live_tested`, `unsupported`,
+  `blocked_missing_prerequisite`); an unsupported combination fails the generation before the engine runs and
+  nothing is dropped or downgraded silently.
+- **Generations and their routes.** `GET/PUT /api/labs/{id}/design`, validate, clear, renumber, generate, cancel,
+  the generation record with its plan (devices, interfaces with their containerlab port, addresses, neighbours,
+  BGP sessions, links), each generated file verified against its digest, a ZIP download whose manifest is a
+  `network-design-generation` (never a backup), and the intent's export and import. `/api/state` carries a small
+  `design` summary per lab; the intent and the generations never appear there. Generation touches no device, VM
+  or Docker (tested, including negatively).
+
 ## Changes in 1.30.42
 
 **Technical audit, part 4: backend and state debt** ([docs/technical-audit/AUDIT.md](technical-audit/AUDIT.md), findings
