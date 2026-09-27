@@ -29,7 +29,7 @@ Chromium 153.0.8010.12
       "ipv4": "172.16.0.0/16",
       "ipv6": "2001:db8:2::/48",
       "prefix": 24,
-     
+
   FAIL [P1] CONFIRMED-target: an unrelated guided edit silently drops the router_id pool: {
   "schema": 1,
   "label": "P1",
@@ -51,7 +51,7 @@ Chromium 153.0.8010.12
       "ipv4": "172.16.0.0/16",
       "ipv6": "2001:db8:2::/48",
       "prefix": 24,
-     
+
   FAIL [P1] CONFIRMED-target: an unrelated guided edit silently drops the lan pool's start/allocation keys: {
   "schema": 1,
   "label": "P1",
@@ -73,7 +73,7 @@ Chromium 153.0.8010.12
       "ipv4": "172.16.0.0/16",
       "ipv6": "2001:db8:2::/48",
       "prefix": 24,
-     
+
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P1-02-after-unrelated-guided-edit.png
   PASS [P1] no warning is shown that data was dropped
   FAIL [P1] the loss is permanent: gone again after Save + reload: {
@@ -97,7 +97,7 @@ Chromium 153.0.8010.12
       "ipv4": "172.16.0.0/16",
       "ipv6": "2001:db8:2::/48",
       "prefix": 24,
-     
+
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P1-03-after-save-and-reload.png
 
 === Probe 2 ===
@@ -124,7 +124,7 @@ Chromium 153.0.8010.12
     "lan": {
       "ipv4": "172.16.0.0/16",
       "ipv6": "2001:db8:2::/48",
-     
+
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P2-02-after-unrelated-guided-edit.png
   PASS [P2] no warning is shown that a route reflector was silently dropped
 
@@ -139,7 +139,7 @@ Chromium 153.0.8010.12
   ..   [P3] design-state after Save click: 'Advanced JSON is not valid Advanced JSON is not valid'
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P3-03-malformed-before-generate.png
   ..   [P3] Generate did not start: Page.wait_for_function: Timeout 8000ms exceeded.
-  FAIL [P3] Generate was not blocked by the malformed on-screen text (no disabled state, no refusal): 
+  FAIL [P3] Generate was not blocked by the malformed on-screen text (no disabled state, no refusal):
 
 === Probe 4 ===
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P4-01-plan-with-as-65001.png
@@ -173,7 +173,7 @@ addressing:
     ipv6: 2001:db8:2::/48
     prefix: 24
 modules:
-- 
+-
 
 === Probe 5 ===
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P5-01-lab-b-immediately-after-switch.png
@@ -205,7 +205,7 @@ greenlet.error: cannot switch to a different thread (which happens to have exite
       "ipv6": "2001:db8:1::/48",
       "prefix": 31
     },
-    
+
   ..   [P5] server-side lab B intent: None
   PASS [P5] server-side lab B was never actually touched (this is a rendering race, not a server bug)
 
@@ -279,10 +279,10 @@ greenlet.error: cannot switch to a different thread (which happens to have exite
       "ipv4": "10.255.0.0/24",
       "ipv6": "2001:db8:ff::/48"
     },
-  
+
   PASS [P10] no problem/warning is raised about the 0 being replaced
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-02-p2p-prefix-blank-coerced.png
-  FAIL [P10] CONFIRMED-target: a blank p2p prefix size is silently coerced to the default 31: 
+  FAIL [P10] CONFIRMED-target: a blank p2p prefix size is silently coerced to the default 31:
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-03-vrf-module-auto-checked-after-naming-a-vrf.png
   PASS [P10] defining a VRF auto-enables the vrf module (documented behaviour)
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-04-vrf-checkbox-immediately-after-manual-uncheck.png
@@ -306,7 +306,7 @@ greenlet.error: cannot switch to a different thread (which happens to have exite
       "ipv6": "2001:db8:1::/48",
       "prefix": 31
     },
- 
+
   shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-06-vrf-checkbox-corrects-itself-only-after-a-full-reload.png
   PASS [P10] only a full page reload (a fresh render with no stale setMarkup cache) reveals the module was in fact still on the whole time
 
