@@ -712,12 +712,20 @@ class LabOperations:
         with self.store.lock:
             job = next((j for j in self.store.state['operations'] if j['id'] == ident), {})
             restart_key = (job.get('lab_id'), job.get('node')) if job.get('action') == 'restart-node' and job.get('node') else None
+            # A lab-wide lifecycle job (deploy, redeploy, start, restart) boots every device of the lab: each one's proven
+            # login is history too, and each gets the same login grace window as a single restarted device (QA-019).
+            lab_keys = []
+            if job.get('action') in ('deploy', 'redeploy', 'start', 'restart') and job.get('lab_id'):
+                lab_row = next((l for l in self.store.state.get('labs', []) if l.get('id') == job['lab_id']), None)
+                lab_keys = [(job['lab_id'], n['name']) for n in (lab_row or {}).get('nodes', []) if n.get('name')]
         def invalidate_readiness():
             # Restart device: the device's proven login is history from the moment the restart is
             # accepted; a probe that answered before this moment can no longer mark it ready, and it
             # is asked again after the restart. Done before the helper runs and again after, so neither
             # a probe in flight nor one that ran while the container came back counts.
-            if restart_key and self.readiness: self.readiness.forget(restart_key)
+            if not self.readiness: return
+            if restart_key: self.readiness.forget(restart_key)
+            for key in lab_keys: self.readiness.forget(key)
         try:
             invalidate_readiness()
             update(status='running', started=stamp(), message='Executing on the VM')

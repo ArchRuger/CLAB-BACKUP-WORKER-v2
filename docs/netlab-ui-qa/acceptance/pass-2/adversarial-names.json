@@ -1,0 +1,178 @@
+{
+ "started": "2026-09-27T20:30:05+00:00",
+ "port": 8145,
+ "data": "/tmp/claude-1000/-home-clabllm-projects-clab-manager-1-30-42/5248bba7-3cca-409d-b1cd-6742369f6838/scratchpad/acceptance-opus/fx-8145-adversarial",
+ "cases": [
+  {
+   "case": "routing.policy name of 17 characters",
+   "status": 400,
+   "detail": "Fix the design first: routing.policy.ppppppppppppppppp: Use a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "case": "routing.prefix (prefix-list) name of 17 characters",
+   "status": 400,
+   "detail": "Fix the design first: routing.prefix.ppppppppppppppppp: Use a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "case": "routing.static name of 17 characters",
+   "status": 400,
+   "detail": "Fix the design first: routing.static.ppppppppppppppppp: Use a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "case": "per-device VLAN name of 17 characters",
+   "status": 400,
+   "detail": "Fix the design first: nodes.r1.vlans: Use a mapping of vlans names (each a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore)"
+  },
+  {
+   "case": "a 17-character VRF name as an id-typed value (static route vrf)",
+   "status": 400,
+   "detail": "Fix the design first: nodes.r1.routing.static[0].vrf: The value has the wrong type (expected id)"
+  },
+  {
+   "case": "VRF key with a trailing newline (\"red\\n\")",
+   "status": 400,
+   "detail": "Fix the design first: vrfs.red\n: This name is not accepted in a design: unreadable key"
+  },
+  {
+   "case": "VRF name starting with a digit",
+   "status": 400,
+   "detail": "Fix the design first: vrfs.1red: Use a plain identifier as the name: a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "case": "VRF name with a hyphen (netlab itself accepts [A-Za-z0-9_-])",
+   "status": 400,
+   "detail": "Fix the design first: vrfs.red-blue: Use a plain identifier as the name: a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "case": "BGP AS 0",
+   "status": 400,
+   "detail": "Fix the design first: bgp.as: The value has the wrong type (expected asn)"
+  },
+  {
+   "case": "BGP AS 4294967296",
+   "status": 400,
+   "detail": "Fix the design first: bgp.as: The value has the wrong type (expected asn)"
+  },
+  {
+   "case": "BGP AS as the string \"65000\"",
+   "status": 400,
+   "detail": "Fix the design first: bgp.as: The value has the wrong type (expected asn)"
+  },
+  {
+   "case": "BGP AS true (a bool)",
+   "status": 400,
+   "detail": "Fix the design first: bgp.as: The value has the wrong type (expected asn)"
+  },
+  {
+   "case": "16-character VRF, policy, prefix-list and static names with AS 4294967295",
+   "status": 200,
+   "detail": "saved revision 132076a647ae46d97bf85d16"
+  },
+  {
+   "case": "exploratory: policy match.prefix naming a prefix list that does not exist",
+   "status": 200,
+   "detail": "saved revision 72b716ee5eac05ee6f834379"
+  }
+ ],
+ "manager": "1.30.48",
+ "lab": {
+  "name": "ospf-basics",
+  "id": "470ad64b554e4a778ba0585916174c18",
+  "devices": [
+   "r1",
+   "r2",
+   "r3"
+  ]
+ },
+ "generation": {
+  "status": "succeeded",
+  "detail": "{\"status\": \"succeeded\", \"message\": \"Plan generated\", \"errors\": [], \"engine\": null}"
+ },
+ "exploratory_dangling_prefix_generation": {
+  "status": "succeeded",
+  "detail": "{\"status\": \"succeeded\", \"message\": \"Plan generated\", \"errors\": []}"
+ },
+ "checks": [
+  {
+   "name": "routing.policy name of 17 characters: refused at Save (400) naming \"16 characters\"",
+   "ok": true,
+   "detail": "400 Fix the design first: routing.policy.ppppppppppppppppp: Use a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "name": "routing.prefix (prefix-list) name of 17 characters: refused at Save (400) naming \"16 characters\"",
+   "ok": true,
+   "detail": "400 Fix the design first: routing.prefix.ppppppppppppppppp: Use a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "name": "routing.static name of 17 characters: refused at Save (400) naming \"16 characters\"",
+   "ok": true,
+   "detail": "400 Fix the design first: routing.static.ppppppppppppppppp: Use a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "name": "per-device VLAN name of 17 characters: refused at Save (400) naming \"16 characters\"",
+   "ok": true,
+   "detail": "400 Fix the design first: nodes.r1.vlans: Use a mapping of vlans names (each a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore)"
+  },
+  {
+   "name": "a 17-character VRF name as an id-typed value (static route vrf): refused at Save (400)",
+   "ok": true,
+   "detail": "400 Fix the design first: nodes.r1.routing.static[0].vrf: The value has the wrong type (expected id)"
+  },
+  {
+   "name": "VRF key with a trailing newline (\"red\\n\"): refused at Save (400)",
+   "ok": true,
+   "detail": "400 Fix the design first: vrfs.red\n: This name is not accepted in a design: unreadable key"
+  },
+  {
+   "name": "VRF name starting with a digit: refused at Save (400)",
+   "ok": true,
+   "detail": "400 Fix the design first: vrfs.1red: Use a plain identifier as the name: a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "name": "VRF name with a hyphen (netlab itself accepts [A-Za-z0-9_-]): refused at Save (400)",
+   "ok": true,
+   "detail": "400 Fix the design first: vrfs.red-blue: Use a plain identifier as the name: a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore"
+  },
+  {
+   "name": "BGP AS 0: refused at Save (400) naming \"bgp.as\"",
+   "ok": true,
+   "detail": "400 Fix the design first: bgp.as: The value has the wrong type (expected asn)"
+  },
+  {
+   "name": "BGP AS 4294967296: refused at Save (400) naming \"bgp.as\"",
+   "ok": true,
+   "detail": "400 Fix the design first: bgp.as: The value has the wrong type (expected asn)"
+  },
+  {
+   "name": "BGP AS as the string \"65000\": refused at Save (400) naming \"bgp.as\"",
+   "ok": true,
+   "detail": "400 Fix the design first: bgp.as: The value has the wrong type (expected asn)"
+  },
+  {
+   "name": "BGP AS true (a bool): refused at Save (400) naming \"bgp.as\"",
+   "ok": true,
+   "detail": "400 Fix the design first: bgp.as: The value has the wrong type (expected asn)"
+  },
+  {
+   "name": "16-character VRF, policy, prefix-list and static names with AS 4294967295: saved (200)",
+   "ok": true,
+   "detail": "200 None"
+  },
+  {
+   "name": "generate accepted",
+   "ok": true,
+   "detail": "200 {'id': '53f4b03d7b09499486b6a2eecc735991', 'lab_id': '470ad64b554e4a778ba0585916174c18', 'created': '2026-09-27T20:30:05.898268+00:00', 'status': 'queued', 'message': 'Waiting to generate', 'intent_revision': '132076a647ae46d97bf85d16', 'topology_digest': '41dce097416f88a7a4ead5c4e18477d3ee195bb193a8e389dc60d45c34e06c18', 'adapter_version': '1', 'label': ''}"
+  },
+  {
+   "name": "the real engine generates the plan for names the manager accepted (never fails later)",
+   "ok": true,
+   "detail": "{\"status\": \"succeeded\", \"message\": \"Plan generated\", \"errors\": [], \"engine\": null}"
+  },
+  {
+   "name": "exploratory: policy match.prefix naming a prefix list that does not exist: saved (200)",
+   "ok": true,
+   "detail": "200 None"
+  }
+ ],
+ "finished": "2026-09-27T20:30:10+00:00"
+}

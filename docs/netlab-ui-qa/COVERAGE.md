@@ -293,4 +293,3 @@ mark whether the control was found in Source / DOM / Navigation tracing.
 | ND-STATE-T15 | Draft vs saved revision | clean -> edited elsewhere (import, or another tab) -> local draft now stale -> discarded … | none (client-only) |
 | ND-STATE-T16 | Missing topology precondition | has_topology:false blocks Generate specifically (not Save/guided editing) | POST generate -> 409 NO_TOPOLOGY |
 | ND-STATE-T17 | Unsupported-target precondition | a requested feature is unsupported/blocked-missing-prerequisite for a device's kind | generation fails with status failed, errors[] naming device+feature+k… |
-

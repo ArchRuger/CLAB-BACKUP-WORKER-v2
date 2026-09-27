@@ -1,0 +1,74 @@
+{
+ "started": "2026-09-27T20:43:56+00:00",
+ "manager": "1.30.48",
+ "devices": {
+  "cjunosevolved": {
+   "status": "Tick the interfaces to capture.",
+   "legend": "Connected interfaces",
+   "interfaces": [
+    "eth4\net-0/0/0",
+    "eth5\net-0/0/1"
+   ]
+  },
+  "vjunos-switch": {
+   "status": "Tick the interfaces to capture.",
+   "legend": "Connected interfaces",
+   "interfaces": [
+    "eth1\nge-0/0/0",
+    "eth2\nge-0/0/1",
+    "eth3\nge-0/0/2"
+   ]
+  },
+  "xrv9k": {
+   "status": "Tick the interfaces to capture.",
+   "legend": "Connected interfaces",
+   "interfaces": [
+    "eth1\nGi0/0/0/0",
+    "eth2\nGi0/0/0/1"
+   ]
+  }
+ },
+ "checks": [
+  {
+   "name": "cjunosevolved: the diagram ports are recognised (legend \"Connected interfaces\", no \"not found on the VM\")",
+   "ok": true,
+   "detail": "{\"legend\": \"Connected interfaces\", \"status\": \"Tick the interfaces to capture.\"}"
+  },
+  {
+   "name": "cjunosevolved: the connected interfaces are the containerlab ends of its diagram ports ['eth4', 'eth5']",
+   "ok": true,
+   "detail": "[\"eth4\\net-0/0/0\", \"eth5\\net-0/0/1\"]"
+  },
+  {
+   "name": "vjunos-switch: the diagram ports are recognised (legend \"Connected interfaces\", no \"not found on the VM\")",
+   "ok": true,
+   "detail": "{\"legend\": \"Connected interfaces\", \"status\": \"Tick the interfaces to capture.\"}"
+  },
+  {
+   "name": "vjunos-switch: the connected interfaces are the containerlab ends of its diagram ports ['eth1', 'eth2', 'eth3']",
+   "ok": true,
+   "detail": "[\"eth1\\nge-0/0/0\", \"eth2\\nge-0/0/1\", \"eth3\\nge-0/0/2\"]"
+  },
+  {
+   "name": "xrv9k: the diagram ports are recognised (legend \"Connected interfaces\", no \"not found on the VM\")",
+   "ok": true,
+   "detail": "{\"legend\": \"Connected interfaces\", \"status\": \"Tick the interfaces to capture.\"}"
+  },
+  {
+   "name": "xrv9k: the connected interfaces are the containerlab ends of its diagram ports ['eth1', 'eth2']",
+   "ok": true,
+   "detail": "[\"eth1\\nGi0/0/0/0\", \"eth2\\nGi0/0/0/1\"]"
+  },
+  {
+   "name": "no job and no capture session was created",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "finished": "2026-09-27T20:44:02+00:00"
+}

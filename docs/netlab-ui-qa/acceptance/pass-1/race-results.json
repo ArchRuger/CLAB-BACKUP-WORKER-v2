@@ -1,0 +1,807 @@
+{
+  "pass": "race",
+  "started": "2026-09-27T19:33:18+00:00",
+  "finished": "2026-09-27T19:39:54+00:00",
+  "n_per_behaviour": 20,
+  "chromium": "153.0.8010.12",
+  "data_dir": "/tmp/stress-race-jlkjqu5v",
+  "port": 8142,
+  "race_a": [
+    {
+      "variant": "save",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80000,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80001,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "save",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80002,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80003,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "save",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80004,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80005,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "save",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80006,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80007,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "save",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80008,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80009,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "save",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80010,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80011,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "save",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80012,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80013,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "save",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80014,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80015,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "save",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80016,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "marker": 80017,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "save",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80018,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    },
+    {
+      "variant": "plan-load",
+      "src": "BGP_TheoryToPractice",
+      "dst": "ospf-basics",
+      "marker": 80019,
+      "leak": false,
+      "ok": true,
+      "intercepted": 1
+    }
+  ],
+  "race_a_leaks": 0,
+  "race_b": [
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10000,
+      "new_marker": 510000,
+      "gid_old": "84b283005a664983b4c0396d5467818a",
+      "gid_new": "07ad5f58cff84290b025e363d4a61152",
+      "newest_id_shown": "07ad5f58cff84290b025e363d4a61152",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10001,
+      "new_marker": 510001,
+      "gid_old": "6cbdac1ccf5d406d96369a8c0ae92c9d",
+      "gid_new": "b709d64587204573998113188748fbb6",
+      "newest_id_shown": "b709d64587204573998113188748fbb6",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10002,
+      "new_marker": 510002,
+      "gid_old": "19f275b0db6f44c08fa323a13687684b",
+      "gid_new": "334fccea638a4918b3ec70de6b83ad79",
+      "newest_id_shown": "334fccea638a4918b3ec70de6b83ad79",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10003,
+      "new_marker": 510003,
+      "gid_old": "1dfc5c82c4e34566be817c21469a89bf",
+      "gid_new": "e7501c9c37074184b11cc408502339ba",
+      "newest_id_shown": "e7501c9c37074184b11cc408502339ba",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10004,
+      "new_marker": 510004,
+      "gid_old": "d35e02675352428380157e0dbd3ef3d0",
+      "gid_new": "acc8b4a8e8d8473e951e56a0e2e2e2b4",
+      "newest_id_shown": "acc8b4a8e8d8473e951e56a0e2e2e2b4",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10005,
+      "new_marker": 510005,
+      "gid_old": "4c7deea6ce0c44799d4b18dd4a57d221",
+      "gid_new": "8da983edce3b4128a887f1cddc1b5e51",
+      "newest_id_shown": "8da983edce3b4128a887f1cddc1b5e51",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10006,
+      "new_marker": 510006,
+      "gid_old": "c013288fd549490abf09fefee9ffa593",
+      "gid_new": "6c5935977f8845588dea270e0b058843",
+      "newest_id_shown": "6c5935977f8845588dea270e0b058843",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10007,
+      "new_marker": 510007,
+      "gid_old": "26386beb68f04614b58fcc57d2d36e37",
+      "gid_new": "65fdca955d0a4f739d343b15e9b59dd5",
+      "newest_id_shown": "65fdca955d0a4f739d343b15e9b59dd5",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10008,
+      "new_marker": 510008,
+      "gid_old": "a23ffdf349dd40158924e8673cd99fe0",
+      "gid_new": "94864913a0c24d808952d8d185a37419",
+      "newest_id_shown": "94864913a0c24d808952d8d185a37419",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10009,
+      "new_marker": 510009,
+      "gid_old": "b766991f5b04435789ac7fd3fc414c13",
+      "gid_new": "12d2af151ca84601bf27fa41e2f43e93",
+      "newest_id_shown": "12d2af151ca84601bf27fa41e2f43e93",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10010,
+      "new_marker": 510010,
+      "gid_old": "e0039f3520214156a3fbf547d37b48b5",
+      "gid_new": "b15d02d904934006b29b372c12a411c6",
+      "newest_id_shown": "b15d02d904934006b29b372c12a411c6",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10011,
+      "new_marker": 510011,
+      "gid_old": "4a4a927b75fd43fa846738ab576cc138",
+      "gid_new": "324bba5908bc416aba437c6e6e6f3650",
+      "newest_id_shown": "324bba5908bc416aba437c6e6e6f3650",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10012,
+      "new_marker": 510012,
+      "gid_old": "703fbe4dd0dd41289377aff87c6ec412",
+      "gid_new": "bb3f14192316440a99285d7c9103dfc6",
+      "newest_id_shown": "bb3f14192316440a99285d7c9103dfc6",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10013,
+      "new_marker": 510013,
+      "gid_old": "58ac5e55686d4791b2666df46a4f5986",
+      "gid_new": "de22e13a0e6c4f6cbece5d0c5b84fe02",
+      "newest_id_shown": "de22e13a0e6c4f6cbece5d0c5b84fe02",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10014,
+      "new_marker": 510014,
+      "gid_old": "489c397c0e324d88b18db60093526091",
+      "gid_new": "83105e3895974806b12520ab6edf1776",
+      "newest_id_shown": "83105e3895974806b12520ab6edf1776",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10015,
+      "new_marker": 510015,
+      "gid_old": "dd83b75e20d34c4ca88f867b42f9e3b4",
+      "gid_new": "23f19bdf750a425b952c867cef072df4",
+      "newest_id_shown": "23f19bdf750a425b952c867cef072df4",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10016,
+      "new_marker": 510016,
+      "gid_old": "fde02382077c445f9d6eb05c1e368afd",
+      "gid_new": "8b89c98a1462492686186ad47860b850",
+      "newest_id_shown": "8b89c98a1462492686186ad47860b850",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10017,
+      "new_marker": 510017,
+      "gid_old": "40671b49524343aa98af392c4a86d812",
+      "gid_new": "387bf3543b5a4fc9a17eeedf61661833",
+      "newest_id_shown": "387bf3543b5a4fc9a17eeedf61661833",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "ospf-basics",
+      "old_marker": 10018,
+      "new_marker": 510018,
+      "gid_old": "da606be16183435ab4604f8a67e874b2",
+      "gid_new": "cd67a2bcc80944de8e42b61a892b9fe3",
+      "newest_id_shown": "cd67a2bcc80944de8e42b61a892b9fe3",
+      "newest_won": true,
+      "ok": true
+    },
+    {
+      "lab": "BGP_TheoryToPractice",
+      "old_marker": 10019,
+      "new_marker": 510019,
+      "gid_old": "d72b2dbde34b481c84d04f4bfb4634d8",
+      "gid_new": "2dc9b10959fc4ec4824dc45f444173fd",
+      "newest_id_shown": "2dc9b10959fc4ec4824dc45f444173fd",
+      "newest_won": true,
+      "ok": true
+    }
+  ],
+  "race_b_stale": 0,
+  "summary": {
+    "checks_total": 80,
+    "checks_failed": 0,
+    "failed": [],
+    "checks": [
+      {
+        "name": "race-a save marker=80000: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80000 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80001: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80001 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a save marker=80002: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80002 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80003: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80003 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a save marker=80004: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80004 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80005: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80005 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a save marker=80006: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80006 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80007: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80007 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a save marker=80008: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80008 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80009: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80009 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a save marker=80010: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80010 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80011: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80011 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a save marker=80012: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80012 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80013: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80013 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a save marker=80014: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80014 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80015: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80015 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a save marker=80016: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80016 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80017: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80017 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a save marker=80018: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a save marker=80018 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-a plan-load marker=80019: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-a plan-load marker=80019 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics",
+        "ok": true,
+        "detail": "title=ospf-basics js_lab_is_dst=True leaked=False intercepted_requests=1"
+      },
+      {
+        "name": "race-b marker=10000: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10000 new=510000): newest generation wins",
+        "ok": true,
+        "detail": "shown=07ad5f58cff84290b025e363d4a61152 expected_newest=07ad5f58cff84290b025e363d4a61152 old_gid=84b283005a664983b4c0396d5467818a plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10001: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10001 new=510001): newest generation wins",
+        "ok": true,
+        "detail": "shown=b709d64587204573998113188748fbb6 expected_newest=b709d64587204573998113188748fbb6 old_gid=6cbdac1ccf5d406d96369a8c0ae92c9d plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10002: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10002 new=510002): newest generation wins",
+        "ok": true,
+        "detail": "shown=334fccea638a4918b3ec70de6b83ad79 expected_newest=334fccea638a4918b3ec70de6b83ad79 old_gid=19f275b0db6f44c08fa323a13687684b plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10003: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10003 new=510003): newest generation wins",
+        "ok": true,
+        "detail": "shown=e7501c9c37074184b11cc408502339ba expected_newest=e7501c9c37074184b11cc408502339ba old_gid=1dfc5c82c4e34566be817c21469a89bf plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10004: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10004 new=510004): newest generation wins",
+        "ok": true,
+        "detail": "shown=acc8b4a8e8d8473e951e56a0e2e2e2b4 expected_newest=acc8b4a8e8d8473e951e56a0e2e2e2b4 old_gid=d35e02675352428380157e0dbd3ef3d0 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10005: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10005 new=510005): newest generation wins",
+        "ok": true,
+        "detail": "shown=8da983edce3b4128a887f1cddc1b5e51 expected_newest=8da983edce3b4128a887f1cddc1b5e51 old_gid=4c7deea6ce0c44799d4b18dd4a57d221 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10006: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10006 new=510006): newest generation wins",
+        "ok": true,
+        "detail": "shown=6c5935977f8845588dea270e0b058843 expected_newest=6c5935977f8845588dea270e0b058843 old_gid=c013288fd549490abf09fefee9ffa593 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10007: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10007 new=510007): newest generation wins",
+        "ok": true,
+        "detail": "shown=65fdca955d0a4f739d343b15e9b59dd5 expected_newest=65fdca955d0a4f739d343b15e9b59dd5 old_gid=26386beb68f04614b58fcc57d2d36e37 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10008: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10008 new=510008): newest generation wins",
+        "ok": true,
+        "detail": "shown=94864913a0c24d808952d8d185a37419 expected_newest=94864913a0c24d808952d8d185a37419 old_gid=a23ffdf349dd40158924e8673cd99fe0 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10009: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10009 new=510009): newest generation wins",
+        "ok": true,
+        "detail": "shown=12d2af151ca84601bf27fa41e2f43e93 expected_newest=12d2af151ca84601bf27fa41e2f43e93 old_gid=b766991f5b04435789ac7fd3fc414c13 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10010: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10010 new=510010): newest generation wins",
+        "ok": true,
+        "detail": "shown=b15d02d904934006b29b372c12a411c6 expected_newest=b15d02d904934006b29b372c12a411c6 old_gid=e0039f3520214156a3fbf547d37b48b5 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10011: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10011 new=510011): newest generation wins",
+        "ok": true,
+        "detail": "shown=324bba5908bc416aba437c6e6e6f3650 expected_newest=324bba5908bc416aba437c6e6e6f3650 old_gid=4a4a927b75fd43fa846738ab576cc138 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10012: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10012 new=510012): newest generation wins",
+        "ok": true,
+        "detail": "shown=bb3f14192316440a99285d7c9103dfc6 expected_newest=bb3f14192316440a99285d7c9103dfc6 old_gid=703fbe4dd0dd41289377aff87c6ec412 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10013: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10013 new=510013): newest generation wins",
+        "ok": true,
+        "detail": "shown=de22e13a0e6c4f6cbece5d0c5b84fe02 expected_newest=de22e13a0e6c4f6cbece5d0c5b84fe02 old_gid=58ac5e55686d4791b2666df46a4f5986 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10014: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10014 new=510014): newest generation wins",
+        "ok": true,
+        "detail": "shown=83105e3895974806b12520ab6edf1776 expected_newest=83105e3895974806b12520ab6edf1776 old_gid=489c397c0e324d88b18db60093526091 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10015: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10015 new=510015): newest generation wins",
+        "ok": true,
+        "detail": "shown=23f19bdf750a425b952c867cef072df4 expected_newest=23f19bdf750a425b952c867cef072df4 old_gid=dd83b75e20d34c4ca88f867b42f9e3b4 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10016: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10016 new=510016): newest generation wins",
+        "ok": true,
+        "detail": "shown=8b89c98a1462492686186ad47860b850 expected_newest=8b89c98a1462492686186ad47860b850 old_gid=fde02382077c445f9d6eb05c1e368afd plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10017: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10017 new=510017): newest generation wins",
+        "ok": true,
+        "detail": "shown=387bf3543b5a4fc9a17eeedf61661833 expected_newest=387bf3543b5a4fc9a17eeedf61661833 old_gid=40671b49524343aa98af392c4a86d812 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10018: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on ospf-basics (old=10018 new=510018): newest generation wins",
+        "ok": true,
+        "detail": "shown=cd67a2bcc80944de8e42b61a892b9fe3 expected_newest=cd67a2bcc80944de8e42b61a892b9fe3 old_gid=da606be16183435ab4604f8a67e874b2 plan_shows_old_marker=True intercepted=1"
+      },
+      {
+        "name": "race-b marker=10019: call 1 was actually captured",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "race-b out-of-order polls on BGP_TheoryToPractice (old=10019 new=510019): newest generation wins",
+        "ok": true,
+        "detail": "shown=2dc9b10959fc4ec4824dc45f444173fd expected_newest=2dc9b10959fc4ec4824dc45f444173fd old_gid=d72b2dbde34b481c84d04f4bfb4634d8 plan_shows_old_marker=True intercepted=1"
+      }
+    ],
+    "console_errors_total": 0,
+    "console_errors_unhandled": [],
+    "page_errors": [],
+    "requests_failed": [],
+    "anomalies": []
+  }
+}

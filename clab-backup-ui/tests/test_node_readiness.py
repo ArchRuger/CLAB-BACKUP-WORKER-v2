@@ -186,6 +186,28 @@ class ReadinessTests(unittest.TestCase):
             self.rescan()
             self.assertEqual([n['nos_login']['status'] for n in self.public()['nodes']], ['ready', 'ready'], 'the lab is free again: both devices are probed and answer')
 
+    def test_a_refused_login_right_after_a_manager_restart_reads_booting_until_the_grace_window_closes(self):
+        # QA-019: IOS XR answers SSH for minutes before it accepts any login. After a restart, start or deploy the
+        # manager itself performed (forget() marks the epoch), a refused login is the boot, not wrong credentials.
+        from app.node_readiness import LOGIN_GRACE
+        key = ('lab', 'clab-demo-r1'); self.answers = {'clab-demo-r1': 'failed', 'clab-demo-r2': 'reachable'}
+        with patch.object(self.app.state.runner.pool, 'submit'):
+            self.monitor.forget(key)
+            for _ in range(REFUSALS_BEFORE_FAILED + 2):
+                self.rescan()
+                login = self.public()['nodes'][0]['nos_login']
+                self.assertEqual(login['status'], 'booting', login)
+                self.assertIn('not accepted yet', login['message'])
+            self.assertEqual(self.monitor.refusals.get(key, 0), 0, 'the count does not start inside the window')
+            # Once the window is over the ordinary rule applies: three refusals in a row are a failure.
+            later = time.monotonic() + LOGIN_GRACE + 1
+            with patch('app.node_readiness.time.monotonic', return_value=later):
+                for attempt in range(REFUSALS_BEFORE_FAILED):
+                    self.rescan()
+                    status = self.public()['nodes'][0]['nos_login']['status']
+                    self.assertEqual(status, 'booting' if attempt < REFUSALS_BEFORE_FAILED - 1 else 'failed', attempt)
+            # A device the manager never touched gets no window: test_a_refused_login_is_reported_only_when_it_persists… above.
+
     def test_a_refused_login_is_reported_only_when_it_persists_and_never_opens_ssh(self):
         self.answers = {'clab-demo-r1': 'failed', 'clab-demo-r2': 'reachable'}
         with patch.object(self.app.state.runner.pool, 'submit') as submit:

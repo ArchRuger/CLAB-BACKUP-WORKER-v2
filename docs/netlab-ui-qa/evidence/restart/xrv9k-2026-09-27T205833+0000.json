@@ -1,0 +1,404 @@
+{
+ "started": "2026-09-27T20:58:33+00:00",
+ "manager": "1.30.49",
+ "containerlab": "0.79.0",
+ "lab": "restore-square",
+ "lab_id": "174386ec12ee496190c585c5796b2662",
+ "device": "clab-restore-square-xrv9k",
+ "label": "xrv9k",
+ "kind": "cisco_xrv9k",
+ "runs": {
+  "map-running": {
+   "before": {
+    "clab-restore-square-ceos": {
+     "id": "1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a",
+     "started": "2026-09-27T20:33:47.675161284Z",
+     "status": "running",
+     "pid": 3420715
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5",
+     "started": "2026-09-27T20:13:31.729226962Z",
+     "status": "running",
+     "pid": 3336650
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de",
+     "started": "2026-09-27T18:45:24.008831742Z",
+     "status": "running",
+     "pid": 3124584
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d",
+     "started": "2026-09-27T20:36:35.42844266Z",
+     "status": "running",
+     "pid": 3429890
+    },
+    "clab-restore-square-host1": {
+     "id": "f70592ffd78eb5eb3bc248fb96ee0fee0b0c48a3acacb7461f4f4be5cbaedc1a",
+     "started": "2026-09-27T20:34:13.041937123Z",
+     "status": "running",
+     "pid": 3423325
+    }
+   },
+   "links_before": [
+    "ctrl-dummy",
+    "dev-dummy",
+    "eth1@if375",
+    "eth2@if383"
+   ],
+   "entry": "map",
+   "design_before": {
+    "design_revision": "c80a6c7278ecb6083bc9e883",
+    "design_updated": "2026-09-27T02:53:26.674998+00:00",
+    "generations": [
+     [
+      "d6334bf4f22c425d849432b6cdd20ea4",
+      "succeeded"
+     ],
+     [
+      "9c4456611e754e71a88b7ddea6311926",
+      "succeeded"
+     ],
+     [
+      "44871fdd6f244fe4af50c734a2d19961",
+      "succeeded"
+     ],
+     [
+      "f99b9f8605c4451f8f18b94dc50b54ac",
+      "succeeded"
+     ],
+     [
+      "b37045342ee0408282eadf0f5d718f42",
+      "succeeded"
+     ],
+     [
+      "07503fb90ae34fa2ba7caa73783bb9a3",
+      "failed"
+     ],
+     [
+      "6a7f2374899447039254253e49baed30",
+      "succeeded"
+     ],
+     [
+      "ad5faba619c44dcdae4ebc6f77276acf",
+      "succeeded"
+     ],
+     [
+      "57371369e14e483bb7e25ee6f64c6f3f",
+      "succeeded"
+     ]
+    ],
+    "git_binding": {
+     "binding_id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+     "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2",
+     "repository": {
+      "id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+      "label": "CLAB-MNGR-DEV-LLM / restore-square/qa-1-30-37",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "restore-square/qa-1-30-37",
+      "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "last_deployed": ""
+   },
+   "confirmed_at": "2026-09-27T20:58:38+00:00",
+   "job": {
+    "id": "29b877e2ef4f4bf98a0fc8d80da35d19",
+    "action": "restart-node",
+    "node": "clab-restore-square-xrv9k",
+    "node_label": "xrv9k",
+    "status": "succeeded",
+    "exit_code": 0,
+    "message": "Operation completed \u00b7 2 links restored",
+    "created": "2026-09-27T20:58:38.490975+00:00",
+    "started": "2026-09-27T20:58:38.502188+00:00",
+    "finished": "2026-09-27T20:58:48.315809+00:00"
+   },
+   "job_output": "20:58:38 INFO Parsing & checking topology file=restore-square.clab.yml\n20:58:45 INFO Restored link node=xrv9k interface=eth1\n20:58:45 INFO Restored link node=xrv9k interface=eth2\n",
+   "after": {
+    "clab-restore-square-ceos": {
+     "id": "1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a",
+     "started": "2026-09-27T20:33:47.675161284Z",
+     "status": "running",
+     "pid": 3420715
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5",
+     "started": "2026-09-27T20:13:31.729226962Z",
+     "status": "running",
+     "pid": 3336650
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de",
+     "started": "2026-09-27T18:45:24.008831742Z",
+     "status": "running",
+     "pid": 3124584
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d",
+     "started": "2026-09-27T20:58:45.79517717Z",
+     "status": "running",
+     "pid": 3478402
+    },
+    "clab-restore-square-host1": {
+     "id": "f70592ffd78eb5eb3bc248fb96ee0fee0b0c48a3acacb7461f4f4be5cbaedc1a",
+     "started": "2026-09-27T20:34:13.041937123Z",
+     "status": "running",
+     "pid": 3423325
+    }
+   },
+   "links_after": [
+    "ctrl-dummy",
+    "dev-dummy",
+    "eth1@if375",
+    "eth2@if383"
+   ],
+   "readiness": {
+    "states": [
+     [
+      "2026-09-27T20:58:48+00:00",
+      "booting"
+     ],
+     [
+      "2026-09-27T21:03:51+00:00",
+      "ready"
+     ]
+    ],
+    "ready_at": "2026-09-27T21:03:49.238015+00:00",
+    "budget_s": 1200
+   },
+   "design_after": {
+    "design_revision": "c80a6c7278ecb6083bc9e883",
+    "design_updated": "2026-09-27T02:53:26.674998+00:00",
+    "generations": [
+     [
+      "d6334bf4f22c425d849432b6cdd20ea4",
+      "succeeded"
+     ],
+     [
+      "9c4456611e754e71a88b7ddea6311926",
+      "succeeded"
+     ],
+     [
+      "44871fdd6f244fe4af50c734a2d19961",
+      "succeeded"
+     ],
+     [
+      "f99b9f8605c4451f8f18b94dc50b54ac",
+      "succeeded"
+     ],
+     [
+      "b37045342ee0408282eadf0f5d718f42",
+      "succeeded"
+     ],
+     [
+      "07503fb90ae34fa2ba7caa73783bb9a3",
+      "failed"
+     ],
+     [
+      "6a7f2374899447039254253e49baed30",
+      "succeeded"
+     ],
+     [
+      "ad5faba619c44dcdae4ebc6f77276acf",
+      "succeeded"
+     ],
+     [
+      "57371369e14e483bb7e25ee6f64c6f3f",
+      "succeeded"
+     ]
+    ],
+    "git_binding": {
+     "binding_id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+     "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2",
+     "repository": {
+      "id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+      "label": "CLAB-MNGR-DEV-LLM / restore-square/qa-1-30-37",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "restore-square/qa-1-30-37",
+      "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "last_deployed": ""
+   }
+  }
+ },
+ "reviews": {
+  "map-running": "Restart xrv9k?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (proven on cisco_xrv9k 24.3.1 with containerlab 0.79.0). Back up the configuration first and use Replace running configuration afterwards.\n\nOnly xrv9k in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 18 hours ago to Git.\n\n1 device affected: xrv9k (clab-restore-square-xrv9k, running). The other devices of restore-square are not restarted.\n\nTechnical details\n\nRuns on the lab VM. If the lab changes before you confirm, this check is repeated.\n\nCancel\nSave progress first\nRestart device"
+ },
+ "chromium": "153.0.8010.12",
+ "checks": [
+  {
+   "name": "the map menu offers Restart device\u2026 for the device",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "name": "the review is titled for the one device",
+   "ok": true,
+   "detail": "Restart xrv9k?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the XRv9k image: its launcher picks the VM disk by file name at every s"
+  },
+  {
+   "name": "the review names the device and the lab and the native operation",
+   "ok": true,
+   "detail": "Restart xrv9k?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configurat"
+  },
+  {
+   "name": "the review says what drops and does not promise unrelated traffic is untouched",
+   "ok": true,
+   "detail": "Restart xrv9k?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configurat"
+  },
+  {
+   "name": "the review says nothing is saved, backed up, reset or reapplied",
+   "ok": true,
+   "detail": "Restart xrv9k?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configurat"
+  },
+  {
+   "name": "the affected list is the one device",
+   "ok": true,
+   "detail": "Restart xrv9k?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configurat"
+  },
+  {
+   "name": "the command names exactly one --node, followed by the device",
+   "ok": false,
+   "detail": "(containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 18 hours ago to Git.\n\n1 device affected: xrv9k (clab-restore-square-xrv9k, running). "
+  },
+  {
+   "name": "the confirm button is the destructive Restart device",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the review names the known limit of this image before the student confirms",
+   "ok": true,
+   "detail": "Restart xrv9k?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configurat"
+  },
+  {
+   "name": "Cancel starts nothing",
+   "ok": true,
+   "detail": "jobs grew"
+  },
+  {
+   "name": "Cancel leaves the container untouched",
+   "ok": true,
+   "detail": "{\"id\": \"520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d\", \"started\": \"2026-09-27T20:36:35.42844266Z\", \"status\": \"running\", \"pid\": 3429890}"
+  },
+  {
+   "name": "the device reads Restarting while the job runs",
+   "ok": true,
+   "detail": "pill: Restarting"
+  },
+  {
+   "name": "the lab banner names the device being restarted",
+   "ok": true,
+   "detail": "Restarting xrv9k\u2026DetailsExecuting on the VMStart labView outputView progressTry againRetryDetailsCheck credentialsVM connection\u2026Match to a running lab\u2026Review and remove\u2026Dismiss\u00d7"
+  },
+  {
+   "name": "one Restart device job exists for the device",
+   "ok": true,
+   "detail": "{\"id\": \"29b877e2ef4f4bf98a0fc8d80da35d19\", \"lab_id\": \"174386ec12ee496190c585c5796b2662\", \"name\": \"restore-square\", \"action\": \"restart-node\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"created\": \"2026-09-27T20:58:38.490975+00:00\", \"status\": \"running\", \""
+  },
+  {
+   "name": "the job succeeded",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "the job output is containerlab's own restart log",
+   "ok": true,
+   "detail": "20:58:38 INFO Parsing & checking topology file=restore-square.clab.yml\n20:58:45 INFO Restored link node=xrv9k interface=eth1\n20:58:45 INFO Restored link node=xrv9k interface=eth2\n"
+  },
+  {
+   "name": "the job message counts the restored links",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "every dataplane link of the device was restored",
+   "ok": true,
+   "detail": "restored 2, expected 2"
+  },
+  {
+   "name": "the target kept its container id and has a new start time",
+   "ok": true,
+   "detail": "{\"id\": \"520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d\", \"started\": \"2026-09-27T20:58:45.79517717Z\", \"status\": \"running\", \"pid\": 3478402}"
+  },
+  {
+   "name": "the other containers kept their ids, start times and processes",
+   "ok": true,
+   "detail": "{\"clab-restore-square-ceos\": {\"id\": \"1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a\", \"started\": \"2026-09-27T20:33:47.675161284Z\", \"status\": \"running\", \"pid\": 3420715}, \"clab-restore-square-cjunosevolved\": {\"id\": \"5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5\", \"started\": \"2026-09-27T20:13:31.729226962Z\", \"status\": \"running\", \"pid\": 3336650}, \"clab-restore-squa"
+  },
+  {
+   "name": "the device has its dataplane interfaces back",
+   "ok": true,
+   "detail": "ctrl-dummy, dev-dummy, eth1@if375, eth2@if383"
+  },
+  {
+   "name": "the device went back through Starting (its old proof was dropped)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T20:58:48+00:00\", \"booting\"], [\"2026-09-27T21:03:51+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "no false credentials failure between Starting and Ready",
+   "ok": true,
+   "detail": "[[\"2026-09-27T20:58:48+00:00\", \"booting\"], [\"2026-09-27T21:03:51+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the device is Ready again with a check made after the restart (within 1200 s)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T20:58:48+00:00\", \"booting\"], [\"2026-09-27T21:03:51+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the rail reads Ready for the device again",
+   "ok": true,
+   "detail": "Ready"
+  },
+  {
+   "name": "the design, its plans, the Git binding and the deployment time are untouched",
+   "ok": true,
+   "detail": "{\"before\": {\"design_revision\": \"c80a6c7278ecb6083bc9e883\", \"design_updated\": \"2026-09-27T02:53:26.674998+00:00\", \"generations\": [[\"d6334bf4f22c425d849432b6cdd20ea4\", \"succeeded\"], [\"9c4456611e754e71a88b7ddea6311926\", \"succeeded\"], [\"44871fdd6f244fe4af50c734a2d19961\", \"succeeded\"], [\"f99b9f8605c4451f8f18b94dc50b54ac\", \"succeeded\"], [\"b37045342ee0408282eadf0f5d718f42\", \"succeeded\"], [\"07503fb90ae34f"
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "shots": [
+  "xrv9k-2058-map-running-01-map-menu.png",
+  "xrv9k-2058-map-running-02-review.png",
+  "xrv9k-2058-map-running-03-restarting.png",
+  "xrv9k-2058-map-running-04-ready-again.png"
+ ],
+ "finished": "2026-09-27T21:03:55+00:00"
+}

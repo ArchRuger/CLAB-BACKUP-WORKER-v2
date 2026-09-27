@@ -1,0 +1,707 @@
+{
+  "pass": "bulk",
+  "started": "2026-09-27T20:31:08+00:00",
+  "finished": "2026-09-27T20:32:06+00:00",
+  "total_generations": 24,
+  "chromium": "153.0.8010.12",
+  "data_dir": "/tmp/claude-1000/-home-clabllm-projects-clab-manager-1-30-42/5248bba7-3cca-409d-b1cd-6742369f6838/scratchpad/acceptance-opus/fx-8147-bulk/stress-bulk-0_u9lsen",
+  "port": 8147,
+  "put_seconds": 0.019,
+  "generate_timings": [
+    2.104,
+    2.141,
+    2.123,
+    2.114,
+    2.158,
+    2.124,
+    2.144,
+    2.118,
+    2.126,
+    2.106,
+    2.139,
+    2.126,
+    2.142,
+    2.126,
+    2.155,
+    2.131,
+    2.143,
+    2.158,
+    2.119,
+    2.139,
+    2.161,
+    2.134,
+    2.14,
+    2.143
+  ],
+  "generate_median": 2.136,
+  "generate_p95": 2.158,
+  "timing": [
+    {
+      "step": "bulk_tab_entry_render",
+      "n": 1,
+      "min": 0.203,
+      "median": 0.203,
+      "p95": 0.203,
+      "max": 0.203
+    },
+    {
+      "step": "bulk_generate_01_paint",
+      "n": 1,
+      "min": 0.055,
+      "median": 0.055,
+      "p95": 0.055,
+      "max": 0.055
+    },
+    {
+      "step": "bulk_generate_01_done",
+      "n": 1,
+      "min": 2.017,
+      "median": 2.017,
+      "p95": 2.017,
+      "max": 2.017
+    },
+    {
+      "step": "bulk_plan_card_render",
+      "n": 1,
+      "min": 0.017,
+      "median": 0.017,
+      "p95": 0.017,
+      "max": 0.017
+    },
+    {
+      "step": "bulk_files_list_render",
+      "n": 1,
+      "min": 0.009,
+      "median": 0.009,
+      "p95": 0.009,
+      "max": 0.009
+    },
+    {
+      "step": "bulk_history_render_inner",
+      "n": 1,
+      "min": 0.12,
+      "median": 0.12,
+      "p95": 0.12,
+      "max": 0.12
+    },
+    {
+      "step": "bulk_history_render",
+      "n": 1,
+      "min": 0.124,
+      "median": 0.124,
+      "p95": 0.124,
+      "max": 0.124
+    },
+    {
+      "step": "bulk_generate_02_paint",
+      "n": 1,
+      "min": 0.074,
+      "median": 0.074,
+      "p95": 0.074,
+      "max": 0.074
+    },
+    {
+      "step": "bulk_generate_02_done",
+      "n": 1,
+      "min": 2.018,
+      "median": 2.018,
+      "p95": 2.018,
+      "max": 2.018
+    },
+    {
+      "step": "bulk_generate_03_paint",
+      "n": 1,
+      "min": 0.061,
+      "median": 0.061,
+      "p95": 0.061,
+      "max": 0.061
+    },
+    {
+      "step": "bulk_generate_03_done",
+      "n": 1,
+      "min": 2.016,
+      "median": 2.016,
+      "p95": 2.016,
+      "max": 2.016
+    },
+    {
+      "step": "bulk_generate_04_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_04_done",
+      "n": 1,
+      "min": 2.02,
+      "median": 2.02,
+      "p95": 2.02,
+      "max": 2.02
+    },
+    {
+      "step": "bulk_generate_05_paint",
+      "n": 1,
+      "min": 0.077,
+      "median": 0.077,
+      "p95": 0.077,
+      "max": 0.077
+    },
+    {
+      "step": "bulk_generate_05_done",
+      "n": 1,
+      "min": 2.032,
+      "median": 2.032,
+      "p95": 2.032,
+      "max": 2.032
+    },
+    {
+      "step": "bulk_generate_06_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_06_done",
+      "n": 1,
+      "min": 2.015,
+      "median": 2.015,
+      "p95": 2.015,
+      "max": 2.015
+    },
+    {
+      "step": "bulk_generate_07_paint",
+      "n": 1,
+      "min": 0.082,
+      "median": 0.082,
+      "p95": 0.082,
+      "max": 0.082
+    },
+    {
+      "step": "bulk_generate_07_done",
+      "n": 1,
+      "min": 2.017,
+      "median": 2.017,
+      "p95": 2.017,
+      "max": 2.017
+    },
+    {
+      "step": "bulk_generate_08_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_08_done",
+      "n": 1,
+      "min": 2.018,
+      "median": 2.018,
+      "p95": 2.018,
+      "max": 2.018
+    },
+    {
+      "step": "bulk_generate_09_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_09_done",
+      "n": 1,
+      "min": 2.019,
+      "median": 2.019,
+      "p95": 2.019,
+      "max": 2.019
+    },
+    {
+      "step": "bulk_generate_10_paint",
+      "n": 1,
+      "min": 0.047,
+      "median": 0.047,
+      "p95": 0.047,
+      "max": 0.047
+    },
+    {
+      "step": "bulk_generate_10_done",
+      "n": 1,
+      "min": 2.018,
+      "median": 2.018,
+      "p95": 2.018,
+      "max": 2.018
+    },
+    {
+      "step": "bulk_generate_11_paint",
+      "n": 1,
+      "min": 0.065,
+      "median": 0.065,
+      "p95": 0.065,
+      "max": 0.065
+    },
+    {
+      "step": "bulk_generate_11_done",
+      "n": 1,
+      "min": 2.031,
+      "median": 2.031,
+      "p95": 2.031,
+      "max": 2.031
+    },
+    {
+      "step": "bulk_generate_12_paint",
+      "n": 1,
+      "min": 0.061,
+      "median": 0.061,
+      "p95": 0.061,
+      "max": 0.061
+    },
+    {
+      "step": "bulk_generate_12_done",
+      "n": 1,
+      "min": 2.032,
+      "median": 2.032,
+      "p95": 2.032,
+      "max": 2.032
+    },
+    {
+      "step": "bulk_generate_13_paint",
+      "n": 1,
+      "min": 0.065,
+      "median": 0.065,
+      "p95": 0.065,
+      "max": 0.065
+    },
+    {
+      "step": "bulk_generate_13_done",
+      "n": 1,
+      "min": 2.031,
+      "median": 2.031,
+      "p95": 2.031,
+      "max": 2.031
+    },
+    {
+      "step": "bulk_generate_14_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_14_done",
+      "n": 1,
+      "min": 2.031,
+      "median": 2.031,
+      "p95": 2.031,
+      "max": 2.031
+    },
+    {
+      "step": "bulk_generate_15_paint",
+      "n": 1,
+      "min": 0.081,
+      "median": 0.081,
+      "p95": 0.081,
+      "max": 0.081
+    },
+    {
+      "step": "bulk_generate_15_done",
+      "n": 1,
+      "min": 2.033,
+      "median": 2.033,
+      "p95": 2.033,
+      "max": 2.033
+    },
+    {
+      "step": "bulk_generate_16_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_16_done",
+      "n": 1,
+      "min": 2.032,
+      "median": 2.032,
+      "p95": 2.032,
+      "max": 2.032
+    },
+    {
+      "step": "bulk_generate_17_paint",
+      "n": 1,
+      "min": 0.064,
+      "median": 0.064,
+      "p95": 0.064,
+      "max": 0.064
+    },
+    {
+      "step": "bulk_generate_17_done",
+      "n": 1,
+      "min": 2.033,
+      "median": 2.033,
+      "p95": 2.033,
+      "max": 2.033
+    },
+    {
+      "step": "bulk_generate_18_paint",
+      "n": 1,
+      "min": 0.095,
+      "median": 0.095,
+      "p95": 0.095,
+      "max": 0.095
+    },
+    {
+      "step": "bulk_generate_18_done",
+      "n": 1,
+      "min": 2.02,
+      "median": 2.02,
+      "p95": 2.02,
+      "max": 2.02
+    },
+    {
+      "step": "bulk_generate_19_paint",
+      "n": 1,
+      "min": 0.045,
+      "median": 0.045,
+      "p95": 0.045,
+      "max": 0.045
+    },
+    {
+      "step": "bulk_generate_19_done",
+      "n": 1,
+      "min": 2.032,
+      "median": 2.032,
+      "p95": 2.032,
+      "max": 2.032
+    },
+    {
+      "step": "bulk_generate_20_paint",
+      "n": 1,
+      "min": 0.064,
+      "median": 0.064,
+      "p95": 0.064,
+      "max": 0.064
+    },
+    {
+      "step": "bulk_generate_20_done",
+      "n": 1,
+      "min": 2.031,
+      "median": 2.031,
+      "p95": 2.031,
+      "max": 2.031
+    },
+    {
+      "step": "bulk_generate_21_paint",
+      "n": 1,
+      "min": 0.081,
+      "median": 0.081,
+      "p95": 0.081,
+      "max": 0.081
+    },
+    {
+      "step": "bulk_generate_21_done",
+      "n": 1,
+      "min": 2.035,
+      "median": 2.035,
+      "p95": 2.035,
+      "max": 2.035
+    },
+    {
+      "step": "bulk_generate_22_paint",
+      "n": 1,
+      "min": 0.064,
+      "median": 0.064,
+      "p95": 0.064,
+      "max": 0.064
+    },
+    {
+      "step": "bulk_generate_22_done",
+      "n": 1,
+      "min": 2.032,
+      "median": 2.032,
+      "p95": 2.032,
+      "max": 2.032
+    },
+    {
+      "step": "bulk_generate_23_paint",
+      "n": 1,
+      "min": 0.061,
+      "median": 0.061,
+      "p95": 0.061,
+      "max": 0.061
+    },
+    {
+      "step": "bulk_generate_23_done",
+      "n": 1,
+      "min": 2.03,
+      "median": 2.03,
+      "p95": 2.03,
+      "max": 2.03
+    },
+    {
+      "step": "bulk_generate_24_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_24_done",
+      "n": 1,
+      "min": 2.033,
+      "median": 2.033,
+      "p95": 2.033,
+      "max": 2.033
+    },
+    {
+      "step": "bulk_history_after_cap",
+      "n": 1,
+      "min": 0.058,
+      "median": 0.058,
+      "p95": 0.058,
+      "max": 0.058
+    },
+    {
+      "step": "bulk_file_after_cap",
+      "n": 1,
+      "min": 0.137,
+      "median": 0.137,
+      "p95": 0.137,
+      "max": 0.137
+    }
+  ],
+  "summary": {
+    "checks_total": 43,
+    "checks_failed": 0,
+    "failed": [],
+    "checks": [
+      {
+        "name": "long-identifier boundary: a 17-character VRF name is refused at save time (400)",
+        "ok": true,
+        "detail": "(400, \"{'detail': 'Fix the design first: vrfs.xxxxxxxxxxxxxxxxx: Use a plain identifier as the name: a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore'}\")"
+      },
+      {
+        "name": "long-identifier boundary: the refusal names the real 16-character limit in the manager's words",
+        "ok": true,
+        "detail": "{'detail': 'Fix the design first: vrfs.xxxxxxxxxxxxxxxxx: Use a plain identifier as the name: a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore'}"
+      },
+      {
+        "name": "long-identifier boundary: a 16-character VRF name (the engine's maximum) is accepted at save time",
+        "ok": true,
+        "detail": "200"
+      },
+      {
+        "name": "long-identifier boundary: generate is accepted for the 16-character name",
+        "ok": true,
+        "detail": "(200, {'id': 'be7c26101b594f10940c0621c6999df0', 'lab_id': '9a59ac5af23e4090995c173d71e22a24', 'created': '2026-09-27T20:31:09.006558+00:00', 'status': 'queued', 'message': 'Waiting to generate', 'intent_revision': '88d3e678f8e1a7157553e968', 'topology_digest': '41dce097416f88a7a4ead5c4e18477d3ee195bb193a8e389dc60d45c34e06c18', 'adapter_version': '1', 'label': ''})"
+      },
+      {
+        "name": "long-identifier boundary: the generation settles within 60s (no hang)",
+        "ok": true,
+        "detail": "{'id': 'be7c26101b594f10940c0621c6999df0', 'lab_id': '9a59ac5af23e4090995c173d71e22a24', 'created': '2026-09-27T20:31:09.006558+00:00', 'started': '2026-09-27T20:31:09.007621+00:00', 'finished': '2026-09-27T20:31:10.130731+00:00', 'status': 'succeeded', 'message': 'Plan generated', 'intent_revision': '88d3e678f8e1a7157553e968', 'topology_digest': '41dce097416f88a7a4ead5c4e18477d3ee195bb193a8e389dc60d45c34e06c18', 'mapping_digest': 'e8260d176b77bb4bf2bc0e3bad75692cd2a853245a5ca19af50073375daf5651"
+      },
+      {
+        "name": "long-identifier boundary: the engine accepts the 16-character name (the manager's rule is the engine's)",
+        "ok": true,
+        "detail": "{'status': 'succeeded', 'message': 'Plan generated', 'errors': []}"
+      },
+      {
+        "name": "bulk setup: read the empty design",
+        "ok": true,
+        "detail": "200"
+      },
+      {
+        "name": "bulk setup: PUT with 300 VRFs + 300 VLANs + 60 static routes saves",
+        "ok": true,
+        "detail": "revision=2ec3691f2e25753c5ed1a310"
+      },
+      {
+        "name": "bulk: the VRF table rendered all 300 rows",
+        "ok": true,
+        "detail": "300"
+      },
+      {
+        "name": "bulk: the VLAN table rendered all 300 rows",
+        "ok": true,
+        "detail": "300"
+      },
+      {
+        "name": "bulk generation #1 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk: plan card mentions this design's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.0.0.1/32Loopback IPv6Router id10.0.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.1/30r2OSPF area 0.0.0.0BGP sessionsNeighbourASTypeI"
+      },
+      {
+        "name": "bulk: files list is non-empty",
+        "ok": true,
+        "detail": "r1normalize 60 B Viewinitial 427 B Viewvlan 0 B Viewrouting 633 B Viewospf 370 B Viewbgp 867 B Viewr2normalize 120 B Viewinitial 544 B Viewvlan 0 B Viewrouting 660 B Viewospf 457 B Viewbgp 867 B Viewr"
+      },
+      {
+        "name": "bulk: history is non-empty after the first generation",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated View"
+      },
+      {
+        "name": "bulk generation #2 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #3 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #4 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #5 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #6 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #7 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #8 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #9 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #10 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #11 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #12 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #13 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #14 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #15 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #16 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #17 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #18 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #19 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #20 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #21 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #22 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #23 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk generation #24 settles (succeeded or a clean failure)",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "bulk boundary: exactly 20 generations retained after 24 requests",
+        "ok": true,
+        "detail": "20"
+      },
+      {
+        "name": "bulk boundary: the oldest 4 generations were the ones pruned",
+        "ok": true,
+        "detail": "{'pruned': ['c462283d744d4a4a9739c364150b98c2', 'c6176df6f9be40a2a405286e8a55ee3e', 'ab97db1cf4204567b5920fc84187f55d'], 'first_created': ['c462283d744d4a4a9739c364150b98c2', 'c6176df6f9be40a2a405286e8a55ee3e', 'ab97db1cf4204567b5920fc84187f55d']}"
+      },
+      {
+        "name": "bulk boundary: the UI history list also shows exactly 20 entries",
+        "ok": true,
+        "detail": "20"
+      },
+      {
+        "name": "bulk boundary: a pruned generation's detail is refused cleanly (404)",
+        "ok": true,
+        "detail": "404"
+      },
+      {
+        "name": "bulk boundary: a pruned generation's file is refused cleanly (404)",
+        "ok": true,
+        "detail": "404"
+      },
+      {
+        "name": "bulk boundary: a still-present generation's file still opens in the UI",
+        "ok": true,
+        "detail": "True"
+      }
+    ],
+    "console_errors_total": 0,
+    "console_errors_unhandled": [],
+    "page_errors": [],
+    "requests_failed": [],
+    "anomalies": []
+  }
+}

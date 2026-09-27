@@ -1,0 +1,910 @@
+{
+ "ND-A11Y-001": {
+  "detail": "role=tab, aria-selected, aria-controls=design-view and roving tabindex all present on #tab-design (checked above)",
+  "evidence": [
+   "evidence/coverage/ND-A11Y-001.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-A11Y-002": {
+  "detail": "#design-view has role=tabpanel aria-labelledby=tab-design",
+  "evidence": [
+   "evidence/coverage/ND-A11Y-002.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-A11Y-003": {
+  "detail": "#design-state has role=status",
+  "evidence": [
+   "evidence/coverage/ND-A11Y-003.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-A11Y-004": {
+  "detail": "role=alert present on #design-problems/#design-plan-errors/#design-apply-choose-error/#design-export-git-error (checked structurally throughout this run)",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:08+00:00",
+  "result": "PASS"
+ },
+ "ND-A11Y-005": {
+  "detail": "native <dialog> elements carry aria-labelledby and a labelled close icon-button (checked on the export/apply/renumber/clear dialogs above)",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:08+00:00",
+  "result": "PASS"
+ },
+ "ND-A11Y-006": {
+  "detail": "th[scope=row] pattern is source-confirmed (network-design.js:429); this lab's compatibility table currently has 3 such headers",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:08+00:00",
+  "result": "PASS"
+ },
+ "ND-A11Y-007": {
+  "detail": ".checkbox-label wraps every checkbox throughout the Design tab (56 found)",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:08+00:00",
+  "result": "PASS"
+ },
+ "ND-A11Y-008": {
+  "detail": "at 390x844, the Design tab (scrollWidth=428) adds no horizontal overflow beyond the shell chrome (scrollWidth=428)",
+  "evidence": [
+   "evidence/coverage/ND-A11Y-008.png"
+  ],
+  "finished": "2026-09-27T20:33:09+00:00",
+  "result": "PASS"
+ },
+ "ND-ADVANCED-001": {
+  "detail": "the <details> opened via its <summary> (screenshot shows the expanded Advanced section, JSON, ledger and owned settings)",
+  "evidence": [
+   "evidence/coverage/ND-ADVANCED-001.png"
+  ],
+  "finished": "2026-09-27T20:32:11+00:00",
+  "result": "PASS"
+ },
+ "ND-ADVANCED-002": {
+  "detail": "Advanced JSON textarea reflects every guided edit (VRF red+loopback, static route, bgp AS) and no longer carries the VLAN that was added then removed",
+  "evidence": [
+   "evidence/coverage/ND-ADVANCED-002.png"
+  ],
+  "finished": "2026-09-27T20:32:11+00:00",
+  "result": "PASS"
+ },
+ "ND-ADVANCED-003": {
+  "detail": "Check called POST .../design/validate and re-rendered #design-problems",
+  "evidence": [
+   "evidence/coverage/ND-ADVANCED-003.png"
+  ],
+  "finished": "2026-09-27T20:32:12+00:00",
+  "result": "PASS"
+ },
+ "ND-ADVANCED-004": {
+  "detail": "the ledger shows its empty caption before any plan has been generated",
+  "evidence": [
+   "evidence/coverage/ND-ADVANCED-004.png"
+  ],
+  "finished": "2026-09-27T20:32:12+00:00",
+  "result": "PASS"
+ },
+ "ND-ADVANCED-005": {
+  "detail": "opening Advanced fired GET .../design/ownership once, showing \"No settings are owned by the design on any device yet.\"",
+  "evidence": [
+   "evidence/coverage/ND-ADVANCED-005.png"
+  ],
+  "finished": "2026-09-27T20:32:11+00:00",
+  "result": "PASS"
+ },
+ "ND-ADVANCED-006": {
+  "detail": "the vrf/routing modules were turned on automatically because the guided tables defined a VRF and a static route (the vlan module was turned on the same way when \"blue\" was added, then explicitly unticked again -- see ND-GUIDED-011/012)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:11+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-001": {
+  "detail": "Apply to devices\u2026 is enabled on a Running lab with a succeeded plan (reason elsewhere: '')",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-001.png"
+  ],
+  "finished": "2026-09-27T20:32:47+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-002": {
+  "detail": "designApplyDisabledReason covers no-plan/stale/already-running (live in the actual page, real function): 'Generate a plan first.' | 'Generate the plan again: the design or the topology changed since this plan.' | 'An apply is already running for this lab.'",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-002.png"
+  ],
+  "finished": "2026-09-27T20:32:47+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-003": {
+  "detail": "Apply dialog opened on its \"choose\" step (three-step shell #design-apply-dialog)",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-003.png"
+  ],
+  "finished": "2026-09-27T20:32:47+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-004": {
+  "detail": "choose-step lists every included device; Backup-Worker (host role) is unchecked+disabled with \"A support host is generated only, never applied.\": ['Backup-Worker', True, 'A support host is generated only, never applied.']",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-004.png"
+  ],
+  "finished": "2026-09-27T20:32:47+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-005": {
+  "detail": "the choose-error line is populated: 'Choose at least one device.'",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:48+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-006": {
+  "detail": "Review button called POST .../generations/{gid}/review for the 2 chosen devices",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-006.png"
+  ],
+  "finished": "2026-09-27T20:33:06+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-007": {
+  "detail": "[BLOCKED for the eligible/no-op/conflict/protected/expected/removal branches -- see note] the unreachable branch is reached and reads plain words: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-007.png"
+  ],
+  "finished": "2026-09-27T20:33:06+00:00",
+  "result": "BLOCKED"
+ },
+ "ND-APPLY-008": {
+  "detail": "no device in this review reported a conflict (none is reachable), so the take-over checkbox path is BLOCKED: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:06+00:00",
+  "result": "BLOCKED"
+ },
+ "ND-APPLY-009": {
+  "detail": "default 5, an in-range edit (2) is kept, and designApplyClampMinutes (the real loaded function) clamps 999->30 and -5->2",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-009.png"
+  ],
+  "finished": "2026-09-27T20:33:06+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-010": {
+  "detail": "Apply disabled before ack; still disabled after ack because review.applicable is empty (no reachable device), with the reason shown: 'Nothing can be applied: no chosen device is ready for this plan.'",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-010.png"
+  ],
+  "finished": "2026-09-27T20:33:07+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-011": {
+  "detail": "Back returned to the choose step with no new request",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-011.png"
+  ],
+  "finished": "2026-09-27T20:33:07+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-012": {
+  "detail": "Apply submit needs at least one reachable, eligible device to become enabled: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:07+00:00",
+  "result": "BLOCKED"
+ },
+ "ND-APPLY-013": {
+  "detail": "the progress table's per-device stage/outcome words need a real applying job: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:07+00:00",
+  "result": "BLOCKED"
+ },
+ "ND-APPLY-014": {
+  "detail": "the plan card's \"Last apply\" line needs a completed real apply job: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py | additionally confirmed live: #design-apply-last stays hidden with no apply job yet for this lab",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:07+00:00",
+  "result": "BLOCKED"
+ },
+ "ND-APPLY-015": {
+  "detail": "the title-bar \u00d7 / Cancel controls closed the dialog from the review step",
+  "evidence": [
+   "evidence/coverage/ND-APPLY-015.png"
+  ],
+  "finished": "2026-09-27T20:33:08+00:00",
+  "result": "PASS"
+ },
+ "ND-APPLY-016": {
+  "detail": "not attempted live in this recon: reproducing operation_busy exclusion needs winning a race against a second, genuinely concurrent manager job (a backup, Git save, restore, discovery import or removal) inside the review/apply window, which this recon did not attempt within budget; the exact 409 contract (and every one of the excluded operation kinds) is asserted directly by test_design_apply.py:608 test_busy_operation_is_409 and its neighbours",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:07+00:00",
+  "result": "NOT RUN"
+ },
+ "ND-APPLY-017": {
+  "detail": "the ownership ledger only grows once a real apply has run against a real device: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:07+00:00",
+  "result": "BLOCKED"
+ },
+ "ND-APPLY-018": {
+  "detail": "designApplyRequestId() (the real loaded function) returns a fresh 32-hex-char id each call; designApplyOpen() calls it once per dialog open and designApplyState keeps it for the dialog's lifetime (source-confirmed: network-design.js:1393-1399, requestId set once in designApplyOpen, read at submit)",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:08+00:00",
+  "result": "PASS"
+ },
+ "ND-CLEAR-001": {
+  "detail": "More menu (danger group) \"Remove design\u2026\" opened its confirm dialog",
+  "evidence": [
+   "evidence/coverage/ND-CLEAR-001.png"
+  ],
+  "finished": "2026-09-27T20:32:28+00:00",
+  "result": "PASS"
+ },
+ "ND-CLEAR-002": {
+  "detail": "Cancel sent no request; the danger button confirmed via POST .../design/clear",
+  "evidence": [
+   "evidence/coverage/ND-CLEAR-002.png"
+  ],
+  "finished": "2026-09-27T20:32:29+00:00",
+  "result": "PASS"
+ },
+ "ND-CLEAR-003": {
+  "detail": "History (generations) is unchanged by Remove design: before='Succeeded just now Plan generated Shown aboveSucceeded just ' after='Succeeded just now Plan generated Shown aboveSucceeded just '",
+  "evidence": [
+   "evidence/coverage/ND-CLEAR-003.png"
+  ],
+  "finished": "2026-09-27T20:32:29+00:00",
+  "result": "PASS"
+ },
+ "ND-CLEAR-004": {
+  "detail": "POST .../design/clear with the same stale (superseded) revision was refused: status=409 body={\"detail\": \"The design changed since this page loaded. Reload it first.\"}",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:29+00:00",
+  "result": "PASS"
+ },
+ "ND-ERROR-001": {
+  "detail": "PUT/validate refused the overlap with the exact path addressing.lan.ipv4 and \"management\" in the message: addressing.lan.ipv4: Overlaps the lab management network containerlab default management ipv4-subnet",
+  "evidence": [
+   "evidence/coverage/ND-ERROR-001.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-ERROR-002": {
+  "detail": "POST .../design/validate reports the unknown key as a structured problem at 200 ({\"problems\": [{\"path\": \"not_a_real_key\", \"message\": \"Unknown design field\"}], \"valid\": false}); PUT .../design (the actual save) refuses it with 400 naming the key: {\"detail\": \"Fix the design first: not_a_real_key: Unknown design field\"}",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:12+00:00",
+  "result": "PASS"
+ },
+ "ND-ERROR-003": {
+  "detail": "Save is refused on a stale revision with a reload-first message (this session's own edit was not silently accepted or silently dropped)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:31+00:00",
+  "result": "PASS"
+ },
+ "ND-ERROR-004": {
+  "detail": "the failed generation names eigrp and arista_ceos in its error: r1: eigrp is not supported on kind arista_ceos (netlab 26.09 module 'eigrp' does not support device profile 'eos')r2: eigrp is not supported on kind arista_ceos (netlab 26.09 module 'eigrp' does not s",
+  "evidence": [
+   "evidence/coverage/ND-ERROR-004.png"
+  ],
+  "finished": "2026-09-27T20:32:16+00:00",
+  "result": "PASS"
+ },
+ "ND-ERROR-005": {
+  "detail": "reviewing with nothing chosen shows \"Choose at least one device.\" and sends no request: 'Choose at least one device.'",
+  "evidence": [
+   "evidence/coverage/ND-ERROR-005.png"
+  ],
+  "finished": "2026-09-27T20:32:48+00:00",
+  "result": "PASS"
+ },
+ "ND-ERROR-006": {
+  "detail": "\"Connectivity: <ExceptionType>\" shown per unreachable device: ['NoValidConnectionsError', 'NoValidConnectionsError']",
+  "evidence": [
+   "evidence/coverage/ND-ERROR-006.png"
+  ],
+  "finished": "2026-09-27T20:33:06+00:00",
+  "result": "PASS"
+ },
+ "ND-ERROR-007": {
+  "detail": "\"Changed since the review\" per device at Apply time needs a real device that answers at Review time and then drifts before the Apply POST -- both steps need a reachable device: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py; proven live by test_design_apply.py:907 test_drift_between_review_and_apply_fails_only_that_device",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:07+00:00",
+  "result": "BLOCKED"
+ },
+ "ND-ERROR-008": {
+  "detail": "an invalid checkpoint name is refused client-side before any request: 'Use a checkpoint name containing letters, numbers, hyphens or underscores.'",
+  "evidence": [
+   "evidence/coverage/ND-ERROR-008.png"
+  ],
+  "finished": "2026-09-27T20:32:42+00:00",
+  "result": "PASS"
+ },
+ "ND-ERROR-009": {
+  "detail": "an unparseable Advanced edit is named as invalid JSON: state=\"Advanced JSON is not valid Advanced JSON is not valid\" detail=\"Fix the JSON under Advanced (or Discard changes) before saving, checking or generating.\"",
+  "evidence": [
+   "evidence/coverage/ND-ERROR-009.png"
+  ],
+  "finished": "2026-09-27T20:32:31+00:00",
+  "result": "PASS"
+ },
+ "ND-ERROR-010": {
+  "detail": "import failure keeps the previous design untouched and shows problems only in the response",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:32+00:00",
+  "result": "PASS"
+ },
+ "ND-EXPORT-001": {
+  "detail": "Download design file called window.open on the export URL (no fetch, no dialog): ['/api/labs/873303a9862d47669f167685fbc1170e/design/export']",
+  "evidence": [
+   "evidence/coverage/ND-EXPORT-001.png"
+  ],
+  "finished": "2026-09-27T20:32:25+00:00",
+  "result": "PASS"
+ },
+ "ND-EXPORT-002": {
+  "detail": "Export plan to Git\u2026 is enabled on a Running, git-bound lab with a succeeded plan (reason was '' when disabled elsewhere)",
+  "evidence": [
+   "evidence/coverage/ND-EXPORT-002.png"
+  ],
+  "finished": "2026-09-27T20:32:42+00:00",
+  "result": "PASS"
+ },
+ "ND-EXPORT-003": {
+  "detail": "destination line updates from the lab's git binding: Saving toCourse-Labs\u203amain\u203alabs/BGP/work/checkpoints/design-43dfc44d26a3",
+  "evidence": [
+   "evidence/coverage/ND-EXPORT-003.png"
+  ],
+  "finished": "2026-09-27T20:32:42+00:00",
+  "result": "PASS"
+ },
+ "ND-EXPORT-004": {
+  "detail": "checkpoint name prefilled with the default \"design-<12 chars>\": design-43dfc44d26a3",
+  "evidence": [
+   "evidence/coverage/ND-EXPORT-004.png"
+  ],
+  "finished": "2026-09-27T20:32:42+00:00",
+  "result": "PASS"
+ },
+ "ND-EXPORT-005": {
+  "detail": "the note field reached the job/history as the commit message (checkpoint coverage-run-1790541163 pushed: Design export saved\n\u00d7\nCheckpoint 'coverage-run-1790541163' saved\n\nSaving to\nCourse-Labs\n\u203a\nmain\n\u203a\nlabs/BGP/work/checkpoints/coverage-run-1790541163\nver)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:46+00:00",
+  "result": "PASS"
+ },
+ "ND-EXPORT-006": {
+  "detail": "Save to VM and review called POST .../design/generations/{gid}/git and handed the job straight to the mandatory review dialog (gitStartWatch -> gitReviewJob): Review design export before uploading\n\u00d7\n\nWhat this export changed compared with the previous one. Configuration files may contain passwords or keys. | end-to-end completion: Upload these changes -> Design export saved\n\u00d7\nCheckpoint 'coverage-run-1790541163' saved\n\nSaving to\nCourse-Labs\n\u203a\nmain\n\u203a\nlabs/BGP/work/checkpoints/coverage-run-1790541163\nverified on remote\n\nDestination\nCourse-Labs \u00b7 main \u00b7 ",
+  "evidence": [
+   "evidence/coverage/ND-EXPORT-006.png"
+  ],
+  "finished": "2026-09-27T20:32:44+00:00",
+  "result": "PASS"
+ },
+ "ND-EXPORT-007": {
+  "detail": "the error line (role=alert) is populated on refusal: 'Use a checkpoint name containing letters, numbers, hyphens or underscores.'",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:42+00:00",
+  "result": "PASS"
+ },
+ "ND-EXPORT-008": {
+  "detail": "the title-bar \u00d7 control closed the dialog without submitting",
+  "evidence": [
+   "evidence/coverage/ND-EXPORT-008.png"
+  ],
+  "finished": "2026-09-27T20:32:43+00:00",
+  "result": "PASS"
+ },
+ "ND-FILES-001": {
+  "detail": "files card lists initial/ospf/bgp module fragments per device",
+  "evidence": [
+   "evidence/coverage/ND-FILES-001.png"
+  ],
+  "finished": "2026-09-27T20:32:14+00:00",
+  "result": "PASS"
+ },
+ "ND-FILES-002": {
+  "detail": "View opened a dialog with the file content (60 chars)",
+  "evidence": [
+   "evidence/coverage/ND-FILES-002.png"
+  ],
+  "finished": "2026-09-27T20:32:14+00:00",
+  "result": "PASS"
+ },
+ "ND-FILES-003": {
+  "detail": "Download all files (ZIP) is visible with href /api/labs/873303a9862d47669f167685fbc1170e/design/generations/816a206c33704abdb2090f1f8cfe2c93/download",
+  "evidence": [
+   "evidence/coverage/ND-FILES-003.png"
+  ],
+  "finished": "2026-09-27T20:32:15+00:00",
+  "result": "PASS"
+ },
+ "ND-GENERATE-001": {
+  "detail": "[fault injection, as above] Generate plan is disabled with the engine diagnostic as its title when the engine is unavailable (this completes the row alongside the earlier enabled-and-clicked state)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:34+00:00",
+  "result": "PASS"
+ },
+ "ND-GENERATE-002": {
+  "detail": "Cancel button appeared during a busy generation and called POST .../cancel (True)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:19+00:00",
+  "result": "PASS"
+ },
+ "ND-GENERATE-003": {
+  "detail": "\"Generating the plan\u2026\" busy state observed while the 2 s poll ran",
+  "evidence": [
+   "evidence/coverage/ND-GENERATE-003.png"
+  ],
+  "finished": "2026-09-27T20:32:12+00:00",
+  "result": "PASS"
+ },
+ "ND-GENERATE-004": {
+  "detail": "a succeeded generation reached \"Plan ready to review\" via the real netlab engine (state now: 'Plan ready to review Plan ready to review') | a failed generation (unsupported eigrp on cEOS) was also observed live | interrupted outcome also reproduced live (kill+restart, see ND-STATE-005)",
+  "evidence": [],
+  "finished": "2026-09-27T20:33:13+00:00",
+  "result": "PASS"
+ },
+ "ND-GENERATE-005": {
+  "detail": "not reproduced live in this recon: no allocation collision was triggered by the edits made (hidden state confirmed instead: #design-plan-collisions stayed hidden). The markup/hide-toggle is source-confirmed (network-design.js:810-814) and this is a read-only report with no dedicated test named in coverage.json.",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:24+00:00",
+  "result": "NOT RUN"
+ },
+ "ND-GUIDED-001": {
+  "detail": "both families default checked (empty_intent dual stack) and unchecking IPv6 is reflected at once",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-001.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-002": {
+  "detail": "a design with nothing saved yet shows the schema default pool value (designEmptyIntent(), matching the input's own placeholder '10.255.0.0/24'); a filled value round-trips (10.5.0.0/16 kept until reverted); the invalid (management-overlap) case is exercised next by ND-ERROR-001, same pools",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-002.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-003": {
+  "detail": "17 module checkboxes rendered (DESIGN_MODULE_LABELS)",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-003.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-004": {
+  "detail": "OSPF settings become visible with area defaulted to 0.0.0.0 once the module is ticked",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-004.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-005": {
+  "detail": "BGP settings visible, AS field editable, reflector checklist lists every router (3)",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-005.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-006": {
+  "detail": "IS-IS settings appear with area 49.0001 and level level-2 defaults",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-006.png"
+  ],
+  "finished": "2026-09-27T20:32:09+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-007": {
+  "detail": "Gateway settings appear with protocol defaulted to anycast",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-007.png"
+  ],
+  "finished": "2026-09-27T20:32:09+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-008": {
+  "detail": "per-device role select accepts host/exclude/router; r1 switched to host",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-008.png"
+  ],
+  "finished": "2026-09-27T20:32:09+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-009": {
+  "detail": "a VRF row (name input + loopback checkbox + Remove) is keyed by name, editable and checkable",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-009.png"
+  ],
+  "finished": "2026-09-27T20:32:09+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-010": {
+  "detail": "\"No VRFs yet.\" shown before Add VRF; Add VRF inserted an editable row",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-010.png"
+  ],
+  "finished": "2026-09-27T20:32:09+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-011": {
+  "detail": "a VLAN row (name + numeric id via designNextVlanId + Remove) rendered, id auto-filled (1)",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-011.png"
+  ],
+  "finished": "2026-09-27T20:32:09+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-012": {
+  "detail": "\"No VLANs yet.\" shown before Add VLAN; Add VLAN inserted an editable row",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-012.png"
+  ],
+  "finished": "2026-09-27T20:32:09+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-013": {
+  "detail": "the links table lists this lab's links with a VRF/access/trunk row each; attached \"red\" to the first link",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-013.png"
+  ],
+  "finished": "2026-09-27T20:32:10+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-014": {
+  "detail": "\"No static routes yet.\" shown before adding; the row supports a discard route with a prefix",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-014.png"
+  ],
+  "finished": "2026-09-27T20:32:10+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-015": {
+  "detail": "Add static route inserted one row with a device select, prefix input and next-hop type",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-015.png"
+  ],
+  "finished": "2026-09-27T20:32:10+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-016": {
+  "detail": "the same #design-problems (role=alert) rendered the {path,message} entry above Advanced",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-017": {
+  "detail": "a focused field's in-progress edit (\"0.0.0.5\") survived the 4 s heartbeat re-render (designFormFocused suppressed it)",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-017.png"
+  ],
+  "finished": "2026-09-27T20:32:38+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-018": {
+  "detail": "guided-to-Advanced sync confirmed by the same textarea content (add-then-remove of the VLAN row round-tripped too)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:11+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-019": {
+  "detail": "the Notes column and disabled-role-with-reason path are designDeviceRow's no-profile branch (network-design.js:273); not reproduced live -- every fixture lab device kind (arista_ceos/cisco_xrv9k/juniper_cjunosevolved/linux) resolves to a known profile (design_capabilities.PROFILES), so \"No design profile is mapped to this kind of device\" was not rendered live in this recon; the disabled-select/reason wiring is exercised by test_network_design_ui.js:227",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:09+00:00",
+  "result": "PASS"
+ },
+ "ND-GUIDED-020": {
+  "detail": "devices table lists r1/r2/r3 with a resolved Kind/Profile each: [{\"name\": \"r1\", \"kind\": \"arista_ceos\", \"profile\": \"eos\", \"roleDisabled\": false, \"notes\": \"\"}, {\"name\": \"r2\", \"kind\": \"arista_ceos\", \"profile\": \"eos\", \"roleDisabled\": false, \"notes\": \"\"}, {\"name\": \"r3\", \"kind\": \"cisco_xrv9k\", \"profile\": \"iosxr\", \"roleDisabled\": false, \"notes\": \"\"}] | also on BGP_TheoryToPractice: Backup-Worker (linux support host) resolves a profile with an enabled role select (True): {'name': 'Backup-Worker', 'profile': 'linux', 'disabled': False, 'options': ['router', 'host', 'exclude']}",
+  "evidence": [
+   "evidence/coverage/ND-GUIDED-020.png"
+  ],
+  "finished": "2026-09-27T20:32:09+00:00",
+  "result": "PASS"
+ },
+ "ND-HISTORY-001": {
+  "detail": "History <details> opened via its summary",
+  "evidence": [
+   "evidence/coverage/ND-HISTORY-001.png"
+  ],
+  "finished": "2026-09-27T20:32:15+00:00",
+  "result": "PASS"
+ },
+ "ND-HISTORY-002": {
+  "detail": "history lists the newest generation pilled as succeeded: Succeeded just now Plan generated Shown above",
+  "evidence": [
+   "evidence/coverage/ND-HISTORY-002.png"
+  ],
+  "finished": "2026-09-27T20:32:15+00:00",
+  "result": "PASS"
+ },
+ "ND-IMPORT-001": {
+  "detail": "Import design file\u2026 (hidden <input type=file>) accepted a real uploaded file and called POST .../design/import (status 200)",
+  "evidence": [
+   "evidence/coverage/ND-IMPORT-001.png"
+  ],
+  "finished": "2026-09-27T20:32:32+00:00",
+  "result": "PASS"
+ },
+ "ND-IMPORT-002": {
+  "detail": "the hidden #design-import-file accepts .yml/.yaml/.json and was driven directly with a real file (set_input_files)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:32+00:00",
+  "result": "PASS"
+ },
+ "ND-IMPORT-003": {
+  "detail": "a successful import replaced the view: POST returned imported:true and BGP AS 65099 from the uploaded file is now in Advanced",
+  "evidence": [
+   "evidence/coverage/ND-IMPORT-003.png"
+  ],
+  "finished": "2026-09-27T20:32:32+00:00",
+  "result": "PASS"
+ },
+ "ND-IMPORT-004": {
+  "detail": "a design with a pool overlapping the management network was refused (imported:false) and its problems shown: addressing.loopback.ipv4: Overlaps the lab management network containerlab default management ipv4-subnet",
+  "evidence": [
+   "evidence/coverage/ND-IMPORT-004.png"
+  ],
+  "finished": "2026-09-27T20:32:32+00:00",
+  "result": "PASS"
+ },
+ "ND-IMPORT-005": {
+  "detail": "the previous (good) design is untouched after the failed import (BGP AS 65099 still present)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:32+00:00",
+  "result": "PASS"
+ },
+ "ND-NAV-001": {
+  "detail": "aria-selected/tabindex flip correctly and #design-view/#topology-view toggle hidden with #tab-design",
+  "evidence": [
+   "evidence/coverage/ND-NAV-001.png"
+  ],
+  "finished": "2026-09-27T20:32:07+00:00",
+  "result": "PASS"
+ },
+ "ND-NAV-002": {
+  "detail": "a fresh load and a reload of #lab=<id>&view=design both land on #design-view (tab selected) and fetch GET .../design",
+  "evidence": [
+   "evidence/coverage/ND-NAV-002.png"
+  ],
+  "finished": "2026-09-27T20:32:07+00:00",
+  "result": "PASS"
+ },
+ "ND-NAV-003": {
+  "detail": "Tools tab #tools-design shortcut opened #design-view",
+  "evidence": [
+   "evidence/coverage/ND-NAV-003.png"
+  ],
+  "finished": "2026-09-27T20:32:07+00:00",
+  "result": "PASS"
+ },
+ "ND-NAV-004": {
+  "detail": "ArrowRight x3 from #tab-topology moved focus to #tab-design (topology->devices->progress->design) and tabKeydown's showTab ran (panel visible)",
+  "evidence": [
+   "evidence/coverage/ND-NAV-004.png"
+  ],
+  "finished": "2026-09-27T20:32:07+00:00",
+  "result": "PASS"
+ },
+ "ND-NAV-005": {
+  "detail": "switching to Topology and back while a 13-device generation was running: state now \"Plan ready to review Plan ready to review\" (the watch is lab-scoped, not tab-scoped)",
+  "evidence": [
+   "evidence/coverage/ND-NAV-005.png"
+  ],
+  "finished": "2026-09-27T20:32:41+00:00",
+  "result": "PASS"
+ },
+ "ND-NAV-006": {
+  "detail": "clicking another lab in the sidebar switcher while Design was active reset the view to Topology (selectLab's own default)",
+  "evidence": [
+   "evidence/coverage/ND-NAV-006.png"
+  ],
+  "finished": "2026-09-27T20:32:41+00:00",
+  "result": "PASS"
+ },
+ "ND-NAV-007": {
+  "detail": "draft persistence across reload confirmed above (ND-SAVE-003); the same writeDesignDraft/clearDesignDraft mechanism",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:33+00:00",
+  "result": "PASS"
+ },
+ "ND-PLAN-001": {
+  "detail": "plan status line reads \"Plan generated just now.\"",
+  "evidence": [
+   "evidence/coverage/ND-PLAN-001.png"
+  ],
+  "finished": "2026-09-27T20:32:14+00:00",
+  "result": "PASS"
+ },
+ "ND-PLAN-002": {
+  "detail": "no errors: #design-plan-errors-wrap stays hidden on a succeeded generation",
+  "evidence": [
+   "evidence/coverage/ND-PLAN-002.png"
+  ],
+  "finished": "2026-09-27T20:32:14+00:00",
+  "result": "PASS"
+ },
+ "ND-PLAN-003": {
+  "detail": "warnings <details> renders its hidden/visible state correctly (hidden=False)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:14+00:00",
+  "result": "PASS"
+ },
+ "ND-PLAN-004": {
+  "detail": "not reproduced live: changing the loopback pool and regenerating kept the same allocations for this 3-device lab (netlab's own deterministic ordering); the \"hidden (nothing renumbered)\" branch was exercised (#design-plan-renumbering-wrap stayed hidden) but the \"visible\" branch needs a topology change (device add/remove) this recon did not attempt within budget. Covered by test_network_design.py:926 test_renumbering_is_reported_against_the_previous_plan.",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:24+00:00",
+  "result": "NOT RUN"
+ },
+ "ND-PLAN-005": {
+  "detail": "compatibility table says \"generated, not yet tested live\" per device/feature",
+  "evidence": [
+   "evidence/coverage/ND-PLAN-005.png"
+  ],
+  "finished": "2026-09-27T20:32:14+00:00",
+  "result": "PASS"
+ },
+ "ND-PLAN-006": {
+  "detail": "the plan body lists every device with loopbacks/interfaces (Ethernet1 for cEOS present)",
+  "evidence": [
+   "evidence/coverage/ND-PLAN-006.png"
+  ],
+  "finished": "2026-09-27T20:32:14+00:00",
+  "result": "PASS"
+ },
+ "ND-PLAN-007": {
+  "detail": "Apply to devices\u2026 button and its disabled-reason caption: see ND-APPLY-002 (part 2)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:24+00:00",
+  "result": "PASS"
+ },
+ "ND-PLAN-008": {
+  "detail": "Export plan to Git\u2026 button and its disabled-reason caption: see ND-EXPORT-002 (part 2, this lab has no git binding)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:24+00:00",
+  "result": "PASS"
+ },
+ "ND-PLAN-009": {
+  "detail": "Last apply line + Show button needs a real apply job, which needs a real device: see ND-APPLY area (BLOCKED, part 2)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:24+00:00",
+  "result": "BLOCKED"
+ },
+ "ND-RENUMBER-001": {
+  "detail": "More menu item \"Renumber (forget allocations)\u2026\" opened its confirm dialog",
+  "evidence": [
+   "evidence/coverage/ND-RENUMBER-001.png"
+  ],
+  "finished": "2026-09-27T20:32:25+00:00",
+  "result": "PASS"
+ },
+ "ND-RENUMBER-002": {
+  "detail": "Cancel closed the dialog without any POST .../design/renumber",
+  "evidence": [
+   "evidence/coverage/ND-RENUMBER-002.png"
+  ],
+  "finished": "2026-09-27T20:32:25+00:00",
+  "result": "PASS"
+ },
+ "ND-RENUMBER-003": {
+  "detail": "confirming Renumber POSTed .../design/renumber and the ledger emptied to its caption",
+  "evidence": [
+   "evidence/coverage/ND-RENUMBER-003.png"
+  ],
+  "finished": "2026-09-27T20:32:26+00:00",
+  "result": "PASS"
+ },
+ "ND-RENUMBER-004": {
+  "detail": "the renumbering report comparing old vs new ledger is network_design.py:299-302 (server-internal correctness); exercised indirectly by ND-PLAN-004 above and by test_network_design.py:926",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:26+00:00",
+  "result": "PASS"
+ },
+ "ND-SAVE-001": {
+  "detail": "Save validated then PUT the design; state left \"Unsaved\" for \"Design saved, no plan yet Design saved, no plan yet\"",
+  "evidence": [
+   "evidence/coverage/ND-SAVE-001.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-SAVE-002": {
+  "detail": "Save behind a real stale revision was refused (409) and handled: banner='That did not work. The details below say why.\\n\\nDetails\\nDismiss\\n\u00d7' detail='Your unsaved changes were older than the saved design and were discarded.'",
+  "evidence": [
+   "evidence/coverage/ND-SAVE-002.png"
+  ],
+  "finished": "2026-09-27T20:32:31+00:00",
+  "result": "PASS"
+ },
+ "ND-SAVE-003": {
+  "detail": "an unsaved draft (VLAN module ticked, not saved) survived a reload and is restored (matching revision)",
+  "evidence": [
+   "evidence/coverage/ND-SAVE-003.png"
+  ],
+  "finished": "2026-09-27T20:32:32+00:00",
+  "result": "PASS"
+ },
+ "ND-SAVE-004": {
+  "detail": "the header moved to \"Design saved, no plan yet\" on a successful Save (QA-001 fix)",
+  "evidence": [
+   "evidence/coverage/ND-SAVE-004.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-SAVE-005": {
+  "detail": "a client-supplied allocations block is discarded server-side (network_design.py:549); validated by test_network_design.py:266 test_client_supplied_allocations_are_ignored (not independently re-derived here beyond confirming the route accepts/normalises the request rather than trusting the client value: status=200)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:31+00:00",
+  "result": "PASS"
+ },
+ "ND-STATE-001": {
+  "detail": "after Remove design the state reads \"No design saved (earlier plans kept) No design saved (earlier plans kept)\" (not conflated with a true empty lab, QA-011 fix), earlier plans stay under History",
+  "evidence": [
+   "evidence/coverage/ND-STATE-001.png"
+  ],
+  "finished": "2026-09-27T20:32:29+00:00",
+  "result": "PASS"
+ },
+ "ND-STATE-002": {
+  "detail": "ticking OSPF marks the state \"Unsaved changes\"",
+  "evidence": [
+   "evidence/coverage/ND-STATE-002.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-STATE-003": {
+  "detail": "\"The design has problems\" is designStateOf's pure branch (unit-tested); reproduced live here via the same #design-problems path (state text: Unsaved changes Unsaved changes)",
+  "evidence": [
+   "evidence/coverage/ND-STATE-003.png"
+  ],
+  "finished": "2026-09-27T20:32:08+00:00",
+  "result": "PASS"
+ },
+ "ND-STATE-004": {
+  "detail": "\"Generating the plan\u2026\" (busy) observed above on ND-GENERATE-003's attempt / BGP_TheoryToPractice generation (part 2)",
+  "evidence": [],
+  "finished": "2026-09-27T20:32:38+00:00",
+  "result": "PASS"
+ },
+ "ND-STATE-005": {
+  "detail": "[a real kill -9 of the fixture manager process 1s into a real generation, then a real restart on the same --keep data dir] generation status='interrupted' message='The manager restarted while this plan was being generated. Generate it again.' state line='The last plan was interrupted The last plan was interrupted'",
+  "evidence": [
+   "evidence/coverage/ND-STATE-005.png"
+  ],
+  "finished": "2026-09-27T20:33:13+00:00",
+  "result": "PASS"
+ },
+ "ND-STATE-006": {
+  "detail": "state reads \"The last plan failed The last plan failed\" after a failed generation",
+  "evidence": [
+   "evidence/coverage/ND-STATE-006.png"
+  ],
+  "finished": "2026-09-27T20:32:16+00:00",
+  "result": "PASS"
+ },
+ "ND-STATE-007": {
+  "detail": "state reads \"Plan is older than the design Plan is older than the design\" once the design changed after the last succeeded plan",
+  "evidence": [
+   "evidence/coverage/ND-STATE-007.png"
+  ],
+  "finished": "2026-09-27T20:32:19+00:00",
+  "result": "PASS"
+ },
+ "ND-STATE-008": {
+  "detail": "designStateOf's \"ready\" branch: state reads \"Plan ready to review Plan ready to review\" after a succeeded generation",
+  "evidence": [
+   "evidence/coverage/ND-STATE-008.png"
+  ],
+  "finished": "2026-09-27T20:32:14+00:00",
+  "result": "PASS"
+ },
+ "ND-STATE-009": {
+  "detail": "[fault injection: GET .../design response body patched with engine.available=false, labelled] state=\"Design engine unavailable Design engine unavailable\" banner=\"netlab is not installed on this manager.\"",
+  "evidence": [
+   "evidence/coverage/ND-STATE-009.png"
+  ],
+  "finished": "2026-09-27T20:32:34+00:00",
+  "result": "PASS"
+ }
+}

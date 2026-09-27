@@ -4,6 +4,25 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.49
+
+The second independent acceptance pass of the netlab UI/UX campaign (`docs/netlab-ui-qa/acceptance/PASS-2-opus.md`)
+found one product defect and three tooling faults in 1.30.48; this release fixes them and the campaign's two clean
+acceptance passes are taken again on it.
+
+- After a restart, start or deploy the manager itself performed, a login the device refuses still reads *Starting*
+  ("SSH answers but the saved login is not accepted yet") for fifteen minutes instead of the red *Needs attention*,
+  "SSH login failed with the saved credentials": IOS XR answers SSH minutes before it accepts any login, so every
+  XRv9k restart had shown a false credentials failure for 1.5–4.5 minutes before *Ready* (QA-019). Lab-wide deploy,
+  redeploy, start and restart jobs now drop every device's login proof the way a single restart does, which opens the
+  same window for them. A device booted outside the manager keeps the plain rule (three refusals in a row).
+- Tooling: the live restart check refuses any credentials failure between *Starting* and *Ready* and asserts the
+  helper's argv exactly (TOOL-002); the probe script's three stale bug-side assertions are corrected (TOOL-003); the
+  evidence files of 1.30.48 with trailing whitespace are normalised.
+- Records: the final-build runs of the neighbour checks in both stop modes, two-tabs, cJunosEvolved (after its VM hung
+  following a redeploy, the product's own restart brought it back) and the two acceptance passes, the final report
+  (`docs/netlab-ui-qa/FINAL-REPORT.md`).
+
 ## Changes in 1.30.48
 
 **Restart device** (one device, Containerlab VS Code extension parity) and the first repairs of the

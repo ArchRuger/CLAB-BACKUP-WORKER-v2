@@ -1,3 +1,13 @@
+# Netlab UI/UX campaign, part 2: acceptance findings fixed — 1.30.49
+
+Read `docs/netlab-ui-qa/PICKUP.md` first, then `FINAL-REPORT.md`. What the next agent must preserve beyond the 1.30.48
+section below: (1) the login grace window (`LOGIN_GRACE` in `node_readiness.py`) is keyed on the epoch `forget()` records,
+so it opens only for a restart, start or deploy the manager performed; `login_state()` passes its words through; do not
+widen it to devices the manager never touched (a wrong password must still surface after three refusals). (2) Lab-wide
+lifecycle jobs call `forget()` for every device of the lab in `LabOperations.execute()`; keep the three calls (before the
+helper, after it, when the job closes). (3) A live check must fail when a `failed` state appears between *Starting* and
+*Ready* (`check_restart_device.py`), and every commit is checked with `git diff --cached --check` before it is made.
+
 # Restart device and the netlab UI/UX campaign, part 1 — 1.30.48
 
 The owner's campaign (`CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md`, untracked in the worktree root, with

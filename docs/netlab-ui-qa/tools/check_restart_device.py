@@ -172,6 +172,19 @@ def review_text(page):
 KNOWN_LIMIT_WORDS = {'juniper_vjunosswitch': 'cannot be started a second time', 'cisco_xrv9k': 'factory configuration'}
 
 
+def check_argv(r, base, lab_id, node_name, label):
+    """The helper's argv, exactly, from the API preview of the same request the review was built from (the review shows
+    the command block under a collapsed technical section, so the dialog's visible text is prose): one `--node`,
+    followed by the device's topology name, on containerlab's restart."""
+    status, preview = call(base, '/api/operations/preview', 'POST', {'action': 'restart-node', 'lab_id': lab_id, 'node': node_name})
+    argv = (preview or {}).get('argv') or [] if status == 200 else []
+    short = label.split('/')[0]
+    ok = status == 200 and argv.count('--node') == 1 and argv[argv.index('--node') + 1] == short if '--node' in argv else False
+    ok = ok and len(argv) > 2 and argv[0].endswith('containerlab') and argv[1] == 'restart' and '-t' in argv
+    r.check('the helper runs containerlab restart with exactly one --node, followed by the device', ok, (status, argv))
+    return argv
+
+
 def check_known_limit(r, text, kind, tag):
     """The review names the image's known limit before the student confirms, and only then; the text is kept
     in the record so the evidence shows what the student read."""
@@ -190,7 +203,6 @@ def check_review(r, text, label, lab_name, container, kind='', tag=''):
             and 'unaffected' not in text.lower(), text[:600])
     r.check('the review says nothing is saved, backed up, reset or reapplied', 'Nothing is saved, backed up, reset or reapplied for you.' in text, text[:600])
     r.check('the affected list is the one device', ('1 device affected: ' + label) in text and 'The other devices of ' + lab_name + ' are not restarted.' in text, text[:600])
-    r.check('the command names exactly one --node', text.count('"--node"') == 1 and ('"--node" "' + label.split('/')[0]) in text or text.count('--node') >= 1, text[-600:])
     r.check('the confirm button is the destructive Restart device', page_confirm_label(r.page) == 'Restart device')
     check_known_limit(r, text, kind, tag or label)
 
@@ -217,6 +229,7 @@ def restart_from_map(r, page, base, lab, node, budget, before, others, tag):
     text = review_text(page)
     r.shot(tag + '-02-review')
     check_review(r, text, label, lab['deployment_name'] or lab['name'], node_name, node.get('kind'), tag)
+    check_argv(r, base, lab['id'], node_name, label)
     # Cancel: no job, no change.
     jobs_before = call(base, '/api/operations')[1]
     page.click('#op-cancel')
@@ -255,6 +268,7 @@ def restart_from_devices(r, page, base, lab, node, tag):
     text = review_text(page)
     r.shot(tag + '-02-review')
     check_review(r, text, label, lab['deployment_name'] or lab['name'], node_name, node.get('kind'), tag)
+    check_argv(r, base, lab['id'], node_name, label)
     r.check('the device panel stays open under the review (focus returns to its button afterwards)', page.evaluate("() => document.getElementById('details-dialog').open"))
     confirmed_at = now()
     page.click('#op-confirm')
@@ -301,7 +315,11 @@ def follow_and_prove(r, page, base, lab_id, node, before, others, budget, confir
     # Fresh readiness: the device's login must be proven again, by a check made after the job finished.
     ready, seen = wait_ready(base, lab_id, node_name, job['finished'], budget)
     record['readiness'] = {'states': seen, 'ready_at': ready['nos_login'].get('at') if ready else None, 'budget_s': budget}
-    r.check('the device went back through Starting (its old proof was dropped)', any(word == 'booting' for _, word in seen) or (ready is not None and ready['nos_login'].get('at', '') > job['finished']), json.dumps(seen))
+    words = [word for _, word in seen]
+    r.check('the device went back through Starting (its old proof was dropped)', 'booting' in words or (ready is not None and ready['nos_login'].get('at', '') > job['finished']), json.dumps(seen))
+    # Between Starting and Ready the device must never read as a credentials failure: a NOS that answers SSH before it
+    # accepts logins (IOS XR) is booting, not misconfigured (QA-019).
+    r.check('no false credentials failure between Starting and Ready', 'failed' not in words and all(w in ('booting', 'restarting', 'ready', 'unavailable', 'checking') for w in words), json.dumps(seen))
     r.check('the device is Ready again with a check made after the restart (within %d s)' % budget, ready is not None, json.dumps(seen))
     page.wait_for_timeout(4500)
     r.check('the rail reads Ready for the device again', device_pill(page, node_name) == 'Ready', device_pill(page, node_name))

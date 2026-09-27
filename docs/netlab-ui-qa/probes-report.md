@@ -383,3 +383,17 @@ re-rendering is trivial).
 - Report: `docs/netlab-ui-qa/probes-report.md` (this file).
 - Driver: `docs/netlab-ui-qa/tools/probes/design_probes.py`.
 - Screenshots: `docs/netlab-ui-qa/evidence/probes/P<1-10>-*.png` (32 files).
+
+## Corrections after acceptance pass 1 (2026-09-27, 20:20 UTC)
+
+The first acceptance pass (`acceptance/PASS-1-sonnet.md`, finding F1) found three of the probe script's own
+"bug present" assertions stale on the fixed build, not the product: P7 read the state label (which reads
+*Generating the plan…* for the whole busy period by design) instead of `#design-detail`, where QA-009's retry
+notice is written; P8 looked for a warning after the reload, whereas QA-010's warning ("could not be kept in this
+browser") is shown while the edit is still on screen and nothing can be recovered once the write has failed; P10
+left the deliberately invalid AS `0` and blank prefix in the form, so its final Save was refused by name (QA-012)
+and two checks never ran. `tools/probes/design_probes.py` now reads the detail line, checks the warning before the
+reload (the post-reload state is recorded as the inherent observation it is) and restores valid values before the
+save. Rerun of probes 7, 8 and 10 on the fixture (`--probes 7,8,10`): every CONFIRMED-target check fails on the
+fixed build (the bugs are gone) and the two P10 checks run again; P10's `uncheck()` became a click when QA-012's
+re-sync made the box bounce back (U-21 adds the notice that says why).
