@@ -1,3 +1,29 @@
+# Network design, part 4: feature families — 1.30.46
+
+Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.45 (`7bb45af`, CI green). Routing observed: two
+Sonnet workers (observed `claude-sonnet-5`) wrote the real-engine family tests and one wrote the guided tables; the
+lead (Fable) wrote the schema, adapter and driver rules, ran every live step and the records. Per task:
+`docs/netlab-integration/TESTS.md` chunk 4.
+
+- **Live, the deployed product on `restore-square` (`docs/netlab-integration/evidence/live-apply-families.md`):**
+  the lab redeployed to containerlab's startup configurations and the product's OSPF + BGP plan applied to all four
+  routers first, so the product owned every statement. Then, each through `PUT …/design`, a generation and
+  `POST …/apply` on all four routers, read back with `nodecli.py`: E1 IS-IS instead of OSPF (adjacencies up on every
+  link, iBGP kept), E2 a VRF on the host links plus a static discard route per router, E3 prefix list, route policy,
+  redistribution both ways and a default-route origination, E4 VLAN access ports with SVIs on cEOS and
+  vJunos-switch with XRv9k left out through its module list, E5 VXLAN/EVPN: applied and verified on cEOS,
+  refused by vJunos-switch at its own `commit check` (job `partial`, device untouched), E6 the revert. Every
+  applied device `verified` and saved; every removal at the right level.
+- **Real engine, unit (this checkout, `netlab` on PATH):** `python -m unittest discover -s tests -t tests`
+  1656 OK (1 skipped, 202 s); the family files: `test_design_families_routing.py` 20, `test_design_families_l2.py`
+  25 (IS-IS, static routes, VRFs, BGP policy, BFD; VLANs, LAG, gateways, VXLAN/EVPN, STP on the four profiles);
+  `test_design_intent.py` 140, `test_design_adapter.py` 72, `test_network_design.py` 61, `test_design_junos.py` 28.
+  `node --test tests/*.js` 338 pass (`test_network_design_ui.js` 57, of which 13 are new for the guided tables). `node --check`, `verify-release.py`,
+  `check_links.py`, `git diff --check`.
+- **Browser, fixture (`docs/netlab-integration/tools/check_design_ui.py`, Chromium 153):** `check_design_ui.py` extended with the guided tables (a VRF with its loopback, a link attached to it and a static route entered through the form, mirrored into the JSON, saved, generated with the real engine: the files card then lists `vrf` and `routing`): 29 of 29 checks, 0 console errors, 0 page errors (report `docs/netlab-integration/evidence/browser-design-ui.md`). A focused *Add VRF* button used to block the form's re-render (found by this run, fixed in `designFormFocused`).
+- **Not done:** LAG, VRRP/anycast, STP and BFD were not applied live (the lab has no parallel links and no shared
+  segment with two routers); MLAG untested; no fresh-VM install of this release.
+
 # Network design, part 3: Apply to devices — 1.30.45
 
 Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.44 (`64c954e`, CI green). Routing observed: the lead

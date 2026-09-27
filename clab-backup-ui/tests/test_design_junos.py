@@ -532,5 +532,15 @@ class DesignJunosDriverTests(unittest.TestCase):
         self.assertEqual(design_junos.options(None), {})
 
 
+class CheckReasonTests(unittest.TestCase):
+    def test_commit_check_errors_become_fixed_phrases_never_device_text(self):
+        text = ("warning: requires 'vxlan' license\nwarning: requires 'bgp' license\n[edit vlans red]\n"
+                "  Error in parsing bridge domains/vlans: SECRET-NAME oddity\nerror: configuration check-out failed\n")
+        words = design_junos._check_reasons(text)
+        self.assertIn('VLAN or bridge-domain', words)
+        self.assertNotIn('SECRET-NAME', words); self.assertNotIn('check-out failed', words)
+        self.assertEqual(design_junos._check_reasons('configuration check succeeds\n'), '')
+
+
 if __name__ == '__main__':
     unittest.main()

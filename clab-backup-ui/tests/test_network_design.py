@@ -996,9 +996,9 @@ class ReviewRegressionUnitTests(unittest.TestCase):
         lines = service._scrub(['Cannot read YAML from ' + str(service.work) + '/abc/../../x.yml', 'plain ' + str(service.store.root)])
         self.assertEqual(lines, ['Cannot read YAML from <work>/abc/../../x.yml', 'plain <data>'])
 
-    def test_effective_modules_and_requested_features_follow_device_extras_and_link_settings(self):
+    def test_effective_modules_and_requested_features_follow_device_lists_and_link_settings(self):
         intent = dict(valid_intent(), nodes={'ceos': {'modules': ['isis']}, 'host1': {}}, links={'k': {'endpoints': {'ceos': {'ospf': {'passive': True}}}}, 'routing': {}})
-        self.assertEqual(nd.effective_modules(intent, 'ceos', {'role': 'router'}), {'ospf', 'bgp', 'isis'})
+        self.assertEqual(nd.effective_modules(intent, 'ceos', {'role': 'router'}), {'isis'}, "a device's own list replaces the design's")
         self.assertEqual(nd.effective_modules(intent, 'host1', {'role': 'host'}), set())
         self.assertEqual(nd.effective_modules(intent, 'xrv9k', {'role': 'router'}), {'ospf', 'bgp'})
         intent2 = dict(valid_intent(), modules=['ospf', 'bgp', 'routing'], links={'k': {'routing': {'static': [{'ipv4': '0.0.0.0/0'}]}}})

@@ -1,8 +1,8 @@
 # Browser check: Network design tab
 
-Run 2026-09-27T00:00:18+00:00 against the fixture manager (real app on scratch data `/tmp/design-ui-fixture-_wq76uyg`, real `netlab` engine, no VM), Chromium 153.0.8010.12.
+Run 2026-09-27T03:02:31+00:00 against the fixture manager (real app on scratch data `/tmp/design-ui-fixture-7244_ido`, real `netlab` engine, no VM), Chromium 153.0.8010.12.
 
-20 of 20 checks passed; 0 console errors (0 handled HTTP responses); 0 page errors.
+29 of 29 checks passed; 0 console errors (0 handled HTTP responses); 0 page errors.
 
 | Check | Result | Detail |
 |---|---|---|
@@ -13,12 +13,21 @@ Run 2026-09-27T00:00:18+00:00 against the fixture manager (real app on scratch d
 | editing marks the design as unsaved | ok | Unsaved changes Unsaved changes |
 | the design saves without problems | ok | No design yet No design yet \|  |
 | the advanced editor shows the saved intent with the guided values | ok | {   "schema": 1,   "label": "",   "families": {     "ipv4": true,     "ipv6": true   },   "addressing": {     "loopback": {       "ipv4": "10.255.0.0/24",       |
-| the plan lists every device with a loopback and interfaces | ok |        Generated planPlan generated just now.Cancel              Warnings       What changed              Compatibility       Devicebgpipv4ipv6ospfv2ospfv3r1Gen |
-| the plan shows the containerlab ports beside the device ports | ok |        Generated planPlan generated just now.Cancel              Warnings       What changed              Compatibility       Devicebgpipv4ipv6ospfv2ospfv3r1Gen |
-| BGP sessions appear in the plan | ok |        Generated planPlan generated just now.Cancel              Warnings       What changed              Compatibility       Devicebgpipv4ipv6ospfv2ospfv3r1Gen |
-| compatibility says generated, not live tested | ok | Devicebgpipv4ipv6ospfv2ospfv3r1Generated, not yet tested liveGenerated, not yet tested liveGenerated, not yet tested liveGenerated, not yet tested liveGenerated |
-| the files card lists initial, ospf and bgp for a device | ok |        Generated files       Generated configuration fragments, not backups. Applying them to devices is not available yet.       r1normalize 60 B Viewinitial 6 |
-| the ZIP download link points at the generation | ok | /api/labs/8a58272b9c5c41fe81ee9633bc5c9185/design/generations/778ed4d8ed2f4afd9e2affbfd18eee9a/download |
+| the design-vrfs table is rendered | ok |  |
+| the design-vlans table is rendered | ok |  |
+| the design-links table is rendered | ok |  |
+| the design-static table is rendered | ok |  |
+| a VRF added through the table reaches the JSON with its loopback | ok | {   "schema": 1,   "label": "",   "families": {     "ipv4": true,     "ipv6": true   },   "addressing": {     "loopback": {       "ipv4": "10.255.0.0/24",       |
+| the link table attaches the link to the VRF | ok | {   "schema": 1,   "label": "",   "families": {     "ipv4": true,     "ipv6": true   },   "addressing": {     "loopback": {       "ipv4": "10.255.0.0/24",       |
+| a static route added through the table reaches the JSON | ok | {   "schema": 1,   "label": "",   "families": {     "ipv4": true,     "ipv6": true   },   "addressing": {     "loopback": {       "ipv4": "10.255.0.0/24",       |
+| the vrf and routing modules were switched on with the tables | ok | {   "schema": 1,   "label": "",   "families": {     "ipv4": true,     "ipv6": true   },   "addressing": {     "loopback": {       "ipv4": "10.255.0.0/24",       |
+| the design with the guided tables saves without problems | ok |  |
+| the plan lists every device with a loopback and interfaces | ok |        Generated planPlan generated just now.Cancel              WarningsWarning in vrf: Node r3 uses no VRFs, removing 'vrf' from node modules       What chang |
+| the plan shows the containerlab ports beside the device ports | ok |        Generated planPlan generated just now.Cancel              WarningsWarning in vrf: Node r3 uses no VRFs, removing 'vrf' from node modules       What chang |
+| BGP sessions appear in the plan | ok |        Generated planPlan generated just now.Cancel              WarningsWarning in vrf: Node r3 uses no VRFs, removing 'vrf' from node modules       What chang |
+| compatibility says generated, not live tested | ok | Devicebgpipv4ipv6ospfv2ospfv3static_routesvrfr1Generated, not yet tested liveGenerated, not yet tested liveGenerated, not yet tested liveGenerated, not yet test |
+| the files card lists initial, ospf, bgp, vrf and routing for a device | ok |        Generated files       Generated configuration fragments, not backups. Applying them to devices is not available yet.       r1normalize 60 B Viewinitial 8 |
+| the ZIP download link points at the generation | ok | /api/labs/6593470145184a5f896cd4393eccf381/design/generations/2e1fda8f0c8a417ba56be9e8fdeba0e7/download |
 | a generated file opens in a dialog | ok |  |
 | EIGRP on cEOS fails the plan with the device and the reason named | ok | r1: eigrp is not supported on kind arista_ceos (netlab 26.09 module 'eigrp' does not support device profile 'eos')r2: eigrp is not supported on kind arista_ceos |
 | a reload keeps the saved design | ok |  |
@@ -27,4 +36,4 @@ Run 2026-09-27T00:00:18+00:00 against the fixture manager (real app on scratch d
 | no horizontal scroll at tablet width | ok | scrollWidth=768 |
 | the Design tab adds no horizontal overflow at phone width beyond the shell | ok | design=428 shell=428 |
 
-Screenshots: 01-empty.png, 02-problems.png, 03-saved.png, 04-plan.png, 05-file.png, 06-unsupported.png, 07-tablet.png, 08-phone.png
+Screenshots: 01-empty.png, 02-problems.png, 03-saved.png, 03b-tables.png, 04-plan.png, 05-file.png, 06-unsupported.png, 07-tablet.png, 08-phone.png

@@ -304,3 +304,15 @@ Three must-fix and six should-fix findings, all applied and pinned:
 - the acknowledgement is unticked on every new review, capped samples say "… and N more", a take-over says how
   many manual settings it covers.
 
+### Milestone E facts (feature families, 2026-09-27)
+
+- A Junos `commit check` refusal reaches the job in the manager's fixed words (`design_junos.CHECK_PHRASES`:
+  "the device refused the VLAN or bridge-domain part of it", "a licensed feature is not available on this
+  image", …), never the device's text — the same rule as the IOS XR `!!%` reasons. First case: vJunos-switch
+  23.2R1.14 refuses netlab's EVPN/VXLAN VLAN rendering ("Error in parsing bridge domains/vlans"); the job was
+  `partial`, the device untouched.
+- The families' removals follow the same algebra without new rules: a module dropped goes at its container
+  (`no router ospf 1`, `delete protocols ospf`), a VLAN or VRF attachment removed takes the lines it brought
+  (`delete routing-instances red`, `no interface Vxlan1`, `no address-family evpn`), and a link moved into a VRF
+  or a VLAN loses its global BGP `network` and IGP interface lines as stale leaves.
+

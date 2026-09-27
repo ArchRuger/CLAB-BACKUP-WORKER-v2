@@ -147,7 +147,7 @@ def scan(document):
     document is bounded in depth and size. Returns the problems found (a non-empty list stops validation)."""
     problems = []; count = 0
 
-    def walk(value, path, depth):
+    def walk(value, path, depth, parent=''):
         nonlocal count
         count += 1
         if count > MAX_ITEMS: problems.append({'path': path, 'message': 'The design has too many items'}); return
@@ -155,12 +155,14 @@ def scan(document):
         if isinstance(value, dict):
             for key, item in value.items():
                 here = path + '.' + str(key) if path else str(key)
-                if not isinstance(key, str) or not key or len(key) > 200 or key.startswith('_') or (key in DENIED_KEYS and key != 'id') or not _text(key, 200):
+                # `members` names the member links of a link aggregation (checked by the link level) and nothing else.
+                denied = key in DENIED_KEYS and key != 'id' and not (key == 'members' and parent == 'lag')
+                if not isinstance(key, str) or not key or len(key) > 200 or key.startswith('_') or denied or not _text(key, 200):
                     problems.append({'path': here, 'message': 'This name is not accepted in a design: ' + (key if isinstance(key, str) and _text(key, 200) else 'unreadable key')}); continue
-                walk(item, here, depth + 1)
+                walk(item, here, depth + 1, key)
         elif isinstance(value, list):
             if len(value) > 2000: problems.append({'path': path, 'message': 'The list is too long'}); return
-            for index, item in enumerate(value): walk(item, path + '[' + str(index) + ']', depth + 1)
+            for index, item in enumerate(value): walk(item, path + '[' + str(index) + ']', depth + 1, parent)
         elif isinstance(value, str):
             if not _text(value, 4096): problems.append({'path': path, 'message': 'Text may not contain control characters, quotes, braces, semicolons, backslashes or backticks'})
         elif value is not None and not isinstance(value, (bool, int, float)):
@@ -192,6 +194,7 @@ class SchemaChecker:
         """No address or prefix anywhere in the settings may fall inside the lab's management networks."""
         try: network = ipaddress.ip_network(value, strict=False)
         except (ValueError, TypeError): return
+        if network.prefixlen == 0: return   # a default route (`0.0.0.0/0`, `::/0`) is a prefix to originate, never an address
         for label, net in self.management:
             if net.version == network.version and net.overlaps(network):
                 errors.append({'path': path, 'message': 'Overlaps the lab management network ' + label}); return
@@ -201,6 +204,9 @@ class SchemaChecker:
         if isinstance(schema, str):
             self.leaf(value, {'type': schema}, path, errors, depth); return
         last = path.rsplit('.', 1)[-1]
+        if last == 'import' and isinstance(value, dict) and any(v is None for v in value.values()):
+            # The engine's schema allows an empty entry, its BGP templates crash on it (eos, iosxr): ask for the form that renders.
+            errors.append({'path': path, 'message': 'Set a redistributed protocol to true or to a mapping with its policy'}); return
         if schema is None and last == 'prefix' and '_prefix' in self.named:
             self.check(value, self.named['_prefix'], path, errors, depth + 1); return   # netlab types a VLAN prefix loosely
         if last == 'loopback' and isinstance(schema, dict) and 'type' in schema and '_keys' not in schema and '_subtype' not in schema and isinstance(value, dict):
@@ -247,7 +253,8 @@ class SchemaChecker:
             return (low is None or len(value) >= low) and (high is None or len(value) <= high)
         if kind == 'asn': return _is_int(value) and 1 <= value <= 4294967295
         if kind == 'mac': return _text(value, 40) and re.fullmatch(r'[0-9A-Fa-f]{2}([:.-][0-9A-Fa-f]{2}){5}|[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}', value) is not None
-        if kind == 'net': return _text(value, 80) and re.fullmatch(r'[0-9a-fA-F]{2}(\.[0-9a-fA-F]{4}){3,9}\.00', value) is not None
+        # A NET, or an IS-IS area (`49.0001`): netlab types `isis.area` as `net` but takes the area and builds the NET.
+        if kind == 'net': return _text(value, 80) and (re.fullmatch(r'[0-9a-fA-F]{2}(\.[0-9a-fA-F]{4}){3,9}\.00', value) is not None or re.fullmatch(r'[0-9a-fA-F]{2}(\.[0-9a-fA-F]{4}){0,6}', value) is not None)
         if kind == 'rd': return _text(value, 60) and re.fullmatch(r'(?:\d{1,10}|\d{1,3}(?:\.\d{1,3}){3}):\d{1,10}', value) is not None
         if kind in ('ipv4', 'ipv6'):
             use = schema.get('use', '')
@@ -424,10 +431,36 @@ def _check_named_objects(intent, key, errors, schema, checker, ids):
         elif rest: errors.append({'path': here, 'message': 'Settings cannot be checked without the engine schema'})
 
 
-def _module_settings(container, path, modules, level, errors, checker, schema, allow_unlisted=False, vrf_names=()):
+def link_nodes(key):
+    """The two device names a link key joins (`a:if--b:if`), or () when the key is not of that shape."""
+    ends = str(key or '').split('--')
+    if len(ends) != 2 or not all(':' in e for e in ends): return ()
+    return tuple(sorted(e.split(':', 1)[0] for e in ends))
+
+
+def _lag_members(body, here, errors, link_key, link_keys):
+    """`links.<key>.lag.members`: the other member links of the aggregation this link carries — one to eight keys of
+    this lab's links, distinct, not the link itself, each joining the same two devices. Returns the body without
+    `members` for the engine schema check."""
+    body = dict(body); members = body.pop('members', None)
+    if members is None: return body
+    path = here + '.members'
+    if not isinstance(members, list) or not members or len(members) > 8 or not all(isinstance(m, str) for m in members):
+        errors.append({'path': path, 'message': 'List one to eight member links by their link key'}); return body
+    if len(set(members)) != len(members): errors.append({'path': path, 'message': 'A member link is listed twice'})
+    pair = link_nodes(link_key)
+    for member in members:
+        if member == link_key: errors.append({'path': path, 'message': 'The link that carries the aggregation is a member by itself; list the other links'})
+        elif link_keys is not None and member not in link_keys: errors.append({'path': path, 'message': 'No link with this key in the lab: ' + member})
+        elif pair and link_nodes(member) != pair: errors.append({'path': path, 'message': 'A member link must join the same two devices: ' + member})
+    return body
+
+
+def _module_settings(container, path, modules, level, errors, checker, schema, allow_unlisted=False, vrf_names=(), link_key='', link_keys=None):
     """Check every enabled module's settings in `container` at `level`; a module that is not enabled is an error.
     `False` switches a module off at that level (netlab's own rule); at the node, link and interface levels the
-    `vrf` module also takes the name of a VRF defined in the design (the attachment)."""
+    `vrf` module also takes the name of a VRF defined in the design (the attachment); at the link level `lag`
+    may name its member links."""
     for module in MODULES:
         if module not in container: continue
         here = path + '.' + module if path else module
@@ -435,6 +468,9 @@ def _module_settings(container, path, modules, level, errors, checker, schema, a
             errors.append({'path': here, 'message': 'Enable ' + module + ' in the design before setting its options'}); continue
         body = container[module]
         if body is None or body is True: continue
+        if module == 'lag' and isinstance(body, dict) and 'members' in body:
+            if level != 'link': errors.append({'path': here + '.members', 'message': 'Member links are listed on the link that carries the aggregation'}); continue
+            body = _lag_members(body, here, errors, link_key, link_keys)
         if body is False:
             if level in ('link', 'interface'): continue
             errors.append({'path': here, 'message': 'Switch a module off per link or per link end; a device drops a module from its modules list'}); continue
@@ -528,7 +564,7 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
             extra = node['modules']
             if not isinstance(extra, list) or any(m not in MODULES for m in extra) or len(set(extra)) != len(extra):
                 errors.append({'path': here + '.modules', 'message': 'Device modules come from the supported list'})
-        node_modules = set(modules) | set(node.get('modules') or []) if isinstance(node.get('modules', []), list) else set(modules)
+        node_modules = set(node['modules']) if isinstance(node.get('modules'), list) else set(modules)   # a device's list replaces the design's (netlab's rule)
         loop = node.get('loopback')
         if loop is not None:
             if loop is False: pass
@@ -599,7 +635,7 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
         if 'unnumbered' in link and not isinstance(link['unnumbered'], bool): errors.append({'path': here + '.unnumbered', 'message': 'unnumbered is yes or no'})
         for family in ('ipv4', 'ipv6'):
             if family in link and not isinstance(link[family], bool): errors.append({'path': here + '.' + family, 'message': 'At link level ' + family + ' switches the family on or off; put addresses under endpoints'})
-        _module_settings(link, here, modules, 'link', errors, checker, schema, vrf_names=vrf_names)
+        _module_settings(link, here, modules, 'link', errors, checker, schema, vrf_names=vrf_names, link_key=key, link_keys=set(lab_links) if lab_links is not None else None)
         _vlan_references(link.get('vlan'), here + '.vlan', vlan_names, errors)
         endpoints = link.get('endpoints', {})
         if not isinstance(endpoints, dict): errors.append({'path': here + '.endpoints', 'message': 'Endpoints are a mapping of device names'}); continue

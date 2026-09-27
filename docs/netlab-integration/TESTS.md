@@ -88,3 +88,20 @@ Suites and checks at the checkpoint: the six new Python files above all pass on 
 0 failures); `node --test tests/test_network_design_ui.js` passes (39, 0 failures). Full-suite counts,
 `verify-release.py`, `check_links.py` and `git diff --check` for the release that ships this chunk (1.30.45)
 belong in `clab-backup-ui/VALIDATION.md` and `docs/CHANGELOG.md`, not here.
+
+## Chunk 4 (milestone E: feature families)
+
+| File | Count | Pins |
+|---|---|---|
+| `tests/test_design_families_routing.py` | 20 (`IsisFamilyTests`, `StaticRoutesFamilyTests`, `VrfFamilyTests`, `BgpPolicyFamilyTests`, `BfdFamilyTests`) | Real-engine generation on the four-node topology: IS-IS (NET from the area, per-node level), node-level static routes with a discard next hop, VRF objects with link attachment and a VRF loopback, prefix lists / route policies / redistribution / default origination, BFD on cEOS and Junos with XRv9k refused by the capability model; validation accepts the proven shapes and refuses the wrong ones; byte-identical reruns |
+| `tests/test_design_families_l2.py` | 25 (`VlanFamilyTests`, `LagFamilyTests`, `GatewayFamilyTests`, `VxlanEvpnFamilyTests`, `StpFamilyTests`) | VLAN access and trunk ports, a two-link LAG bundle (cEOS port-channel, Junos ae), VRRP on all four and anycast on three, VXLAN + EVPN, STP on cEOS; the capability answers for the unsupported kinds; byte-identical reruns |
+| `tests/test_design_intent.py` | 140 (+2: LAG members, the IS-IS area / default origination / redistribution forms) | as before |
+| `tests/test_design_adapter.py` | 72 (+1: `BuildLagTests`, the bundle with member ports by ifindex; the per-node module rule rewritten) | as before |
+| `tests/test_network_design.py` | 61 (the per-node module rule rewritten) | as before |
+| `tests/test_design_junos.py` | 28 (+1: `CheckReasonTests`, a commit-check refusal classified into fixed words) | as before |
+| `tests/test_network_design_ui.js` | 57 (+13: the guided tables `designVrfsMarkup`, `designVlansMarkup`, `designLinksMarkup`, `designStaticMarkup`, their form-to-intent round trips, module auto-add, empty rows dropped) | as before |
+
+Both family files are registered in `.github/workflows/release-check.yml`. Live: `scratchpad/product_design.py`
+(change the deployed lab's design through `PUT …/design` and generate) and `scratchpad/product_apply.py` (review
+and apply through the product's API), both described only; the read-backs use `nodecli.py` with the transcript tags
+`e1-isis`, `e1-isis-recheck`, `e2-vrf`, `e3-policy`, `e4-vlan`.

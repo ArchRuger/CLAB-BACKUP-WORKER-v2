@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.45"><script src="/static/status.js?v=1.30.45" defer></script><script src="/static/shell.js?v=1.30.45" defer></script><script src="/static/app.js?v=1.30.45" defer></script><script src="/static/topology-render.js?v=1.30.45" defer></script><script src="/static/topology.js?v=1.30.45" defer></script><script src="/static/home.js?v=1.30.45" defer></script><script src="/static/management.js?v=1.30.45" defer></script><script src="/static/operations.js?v=1.30.45" defer></script><script src="/static/diagram-editor.js?v=1.30.45" defer></script><script src="/static/diff-view.js?v=1.30.45" defer></script><script src="/static/git-progress.js?v=1.30.45" defer></script><script src="/static/git-places.js?v=1.30.45" defer></script><script src="/static/restore.js?v=1.30.45" defer></script><script src="/static/network-design.js?v=1.30.45" defer></script><script src="/static/capture.js?v=1.30.45" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.46"><script src="/static/status.js?v=1.30.46" defer></script><script src="/static/shell.js?v=1.30.46" defer></script><script src="/static/app.js?v=1.30.46" defer></script><script src="/static/topology-render.js?v=1.30.46" defer></script><script src="/static/topology.js?v=1.30.46" defer></script><script src="/static/home.js?v=1.30.46" defer></script><script src="/static/management.js?v=1.30.46" defer></script><script src="/static/operations.js?v=1.30.46" defer></script><script src="/static/diagram-editor.js?v=1.30.46" defer></script><script src="/static/diff-view.js?v=1.30.46" defer></script><script src="/static/git-progress.js?v=1.30.46" defer></script><script src="/static/git-places.js?v=1.30.46" defer></script><script src="/static/restore.js?v=1.30.46" defer></script><script src="/static/network-design.js?v=1.30.46" defer></script><script src="/static/capture.js?v=1.30.46" defer></script></head>
 <body>
 
 <svg hidden aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
@@ -189,6 +189,21 @@
         <div id="design-gateway-settings" class="design-module-settings" hidden><label for="design-gateway-protocol">First-hop gateway protocol</label><select id="design-gateway-protocol"><option value="anycast">Anycast</option><option value="vrrp">VRRP</option></select></div>
         <h3>Devices</h3>
         <div class="table-wrap"><table><thead><tr><th>Device</th><th>Kind</th><th>Profile</th><th>Role</th><th>Notes</th></tr></thead><tbody id="design-devices"></tbody></table></div>
+        <h3>VRFs</h3>
+        <p class="caption">Virtual routing and forwarding instances this design defines. Attach one to a link below to put that link's interfaces into it.</p>
+        <div class="table-wrap"><table><thead><tr><th>Name</th><th>Loopback</th><th></th></tr></thead><tbody id="design-vrfs"></tbody></table></div>
+        <div class="actions"><button type="button" class="button secondary small" id="design-vrf-add">Add VRF</button></div>
+        <h3>VLANs</h3>
+        <p class="caption">VLANs this design defines. Use them below to set a link's access or trunk VLANs.</p>
+        <div class="table-wrap"><table><thead><tr><th>Name</th><th>Id</th><th></th></tr></thead><tbody id="design-vlans"></tbody></table></div>
+        <div class="actions"><button type="button" class="button secondary small" id="design-vlan-add">Add VLAN</button></div>
+        <h3>Links</h3>
+        <p class="caption">The VRF and VLAN settings of this lab's links. Other link settings (addressing, link aggregation, …) stay under Advanced.</p>
+        <div class="table-wrap"><table><thead><tr><th>Link</th><th>VRF</th><th>Access VLAN</th><th>Trunk VLANs</th><th></th></tr></thead><tbody id="design-links"></tbody></table></div>
+        <h3>Static routes</h3>
+        <p class="caption">Static routes to add to a device's routing table, with a discard route or an explicit next hop.</p>
+        <div class="table-wrap"><table><thead><tr><th>Device</th><th>Prefix</th><th>Next hop</th><th>Address</th><th></th></tr></thead><tbody id="design-static"></tbody></table></div>
+        <div class="actions"><button type="button" class="button secondary small" id="design-static-add">Add static route</button></div>
         <div id="design-problems" role="alert"></div>
         <details id="design-advanced-details"><summary>Advanced</summary>
           <p class="form-help">The whole design as JSON, including settings the form above does not cover (per-link settings, VLAN and VRF objects, interface overrides, module options). Editing the form updates this text; editing this text (and leaving the field) updates the form when it parses.</p>

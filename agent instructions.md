@@ -1,3 +1,20 @@
+# Network design, part 4: feature families — 1.30.46
+
+Read `docs/netlab-integration/PICKUP.md` first, then `LEDGER.md` (the per-family, per-image truth) and
+`evidence/live-apply-families.md`. Preserve, beside the 1.30.43–1.30.45 points: (1) a device's `modules` list
+replaces the design's list for that device (`design_adapter`, `network_design.effective_modules`, the validation's
+`node_modules`): never make it additive again, it is how a device is kept out of a module it cannot carry. (2)
+`links.<key>.lag.members` is validated by `design_intent._lag_members` (other links of the lab, same two devices,
+one to eight) and `members` stays denied everywhere else; the adapter emits the bundle after its members with the
+member ports by netlab `ifindex` (`ifname` there leaks onto the bundle). (3) The `net` type accepts an IS-IS area;
+`guard_address` exempts a zero-length prefix; an `import` entry of `None` is refused. (4) `design_adapter.overlaps`
+treats access ports of one VLAN as one segment. (5) `design_junos.CHECK_PHRASES` and `design_iosxr.FAILURE_PHRASES`
+are the only way a device's refusal reaches a job: classes, never text. (6) The ledger's "Live" column says
+exactly what was applied on `restore-square` and what was only generated; VXLAN/EVPN is "attempted, refused by
+vJunos-switch"; do not promote a row without a new live record. (7) The lab ends at the E4 design (IS-IS + BGP,
+policy, static routes, two VLANs), every statement owned by the deployed product. Routing observed: Sonnet for the
+two family test files and the guided tables; the lead for the schema, adapter and driver rules and every live step.
+
 # Network design, part 3: Apply to devices — 1.30.45
 
 Read `docs/netlab-integration/PICKUP.md` first, then `PROVISIONING.md` (the contract; §8 is what the live proof

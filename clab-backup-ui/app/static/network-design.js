@@ -84,6 +84,103 @@ function designIntentFromForm(values,base){
   if(Object.keys(node).length)nodes[name]=node;else delete nodes[name];
  }
  intent.nodes=nodes;
+ // VRFs, VLANs, links (vrf/vlan attachment) and static routes are guided fields like any other above,
+ // but a caller that knows nothing about them (an older `values` object, or a test built before this
+ // milestone) omits the key entirely rather than sending an empty list — that must leave the intent's
+ // vrfs/vlans/links/nodes exactly as `base` had them, same as every other field this function does not
+ // own. Only an explicit array (including an empty one, meaning "no rows in this table right now")
+ // replaces what is there.
+ let newVrfs=intent.vrfs&&typeof intent.vrfs==='object'?intent.vrfs:{};
+ if(values.vrfs!==undefined){
+  // intent.vrfs={name:{loopback:true|false,...}}; loopback omitted when false; any other key a VRF
+  // object already has (rd, id, import, export) is merged in by the row's original key, never replaced.
+  // A row with no name (never saved, or cleared by the student) is dropped.
+  const existingVrfs=newVrfs;newVrfs={};
+  for(const row of values.vrfs){
+   const name=String((row&&row.name)||'').trim();if(!name)continue;
+   const key=(row&&row.key)||name;
+   const original=existingVrfs[key]&&typeof existingVrfs[key]==='object'?existingVrfs[key]:{};
+   const vrf={...original};
+   if(row.loopback)vrf.loopback=true;else delete vrf.loopback;
+   newVrfs[name]=vrf;
+  }
+  intent.vrfs=newVrfs;
+ }
+ let newVlans=intent.vlans&&typeof intent.vlans==='object'?intent.vlans:{};
+ if(values.vlans!==undefined){
+  // intent.vlans={name:{id:N,...}}, merged the same way.
+  const existingVlans=newVlans;newVlans={};
+  for(const row of values.vlans){
+   const name=String((row&&row.name)||'').trim();if(!name)continue;
+   const key=(row&&row.key)||name;
+   const original=existingVlans[key]&&typeof existingVlans[key]==='object'?existingVlans[key]:{};
+   const vlan={...original};
+   const id=Number(row&&row.id);
+   if(Number.isFinite(id)&&id>0)vlan.id=id;else delete vlan.id;
+   newVlans[name]=vlan;
+  }
+  intent.vlans=newVlans;
+ }
+ let newLinks=intent.links&&typeof intent.links==='object'?intent.links:{};
+ if(values.links!==undefined){
+  // Only `vrf` and `vlan` are touched; every other per-link setting (prefix, pool, modules, …) carries
+  // over untouched. A link left with nothing at all (no vrf, no vlan, no other setting) is dropped rather
+  // than kept as an empty object; a link not shown in this table (a stale key) is never touched.
+  const existingLinks=newLinks;newLinks={...existingLinks};
+  for(const row of values.links){
+   const key=row&&row.key;if(!key)continue;
+   const original=existingLinks[key]&&typeof existingLinks[key]==='object'?existingLinks[key]:{};
+   const link={...original};
+   if(row.vrf)link.vrf=row.vrf;else delete link.vrf;
+   const trunk=(row.trunk||[]).map(v=>String(v).trim()).filter(Boolean);
+   if(trunk.length)link.vlan={trunk};
+   else if(row.vlanAccess)link.vlan={access:row.vlanAccess};
+   else delete link.vlan;
+   if(Object.keys(link).length)newLinks[key]=link;else delete newLinks[key];
+  }
+  intent.links=newLinks;
+ }
+ let staticByDevice=null;
+ if(values.staticRoutes!==undefined){
+  // intent.nodes[device].routing.static=[{ipv4|ipv6:prefix,nexthop:{discard:true}|{ipv4|ipv6:address}}].
+  // A row with no prefix, no device, or an address next hop with no address is dropped. Every other
+  // per-node setting (role, bgp, …) carries over untouched.
+  staticByDevice={};
+  for(const row of values.staticRoutes){
+   const prefix=String((row&&row.prefix)||'').trim();if(!prefix)continue;
+   const device=String((row&&(row.device||row.origDevice))||'').trim();if(!device)continue;
+   const family=prefix.includes(':')?'ipv6':'ipv4';
+   let nexthop;
+   if(row.nexthopType==='discard')nexthop={discard:true};
+   else{
+    const address=String((row&&row.nexthopAddress)||'').trim();if(!address)continue;
+    nexthop={[family]:address};
+   }
+   (staticByDevice[device]=staticByDevice[device]||[]).push({[family]:prefix,nexthop});
+  }
+  for(const device of new Set([...Object.keys(nodes),...Object.keys(staticByDevice)])){
+   const hadStatic=!!(nodes[device]&&nodes[device].routing&&Array.isArray(nodes[device].routing.static));
+   if(!staticByDevice[device]&&!hadStatic)continue;
+   const node={...(nodes[device]&&typeof nodes[device]==='object'?nodes[device]:{})};
+   const routing={...(node.routing&&typeof node.routing==='object'?node.routing:{})};
+   if(staticByDevice[device])routing.static=staticByDevice[device];else delete routing.static;
+   if(Object.keys(routing).length)node.routing=routing;else delete node.routing;
+   if(Object.keys(node).length)nodes[device]=node;else delete nodes[device];
+  }
+  intent.nodes=nodes;
+ }
+ // The server refuses a link's vrf, or any VLAN, while its module is off (design_intent.py's own rule for
+ // vlans/vrfs defined at all, and for a link referencing one); mirrored here so defining or attaching one
+ // turns its module on. Gated on this call having actually touched that table (values.vrfs/vlans/links
+ // undefined, e.g. an older caller, must leave `modules` alone even if `base` already carried VRFs/VLANs
+ // from before this milestone existed). Never removed automatically — including `routing`, once a static
+ // route exists — because a module can stay wanted for other reasons (BGP policy also lives under
+ // `routing`) even after every route using it is deleted.
+ const linksUseVrf=values.links!==undefined&&Object.values(newLinks).some(l=>l&&l.vrf);
+ const linksUseVlan=values.links!==undefined&&Object.values(newLinks).some(l=>l&&l.vlan);
+ if(((values.vrfs!==undefined&&Object.keys(newVrfs).length)||linksUseVrf)&&!modules.includes('vrf'))modules.push('vrf');
+ if(((values.vlans!==undefined&&Object.keys(newVlans).length)||linksUseVlan)&&!modules.includes('vlan'))modules.push('vlan');
+ if(staticByDevice&&Object.keys(staticByDevice).length&&!modules.includes('routing'))modules.push('routing');
  return intent;
 }
 // The inverse of designIntentFromForm: what the guided controls should show for a stored (or draft) intent.
@@ -141,6 +238,93 @@ function designDevicesMarkup(nodes,roles){
  const names=Object.keys(nodes).sort();
  if(!names.length)return '<tr><td colspan="5" class="table-empty">This lab has no devices yet.</td></tr>';
  return names.map(name=>designDeviceRow(name,nodes[name],roles[name])).join('');
+}
+
+// --- VRFs, VLANs, links (vrf/vlan attachment) and static routes: milestone E guided controls ----------
+// Each table renders straight from the intent (never from cached form state) so an Advanced edit shows up
+// here immediately; edits write back through designIntentFromForm, keyed by the *original* name/key
+// (data-design-*-key on each row) so a row being renamed still merges onto the object it came from.
+function designVrfRow(name,vrf){
+ vrf=vrf||{};
+ return `<tr data-design-vrf-key="${esc(name)}"><td><input type="text" class="mono" data-design-vrf-field="name" value="${esc(name)}" pattern="^[A-Za-z_][A-Za-z0-9_]{0,63}$" placeholder="red"></td>`+
+  `<td><label class="checkbox-label"><input type="checkbox" data-design-vrf-field="loopback" ${vrf.loopback?'checked':''}> Loopback</label></td>`+
+  `<td><button type="button" class="button secondary small" data-design-vrf-remove="${esc(name)}">Remove</button></td></tr>`;
+}
+function designVrfsMarkup(vrfs){
+ vrfs=vrfs&&typeof vrfs==='object'?vrfs:{};
+ const names=Object.keys(vrfs).sort();
+ if(!names.length)return '<tr><td colspan="3" class="table-empty">No VRFs yet.</td></tr>';
+ return names.map(name=>designVrfRow(name,vrfs[name])).join('');
+}
+function designVlanRow(name,vlan){
+ vlan=vlan||{};
+ return `<tr data-design-vlan-key="${esc(name)}"><td><input type="text" class="mono" data-design-vlan-field="name" value="${esc(name)}" pattern="^[A-Za-z_][A-Za-z0-9_]{0,63}$" placeholder="red"></td>`+
+  `<td><input type="number" min="1" max="4094" data-design-vlan-field="id" value="${vlan.id!=null?esc(vlan.id):''}"></td>`+
+  `<td><button type="button" class="button secondary small" data-design-vlan-remove="${esc(name)}">Remove</button></td></tr>`;
+}
+function designVlansMarkup(vlans){
+ vlans=vlans&&typeof vlans==='object'?vlans:{};
+ const names=Object.keys(vlans).sort();
+ if(!names.length)return '<tr><td colspan="3" class="table-empty">No VLANs yet.</td></tr>';
+ return names.map(name=>designVlanRow(name,vlans[name])).join('');
+}
+function designLinkEnds(link){
+ link=link||{};
+ const names=Object.keys(link.endpoints||{}).sort();
+ if(names.length)return names.join(' — ');
+ return String(link.key||'').split('--').map(e=>e.split(':')[0]).filter(Boolean).join(' — ');
+}
+// A link's settings this table does not cover (prefix, pool, per-endpoint overrides, other modules):
+// shown as a caption so a student editing the guided table knows there is more to this link under Advanced.
+function designLinkOtherKeysCaption(settings){
+ const covered=new Set(['vrf','vlan']);
+ const extra=Object.keys(settings||{}).filter(k=>!covered.has(k));
+ return extra.length?`<p class="caption">Also set under Advanced: ${esc(extra.sort().join(', '))}</p>`:'';
+}
+function designLinkVrfVlanRow(link,settings,vrfNames,vlanNames){
+ link=link||{};settings=settings&&typeof settings==='object'?settings:{};vrfNames=vrfNames||[];vlanNames=vlanNames||[];
+ const key=link.key||'';
+ const vrfOptions='<option value="">None</option>'+vrfNames.map(n=>`<option value="${esc(n)}" ${settings.vrf===n?'selected':''}>${esc(n)}</option>`).join('');
+ const vlan=settings.vlan&&typeof settings.vlan==='object'?settings.vlan:{};
+ const access=typeof vlan.access==='string'?vlan.access:'';
+ const accessOptions='<option value="">None</option>'+vlanNames.map(n=>`<option value="${esc(n)}" ${access===n?'selected':''}>${esc(n)}</option>`).join('');
+ const trunk=Array.isArray(vlan.trunk)?vlan.trunk:[];
+ return `<tr data-design-link-key="${esc(key)}"><td class="mono">${esc(designLinkEnds(link))}</td>`+
+  `<td><select data-design-link-field="vrf">${vrfOptions}</select></td>`+
+  `<td><select data-design-link-field="vlan-access">${accessOptions}</select></td>`+
+  `<td><input type="text" class="mono" data-design-link-field="vlan-trunk" value="${esc(trunk.join(','))}" placeholder="red,blue"></td>`+
+  `<td>${designLinkOtherKeysCaption(settings)}</td></tr>`;
+}
+function designLinksMarkup(links,linkSettings,vrfNames,vlanNames){
+ links=Array.isArray(links)?links:[];linkSettings=linkSettings&&typeof linkSettings==='object'?linkSettings:{};
+ const rows=links.filter(l=>l&&l.key).map(l=>designLinkVrfVlanRow(l,linkSettings[l.key],vrfNames,vlanNames)).join('');
+ return rows||'<tr><td colspan="5" class="table-empty">This lab has no designable links yet.</td></tr>';
+}
+function designStaticDeviceOptions(current,deviceNames){
+ const names=new Set(deviceNames||[]);if(current)names.add(current);
+ return [...names].sort().map(n=>`<option value="${esc(n)}" ${n===current?'selected':''}>${esc(n)}</option>`).join('');
+}
+function designStaticRouteRow(device,route,index,deviceNames){
+ route=route&&typeof route==='object'?route:{};
+ const family=route.ipv6!==undefined?'ipv6':'ipv4';
+ const prefix=route[family]||'';
+ const nexthop=route.nexthop&&typeof route.nexthop==='object'?route.nexthop:{};
+ const discard=!!nexthop.discard;
+ const address=discard?'':(nexthop.ipv6!==undefined?nexthop.ipv6:(nexthop.ipv4!==undefined?nexthop.ipv4:''));
+ return `<tr data-design-static-key="${esc(device+':'+index)}"><td><select data-design-static-field="device">${designStaticDeviceOptions(device,deviceNames)}</select></td>`+
+  `<td><input type="text" class="mono" data-design-static-field="prefix" value="${esc(prefix)}" placeholder="192.0.2.0/24"></td>`+
+  `<td><select data-design-static-field="nexthop-type"><option value="discard" ${discard?'selected':''}>Discard</option><option value="address" ${discard?'':'selected'}>Address</option></select></td>`+
+  `<td><input type="text" class="mono" data-design-static-field="nexthop-address" value="${esc(address)}" ${discard?'disabled':''} placeholder="192.0.2.1"></td>`+
+  `<td><button type="button" class="button secondary small" data-design-static-remove="${esc(device+':'+index)}">Remove</button></td></tr>`;
+}
+function designStaticMarkup(nodes,deviceNames){
+ nodes=nodes&&typeof nodes==='object'?nodes:{};
+ const rows=[];
+ for(const device of Object.keys(nodes).sort()){
+  const list=nodes[device]&&nodes[device].routing&&Array.isArray(nodes[device].routing.static)?nodes[device].routing.static:[];
+  list.forEach((route,index)=>rows.push(designStaticRouteRow(device,route,index,deviceNames)));
+ }
+ return rows.join('')||'<tr><td colspan="5" class="table-empty">No static routes yet.</td></tr>';
 }
 function designLedgerMarkup(allocations){
  allocations=allocations||{};
@@ -501,8 +685,10 @@ function designMaybeStartWatch(){
 }
 // --- form focus guard: never rewrite a guided control while the student is using it -------------------
 function designFormFocused(){
- const form=$('design-form');
- return !!(form&&document.activeElement&&typeof form.contains==='function'&&form.contains(document.activeElement));
+ // Only a field being typed in blocks a re-render: a focused button (Add VRF, remove) must not keep its own change from showing.
+ const form=$('design-form');const active=document.activeElement;
+ if(!form||!active||typeof form.contains!=='function'||!form.contains(active))return false;
+ return ['INPUT','TEXTAREA','SELECT'].includes(String(active.tagName||'').toUpperCase())&&String(active.type||'').toLowerCase()!=='button';
 }
 function designToggleModuleSettings(modules){
  const set=new Set(modules||[]);
@@ -544,6 +730,10 @@ function designRenderForm(view){
   designSetControlValue('design-isis-type',values.isisType);
   designSetControlValue('design-gateway-protocol',values.gatewayProtocol);
   designRenderDeviceOptions(view,values);
+  setMarkup($('design-vrfs'),designVrfsMarkup(intent.vrfs));
+  setMarkup($('design-vlans'),designVlansMarkup(intent.vlans));
+  setMarkup($('design-links'),designLinksMarkup((view&&view.links)||[],intent.links,Object.keys(intent.vrfs||{}).sort(),Object.keys(intent.vlans||{}).sort()));
+  setMarkup($('design-static'),designStaticMarkup(intent.nodes,designRouterDeviceNames(view,values)));
   if($('design-advanced'))$('design-advanced').value=JSON.stringify(intent,null,2);
  }
  designToggleModuleSettings(values.modules);
@@ -630,6 +820,50 @@ function designRolesFromDom(){
  return map;
 }
 function designVal(id){return $(id)?$(id).value:'';}
+// One reader per new table, each scoped to its own tbody id so a stray element elsewhere on the page
+// (there is none, but the next table added should keep the habit) cannot be picked up by mistake.
+function designRowsIn(containerId,rowSelector){
+ if(typeof document==='undefined'||typeof document.querySelectorAll!=='function')return [];
+ const container=$(containerId);if(!container||typeof container.querySelectorAll!=='function')return [];
+ return [...container.querySelectorAll(rowSelector)];
+}
+function designVrfsFromDom(){
+ return designRowsIn('design-vrfs','[data-design-vrf-key]').map(row=>{
+  const nameEl=row.querySelector('[data-design-vrf-field="name"]'),loopbackEl=row.querySelector('[data-design-vrf-field="loopback"]');
+  return {key:row.dataset.designVrfKey,name:nameEl?nameEl.value:'',loopback:!!(loopbackEl&&loopbackEl.checked)};
+ });
+}
+function designVlansFromDom(){
+ return designRowsIn('design-vlans','[data-design-vlan-key]').map(row=>{
+  const nameEl=row.querySelector('[data-design-vlan-field="name"]'),idEl=row.querySelector('[data-design-vlan-field="id"]');
+  return {key:row.dataset.designVlanKey,name:nameEl?nameEl.value:'',id:idEl?idEl.value:''};
+ });
+}
+function designLinksFromDom(){
+ return designRowsIn('design-links','[data-design-link-key]').map(row=>{
+  const vrfEl=row.querySelector('[data-design-link-field="vrf"]'),accessEl=row.querySelector('[data-design-link-field="vlan-access"]'),
+   trunkEl=row.querySelector('[data-design-link-field="vlan-trunk"]');
+  const trunk=trunkEl&&trunkEl.value?trunkEl.value.split(',').map(s=>s.trim()).filter(Boolean):[];
+  return {key:row.dataset.designLinkKey,vrf:vrfEl?vrfEl.value:'',vlanAccess:accessEl?accessEl.value:'',trunk};
+ });
+}
+function designStaticFromDom(){
+ return designRowsIn('design-static','[data-design-static-key]').map(row=>{
+  const [origDevice]=String(row.dataset.designStaticKey||'').split(':');
+  const deviceEl=row.querySelector('[data-design-static-field="device"]'),prefixEl=row.querySelector('[data-design-static-field="prefix"]'),
+   typeEl=row.querySelector('[data-design-static-field="nexthop-type"]'),addressEl=row.querySelector('[data-design-static-field="nexthop-address"]');
+  return {origDevice,device:deviceEl?deviceEl.value:origDevice,prefix:prefixEl?prefixEl.value:'',
+   nexthopType:typeEl?typeEl.value:'discard',nexthopAddress:addressEl?addressEl.value:''};
+ });
+}
+// The designable routers of this lab (view.nodes, the adapter's device list — not values.devices, which
+// only names devices the intent already has a setting for): the same rule designRenderDeviceOptions uses
+// for the BGP route-reflector list, reused here for the static-route table's device options.
+function designRouterDeviceNames(view,values){
+ const nodes=(view&&view.nodes)||{};
+ const roles={};for(const d of (values&&values.devices)||[])roles[d.name]=d.role;
+ return Object.keys(nodes).filter(n=>nodes[n]&&nodes[n].included&&(roles[n]||'router')==='router').sort();
+}
 function designReadFormValues(){
  const modulesEls=typeof document!=='undefined'&&typeof document.querySelectorAll==='function'
   ?[...document.querySelectorAll('#design-modules input[name="design-module"]:checked')]:[];
@@ -647,7 +881,8 @@ function designReadFormValues(){
   modules,
   ospfArea:designVal('design-ospf-area'),bgpAs:designVal('design-bgp-as'),bgpRr:designVal('design-bgp-rr'),
   isisArea:designVal('design-isis-area'),isisType:designVal('design-isis-type'),gatewayProtocol:designVal('design-gateway-protocol'),
-  devices
+  devices,
+  vrfs:designVrfsFromDom(),vlans:designVlansFromDom(),links:designLinksFromDom(),staticRoutes:designStaticFromDom()
  };
 }
 function designSetDraft(labId,intent){
@@ -676,6 +911,73 @@ function designOnAdvancedChange(){
  designSetDraft(lab.id,parsed);
  designRenderForm(designState.view);
  designRenderHeader(lab,designActiveView(lab));
+}
+// --- VRF/VLAN/static-route Add and Remove: these mutate the draft intent directly (never through
+// designReadFormValues/designIntentFromForm) so a brand-new row is never dropped as "empty" before the
+// student has had a chance to fill it in. A following edit anywhere on the form goes through the normal
+// guided-change pipeline as usual and drops it then if it is still empty.
+function designNextName(existing,prefix){
+ existing=existing||{};let n=1;while(existing[prefix+n]!==undefined)n++;return prefix+n;
+}
+function designApplyIntentPatch(patch){
+ const lab=current();if(!lab)return;
+ const intent={...designCurrentIntent(designState.view),...patch};
+ designSetDraft(lab.id,intent);
+ designRenderForm(designState.view);
+ designRenderHeader(lab,designActiveView(lab));
+}
+function designAddVrf(){
+ const base=designCurrentIntent(designState.view);
+ const vrfs={...(base.vrfs||{})};
+ vrfs[designNextName(vrfs,'vrf')]={};
+ designApplyIntentPatch({vrfs});
+}
+function designRemoveVrf(name){
+ const base=designCurrentIntent(designState.view);
+ const vrfs={...(base.vrfs||{})};delete vrfs[name];
+ designApplyIntentPatch({vrfs});
+}
+function designNextVlanId(vlans){
+ const used=new Set(Object.values(vlans||{}).map(v=>v&&v.id).filter(n=>typeof n==='number'));
+ let id=1;while(used.has(id)&&id<4094)id++;return id;
+}
+function designAddVlan(){
+ const base=designCurrentIntent(designState.view);
+ const vlans={...(base.vlans||{})};
+ vlans[designNextName(vlans,'vlan')]={id:designNextVlanId(vlans)};
+ designApplyIntentPatch({vlans});
+}
+function designRemoveVlan(name){
+ const base=designCurrentIntent(designState.view);
+ const vlans={...(base.vlans||{})};delete vlans[name];
+ designApplyIntentPatch({vlans});
+}
+function designAddStaticRoute(){
+ const base=designCurrentIntent(designState.view);
+ const routers=designRouterDeviceNames(designState.view,designReadFormValues());
+ if(!routers.length)return;
+ const device=routers[0];
+ const nodes={...(base.nodes||{})};
+ const node={...(nodes[device]&&typeof nodes[device]==='object'?nodes[device]:{})};
+ const routing={...(node.routing&&typeof node.routing==='object'?node.routing:{})};
+ routing.static=[...(Array.isArray(routing.static)?routing.static:[]),{ipv4:'',nexthop:{discard:true}}];
+ node.routing=routing;nodes[device]=node;
+ designApplyIntentPatch({nodes});
+}
+function designRemoveStatic(key){
+ const [device,indexText]=String(key||'').split(':');
+ const index=Number(indexText);
+ const base=designCurrentIntent(designState.view);
+ const nodes={...(base.nodes||{})};
+ const node=nodes[device];
+ if(!node||!node.routing||!Array.isArray(node.routing.static))return;
+ const list=[...node.routing.static];list.splice(index,1);
+ const routing={...node.routing};
+ if(list.length)routing.static=list;else delete routing.static;
+ const newNode={...node};
+ if(Object.keys(routing).length)newNode.routing=routing;else delete newNode.routing;
+ if(Object.keys(newNode).length)nodes[device]=newNode;else delete nodes[device];
+ designApplyIntentPatch({nodes});
 }
 async function designValidate(){
  const lab=current();if(!lab)return;
@@ -958,6 +1260,22 @@ function initNetworkDesign(){
  for(const id of guidedIds)if($(id))$(id).addEventListener('change',designOnGuidedChange);
  if($('design-modules'))$('design-modules').addEventListener('change',designOnGuidedChange);
  if($('design-devices'))$('design-devices').addEventListener('change',e=>{if(e.target&&e.target.dataset&&e.target.dataset.designRole!==undefined)designOnGuidedChange();});
+ if($('design-vrfs')){
+  $('design-vrfs').addEventListener('change',e=>{if(e.target&&e.target.dataset&&e.target.dataset.designVrfField!==undefined)designOnGuidedChange();});
+  $('design-vrfs').addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-design-vrf-remove]');if(b)designRemoveVrf(b.dataset.designVrfRemove);});
+ }
+ if($('design-vrf-add'))$('design-vrf-add').onclick=()=>designAddVrf();
+ if($('design-vlans')){
+  $('design-vlans').addEventListener('change',e=>{if(e.target&&e.target.dataset&&e.target.dataset.designVlanField!==undefined)designOnGuidedChange();});
+  $('design-vlans').addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-design-vlan-remove]');if(b)designRemoveVlan(b.dataset.designVlanRemove);});
+ }
+ if($('design-vlan-add'))$('design-vlan-add').onclick=()=>designAddVlan();
+ if($('design-links'))$('design-links').addEventListener('change',e=>{if(e.target&&e.target.dataset&&e.target.dataset.designLinkField!==undefined)designOnGuidedChange();});
+ if($('design-static')){
+  $('design-static').addEventListener('change',e=>{if(e.target&&e.target.dataset&&e.target.dataset.designStaticField!==undefined)designOnGuidedChange();});
+  $('design-static').addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-design-static-remove]');if(b)designRemoveStatic(b.dataset.designStaticRemove);});
+ }
+ if($('design-static-add'))$('design-static-add').onclick=()=>designAddStaticRoute();
  if($('design-advanced'))$('design-advanced').addEventListener('change',designOnAdvancedChange);
  if($('design-validate'))$('design-validate').onclick=()=>designValidate();
  if($('design-generate'))$('design-generate').onclick=()=>designGenerate();

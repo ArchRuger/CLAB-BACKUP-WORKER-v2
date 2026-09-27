@@ -4,6 +4,36 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.46
+
+**Network design, part 4: the feature families, proven where the lab allows and generated where it does not**
+([docs/NETWORK-DESIGN.md](NETWORK-DESIGN.md) "Feature families", the ledger
+[docs/netlab-integration/LEDGER.md](netlab-integration/LEDGER.md), the live record
+`docs/netlab-integration/evidence/live-apply-families.md`).
+
+- **Applied live through the deployed product, on all four routers of the acceptance lab, and removed again:**
+  IS-IS in place of OSPF (OSPF removed at the process level everywhere, L2 adjacencies up on every link, iBGP
+  kept), VRFs (a VRF on the host links with its loopback and VRF-scoped BGP address families; the global BGP
+  `network` and IGP interface lines of those links removed as stale), static routes (a discard route per router),
+  route policies and prefix lists, redistribution (connected into IS-IS, IS-IS into BGP through the policy), a
+  literal default-route origination, VLAN access ports with their SVIs on cEOS and vJunos-switch while XRv9k, which
+  has no vlan module, stayed out through its own module list. VXLAN/EVPN applied and verified on cEOS; vJunos-switch
+  refused netlab's rendering at its own `commit check` ("bridge domains/vlans"), the job said *partly applied*,
+  the device was untouched, and the next apply removed cEOS's side cleanly.
+- **Generated with the real engine, not applied on this lab** (no parallel links, no shared segment with two
+  routers): link aggregation, VRRP and anycast gateways, STP, BFD; each with its capability answer per image.
+- **Schema.** A device's `modules` list now replaces the design's list for that device (netlab's rule; it was an
+  addition before); `links.<key>.lag.members` names the other member links of an aggregation (the adapter emits one
+  bundle with the member ports by netlab index); the `net` type takes an IS-IS area; a zero-length prefix is a
+  route to originate, not an address; an empty redistribution entry is refused (it crashes the engine's template);
+  access ports of one VLAN may share its subnet in the overlap check (netlab gives them one on purpose).
+- **Words.** A Junos `commit check` refusal reaches the job classified in fixed words, like the IOS XR reasons.
+- **Design tab.** Guided tables for VRFs, VLANs, per-link VRF and VLAN settings, and static routes, mirrored into
+  the Advanced editor like every other control.
+- **Tests and tools.** `test_design_families_routing.py` and `test_design_families_l2.py` generate every family
+  with the pinned engine on the four profiles; the intent, adapter and Junos driver tests grew with the rules above;
+  all registered in CI.
+
 ## Changes in 1.30.45
 
 **Network design, part 3: *Apply to devices*, proven live on all four platforms**

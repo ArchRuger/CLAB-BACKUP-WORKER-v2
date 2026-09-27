@@ -592,6 +592,33 @@ class LinkModuleSettingsAdvancedTests(DesignIntentTestCase):
         errs = di.validate(intent, schema=self.schema, lab_links=[self.K])
         self.assertError(errs, 'links.' + self.K + '.endpoints.a.ospf.priority', 'type')
 
+    def test_lag_member_links_are_accepted_on_the_carrying_link_only(self):
+        K2 = 'a:eth2--b:eth2'; K3 = 'a:eth3--c:eth1'
+        good = dict(di.empty_intent(), modules=['lag'], links={self.K: {'lag': {'members': [K2]}}})
+        self.assertClean(di.validate(good, schema=self.schema, lab_links=[self.K, K2, K3]))
+        bad = dict(di.empty_intent(), modules=['lag'], links={self.K: {'lag': {'members': [self.K, K3, 'nope', K2, K2]}}})
+        errs = di.validate(bad, schema=self.schema, lab_links=[self.K, K2, K3])
+        messages = ' | '.join(e['message'] for e in errs if e['path'] == 'links.' + self.K + '.lag.members')
+        for fragment in ('is a member by itself', 'same two devices', 'No link with this key', 'listed twice'):
+            self.assertIn(fragment, messages)
+        node_level = dict(di.empty_intent(), modules=['lag'], nodes={'a': {'lag': {'members': [K2]}}})
+        self.assertError(di.validate(node_level, schema=self.schema, lab_nodes={'a': 'arista_ceos'}, lab_links=[self.K, K2]), 'nodes.a.lag.members', 'carries the aggregation')
+        elsewhere = dict(di.empty_intent(), modules=['vlan'], vlans={'red': {'id': 100, 'members': ['x']}})
+        self.assertError(di.validate(elsewhere, schema=self.schema), 'vlans.red.members', 'not accepted')
+
+    def test_isis_area_default_origination_and_redistribution_forms(self):
+        ok = dict(di.empty_intent(), modules=['isis', 'bgp', 'ospf'], isis={'area': '49.0001'}, bgp={'as': 65000},
+                  nodes={'a': {'bgp': {'originate': ['0.0.0.0/0', '::/0'], 'import': {'ospf': True}}}})
+        self.assertClean(di.validate(ok, schema=self.schema, lab_nodes={'a': 'arista_ceos'}, management=[('mgmt ipv4-subnet', ipaddress.ip_network('172.20.20.0/24'))]))
+        full = dict(di.empty_intent(), modules=['isis'], isis={'area': '49.0001.0000.0000.0001.00'})
+        self.assertClean(di.validate(full, schema=self.schema))
+        bad_area = dict(di.empty_intent(), modules=['isis'], isis={'area': 'zz.1'})
+        self.assertError(di.validate(bad_area, schema=self.schema), 'isis.area', 'type')
+        managed = dict(di.empty_intent(), modules=['bgp'], bgp={'as': 65000}, nodes={'a': {'bgp': {'originate': ['172.20.20.0/24']}}})
+        self.assertError(di.validate(managed, schema=self.schema, lab_nodes={'a': 'arista_ceos'}, management=[('mgmt ipv4-subnet', ipaddress.ip_network('172.20.20.0/24'))]), 'nodes.a.bgp.originate[0]', 'management')
+        crashy = dict(di.empty_intent(), modules=['bgp', 'ospf'], bgp={'as': 65000}, nodes={'a': {'bgp': {'import': {'ospf': None}}}})
+        self.assertError(di.validate(crashy, schema=self.schema, lab_nodes={'a': 'arista_ceos'}), 'nodes.a.bgp.import', 'true or to a mapping')
+
 
 # --- interfaces overrides ------------------------------------------------------------------------------------
 

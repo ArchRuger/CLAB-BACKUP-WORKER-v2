@@ -237,6 +237,144 @@ test('designDevicesMarkup shows the blocked reason and disables the role select 
  assert.equal(c.designDevicesMarkup({},{}),'<tr><td colspan="5" class="table-empty">This lab has no devices yet.</td></tr>');
 });
 
+// --- milestone E: VRFs, VLANs, links (vrf/vlan attachment) and static routes -----------------------------
+// Markup functions first (pure, escaping every interpolation), then designIntentFromForm's handling of
+// the four families: round trip through an existing intent, an uncovered key kept, an empty row dropped,
+// and the vrf/vlan/routing module auto-add rule.
+test('designVrfsMarkup renders each VRF with its loopback checkbox and escapes a hostile name',()=>{
+ const c=ctx();
+ const html=c.designVrfsMarkup({red:{loopback:true},'"><img>':{}});
+ assert.match(html,/data-design-vrf-key="red"/);
+ assert.match(html,/data-design-vrf-field="loopback" checked/);
+ assert.doesNotMatch(html,/<img>/);
+ assert.match(html,/&quot;&gt;&lt;img&gt;/);
+ assert.equal(c.designVrfsMarkup({}),'<tr><td colspan="3" class="table-empty">No VRFs yet.</td></tr>');
+});
+test('designVlansMarkup renders each VLAN\'s id and escapes a hostile name',()=>{
+ const c=ctx();
+ const html=c.designVlansMarkup({red:{id:100},'a<b':{id:200}});
+ assert.match(html,/data-design-vlan-key="red"/);
+ assert.match(html,/data-design-vlan-field="id" value="100"/);
+ assert.doesNotMatch(html,/a<b/);
+ assert.match(html,/a&lt;b/);
+ assert.equal(c.designVlansMarkup({}),'<tr><td colspan="3" class="table-empty">No VLANs yet.</td></tr>');
+});
+test('designLinksMarkup shows each link\'s ends, pre-selects its VRF/VLAN settings, and flags settings the table does not cover',()=>{
+ const c=ctx();
+ const links=[{key:'ceos:eth1--r2:eth1',endpoints:{ceos:{nos:'Ethernet1'},r2:{nos:'Ethernet1'}}},{key:'a--b',endpoints:{}}];
+ const settings={'ceos:eth1--r2:eth1':{vrf:'red',prefix:{ipv4:'10.9.9.0/30'}}};
+ const html=c.designLinksMarkup(links,settings,['red','blue'],['v100']);
+ assert.match(html,/data-design-link-key="ceos:eth1--r2:eth1"/);
+ assert.match(html,/ceos — r2/);
+ assert.match(html,/<option value="red" selected>red<\/option>/);
+ assert.match(html,/Also set under Advanced: prefix/);
+ assert.match(html,/data-design-link-key="a--b"/);
+ assert.equal(c.designLinksMarkup([],{},[],[]),'<tr><td colspan="5" class="table-empty">This lab has no designable links yet.</td></tr>');
+});
+test('designStaticMarkup shows each device\'s static routes with a discard or address next hop',()=>{
+ const c=ctx();
+ const nodes={r1:{routing:{static:[{ipv4:'192.0.2.0/24',nexthop:{discard:true}},{ipv6:'2001:db8::/32',nexthop:{ipv6:'2001:db8::1'}}]}}};
+ const html=c.designStaticMarkup(nodes,['r1','r2']);
+ assert.match(html,/data-design-static-key="r1:0"/);
+ assert.match(html,/data-design-static-field="prefix" value="192\.0\.2\.0\/24"/);
+ assert.match(html,/option value="discard" selected/);
+ assert.match(html,/data-design-static-key="r1:1"/);
+ assert.match(html,/value="2001:db8::\/32"/);
+ assert.match(html,/value="2001:db8::1"/);
+ assert.equal(c.designStaticMarkup({},[]),'<tr><td colspan="5" class="table-empty">No static routes yet.</td></tr>');
+});
+test('designIntentFromForm VRFs: builds intent.vrfs, keeps an uncovered key, omits loopback when false, and drops an empty-name row',()=>{
+ const c=ctx();
+ const base={...c.designEmptyIntent(),vrfs:{red:{loopback:true,rd:'65000:1'},blue:{}}};
+ const values={pools:{},modules:[],devices:[],vrfs:[
+  {key:'red',name:'red',loopback:true},{key:'blue',name:'blue',loopback:false},{key:'',name:'',loopback:true}
+ ],vlans:[],links:[],staticRoutes:[]};
+ const intent=c.designIntentFromForm(values,base);
+ same(intent.vrfs.red,{loopback:true,rd:'65000:1'});
+ same(intent.vrfs.blue,{});
+ assert.equal(Object.keys(intent.vrfs).length,2,'the blank row is dropped');
+ assert.ok(intent.modules.includes('vrf'),'defining a VRF turns the vrf module on');
+});
+test('designIntentFromForm VRFs: renaming a VRF keeps its other settings under the new name',()=>{
+ const c=ctx();
+ const base={...c.designEmptyIntent(),vrfs:{red:{loopback:true,rd:'65000:1'}}};
+ const values={pools:{},modules:[],devices:[],vrfs:[{key:'red',name:'crimson',loopback:true}],vlans:[],links:[],staticRoutes:[]};
+ const intent=c.designIntentFromForm(values,base);
+ assert.equal(intent.vrfs.red,undefined);
+ same(intent.vrfs.crimson,{loopback:true,rd:'65000:1'});
+});
+test('designIntentFromForm VLANs: builds intent.vlans, keeps an uncovered key, and drops an empty-name row',()=>{
+ const c=ctx();
+ const base={...c.designEmptyIntent(),vlans:{red:{id:100,description:'servers'}}};
+ const values={pools:{},modules:[],devices:[],vrfs:[],vlans:[
+  {key:'red',name:'red',id:'100'},{key:'',name:'',id:'200'}
+ ],links:[],staticRoutes:[]};
+ const intent=c.designIntentFromForm(values,base);
+ same(intent.vlans,{red:{id:100,description:'servers'}});
+ assert.ok(intent.modules.includes('vlan'));
+});
+test('designIntentFromForm links: attaches a VRF, keeps the link\'s other settings, and drops the vrf key (not the link) when none is chosen',()=>{
+ const c=ctx();
+ const base={...c.designEmptyIntent(),links:{'r1:eth1--r2:eth1':{prefix:{ipv4:'10.9.9.0/30'},vrf:'red'}}};
+ const values={pools:{},modules:[],devices:[],vrfs:[],vlans:[],links:[{key:'r1:eth1--r2:eth1',vrf:'red',vlanAccess:'',trunk:[]}],staticRoutes:[]};
+ let intent=c.designIntentFromForm(values,base);
+ same(intent.links['r1:eth1--r2:eth1'],{prefix:{ipv4:'10.9.9.0/30'},vrf:'red'});
+ values.links[0].vrf='';
+ intent=c.designIntentFromForm(values,intent);
+ same(intent.links['r1:eth1--r2:eth1'],{prefix:{ipv4:'10.9.9.0/30'}});
+});
+test('designIntentFromForm links: sets vlan access or trunk (trunk wins over access), and drops a link with nothing set at all',()=>{
+ const c=ctx();
+ const base=c.designEmptyIntent();
+ const values={pools:{},modules:[],devices:[],vrfs:[],vlans:[],staticRoutes:[],links:[
+  {key:'a--b',vrf:'',vlanAccess:'red',trunk:[]},
+  {key:'c--d',vrf:'',vlanAccess:'red',trunk:['red','blue']},
+  {key:'e--f',vrf:'',vlanAccess:'',trunk:[]}
+ ]};
+ const intent=c.designIntentFromForm(values,base);
+ same(intent.links['a--b'],{vlan:{access:'red'}});
+ same(intent.links['c--d'],{vlan:{trunk:['red','blue']}});
+ assert.equal(intent.links['e--f'],undefined,'a link with nothing set is dropped, not kept as {}');
+ assert.ok(intent.modules.includes('vlan'));
+});
+test('designIntentFromForm static routes: builds routing.static per device, keeps other node settings, and drops an empty-prefix row',()=>{
+ const c=ctx();
+ const base={...c.designEmptyIntent(),nodes:{ceos:{role:'exclude'}}};
+ const values={pools:{},modules:[],devices:[],vrfs:[],vlans:[],links:[],staticRoutes:[
+  {origDevice:'ceos',device:'ceos',prefix:'192.0.2.0/24',nexthopType:'discard',nexthopAddress:''},
+  {origDevice:'ceos',device:'ceos',prefix:'2001:db8::/32',nexthopType:'address',nexthopAddress:'2001:db8::1'},
+  {origDevice:'ceos',device:'ceos',prefix:'',nexthopType:'discard',nexthopAddress:''}
+ ]};
+ const intent=c.designIntentFromForm(values,base);
+ assert.equal(intent.nodes.ceos.role,'exclude','other per-node settings survive');
+ same(intent.nodes.ceos.routing.static,[{ipv4:'192.0.2.0/24',nexthop:{discard:true}},{ipv6:'2001:db8::/32',nexthop:{ipv6:'2001:db8::1'}}]);
+ assert.ok(intent.modules.includes('routing'));
+});
+test('designIntentFromForm static routes: an address next hop with no address is dropped',()=>{
+ const c=ctx();
+ const base=c.designEmptyIntent();
+ const values={pools:{},modules:[],devices:[],vrfs:[],vlans:[],links:[],
+  staticRoutes:[{origDevice:'r1',device:'r1',prefix:'10.0.0.0/24',nexthopType:'address',nexthopAddress:''}]};
+ const intent=c.designIntentFromForm(values,base);
+ assert.equal(intent.nodes.r1,undefined);
+});
+test('designIntentFromForm static routes: clearing every route drops routing.static but never removes the routing module automatically',()=>{
+ const c=ctx();
+ const base={...c.designEmptyIntent(),modules:['routing'],nodes:{r1:{routing:{static:[{ipv4:'10.0.0.0/24',nexthop:{discard:true}}]}}}};
+ const values={pools:{},modules:['routing'],devices:[],vrfs:[],vlans:[],links:[],staticRoutes:[]};
+ const intent=c.designIntentFromForm(values,base);
+ assert.equal(intent.nodes.r1,undefined,'the node had nothing else set, so it is dropped along with the now-empty routing object');
+ assert.ok(intent.modules.includes('routing'),'routing stays on because it was already selected (e.g. for BGP policy)');
+});
+test('designIntentFromForm: defining a VRF or VLAN does not duplicate a module that is already selected',()=>{
+ const c=ctx();
+ const base=c.designEmptyIntent();
+ const values={pools:{},modules:['vrf','vlan'],devices:[],
+  vrfs:[{key:'red',name:'red',loopback:false}],vlans:[{key:'blue',name:'blue',id:'200'}],links:[],staticRoutes:[]};
+ const intent=c.designIntentFromForm(values,base);
+ same(intent.modules,['vrf','vlan']);
+});
+
 // --- draft helpers (shell.js), driven with a minimal document/window ------------------------------------
 function shellHarness(){
  const localStore=new Map(),sessionStore=new Map();

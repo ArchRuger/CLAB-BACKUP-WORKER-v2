@@ -364,3 +364,30 @@ decisions refine D4.3 and D4.4 (noted there) rather than replace them.
   than blocking the device; a plan is applied only while it is the current design's and topology's plan; an armed
   change the manager could not compare with the review is compared with the would-be digest before confirming;
   the busy guard is manager-wide for applies and restores because the Runner is.
+
+## 9. Feature families: milestone E (2026-09-27)
+
+Evidence: `tests/test_design_families_routing.py`, `tests/test_design_families_l2.py` (real engine, all four
+profiles) and `evidence/live-apply-families.md` (the deployed product on `restore-square`).
+
+- D9.1 **A device's `modules` list replaces the design's list** (netlab's own rule), instead of adding to it as in
+  chunks 1–3. Reason: the families differ per image (XRv9k has no `vlan`, `bfd`, `lag`), and a design must be able
+  to keep such a device out of one module while the others carry it; "extra modules" could only add. The adapter,
+  `effective_modules`, the validation and the guide changed together; a device with no list keeps the design's.
+- D9.2 **Link aggregation is expressed on the link that carries it**: `links.<key>.lag.members` lists the other
+  member links by key (one to eight, same two devices, present in the lab). The adapter emits one netlab link with
+  `lag.members` and never the members as links of their own; member ports are named by netlab `ifindex`, because
+  netlab keeps only `ifindex` on member interfaces and an `ifname` there leaks onto the bundle (verified with the
+  engine: "overlapping interface name Ethernet1 between interfaces #1 and #30000"). `members` stays a denied key
+  everywhere else. The acceptance lab has no parallel links, so LAG is generation-tested only.
+- D9.3 **The `net` type takes an IS-IS area** (`49.0001`) as well as a full NET: netlab types `isis.area` as `net`
+  but builds the NET from the area itself (verified: `net 49.0001.0000.0000.0001.00`).
+- D9.4 **A zero-length prefix is not an address**: the management-overlap guard exempts `0.0.0.0/0` and `::/0`, so
+  `bgp.originate` can carry a real default route (proven live: E3).
+- D9.5 **An empty redistribution entry is refused** (`bgp.import: {ospf: null}` crashes the engine's BGP template
+  on eos and iosxr although its schema allows it): the schema asks for `true` or a mapping with the policy.
+- D9.6 **VRF-level module settings stay refused**: netlab's VRF object takes none; VRF routing is the attached
+  links plus the enabled module (proven live: E2, VRF-scoped BGP address families and the VRF loopback).
+- D9.7 **What cannot be proven on `restore-square` stays "generated, not live-tested"**: VRRP and anycast (no
+  multi-access segment with two routers), LAG (no parallel links), VXLAN/EVPN (no second VTEP segment), STP,
+  BFD (no BFD on XRv9k; the others unexercised). The ledger says so per row rather than claiming support.

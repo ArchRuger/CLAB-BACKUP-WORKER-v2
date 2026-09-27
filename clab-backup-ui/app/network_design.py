@@ -125,11 +125,12 @@ def requested_features(intent, modules=None, node=None):
 
 
 def effective_modules(intent, name, row):
-    """The modules one device really gets: the lab's modules plus the device's extras, or none for a host
-    without explicit modules (the adapter emits `module: []` for it)."""
+    """The modules one device really gets: its own `modules` list when it has one (netlab's rule: the list
+    replaces the design's), else the design's modules, or none for a host without explicit modules (the
+    adapter emits `module: []` for it)."""
     settings = (intent.get('nodes') or {}).get(name) or {}
     modules = set(intent.get('modules') or [])
-    if isinstance(settings.get('modules'), list): return modules | set(settings['modules'])
+    if isinstance(settings.get('modules'), list): return set(settings['modules'])
     if row.get('role') == 'host': return set()
     return modules
 

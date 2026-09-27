@@ -359,6 +359,37 @@ class BuildFamiliesTests(DesignAdapterTestCase):
         self.assertEqual(addressing['router_id']['ipv4'], '10.0.0.0/24')
 
 
+class BuildLagTests(DesignAdapterTestCase):
+    TWO = """name: two
+topology:
+  nodes:
+    r1: {kind: arista_ceos, image: x}
+    r2: {kind: juniper_vjunosswitch, image: y}
+  links:
+    - endpoints: ["r1:eth1", "r2:ge-0/0/0"]
+    - endpoints: ["r1:eth2", "r2:ge-0/0/1"]
+    - endpoints: ["r1:eth3", "r2:ge-0/0/2"]
+"""
+
+    def test_a_bundle_carries_its_member_ports_and_the_members_are_not_separate_links(self):
+        nodes = parse_definition(self.TWO.encode())['nodes']
+        K1, K2, K3 = 'r1:eth1--r2:ge-0/0/0', 'r1:eth2--r2:ge-0/0/1', 'r1:eth3--r2:ge-0/0/2'
+        intent = dict(di.empty_intent(), modules=['lag'], links={K1: {'lag': {'members': [K2]}}})
+        built = da.build(self.TWO, nodes, intent, profile_for)
+        topo_links = built['topology']['links']
+        self.assertEqual(len(topo_links), 2, 'the bundle and the third plain link; the member is inside the bundle')
+        bundle = next(l for l in topo_links if 'lag' in l)
+        self.assertEqual(bundle['r1'], {}); self.assertEqual(bundle['r2'], {})   # the bundle's own interface is the engine's
+        # netlab keeps only `ifindex` on member ports and names them from the device template (an `ifname` here leaks onto the bundle: verified with the engine).
+        self.assertEqual(bundle['lag']['members'], [{'r1': {'ifindex': 1}, 'r2': {'ifindex': 0}}, {'r1': {'ifindex': 2}, 'r2': {'ifindex': 1}}])
+        plain = next(l for l in topo_links if 'lag' not in l)
+        self.assertEqual(plain['r1'], {'ifname': 'Ethernet3'})
+        rows = {r['key']: r for r in built['links']}
+        self.assertTrue(rows[K2]['included']); self.assertIn('Member of the link aggregation carried by ' + K1, rows[K2]['reason'])
+        self.assertEqual(built['link_keys'], [K3, K1], 'bundles are emitted after the plain links, in key order')
+        self.assertIn(K2, built['mapping'])
+
+
 class BuildLedgerAndOverridesTests(DesignAdapterTestCase):
     def setUp(self):
         self.nodes = lab_nodes()
@@ -444,13 +475,13 @@ class BuildSettingsPlacementTests(DesignAdapterTestCase):
     def setUp(self):
         self.nodes = lab_nodes()
 
-    def test_node_module_settings_and_modules_extras_land_on_the_node(self):
+    def test_node_module_settings_land_on_the_node_and_its_modules_list_replaces_the_designs(self):
         intent = base_intent()
-        intent['nodes'] = {'ceos': {'modules': ['vlan'], 'bgp': {'as': 65001}}}
+        intent['nodes'] = {'ceos': {'modules': ['bgp', 'vlan'], 'bgp': {'as': 65001}}}
         result = da.build(FIXTURE_YAML, self.nodes, intent, profile_for)
         ceos = result['topology']['nodes']['ceos']
         self.assertEqual(ceos['bgp'], {'as': 65001})
-        self.assertEqual(ceos['module'], ['ospf', 'bgp', 'vlan'])
+        self.assertEqual(ceos['module'], ['bgp', 'vlan'], "netlab's rule: a device's list is its whole list (here: no OSPF on ceos)")
 
     def test_top_level_vlans_and_vrfs_land_on_the_topology(self):
         intent = base_intent()
@@ -569,6 +600,18 @@ class OverlapsTests(DesignAdapterTestCase):
 
 
 # --- plan_summary --------------------------------------------------------------------------------------------
+
+class VlanSegmentOverlapTests(DesignAdapterTestCase):
+    def test_access_ports_of_one_vlan_share_its_subnet_without_an_overlap(self):
+        # netlab gives every access link of a VLAN the VLAN's prefix (verified with the engine): one segment, one subnet.
+        red = {'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'access': 'red'}}
+        same = {'links': [dict(red, linkindex=1), dict(red, linkindex=2)], 'nodes': {}}
+        self.assertEqual(da.overlaps(same), [])
+        other = {'links': [dict(red, linkindex=1), {'prefix': {'ipv4': '172.16.0.0/24'}, 'vlan': {'access': 'blue'}, 'linkindex': 2}], 'nodes': {}}
+        self.assertEqual(da.overlaps(other), [{'family': 'ipv4', 'a': 'link 1', 'b': 'link 2'}], 'two VLANs on one subnet still overlap')
+        plain = {'links': [dict(red, linkindex=1), {'prefix': {'ipv4': '172.16.0.0/24'}, 'linkindex': 2}], 'nodes': {}}
+        self.assertEqual(len(da.overlaps(plain)), 1, 'a plain link on the VLAN subnet overlaps it')
+
 
 class PlanSummaryTests(DesignAdapterTestCase):
     def test_device_rows_neighbours_bgp_ospf_and_link_rows(self):

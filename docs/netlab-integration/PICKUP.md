@@ -83,9 +83,15 @@ Chunks 1–3 (milestones B, C, D) are implemented; B and C are released (1.30.43
 `claude/netlab-integration` (PR #55, not merged to `main` yet). Milestone D (safe provisioning) is implemented, risk-reviewed and live-proven on
 `restore-square` as of 2026-09-27 and ships as 1.30.45 (the release bump, the CHANGELOG/VALIDATION/handoff sections,
 the fourth risk-review pass and its fixes, the browser runs of the dialog and the deployment on the development VM
-are all in this release's commit; see `git log`). The next agent's exact next action is milestone E: pick the
-next feature family from `LEDGER.md`, extend the adapter, the capability model and the provisioning rules, and
-prove it the same way (unit, real engine, live on `restore-square`, then the product).
+are all in this release's commit; see `git log`). Milestone E (feature families) ships as 1.30.46: every family generates with the real engine on the four profiles
+(`tests/test_design_families_*.py`), and IS-IS, VRFs, static routes, policies, redistribution, default origination
+and VLANs were applied live through the deployed product on all four routers and removed again
+(`evidence/live-apply-families.md`); VXLAN/EVPN was applied on cEOS and refused by vJunos-switch's own commit check;
+LAG, gateways, STP and BFD stay generated-only on this lab. The next agent's exact next action is milestone F:
+the reviewed design-artifact export (a generation's files through the student's Git save, `docs/GIT-PROGRESS.md`),
+VM sync where it applies, diagnostics of a failed apply in the Debug panel, packaging/install/upgrade evidence on a
+fresh VM, the full regressions and the final report; and, from E, the GRE plugin allowlist and the secret-reference
+model for protocol authentication, which are the two families still outside the schema.
 
 Read first, in this order: `docs/netlab-integration/PROVISIONING.md` (the milestone D contract; §8 lists what
 the live proof changed), `docs/netlab-integration/evidence/live-apply-{ceos,junos,iosxr}.md` (the three live

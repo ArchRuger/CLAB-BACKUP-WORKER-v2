@@ -97,7 +97,7 @@ silently. The ledger of what is verified where is [docs/netlab-integration/LEDGE
 
 `design_intent.py` defines schema 1: `families`, `addressing` (the pools `loopback`, `p2p`, `lan`,
 `vrf_loopback`, `router_id` or a custom name; never `mgmt`), `modules` (from the supported list),
-`targets`, per-module settings at the global level, `nodes` (role, loopback, extra modules,
+`targets`, per-module settings at the global level, `nodes` (role, loopback, the device's own module list, which replaces the design's for that device: netlab's rule, so a device that cannot carry a module is left out of it,
 per-module settings, `vlans`, `vrfs`), `links` (prefix, pool, role, type, name, MTU, bandwidth,
 unnumbered, per-module settings and per-endpoint addresses and settings), `vlans`, `vrfs`,
 `interfaces` (endpoint overrides) and `allocations` (the ledger, written by the manager). Before anything else looks at a document, a recursive guard walks it: every key at every depth
@@ -120,6 +120,32 @@ bounded. Then two layers of validation run on every save, validate and generate:
 Every problem is reported at once as a list of `{path, message}`. A save carries the revision it was
 loaded from; a stale revision is refused (409) so an old tab cannot overwrite newer edits. The
 revision covers the student's content, not the ledger.
+
+## Feature families
+
+Every family the assignment names is in the schema and the capability model; the ledger
+`docs/netlab-integration/LEDGER.md` says per family and per image what is upstream support, what generates, what
+was applied live, and what the limit is. As of this release, on the four acceptance images:
+
+- **Proven live through the product** (generated, applied with *Apply to devices…*, read back on the device and
+  in its control plane; `docs/netlab-integration/evidence/live-apply-families.md`): IPv4/IPv6 addressing, OSPFv2/v3,
+  BGP (iBGP, eBGP, default origination), IS-IS (adjacencies on every link), VRFs (a VRF on the host links with its
+  loopback and VRF-scoped BGP), static routes (a discard route per router), route policies and prefix lists,
+  redistribution (IS-IS into BGP through a policy, connected into IS-IS), VLANs (an access port with its SVI on
+  cEOS and vJunos-switch), and the removal of each of those again.
+- **Generated with the real engine, not applied live on this lab** (the lab has no parallel links, no shared
+  segment with two routers and no second VTEP pair): link aggregation (`lag.members`), VRRP and anycast gateways,
+  VXLAN and EVPN, STP, BFD. They are offered with the capability level *generated, not yet tested live*.
+- **Refused by the capability model per image, before the engine runs**: EIGRP (none of the four), RIPv2 and DHCP
+  (cEOS only), VLANs, VXLAN, BFD, LAG, anycast (not on XRv9k), STP (cEOS only), SRv6 (XRv9k only); a plan that asks
+  one of those of a device that cannot do it names the device and generates nothing.
+- **Not yet in the schema**: the GRE and WireGuard plugins (`tunnel.*`), and protocol authentication (the
+  secret-reference model): `password` and key attributes stay refused by name.
+
+Two rules of the intent that the families rely on: a device's own `modules` list *replaces* the design's list
+for that device (netlab's rule), which is how a device that cannot carry a module is left out of it while the
+others keep it; and `links.<key>.lag.members` names the other member links of an aggregation carried by that
+link (the member ports are then netlab's, by index, and never links of their own).
 
 ## Generation
 

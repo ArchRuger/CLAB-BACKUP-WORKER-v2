@@ -61,6 +61,29 @@ def _delete(shell, lines):
             raise RestoreError('The node rejected removal %d of %d; nothing was applied.' % (index, len(lines)))
 
 
+# The device's `error:` lines of a failed `commit check`, classified into the manager's fixed words: a job message
+# never carries device or configuration text (CLAUDE.md), so the reason is named by class, never quoted.
+CHECK_PHRASES = (
+    (re.compile(r'bridge domains?/vlans|vlan', re.I), 'the device refused the VLAN or bridge-domain part of it'),
+    (re.compile(r'license', re.I), 'a licensed feature is not available on this image'),
+    (re.compile(r'mandatory|missing', re.I), 'a statement it needs is missing'),
+    (re.compile(r'not (?:supported|valid)|unsupported|invalid', re.I), 'a statement is not supported on this image'),
+    (re.compile(r'refer|reference|not defined|undefined', re.I), 'it refers to something the device does not have'),
+)
+GENERIC_CHECK = 'the device refused it on semantic grounds'
+
+
+def _check_reasons(text):
+    """Why `commit check` refused, in the manager's fixed words (at most three classes), or ''."""
+    phrases = []
+    for line in (text or '').splitlines():
+        if not re.match(r'^\s*(?:error|\[edit[^\]]*\]\s*error)\s*:', line, re.I) and 'error' not in line.lower(): continue
+        if 'warning' in line.lower() and 'error' not in line.lower(): continue
+        phrase = next((words for pattern, words in CHECK_PHRASES if pattern.search(line)), GENERIC_CHECK)
+        if phrase not in phrases: phrases.append(phrase)
+    return (' The device said, in the manager\'s words: ' + '; '.join(phrases[:3]) + '.') if phrases else ''
+
+
 def _enter(shell, mode):
     shell.send('configure ' + mode)
     index, _ = shell.expect([CONF, OPER], PROMPT_TIMEOUT)
@@ -123,7 +146,7 @@ def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False):
             return {'before': before, 'would_be': would_be, 'diff': diff, 'no_op': no_op, 'armed': False, 'handle': {'session': name}, 'hierarchy': hierarchy}
         check = shell.run('commit check', COMMIT_TIMEOUT)
         if CHECK_OK not in check:
-            raise RestoreError('The node failed the configuration check for the generated configuration; nothing was applied.')
+            raise RestoreError('The node failed the configuration check for the generated configuration; nothing was applied.' + _check_reasons(check))
         confirmed = shell.run('commit confirmed %d comment %s' % (int(confirm_minutes), name), COMMIT_TIMEOUT)
         if COMMIT_OK not in confirmed:
             raise RestoreError('The node did not accept the timed commit of the design; nothing was applied.')
