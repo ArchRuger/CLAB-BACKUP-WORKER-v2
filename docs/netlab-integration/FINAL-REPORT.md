@@ -89,7 +89,8 @@ in the capability answers; the live proofs are on the two images that run in thi
 
 - Unit and real-engine suites per release in `VALIDATION.md`; live records under `evidence/`; browser records
   `evidence/browser-design-ui.md` and `evidence/browser-design-apply-ui.md`; the health check on the development
-  VM: 61 PASS, 0 FAIL, 1 WARN (folder coverage) after the helper refresh.
+  VM after 1.30.47 was deployed with every helper refreshed: 62 PASS, 0 FAIL, 1 WARN (folder coverage), the
+  network design engine among the passes.
 - **Pre-existing**: the shell's 428 px width at phone size on every tab (recorded in 1.30.44), the engineer-access
   group state of the development VM (refreshed on 2026-09-27).
 - **Unresolved**: vJunos-switch refuses netlab's EVPN/VXLAN VLAN rendering ("bridge domains/vlans"); IOS XR refuses
@@ -104,7 +105,7 @@ in the capability answers; the live proofs are on the two images that run in thi
 | 1.30.44 | `64c954e` | the Design tab; the second and third risk-review passes (milestone C) |
 | 1.30.45 | `7bb45af` | Apply to devices on all four platforms; the fourth review pass (milestone D) |
 | 1.30.46 | `0439abb` | the feature families; guided tables (milestone E) |
-| 1.30.47 | the commit that carries this report (`git log -1 -- docs/netlab-integration/FINAL-REPORT.md`) | the reviewed Git export of a plan, the engine health check, this report (milestone F) |
+| 1.30.47 | `b3404f8` | the reviewed Git export of a plan, the engine health check, this report (milestone F); the fresh-install evidence follows in the next commit |
 
 Branch `claude/netlab-integration`, pull request #55 against `main`; CI green on every push. Installation: the image
 carries the engine; `deploy/install.sh` and `start-manager.sh` unchanged; after an upgrade the VM helpers are

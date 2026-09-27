@@ -48,8 +48,9 @@ boundaries are repeated in DECISIONS.md §0.
   change rebuilds the image layer). Helpers after a `host_*.py` or VERSION change: `sudo bash deploy/setup-discovery.sh --update-helper`,
   `sudo bash deploy/setup-operations.sh --lab-root /srv/containerlab-node-manager/projects`, `sudo bash deploy/setup-git.sh --refresh`
   (`--refresh` is not an option of the first two: a wrong flag exits 64 and leaves the old helper, which is how the
-  inspect and operations helpers stayed at 1.30.42 until 1.30.46 was deployed); `sudo bash deploy/check-install.sh`
-  verifies (61 PASS, 0 FAIL, 1 WARN on 2026-09-27 after the refresh).
+  inspect and operations helpers stayed at 1.30.42 until 1.30.46 was deployed); then `sudo bash deploy/setup-engineer-access.sh --refresh` (the operations setup resets the lab root's group,
+  which the engineer-access check then reports); `sudo bash deploy/check-install.sh` verifies (61 PASS, 0 FAIL, 1 WARN
+  on 2026-09-27 after the refresh, the engine item among the passes).
 - Lab `restore-square` (`/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml`,
   the four-image square of `docs/multi-platform-restore/lab/`): found with its four NOS containers exited
   (host reboot two days earlier, only `host1` running). Destroyed with `--cleanup` and redeployed on
@@ -90,11 +91,14 @@ are all in this release's commit; see `git log`). Milestone E (feature families)
 (`tests/test_design_families_*.py`), and IS-IS, VRFs, static routes, policies, redistribution, default origination
 and VLANs were applied live through the deployed product on all four routers and removed again
 (`evidence/live-apply-families.md`); VXLAN/EVPN was applied on cEOS and refused by vJunos-switch's own commit check;
-LAG, gateways, STP and BFD stay generated-only on this lab. The next agent's exact next action is milestone F:
-the reviewed design-artifact export (a generation's files through the student's Git save, `docs/GIT-PROGRESS.md`),
-VM sync where it applies, diagnostics of a failed apply in the Debug panel, packaging/install/upgrade evidence on a
-fresh VM, the full regressions and the final report; and, from E, the GRE plugin allowlist and the secret-reference
-model for protocol authentication, which are the two families still outside the schema.
+LAG, gateways, STP and BFD stay generated-only on this lab. Milestone F ships as 1.30.47 (`b3404f8`): *Export plan to Git…* as a reviewed Git save of kind `design` in its
+own checkpoint folder (the Git helper's one rule for it, two Opus review passes, proven live on the QA repository:
+`evidence/live-export-git.md`), helper calls serialised, the engine in the health check, and
+`FINAL-REPORT.md`. The fresh install of 1.30.47 in a nested Ubuntu 24.04 VM is recorded in
+`evidence/fresh-install-1.30.47.md`. The next agent's exact next action is one of the two families still outside
+the schema, each its own reviewed chunk: the secret-reference model for protocol authentication (DECISIONS D9.8) or
+the allowlist of built-in netlab plugins for GRE (D9.9); D6.2 (a VM-side sidecar) stays provisional and unneeded.
+Merging PR #55 into `main` is the owner's decision.
 
 Read first, in this order: `docs/netlab-integration/PROVISIONING.md` (the milestone D contract; §8 lists what
 the live proof changed), `docs/netlab-integration/evidence/live-apply-{ceos,junos,iosxr}.md` (the three live
