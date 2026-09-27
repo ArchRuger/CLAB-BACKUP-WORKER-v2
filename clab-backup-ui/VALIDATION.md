@@ -1,3 +1,84 @@
+# Restart device and the netlab UI/UX campaign, part 1 — 1.30.48
+
+What was actually run for this release, by layer. Live evidence is on the development VM `clab-llm-dev2`
+(containerlab 0.79.0, Docker 29.8.1) against lab `restore-square` (one instance of each baseline image plus
+`host1`); browser evidence is Chromium 153.0.8010.12 (Playwright 1.63) unless said otherwise. Nothing here
+claims a run that did not happen; the per-run records are under `docs/netlab-ui-qa/evidence/`.
+
+## Static and unit
+
+- `python3 deploy/verify-release.py`: source and documentation at 1.30.48; `git diff --check` clean;
+  `node --check` on every changed script; `docs/maintenance-audit/tools/check_links.py`: 156 files, 0 problems.
+- Python: `python -m unittest discover -s tests -t tests` → 1701 tests OK (1 skipped), 222 s on the final tree (the baseline was 1686); new tests in
+  `test_lab_operations.py` (Restart device: selector fail-closed, exact single `--node`, container binding, run-time
+  refusal after redeploy/state change, every container naming shape, the manager's resolution and refusals, stale
+  consent after a lifecycle job and during the review's own helper calls, readiness invalidation, the exited-container
+  outcome), `test_node_readiness.py` (readiness epoch, the uptime hint and its slow-pass reproducer, the restarting
+  state), `test_discovery.py` (status line, uptime parsing, expected container names), `test_design_intent.py`
+  (BGP AS range, globally or per device; netlab's 16-character identifier rule), the XRv9k known-limit note.
+- Browser (`node --test tests/*.js`): 379 pass, 0 fail (the baseline was 347); new tests in `test_operations_ui.js`, `test_topology_menu_ui.js`,
+  `test_status_ui.js`, `test_readiness_ui.js`, `test_shell_ui.js`, `test_capture_ui.js` and `test_network_design_ui.js`
+  (one test per repaired probe P1…P10, U-01, the usability batch, the Design-tab state words and menu reasons).
+
+## Fixture and browser (real app on scratch state, real netlab engine, no VM)
+
+- `docs/netlab-integration/tools/check_design_ui.py`: 29 of 29 checks after the batch (it caught the one CSS
+  regression, a hidden header text widening the page at phone width, which was fixed), and 29 of 29 again on the final
+  tree (17:19 UTC).
+- `docs/netlab-ui-qa/tools/probes/design_probes.py` (the ten §6 reproductions): every "bug present" check of P1–P6,
+  P9 and P10 now fails on the fixed build (the bug is gone); P7 and P8 are covered by positive checks instead
+  (`tools/check_design_poll_retry.py` 9 of 9; the unit tests for the storage-failure warning and the leave guard).
+  Rerun on the final tree (17:24 UTC): 15 of the 18 failing checks are the bugs' own; the other three are a probe's
+  set-up steps the fixed product no longer allows (the loss it waited for, the Generate it expected unblocked, the
+  module box it could not untick: U-21, a notice now says why).
+- `docs/netlab-ui-qa/tools/usability_scan.py` and `evidence/usability/`: the independent review (Chromium and
+  Firefox 155.0; WebKit 26.6 could not launch on this VM); its findings U-01…U-20 are repaired in this release except
+  U-13 in full.
+- Coverage closure (`docs/netlab-ui-qa/tools/coverage_run.py`, an independent Sonnet agent, 16:53 UTC, fixture manager with the
+  real engine, Chromium 153.0.8010.12): all 123 rows of `coverage.json` executed with an assertion each: **112 PASS, 0 FAIL,
+  8 BLOCKED** (Apply review branches that need a reachable device; each row cites the live record of 1.30.45–1.30.47 that
+  covers it), **3 NOT RUN** (an allocation collision and a concurrent-job race, each covered by a named unit test).
+  `COVERAGE.md` has the Results section and a Result column; `evidence/coverage/results.json` and 87 screenshots.
+- The stress, race and longevity pass (`docs/netlab-ui-qa/tools/stress_design.py`, `evidence/stress/REPORT.md`, an
+  independent Sonnet agent, 1.30.47 working tree): core loop ×25 with 24 lab switches clean; 100 seeded mixed actions
+  clean; the 20-generation retention boundary exact; 30 minutes idle with a flat DOM; the cross-lab race (pass 2a)
+  clean in 20/20 replays; the out-of-order poll race (pass 2b, fault injection) reproduced 20/20 → QA-015, fixed,
+  and the same replays rerun on the fixed tree: 0/20 stale-wins, 80/80 checks; a 64-character VRF name accepted by the manager and refused by the engine → QA-016, fixed
+  (unit test, and the stress tool's pass 5 rerun on the fixed tree with the real engine: 43/43, the 17-character
+  name refused at Save in the manager's words, the 16-character one generated).
+- Adjacent workflows on the same tree, each on a fresh fixture: `docs/redesign/tools/verify_after.py` 0 failures (its
+  device-menu expectation now includes *Restart device…*), `docs/lab-builder/tools/student_workflow.py` 0 failures,
+  `docs/ui-review-001/tools/check_ui001/002a/002b/003/003b/004/006/007ab/008b` pass. `check_ui005`, `check_ui007c`
+  and `check_ui008a` fail on this tree and identically on the untouched HEAD checkout `3194ec4`: pre-existing tooling
+  debt of that stream (TOOL-001 in `DEFECTS.md`), not a regression.
+
+## Live (development VM, deployed product, real devices)
+
+- Deployed at 1.30.48 with `sudo bash deploy/start-manager.sh --manager-only` (image rebuilt, the discovery, operations and
+  Git helpers refreshed and verified at 1.30.48), then `sudo bash deploy/check-install.sh`: PASS 62, FAIL 0, WARN 1 (the folder
+  coverage cap of 20 folders), INFO 4. The browser Wireshark stack was not rebuilt (unchanged in this release; its container
+  keeps the image it had).
+- Restart device through the deployed product (`docs/netlab-ui-qa/tools/check_restart_device.py`, real clicks on both
+  entry points, the stopped path, a browser CLI and a new capture): cEOS 66/66; cJunosEvolved 70/73 then 50/51 (the
+  first run's stalled second boot and the capture port mapping, both recorded); vJunos-switch: the first run executed the restart and lost the device (its launcher cannot start the container a
+  second time, QA-014); the rerun on the fixed build reports the job *failed* with the reason and *Redeploy the lab*
+  (26 checks, 7 of them the expected failures of that image); XRv9k 75/75 (three restarts of one container, 2 links
+  restored each, *Ready* after 11.2, 5.1 and 5.1 min), but the independent traffic probe showed the path through it never
+  came back: the first restart after a deploy boots the image from a fresh disk and the device returns with its factory
+  configuration (QA-017, the mechanism read in the container's launcher; the first attempt to prove what a later restart keeps
+  ran into QA-018 and the proof was completed on the final build, below). The review now names that
+  limit; seen live on the final build (1.30.48, redeployed lab, configuration A committed at 16:34): the review carried the
+  XRv9k note in all three restarts (`xrv9k-2026-09-27T165016+0000.json` 27/27, `xrv9k-2026-09-27T170416+0000.json` 52/52,
+  map and Devices entry points), and after the first restart the loopback and OSPF were gone again (read-back at 17:02).
+  Whether a later restart keeps what is configured after the first one: **proven on the final build**: configuration A applied at 17:17:43 and read back on the device (Loopback0 present) before the restart; one restart from the map at 17:19 (record `xrv9k-2026-09-27T171848+0000.json` (27/27, the review named the limit; job 17:18:53–17:19:26, `2 links restored`, *Ready* 17:24:27)); read-back at 17:25: `interface Loopback0 … ipv4 address 10.255.0.4`, OSPF FULL with 10.255.0.3 and 10.255.0.1, Loopback0 Up; the disk listing shows the boot chained a new overlay on the previous one (`…-overlay-overlay-overlay-overlay.qcow2` on `…-overlay-overlay-overlay.qcow2`). So only the first restart after a deploy loses the configuration; what is configured after it survives the next restarts.. Independent traffic probes per run (`traffic_probe.py`), the reference command on `host1`,
+  the `docker stop` limitation, all in `RESTART-PARITY.md`.
+- Adversarial (`tools/check_restart_two_tabs.py`, `host1`, final build): 13 of 13 (a double click makes one job; an older
+  tab's review is refused after the restart; two simultaneous confirmations start at most one job). Persistence markers on
+  cEOS (`tools/persistence_markers.py`, independent SSH read-back): the saved marker survived the product-driven restart,
+  the running-only marker did not, nothing was saved by the manager.
+- Not run live: the Containerlab VS Code extension's own UI (only its source at `6df8e96` and the identical CLI
+  command were exercised); a paused container; WebKit.
+
 # Network design, part 5: Git export, health check, final report — 1.30.47
 
 Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.46 (`0439abb`, CI green). Routing observed: a

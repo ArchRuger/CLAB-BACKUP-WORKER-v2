@@ -1,0 +1,13 @@
+# cEOS container clab-restore-square-ceos after the 17:26 UTC docker-stop case (host1 stopped with docker stop, ceos restarted through the product: 2 of 3 links restored). Selected lines of 'docker logs' and the container environment (no credentials).
+Sep 27 17:25:22 ceos Ebra: %LINEPROTO-5-UPDOWN: Line protocol on Interface Ethernet3, changed state to down
+Sep 27 17:25:22 ceos Stp: %SPANTREE-6-INTERFACE_DEL: Interface Ethernet3 has been removed from instance MST0
+Waiting for 3 interfaces to be connected (timeout: 300s)
+Connected 0 interfaces out of 3 (waited 0s)
+Found 3 interfaces (required: 3)
+Waiting for 3 interfaces to be connected (timeout: 300s)
+Connected 0 interfaces out of 3 (waited 0s)
+Connected 2 interfaces out of 3 (waited 1s)
+# environment:
+INTFTYPE=eth
+CLAB_INTFS=3
+# manager readiness timeline of the docker-stop record: booting from 17:27:04, still Starting at 17:32 (300 s budget), Ready again before 17:52

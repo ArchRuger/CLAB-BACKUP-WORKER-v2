@@ -27,8 +27,8 @@ inspection accounts do not automatically gain the operations protocol.
 
 Everything containerlab can do with a lab is under **Lab actions ▾** in the lab header
 (or right-click a lab card on Home; keyboard: Shift+F10). The menu carries the everyday
-actions — **Start lab** (or *Start stopped devices*), **Stop devices**, **Restart
-devices**, **Redeploy lab…**, **Destroy lab…** — and **All lab operations…** opens the
+actions — **Start lab** (or *Start stopped devices*), **Stop devices**, **Restart all
+devices…**, **Redeploy lab…**, **Destroy lab…** — and **All lab operations…** opens the
 complete list in three groups: *Deployment*, *Lab tools* and *Danger*. **Advanced options**
 at the bottom of the menu unfolds in place (click, Enter or ArrowRight) and holds **Import map…**,
 **Edit map**, **Operation history…** and, only while the lab still records configuration lines the
@@ -42,7 +42,8 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 |---|---|
 | Start lab / Deploy lab, Redeploy lab, Destroy lab | Operate on the original VM topology. Destroy runs `containerlab destroy --cleanup` (whenever the installed containerlab offers `--cleanup`; there is no variant without it), so the containers and the generated lab folder (`clab-<name>`) go together and the next deploy starts clean; the review names the folder under *Technical details* before you confirm. Redeploy keeps that folder unless you choose *Redeploy and clear the lab folder…* (*Redeploy lab and clear the lab folder…* under All lab operations…), and falls back to destroy then deploy when necessary. |
 | Apply topology changes | Applies the original VM YAML to the running lab when the installed containerlab supports it. |
-| Start / Stop / Restart devices | Every device of the lab. Stop keeps the containers; Destroy removes them. |
+| Start / Stop / Restart all devices | Every device of the lab. Stop keeps the containers; Destroy removes them. *Restart all devices…* is containerlab's lab-wide restart (every container stops and starts with its links kept); one device is *Restart device…* below. |
+| Restart device… (one device: right-click it on the map, or *Details* in the Devices view) | containerlab's node-scoped restart of that one device (`containerlab restart --node <device>`, the operation the Containerlab VS Code extension's *Restart node* runs): the container stops and starts again with its links kept, so neighbours keep their wiring; a stopped device takes the start/restore path. The review names the device and the lab, warns that its CLI sessions and traffic through it drop and that neighbours lose their adjacencies to it, and lists that one device as affected. Nothing is saved, backed up, reset or reapplied; the device reads *Restarting*, then *Starting* until it accepts a login again. A device stopped with `docker stop` outside containerlab has already lost its links; the job says how many links were restored. When a neighbour's container is not running, the review names it and says what follows: a neighbour stopped by the manager, the extension or `containerlab stop` keeps its link ends parked and the link comes back; one that exited on its own or was stopped with `docker stop` took the link with it, the job then reports *n of m links restored* with the neighbour named, and the device waits for all its interfaces before it boots (containerlab tells the image how many to expect: cEOS gives up waiting after five minutes, a VM-based image waits for good). Start the neighbour first, or redeploy the lab. Known limits, each named in the review before the student confirms: a vJunos-switch container cannot be started a second time (its launcher fails without the `init.conf` it renamed on the first start), so its restart is reported as failed by the job, with *Redeploy lab* as the way out; an XRv9k container's launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (back up first, then *Replace running configuration*). |
 | Show running devices, Running labs on the VM | A readable table (topology, lab, device, type/image, state/health, IPv4/IPv6) in the operation window. Failed or incomplete output stays visible for diagnosis. |
 | Save device configurations | containerlab's kind-dependent save command. The manager's own backups (Tools › Configuration backups) and *Save progress* are separate. |
 | Open all CLIs ↗ | A launcher page with one row per device (state pill, Open CLI ↗) and *Open all ready CLIs*. Allow pop-ups; at most 32 CLIs at once. |
@@ -140,7 +141,7 @@ The map's **More ▾** menu (also in the expanded map) offers **Open all CLIs �
 now, including devices not selected for scheduled backups. When every device is ready it
 starts at once; when some cannot be backed up, or a job is already running, it first lists
 the devices it will skip and why, and you confirm with **Back up N devices**. Right-click a device on the map for Open CLI, Capture traffic, Back
-up configuration and Device details.
+up configuration, Restart device… and Device details.
 
 ## Review and persistence
 

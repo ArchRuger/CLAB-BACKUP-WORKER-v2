@@ -11,6 +11,7 @@ const DESIGN_MODULE_LABELS={ospf:'OSPF',bgp:'BGP',isis:'IS-IS',eigrp:'EIGRP',rip
  gateway:'First-hop gateway (VRRP, anycast)',vxlan:'VXLAN',evpn:'EVPN',mpls:'MPLS (LDP, BGP-LU, L3VPN, 6PE)',
  sr:'Segment routing (SR-MPLS)',srv6:'SRv6',routing:'Routing policies and static routes'};
 const DESIGN_BUSY_GENERATION=['queued','running'];
+const DESIGN_POLL_RETRIES=5;
 const DESIGN_LEVEL_WORDS={verified_on_image:'Verified on this image',generated_not_live_tested:'Generated, not yet tested live',
  unsupported:'Not supported',blocked_missing_prerequisite:'Needs a prerequisite module'};
 const DESIGN_LEVEL_CLASS={verified_on_image:'ok',generated_not_live_tested:'neutral',unsupported:'danger',blocked_missing_prerequisite:'warn'};
@@ -33,17 +34,29 @@ function designStateOf(lab,view){
   return {key:'engine',label:'Design engine unavailable',pill:'danger',detail:engine.diagnostic||engine.reason||'The design engine is not available on this manager.'};
  const generations=view.generations||[],newest=generations.length?generations[generations.length-1]:null;
  const generating=!!(view.summary&&view.summary.generating)||!!(newest&&DESIGN_BUSY_GENERATION.includes(newest.status));
- if(generating)return {key:'generating',label:'Generating the plan…',pill:'busy',detail:(newest&&newest.message)||'Waiting to generate.'};
- if(view.draft)return {key:'draft',label:'Unsaved changes',pill:'warn',detail:'Save the design to keep these changes.'};
+ // The watch gave up after its retries: the plan may still be generating, but nothing here knows, so the state says so
+ // (no busy pill for something that is not being watched).
+ if(generating&&view.pollGaveUp)return {key:'unknown',label:'Plan progress unknown',pill:'warn',detail:view.pollProblem||'Could not check the plan\'s progress. Reload the page, or open the Design tab again.'};
+ if(generating)return {key:'generating',label:'Generating the plan…',pill:'busy',detail:view.pollProblem||(newest&&newest.message)||'Waiting to generate.'};
+ // The Advanced editor holds text that is not JSON: nothing acts on it until it parses (the last good
+ // intent is not silently used behind it), and the student is told so here, not only in the problems list.
+ if(view.advancedInvalid)return {key:'invalid',label:'Advanced JSON is not valid',pill:'danger',detail:'Fix the JSON under Advanced (or Discard changes) before saving, checking or generating.'};
+ if(view.draft&&view.draftUnsaved)return {key:'draft',label:'Unsaved changes',pill:'danger',detail:'Your changes could not be kept in this browser (its storage is unavailable). Save the design now, or they are lost when you leave this page.'};
+ if(view.draft)return {key:'draft',label:'Unsaved changes',pill:'warn',detail:'Save the design to keep these changes, or Discard changes to go back to the saved design.'};
  const problems=view.problems||[];
  if(problems.length)return {key:'problems',label:'The design has problems',pill:'danger',detail:problems[0].message||'Fix the problems below, then save again.'};
+ if(view.pollProblem)return {key:'unknown',label:'Plan progress unknown',pill:'warn',detail:view.pollProblem};
+ // No saved design but earlier plans: they belong to a design that was removed, and must not read as current.
+ if(!view.intent&&generations.length)return {key:'removed',label:'No design saved (earlier plans kept)',pill:'neutral',detail:'The design was removed. Its earlier plans stay under History for reference; save a new design to generate again.'};
  if(newest&&newest.status==='interrupted')
   return {key:'interrupted',label:'The last plan was interrupted',pill:'warn',detail:newest.message||'The manager restarted while this plan was being generated. Generate it again.'};
  if(newest&&newest.status==='failed')return {key:'failed',label:'The last plan failed',pill:'danger',detail:newest.message||'The last plan did not finish. See its errors below.'};
  if(newest&&newest.status==='succeeded'&&view.summary&&view.summary.stale)
   return {key:'stale',label:'Plan is older than the design',pill:'warn',detail:'The design changed since this plan was generated. Generate it again to see the current plan.'};
  if(newest&&newest.status==='succeeded')return {key:'ready',label:'Plan ready to review',pill:'ok',detail:newest.message||'Generated successfully.'};
- return {key:'none',label:'No design yet',pill:'neutral',detail:"Choose addressing, protocols and services below, then Generate plan."};
+ // A saved design with no plan yet is not "no design": the student's Save worked, and the next step is Generate plan.
+ if(view.intent)return {key:'saved',label:'Design saved, no plan yet',pill:'neutral',detail:'The design is saved. Generate plan to calculate its addressing and routing.'};
+ return {key:'none',label:'No design yet',pill:'neutral',detail:"Choose addressing, protocols and services below, save the design, then Generate plan."};
 }
 
 // --- guided form <-> intent (design_intent.py schema 1) ----------------------------------------------
@@ -54,31 +67,53 @@ function designIntentFromForm(values,base){
  const intent=JSON.parse(JSON.stringify(base&&typeof base==='object'?base:designEmptyIntent()));
  intent.schema=1;
  intent.families={ipv4:!!values.ipv4,ipv6:!!values.ipv6};
+ // Pools are merged into what `base` has: the three guided pools keep every key the form has no control
+ // for (start, allocation, prefix6, …) and any other pool the schema allows (vrf_loopback, router_id) is
+ // left untouched. A blank or odd prefix stays what was typed, so the server names the problem instead of a
+ // look-alike default appearing.
  const pools=values.pools||{};
- intent.addressing={
-  loopback:{ipv4:(pools.loopback&&pools.loopback.ipv4)||'',ipv6:(pools.loopback&&pools.loopback.ipv6)||''},
-  p2p:{ipv4:(pools.p2p&&pools.p2p.ipv4)||'',ipv6:(pools.p2p&&pools.p2p.ipv6)||'',prefix:Number(pools.p2p&&pools.p2p.prefix)||31},
-  lan:{ipv4:(pools.lan&&pools.lan.ipv4)||'',ipv6:(pools.lan&&pools.lan.ipv6)||'',prefix:Number(pools.lan&&pools.lan.prefix)||24}
+ const addressing={...(intent.addressing&&typeof intent.addressing==='object'?intent.addressing:{})};
+ const pool=(name,withPrefix)=>{
+  const current=addressing[name]&&typeof addressing[name]==='object'?addressing[name]:{};
+  const given=pools[name]||{};
+  const next={...current,ipv4:given.ipv4||'',ipv6:given.ipv6||''};
+  if(withPrefix){
+   if(given.prefix===undefined)delete next.prefix;else next.prefix=designNumberOrRaw(given.prefix);
+  }
+  return next;
  };
+ addressing.loopback=pool('loopback',false);addressing.p2p=pool('p2p',true);addressing.lan=pool('lan',true);
+ intent.addressing=addressing;
  const modules=[...new Set(values.modules||[])];
  intent.modules=modules;
  const has=id=>modules.includes(id);
  if(has('ospf'))intent.ospf={...(intent.ospf&&typeof intent.ospf==='object'?intent.ospf:{}),area:values.ospfArea||'0.0.0.0'};
  else delete intent.ospf;
- if(has('bgp'))intent.bgp={...(intent.bgp&&typeof intent.bgp==='object'?intent.bgp:{}),as:Number(values.bgpAs)||65000};
+ if(has('bgp')){
+  const bgp={...(intent.bgp&&typeof intent.bgp==='object'?intent.bgp:{})};
+  // The AS is what the student typed: an empty field leaves the AS out (the server asks for one), 0 or a
+  // non-number is kept as typed and refused by name — never silently replaced by 65000.
+  if(values.bgpAs===''||values.bgpAs===undefined||values.bgpAs===null)delete bgp.as;else bgp.as=designNumberOrRaw(values.bgpAs);
+  intent.bgp=bgp;
+ }
  else delete intent.bgp;
  if(has('isis'))intent.isis={...(intent.isis&&typeof intent.isis==='object'?intent.isis:{}),area:values.isisArea||'49.0001',type:values.isisType||'level-2'};
  else delete intent.isis;
  if(has('gateway'))intent.gateway={...(intent.gateway&&typeof intent.gateway==='object'?intent.gateway:{}),protocol:values.gatewayProtocol||'anycast'};
  else delete intent.gateway;
  const nodes={...(intent.nodes||{})};
+ // Route reflectors: the guided control is a checklist (every router can be one), so its checked set is
+ // the whole truth for the routers it shows (bgpRrKnown); a device it does not show keeps its own flag. An
+ // older caller may still pass one name as a string.
+ const rrs=new Set(Array.isArray(values.bgpRr)?values.bgpRr:values.bgpRr?[values.bgpRr]:[]);
+ const rrKnown=Array.isArray(values.bgpRrKnown)?new Set(values.bgpRrKnown):null;
  for(const device of values.devices||[]){
   const name=device&&device.name;if(!name)continue;
   const node={...(nodes[name]&&typeof nodes[name]==='object'?nodes[name]:{})};
   if(device.role&&device.role!=='router')node.role=device.role;else delete node.role;
   if(has('bgp')){
    const bgp={...(node.bgp&&typeof node.bgp==='object'?node.bgp:{})};
-   if(values.bgpRr&&values.bgpRr===name)bgp.rr=true;else delete bgp.rr;
+   if(rrs.has(name))bgp.rr=true;else if(!rrKnown||rrKnown.has(name))delete bgp.rr;
    if(Object.keys(bgp).length)node.bgp=bgp;else delete node.bgp;
   }
   if(Object.keys(node).length)nodes[name]=node;else delete nodes[name];
@@ -183,28 +218,38 @@ function designIntentFromForm(values,base){
  if(staticByDevice&&Object.keys(staticByDevice).length&&!modules.includes('routing'))modules.push('routing');
  return intent;
 }
+// A form field's text as a number when it is one, else as typed (so validation can name it). '' stays ''.
+function designNumberOrRaw(value){
+ if(value===''||value===null||value===undefined)return value===undefined?undefined:'';
+ if(typeof value==='number')return value;
+ const text=String(value).trim();
+ return /^-?\d+$/.test(text)?Number(text):text;
+}
 // The inverse of designIntentFromForm: what the guided controls should show for a stored (or draft) intent.
 function designFormFromIntent(intent){
  intent=intent&&typeof intent==='object'?intent:{};
  const families=intent.families||{},addressing=intent.addressing||{};
  const loopback=addressing.loopback||{},p2p=addressing.p2p||{},lan=addressing.lan||{};
  const nodes=intent.nodes||{};
- let bgpRr='';
+ const bgpRr=[];
  const devices=Object.keys(nodes).sort().map(name=>{
   const node=nodes[name]||{};
-  if(node&&node.bgp&&node.bgp.rr)bgpRr=name;
+  if(node&&node.bgp&&node.bgp.rr)bgpRr.push(name);
   return {name,role:node.role||'router'};
  });
+ // Numbers show as stored: an intent without a prefix shows the schema default, but a blank or odd value the
+ // student typed shows as typed (the server has named the problem), never a look-alike default.
+ const shown=(value,fallback)=>value===undefined||value===null?fallback:value;
  return {
   ipv4:families.ipv4!==false,ipv6:families.ipv6!==false,
   pools:{
    loopback:{ipv4:loopback.ipv4||'',ipv6:loopback.ipv6||''},
-   p2p:{ipv4:p2p.ipv4||'',ipv6:p2p.ipv6||'',prefix:p2p.prefix||31},
-   lan:{ipv4:lan.ipv4||'',ipv6:lan.ipv6||'',prefix:lan.prefix||24}
+   p2p:{ipv4:p2p.ipv4||'',ipv6:p2p.ipv6||'',prefix:shown(p2p.prefix,31)},
+   lan:{ipv4:lan.ipv4||'',ipv6:lan.ipv6||'',prefix:shown(lan.prefix,24)}
   },
   modules:[...(intent.modules||[])],
   ospfArea:(intent.ospf&&intent.ospf.area)||'0.0.0.0',
-  bgpAs:(intent.bgp&&intent.bgp.as)||65000,
+  bgpAs:intent.bgp&&intent.bgp.as!==undefined&&intent.bgp.as!==null?intent.bgp.as:'',
   bgpRr,
   isisArea:(intent.isis&&intent.isis.area)||'49.0001',
   isisType:(intent.isis&&intent.isis.type)||'level-2',
@@ -230,7 +275,7 @@ function designDeviceRow(name,row,role){
  const reason=row.profile?'':(row.reason||'No design profile is mapped to this kind of device');
  const profileCell=row.profile?esc(row.profile):`<span class="status-neutral">${esc(reason)}</span>`;
  return `<tr><td>${esc(name)}</td><td>${esc(row.kind||'')}</td><td>${profileCell}</td>`+
-  `<td><select data-design-role="${esc(name)}" ${row.profile?'':'disabled'} ${reason?`title="${esc(reason)}"`:''}>${designRoleOptions(role)}</select></td>`+
+  `<td><select data-design-role="${esc(name)}" aria-label="Role of ${esc(name)}" ${row.profile?'':'disabled'} ${reason?`title="${esc(reason)}"`:''}>${designRoleOptions(role)}</select></td>`+
   `<td>${row.blocked?esc(row.blocked):''}</td></tr>`;
 }
 function designDevicesMarkup(nodes,roles){
@@ -246,9 +291,9 @@ function designDevicesMarkup(nodes,roles){
 // (data-design-*-key on each row) so a row being renamed still merges onto the object it came from.
 function designVrfRow(name,vrf){
  vrf=vrf||{};
- return `<tr data-design-vrf-key="${esc(name)}"><td><input type="text" class="mono" data-design-vrf-field="name" value="${esc(name)}" pattern="^[A-Za-z_][A-Za-z0-9_]{0,63}$" placeholder="red"></td>`+
+ return `<tr data-design-vrf-key="${esc(name)}"><td><input type="text" class="mono" data-design-vrf-field="name" aria-label="VRF name" value="${esc(name)}" maxlength="16" pattern="^[A-Za-z_][A-Za-z0-9_]{0,15}$" title="Up to 16 characters: letters, digits and underscores, starting with a letter or an underscore" placeholder="red"></td>`+
   `<td><label class="checkbox-label"><input type="checkbox" data-design-vrf-field="loopback" ${vrf.loopback?'checked':''}> Loopback</label></td>`+
-  `<td><button type="button" class="button secondary small" data-design-vrf-remove="${esc(name)}">Remove</button></td></tr>`;
+  `<td><button type="button" class="button secondary small" data-design-vrf-remove="${esc(name)}" aria-label="Remove VRF ${esc(name)}">Remove</button></td></tr>`;
 }
 function designVrfsMarkup(vrfs){
  vrfs=vrfs&&typeof vrfs==='object'?vrfs:{};
@@ -258,9 +303,9 @@ function designVrfsMarkup(vrfs){
 }
 function designVlanRow(name,vlan){
  vlan=vlan||{};
- return `<tr data-design-vlan-key="${esc(name)}"><td><input type="text" class="mono" data-design-vlan-field="name" value="${esc(name)}" pattern="^[A-Za-z_][A-Za-z0-9_]{0,63}$" placeholder="red"></td>`+
-  `<td><input type="number" min="1" max="4094" data-design-vlan-field="id" value="${vlan.id!=null?esc(vlan.id):''}"></td>`+
-  `<td><button type="button" class="button secondary small" data-design-vlan-remove="${esc(name)}">Remove</button></td></tr>`;
+ return `<tr data-design-vlan-key="${esc(name)}"><td><input type="text" class="mono" data-design-vlan-field="name" aria-label="VLAN name" value="${esc(name)}" maxlength="16" pattern="^[A-Za-z_][A-Za-z0-9_]{0,15}$" title="Up to 16 characters: letters, digits and underscores, starting with a letter or an underscore" placeholder="red"></td>`+
+  `<td><input type="number" min="1" max="4094" data-design-vlan-field="id" aria-label="VLAN id of ${esc(name)}" value="${vlan.id!=null?esc(vlan.id):''}"></td>`+
+  `<td><button type="button" class="button secondary small" data-design-vlan-remove="${esc(name)}" aria-label="Remove VLAN ${esc(name)}">Remove</button></td></tr>`;
 }
 function designVlansMarkup(vlans){
  vlans=vlans&&typeof vlans==='object'?vlans:{};
@@ -290,9 +335,9 @@ function designLinkVrfVlanRow(link,settings,vrfNames,vlanNames){
  const accessOptions='<option value="">None</option>'+vlanNames.map(n=>`<option value="${esc(n)}" ${access===n?'selected':''}>${esc(n)}</option>`).join('');
  const trunk=Array.isArray(vlan.trunk)?vlan.trunk:[];
  return `<tr data-design-link-key="${esc(key)}"><td class="mono">${esc(designLinkEnds(link))}</td>`+
-  `<td><select data-design-link-field="vrf">${vrfOptions}</select></td>`+
-  `<td><select data-design-link-field="vlan-access">${accessOptions}</select></td>`+
-  `<td><input type="text" class="mono" data-design-link-field="vlan-trunk" value="${esc(trunk.join(','))}" placeholder="red,blue"></td>`+
+  `<td><select data-design-link-field="vrf" aria-label="VRF of link ${esc(designLinkEnds(link))}">${vrfOptions}</select></td>`+
+  `<td><select data-design-link-field="vlan-access" aria-label="Access VLAN of link ${esc(designLinkEnds(link))}">${accessOptions}</select></td>`+
+  `<td><input type="text" class="mono" data-design-link-field="vlan-trunk" aria-label="Trunk VLANs of link ${esc(designLinkEnds(link))}, comma-separated" value="${esc(trunk.join(','))}" placeholder="names, comma-separated"></td>`+
   `<td>${designLinkOtherKeysCaption(settings)}</td></tr>`;
 }
 function designLinksMarkup(links,linkSettings,vrfNames,vlanNames){
@@ -311,11 +356,11 @@ function designStaticRouteRow(device,route,index,deviceNames){
  const nexthop=route.nexthop&&typeof route.nexthop==='object'?route.nexthop:{};
  const discard=!!nexthop.discard;
  const address=discard?'':(nexthop.ipv6!==undefined?nexthop.ipv6:(nexthop.ipv4!==undefined?nexthop.ipv4:''));
- return `<tr data-design-static-key="${esc(device+':'+index)}"><td><select data-design-static-field="device">${designStaticDeviceOptions(device,deviceNames)}</select></td>`+
-  `<td><input type="text" class="mono" data-design-static-field="prefix" value="${esc(prefix)}" placeholder="192.0.2.0/24"></td>`+
-  `<td><select data-design-static-field="nexthop-type"><option value="discard" ${discard?'selected':''}>Discard</option><option value="address" ${discard?'':'selected'}>Address</option></select></td>`+
-  `<td><input type="text" class="mono" data-design-static-field="nexthop-address" value="${esc(address)}" ${discard?'disabled':''} placeholder="192.0.2.1"></td>`+
-  `<td><button type="button" class="button secondary small" data-design-static-remove="${esc(device+':'+index)}">Remove</button></td></tr>`;
+ return `<tr data-design-static-key="${esc(device+':'+index)}"><td><select data-design-static-field="device" aria-label="Device of static route ${index+1}">${designStaticDeviceOptions(device,deviceNames)}</select></td>`+
+  `<td><input type="text" class="mono" data-design-static-field="prefix" aria-label="Prefix of static route ${index+1}" value="${esc(prefix)}" placeholder="192.0.2.0/24"></td>`+
+  `<td><select data-design-static-field="nexthop-type" aria-label="Next hop type of static route ${index+1}"><option value="discard" ${discard?'selected':''}>Discard</option><option value="address" ${discard?'':'selected'}>Address</option></select></td>`+
+  `<td><input type="text" class="mono" data-design-static-field="nexthop-address" aria-label="Next hop address of static route ${index+1}" value="${esc(address)}" ${discard?'disabled':''} placeholder="192.0.2.1"></td>`+
+  `<td><button type="button" class="button secondary small" data-design-static-remove="${esc(device+':'+index)}" aria-label="Remove static route ${index+1}">Remove</button></td></tr>`;
 }
 function designStaticMarkup(nodes,deviceNames){
  nodes=nodes&&typeof nodes==='object'?nodes:{};
@@ -337,11 +382,14 @@ function designLedgerMarkup(allocations){
 }
 function designHistoryWord(status){return {queued:'Waiting to start',running:'Generating…',succeeded:'Succeeded',failed:'Failed',interrupted:'Interrupted'}[status]||String(status||'');}
 function designHistoryPill(status){return status==='succeeded'?'ok':status==='failed'?'danger':status==='interrupted'?'warn':DESIGN_BUSY_GENERATION.includes(status)?'busy':'neutral';}
-function designHistoryMarkup(generations,now){
+// One row per generation, newest first; every row can be opened (View) so an earlier plan, its files and its
+// errors stay reachable after a newer one exists. `shownId` marks the one the plan card shows right now.
+function designHistoryMarkup(generations,now,shownId){
  const list=[...(generations||[])].reverse();
  if(!list.length)return '<p class="caption">No plans generated yet.</p>';
  return '<ul class="design-history-list">'+list.map(g=>`<li><span class="pill ${designHistoryPill(g.status)}">${esc(designHistoryWord(g.status))}</span> `+
-  `<span>${esc(typeof relativeTime==='function'?relativeTime(g.finished||g.created,now):'')}</span> <span>${esc(g.message||'')}</span></li>`).join('')+'</ul>';
+  `<span>${esc(typeof relativeTime==='function'?relativeTime(g.finished||g.created,now):'')}</span> <span>${esc(g.message||'')}</span> `+
+  (g.id===shownId?'<span class="caption">Shown above</span>':`<button type="button" class="button secondary small" data-design-view-generation="${esc(g.id)}">View</button>`)+'</li>').join('')+'</ul>';
 }
 function designFileSize(bytes){bytes=Number(bytes)||0;return bytes<1024?bytes+' B':Math.round(bytes/1024)+' KiB';}
 function designFilesMarkup(generation){
@@ -351,7 +399,7 @@ function designFilesMarkup(generation){
  if(!names.length)return '<p class="caption">This plan has no generated files.</p>';
  return names.map(name=>`<div class="design-file-group"><strong>${esc(name)}</strong><ul class="design-file-list">`+
   (artifacts[name]||[]).map((a,index)=>`<li><span>${esc(a.module||'')}</span> <span class="caption">${esc(designFileSize(a.size))}</span> `+
-   `<button type="button" class="button secondary small" data-design-view-file="${esc(name)}" data-design-view-index="${index}">View</button></li>`).join('')+
+   `<button type="button" class="button secondary small" data-design-view-file="${esc(name)}" data-design-view-index="${index}" aria-label="View ${esc(name)} ${esc(a.module||'')}">View</button></li>`).join('')+
   '</ul></div>').join('');
 }
 function designRenumberingMarkup(list){
@@ -503,7 +551,7 @@ function designApplyDeviceMarkup(target,takeover){
  const heading=`<h4>${esc(target.name||'')} <span class="caption">${esc(target.kind||'')}</span></h4>`;
  const compat=designApplyCompatMarkup(target.compatibility);
  if(!target.eligible)return `<article class="design-apply-device">${heading}<p class="form-help">${esc(target.reason||'This device is not part of the plan.')}</p>${compat}</article>`;
- if(!target.reachable||!target.ready)return `<article class="design-apply-device">${heading}<p class="form-help">${esc(target.reason||'This device could not be reviewed.')}</p>${compat}</article>`;
+ if(!target.reachable||!target.ready)return `<article class="design-apply-device">${heading}<p class="form-help">${esc(designApplyReasonText(target.reason||'This device could not be reviewed.'))}</p>${compat}</article>`;
  if(target.no_op)return `<article class="design-apply-device">${heading}<p class="form-help">Already matches the plan.</p>${compat}</article>`;
  const counts=target.counts||{};
  const countsLine=`Added ${counts.added||0} · Removed ${counts.removals||0} · Stale ${counts.stale||0} · Conflicts ${counts.conflicts||0} · Expected ${counts.expected||0}`;
@@ -525,7 +573,16 @@ function designApplyDeviceMarkup(target,takeover){
 }
 function designApplyReviewMarkup(review,takeover){
  if(!review||!review.targets||!review.targets.length)return '<p class="caption">Choose at least one device to review.</p>';
- return review.targets.map(t=>designApplyDeviceMarkup(t,takeover)).join('');
+ return `<h3 id="design-apply-review-title" tabindex="-1">Review of ${review.targets.length===1?'one device':review.targets.length+' devices'}</h3>`+designApplyReviewSummary(review)+review.targets.map(t=>designApplyDeviceMarkup(t,takeover)).join('');
+}
+// Why Apply is off right now, under the button (never a silent disabled button).
+function designApplyRunReason(review,takeover,acknowledged){
+ if(!review)return '';
+ if(!(review.applicable||[]).length)return 'Nothing can be applied: no chosen device is ready for this plan.';
+ takeover=takeover||new Set();
+ if((review.targets||[]).some(t=>t.ready&&(t.counts&&t.counts.conflicts)&&!takeover.has(t.name)))return 'A device has conflicts with manual configuration: tick "Take over these settings" on it, or choose other devices.';
+ if(!acknowledged)return 'Tick the acknowledgement above to enable Apply.';
+ return '';
 }
 // Enabled only when acknowledged, the review has something applicable, and every ready device with a
 // conflict is either taken over or resolved (design_apply.review()'s own `applicable` rule, checked
@@ -661,7 +718,21 @@ function designExportGitBody(values){
 // designState is the module-level cache the spec calls for: {labId,view,plan,draft,loading,error}.
 // view is the GET .../design document; plan is the plan.json of the newest succeeded generation (fetched
 // separately, since network_design.py keeps it on disk, not on the lightweight generation record).
-let designState={labId:'',view:null,plan:null,draft:null,draftDiscarded:false,loading:false,error:''};
+let designState={labId:'',view:null,plan:null,draft:null,draftDiscarded:false,loading:false,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:''};
+// Answers land in request order only by luck: every read of the design takes a sequence number when it is sent,
+// and an answer is shown only if nothing newer has been shown since (an older answer that arrives late is
+// dropped, never painted over a newer generation). A write (save, import, renumber, clear) is the newest truth
+// by construction and marks everything sent before it stale.
+let designViewSeq=0,designViewApplied=0;
+function designViewRequest(){return ++designViewSeq;}
+function designViewFresh(labId,seq){if(designState.labId!==labId||seq<=designViewApplied)return false;designViewApplied=seq;return true;}
+function designViewWritten(labId){return designViewFresh(labId,designViewRequest());}
+// The generation the plan card, files and download show: the one the student chose under History, else the newest.
+function designViewedGeneration(view){
+ const generations=(view&&view.generations)||[];
+ if(designState.viewing){const found=generations.find(g=>g.id===designState.viewing);if(found)return found;}
+ return generations.length?generations[generations.length-1]:null;
+}
 let designWatch=null,designWatchTimer=null;
 function designCurrentIntent(view){
  if(designState.draft&&designState.draft.intent)return designState.draft.intent;
@@ -677,18 +748,26 @@ function designApplyDraft(labId,view){
  if(stored.revision===currentRevision)designState.draft=stored;
  else{designState.draft=null;designState.draftDiscarded=true;if(typeof clearDesignDraft==='function')clearDesignDraft(labId);}
 }
+// The plan for one generation is fetched separately; the answer counts only if that generation is still the one
+// shown (the lab and the generation may both have moved on while it was in flight).
+function designPlanWanted(labId,generationId){
+ if(designState.labId!==labId)return false;
+ const shown=designViewedGeneration(designState.view);
+ return !!shown&&shown.id===generationId;
+}
 async function designLoadPlan(labId,generationId){
  try{
   const data=await(await api('/labs/'+encodeURIComponent(labId)+'/design/generations/'+encodeURIComponent(generationId))).json();
-  if(designState.labId===labId)designState.plan=data.plan||null;
- }catch{if(designState.labId===labId)designState.plan=null;}
+  if(designPlanWanted(labId,generationId))designState.plan=data.plan||null;
+ }catch{if(designPlanWanted(labId,generationId))designState.plan=null;}
 }
 async function designLoad(labId){
- designState={labId,view:null,plan:null,draft:null,draftDiscarded:false,loading:true,error:''};
+ designState={labId,view:null,plan:null,draft:null,draftDiscarded:false,loading:true,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:designState.formLab||''};
  designRenderAll();
+ const seq=designViewRequest();
  try{
   const view=await(await api('/labs/'+encodeURIComponent(labId)+'/design')).json();
-  if(designState.labId!==labId)return;
+  if(!designViewFresh(labId,seq))return;
   designState.view=view;designState.loading=false;
   designApplyDraft(labId,view);
   const newest=designNewestGeneration(view);
@@ -703,15 +782,21 @@ async function designLoad(labId){
 function designMaybeStartWatch(){
  const newest=designNewestGeneration(designState.view);
  if(!newest||!DESIGN_BUSY_GENERATION.includes(newest.status)){designStopWatch();return;}
+ // After the bounded retries the watch stays stopped (no endless polling behind the student's back) until a
+ // deliberate step: Generate plan again, or opening the tab again, both of which load the design afresh.
+ if(designState.pollGaveUp){designStopWatch();return;}
  if(designWatch===designState.labId)return;
  designStopWatch();designWatch=designState.labId;
- const labId=designState.labId;
+ const labId=designState.labId;let failures=0;
  const poll=async()=>{
   if(designWatch!==labId)return;
+  const seq=designViewRequest();
   try{
    const view=await(await api('/labs/'+encodeURIComponent(labId)+'/design')).json();
    if(designWatch!==labId||designState.labId!==labId)return;
-   designState.view=view;
+   if(!view||typeof view!=='object'||!Array.isArray(view.generations))throw new Error('The manager answered with something that is not a design.');
+   if(!designViewFresh(labId,seq)){designWatchTimer=setTimeout(poll,2000);return;}
+   designState.view=view;failures=0;designState.pollProblem='';
    const next=designNewestGeneration(view);
    if(next&&DESIGN_BUSY_GENERATION.includes(next.status)){designRenderAll();designWatchTimer=setTimeout(poll,2000);}
    else{
@@ -720,17 +805,36 @@ function designMaybeStartWatch(){
     designRenderAll();
     if(typeof refresh==='function')await refresh();
    }
-  }catch{designStopWatch();}
+  }catch(error){
+   // A failed poll (a lost connection, a 500, a bad answer) is retried a bounded number of times with the
+   // student told so; after that the watch stops and the state says the progress is unknown, with a way out.
+   if(designWatch!==labId||designState.labId!==labId)return;
+   failures++;
+   if(failures<=DESIGN_POLL_RETRIES){
+    designState.pollProblem='Could not check the plan\'s progress (attempt '+failures+' of '+DESIGN_POLL_RETRIES+'): '+(error&&error.message||'no answer')+'. Trying again…';
+    designRenderAll();designWatchTimer=setTimeout(poll,2000*failures);
+   }else{
+    designStopWatch();designState.pollGaveUp=true;
+    designState.pollProblem='Could not check the plan\'s progress after '+DESIGN_POLL_RETRIES+' retries. Reload the page, or open the Design tab again, to see where it stands.';
+    designRenderAll();
+   }
+  }
  };
  designWatchTimer=setTimeout(poll,2000);
 }
 // --- form focus guard: never rewrite a guided control while the student is using it -------------------
 function designFormFocused(){
- // Only a field being typed in blocks a re-render: a focused button (Add VRF, remove) must not keep its own change from showing.
+ // Only a field being typed in blocks a re-render: a focused button (Add VRF, remove) or a focused checkbox or
+ // radio (a module ticked by hand keeps focus; the form must still redraw what that tick meant) must not keep
+ // its own change from showing.
  const form=$('design-form');const active=document.activeElement;
  if(!form||!active||typeof form.contains!=='function'||!form.contains(active))return false;
- return ['INPUT','TEXTAREA','SELECT'].includes(String(active.tagName||'').toUpperCase())&&String(active.type||'').toLowerCase()!=='button';
+ const type=String(active.type||'').toLowerCase();
+ return ['INPUT','TEXTAREA','SELECT'].includes(String(active.tagName||'').toUpperCase())&&!['button','checkbox','radio'].includes(type);
 }
+// shell.js asks before the page is left: true while an unsaved draft exists that the browser could not store
+// (the only copy of the student's edit is in this page).
+function designLeaveGuard(){return !!(designState.draft&&designState.draftUnsaved);}
 function designToggleModuleSettings(modules){
  const set=new Set(modules||[]);
  if($('design-ospf-settings'))$('design-ospf-settings').hidden=!set.has('ospf');
@@ -744,16 +848,33 @@ function designRenderDeviceOptions(view,values){
  setMarkup($('design-devices'),designDevicesMarkup(nodes,roles));
  if($('design-bgp-rr')){
   const names=Object.keys(nodes).filter(n=>nodes[n]&&nodes[n].included&&(roles[n]||'router')==='router').sort();
-  const options='<option value="">None</option>'+names.map(n=>`<option value="${esc(n)}" ${values.bgpRr===n?'selected':''}>${esc(n)}</option>`).join('');
-  if($('design-bgp-rr').innerHTML!==options)$('design-bgp-rr').innerHTML=options;
-  $('design-bgp-rr').value=values.bgpRr||'';
+  const chosen=new Set(Array.isArray(values.bgpRr)?values.bgpRr:values.bgpRr?[values.bgpRr]:[]);
+  setMarkup($('design-bgp-rr'),designReflectorMarkup(names,chosen));
+  designSyncChecked($('design-bgp-rr'),'input[name="design-bgp-rr"]',chosen);
  }
 }
 function designSetControlValue(id,value){if($(id))$(id).value=value;}
+// One checkbox per router; several reflectors are as normal as one (the form never collapses them).
+function designReflectorMarkup(names,chosen){
+ chosen=chosen||new Set();
+ if(!(names||[]).length)return '<p class="caption">No router to choose from yet.</p>';
+ return names.map(n=>`<label class="checkbox-label"><input type="checkbox" name="design-bgp-rr" value="${esc(n)}" ${chosen.has(n)?'checked':''}> ${esc(n)}</label>`).join('');
+}
+// setMarkup() skips an unchanged string, so a checkbox the student toggled by hand and the form then put
+// back would keep its stale look: the live `checked` property is set from the values every render.
+function designSyncChecked(container,selector,chosen){
+ if(!container||typeof container.querySelectorAll!=='function')return;
+ for(const box of container.querySelectorAll(selector))box.checked=chosen.has(box.value);
+}
 function designRenderForm(view){
  const intent=designCurrentIntent(view);
  const values=designFormFromIntent(intent);
- if(!designFormFocused()){
+ // The focus guard protects a field the student is typing in — for the lab the form already shows. When the
+ // design of another lab arrives (a lab switch, browser Back with a field still focused), the form is redrawn
+ // whatever has focus, so the controls can never show one lab's settings under another lab's name.
+ const switched=designState.formLab!==designState.labId;
+ if(switched){designState.formLab=designState.labId;const active=typeof document!=='undefined'?document.activeElement:null;if(active&&typeof active.blur==='function'&&$('design-form')&&typeof $('design-form').contains==='function'&&$('design-form').contains(active))active.blur();}
+ if(switched||!designFormFocused()){
   if($('design-ipv4'))$('design-ipv4').checked=values.ipv4;
   if($('design-ipv6'))$('design-ipv6').checked=values.ipv6;
   designSetControlValue('design-pool-loopback-ipv4',values.pools.loopback.ipv4);
@@ -765,6 +886,7 @@ function designRenderForm(view){
   designSetControlValue('design-pool-lan-ipv6',values.pools.lan.ipv6);
   designSetControlValue('design-pool-lan-prefix',values.pools.lan.prefix);
   setMarkup($('design-modules'),designModulesMarkup((view&&view.modules)||[],values.modules));
+  designSyncChecked($('design-modules'),'input[name="design-module"]',new Set(values.modules));
   designSetControlValue('design-ospf-area',values.ospfArea);
   designSetControlValue('design-bgp-as',values.bgpAs);
   designSetControlValue('design-isis-area',values.isisArea);
@@ -775,7 +897,8 @@ function designRenderForm(view){
   setMarkup($('design-vlans'),designVlansMarkup(intent.vlans));
   setMarkup($('design-links'),designLinksMarkup((view&&view.links)||[],intent.links,Object.keys(intent.vrfs||{}).sort(),Object.keys(intent.vlans||{}).sort()));
   setMarkup($('design-static'),designStaticMarkup(intent.nodes,designRouterDeviceNames(view,values)));
-  if($('design-advanced'))$('design-advanced').value=JSON.stringify(intent,null,2);
+  // Text that does not parse stays on screen for the student to fix; it is never overwritten by the last good intent.
+  if($('design-advanced')&&!designState.advancedInvalid)$('design-advanced').value=JSON.stringify(intent,null,2);
  }
  designToggleModuleSettings(values.modules);
  if($('design-ledger'))setMarkup($('design-ledger'),designLedgerMarkup(intent.allocations));
@@ -789,22 +912,42 @@ function designRenderHeader(lab,view){
  const engine=view&&view.engine,engineOk=!engine||engine.available!==false;
  if($('design-engine')){$('design-engine').hidden=engineOk;if($('design-engine-text'))$('design-engine-text').textContent=(engine&&engine.diagnostic)||'';}
  if($('design-generate')){
-  const busy=st.key==='generating',noTopology=view&&view.has_topology===false;
-  $('design-generate').disabled=busy||!engineOk||noTopology;
+  const busy=st.key==='generating',noTopology=view&&view.has_topology===false,nothing=!(view&&view.intent)&&!(view&&view.draft);
+  $('design-generate').disabled=busy||!engineOk||noTopology||nothing;
   $('design-generate').title=!engineOk?((engine&&engine.diagnostic)||'The design engine is not available.')
    :busy?'A plan is already being generated for this lab.'
-   :noTopology?'This lab has no topology file yet.':'';
+   :noTopology?'This lab has no topology file yet.'
+   :nothing?'Choose settings below and save the design first.':'';
   menuReasonSafe($('design-generate'),$('design-generate').disabled?$('design-generate').title:'');
  }
+ // The More menu explains itself like Generate plan, Apply to devices… and Export plan to Git… do: the
+ // reasons mirror what the routes refuse (no design → 404 on export, renumber and remove; a plan being
+ // generated → 409 on import, renumber and remove), so a click never ends in an unexplained error tab.
+ for(const [id,reason] of designMoreMenuReasons(view,st)){const el=$(id);if(!el)continue;el.disabled=!!reason;el.title=reason;menuReasonSafe(el,reason);}
+ if($('design-discard'))$('design-discard').hidden=!(view&&(view.draft||view.advancedInvalid));
+}
+// [id, reason] for the More menu's four items; '' enables the item. Pure, so the tests can pin it.
+function designMoreMenuReasons(view,st){
+ const saved=!!(view&&view.intent),generating=!!(st&&st.key==='generating'),wait='Wait for the plan being generated to finish.';
+ const draft=!!(view&&(view.draft||view.advancedInvalid)),unsaved='Save or discard your unsaved changes first.';
+ return [['design-export',!saved?'Save a design first.':draft?'Save the design first: the download is the saved design, not your unsaved changes.':''],
+  ['design-import',generating?wait:draft?unsaved:''],['design-renumber',!saved?'Save a design first.':generating?wait:''],['design-clear',!saved?'There is no design to remove.':generating?wait:'']];
 }
 function menuReasonSafe(el,text){if(typeof menuReason==='function')menuReason(el,text);}
 function designRenderPlanCard(view){
- const newest=designNewestGeneration(view);
- if($('design-plan-status'))$('design-plan-status').textContent=designGenerationLine(newest,Date.now());
+ const newest=designViewedGeneration(view),latest=designNewestGeneration(view);
+ if($('design-plan-status')){
+  let line=designGenerationLine(newest,Date.now());
+  if(newest&&latest&&newest.id!==latest.id)line='Showing an earlier plan ('+(designSafeRelative(newest.finished||newest.created,Date.now())||'')+'), not the newest. '+line;
+  if(newest&&!(view&&view.intent))line+=' This plan belongs to a design that was removed; it is kept for reference only.';
+  $('design-plan-status').textContent=line;
+ }
+ if($('design-plan-newest'))$('design-plan-newest').hidden=!(newest&&latest&&newest.id!==latest.id);
  setMarkup($('design-plan-errors'),((newest&&newest.errors)||[]).map(e=>`<li>${esc(e)}</li>`).join(''));
  if($('design-plan-errors-wrap'))$('design-plan-errors-wrap').hidden=!((newest&&newest.errors)||[]).length;
  setMarkup($('design-plan-warnings'),((newest&&newest.warnings)||[]).map(w=>`<li>${esc(w)}</li>`).join(''));
  if($('design-plan-warnings-wrap'))$('design-plan-warnings-wrap').hidden=!((newest&&newest.warnings)||[]).length;
+ if($('design-plan-warnings-summary'))$('design-plan-warnings-summary').textContent='Warnings ('+((newest&&newest.warnings)||[]).length+')';
  setMarkup($('design-plan-renumbering'),designRenumberingMarkup(newest&&newest.renumbering));
  if($('design-plan-renumbering-wrap'))$('design-plan-renumbering-wrap').hidden=!((newest&&newest.renumbering)||[]).length;
  if($('design-plan-collisions')){
@@ -818,14 +961,26 @@ function designRenderPlanCard(view){
 }
 function designUpdateDownloadLink(lab,view){
  if(!$('design-download'))return;
- const newest=designNewestGeneration(view),ok=!!lab&&!!newest&&newest.status==='succeeded';
+ const newest=designViewedGeneration(view),ok=!!lab&&!!newest&&newest.status==='succeeded';
  $('design-download').hidden=!ok;
  if(ok)$('design-download').href='/api/labs/'+encodeURIComponent(lab.id)+'/design/generations/'+encodeURIComponent(newest.id)+'/download';
 }
-function designRenderFiles(view){setMarkup($('design-files-body'),designFilesMarkup(designNewestGeneration(view)));}
-function designRenderHistory(view){setMarkup($('design-history-body'),designHistoryMarkup(view&&view.generations,Date.now()));}
+function designRenderFiles(view){setMarkup($('design-files-body'),designFilesMarkup(designViewedGeneration(view)));}
+function designRenderHistory(view){const shown=designViewedGeneration(view);setMarkup($('design-history-body'),designHistoryMarkup(view&&view.generations,Date.now(),shown&&shown.id));}
+// History › View: the plan card, files and download switch to that generation until Back to newest (or a new plan).
+async function designViewGeneration(generationId){
+ const lab=current();if(!lab)return;
+ const labId=lab.id,generations=(designState.view&&designState.view.generations)||[];
+ const found=generations.find(g=>g.id===generationId);if(!found)return;
+ const latest=designNewestGeneration(designState.view);
+ designState.viewing=latest&&latest.id===generationId?null:generationId;
+ designState.plan=null;
+ if(found.status==='succeeded')await designLoadPlan(labId,generationId);
+ if(designState.labId!==labId)return;
+ designRenderAll();
+}
 function designActiveView(lab){
- if(designState.labId===lab.id&&designState.view)return {...designState.view,draft:!!designState.draft};
+ if(designState.labId===lab.id&&designState.view)return {...designState.view,draft:!!designState.draft,draftUnsaved:!!designState.draftUnsaved,advancedInvalid:!!designState.advancedInvalid,pollProblem:designState.pollProblem||'',pollGaveUp:!!designState.pollGaveUp};
  const design=lab&&lab.design;
  if(!design)return {generations:[],problems:[],summary:{present:false}};
  return {generations:design.generation?[design.generation]:[],problems:[],summary:design};
@@ -862,6 +1017,10 @@ function designRolesFromDom(){
  return map;
 }
 function designVal(id){return $(id)?$(id).value:'';}
+function designCheckedValues(containerId,name,all=false){
+ const container=$(containerId);if(!container||typeof container.querySelectorAll!=='function')return [];
+ return [...container.querySelectorAll('input[name="'+name+'"]'+(all?'':':checked'))].map(i=>i.value);
+}
 // One reader per new table, each scoped to its own tbody id so a stray element elsewhere on the page
 // (there is none, but the next table added should keep the habit) cannot be picked up by mistake.
 function designRowsIn(containerId,rowSelector){
@@ -921,7 +1080,7 @@ function designReadFormValues(){
    lan:{ipv4:designVal('design-pool-lan-ipv4'),ipv6:designVal('design-pool-lan-ipv6'),prefix:designVal('design-pool-lan-prefix')}
   },
   modules,
-  ospfArea:designVal('design-ospf-area'),bgpAs:designVal('design-bgp-as'),bgpRr:designVal('design-bgp-rr'),
+  ospfArea:designVal('design-ospf-area'),bgpAs:designVal('design-bgp-as'),bgpRr:designCheckedValues('design-bgp-rr','design-bgp-rr'),bgpRrKnown:designCheckedValues('design-bgp-rr','design-bgp-rr',true),
   isisArea:designVal('design-isis-area'),isisType:designVal('design-isis-type'),gatewayProtocol:designVal('design-gateway-protocol'),
   devices,
   vrfs:designVrfsFromDom(),vlans:designVlansFromDom(),links:designLinksFromDom(),staticRoutes:designStaticFromDom()
@@ -930,25 +1089,54 @@ function designReadFormValues(){
 function designSetDraft(labId,intent){
  designState.draft={revision:(designState.view&&designState.view.intent&&designState.view.intent.revision)||'',intent};
  designState.draftDiscarded=false;
- if(typeof writeDesignDraft==='function')writeDesignDraft(labId,designState.draft);
+ // writeDesignDraft answers false when the browser's storage refused (quota, a private window): the draft
+ // then lives in memory only, and the state line says so instead of the edit vanishing on the next reload.
+ designState.draftUnsaved=typeof writeDesignDraft==='function'?writeDesignDraft(labId,designState.draft)===false:false;
+}
+// Back to the saved design: the draft (in memory and in browser storage) and any unparsable Advanced text go.
+function designDiscardDraft(){
+ const lab=current();if(!lab)return;
+ designState.draft=null;designState.draftDiscarded=false;designState.draftUnsaved=false;designState.advancedInvalid=false;
+ if(typeof clearDesignDraft==='function')clearDesignDraft(lab.id);
+ setMarkup($('design-problems'),'');
+ designRenderAll();
+ if(typeof notify==='function')notify('Unsaved changes discarded.');
+}
+// A module the student unticked but the design still needs (VRFs, VLANs or static routes are defined) is kept on
+// by designIntentFromForm and the box is redrawn ticked; the student is told why instead of watching it bounce.
+const DESIGN_MODULE_KEPT={vrf:'VRFs (or links in a VRF) are defined',vlan:'VLANs (or links in a VLAN) are defined',routing:'static routes are defined'};
+function designKeptModulesNotice(ticked,modules){
+ if(!Array.isArray(ticked)||!Array.isArray(modules))return '';
+ const kept=modules.filter(m=>!ticked.includes(m)&&DESIGN_MODULE_KEPT[m]);
+ if(!kept.length)return '';
+ return kept.map(m=>'The '+m+' module stays on while '+DESIGN_MODULE_KEPT[m]+'; remove them to turn it off.').join(' ');
 }
 function designOnGuidedChange(){
  const lab=current();if(!lab)return;
+ // A change event from a form that was drawn for another lab (or not drawn yet for this one) is not this lab's
+ // edit: redraw instead of reading it back.
+ if(designState.formLab!==lab.id||designState.labId!==lab.id){designRenderAll();return;}
  const base=designCurrentIntent(designState.view);
- const intent=designIntentFromForm(designReadFormValues(),base);
+ const values=designReadFormValues();
+ const intent=designIntentFromForm(values,base);
  designSetDraft(lab.id,intent);
  designRenderForm(designState.view);
  designRenderHeader(lab,designActiveView(lab));
+ const kept=designKeptModulesNotice(values.modules,intent.modules);
+ if(kept&&typeof notify==='function')notify(kept);
 }
 function designOnAdvancedChange(){
  const lab=current();if(!lab)return;
  const text=$('design-advanced')?$('design-advanced').value:'';
  let parsed;
+ // Text that does not parse is remembered as invalid: the state line says so, Save/Check/Generate refuse,
+ // and the text stays on screen for the student to fix (nothing acts on the last good intent behind it).
  try{parsed=JSON.parse(text);}
- catch(error){setMarkup($('design-problems'),designProblemsMarkup([{path:'advanced',message:'This is not valid JSON: '+error.message}]));return;}
+ catch(error){designState.advancedInvalid=true;setMarkup($('design-problems'),designProblemsMarkup([{path:'advanced',message:'This is not valid JSON: '+error.message}]));designRenderHeader(lab,designActiveView(lab));return;}
  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)){
-  setMarkup($('design-problems'),designProblemsMarkup([{path:'advanced',message:'The design must be a JSON object.'}]));return;
+  designState.advancedInvalid=true;setMarkup($('design-problems'),designProblemsMarkup([{path:'advanced',message:'The design must be a JSON object.'}]));designRenderHeader(lab,designActiveView(lab));return;
  }
+ designState.advancedInvalid=false;
  setMarkup($('design-problems'),'');
  designSetDraft(lab.id,parsed);
  designRenderForm(designState.view);
@@ -974,10 +1162,11 @@ function designAddVrf(){
  vrfs[designNextName(vrfs,'vrf')]={};
  designApplyIntentPatch({vrfs});
 }
+function designFocus(id){const el=$(id);if(el&&typeof el.focus==='function')el.focus();}
 function designRemoveVrf(name){
  const base=designCurrentIntent(designState.view);
  const vrfs={...(base.vrfs||{})};delete vrfs[name];
- designApplyIntentPatch({vrfs});
+ designApplyIntentPatch({vrfs});designFocus('design-vrf-add');
 }
 function designNextVlanId(vlans){
  const used=new Set(Object.values(vlans||{}).map(v=>v&&v.id).filter(n=>typeof n==='number'));
@@ -992,7 +1181,7 @@ function designAddVlan(){
 function designRemoveVlan(name){
  const base=designCurrentIntent(designState.view);
  const vlans={...(base.vlans||{})};delete vlans[name];
- designApplyIntentPatch({vlans});
+ designApplyIntentPatch({vlans});designFocus('design-vlan-add');
 }
 function designAddStaticRoute(){
  const base=designCurrentIntent(designState.view);
@@ -1019,52 +1208,79 @@ function designRemoveStatic(key){
  const newNode={...node};
  if(Object.keys(routing).length)newNode.routing=routing;else delete newNode.routing;
  if(Object.keys(newNode).length)nodes[device]=newNode;else delete nodes[device];
- designApplyIntentPatch({nodes});
+ designApplyIntentPatch({nodes});designFocus('design-static-add');
+}
+// The Advanced editor holds text that is not JSON: no action may run on the last good intent behind it.
+function designAdvancedBlocked(){
+ if(!designState.advancedInvalid)return false;
+ const message='Fix the JSON under Advanced first (it is not valid), or use Discard changes to go back to the saved design.';
+ if(typeof showActionError==='function')showActionError(message);else if(typeof notify==='function')notify(message);
+ return true;
 }
 async function designValidate(){
- const lab=current();if(!lab)return;
- const intent=designCurrentIntent(designState.view);
+ const lab=current();if(!lab||designAdvancedBlocked())return;
+ const labId=lab.id,intent=designCurrentIntent(designState.view);
  try{
-  const result=await json('/labs/'+encodeURIComponent(lab.id)+'/design/validate','POST',{intent,revision:''});
+  const result=await json('/labs/'+encodeURIComponent(labId)+'/design/validate','POST',{intent,revision:''});
+  if(designState.labId!==labId)return;   // the student moved to another lab meanwhile: nothing of this lands there
   setMarkup($('design-problems'),designProblemsMarkup(result.problems||[]));
   if(typeof notify==='function')notify((result.problems||[]).length?'The design has problems. See the list below.':'No problems found.');
- }catch(error){if(typeof notify==='function')notify(error.message);}
+ }catch(error){if(designState.labId===labId&&typeof notify==='function')notify(error.message);}
 }
 function designStaleMessage(message){return /changed since this page loaded|no saved design any more/i.test(String(message||''));}
-async function designSave(){
- const lab=current();if(!lab)return;
- const intent=designCurrentIntent(designState.view);
+// Saves the current intent (draft or saved) for the lab that is open now. Resolves true when saved. Every
+// answer is applied only if the same lab is still open: a save answered late, after the student moved to
+// another lab, must never repaint that lab with this one's design.
+async function designSave(options){
+ options=options||{};
+ const lab=current();if(!lab||designAdvancedBlocked())return false;
+ const labId=lab.id,intent=designCurrentIntent(designState.view);
  const revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
  try{
   // Validate first: the save route itself answers a fixed-string 400, not a structured problem list.
-  const check=await json('/labs/'+encodeURIComponent(lab.id)+'/design/validate','POST',{intent,revision:''});
+  const check=await json('/labs/'+encodeURIComponent(labId)+'/design/validate','POST',{intent,revision:''});
+  if(designState.labId!==labId)return false;
   if((check.problems||[]).length){
    setMarkup($('design-problems'),designProblemsMarkup(check.problems));
    designRenderHeader(lab,{...designActiveView(lab),problems:check.problems});
-   return;
+   return false;
   }
-  const view=await json('/labs/'+encodeURIComponent(lab.id)+'/design','PUT',{intent,revision});
-  designState.view=view;designState.draft=null;designState.draftDiscarded=false;
-  if(typeof clearDesignDraft==='function')clearDesignDraft(lab.id);
+  const view=await json('/labs/'+encodeURIComponent(labId)+'/design','PUT',{intent,revision});
+  if(!designViewWritten(labId))return false;
+  designState.view=view;designState.draft=null;designState.draftDiscarded=false;designState.draftUnsaved=false;
+  if(typeof clearDesignDraft==='function')clearDesignDraft(labId);
   setMarkup($('design-problems'),'');
-  if(typeof notify==='function')notify('Design saved.');
+  if(!options.quiet&&typeof notify==='function')notify('Design saved.');
   designRenderAll();
+  return true;
  }catch(error){
+  if(designState.labId!==labId)return false;
   if(designStaleMessage(error.message)){
    if(typeof showActionError==='function')showActionError(error.message);else if(typeof notify==='function')notify(error.message);
-   await designLoad(lab.id);return;
+   await designLoad(labId);return false;
   }
   if(typeof notify==='function')notify(error.message);
+  return false;
  }
 }
+// Generate plan works on the saved design; unsaved changes are saved first, explicitly, so the plan never
+// quietly comes from an older version than the form shows. A new plan is always shown as the newest.
 async function designGenerate(){
- const lab=current();if(!lab)return;
+ const lab=current();if(!lab||designAdvancedBlocked())return;
+ const labId=lab.id;
+ if(designState.draft){
+  const saved=await designSave({quiet:true});
+  if(!saved||designState.labId!==labId)return;
+  if(typeof notify==='function')notify('Design saved. Generating the plan…');
+ }
  const revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
  try{
-  await json('/labs/'+encodeURIComponent(lab.id)+'/design/generate','POST',{revision});
-  await designLoad(lab.id);
+  await json('/labs/'+encodeURIComponent(labId)+'/design/generate','POST',{revision});
+  if(designState.labId!==labId)return;
+  designState.viewing=null;
+  await designLoad(labId);
   if(typeof refresh==='function')await refresh();
- }catch(error){if(typeof notify==='function')notify(error.message);}
+ }catch(error){if(designState.labId===labId&&typeof notify==='function')notify(error.message);}
 }
 async function designCancel(){
  const lab=current();if(!lab)return;
@@ -1078,27 +1294,32 @@ function designRenumber(){
  const lab=current();if(!lab||typeof opDialog!=='function')return;
  const dialog=opDialog('design-renumber-dialog','Renumber this design',
   '<p>The manager forgets every device id, loopback and link address this design has pinned. The next generated plan allocates them again from the pools, and devices may get different addresses.</p>'+
+  '<p class="form-help">This cannot be undone here: download the design file first if you want to keep the current addresses. Devices already configured keep what they have until you apply a new plan.</p>'+
   '<div class="dialog-actions"><button type="button" class="button secondary" data-op-close>Cancel</button><button type="button" class="button danger" id="design-renumber-run">Forget allocations</button></div>');
  const closeButtons=dialog.querySelectorAll?dialog.querySelectorAll('[data-op-close]'):[];
  for(const b of closeButtons)b.onclick=()=>dialog.close();
  if($('design-renumber-run'))$('design-renumber-run').onclick=()=>opTask(dialog,async()=>{
-  const revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
-  const view=await json('/labs/'+encodeURIComponent(lab.id)+'/design/renumber','POST',{revision});
-  designState.view=view;dialog.close();designRenderAll();if(typeof notify==='function')notify('Allocation ledger cleared.');
+  const labId=lab.id,revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
+  const view=await json('/labs/'+encodeURIComponent(labId)+'/design/renumber','POST',{revision});
+  dialog.close();if(!designViewWritten(labId))return;
+  designState.view=view;designRenderAll();if(typeof notify==='function')notify('Allocation ledger cleared.');
  });
 }
 function designClearDesign(){
  const lab=current();if(!lab||typeof opDialog!=='function')return;
  const dialog=opDialog('design-clear-dialog','Remove this design',
   "<p>The saved network design for this lab is removed. Generated plans and their files are kept and still listed under History.</p>"+
+  '<p class="form-help">This cannot be undone here: download the design file first if you may want it back. Devices already configured keep their configuration; nothing is changed on them.</p>'+
   '<div class="dialog-actions"><button type="button" class="button secondary" data-op-close>Cancel</button><button type="button" class="button danger" id="design-clear-run">Remove design</button></div>');
  const closeButtons=dialog.querySelectorAll?dialog.querySelectorAll('[data-op-close]'):[];
  for(const b of closeButtons)b.onclick=()=>dialog.close();
  if($('design-clear-run'))$('design-clear-run').onclick=()=>opTask(dialog,async()=>{
-  const revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
-  const view=await json('/labs/'+encodeURIComponent(lab.id)+'/design/clear','POST',{revision});
-  designState.view=view;designState.draft=null;if(typeof clearDesignDraft==='function')clearDesignDraft(lab.id);
-  dialog.close();designRenderAll();if(typeof notify==='function')notify('Design removed.');
+  const labId=lab.id,revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
+  const view=await json('/labs/'+encodeURIComponent(labId)+'/design/clear','POST',{revision});
+  dialog.close();if(!designViewWritten(labId))return;
+  designState.view=view;designState.draft=null;designState.draftUnsaved=false;designState.advancedInvalid=false;designState.viewing=null;
+  if(typeof clearDesignDraft==='function')clearDesignDraft(labId);
+  designRenderAll();if(typeof notify==='function')notify('Design removed.');
 });
 }
 function designExport(){
@@ -1108,22 +1329,24 @@ function designExport(){
 function designImportPrompt(){if($('design-import-file'))$('design-import-file').click();}
 async function designImportFile(file){
  const lab=current();if(!lab||!file)return;
- const revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
+ const labId=lab.id,revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
  const data=new FormData();data.append('intent',file);data.append('revision',revision);
  try{
-  const result=await(await api('/labs/'+encodeURIComponent(lab.id)+'/design/import',{method:'POST',body:data})).json();
+  const result=await(await api('/labs/'+encodeURIComponent(labId)+'/design/import',{method:'POST',body:data})).json();
+  if(!designViewWritten(labId))return;
   if(!result.imported){
    setMarkup($('design-problems'),designProblemsMarkup(result.problems||[]));
    if(typeof notify==='function')notify('The imported design has problems. See Advanced › Check below.');
    return;
   }
-  designState.view=result;designState.draft=null;designState.draftDiscarded=false;
-  if(typeof clearDesignDraft==='function')clearDesignDraft(lab.id);
+  designState.view=result;designState.draft=null;designState.draftDiscarded=false;designState.draftUnsaved=false;designState.advancedInvalid=false;
+  if(typeof clearDesignDraft==='function')clearDesignDraft(labId);
   setMarkup($('design-problems'),'');
   if(typeof notify==='function')notify('Design imported.');
   designRenderAll();
  }catch(error){
-  if(designStaleMessage(error.message))await designLoad(lab.id);
+  if(designState.labId!==labId)return;
+  if(designStaleMessage(error.message))await designLoad(labId);
   if(typeof notify==='function')notify(error.message);
  }
 }
@@ -1154,13 +1377,17 @@ function designRenderApplyButton(lab,view){
  const reason=designApplyDisabledReason(lab,view,designApplyJobsOf(lab.id));
  $('design-apply').disabled=!!reason;
  $('design-apply').title=reason;
+ if(typeof $('design-apply').setAttribute==='function')$('design-apply').setAttribute('aria-describedby','design-apply-reason');
  designApplyRenderLast(lab.id);
 }
 function designRenderExportGitButton(lab,view){
  if(!$('design-export-git'))return;
  const reason=designExportGitReason(lab,view);
  $('design-export-git').disabled=!!reason;
- $('design-export-git').title=reason;
+ // The same reason for both buttons ("Generate a plan first.") is said once, under Apply, not twice.
+ const applyReason=$('design-apply')?$('design-apply').title:'';
+ $('design-export-git').title=reason&&reason===applyReason?'':reason;
+ if(typeof $('design-export-git').setAttribute==='function')$('design-export-git').setAttribute('aria-describedby',reason&&reason===applyReason?'design-apply-reason':'design-export-git-reason');
 }
 function designApplyRenderLast(labId){
  if(!$('design-apply-last'))return;
@@ -1198,12 +1425,36 @@ async function designApplyRunReview(){
  designApplyState.selected=new Set(targets);
  if($('design-apply-choose-error'))$('design-apply-choose-error').textContent='';
  if(!targets.length){if($('design-apply-choose-error'))$('design-apply-choose-error').textContent='Choose at least one device.';return;}
+ // The review connects to every chosen device (up to a minute for many of them): the button says so and
+ // cannot be clicked again meanwhile, and the dialog is marked busy for assistive technology.
+ const button=$('design-apply-review-run'),dialog=$('design-apply-dialog'),label=button?button.textContent:'';
+ if(button){button.disabled=true;button.textContent='Reviewing '+targets.length+(targets.length===1?' device…':' devices…');}
+ if(dialog&&typeof dialog.setAttribute==='function')dialog.setAttribute('aria-busy','true');
  try{
   const review=await json('/labs/'+encodeURIComponent(designApplyState.labId)+'/design/generations/'+encodeURIComponent(designApplyState.generationId)+'/review',
    'POST',{targets,takeover:[...designApplyState.takeover].filter(n=>targets.includes(n))});
   designApplyState.review=review;designApplyState.takeover=new Set(review.takeover||[]);
   designApplyRenderReview();designApplyShowStep('review');
+  // The step starts at its top, on its own heading, not wherever the previous step was scrolled to.
+  if(dialog&&'scrollTop' in dialog)dialog.scrollTop=0;
+  designFocus('design-apply-review-title');
  }catch(error){if($('design-apply-choose-error'))$('design-apply-choose-error').textContent=error.message;}
+ finally{if(button){button.disabled=false;button.textContent=label||'Review';}if(dialog&&typeof dialog.removeAttribute==='function')dialog.removeAttribute('aria-busy');}
+}
+// A device's reason in the review, in words: the server's exception names are kept in the details.
+function designApplyReasonText(reason){
+ const text=String(reason||'');
+ if(/NoValidConnections|Connectivity:|Connection refused|timed out|Errno/i.test(text))return 'Could not connect to this device over SSH (is it running, and does its login work? Devices › Test logins). '+text;
+ if(/Authentication|password|credential/i.test(text))return 'The device refused the saved login. Check its credentials under Devices. '+text;
+ return text;
+}
+// One line above the devices when none of them can be applied to, so the student sees why before scrolling.
+function designApplyReviewSummary(review){
+ if(!review||!(review.targets||[]).length)return '';
+ if((review.applicable||[]).length)return '';
+ const total=review.targets.length,unreachable=review.targets.filter(t=>t.eligible&&!(t.reachable&&t.ready)).length;
+ if(unreachable===total)return `<p class="form-error">None of the ${total===1?'device':total+' devices'} answered over SSH, so nothing can be applied. Check that the lab is running and the logins work (Devices › Test logins), then Back and Review again.</p>`;
+ return `<p class="form-error">Nothing can be applied: ${unreachable?unreachable+' of '+total+' devices did not answer over SSH and the rest':'every device'} already match the plan or cannot take part. Back to choose other devices, or close.</p>`;
 }
 // The sole render point for the review step (a fresh review from designApplyRunReview's Back->Review,
 // and a take-over re-review from designApplyToggleTakeover both land here): a new review result is
@@ -1217,6 +1468,7 @@ function designApplyRenderReview(){
 function designApplyUpdateRunButton(){
  const ack=!!($('design-apply-ack')&&$('design-apply-ack').checked);
  if($('design-apply-run'))$('design-apply-run').disabled=!designApplyCanSubmit(designApplyState.review,designApplyState.takeover,ack);
+ if($('design-apply-run-reason')){const why=designApplyRunReason(designApplyState.review,designApplyState.takeover,ack);$('design-apply-run-reason').textContent=why;$('design-apply-run-reason').hidden=!why;}
 }
 // A conflict's take-over checkbox: the token binds the take-over list, so the review must run again.
 async function designApplyToggleTakeover(name,checked){
@@ -1372,6 +1624,10 @@ function initNetworkDesign(){
  if($('design-static-add'))$('design-static-add').onclick=()=>designAddStaticRoute();
  if($('design-advanced'))$('design-advanced').addEventListener('change',designOnAdvancedChange);
  if($('design-validate'))$('design-validate').onclick=()=>designValidate();
+ if($('design-discard'))$('design-discard').onclick=()=>designDiscardDraft();
+ if($('design-plan-newest'))$('design-plan-newest').onclick=()=>{const latest=designNewestGeneration(designState.view);if(latest)designViewGeneration(latest.id);};
+ if($('design-history-body'))$('design-history-body').addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-design-view-generation]');if(b)designViewGeneration(b.dataset.designViewGeneration);});
+ if($('design-bgp-rr'))$('design-bgp-rr').addEventListener('change',()=>designOnGuidedChange());
  if($('design-generate'))$('design-generate').onclick=()=>designGenerate();
  if($('design-save'))$('design-save').onclick=()=>designSave();
  if($('design-cancel'))$('design-cancel').onclick=()=>designCancel();

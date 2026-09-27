@@ -181,3 +181,17 @@ test('badges and saved-version names use student words',()=>{
 });
 
 function pick(o){return {key:o.key,label:o.label,detail:o.detail,pill:o.pill};}
+
+test('a device that Restart device is running for reads Restarting, and the lab names the device it restarts',()=>{
+ const c=makeContext();
+ const restarting=c.deviceState({name:'clab-bgp-r1',short_name:'R1',ssh_ready:false,available:false,login_configured:true,nos_login:{status:'restarting'}});
+ assert.equal(restarting.label,'Restarting');assert.equal(restarting.key,'working');assert.equal(restarting.cli,false);assert.equal(restarting.pill,'busy');
+ assert.match(restarting.detail,/R1 is restarting on the VM\. Its CLI opens again once it accepts a login\./);
+ assert.equal(c.operationLabel('restart-node'),'Restarting device');
+ assert.equal(c.operationLabel('restart-node',{node_label:'ceos'}),'Restarting ceos');
+ assert.equal(c.operationLabel('restart',{node_label:'ceos'}),'Restarting all devices','only Restart device names a device; the lab-wide word says all (U-17)');
+ const job={id:'j',lab_id:'lab',action:'restart-node',status:'running',node:'clab-bgp-r1',node_label:'R1',message:'Executing on the VM'};
+ const ls=c.labState(running,{operations:[job]});
+ assert.equal(ls.key,'working');assert.equal(ls.label,'Restarting R1');assert.equal(ls.job,job);assert.equal(ls.pill,'busy');assert.equal(ls.detail,'Executing on the VM');
+ assert.doesNotMatch(JSON.stringify([restarting,ls]),/container|docker/i);
+});

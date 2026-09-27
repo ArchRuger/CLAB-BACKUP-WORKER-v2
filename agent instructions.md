@@ -1,3 +1,62 @@
+# Restart device and the netlab UI/UX campaign, part 1 — 1.30.48
+
+The owner's campaign (`CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md`, untracked in the worktree root, with
+the folded-in `CLAB_Single_Device_Restart_Addendum.md`) runs on `claude/netlab-integration`. **Read
+`docs/netlab-ui-qa/PICKUP.md` first**; `DEFECTS.md` is the ledger, `RESTART-PARITY.md` the parity record,
+`EVIDENCE.md` the index. What the next agent must preserve:
+
+(1) **Restart device is containerlab's node-scoped restart and nothing else.** `restart-node` in
+`app/host_operations.py` builds `containerlab restart -t <topology> --name <lab> --node <node>` with exactly
+one `--node`; `node_selector(options, lab)` accepts one literal node and a container that is exactly
+`<prefix>-<lab>-<node>`, `<lab>-<node>` or `<node>`; the options whitelist for this action is `{node,
+container}` and no other action accepts either key; the target's container id and state are in `affected`
+and therefore in the digest. Never let a missing or odd selector fall through to the lab-wide `restart`,
+never substitute `docker restart`, an SSH reboot, destroy+deploy or redeploy, and never rebuild wiring by
+hand (a `docker stop` destroys both ends of a node's veths; see RESTART-PARITY.md).
+(2) **The manager resolves and binds the device** (`lab_operations.py` preview): the page sends the manager's
+node name only; `expected_container()` (`discovery.py`) and `parse_definition()` of the VM file must agree
+with the node record; page-supplied `options.node`, `options.container` and `path` are refused; the review
+stamp is taken under the first lock, and confirm refuses when any `LIFECYCLE_JOBS` job of the lab was
+created at or after it, or when the device no longer resolves to the same container. Keep the stamp
+early (an Opus review found the late-stamp window).
+(3) **Readiness epoch.** `ReadinessMonitor.forget()` records `epoch[key]`; `run()` drops an answer whose
+probe began before it. `LabOperations.execute()` invalidates the restarted device before the helper runs,
+right after it returns and when the job closes; `public_lab` reports `nos_login.status == 'restarting'`
+for a device with a queued/running job (never `ssh_ready`). `restarted_since()` derives a container's start
+from `inspected_epoch` (taken before the discovery pass) minus the uptime in the runtime's status line;
+containerlab reports only `healthy` for health-checked containers, so that hint covers only the others.
+(4) **UI.** One eligibility rule, `opRestartState()` (operations.js), for the map menu (`data-restart`,
+class `danger`), the device panel and the Devices technical view; `opRestartDevice()` re-checks it and calls
+`opReview({action:'restart-node', node})`; the review copy names the device and the lab and promises nothing
+about unrelated traffic; `operationLabel(action, job)` names the device; `mapStateKey` marks only the job's
+device as working; `deviceState` handles `restarting` before `ssh_ready`. `opLifecycle`/`opDisruptive`
+include `restart-node`.
+(5) **Live evidence** is per image in `docs/netlab-ui-qa/evidence/restart/` and summarised in
+RESTART-PARITY.md; the tools are `docs/netlab-ui-qa/tools/check_restart_device.py` (both entry points,
+stopped path, terminal reconnect, new capture, design non-mutation), `check_restart_two_tabs.py`,
+`traffic_probe.py`, `persistence_markers.py`. Never rebuild the manager container while one of them runs.
+(5b) **Image limits are facts, not product bugs, and the review must name them.** `RESTART_KNOWN_LIMITS` in
+`lab_operations.py` holds two: vJunos-switch cannot start its container a second time (the job fails with the reason),
+and XRv9k's first restart after a deploy boots from a fresh disk (factory configuration; the launcher's sorted-listdir
+disk choice, `DEFECTS.md` QA-017). Add a kind only with a live proof; never add an automatic backup or restore to a
+restart (parity with the extension); the traffic probe (`traffic_probe.py`) is what shows a path loss the product's own
+checks cannot see, keep running it beside every live run.
+(5c) **A restart restores only the links whose other end still exists.** A neighbour stopped with `containerlab stop`
+keeps its ends parked (the link comes back); one that exited on its own or was `docker stop`ped took the link with it,
+and the restarted device then waits for the missing interface (`CLAB_INTFS`: cEOS five minutes, a vrnetlab VM for good).
+`restart_links()` (lab_operations.py) reads the device's links from the lab's drawing and names not-running neighbours
+in the review with both cases; the counts travel into the job (`links_expected`, `neighbours_down`) for the
+`n of m links restored` message (QA-018). Keep the drawing as the source (it is parsed from the topology file the
+helper will use), keep both cases in the wording (the manager cannot tell them apart) and never refuse the restart.
+(6) **Design tab repairs** QA-001…QA-016 and U-01…U-20 are in `DEFECTS.md` with their regression tests; the
+inventory (`COVERAGE.md`, 123 rows) and the §6 probe report drive the rest. Two rules worth keeping: every read
+of a design is numbered when sent and applied only if nothing newer landed (`designViewRequest` /
+`designViewFresh` / `designViewWritten` in network-design.js, QA-015: never go back to a lab-id-only guard), and
+`design_intent.NAME` is netlab's 16-character identifier rule for every `id`-typed name while `ID` (64) stays
+for setting keys (QA-016).
+(7) **Tooling.** `check_ui005/007c/008a` of UI review 001 fail on HEAD as well (TOOL-001): fix or retire them in
+their own stream, do not read them as a regression of this one.
+
 # Network design, part 5: Git export, health check, final report — 1.30.47
 
 Read `docs/netlab-integration/FINAL-REPORT.md` first (the whole stream in one page), then `PICKUP.md`. Preserve,

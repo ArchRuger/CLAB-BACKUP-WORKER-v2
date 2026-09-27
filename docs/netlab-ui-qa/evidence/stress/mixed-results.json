@@ -1,0 +1,169 @@
+{
+  "pass": "mixed",
+  "started": "2026-09-27T14:45:21+00:00",
+  "finished": "2026-09-27T14:45:36+00:00",
+  "n": 100,
+  "seed": 20260927,
+  "chromium": "153.0.8010.12",
+  "data_dir": "/tmp/stress-mixed-ur451xqv",
+  "port": 8102,
+  "action_counts": {
+    "renumber_cancel": 3,
+    "advanced_toggle": 12,
+    "reload": 5,
+    "tab_switch": 20,
+    "clear_cancel": 2,
+    "generate": 7,
+    "pool_edit": 10,
+    "module_toggle": 7,
+    "more_menu": 6,
+    "save": 7,
+    "as_edit": 10,
+    "history_open": 4,
+    "file_preview": 7
+  },
+  "failed_actions": [],
+  "checkpoints": [
+    {
+      "idx": 20,
+      "nodes": 1489,
+      "memory": {
+        "used": 10000000,
+        "total": 11900000,
+        "limit": 3760000000
+      },
+      "inflight": 0,
+      "fetches": 19,
+      "timeouts": 4,
+      "intervals": 1,
+      "asValue": "90001",
+      "bgpOn": true,
+      "console_errors_so_far": 0
+    },
+    {
+      "idx": 40,
+      "nodes": 1446,
+      "memory": {
+        "used": 10000000,
+        "total": 11900000,
+        "limit": 3760000000
+      },
+      "inflight": 0,
+      "fetches": 7,
+      "timeouts": 2,
+      "intervals": 1,
+      "asValue": "90004",
+      "bgpOn": true,
+      "console_errors_so_far": 0
+    },
+    {
+      "idx": 60,
+      "nodes": 1457,
+      "memory": {
+        "used": 10000000,
+        "total": 11900000,
+        "limit": 3760000000
+      },
+      "inflight": 0,
+      "fetches": 14,
+      "timeouts": 3,
+      "intervals": 1,
+      "asValue": "90006",
+      "bgpOn": true,
+      "console_errors_so_far": 0
+    },
+    {
+      "idx": 80,
+      "nodes": 1499,
+      "memory": {
+        "used": 10000000,
+        "total": 11900000,
+        "limit": 3760000000
+      },
+      "inflight": 0,
+      "fetches": 12,
+      "timeouts": 3,
+      "intervals": 1,
+      "asValue": "90009",
+      "bgpOn": true,
+      "console_errors_so_far": 0
+    },
+    {
+      "idx": 100,
+      "nodes": 1552,
+      "memory": {
+        "used": 10000000,
+        "total": 11900000,
+        "limit": 3760000000
+      },
+      "inflight": 0,
+      "fetches": 37,
+      "timeouts": 7,
+      "intervals": 1,
+      "asValue": "90011",
+      "bgpOn": true,
+      "console_errors_so_far": 0
+    }
+  ],
+  "growth": {
+    "nodes": [
+      1489,
+      1446,
+      1457,
+      1499,
+      1552
+    ],
+    "inflight": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "fetches": [
+      19,
+      7,
+      14,
+      12,
+      37
+    ],
+    "timeouts": [
+      4,
+      2,
+      3,
+      3,
+      7
+    ],
+    "intervals": [
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "console_errors": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "memory_used": [
+      10000000,
+      10000000,
+      10000000,
+      10000000,
+      10000000
+    ]
+  },
+  "summary": {
+    "checks_total": 5,
+    "checks_failed": 0,
+    "failed": [],
+    "console_errors_total": 0,
+    "console_errors_unhandled": [],
+    "page_errors": [],
+    "requests_failed": [],
+    "anomalies": []
+  }
+}

@@ -1,0 +1,29 @@
+{
+ "started": "2026-09-27T14:16:05+00:00",
+ "browsers": {
+  "chromium": {
+   "launched": true,
+   "version": "153.0.8010.12",
+   "findings": 16,
+   "checks": 23
+  },
+  "firefox": {
+   "launched": true,
+   "version": "155.0",
+   "findings": 17,
+   "checks": 23
+  },
+  "webkit": {
+   "launched": false,
+   "error": [
+    "BrowserType.launch: ",
+    "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557",
+    "\u2551 Host system is missing dependencies to run browsers. \u2551",
+    "\u2551 Missing libraries:                                   \u2551",
+    "\u2551     libgtk-4.so.1                                    \u2551",
+    "\u2551     libgraphene-1.0.so.0                             \u2551"
+   ]
+  }
+ },
+ "finished": "2026-09-27T14:20:12+00:00"
+}

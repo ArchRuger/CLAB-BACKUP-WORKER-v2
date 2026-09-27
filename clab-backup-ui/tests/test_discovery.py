@@ -231,6 +231,30 @@ class DiscoveryParserTests(unittest.TestCase):
         for value in (b'not json',b'null',b'{"error":"denied"}'):
             with self.assertRaises(ValueError):parse_inspect(value)
 
+    def test_container_status_uptime_and_expected_container_names(self):
+        from app.discovery import uptime_seconds, expected_container
+        data=json.loads(response());data['training'][0]['status']='Up 12 minutes (healthy)'
+        parsed=parse_inspect(json.dumps(data).encode())['training']
+        self.assertEqual(parsed[0]['status'],'Up 12 minutes (healthy)');self.assertNotIn('status',parsed[1],'an inspect without a status line still parses')
+        data['training'][0]['status']='x'*200;self.assertNotIn('status',parse_inspect(json.dumps(data).encode())['training'][0],'an odd status line is dropped, never fatal')
+        for status,seconds in (('Up Less than a second',0),('Up 1 second',1),('Up 45 seconds',45),('Up About a minute',60),('Up 12 minutes',720),('Up 12 minutes (healthy)',720),('Up 59 minutes (health: starting)',3540)):
+            self.assertEqual(uptime_seconds(status),seconds,status)
+        for status in ('Up About an hour','Up 2 hours','Up 3 days','Exited (0) 5 minutes ago','Created','Paused',None,'','Up'):
+            self.assertIsNone(uptime_seconds(status),status)
+        lab=dict(deployment_name='training',container_prefix='clab')
+        self.assertEqual(expected_container(lab,dict(name='x',definition_node='r1')),'clab-training-r1')
+        self.assertEqual(expected_container(dict(deployment_name='training',container_prefix=''),dict(name='x',definition_node='r1')),'r1')
+        self.assertEqual(expected_container(dict(deployment_name='training'),dict(name='x',short_name='r1')),'clab-training-r1')
+        self.assertEqual(expected_container(dict(deployment_name='training',container_prefix='lab'),dict(name='x',definition_node='r1',short_name='R1')),'lab-training-r1','the topology node name wins over a renamed short name')
+        self.assertEqual(expected_container(lab,dict(name='x')),'');self.assertEqual(expected_container(dict(),dict(name='x',definition_node='r1')),'')
+        # reconcile carries the status line onto the node, and drops it with the container.
+        from app.discovery import reconcile
+        data['training'][0]['status']='Up 12 minutes (healthy)'
+        nodes=[dict(name='clab-training-r1',definition_node='r1',endpoint_mode='auto'),dict(name='clab-training-r2',definition_node='r2',endpoint_mode='auto')]
+        state={'labs':[dict(id='l',deployment_name='training',container_prefix='clab',nodes=nodes)],'discovery':{'labs':parse_inspect(json.dumps(data).encode())}}
+        reconcile(state);self.assertEqual(nodes[0]['runtime_status'],'Up 12 minutes (healthy)');self.assertEqual(nodes[1]['runtime_status'],'');self.assertEqual(nodes[0]['runtime_state'],'running')
+        state['discovery']['labs']={};reconcile(state);self.assertEqual((nodes[0]['runtime_status'],nodes[0]['runtime_state']),('','absent'))
+
     def test_bad_identity_and_duplicate_entries_fail_closed(self):
         data=json.loads(response());data['training'].append(data['training'][0])
         with self.assertRaises(ValueError):parse_inspect(json.dumps(data).encode())

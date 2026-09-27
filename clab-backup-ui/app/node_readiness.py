@@ -13,6 +13,7 @@ restarts must answer again, and a failed automatic test sends its nodes back to
 booting with a bounded number of retries.
 """
 import copy
+from datetime import datetime
 import logging
 import threading
 import time
@@ -20,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import paramiko
 
-from .discovery import discovery_fresh, lab_status, node_available
+from .discovery import discovery_fresh, lab_status, node_available, uptime_seconds
 from .lab_operations import operation_busy
 from .node_services import connect
 from .runner import CLI_ERROR, effective_credentials, now
@@ -88,7 +89,7 @@ def summarize(states):
     alongside 'booting' so the deployment bar's total keeps every monitored device
     while a "Test logins" refresh is in flight, instead of the total briefly shrinking.
     """
-    bucket = lambda s: 'booting' if s['status'] == 'checking' else s['status']
+    bucket = lambda s: 'booting' if s['status'] in ('checking', 'restarting') else s['status']
     monitored = [s for s in states if bucket(s) in ('ready', 'booting', 'failed')]
     counts = {key: sum(bucket(s) == key for s in monitored) for key in ('ready', 'booting', 'failed')}
     if not monitored: status = 'idle'
@@ -113,6 +114,7 @@ class ReadinessMonitor:
         self.tested = set()        # labs whose automatic login test ran for the current boot cycle
         self.reviewed = set()      # automatic test jobs whose outcome has been acted on
         self.test_attempts = {}    # lab id -> automatic tests started in the current boot cycle
+        self.epoch = {}            # (lab id, node) -> monotonic time its login proof was last invalidated
 
     def start(self):
         self.thread = threading.Thread(target=self.loop, daemon=True)
@@ -126,7 +128,7 @@ class ReadinessMonitor:
     def reset(self):
         with self.lock:
             self.retry_at.clear(); self.observed.clear(); self.refusals.clear(); self.tested.clear()
-            self.reviewed.clear(); self.test_attempts.clear()
+            self.reviewed.clear(); self.test_attempts.clear(); self.epoch.clear()
 
     def loop(self):
         while not self.stopping.is_set():
@@ -136,10 +138,34 @@ class ReadinessMonitor:
             self.wake.wait(SCAN_INTERVAL); self.wake.clear()
 
     def forget(self, key):
-        """A node that stopped, restarted or was redeployed must prove its login again."""
+        """A node that stopped, restarted or was redeployed must prove its login again.
+
+        Also the start of a new readiness epoch for the node: a probe that began before this moment
+        (one still in flight, or one whose answer arrives late) is discarded by run(), so an answer
+        from before a restart can never mark the restarted device ready. The next probe is due at once."""
         with self.services.lock: self.services.checks.pop(key, None)
         with self.lock:
-            self.retry_at.pop(key, None); self.refusals.pop(key, None)
+            self.retry_at.pop(key, None); self.refusals.pop(key, None); self.epoch[key] = time.monotonic()
+        self.wake.set()
+
+    def restarted_since(self, state, node, check):
+        """True when the runtime's uptime says the container started after this login proof was recorded.
+
+        containerlab's inspect carries only the runtime's status line ("Up 12 minutes"); a restart done
+        outside the manager (VS Code, the CLI) keeps the container id and may finish between two
+        discovery passes, so the state signature alone does not show it. The start is derived from the
+        moment the discovery pass began (before the runtime was asked) minus the uptime: the uptime is
+        floored to the minute at most and was sampled after that moment, so the derived start is late by
+        up to 60 s and never early. A proof older than that start, with a minute of margin, is therefore
+        from before a real restart. Coarser uptimes (hours) are not used; the device is then checked
+        again by the usual signature and job paths only."""
+        uptime = uptime_seconds(node.get('runtime_status'))
+        if uptime is None or not check or check.get('status') != 'reachable' or not check.get('at'): return False
+        info = state.get('discovery', {})
+        inspected = info.get('inspected_epoch') or info.get('checked_epoch') or 0
+        try: proven = datetime.fromisoformat(str(check['at']).replace('Z', '+00:00')).timestamp()
+        except (ValueError, TypeError): return False
+        return inspected - uptime - proven > 60
 
     def scan(self):
         """One pass: drop stale results, launch due probes and run pending login tests."""
@@ -164,7 +190,11 @@ class ReadinessMonitor:
                 creds = effective_credentials(lab, node)
                 if not creds.get('username'): continue
                 with self.services.lock: check = copy.deepcopy(self.services.checks.get(key))
-                if check and check.get('status') == 'reachable': continue
+                if check and check.get('status') == 'reachable':
+                    if not self.restarted_since(state, node, check): continue
+                    # The container came up again after this proof: an external restart. Prove it again.
+                    self.forget(key); cycle_reset = True; check = None
+                    self.event('ssh.check', 'Container restarted after the last login check; checking the login again', 'info', lab_id, node['name'])
                 with self.lock:
                     if key in self.inflight or self.retry_at.get(key, 0) > time.monotonic(): continue
                     self.inflight.add(key)
@@ -181,7 +211,7 @@ class ReadinessMonitor:
                 self.login_test(lab)
         with self.lock:
             for key in [k for k in self.observed if k not in present]:
-                self.observed.pop(key, None); self.retry_at.pop(key, None); self.refusals.pop(key, None)
+                self.observed.pop(key, None); self.retry_at.pop(key, None); self.refusals.pop(key, None); self.epoch.pop(key, None)
             self.tested &= {lab['id'] for lab in state['labs']}
             self.reviewed &= {job['id'] for job in state['jobs']}
 
@@ -233,12 +263,16 @@ class ReadinessMonitor:
 
     def run(self, key, node, creds):
         lab_id, name = key
+        started = time.monotonic()
         try: status = self.probe(node, creds)
         except Exception: status = 'booting'
         finally:
             with self.lock: self.inflight.discard(key)
         if status is None: return      # no SSH client slot was free; try again later
         with self.lock:
+            # The node's proof was invalidated (a restart was accepted, a signature changed) while this
+            # probe ran: its answer is about the device as it was, and is dropped. The next scan asks again.
+            if self.epoch.get(key, 0) > started: return
             if status == 'failed':
                 self.refusals[key] = self.refusals.get(key, 0) + 1
                 if self.refusals[key] < REFUSALS_BEFORE_FAILED: status = 'booting'

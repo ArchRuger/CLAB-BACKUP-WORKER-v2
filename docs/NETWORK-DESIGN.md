@@ -102,6 +102,9 @@ per-module settings, `vlans`, `vrfs`), `links` (prefix, pool, role, type, name, 
 unnumbered, per-module settings and per-endpoint addresses and settings), `vlans`, `vrfs`,
 `interfaces` (endpoint overrides) and `allocations` (the ledger, written by the manager). Before anything else looks at a document, a recursive guard walks it: every key at every depth
 must be a plain identifier-like name that does not start with `_` and is not a refused name, every
+name the engine types as an identifier (a VRF, VLAN, address pool, named prefix or routing policy)
+follows netlab's own rule of up to 16 characters (letters, digits and underscores, starting with a
+letter or an underscore) so that a name the manager accepts never fails the plan later, every
 string must be safe text (no control characters, quotes, braces, semicolons, backslashes or
 backticks, because names and descriptions end up inside generated NOS text), and depth and size are
 bounded. Then two layers of validation run on every save, validate and generate:
@@ -180,27 +183,37 @@ preview and download only.
 
 Every lab has a **Design** tab (beside Topology, Devices and Progress). Top to bottom:
 
-- **State and actions.** One line says where the design stands: *No design yet*, *Unsaved changes*, *Generating
-  the plan…*, *The design has problems*, *Plan ready to review*, *Plan is older than the design*, *The last plan
-  failed*, *The last plan was interrupted*, *Design engine unavailable* (with the engine's diagnostic). These are
-  the design's own words, never the devices' readiness or the saved-progress state. *Generate plan*, *Save design*
-  and *More* (download the design file, import one, *Renumber* to forget the pinned allocations, *Remove design*).
+- **State and actions.** One line says where the design stands: *No design yet*, *Design saved, no plan yet*,
+  *Unsaved changes* (in red when the browser could not keep the draft in its storage: save now), *Advanced JSON
+  is not valid*, *Generating the plan…*, *Plan progress unknown* (the progress check failed and five retries failed too; reload
+  or open the tab again), *The design has problems*, *Plan ready to review*, *Plan is older than the design*,
+  *The last plan failed*, *The last plan was interrupted*, *No design saved (earlier plans kept)* after
+  *Remove design*, *Design engine unavailable* (with the engine's diagnostic). These are the design's own words,
+  never the devices' readiness or the saved-progress state. *Generate plan* (unsaved changes are saved first,
+  and the page says so; text under Advanced that is not JSON blocks it), *Save design*, *Discard changes*
+  (back to the saved design; shown while there are unsaved changes) and *More* (download the saved design
+  file, import one, *Renumber* to forget the pinned allocations, *Remove design*; an item that cannot run now
+  says why underneath: no saved design yet, a plan being generated, or unsaved changes for the download and
+  the import).
 - **Design settings.** Address families; the loopback, point-to-point and shared-link pools with their allocation
   sizes; the protocols and services (OSPF, BGP, IS-IS, EIGRP, RIP, BFD, DHCP, VLANs, VRFs, link aggregation,
   spanning tree, first-hop gateway, VXLAN, EVPN, MPLS, segment routing, SRv6, routing policies and static routes)
-  with the common settings that appear when one is ticked (OSPF area, BGP AS and route reflector, IS-IS area and
-  type, gateway protocol); a devices table with each device's kind, profile and role (router, host, excluded) and
+  with the common settings that appear when one is ticked (OSPF area, BGP AS number and the route reflectors as
+  a checklist of the routers, IS-IS area and type, gateway protocol); a number typed as 0 or left blank is
+  refused by name, never replaced by a default; a devices table with each device's kind, profile and role (router, host, excluded) and
   the reason when a device cannot take part. Under **Advanced**, the whole design as JSON for everything the
   controls do not cover (per-link settings, VLAN and VRF objects, interface overrides, module options), a *Check*
   button that lists every problem with its path, and the allocation ledger read-only. Problems are shown above
   the Advanced section, in view.
-- **Plan.** The newest plan: its status, engine version and passes; errors when it failed; warnings; what it
+- **Plan.** The newest plan (or the one chosen under History, with *Back to newest plan*): its status, engine version and passes; errors when it failed; warnings; what it
   renumbered; the compatibility of every device in words; then per device the id, loopback, router id, the
   interfaces with their containerlab port, addresses, neighbours and protocol notes, the BGP sessions; and the
   links. A plan being generated can be cancelled.
 - **Files.** The generated configuration fragments per device, in netlab's order, each viewable, and one ZIP
   download. They are not backups; what reaches a device goes through *Apply to devices…* below.
-- **History.** Every plan of the lab.
+- **History.** Every plan of the lab, newest first; *View* on an earlier plan shows it, its files and its download
+  in the cards above (marked as an earlier plan) until *Back to newest plan*. After *Remove design* the plans
+  stay listed here for reference and are marked as belonging to a removed design.
 - **Apply to devices…** on the plan card, and the last apply's outcome under it; the owned settings per device
   under Advanced. See the next section.
 

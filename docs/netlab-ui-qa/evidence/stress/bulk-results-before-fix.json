@@ -1,0 +1,492 @@
+{
+  "pass": "bulk",
+  "started": "2026-09-27T14:46:40+00:00",
+  "finished": "2026-09-27T14:47:53+00:00",
+  "total_generations": 24,
+  "chromium": "153.0.8010.12",
+  "data_dir": "/tmp/stress-bulk-uk_4g7qs",
+  "port": 8102,
+  "put_seconds": 0.021,
+  "generate_timings": [
+    2.112,
+    2.12,
+    2.105,
+    2.127,
+    2.141,
+    2.14,
+    2.127,
+    2.125,
+    2.142,
+    2.116,
+    4.173,
+    2.127,
+    2.135,
+    2.138,
+    2.136,
+    2.131,
+    2.144,
+    4.198,
+    4.216,
+    4.183,
+    4.194,
+    4.244,
+    4.167,
+    4.202
+  ],
+  "generate_median": 2.139,
+  "generate_p95": 4.216,
+  "timing": [
+    {
+      "step": "bulk_tab_entry_render",
+      "n": 1,
+      "min": 0.21,
+      "median": 0.21,
+      "p95": 0.21,
+      "max": 0.21
+    },
+    {
+      "step": "bulk_generate_01_paint",
+      "n": 1,
+      "min": 0.059,
+      "median": 0.059,
+      "p95": 0.059,
+      "max": 0.059
+    },
+    {
+      "step": "bulk_generate_01_done",
+      "n": 1,
+      "min": 2.014,
+      "median": 2.014,
+      "p95": 2.014,
+      "max": 2.014
+    },
+    {
+      "step": "bulk_plan_card_render",
+      "n": 1,
+      "min": 0.014,
+      "median": 0.014,
+      "p95": 0.014,
+      "max": 0.014
+    },
+    {
+      "step": "bulk_files_list_render",
+      "n": 1,
+      "min": 0.006,
+      "median": 0.006,
+      "p95": 0.006,
+      "max": 0.006
+    },
+    {
+      "step": "bulk_history_render_inner",
+      "n": 1,
+      "min": 0.098,
+      "median": 0.098,
+      "p95": 0.098,
+      "max": 0.098
+    },
+    {
+      "step": "bulk_history_render",
+      "n": 1,
+      "min": 0.101,
+      "median": 0.101,
+      "p95": 0.101,
+      "max": 0.101
+    },
+    {
+      "step": "bulk_generate_02_paint",
+      "n": 1,
+      "min": 0.06,
+      "median": 0.06,
+      "p95": 0.06,
+      "max": 0.06
+    },
+    {
+      "step": "bulk_generate_02_done",
+      "n": 1,
+      "min": 2.022,
+      "median": 2.022,
+      "p95": 2.022,
+      "max": 2.022
+    },
+    {
+      "step": "bulk_generate_03_paint",
+      "n": 1,
+      "min": 0.045,
+      "median": 0.045,
+      "p95": 0.045,
+      "max": 0.045
+    },
+    {
+      "step": "bulk_generate_03_done",
+      "n": 1,
+      "min": 2.02,
+      "median": 2.02,
+      "p95": 2.02,
+      "max": 2.02
+    },
+    {
+      "step": "bulk_generate_04_paint",
+      "n": 1,
+      "min": 0.064,
+      "median": 0.064,
+      "p95": 0.064,
+      "max": 0.064
+    },
+    {
+      "step": "bulk_generate_04_done",
+      "n": 1,
+      "min": 2.019,
+      "median": 2.019,
+      "p95": 2.019,
+      "max": 2.019
+    },
+    {
+      "step": "bulk_generate_05_paint",
+      "n": 1,
+      "min": 0.08,
+      "median": 0.08,
+      "p95": 0.08,
+      "max": 0.08
+    },
+    {
+      "step": "bulk_generate_05_done",
+      "n": 1,
+      "min": 2.017,
+      "median": 2.017,
+      "p95": 2.017,
+      "max": 2.017
+    },
+    {
+      "step": "bulk_generate_06_paint",
+      "n": 1,
+      "min": 0.046,
+      "median": 0.046,
+      "p95": 0.046,
+      "max": 0.046
+    },
+    {
+      "step": "bulk_generate_06_done",
+      "n": 1,
+      "min": 2.036,
+      "median": 2.036,
+      "p95": 2.036,
+      "max": 2.036
+    },
+    {
+      "step": "bulk_generate_07_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_07_done",
+      "n": 1,
+      "min": 2.018,
+      "median": 2.018,
+      "p95": 2.018,
+      "max": 2.018
+    },
+    {
+      "step": "bulk_generate_08_paint",
+      "n": 1,
+      "min": 0.062,
+      "median": 0.062,
+      "p95": 0.062,
+      "max": 0.062
+    },
+    {
+      "step": "bulk_generate_08_done",
+      "n": 1,
+      "min": 2.018,
+      "median": 2.018,
+      "p95": 2.018,
+      "max": 2.018
+    },
+    {
+      "step": "bulk_generate_09_paint",
+      "n": 1,
+      "min": 0.065,
+      "median": 0.065,
+      "p95": 0.065,
+      "max": 0.065
+    },
+    {
+      "step": "bulk_generate_09_done",
+      "n": 1,
+      "min": 2.033,
+      "median": 2.033,
+      "p95": 2.033,
+      "max": 2.033
+    },
+    {
+      "step": "bulk_generate_10_paint",
+      "n": 1,
+      "min": 0.064,
+      "median": 0.064,
+      "p95": 0.064,
+      "max": 0.064
+    },
+    {
+      "step": "bulk_generate_10_done",
+      "n": 1,
+      "min": 2.018,
+      "median": 2.018,
+      "p95": 2.018,
+      "max": 2.018
+    },
+    {
+      "step": "bulk_generate_11_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_11_done",
+      "n": 1,
+      "min": 4.065,
+      "median": 4.065,
+      "p95": 4.065,
+      "max": 4.065
+    },
+    {
+      "step": "bulk_generate_12_paint",
+      "n": 1,
+      "min": 0.062,
+      "median": 0.062,
+      "p95": 0.062,
+      "max": 0.062
+    },
+    {
+      "step": "bulk_generate_12_done",
+      "n": 1,
+      "min": 2.021,
+      "median": 2.021,
+      "p95": 2.021,
+      "max": 2.021
+    },
+    {
+      "step": "bulk_generate_13_paint",
+      "n": 1,
+      "min": 0.064,
+      "median": 0.064,
+      "p95": 0.064,
+      "max": 0.064
+    },
+    {
+      "step": "bulk_generate_13_done",
+      "n": 1,
+      "min": 2.032,
+      "median": 2.032,
+      "p95": 2.032,
+      "max": 2.032
+    },
+    {
+      "step": "bulk_generate_14_paint",
+      "n": 1,
+      "min": 0.061,
+      "median": 0.061,
+      "p95": 0.061,
+      "max": 0.061
+    },
+    {
+      "step": "bulk_generate_14_done",
+      "n": 1,
+      "min": 2.035,
+      "median": 2.035,
+      "p95": 2.035,
+      "max": 2.035
+    },
+    {
+      "step": "bulk_generate_15_paint",
+      "n": 1,
+      "min": 0.061,
+      "median": 0.061,
+      "p95": 0.061,
+      "max": 0.061
+    },
+    {
+      "step": "bulk_generate_15_done",
+      "n": 1,
+      "min": 2.033,
+      "median": 2.033,
+      "p95": 2.033,
+      "max": 2.033
+    },
+    {
+      "step": "bulk_generate_16_paint",
+      "n": 1,
+      "min": 0.063,
+      "median": 0.063,
+      "p95": 0.063,
+      "max": 0.063
+    },
+    {
+      "step": "bulk_generate_16_done",
+      "n": 1,
+      "min": 2.032,
+      "median": 2.032,
+      "p95": 2.032,
+      "max": 2.032
+    },
+    {
+      "step": "bulk_generate_17_paint",
+      "n": 1,
+      "min": 0.077,
+      "median": 0.077,
+      "p95": 0.077,
+      "max": 0.077
+    },
+    {
+      "step": "bulk_generate_17_done",
+      "n": 1,
+      "min": 2.021,
+      "median": 2.021,
+      "p95": 2.021,
+      "max": 2.021
+    },
+    {
+      "step": "bulk_generate_18_paint",
+      "n": 1,
+      "min": 0.083,
+      "median": 0.083,
+      "p95": 0.083,
+      "max": 0.083
+    },
+    {
+      "step": "bulk_generate_18_done",
+      "n": 1,
+      "min": 4.063,
+      "median": 4.063,
+      "p95": 4.063,
+      "max": 4.063
+    },
+    {
+      "step": "bulk_generate_19_paint",
+      "n": 1,
+      "min": 0.064,
+      "median": 0.064,
+      "p95": 0.064,
+      "max": 0.064
+    },
+    {
+      "step": "bulk_generate_19_done",
+      "n": 1,
+      "min": 4.115,
+      "median": 4.115,
+      "p95": 4.115,
+      "max": 4.115
+    },
+    {
+      "step": "bulk_generate_20_paint",
+      "n": 1,
+      "min": 0.104,
+      "median": 0.104,
+      "p95": 0.104,
+      "max": 0.104
+    },
+    {
+      "step": "bulk_generate_20_done",
+      "n": 1,
+      "min": 4.045,
+      "median": 4.045,
+      "p95": 4.045,
+      "max": 4.045
+    },
+    {
+      "step": "bulk_generate_21_paint",
+      "n": 1,
+      "min": 0.057,
+      "median": 0.057,
+      "p95": 0.057,
+      "max": 0.057
+    },
+    {
+      "step": "bulk_generate_21_done",
+      "n": 1,
+      "min": 4.102,
+      "median": 4.102,
+      "p95": 4.102,
+      "max": 4.102
+    },
+    {
+      "step": "bulk_generate_22_paint",
+      "n": 1,
+      "min": 0.12,
+      "median": 0.12,
+      "p95": 0.12,
+      "max": 0.12
+    },
+    {
+      "step": "bulk_generate_22_done",
+      "n": 1,
+      "min": 4.067,
+      "median": 4.067,
+      "p95": 4.067,
+      "max": 4.067
+    },
+    {
+      "step": "bulk_generate_23_paint",
+      "n": 1,
+      "min": 0.06,
+      "median": 0.06,
+      "p95": 0.06,
+      "max": 0.06
+    },
+    {
+      "step": "bulk_generate_23_done",
+      "n": 1,
+      "min": 4.068,
+      "median": 4.068,
+      "p95": 4.068,
+      "max": 4.068
+    },
+    {
+      "step": "bulk_generate_24_paint",
+      "n": 1,
+      "min": 0.096,
+      "median": 0.096,
+      "p95": 0.096,
+      "max": 0.096
+    },
+    {
+      "step": "bulk_generate_24_done",
+      "n": 1,
+      "min": 4.069,
+      "median": 4.069,
+      "p95": 4.069,
+      "max": 4.069
+    },
+    {
+      "step": "bulk_history_after_cap",
+      "n": 1,
+      "min": 0.059,
+      "median": 0.059,
+      "p95": 0.059,
+      "max": 0.059
+    },
+    {
+      "step": "bulk_file_after_cap",
+      "n": 1,
+      "min": 0.125,
+      "median": 0.125,
+      "p95": 0.125,
+      "max": 0.125
+    }
+  ],
+  "summary": {
+    "checks_total": 41,
+    "checks_failed": 0,
+    "failed": [],
+    "console_errors_total": 0,
+    "console_errors_unhandled": [],
+    "page_errors": [],
+    "requests_failed": [],
+    "anomalies": [
+      "finding: a VRF/VLAN name accepted by the manager's own validation (up to 64 chars) can still exceed the real netlab engine's own 16-character identifier limit; the failure is clean but the error text is a low-level engine message (\"...must be a 16-character identifier, found str\"), not a manager-level explanation of the real limit. errors=['Errors encountered while processing topology.yml', 'IncorrectType in topology: topology.vrfs.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx must be a 16-character identifier, found str', 'Fatal error in netlab: Cannot proceed beyond this point due to errors, exiting']"
+    ]
+  }
+}

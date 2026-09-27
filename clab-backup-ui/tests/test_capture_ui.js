@@ -196,3 +196,22 @@ test('every rendered link including coincident nodes exposes both endpoint actio
   assert.match(markup,/data-capture-endpoints=/);assert.match(markup,/node1/);assert.match(markup,/node2/);assert.match(markup,/role="button"/);assert.match(markup,/tabindex="0"/);
  }
 });
+
+test('QA-013: a Junos or IOS XR device\'s diagram ports are matched through their container names, labelled with the port, and "not found" is said only of a port whose veth is absent',async()=>{
+ const links=[[{node:'r1',interface:'ge-0/0/0',capture_interface:'eth1'},{node:'r2',interface:'eth1',capture_interface:'eth1'}],[{node:'r1',interface:'ge-0/0/1',capture_interface:'eth2'},{node:'r2',interface:'eth2',capture_interface:'eth2'}],[{node:'r1',interface:'ge-0/0/5',capture_interface:'eth6'},{node:'r2',interface:'eth6',capture_interface:'eth6'}]];
+ const h=mapHarness(['eth0','eth1','eth2','tap1','tap2','lo'],links);
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint=''",h.c);
+ await h.c.refreshCaptureTargets();
+ const first=h.$('capture-interfaces').innerHTML,rest=h.$('capture-interfaces-all').innerHTML;
+ assert.match(first,/value="eth1"[^>]*> <span>eth1<\/span> <small>ge-0\/0\/0<\/small>/,'the connected veth is listed with the device\'s own port name');
+ assert.match(first,/value="eth2"/);assert.doesNotMatch(first,/value="eth0"|value="tap1"|value="lo"/,'management, tap and loopback stay behind the toggle');
+ assert.doesNotMatch(first,/ge-0\/0\/5/,'a port whose veth the VM does not list is not offered as connected');
+ assert.match(rest,/value="eth0"/);assert.match(rest,/value="tap1"/);
+ assert.equal(h.$('capture-primary-legend').textContent,'Connected interfaces');
+ assert.match(h.$('capture-status').textContent,/Diagram port ge-0\/0\/5 was not found on the VM/,'only the absent port is reported, by its diagram name');
+ // Every wired port present: no "not found" at all.
+ const ok=mapHarness(['eth0','eth1','eth2','lo'],links.slice(0,2));
+ vm.runInContext("captureLab='lab';captureNode='clab-demo-r1';captureHint=''",ok.c);
+ await ok.c.refreshCaptureTargets();
+ assert.match(ok.$('capture-status').textContent,/Tick the interfaces to capture/);assert.doesNotMatch(ok.$('capture-status').textContent,/not found/);
+});

@@ -1,0 +1,380 @@
+{
+ "started": "2026-09-27T15:53:00+00:00",
+ "manager": "1.30.47",
+ "containerlab": "0.79.0",
+ "lab": "restore-square",
+ "lab_id": "174386ec12ee496190c585c5796b2662",
+ "device": "clab-restore-square-vjunos-switch",
+ "label": "vjunos-switch",
+ "runs": {
+  "map-running": {
+   "before": {
+    "clab-restore-square-ceos": {
+     "id": "a63190f2555b9b529f22227622bb4fbb124dfbf43530f56c43211741a24dd679",
+     "started": "2026-09-27T15:16:44.791685913Z",
+     "status": "running",
+     "pid": 2567309
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "44bd278f153868bc772d8662fc0f2e3591b8dd49817e8560c5becae95135c7c6",
+     "started": "2026-09-27T15:14:54.057460651Z",
+     "status": "running",
+     "pid": 2553471
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "c3d565f4bd1d865eb480b07d51a61c4596826c40c8f1368422be6bced25b8262",
+     "started": "2026-09-27T15:14:54.05842903Z",
+     "status": "running",
+     "pid": 2553477
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "423cb69b2f23666c125ec16a688f42eaa2ce7fe4fee2d49affc5d796c36b5aba",
+     "started": "2026-09-27T15:46:44.738663865Z",
+     "status": "running",
+     "pid": 2652632
+    },
+    "clab-restore-square-host1": {
+     "id": "ae1225dda796a8bffc229a1924edac1369983060be63273c713afba22e7cbcd4",
+     "started": "2026-09-27T15:16:31.393699831Z",
+     "status": "running",
+     "pid": 2565080
+    }
+   },
+   "links_before": [
+    "eth2@if215",
+    "eth1@if218",
+    "eth3@if221"
+   ],
+   "entry": "map",
+   "design_before": {
+    "design_revision": "c80a6c7278ecb6083bc9e883",
+    "design_updated": "2026-09-27T02:53:26.674998+00:00",
+    "generations": [
+     [
+      "d6334bf4f22c425d849432b6cdd20ea4",
+      "succeeded"
+     ],
+     [
+      "9c4456611e754e71a88b7ddea6311926",
+      "succeeded"
+     ],
+     [
+      "44871fdd6f244fe4af50c734a2d19961",
+      "succeeded"
+     ],
+     [
+      "f99b9f8605c4451f8f18b94dc50b54ac",
+      "succeeded"
+     ],
+     [
+      "b37045342ee0408282eadf0f5d718f42",
+      "succeeded"
+     ],
+     [
+      "07503fb90ae34fa2ba7caa73783bb9a3",
+      "failed"
+     ],
+     [
+      "6a7f2374899447039254253e49baed30",
+      "succeeded"
+     ],
+     [
+      "ad5faba619c44dcdae4ebc6f77276acf",
+      "succeeded"
+     ],
+     [
+      "57371369e14e483bb7e25ee6f64c6f3f",
+      "succeeded"
+     ]
+    ],
+    "git_binding": {
+     "binding_id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+     "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2",
+     "repository": {
+      "id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+      "label": "CLAB-MNGR-DEV-LLM / restore-square/qa-1-30-37",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "restore-square/qa-1-30-37",
+      "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "last_deployed": ""
+   },
+   "confirmed_at": "2026-09-27T15:53:06+00:00",
+   "job": {
+    "id": "34af26dbb20b40b29c8747982b9594cd",
+    "action": "restart-node",
+    "node": "clab-restore-square-vjunos-switch",
+    "node_label": "vjunos-switch",
+    "status": "failed",
+    "exit_code": 0,
+    "message": "containerlab restarted the device, but its container is exited (Exited (1) 2 seconds ago) right after starting. Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0.79.0. Redeploy the lab to recreate the device; configuration changes that were not saved to its startup configuration are lost either way.",
+    "created": "2026-09-27T15:53:06.058213+00:00",
+    "started": "2026-09-27T15:53:06.070228+00:00",
+    "finished": "2026-09-27T15:53:17.456570+00:00"
+   },
+   "job_output": "15:53:06 INFO Parsing & checking topology file=restore-square.clab.yml\n15:53:14 INFO Restored link node=vjunos-switch interface=eth1\n15:53:14 INFO Restored link node=vjunos-switch interface=eth2\n15:53:14 INFO Restored link node=vjunos-switch interface=eth3\n",
+   "after": {
+    "clab-restore-square-ceos": {
+     "id": "a63190f2555b9b529f22227622bb4fbb124dfbf43530f56c43211741a24dd679",
+     "started": "2026-09-27T15:16:44.791685913Z",
+     "status": "running",
+     "pid": 2567309
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "44bd278f153868bc772d8662fc0f2e3591b8dd49817e8560c5becae95135c7c6",
+     "started": "2026-09-27T15:14:54.057460651Z",
+     "status": "running",
+     "pid": 2553471
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "c3d565f4bd1d865eb480b07d51a61c4596826c40c8f1368422be6bced25b8262",
+     "started": "2026-09-27T15:53:14.801172286Z",
+     "status": "exited",
+     "pid": 0
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "423cb69b2f23666c125ec16a688f42eaa2ce7fe4fee2d49affc5d796c36b5aba",
+     "started": "2026-09-27T15:46:44.738663865Z",
+     "status": "running",
+     "pid": 2652632
+    },
+    "clab-restore-square-host1": {
+     "id": "ae1225dda796a8bffc229a1924edac1369983060be63273c713afba22e7cbcd4",
+     "started": "2026-09-27T15:16:31.393699831Z",
+     "status": "running",
+     "pid": 2565080
+    }
+   },
+   "links_after": [],
+   "readiness": {
+    "states": [
+     [
+      "2026-09-27T15:53:18+00:00",
+      "unavailable"
+     ]
+    ],
+    "ready_at": null,
+    "budget_s": 240
+   },
+   "design_after": {
+    "design_revision": "c80a6c7278ecb6083bc9e883",
+    "design_updated": "2026-09-27T02:53:26.674998+00:00",
+    "generations": [
+     [
+      "d6334bf4f22c425d849432b6cdd20ea4",
+      "succeeded"
+     ],
+     [
+      "9c4456611e754e71a88b7ddea6311926",
+      "succeeded"
+     ],
+     [
+      "44871fdd6f244fe4af50c734a2d19961",
+      "succeeded"
+     ],
+     [
+      "f99b9f8605c4451f8f18b94dc50b54ac",
+      "succeeded"
+     ],
+     [
+      "b37045342ee0408282eadf0f5d718f42",
+      "succeeded"
+     ],
+     [
+      "07503fb90ae34fa2ba7caa73783bb9a3",
+      "failed"
+     ],
+     [
+      "6a7f2374899447039254253e49baed30",
+      "succeeded"
+     ],
+     [
+      "ad5faba619c44dcdae4ebc6f77276acf",
+      "succeeded"
+     ],
+     [
+      "57371369e14e483bb7e25ee6f64c6f3f",
+      "succeeded"
+     ]
+    ],
+    "git_binding": {
+     "binding_id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+     "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2",
+     "repository": {
+      "id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+      "label": "CLAB-MNGR-DEV-LLM / restore-square/qa-1-30-37",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "restore-square/qa-1-30-37",
+      "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "last_deployed": ""
+   }
+  }
+ },
+ "chromium": "153.0.8010.12",
+ "checks": [
+  {
+   "name": "the map menu offers Restart device\u2026 for the device",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "name": "the review is titled for the one device",
+   "ok": true,
+   "detail": "Restart vjunos-switch?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the vJunos-switch image: its container cannot be started a seco"
+  },
+  {
+   "name": "the review names the device and the lab and the native operation",
+   "ok": true,
+   "detail": "Restart vjunos-switch?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with conta"
+  },
+  {
+   "name": "the review says what drops and does not promise unrelated traffic is untouched",
+   "ok": true,
+   "detail": "Restart vjunos-switch?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with conta"
+  },
+  {
+   "name": "the review says nothing is saved, backed up, reset or reapplied",
+   "ok": true,
+   "detail": "Restart vjunos-switch?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with conta"
+  },
+  {
+   "name": "the affected list is the one device",
+   "ok": true,
+   "detail": "Restart vjunos-switch?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with conta"
+  },
+  {
+   "name": "the command names exactly one --node",
+   "ok": true,
+   "detail": "start --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 12 hours ago to Git.\n\n1 device affected: vjunos-switch (clab-restore-square-vjunos-switch, running). "
+  },
+  {
+   "name": "the confirm button is the destructive Restart device",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "Cancel starts nothing",
+   "ok": true,
+   "detail": "jobs grew"
+  },
+  {
+   "name": "Cancel leaves the container untouched",
+   "ok": true,
+   "detail": "{\"id\": \"c3d565f4bd1d865eb480b07d51a61c4596826c40c8f1368422be6bced25b8262\", \"started\": \"2026-09-27T15:14:54.05842903Z\", \"status\": \"running\", \"pid\": 2553477}"
+  },
+  {
+   "name": "the device reads Restarting while the job runs",
+   "ok": true,
+   "detail": "pill: Restarting"
+  },
+  {
+   "name": "the lab banner names the device being restarted",
+   "ok": true,
+   "detail": "Restarting vjunos-switch\u2026DetailsExecuting on the VMStart labView outputView progressTry againRetryDetailsCheck credentialsVM connection\u2026Match to a running lab\u2026Review and remove\u2026Dismiss\u00d7"
+  },
+  {
+   "name": "one Restart device job exists for the device",
+   "ok": true,
+   "detail": "{\"id\": \"34af26dbb20b40b29c8747982b9594cd\", \"lab_id\": \"174386ec12ee496190c585c5796b2662\", \"name\": \"restore-square\", \"action\": \"restart-node\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"created\": \"2026-09-27T15:53:06.058213+00:00\", \"status\": \"running\", \""
+  },
+  {
+   "name": "the job succeeded",
+   "ok": false,
+   "detail": "containerlab restarted the device, but its container is exited (Exited (1) 2 seconds ago) right after starting. Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0."
+  },
+  {
+   "name": "the job output is containerlab's own restart log",
+   "ok": true,
+   "detail": "15:53:06 INFO Parsing & checking topology file=restore-square.clab.yml\n15:53:14 INFO Restored link node=vjunos-switch interface=eth1\n15:53:14 INFO Restored link node=vjunos-switch interface=eth2\n15:53"
+  },
+  {
+   "name": "the job message counts the restored links",
+   "ok": false,
+   "detail": "containerlab restarted the device, but its container is exited (Exited (1) 2 seconds ago) right after starting. Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0."
+  },
+  {
+   "name": "every dataplane link of the device was restored",
+   "ok": true,
+   "detail": "restored 3, expected 3"
+  },
+  {
+   "name": "the target kept its container id and has a new start time",
+   "ok": false,
+   "detail": "{\"id\": \"c3d565f4bd1d865eb480b07d51a61c4596826c40c8f1368422be6bced25b8262\", \"started\": \"2026-09-27T15:53:14.801172286Z\", \"status\": \"exited\", \"pid\": 0}"
+  },
+  {
+   "name": "the other containers kept their ids, start times and processes",
+   "ok": true,
+   "detail": "{\"clab-restore-square-ceos\": {\"id\": \"a63190f2555b9b529f22227622bb4fbb124dfbf43530f56c43211741a24dd679\", \"started\": \"2026-09-27T15:16:44.791685913Z\", \"status\": \"running\", \"pid\": 2567309}, \"clab-restore-square-cjunosevolved\": {\"id\": \"44bd278f153868bc772d8662fc0f2e3591b8dd49817e8560c5becae95135c7c6\", \"started\": \"2026-09-27T15:14:54.057460651Z\", \"status\": \"running\", \"pid\": 2553471}, \"clab-restore-squa"
+  },
+  {
+   "name": "the device has its dataplane interfaces back",
+   "ok": false,
+   "detail": ""
+  },
+  {
+   "name": "the device went back through Starting (its old proof was dropped)",
+   "ok": false,
+   "detail": "[[\"2026-09-27T15:53:18+00:00\", \"unavailable\"]]"
+  },
+  {
+   "name": "the device is Ready again with a check made after the restart (within 240 s)",
+   "ok": false,
+   "detail": "[[\"2026-09-27T15:53:18+00:00\", \"unavailable\"]]"
+  },
+  {
+   "name": "the rail reads Ready for the device again",
+   "ok": false,
+   "detail": "Unavailable"
+  },
+  {
+   "name": "the design, its plans, the Git binding and the deployment time are untouched",
+   "ok": true,
+   "detail": "{\"before\": {\"design_revision\": \"c80a6c7278ecb6083bc9e883\", \"design_updated\": \"2026-09-27T02:53:26.674998+00:00\", \"generations\": [[\"d6334bf4f22c425d849432b6cdd20ea4\", \"succeeded\"], [\"9c4456611e754e71a88b7ddea6311926\", \"succeeded\"], [\"44871fdd6f244fe4af50c734a2d19961\", \"succeeded\"], [\"f99b9f8605c4451f8f18b94dc50b54ac\", \"succeeded\"], [\"b37045342ee0408282eadf0f5d718f42\", \"succeeded\"], [\"07503fb90ae34f"
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "shots": [
+  "vjunos-switch-1553-map-running-01-map-menu.png",
+  "vjunos-switch-1553-map-running-02-review.png",
+  "vjunos-switch-1553-map-running-03-restarting.png",
+  "vjunos-switch-1553-map-running-04-ready-again.png"
+ ],
+ "finished": "2026-09-27T15:57:24+00:00"
+}

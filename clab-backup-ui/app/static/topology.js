@@ -27,7 +27,9 @@ map.addEventListener('click',mapAction);map.addEventListener('keydown',e=>{if(['
 function mapDeviceState(n){return typeof deviceState==='function'?deviceState(n):{key:n.ssh_ready?'ready':'neutral',label:n.ssh_ready?'Ready':'',detail:'',pill:n.ssh_ready?'ok':'neutral'};}
 function mapStateKey(n,lab){
  const ds=mapDeviceState(n);let key=MAP_STATE_KEYS.includes(ds.key)?ds.key:'neutral';
- if(!n.ssh_ready&&typeof labStateOf==='function'&&labStateOf(lab).key==='working')key='working';
+ // A lab-wide operation puts every device that is not ready to "working"; Restart device names its one
+ // device (job.node), and the other devices keep their own state.
+ if(!n.ssh_ready&&typeof labStateOf==='function'){const ls=labStateOf(lab);if(ls.key==='working'&&(!ls.job?.node||ls.job.node===n.name))key='working';}
  return {key,ds};
 }
 function renderMapState(){
@@ -87,10 +89,13 @@ function openNodeMenu(element,x,y){
  const n=current()?.nodes.find(n=>n.name===element.dataset.mapNode);if(!n)return;
  contextLab=activeId;contextNode=element;
  const ds=mapDeviceState(n),captureAttrs=typeof captureActionAttrs==='function'?captureActionAttrs():'',captureOff=/\bdisabled\b/.test(captureAttrs),backupReason=nodeBackupReason(n);
+ // Restart device (one node, operations.js): the same eligibility the Devices view uses, with its reason.
+ const restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};
  nodeMenu.innerHTML=`<div class="context-node-name">${esc(n.short_name||n.name)}<span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span></div>`
  +`<button type="button" role="menuitem" data-terminal="${esc(n.name)}" ${n.ssh_ready?'':`disabled title="${esc(ds.detail)}"`}>Open CLI <span class="external" aria-hidden="true">↗</span>${n.ssh_ready?'':nodeMenuReason(ds.detail)}</button>`
  +`<button type="button" role="menuitem" data-capture="${esc(n.name)}" ${captureAttrs}>Capture traffic…${captureOff?nodeMenuReason('Packet capture isn’t set up on this VM yet — see Tools › Packet capture.'):''}</button>`
  +`<button type="button" role="menuitem" data-backup="${esc(n.name)}" ${backupReason?`disabled title="${esc(backupReason)}"`:''}>Back up configuration${nodeMenuReason(backupReason)}</button>`
+ +`<button type="button" role="menuitem" data-restart="${esc(n.name)}" class="danger" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…${restart.ok?'':nodeMenuReason(restart.reason)}</button>`
  +`<button type="button" role="menuitem" data-details="${esc(n.name)}">Device details</button>`;
  nodeMenu.hidden=false;nodeMenu.style.left=Math.max(8,Math.min(x,window.innerWidth-nodeMenu.offsetWidth-8))+'px';nodeMenu.style.top=Math.max(8,Math.min(y,window.innerHeight-nodeMenu.offsetHeight-8))+'px';nodeMenu.querySelector('button:not(:disabled)')?.focus();
 }

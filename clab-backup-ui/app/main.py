@@ -23,7 +23,7 @@ from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
 from .discovery import Discovery, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
-from .lab_operations import LabOperations, last_deployed, operation_busy
+from .lab_operations import LabOperations, last_deployed, operation_busy, restarting_nodes
 from .git_progress import GitProgress, public_job as public_git_job
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
@@ -43,7 +43,7 @@ def create_app(data_dir=None):
     services=NodeServices(store)
     readiness_monitor=ReadinessMonitor(store,services,runner)
     discovery=Discovery(store)
-    operations=LabOperations(store,discovery)
+    operations=LabOperations(store,discovery,readiness_monitor)
     git_progress=GitProgress(store,runner)
     restore=RestoreService(store,runner,git_progress)
     telemetry_retirement=TelemetryRetirement(store,services)
@@ -144,6 +144,7 @@ def create_app(data_dir=None):
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
         result['nodes']=[]
         with services.lock: checks={k:copy.deepcopy(v) for k,v in services.checks.items() if k[0]==lab['id']}
+        restarting=restarting_nodes(store.state,lab['id'])
         for n in lab['nodes']:
             row={k:copy.deepcopy(v) for k,v in n.items() if k not in ('username','password','enable_password','container_name')}
             row['available']=node_available(store.state,lab,n)
@@ -154,6 +155,9 @@ def create_app(data_dir=None):
             # SSH opens once the NOS has answered a login (linked labs); labs without a
             # deployment keep offering SSH whenever a login is configured.
             row['nos_login']=login_state(lab,n,row['available'],checks.get((lab['id'],n['name'])))
+            # A device with a Restart device job queued or running is neither ready nor merely booting:
+            # its login is proven again only after the restart has run (the job drops the old proof).
+            if n['name'] in restarting: row['nos_login']={'status':'restarting','message':'Restarting on the VM (containerlab restart --node); its login is checked again afterwards.'}
             row['ssh_ready']=row['login_configured'] and row['nos_login']['status'] in ('ready','unmonitored')
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)

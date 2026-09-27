@@ -1,6 +1,6 @@
 # Browser check: Network design tab
 
-Run 2026-09-27T03:02:31+00:00 against the fixture manager (real app on scratch data `/tmp/design-ui-fixture-7244_ido`, real `netlab` engine, no VM), Chromium 153.0.8010.12.
+Run 2026-09-27T17:20:42+00:00 against the fixture manager (real app on scratch data `/tmp/design-ui-fixture-eg46ht5v`, real `netlab` engine, no VM), Chromium 153.0.8010.12.
 
 29 of 29 checks passed; 0 console errors (0 handled HTTP responses); 0 page errors.
 
@@ -11,7 +11,7 @@ Run 2026-09-27T03:02:31+00:00 against the fixture manager (real app on scratch d
 | the devices table lists the three devices with their profiles | ok | r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude |
 | a pool inside the management network is refused | ok | addressing.lan.ipv4: Overlaps the lab management network containerlab default management ipv4-subnet |
 | editing marks the design as unsaved | ok | Unsaved changes Unsaved changes |
-| the design saves without problems | ok | No design yet No design yet \|  |
+| the design saves without problems | ok | Design saved, no plan yet Design saved, no plan yet \|  |
 | the advanced editor shows the saved intent with the guided values | ok | {   "schema": 1,   "label": "",   "families": {     "ipv4": true,     "ipv6": true   },   "addressing": {     "loopback": {       "ipv4": "10.255.0.0/24",       |
 | the design-vrfs table is rendered | ok |  |
 | the design-vlans table is rendered | ok |  |
@@ -22,16 +22,16 @@ Run 2026-09-27T03:02:31+00:00 against the fixture manager (real app on scratch d
 | a static route added through the table reaches the JSON | ok | {   "schema": 1,   "label": "",   "families": {     "ipv4": true,     "ipv6": true   },   "addressing": {     "loopback": {       "ipv4": "10.255.0.0/24",       |
 | the vrf and routing modules were switched on with the tables | ok | {   "schema": 1,   "label": "",   "families": {     "ipv4": true,     "ipv6": true   },   "addressing": {     "loopback": {       "ipv4": "10.255.0.0/24",       |
 | the design with the guided tables saves without problems | ok |  |
-| the plan lists every device with a loopback and interfaces | ok |        Generated planPlan generated just now.Cancel              WarningsWarning in vrf: Node r3 uses no VRFs, removing 'vrf' from node modules       What chang |
-| the plan shows the containerlab ports beside the device ports | ok |        Generated planPlan generated just now.Cancel              WarningsWarning in vrf: Node r3 uses no VRFs, removing 'vrf' from node modules       What chang |
-| BGP sessions appear in the plan | ok |        Generated planPlan generated just now.Cancel              WarningsWarning in vrf: Node r3 uses no VRFs, removing 'vrf' from node modules       What chang |
+| the plan lists every device with a loopback and interfaces | ok |        Generated planPlan generated just now.Back to newest planCancel              Warnings (1)Warning in vrf: Node r3 uses no VRFs, removing 'vrf' from node m |
+| the plan shows the containerlab ports beside the device ports | ok |        Generated planPlan generated just now.Back to newest planCancel              Warnings (1)Warning in vrf: Node r3 uses no VRFs, removing 'vrf' from node m |
+| BGP sessions appear in the plan | ok |        Generated planPlan generated just now.Back to newest planCancel              Warnings (1)Warning in vrf: Node r3 uses no VRFs, removing 'vrf' from node m |
 | compatibility says generated, not live tested | ok | Devicebgpipv4ipv6ospfv2ospfv3static_routesvrfr1Generated, not yet tested liveGenerated, not yet tested liveGenerated, not yet tested liveGenerated, not yet test |
-| the files card lists initial, ospf, bgp, vrf and routing for a device | ok |        Generated files       Generated configuration fragments, not backups. Applying them to devices is not available yet.       r1normalize 60 B Viewinitial 8 |
-| the ZIP download link points at the generation | ok | /api/labs/6593470145184a5f896cd4393eccf381/design/generations/2e1fda8f0c8a417ba56be9e8fdeba0e7/download |
+| the files card lists initial, ospf, bgp, vrf and routing for a device | ok |        Generated files       Generated configuration fragments, not backups. They reach devices only through Apply to devices… on the plan card.       r1normali |
+| the ZIP download link points at the generation | ok | /api/labs/ceae6a4ca229438a983beb8c601d674a/design/generations/2a9065433ee34beb983d18abf9ab5faa/download |
 | a generated file opens in a dialog | ok |  |
 | EIGRP on cEOS fails the plan with the device and the reason named | ok | r1: eigrp is not supported on kind arista_ceos (netlab 26.09 module 'eigrp' does not support device profile 'eos')r2: eigrp is not supported on kind arista_ceos |
 | a reload keeps the saved design | ok |  |
-| the history lists the generated plans | ok | HistoryFailed just now The design asks for something a device in this lab cannot do. Nothing was generated.Succeeded just now Plan generated |
+| the history lists the generated plans | ok | HistoryFailed just now The design asks for something a device in this lab cannot do. Nothing was generated. Shown aboveSucceeded just now Plan generated View |
 | the export item is present | ok |  |
 | no horizontal scroll at tablet width | ok | scrollWidth=768 |
 | the Design tab adds no horizontal overflow at phone width beyond the shell | ok | design=428 shell=428 |

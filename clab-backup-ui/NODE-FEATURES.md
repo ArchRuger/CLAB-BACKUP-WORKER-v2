@@ -21,6 +21,13 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
   connects to the saved management address/port, not the container wrapper, with
   the assigned profile, the containerlab default login or the imported credentials.
   For linked labs it opens once the readiness monitor has seen the NOS answer.
+- **Restart device…** (also in the device panel and the Devices technical view) restarts only this
+  device through containerlab's own node-scoped restart on the VM (`containerlab restart --node`,
+  what the VS Code extension's *Restart node* runs): the container stops and starts with its links
+  kept; a stopped device is started and its links restored. It goes through the reviewed operation
+  dialog like every lab command, names the device and the lab, and saves, backs up, resets or
+  reapplies nothing. The device reads *Restarting*, then *Starting* until it answers a login again
+  (its earlier login proof is dropped, so an old *Ready* never survives a restart).
 - **Back up configuration** queues only this node using the NOS backup engine. This works even
   when the node is excluded from scheduled backups, and does not reset the lab
   schedule. The single backup queue still allows one job at a time.
@@ -109,8 +116,8 @@ After an upgrade, verify on a lab:
 3. SSH opens, `show version` answers, resize, disconnect and reconnect work.
 4. A Linux node connects with a generic profile if present.
 5. A node drawer shows its connection settings and saved backup downloads.
-6. Right-click on the map offers Open CLI, Capture traffic, Back up configuration and
-   Device details; a link opens the
+6. Right-click on the map offers Open CLI, Capture traffic, Back up configuration, Restart
+   device… and Device details; a link opens the
    capture dialog on either endpoint.
 
 See `VALIDATION.md` for what was actually tested for each release.
@@ -140,7 +147,7 @@ reconstructed from an export. Schema 3 records the corrected drawing metadata; a
 map imported by an older importer shows a reminder to reimport the original files.
 
 Right-click a matched device for **Open CLI ↗**, **Capture traffic…**, **Back up
-configuration** and **Device details**; click a link to capture either end. The menu
+configuration**, **Restart device…** and **Device details**; click a link to capture either end. The menu
 header shows the device's state, and an action that is not available says why under
 its label. Keyboard users can focus a device and press Shift+F10, navigate with arrow
 keys, and press Escape to close the menu. Actions have the same credential/readiness

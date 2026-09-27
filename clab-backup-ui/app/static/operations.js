@@ -3,13 +3,21 @@
 // opLabels are the imperative student labels for every containerlab action (status.js keeps its own
 // in-progress table for the header and the banner); the review dialog, the output window and the
 // history rows all read from here so one operation has one name everywhere.
-const opLabels={deploy:'Start lab',redeploy:'Redeploy lab',destroy:'Destroy lab',apply:'Apply topology changes',start:'Start devices',stop:'Stop devices',restart:'Restart devices',save:'Save device configurations',inspect:'Show running devices','inspect-all':'Running labs on the VM',create:'Create topology file',delete:'Delete topology file',clone:'Download lab',publish:'Save lab to the VM',revise:'Save topology changes'};
-const opLifecycle=['deploy','start','stop','restart','redeploy','destroy','apply'];
-const opDisruptive=['stop','restart','redeploy','destroy','apply'];
+const opLabels={deploy:'Start lab',redeploy:'Redeploy lab',destroy:'Destroy lab',apply:'Apply topology changes',start:'Start devices',stop:'Stop devices',restart:'Restart all devices','restart-node':'Restart device',save:'Save device configurations',inspect:'Show running devices','inspect-all':'Running labs on the VM',create:'Create topology file',delete:'Delete topology file',clone:'Download lab',publish:'Save lab to the VM',revise:'Save topology changes'};
+const opLifecycle=['deploy','start','stop','restart','restart-node','redeploy','destroy','apply'];
+const opDisruptive=['stop','restart','restart-node','redeploy','destroy','apply'];
 let opCaps=null, opMenuLab='', opOutputTimer=null, opEditorContext=null;
-function opDialog(id,title,body){
- let dialog=$(id);if(!dialog){dialog=document.createElement('dialog');dialog.id=id;dialog.className='operations-dialog';document.body.append(dialog);}
- dialog.innerHTML=`<div class="dialog-head"><h2>${esc(title)}</h2><button class="icon-button" data-op-close aria-label="Close">×</button></div>${body}<p class="form-error" role="alert"></p>`;
+// Every operation dialog is named by its own heading (screen readers announce the title, not "dialog"),
+// and gives focus back to the control that opened it when it closes: `opener` names that control; without
+// one, whatever had focus when the dialog opened (a keyboard user keeps their place either way).
+function opDialog(id,title,body,opener){
+ let dialog=$(id);if(!dialog){dialog=document.createElement('dialog');dialog.id=id;dialog.className='operations-dialog';document.body.append(dialog);
+  if(typeof dialog.addEventListener==='function')dialog.addEventListener('close',()=>{const back=dialog._opener;dialog._opener=null;if(back&&typeof back.focus==='function'&&(typeof document==='undefined'||!document.body||typeof document.body.contains!=='function'||document.body.contains(back)))back.focus();});
+ }
+ if(!dialog.open){const active=typeof document!=='undefined'?document.activeElement:null;dialog._opener=opener||(active&&active!==document.body?active:null);}
+ else if(opener)dialog._opener=opener;
+ if(typeof dialog.setAttribute==='function')dialog.setAttribute('aria-labelledby',id+'-title');
+ dialog.innerHTML=`<div class="dialog-head"><h2 id="${esc(id)}-title">${esc(title)}</h2><button class="icon-button" data-op-close aria-label="Close">×</button></div>${body}<p class="form-error" role="alert"></p>`;
  dialog.querySelector('[data-op-close]').onclick=()=>dialog.close();if(!dialog.open)dialog.showModal();return dialog;
 }
 async function opTask(dialog,fn){
@@ -104,7 +112,10 @@ const opReviewCopy={
  deploy:{title:n=>`Start ${n}?`,body:'Creates and starts the devices in this topology as its file describes them, including any hooks, mounts and image pulls. Nothing is deleted; device logins open as the devices boot.',confirm:'Start lab'},
  start:{title:n=>`Start ${n}'s stopped devices?`,body:'Stopped devices start again with their existing configuration.',confirm:'Start devices'},
  stop:{title:()=>'Stop devices?',body:'Devices stop but keep their startup configuration.',confirm:'Stop devices'},
- restart:{title:()=>'Restart devices?',body:'Devices restart from their startup configuration. Open CLI sessions disconnect.',confirm:'Restart devices',danger:true},
+ restart:{title:n=>`Restart every device of ${n}?`,body:'Every device of the lab restarts through containerlab: each container stops and starts again with its links kept. CLI sessions to the lab drop and traffic stops while they restart; configuration changes you have not saved on a device may not survive. Nothing is saved, backed up, reset or reapplied for you.',confirm:'Restart all devices',danger:true},
+ // Restart device (one node): containerlab's own node-scoped restart, the operation the VS Code extension
+ // runs. The text names the device and the lab, what is interrupted, and what is not done for the student.
+ 'restart-node':{title:(n,v)=>`Restart ${v?.node_label||'this device'}?`,body:v=>`Only ${v.node_label||'this device'} in ${v.name} restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.`,confirm:'Restart device',danger:true},
  redeploy:{title:n=>`Redeploy ${n}?`,body:'Devices are destroyed and started again from the topology; unsaved device changes are lost. Save progress first if you need them.',confirm:'Redeploy lab',danger:true,cleanup:" The lab's generated folder on the VM is cleared as well."},
  destroy:{title:n=>`Destroy ${n}?`,body:v=>`The running devices are removed from the VM${v.options?.cleanup?" and the lab's generated folder is deleted":''}. Configuration changes you have not saved are lost. Your saved progress, checkpoints and backups remain.`,confirm:'Destroy lab',danger:true},
  apply:{title:n=>`Apply topology changes to ${n}?`,body:'The running lab is updated to match the topology file. Devices removed from the file are destroyed; connectivity may be interrupted.',confirm:'Apply changes',danger:true},
@@ -128,7 +139,7 @@ function opSaveLine(lab,value){
  const text=never?(lab.git_binding?'Never saved.':'Never saved — this lab has no save location yet.'):`Last saved ${opWhen(ps.at)} to Git.`;
  return `<p class="op-save-line${never||stale?' danger':''}">${esc(text)}</p>`;
 }
-async function opReview(request){
+async function opReview(request,opener){
  const value=await json('/operations/preview','POST',request);
  // The helper's plan carries no lab id; the request does.
  const labId=request.lab_id||value.lab_id||'';
@@ -150,15 +161,15 @@ async function opReview(request){
  ${warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
  <p>${esc(body)}</p>
  ${mapLine}
- ${disruptive&&value.action!=='destroy'?'<p>Configuration changes you have not saved are lost.</p>':''}
+ ${disruptive&&!['destroy','restart-node'].includes(value.action)?'<p>Configuration changes you have not saved are lost.</p>':''}
  ${opSaveLine(lab,value)}
- ${disruptive?'<p class="op-notice">Open CLI sessions to this lab will disconnect.</p>':''}
- ${copy.readonly||copy.quiet||value.action==='deploy'?'':`<p>${value.affected.length} running ${value.affected.length===1?'device':'devices'} affected</p>`}
+ ${disruptive&&!['restart','restart-node'].includes(value.action)?'<p class="op-notice">Open CLI sessions to this lab will disconnect.</p>':''}
+ ${copy.readonly||copy.quiet||value.action==='deploy'?'':value.action==='restart-node'?`<p>1 device affected: ${esc(value.node_label||'')} (${esc(value.affected[0]?.name||'')}, ${esc(value.affected[0]?.state||'')}). The other devices of ${esc(value.name)} are not restarted.</p>`:`<p>${value.affected.length} running ${value.affected.length===1?'device':'devices'} affected</p>`}
  ${plain?commandBlock:`<details><summary>Technical details</summary>${commandBlock}</details>`}
  ${copy.quiet&&typeof request.options?.text==='string'?`<details ${value.diff?'':'open'}><summary>Topology that will be saved (YAML)</summary><pre class="op-output" id="op-review-yaml">${esc(request.options.text)}</pre></details>`:''}
  ${value.diff?`<details open><summary>Topology file changes</summary><pre class="op-output">${esc(value.diff)}</pre></details>`:''}
  ${plain?'':'<p class="form-help">Runs on the lab VM. If the lab changes before you confirm, this check is repeated.</p>'}
- <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button>${lab&&lab.git_binding&&disruptive&&typeof gitSaveProgress==='function'?'<button class="button secondary" id="op-save-first">Save progress first</button>':''}<button class="button ${copy.danger?'danger':'primary'}" id="op-confirm">${esc(copy.confirm||label)}</button></div>`);
+ <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button>${lab&&lab.git_binding&&disruptive&&typeof gitSaveProgress==='function'?'<button class="button secondary" id="op-save-first">Save progress first</button>':''}<button class="button ${copy.danger?'danger':'primary'}" id="op-confirm">${esc(copy.confirm||label)}</button></div>`,opener);
  $('op-cancel').onclick=()=>dialog.close();
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
  $('op-confirm').onclick=()=>opTask(dialog,async()=>{
@@ -212,7 +223,7 @@ function opJobHint(job){
 }
 function opJobBanner(job){
  const label=opLabels[job.action]||job.action,done=job.status==='succeeded',failed=['failed','interrupted'].includes(job.status);
- const detail=[job.name,job.message].filter(Boolean).join(' · ');
+ const detail=[job.name,job.node_label,job.message].filter(Boolean).join(' · ');
  const exit=job.exit_code===null||job.exit_code===undefined?'':'Exit code '+job.exit_code;
  return {tone:done?'good':failed?'bad':'running',title:done?`✔ ${label} succeeded`:failed?`✖ ${label} ${job.status}`:`${label} ${job.status}…`,detail,exit,...(opJobHint(job)?{hint:opJobHint(job)}:{})};
 }
@@ -258,7 +269,7 @@ function opPublishedPath(job){if(!job||job.status!=='succeeded')return '';return
 async function opHistory(labId=''){
  const jobs=await(await api('/operations')).json();
  const lab=labId?(state.labs||[]).find(l=>l.id===labId):null;
- const dialog=opDialog('operation-history','Operation history'+(lab?' · '+lab.name:''),`<p>Past lab operations and their output are kept on this manager.</p><div class="op-history">${jobs.filter(j=>!labId||j.lab_id===labId).map(j=>`<button class="button secondary" data-job="${esc(j.id)}"><strong>${esc(j.name)} · ${esc(opLabels[j.action]||j.action)}</strong><small>${esc(opStatusWord(j.status))} · ${esc(opWhen(j.created))}</small></button>`).join('')||'<p>No lab operations yet. Starting, stopping or redeploying a lab shows up here.</p>'}</div>`);
+ const dialog=opDialog('operation-history','Operation history'+(lab?' · '+lab.name:''),`<p>Past lab operations and their output are kept on this manager.</p><div class="op-history">${jobs.filter(j=>!labId||j.lab_id===labId).map(j=>`<button class="button secondary" data-job="${esc(j.id)}"><strong>${esc(j.name)}${j.node_label?' · '+esc(j.node_label):''} · ${esc(opLabels[j.action]||j.action)}</strong><small>${esc(opStatusWord(j.status))} · ${esc(opWhen(j.created))}</small></button>`).join('')||'<p>No lab operations yet. Starting, stopping or redeploying a lab shows up here.</p>'}</div>`);
  dialog.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>opShowJob(b.dataset.job));
 }
 // Deploy lab keeps the manager in step with the VM: the workspace (nodes, map and VM
@@ -487,6 +498,30 @@ function opQuickActions(lab,discovery,isBusy=false){
  const available=!!lab&&!!opPath(lab)&&!!discovery?.connected&&known&&!isBusy;
  const blocked=!lab?'':!discovery?.connected?'Connect the VM first':isBusy?'Wait for the current operation to finish':!opPath(lab)?'This lab has no topology file on the VM (Advanced › Deployment details)':!known?'Lab status is unknown — refresh the lab list':'';
  return {startAction:status==='Not deployed'?'deploy':'start',canStart:available&&status!=='Running',canDestroy:available&&status!=='Not deployed',available,reason:blocked||(status==='Running'?'The lab is already running':''),destroyReason:blocked||(status==='Not deployed'?'Nothing to destroy — the lab is not running':'')};
+}
+// Restart device (one node): whether the action is available for this device, and the reason when it is
+// not — one answer for the map's right-click menu, the Devices table and the device panel. A stopped
+// device is eligible (containerlab's start/restore path); a device the VM does not list is not.
+function opRestartState(lab,n,discovery,isBusy=false){
+ const dev=n?.short_name||n?.name||'This device',status=lab?.deployment?.status;
+ if(!lab||!n)return {ok:false,reason:'This device is not in the lab'};
+ if(!discovery?.connected)return {ok:false,reason:'Connect the VM first'};
+ if(isBusy)return {ok:false,reason:'Wait for the current operation to finish'};
+ if(!opPath(lab))return {ok:false,reason:'This lab has no topology file on the VM (Advanced › Deployment details)'};
+ if(!lab.deployment_name||status==='Unlinked')return {ok:false,reason:'The lab is not matched to a running lab'};
+ if(status==='Unknown'||!status)return {ok:false,reason:'Lab status is unknown — refresh the lab list'};
+ if(status==='Not deployed')return {ok:false,reason:'The lab is not running'};
+ if(!n.discovered||n.runtime_state==='absent')return {ok:false,reason:`${dev} is not deployed on the VM`};
+ if(opCaps&&opCaps.actions&&opCaps.actions['restart-node']?.available!==true)return {ok:false,reason:'Not available on this VM — its containerlab or helper cannot restart one device (see Diagnostics)'};
+ return {ok:true,reason:''};
+}
+async function opRestartDevice(labId,name,opener){
+ try{await opCapabilities();}catch{opCaps=null;}
+ const lab=(state.labs||[]).find(l=>l.id===labId),n=lab?.nodes?.find(n=>n.name===name);
+ const check=opRestartState(lab,n,state.discovery,busy());
+ // The reason is the banner's headline (shell.js keeps this sentence as it is), not a folded detail.
+ if(!check.ok){const text='Restart device… is not available: '+check.reason;if(typeof showActionError==='function')showActionError(text);else notify(text);return;}
+ await opReview({lab_id:labId,action:'restart-node',node:name,options:{}},opener);
 }
 async function opQuickRun(kind){
  const lab=current(),actions=opQuickActions(lab,state.discovery,busy());

@@ -13,14 +13,16 @@ function stub(id){
   setPointerCapture(){},getBoundingClientRect(){return {left:0,top:0,right:10,bottom:10,width:10,height:10};},contains(){return false;}};
 }
 function mapNode(name,label){const n=stub('node-'+name);n.dataset={mapNode:name,label};n.title={textContent:''};n.querySelector=sel=>sel==='title'?n.title:null;return n;}
-function harness({lab,drawing,captureAttrs='',busy=false,jsonImpl}={}){
+function harness({lab,drawing,captureAttrs='',busy=false,jsonImpl,restart={ok:true,reason:''}}={}){
  const elements=new Map(),$=id=>{if(!elements.has(id))elements.set(id,stub(id));return elements.get(id);};
  const docListeners={},winListeners={};
  const document={activeElement:null,addEventListener(name,fn){(docListeners[name]=docListeners[name]||[]).push(fn);},querySelector(){return null;},querySelectorAll(){return [];},createElement:()=>stub('a')};
  const window={innerWidth:1366,innerHeight:768,addEventListener(name,fn){winListeners[name]=fn;}};
  const nodeMenu=$('node-context-menu');nodeMenu.hidden=true;nodeMenu.querySelector=()=>({focus(){nodeMenu.focused++;}});
- const calls={openDetails:[],handleNodeAction:0,notify:[],api:[],json:[],refresh:0};
- const context=vm.createContext({$,esc,document,window,console,URLSearchParams,JSON,activeId:lab?lab.id:'',state:{labs:lab?[lab]:[]},busy:()=>busy,openDetails(n){calls.openDetails.push(n);},handleNodeAction(){calls.handleNodeAction++;},notify(m){calls.notify.push(m);},
+ const calls={openDetails:[],handleNodeAction:0,notify:[],api:[],json:[],refresh:0,restart:[]};
+ // opRestartState (operations.js) decides Restart device's eligibility; the menu only asks it and shows its reason.
+ const context=vm.createContext({$,esc,document,window,console,URLSearchParams,JSON,activeId:lab?lab.id:'',state:{labs:lab?[lab]:[],discovery:{connected:true}},busy:()=>busy,openDetails(n){calls.openDetails.push(n);},handleNodeAction(){calls.handleNodeAction++;},notify(m){calls.notify.push(m);},
+  opRestartState(l,n,discovery,isBusy){calls.restart.push({lab:l?.id,n:n?.name,isBusy});return typeof restart==='function'?restart(n,isBusy):restart;},
   api:async url=>{calls.api.push(url);return {json:async()=>drawing===undefined?null:drawing};},topologyMarkup:d=>'<g data-nodes="'+d.nodes.length+'"></g>',measureTopology:()=>[0,0,100,50],syncProxies(){calls.synced=(calls.synced||0)+1;},setTimeout(){},closeMenus:()=>false,captureActionAttrs:()=>captureAttrs,
   json:async(path,method,data)=>{calls.json.push({path,method,data});return jsonImpl?jsonImpl(path,method,data):{started:0,skipped:[],at:''};},refresh:async()=>{calls.refresh++;}});
  context.current=()=>context.state.labs.find(l=>l.id===context.activeId);
@@ -42,15 +44,16 @@ test('the context menu leads with Open CLI, shows the state instead of the addre
  const h=harness({lab:lab(),captureAttrs:'disabled title="Packet capture is not enabled."'});
  h.context.openNodeMenu(element('r2'),100,100);
  const html=h.nodeMenu.innerHTML,list=items(html);
- assert.deepEqual(list.map(i=>i.kind),['terminal','capture','backup','details'],'student order: CLI, capture, backup, details');
- assert.equal(list.length,4);assert.equal(h.nodeMenu.hidden,false);assert.equal(h.nodeMenu.focused,1,'the first enabled item takes focus');
+ assert.deepEqual(list.map(i=>i.kind),['terminal','capture','backup','restart','details'],'student order: CLI, capture, backup, restart, details');
+ assert.equal(list.length,5);assert.equal(h.nodeMenu.hidden,false);assert.equal(h.nodeMenu.focused,1,'the first enabled item takes focus');
+ assert.equal(list[3].body,'Restart device…');assert.match(list[3].attrs,/class="danger"/);assert.doesNotMatch(list[3].attrs,/disabled/,'the one destructive per-device action, red, enabled for a deployed device');
  assert.match(html,/<div class="context-node-name">R2<span class="pill warn">Starting<\/span><\/div>/,'the header carries the state pill');
  assert.doesNotMatch(html,/\d+\.\d+\.\d+\.\d+|:22/,'the management address stays in the device panel');
  assert.match(list[0].attrs,/disabled title="R2 is still starting/);assert.match(list[0].body,/<small>R2 is still starting\. SSH opens automatically when it answers\. Use Test logins \(above\) or this device&#39;s Test login to check again now\.<\/small>/);
  assert.match(list[0].body,/Open CLI <span class="external" aria-hidden="true">↗<\/span>/);
  assert.match(list[1].attrs,/disabled/);assert.match(list[1].body,/<small>Packet capture isn’t set up on this VM yet — see Tools › Packet capture\.<\/small>/);
  assert.doesNotMatch(list[2].attrs,/disabled/,'a Ready device can be backed up');assert.doesNotMatch(list[2].body,/<small>/);
- assert.equal(list[3].body,'Device details');
+ assert.equal(list[4].body,'Device details');
  assert.doesNotMatch(html,/›_|ⓘ|↓/,'no text glyphs');
  h.context.openNodeMenu(element('r1'),0,0);const ready=items(h.nodeMenu.innerHTML);
  assert.doesNotMatch(ready[0].attrs,/disabled/);assert.doesNotMatch(ready[0].body,/<small>/);assert.match(h.nodeMenu.innerHTML,/<span class="pill ok">Ready<\/span>/);
@@ -193,4 +196,26 @@ test('Test logins starts the lab-wide refresh, reports what was skipped, and set
  assert.deepEqual(h.calls.notify,['Testing the SSH login of 2 devices… 1 device skipped — see each device for why.']);
  // No lab: never sends a request.
  const home=harness({});await home.context.runRailTest();assert.equal(home.calls.json.length,0);
+});
+
+test('Restart device in the menu follows the shared eligibility and its reason; only the restarting device reads as working on the map',()=>{
+ const h=harness({lab:lab(),restart:(n,isBusy)=>isBusy?{ok:false,reason:'Wait for the current operation to finish'}:n.name==='r4'?{ok:false,reason:'R4 is not deployed on the VM'}:{ok:true,reason:''}});
+ h.context.openNodeMenu(element('r4'),0,0);const list=items(h.nodeMenu.innerHTML);
+ assert.equal(list[3].kind,'restart');assert.match(list[3].attrs,/disabled title="R4 is not deployed on the VM"/);assert.match(list[3].body,/<small>R4 is not deployed on the VM<\/small>/);
+ assert.deepEqual(h.calls.restart.at(-1),{lab:'a',n:'r4',isBusy:false},'the menu asks the shared rule with the lab, the device and the busy flag');
+ h.context.openNodeMenu(element('r2'),0,0);assert.doesNotMatch(items(h.nodeMenu.innerHTML)[3].attrs,/disabled/,'a device that is still starting can be restarted: recovery is the point');
+ h.context.openNodeMenu(element('r3'),0,0);assert.doesNotMatch(items(h.nodeMenu.innerHTML)[3].attrs,/disabled/,'a device whose login failed can be restarted');
+ const busy=harness({lab:lab(),busy:true,restart:(n,isBusy)=>isBusy?{ok:false,reason:'Wait for the current operation to finish'}:{ok:true,reason:''}});
+ busy.context.openNodeMenu(element('r1'),0,0);assert.match(items(busy.nodeMenu.innerHTML)[3].body,/<small>Wait for the current operation to finish<\/small>/);
+ assert.deepEqual(busy.calls.restart.at(-1),{lab:'a',n:'r1',isBusy:true});
+ // The map: a lab-wide operation marks every not-ready device working; a Restart device job marks its device only.
+ const m=harness({lab:lab()});const nodes=['r1','r2','r3'].map(n=>mapNode(n,n.toUpperCase()));m.$('topology-map').querySelectorAll=()=>nodes;
+ const cls=n=>n.classList.list().filter(c=>c.startsWith('state-'));
+ m.context.labStateOf=()=>({key:'working',job:{action:'restart-node',node:'r3'}});m.context.renderMapState();
+ assert.deepEqual([cls(nodes[0]),cls(nodes[1]),cls(nodes[2])],[['state-ready'],['state-starting'],['state-working']],'R2 keeps Starting while R3 restarts');
+ m.context.labStateOf=()=>({key:'working',job:{action:'restart'}});m.context.renderMapState();
+ assert.deepEqual([cls(nodes[1]),cls(nodes[2])],[['state-working'],['state-working']],'a lab-wide operation keeps the old behaviour');
+ m.context.state.labs[0].nodes[2].nos_login={status:'restarting'};m.context.labStateOf=()=>({key:'running'});m.context.renderMapState();
+ assert.deepEqual(cls(nodes[2]),['state-working']);assert.equal(nodes[2].getAttribute('aria-label'),'R3 · Restarting');
+ assert.match(nodes[2].title.textContent,/R3 · Restarting\. R3 is restarting on the VM\./);
 });

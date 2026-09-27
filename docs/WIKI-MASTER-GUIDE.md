@@ -983,7 +983,7 @@ All lab operations…** for the complete list, or right-click a lab card on Home
 |---|---|
 | Start lab / Redeploy lab… / Destroy lab… | Operates on the original VM topology. Destroy always runs `containerlab destroy --cleanup`, so the containers and the generated lab folder (`clab-<name>`) go together; the review names the folder. Redeploy keeps that folder unless you choose **Redeploy and clear the lab folder…**, and falls back to destroy then deploy when necessary. |
 | Apply topology changes | Applies the original VM YAML when supported by installed Containerlab. |
-| Start stopped devices / Stop devices / Restart devices | Applies to every device in the open lab. Stop retains containers; destroy removes them. |
+| Start stopped devices / Stop devices / Restart all devices | Applies to every device in the open lab. Stop retains containers; destroy removes them. |
 | Show running devices / Running labs on the VM… | Readable table of topology, lab, device, kind/image, state/health and IPv4/IPv6. Failed or incomplete output remains visible for diagnosis. |
 | Save device configurations | Containerlab's kind-dependent save command. Manager backups are separate. |
 | Open all CLIs ↗ | Opens a launcher tab with one row per device and **Open all ready CLIs ↗**. Allow browser popups; at most 32 concurrent terminals/checks. |

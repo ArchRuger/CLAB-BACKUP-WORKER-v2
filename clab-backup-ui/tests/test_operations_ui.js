@@ -347,3 +347,71 @@ test('the topology preview drops the caption in both branches, sizes the dialog 
  assert.doesNotMatch(capturedBody,/<p>/,'no caption paragraph — the unpositioned branch either');
  assert.doesNotMatch(capturedBody,/default grid/);
 });
+
+test('Restart device is offered for a deployed device of a running or partly running lab, and every refusal has a reason',()=>{
+ const lab={id:'a',name:'square',deployment_name:'square',vm_project_path:'/srv/p/square.clab.yml',deployment:{status:'Running'}};
+ const dev={name:'clab-square-ceos',short_name:'ceos',discovered:true,runtime_state:'running'};
+ const plain=o=>JSON.parse(JSON.stringify(o));
+ assert.deepEqual(plain(context.opRestartState(lab,dev,{connected:true})),{ok:true,reason:''});
+ assert.deepEqual(plain(context.opRestartState(lab,{...dev,runtime_state:'exited'},{connected:true})),{ok:true,reason:''},'a stopped device takes the start/restore path');
+ assert.deepEqual(plain(context.opRestartState({...lab,deployment:{status:'Partially running'}},dev,{connected:true})),{ok:true,reason:''});
+ assert.deepEqual(plain(context.opRestartState(lab,{...dev,ssh_ready:false,nos_login:{status:'failed'}},{connected:true})),{ok:true,reason:''},'a device whose login fails is exactly the one to restart');
+ const cases=[
+  [context.opRestartState(lab,dev,{connected:false}),'Connect the VM first'],
+  [context.opRestartState(lab,dev,{connected:true},true),'Wait for the current operation to finish'],
+  [context.opRestartState({...lab,vm_project_path:''},dev,{connected:true}),'This lab has no topology file on the VM (Advanced › Deployment details)'],
+  [context.opRestartState({...lab,deployment_name:'',deployment:{status:'Unlinked'}},dev,{connected:true}),'The lab is not matched to a running lab'],
+  [context.opRestartState({...lab,deployment:{status:'Unknown'}},dev,{connected:true}),'Lab status is unknown — refresh the lab list'],
+  [context.opRestartState({...lab,deployment:{status:'Not deployed'}},dev,{connected:true}),'The lab is not running'],
+  [context.opRestartState(lab,{...dev,discovered:false,runtime_state:'absent'},{connected:true}),'ceos is not deployed on the VM'],
+  [context.opRestartState(null,dev,{connected:true}),'This device is not in the lab'],
+  [context.opRestartState(lab,null,{connected:true}),'This device is not in the lab'],
+ ];
+ for(const [result,reason] of cases){assert.equal(result.ok,false,reason);assert.equal(result.reason,reason);}
+ vm.runInContext("opCaps={actions:{'restart-node':{available:false}}}",context);
+ assert.match(context.opRestartState(lab,dev,{connected:true}).reason,/cannot restart one device/);
+ vm.runInContext("opCaps={actions:{'restart-node':{available:true}}}",context);assert.equal(context.opRestartState(lab,dev,{connected:true}).ok,true);
+ vm.runInContext("opCaps={actions:{restart:{available:true}}}",context);assert.match(context.opRestartState(lab,dev,{connected:true}).reason,/cannot restart one device/,'an older helper that does not know the action keeps it off');
+ vm.runInContext('opCaps=null',context);assert.equal(context.opRestartState(lab,dev,{connected:true}).ok,true,'capabilities not loaded yet: the server decides');
+});
+
+test('the Restart device review names the one device and the lab, what drops, and what is not done for the student',()=>{
+ const copy=vm.runInContext("opReviewCopy['restart-node']",context);const value={action:'restart-node',name:'square',node:'clab-square-ceos',node_label:'ceos',affected:[{name:'clab-square-ceos',state:'running'}]};
+ assert.equal(copy.title('square',value),'Restart ceos?');assert.equal(copy.confirm,'Restart device');assert.equal(copy.danger,true);
+ const body=copy.body(value);
+ assert.match(body,/^Only ceos in square restarts/);assert.match(body,/containerlab restart --node/);assert.match(body,/links kept/);
+ assert.match(body,/CLI sessions drop and traffic through it stops/);assert.match(body,/neighbouring devices lose their adjacencies/);
+ assert.match(body,/Configuration changes you have not saved on the device may not survive/);assert.match(body,/Nothing is saved, backed up, reset or reapplied for you\./);
+ assert.doesNotMatch(body,/other devices are not affected|unaffected|no other traffic/i,'never promises that unrelated traffic is untouched');
+ assert.equal(vm.runInContext("opLabels['restart-node']",context),'Restart device');assert.equal(vm.runInContext('opLabels.restart',context),'Restart all devices','the lab-wide action is named apart from the one-device action (U-17)');
+ const whole=vm.runInContext("opReviewCopy.restart",context),wholeBody=typeof whole.body==='function'?whole.body({}):whole.body;assert.equal(whole.title('square'),'Restart every device of square?');assert.match(wholeBody,/Every device of the lab restarts through containerlab/);assert.match(wholeBody,/Nothing is saved, backed up, reset or reapplied/);
+ assert.ok(vm.runInContext("opLifecycle.includes('restart-node')&&opDisruptive.includes('restart-node')",context));
+ const banner=context.opJobBanner({action:'restart-node',name:'square',node_label:'ceos',status:'succeeded',exit_code:0,message:'Operation completed'});
+ assert.equal(banner.title,'✔ Restart device succeeded');assert.equal(banner.detail,'square · ceos · Operation completed');
+ const failed=context.opJobBanner({action:'restart-node',name:'square',node_label:'ceos',status:'failed',exit_code:1,message:'Host command returned an error'});
+ assert.equal(failed.title,'✖ Restart device failed');assert.equal(failed.tone,'bad');
+});
+
+test('opRestartDevice re-checks eligibility, then reviews exactly one device of one lab with no options',async()=>{
+ const calls=[];const c=vm.createContext({$:()=>null,esc:context.esc,state:{discovery:{connected:true},labs:[{id:'a',name:'square',deployment_name:'square',vm_project_path:'/srv/p/square.clab.yml',deployment:{status:'Running'},nodes:[{name:'clab-square-ceos',short_name:'ceos',discovered:true,runtime_state:'running'},{name:'clab-square-xrv9k',short_name:'xrv9k',discovered:false,runtime_state:'absent'}]}],jobs:[],operations:[],git_jobs:[]},busy:()=>false,notify:m=>calls.push(['notify',m]),showActionError:m=>calls.push(['error',m]),api:async()=>({json:async()=>({actions:{'restart-node':{available:true}}})}),json:async(path,method,data)=>{calls.push(['json',path,method,data]);return {};}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opReview=async request=>{calls.push(['review',request]);};
+ await c.opRestartDevice('a','clab-square-ceos');
+ assert.deepEqual(JSON.parse(JSON.stringify(calls.filter(x=>x[0]==='review'))),[['review',{lab_id:'a',action:'restart-node',node:'clab-square-ceos',options:{}}]]);
+ await c.opRestartDevice('a','clab-square-xrv9k');
+ assert.deepEqual(JSON.parse(JSON.stringify(calls.filter(x=>x[0]==='error'))),[['error','Restart device… is not available: xrv9k is not deployed on the VM']],'the reason is the banner sentence (U-18)');assert.equal(calls.filter(x=>x[0]==='review').length,1,'an ineligible device is never reviewed');
+ await c.opRestartDevice('zzz','clab-square-ceos');assert.equal(calls.filter(x=>x[0]==='review').length,1);assert.equal(calls.filter(x=>x[0]==='error').at(-1)[1],'Restart device… is not available: This device is not in the lab');
+});
+
+test('U-02/U-03: an operation dialog is named by its heading and gives focus back to the control that opened it',()=>{
+ const body={children:[],append(d){this.children.push(d);},contains:d=>true};const opener={focused:0,focus(){this.focused++;}};
+ const dialogs={};
+ const document={activeElement:opener,body,createElement:()=>{const d={open:false,attrs:{},listeners:{},innerHTML:'',setAttribute(k,v){this.attrs[k]=v;},addEventListener(n,fn){this.listeners[n]=fn;},querySelector(){return {onclick:null};},showModal(){this.open=true;},close(){this.open=false;this.listeners.close&&this.listeners.close();}};return d;}};
+ const c=vm.createContext({$:id=>dialogs[id]||null,esc:context.esc,document,console});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ const d=c.opDialog('operation-review','Restart ceos?','<p>body</p>');dialogs['operation-review']=d;
+ assert.equal(d.attrs['aria-labelledby'],'operation-review-title');assert.match(d.innerHTML,/<h2 id="operation-review-title">Restart ceos\?<\/h2>/);
+ d.close();assert.equal(opener.focused,1,'focus goes back to what had it');
+ const other={focused:0,focus(){this.focused++;}};document.activeElement={};
+ const d2=c.opDialog('operation-review','Again',"<p/>",other);d2.close();assert.equal(other.focused,1,'an explicit opener wins');assert.equal(opener.focused,1);
+});

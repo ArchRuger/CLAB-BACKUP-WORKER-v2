@@ -4,6 +4,89 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.48
+
+**Restart device** (one device, Containerlab VS Code extension parity) and the first repairs of the
+relentless netlab UI/UX campaign (`docs/netlab-ui-qa/`).
+
+- *Restart device…* on a device (right-click on the map, or the device panel and the Devices technical
+  view) restarts only that device through containerlab's own node-scoped restart on the VM
+  (`containerlab restart -t <topology> --name <lab> --node <device>`, what the VS Code extension's *Restart
+  node* runs): the container stops and starts with its links kept; a stopped device is started and its
+  links restored. It is a reviewed operation like every lab command: the review names the device and the
+  lab, lists that one device as affected, says that its CLI sessions and traffic through it drop and that
+  neighbours lose their adjacencies to it, and that nothing is saved, backed up, reset or reapplied. The
+  job message counts the links containerlab restored; the device reads *Restarting* while the job runs,
+  then *Starting* until it answers a login again (its earlier login proof is dropped, so an old *Ready*
+  never survives a restart), and the lab header names the device. The lab-wide *Restart devices* is
+  unchanged.
+- The helper (`host_operations.py`, new action `restart-node`, capability `restart-node`) takes exactly one
+  literal node and the container it must be, refuses every other shape (a list, `a,b`, an option-like
+  value, an unknown or other-lab node, any option), builds exactly one `--node`, and binds the container's
+  id and state into the review so a redeploy, start or stop between review and run is refused. The manager
+  resolves the page's device to its topology node and container against the topology file on the VM,
+  refuses a page-supplied selector or path, and refuses a confirmation once another lifecycle operation ran
+  after the review (a restart keeps container ids, so two tabs' reviews could otherwise both pass).
+- Readiness: `forget()` starts a readiness epoch, so a login probe that began before a restart was
+  accepted can never mark the restarted device ready; discovery keeps the runtime's status line and a
+  device that came up again after its last login proof (a restart done from VS Code or the CLI) is
+  checked again — for containers without a health check, whose status line carries an uptime.
+- Design tab, twelve repairs from the campaign's inventory and its ten probe reproductions
+  (`docs/netlab-ui-qa/DEFECTS.md` QA-001…QA-012): a saved design with no plan reads *Design saved, no plan
+  yet*; the More menu items carry the reason they would be refused; a guided edit keeps every pool and pool
+  key the form has no control for (`vrf_loopback`, `router_id`, `start`, `allocation`); the route reflectors
+  are a checklist so several survive any edit; text under Advanced that is not JSON is named in the state
+  line, blocks Save, Check and Generate and stays on screen (*Discard changes* is the way back); Generate
+  plan saves unsaved changes first and says so, and the download and import wait for a save; a save or check
+  answered after the student moved to another lab lands nowhere; a plan fetched for a generation that is no
+  longer shown is dropped; a failed progress poll is retried five times with the attempt shown, then stops
+  with *Plan progress unknown* instead of dying silently; a draft the browser could not store is said so in
+  red; after *Remove design* the state reads *No design saved (earlier plans kept)* and the kept plans are
+  marked as belonging to a removed design; History › *View* opens any earlier plan, its files and download
+  (*Back to newest plan* returns); a BGP AS of 0, a blank AS or a blank prefix is refused by name
+  (`design_intent.py` checks the AS range, globally or per device) instead of becoming a look-alike default;
+  module and reflector checkboxes are synced from the design on every render, and a module the design still needs (VRFs,
+  VLANs or static routes are defined) says why it stays on when unticked.
+- Restart device on an image whose container cannot start a second time (vJunos-switch: its launcher fails
+  without the `init.conf` it renamed on the first start) is named as a known limit in the review, and the job
+  looks at the container again after the command: a container that exited right after starting makes the
+  job fail with the state, the runtime's status line and the way out (Redeploy lab), never a success that the
+  device list then contradicts (QA-014). The lab-wide action is now *Restart all devices…*, with a review that
+  describes the same mechanism as the one-device review (U-17).
+- The review of a Restart device on an XRv9k names a second known limit: the image's launcher picks the VM disk by file
+  name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart
+  after a deploy boots the device from a fresh disk and it comes back *Ready* with its factory configuration (proven live:
+  the configuration committed three minutes before the restart was gone; QA-017). The note says to back up first and to
+  use *Replace running configuration* afterwards; the manager adds no automatic backup or restore to a restart.
+- The review of a Restart device names a neighbour whose container is not running and says what follows: stopped by the
+  manager, the extension or `containerlab stop`, its link ends are parked and the link comes back (proven live on cEOS);
+  exited on its own or stopped with `docker stop`, the link is gone and the device then waits for all its interfaces
+  and stays at *Starting* until that neighbour runs again: cEOS for the five minutes containerlab gives it, a VM-based
+  image for good (proven live on XRv9k with vJunos-switch exited, and on cEOS with host1 docker-stopped; QA-018). The review says to start
+  the neighbour first, and the job reports *n of m links restored* with the missing neighbour named when fewer came back.
+- Capture traffic… from a Junos or IOS XR device now recognises the device's ports: the dialog compares the
+  diagram's port names with the VM's list through their container interface names (`ge-0/0/0` is `eth1`),
+  lists the connected interfaces first with the port name beside each, and says "not found" only of a port
+  whose interface really is absent (QA-013; before, every Junos and XR device read "Diagram ports … were not
+  found on the VM").
+- Usability and accessibility repairs from the independent review (U-01…U-20): with a form field focused, a
+  lab switch by URL no longer keeps the previous lab's form on screen (a save could write it into the new lab,
+  U-01); every operation dialog is named by its heading and gives focus back to what opened it; the device
+  panel stays open under the Restart review and says in words why an action is unavailable; every Design
+  row control has an accessible name; Remove keeps keyboard focus in its table; the More menu never opens
+  off screen; Generate plan on nothing says why; the apply review shows it is working, lands on its heading,
+  explains an empty review, names why Apply is off and has Cancel; Renumber and Remove design say what cannot
+  be undone; buttons name their file or device; the plan card's reasons belong to their buttons.
+- From the stress, race and longevity pass (`docs/netlab-ui-qa/evidence/stress/REPORT.md`): an older answer to a
+  design load or progress poll that arrives after a newer one is dropped instead of painting the older generation
+  over the newer (every read is numbered when sent; a save, import, renumber or clear marks earlier reads stale;
+  QA-015), and names netlab types as identifiers (VRFs, VLANs, address pools, named prefixes, routing policies)
+  follow its 16-character rule at Save, in the manager's words, instead of failing at Generate plan with the
+  engine's raw message (QA-016; the guided name inputs stop at 16). The generation-time observation near the
+  retention cap and the heartbeat's rate in a hidden tab are recorded, unchanged (OBS-001, OBS-002).
+- `docs/netlab-ui-qa/` is a history folder for the documentation check. `docs/redesign/tools/verify_after.py`
+  expects *Restart device…* in the device menu.
+
 ## Changes in 1.30.47
 
 **Network design, part 5: a plan saved to Git, the engine in the health check, the final report**

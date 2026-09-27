@@ -1,0 +1,18 @@
+== neighbour ends after the vJunos-switch container exited (15:14 UTC) ==
+-- cjunosevolved --
+eth0@if192       UP             02:09:20:95:79:d5 <BROADCAST
+eth1             DOWN           92:85:5d:87:7b:7d <BROADCAST
+eth2             DOWN           2a:fd:1e:67:7c:3a <BROADCAST
+eth3             DOWN           92:6c:d0:91:52:2b <BROADCAST
+eth4@if154       UP             aa:c1:ab:7c:d0:29 <BROADCAST
+-- xrv9k --
+eth0@if146       UP             52:a7:9f:5f:00:c2 <BROADCAST
+eth2@if155       UP             aa:c1:ab:45:f0:d2 <BROADCAST
+-- host1 --
+eth0@if168       UP             6a:37:c7:31:9c:2b <BROADCAST
+eth2@if171       UP             aa:c1:ab:95:27:81 <BROADCAST
+-- ceos --
+eth0@if180       UP             00:1c:73:fb:de:1d <BROADCAST
+eth1@if153       UP             aa:c1:ab:ba:ef:c1 <BROADCAST
+eth2@if156       UP             aa:c1:ab:29:94:d6 <BROADCAST
+eth3@if172       UP             aa:c1:ab:a1:36:88 <BROADCAST

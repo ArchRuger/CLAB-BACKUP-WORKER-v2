@@ -59,6 +59,11 @@ DENIED_KEYS = frozenset(('config', 'plugin', 'plugins', 'validate', 'tools', 'me
                          'skip_config', 'unmanaged', 'group', 'groups', 'members', 'bridge', 'disable',
                          'include', '_include', 'template', 'password', 'private_key'))
 ID = re.compile(r'^[A-Za-z_][A-Za-z0-9_]{0,63}$')
+# netlab's own identifier rule (`must_be_id` in netsim/data/types.py, `max_length` 16) for every name the engine
+# types as `id`: VRFs, VLANs, address pools, named prefixes, routing policies and the like. The manager refuses a
+# longer name with its own words instead of letting the engine fail the plan later with a raw schema message.
+NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]{0,15}$')
+NAME_RULE = 'a name of up to 16 characters: letters, digits and underscores, starting with a letter or an underscore'
 NODE_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$')
 MAX_NODES = 2000
 MAX_LINKS = 4000
@@ -215,7 +220,7 @@ class SchemaChecker:
         if schema is None and last == 'trunk':
             # A VLAN trunk is a list of VLAN names or a mapping of VLAN names to their (empty) per-trunk settings.
             names = value if isinstance(value, list) else list(value) if isinstance(value, dict) else None
-            if names is None or len(names) > 500 or any(not (_text(n, 64) and ID.match(n)) for n in names) or (isinstance(value, dict) and any(v not in (None, {}) for v in value.values())):
+            if names is None or len(names) > 500 or any(not (_text(n, 64) and NAME.match(n)) for n in names) or (isinstance(value, dict) and any(v not in (None, {}) for v in value.values())):
                 errors.append({'path': path, 'message': 'A trunk lists VLAN names'})
             return
         if not isinstance(schema, dict):
@@ -248,7 +253,7 @@ class SchemaChecker:
         if kind == 'addr_pool' and value == 'mgmt': return False
         if kind in ('str', 'id', 'node_id', 'device', 'addr_pool', 'named_pfx', 'r_proto'):
             if not _text(value): return False
-            if kind != 'str' and not ID.match(value): return False
+            if kind != 'str' and not (ID.match(value) if kind == 'node_id' else NAME.match(value)): return False
             low, high = schema.get('min_length'), schema.get('max_length')
             return (low is None or len(value) >= low) and (high is None or len(value) <= high)
         if kind == 'asn': return _is_int(value) and 1 <= value <= 4294967295
@@ -290,8 +295,8 @@ class SchemaChecker:
             if isinstance(keytype, dict): keytype = keytype.get('type', 'id')
             for key, item in value.items():
                 here = path + '.' + str(key)
-                if not isinstance(key, str) or not (ID.match(key) if keytype in ('id', 'node_id', 'device') else _text(key, 80)) or key in DENIED_KEYS:
-                    errors.append({'path': here, 'message': 'This name is not accepted'}); continue
+                if not isinstance(key, str) or not (ID.match(key) if keytype in ('node_id', 'device') else NAME.match(key) if keytype == 'id' else _text(key, 80)) or key in DENIED_KEYS:
+                    errors.append({'path': here, 'message': 'This name is not accepted' if not isinstance(key, str) or key in DENIED_KEYS or keytype != 'id' else 'Use ' + NAME_RULE}); continue
                 if keys is not None:
                     if key not in keys: errors.append({'path': here, 'message': 'Unknown setting'}); continue
                     self.check(item, keys[key], here, errors, depth + 1)
@@ -312,7 +317,7 @@ class SchemaChecker:
         for alt in schema.get('_alt_types') or []: kinds.append(alt)
         if not kinds and '_keys' in schema: kinds.append('dict')
         if schema.get('_list_to_dict') and isinstance(value, list):
-            if all(_text(v, 60) and ID.match(v) for v in value) and len(value) <= 100: return
+            if all(_text(v, 60) and NAME.match(v) for v in value) and len(value) <= 100: return
             errors.append({'path': path, 'message': 'Use a list of names'}); return
         valid = schema.get('valid_values')
         if valid is not None and not isinstance(value, (list, dict)):
@@ -375,8 +380,8 @@ def _check_pools(intent, errors, management):
     networks = []
     for name, pool in pools.items():
         here = 'addressing.' + str(name)
-        if not isinstance(name, str) or not (name in POOLS or ID.match(name) and name != 'mgmt' and not name.startswith('_')):
-            errors.append({'path': here, 'message': 'Pool names are loopback, p2p, lan, vrf_loopback, router_id or a plain identifier (never mgmt)'}); continue
+        if not isinstance(name, str) or not (name in POOLS or NAME.match(name) and name != 'mgmt' and not name.startswith('_')):
+            errors.append({'path': here, 'message': 'Pool names are loopback, p2p, lan, vrf_loopback, router_id or ' + NAME_RULE + ' (never mgmt)'}); continue
         if not isinstance(pool, dict) or any(k not in POOL_KEYS for k in pool):
             errors.append({'path': here, 'message': 'A pool takes ipv4, ipv6, prefix, prefix6, start, allocation and unnumbered'}); continue
         for family, limit in (('ipv4', 32), ('ipv6', 128)):
@@ -414,8 +419,8 @@ def _check_named_objects(intent, key, errors, schema, checker, ids):
     level = object_schema(schema, key[:-1])
     for name, body in objects.items():
         here = key + '.' + str(name)
-        if not isinstance(name, str) or not ID.match(name) or name in DENIED_KEYS:
-            errors.append({'path': here, 'message': 'Use a plain identifier as the name'}); continue
+        if not isinstance(name, str) or not NAME.match(name) or name in DENIED_KEYS:
+            errors.append({'path': here, 'message': 'Use a plain identifier as the name: ' + NAME_RULE}); continue
         if not isinstance(body, dict):
             errors.append({'path': here, 'message': 'Settings must be a mapping'}); continue
         ident = body.get('id')
@@ -496,6 +501,35 @@ def _vlan_references(body, path, vlan_names, errors):
     names = trunk if isinstance(trunk, list) else list(trunk) if isinstance(trunk, dict) else []
     for name in names:
         if isinstance(name, str) and name not in vlan_names: errors.append({'path': path + '.trunk', 'message': 'No VLAN named ' + name + ' is defined in this design'})
+
+
+AS_RANGE = (1, 4294967295)
+
+
+def _check_bgp_as(intent, modules, errors):
+    """A BGP design needs one AS number in the 1..4294967295 range, globally and on any device that sets its own.
+
+    The engine schema types the field but does not bound it, and a form that lets 0 or a blank through
+    would otherwise reach the engine (or, worse, be silently replaced by a look-alike default)."""
+    # One problem per field: a value the schema checker already reported (wrong type, its own range) is left to it.
+    flagged = {e['path'] for e in errors}
+    def out_of_range(value):
+        return isinstance(value, int) and not isinstance(value, bool) and not AS_RANGE[0] <= value <= AS_RANGE[1]
+    settings = intent.get('bgp')
+    nodes = intent.get('nodes')
+    per_node = False
+    if isinstance(nodes, dict):
+        for name, node in nodes.items():
+            bgp = node.get('bgp') if isinstance(node, dict) else None
+            if isinstance(bgp, dict) and 'as' in bgp:
+                per_node = True
+                path = 'nodes.' + str(name) + '.bgp.as'
+                if out_of_range(bgp['as']) and path not in flagged: errors.append({'path': path, 'message': 'The BGP AS number must be a whole number from 1 to 4294967295'})
+    if 'bgp' in modules and isinstance(settings, dict):
+        # netlab takes the AS globally or per device; a design with neither cannot be generated.
+        if 'as' not in settings:
+            if not per_node: errors.append({'path': 'bgp.as', 'message': 'Enter the BGP AS number (1 to 4294967295), globally or on each device'})
+        elif out_of_range(settings['as']) and 'bgp.as' not in flagged: errors.append({'path': 'bgp.as', 'message': 'The BGP AS number must be a whole number from 1 to 4294967295'})
 
 
 def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=()):
@@ -582,8 +616,8 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
         for key in ('vlans', 'vrfs'):
             if key in node:
                 body = node[key]
-                if not isinstance(body, dict) or any(not (isinstance(k, str) and ID.match(k)) for k in body):
-                    errors.append({'path': here + '.' + key, 'message': 'Use a mapping of ' + key + ' names'}); continue
+                if not isinstance(body, dict) or any(not (isinstance(k, str) and NAME.match(k)) for k in body):
+                    errors.append({'path': here + '.' + key, 'message': 'Use a mapping of ' + key + ' names (each ' + NAME_RULE + ')'}); continue
                 level = object_schema(schema, key[:-1])
                 for vname, vbody in body.items():
                     if vbody in (None, {}): continue
@@ -625,7 +659,7 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
                     link_prefixes[key + '/' + family] = network
                 if 'allocation' in prefix and prefix['allocation'] not in ALLOCATIONS:
                     errors.append({'path': here + '.prefix.allocation', 'message': 'Choose p2p, sequential or id_based'})
-        if 'pool' in link and not (_text(link['pool'], 64) and ID.match(link['pool']) and link['pool'] != 'mgmt' and (link['pool'] in POOLS or link['pool'] in pools)):
+        if 'pool' in link and not (_text(link['pool'], 64) and NAME.match(link['pool']) and link['pool'] != 'mgmt' and (link['pool'] in POOLS or link['pool'] in pools)):
             errors.append({'path': here + '.pool', 'message': 'Choose a pool defined in this design'})
         if 'role' in link and link['role'] not in LINK_ROLES: errors.append({'path': here + '.role', 'message': 'Choose stub, passive, external, core or edge'})
         if 'type' in link and link['type'] not in LINK_TYPES: errors.append({'path': here + '.type', 'message': 'Choose lan, p2p or stub'})
@@ -671,6 +705,7 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
                 if not _text(node_name) or not _text(ifname, 64) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9/:._-]*', ifname):
                     errors.append({'path': here + '.' + str(node_name), 'message': 'Use the interface name the device itself shows'})
     _check_ledger(intent.get('allocations', {}), errors, outside_management)
+    _check_bgp_as(intent, modules, errors)   # after the schema passes, so a field they reported is not reported twice
     return errors
 
 

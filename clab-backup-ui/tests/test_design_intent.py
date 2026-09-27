@@ -240,8 +240,23 @@ class ModuleSettingsAdvancedTests(DesignIntentTestCase):
         self.assertOnlyError(di.validate(intent, schema=self.schema), 'bgp.as', 'type')
 
     def test_bgp_unknown_setting_fails(self):
-        intent = dict(di.empty_intent(), modules=['bgp'], bgp={'bogus': 1})
+        intent = dict(di.empty_intent(), modules=['bgp'], bgp={'as': 65000, 'bogus': 1})
         self.assertOnlyError(di.validate(intent, schema=self.schema), 'bgp.bogus', 'unknown')
+
+    def test_bgp_as_must_be_present_and_in_range(self):
+        # 0, a blank the form used to turn into 65000, a bool and an out-of-range value are refused with the field
+        # named; the AS may live on the devices instead of globally (eBGP designs).
+        for value in (0, 4294967296, -1):
+            intent = dict(di.empty_intent(), modules=['bgp'], bgp={'as': value})
+            errs = di.validate(intent, schema=self.schema)
+            self.assertEqual([e['path'] for e in errs], ['bgp.as'], 'one problem, naming the field: %r' % (errs,))
+        intent = dict(di.empty_intent(), modules=['bgp'], bgp={})
+        self.assertOnlyError(di.validate(intent, schema=self.schema), 'bgp.as', 'globally or on each device')
+        intent = dict(di.empty_intent(), modules=['bgp'], bgp={}, nodes={'r1': {'bgp': {'as': 65001}}})
+        self.assertClean(di.validate(intent, schema=self.schema))
+        intent = dict(di.empty_intent(), modules=['bgp'], bgp={'as': 65000}, nodes={'r1': {'bgp': {'as': 0}}})
+        errs = di.validate(intent, schema=self.schema)
+        self.assertEqual([e['path'] for e in errs], ['nodes.r1.bgp.as'], 'one problem naming the device field (the schema\'s own wording when it reports first): %r' % (errs,))
 
     def test_denied_key_config_under_a_module_is_refused_with_schema_too(self):
         intent = dict(di.empty_intent(), modules=['ospf'], ospf={'config': 1})
@@ -264,7 +279,7 @@ class ModuleSettingsAdvancedTests(DesignIntentTestCase):
         self.assertOnlyError(di.validate(intent, schema=self.schema), 'isis.type', 'choose')
 
     def test_bgp_community_list_passes(self):
-        intent = dict(di.empty_intent(), modules=['bgp'], bgp={'community': {'ebgp': ['standard']}})
+        intent = dict(di.empty_intent(), modules=['bgp'], bgp={'as': 65000, 'community': {'ebgp': ['standard']}})
         self.assertClean(di.validate(intent, schema=self.schema))
 
     def test_routing_prefix_list_passes(self):
@@ -344,6 +359,22 @@ class VlanVrfTests(DesignIntentTestCase):
     def test_vlan_names_must_be_identifiers(self):
         intent = dict(di.empty_intent(), modules=['vlan'], vlans={'1bad': {'id': 10}})
         self.assertError(di.validate(intent), 'vlans.1bad', 'identifier')
+
+    # QA-016 (stress finding B1): netlab types VRF, VLAN, pool, named-prefix and policy names as 16-character
+    # identifiers (`must_be_id`, netsim/data/types.py); a longer name the manager accepted failed only at
+    # generation with the engine's raw schema message. The manager now refuses it with its own words.
+    def test_engine_identifiers_follow_netlabs_16_character_rule(self):
+        sixteen, seventeen = 'a' * 16, 'a' * 17
+        self.assertClean(di.validate(dict(di.empty_intent(), modules=['vlan'], vlans={sixteen: {'id': 10}})))
+        self.assertClean(di.validate(dict(di.empty_intent(), modules=['vrf'], vrfs={sixteen: {'id': 10}})))
+        self.assertError(di.validate(dict(di.empty_intent(), modules=['vlan'], vlans={seventeen: {'id': 10}})), 'vlans.' + seventeen, '16 characters')
+        self.assertError(di.validate(dict(di.empty_intent(), modules=['vrf'], vrfs={seventeen: {'id': 10}})), 'vrfs.' + seventeen, '16 characters')
+        self.assertClean(di.validate(dict(di.empty_intent(), addressing={sixteen: {'ipv4': '192.168.0.0/24'}})))
+        self.assertError(di.validate(dict(di.empty_intent(), addressing={seventeen: {'ipv4': '192.168.0.0/24'}})), 'addressing.' + seventeen, '16 characters')
+        nodes = {'r1': {'vrfs': {seventeen: {'id': 11}}}}
+        self.assertError(di.validate(dict(di.empty_intent(), modules=['vrf'], nodes=nodes)), 'nodes.r1.vrfs', '16 characters')
+        link = dict(di.empty_intent(), addressing={sixteen: {'ipv4': '192.168.0.0/24'}}, links={'r1:eth1--r2:eth1': {'pool': seventeen}})
+        self.assertTrue(any(e['path'].endswith('.pool') for e in di.validate(link)), 'a link pool name over 16 characters is refused: %r' % di.validate(link))
 
     def test_vlan_body_must_be_a_mapping(self):
         intent = dict(di.empty_intent(), modules=['vlan'], vlans={'v1': 'notadict'})
