@@ -101,6 +101,7 @@ jobs:
           python -m unittest discover -s tests -t tests -p test_design_iosxr.py -v
           python -m unittest discover -s tests -t tests -p test_design_families_routing.py -v
           python -m unittest discover -s tests -t tests -p test_design_families_l2.py -v
+          python -m unittest discover -s tests -t tests -p test_design_export_git.py -v
       - name: Check browser regressions
         working-directory: clab-backup-ui
         run: node --test tests/test_lab_builder_ui.js tests/test_map_editor_ui.js tests/test_operations_ui.js tests/test_debug_ui.js tests/test_capture_ui.js tests/test_capture_session_ui.js tests/test_topology_ui.js tests/test_vm_password_ui.js tests/test_readiness_ui.js tests/test_download_ui.js tests/test_git_progress_ui.js tests/test_git_places_ui.js tests/test_restore_ui.js tests/test_status_ui.js tests/test_shell_ui.js tests/test_home_ui.js tests/test_diagram_editor_ui.js tests/test_topology_menu_ui.js tests/test_diff_view_ui.js tests/test_lab_builder_yaml_ui.js tests/test_telemetry_retired_ui.js tests/test_network_design_ui.js

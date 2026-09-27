@@ -1,3 +1,23 @@
+# Network design, part 5: Git export, health check, final report — 1.30.47
+
+Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.46 (`0439abb`, CI green). Routing observed: a
+Sonnet worker (observed `claude-sonnet-5`) wrote the export tests, another the export dialog; the Opus
+`risk-reviewer` (observed `claude-opus-5-5`) reviewed the export; the lead (Fable) wrote the backend, the health
+check, the records and ran the live and browser steps. Per task: `docs/netlab-integration/TESTS.md` chunk 5.
+
+- **Risk review (Opus):** two passes on the export. The first found seven items, three of them must-fix: a fresh timestamp made every export fail its own digest check; the unchanged helper wrote `latest/` for every checkpoint publish, so an export would have replaced the lab's configuration snapshot with a plan; the current intent was exported instead of the plan's own; a lost helper answer left the job `failed`; a looser request id than the helper's; docs ahead of the code; a skipped device still listed. All fixed (the helper gained its one rule: a `network-design` manifest goes to its own checkpoint folder only, the two kinds never share a folder). The second pass verified every fix, could not get a design into `latest` or `baseline` by any path, and found two should-fix items (a retry after a lost answer could end `failed`; a renamed lab broke a pending export) plus hardening (any other manifest `kind` refused; the helper tests as a plain test case; the guide's restore wording), all applied.
+- **Unit (this checkout, `netlab` on PATH):** `python -m unittest discover -s tests -t tests` 1686 OK (1 skipped, 217 s);
+  `test_design_export_git.py` 24 (the snapshot's files and manifest, the route's refusals and idempotency,
+  the execution against a fake helper, the reviewed retry, the restore's refusal of a design version),
+  `test_check_install.py` 40 (+2: the engine item). `node --test tests/*.js` 347 pass
+  (`test_network_design_ui.js` 64, +7 for the export dialog; `test_git_progress_ui.js` 41, +2 for the *Design export* labels). `node --check`, `verify-release.py`, `check_links.py`, `git diff --check`.
+- **Live, the deployed product (`docs/netlab-integration/evidence/live-export-git.md`):** three runs of `check_design_export_ui.py` against the rebuilt manager and the lab bound to the QA repository: the first refused by an empty generated fragment (now left out), the second failed on the helper's per-repository lock held by the page's history read (helper calls from one manager are now serialised), the third 12 of 12 checks: the dialog, the job of kind `design`, the mandatory review it stopped at, the upload through the review's own button, the repository history listing the checkpoint with a `network-design` manifest and no restore candidate. The VM checkout confirms the commit touches only `checkpoints/design-…/` (26 files) and `latest/` is untouched; the commit is on the remote.
+- **Browser:** `check_design_export_ui.py` as above (Chromium 153; screenshots `evidence/shots/design-export-0{1,2,3}.png`); the Design tab and apply checks of 1.30.46 unchanged.
+- **Fresh install in a nested VM (`docs/technical-audit/tools/fresh_install_vm.py`, Ubuntu 24.04 cloud image,
+  isolated from the host's manager):** started after this commit from its own `git archive`; the result is recorded in `docs/netlab-integration/evidence/fresh-install-1.30.47.md` by the follow-up evidence commit (a nested VM cannot install a commit that does not exist yet).
+- **Health check on the development VM:** 61 PASS, 0 FAIL, 1 WARN (folder coverage) after the helpers were
+  refreshed to the running release; the new engine item passes with `netlab 26.9 inside the image`.
+
 # Network design, part 4: feature families — 1.30.46
 
 Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.45 (`7bb45af`, CI green). Routing observed: two

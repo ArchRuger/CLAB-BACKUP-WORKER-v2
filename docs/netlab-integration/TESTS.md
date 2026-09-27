@@ -105,3 +105,18 @@ Both family files are registered in `.github/workflows/release-check.yml`. Live:
 (change the deployed lab's design through `PUT …/design` and generate) and `scratchpad/product_apply.py` (review
 and apply through the product's API), both described only; the read-backs use `nodecli.py` with the transcript tags
 `e1-isis`, `e1-isis-recheck`, `e2-vrf`, `e3-policy`, `e4-vlan`.
+
+## Chunk 5 (milestone F: Git export, health check, final report)
+
+| File | Count | Pins |
+|---|---|---|
+| `tests/test_design_export_git.py` | 24 (`DesignSnapshotTests`, the route tests, the execution tests against a fake helper, `PublicJobTests`, `RestoreCandidateTests`) | `NetworkDesign.design_snapshot` (file set and names, base64, the manifest, refusals: not succeeded, missing or changed fragment, unusable name; an empty generated file left out), the route's fields, idempotency and refusals, `GitProgress.execute` for kind `design` (the `publish` request with the checkpoint target, `review_pending` vs `committed`, the reviewed retry, the digest mismatch), `public_job`, the restore never offering a design version |
+| `tests/test_host_git.py` | 70 (+3: `HostGitDesignExportTests`) | the helper writes a design snapshot to its own checkpoint folder only, refuses it at `latest`/`baseline`, and never lets the two kinds share a folder |
+| `tests/test_check_install.py` | 40 (+2: `DesignEngineCheckTests`) | the health check's network design engine item (PASS with the version, WARN with the diagnostic, WARN when the manager does not answer) |
+| `tests/test_network_design_ui.js` | 64 (+7) | the *Export plan to Git…* reason, default checkpoint, name validation, request id, body, destination markup, button render |
+| `tests/test_git_progress_ui.js` | 41 (+2) | the *Design export* labels of a job of kind `design`; ordinary saves unchanged |
+
+All registered in `.github/workflows/release-check.yml`. Browser: `docs/netlab-integration/tools/check_design_export_ui.py`
+(the dialog, the review the job stops at, the upload through the review's own button, the repository history and the
+restore's refusal, against a running manager); fresh install: `docs/technical-audit/tools/fresh_install_vm.py` on the
+Ubuntu 24.04 cloud image.

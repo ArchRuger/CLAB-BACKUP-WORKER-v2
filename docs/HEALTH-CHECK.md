@@ -91,6 +91,7 @@ FAILURES FOUND (exit 1)
 | Area | Automated evidence |
 |---|---|
 | Source | Complete matching release metadata, compared with the running application and host helper responses |
+| Network design engine | The pinned netlab engine inside the running image answers `/api/design/engine`: PASS with its version, WARN with the manager's own diagnostic when it is unavailable (every other feature keeps working; rebuild the image to restore planning) |
 | Ubuntu and clock | Installer target platform, reported NTP synchronization and filesystem free space; no external clock comparison |
 | SSH | Server configuration syntax, a local TCP listener, dedicated `clab-discovery` account/password status and effective restricted gateway policy |
 | Normal SFTP | Effective ordinary-account SFTP subsystem and password policy; no password is requested or tested by this check |

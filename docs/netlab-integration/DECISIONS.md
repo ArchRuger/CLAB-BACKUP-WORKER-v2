@@ -219,6 +219,18 @@ first pass' outcome is in VALIDATION.md for 1.30.43, the second and third in the
   generated artifacts, never as backups); ordinary *Save progress* is unchanged. Imports validate schema,
   sizes, hashes and artifact types. Publication of a sidecar on the VM, if needed, goes through a bounded
   helper action with the same guarantees as `publish`/`revise` (D6.2, provisional).
+  *Implemented in 1.30.47 as a Git save of kind `design`* (`git_progress.export_design`,
+  `NetworkDesign.design_snapshot`): the plan's files go to the lab's repository as their own checkpoint folder
+  through the `publish` request of the Git helper (plain file names, sizes and digests checked twice), with the
+  same mandatory review before any upload and the same one-save-at-a-time guard; the manifest carries no device
+  rows and no restore artifact, which is what keeps such a version out of the restore's candidates without a
+  change to the restore. The helper gained one rule (its only change): a manifest of kind `network-design` is
+  written to its own checkpoint folder only, never to `latest` or `baseline` (an ordinary checkpoint save also
+  refreshes `latest`, which would have replaced the lab's configuration snapshot with a plan: found by the Opus
+  review), and the two kinds never share a folder. The exported intent is the plan's own (`intent.json` of the
+  generation), stamped with the plan's time, so the export is byte-identical at creation and at execution. D6.2
+  stays provisional: the design lives in the manager's state and in Git; a VM-side sidecar was not needed for any
+  workflow of milestones D and E.
 
 ## 7. Routing
 
@@ -391,3 +403,15 @@ profiles) and `evidence/live-apply-families.md` (the deployed product on `restor
 - D9.7 **What cannot be proven on `restore-square` stays "generated, not live-tested"**: VRRP and anycast (no
   multi-access segment with two routers), LAG (no parallel links), VXLAN/EVPN (no second VTEP segment), STP,
   BFD (no BFD on XRv9k; the others unexercised). The ledger says so per row rather than claiming support.
+- D9.8 **Protocol authentication stays outside the design in this stream.** netlab's `password`/key attributes
+  (OSPF, IS-IS, BGP, BFD authentication, WireGuard private keys) remain refused by name (`DENIED_KEYS`), so no
+  secret can enter the intent, an export, a manifest, a log or `/api/state`. The secret-reference model the
+  assignment asks for (a named secret kept in the manager's encrypted state, referenced from the intent by name
+  only, injected into the netlab topology in the private job directory at generation time, never written to a
+  generated file that leaves the manager, and applied through the same drivers) is designed but not implemented:
+  it needs its own review pass (where the secret is materialised, how the ownership ledger treats a line that
+  carries it, how a review masks it) and a live proof per platform. Recorded as remaining work, not as support.
+- D9.9 **Plugins stay out of reach.** netlab plugins (`tunnel.gre`, `tunnel.wireguard`, …) load code; the
+  security decisions of chunk 1 refuse `plugin` by name. An allowlist of built-in plugins by exact name, with the
+  capability model's per-image answer (GRE renders on `eos` only among the four; WireGuard on none), is the shape
+  a later chunk would take; nothing of it is in the schema today, and the ledger says "not in the schema".

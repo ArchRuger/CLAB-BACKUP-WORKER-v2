@@ -4,6 +4,28 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.47
+
+**Network design, part 5: a plan saved to Git, the engine in the health check, the final report**
+([docs/NETWORK-DESIGN.md](NETWORK-DESIGN.md) "Exporting a plan to Git",
+[docs/netlab-integration/FINAL-REPORT.md](netlab-integration/FINAL-REPORT.md)).
+
+- **Export plan to Git…** on the plan card: the design file, the plan, the netlab topology, the endpoint mapping
+  and every generated device file go to the lab's repository as their own checkpoint folder through the unchanged
+  *Save progress* pipeline (the Git helper did not change): the lab must be bound to a repository, the job saves on
+  the VM and stops for the mandatory review, the upload is the reviewed retry, one save at a time; the Progress tab
+  labels such a job *Design export*. Its manifest names the files generated artifacts and carries no device rows
+  and no restore artifact, so *Apply to running lab* lists such a version as view and download only.
+- **Health check.** `check-install.sh` reports the network design engine inside the running image (available with
+  its version, or a warning with the manager's own diagnostic; every other feature keeps working without it).
+- **Records.** `docs/netlab-integration/FINAL-REPORT.md` is the report the assignment asks for: what was built and
+  how a student reaches it, the pinned identities, the compatibility matrix, the ownership and recovery semantics,
+  the evidence with its limits, the releases and commits, *Intentionally removed: None*. The decisions on protocol
+  secrets and plugins (both still outside the schema) are recorded as remaining work, not as support.
+- **Tests and tools.** `test_design_export_git.py` (the snapshot, the route, the execution against a fake helper,
+  the restore's refusal), the health-check item's tests, the export dialog's browser tests; all registered in CI.
+  A fresh install of this release in a nested Ubuntu 24.04 VM is recorded in `docs/netlab-integration/evidence/fresh-install-1.30.47.md`.
+
 ## Changes in 1.30.46
 
 **Network design, part 4: the feature families, proven where the lab allows and generated where it does not**

@@ -616,6 +616,47 @@ function designApplyDisabledReason(lab,view,jobs){
  return '';
 }
 
+// --- Export plan to Git… (git_progress.py export_design): a Git save of kind `design` into
+// checkpoints/<name> of the lab's bound repository, holding the design file, the plan, the netlab
+// topology, the endpoint mapping and every generated device file — never a backup, never a restore
+// source. Like every other upload, it stops at review_pending; the review and the retry that actually
+// uploads stay entirely in git-progress.js (gitReviewJob is the only sender of
+// {push:true,reviewed:true}) — this file only ever sends the export request itself.
+const DESIGN_EXPORT_CHECKPOINT_RE=/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+function designExportGitDefaultCheckpoint(generationId){return 'design-'+String(generationId||'').slice(0,12);}
+function designExportGitValidCheckpoint(name){return DESIGN_EXPORT_CHECKPOINT_RE.test(String(name??''));}
+function designExportGitRequestId(){const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);return Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');}
+// A single-line note (a pasted newline or tab folds to a space, never rejected here), capped at the
+// server's 200-character limit; left blank the server writes its own note naming the plan.
+function designExportGitNote(value){return String(value??'').replace(/[\r\n\t]+/g,' ').replace(/\s+/g,' ').trim().slice(0,200);}
+// Why #design-export-git is disabled, or '' when it is not (index.html's data-proxy-reason caption
+// reads this button's .title automatically, the same pattern #design-apply uses).
+function designExportGitReason(lab,view){
+ const newest=designNewestGeneration(view||{});
+ if(!newest||newest.status!=='succeeded')return 'Generate a plan first.';
+ if(!lab||!lab.git_binding)return 'Bind this lab to a repository under Progress first.';
+ return '';
+}
+// The repository's short name, the same rule git-progress.js's gitRepoName uses (kept local: this
+// file's pure functions are tested without git-progress.js loaded).
+function designExportGitRepoName(repo){return String(repo&&repo.path||'').split('/').filter(Boolean).pop()||(repo&&repo.label)||'Repository';}
+// `<repository> › <branch> › <folder>` for the export dialog, the folder always ending in
+// checkpoints/<name> — the export's own destination, distinct from the lab's latest/ save folder.
+function designExportGitDestinationMarkup(binding,checkpoint){
+ const repo=(binding&&binding.repository)||{};
+ const folder=(repo.prefix?String(repo.prefix).replace(/\/$/,'')+'/':'')+'checkpoints/'+String(checkpoint||'');
+ return `<p class="git-destination-line"><span>Saving to</span><code>${esc(designExportGitRepoName(repo))}</code>`+
+  `<span aria-hidden="true">›</span><code>${esc(repo.branch||'')}</code><span aria-hidden="true">›</span><code>${esc(folder)}</code></p>`;
+}
+// The exact POST body of /design/generations/{id}/git: a fresh hex request id unless one is carried
+// over (a retried submit reuses it so the server's replay check recognises it), the checkpoint as
+// typed, the note trimmed to one line, and push always true — an export always stops at review_pending
+// and is never uploaded by this file (see the header comment above).
+function designExportGitBody(values){
+ values=values||{};
+ return {request_id:values.requestId||designExportGitRequestId(),checkpoint:values.checkpoint||'',note:designExportGitNote(values.note),push:true};
+}
+
 // --- imperative wiring: fetch, poll, render, form, actions ---------------------------------------------
 // designState is the module-level cache the spec calls for: {labId,view,plan,draft,loading,error}.
 // view is the GET .../design document; plan is the plan.json of the newest succeeded generation (fetched
@@ -809,6 +850,7 @@ function designRenderAll(){
  }
  designUpdateDownloadLink(lab,view);
  designRenderApplyButton(lab,view);
+ designRenderExportGitButton(lab,view);
  designMaybeStartWatch();
 }
 
@@ -1114,6 +1156,12 @@ function designRenderApplyButton(lab,view){
  $('design-apply').title=reason;
  designApplyRenderLast(lab.id);
 }
+function designRenderExportGitButton(lab,view){
+ if(!$('design-export-git'))return;
+ const reason=designExportGitReason(lab,view);
+ $('design-export-git').disabled=!!reason;
+ $('design-export-git').title=reason;
+}
 function designApplyRenderLast(labId){
  if(!$('design-apply-last'))return;
  const job=designApplyNewestJob(labId);
@@ -1252,6 +1300,52 @@ function initDesignApply(){
  if($('design-advanced-details'))$('design-advanced-details').addEventListener('toggle',()=>{if($('design-advanced-details').open)designApplyLoadOwnership();});
 }
 
+// --- Export plan to Git…: dialog state and DOM wiring. requestId is generated once per dialog open,
+// same as designApplyState.requestId, so a retry after a network error resubmits the same request.
+let designExportGitState={labId:'',generationId:'',requestId:''};
+function designExportGitUpdateDestination(binding){
+ if($('design-export-git-destination'))setMarkup($('design-export-git-destination'),designExportGitDestinationMarkup(binding,$('design-export-git-checkpoint')?$('design-export-git-checkpoint').value:''));
+}
+function designExportGitOpen(){
+ const lab=current();if(!lab||!$('design-export-git-dialog'))return;
+ const view=designActiveView(lab),newest=designNewestGeneration(view);
+ if(designExportGitReason(lab,view)||!newest)return;
+ designExportGitState={labId:lab.id,generationId:newest.id,requestId:designExportGitRequestId()};
+ if($('design-export-git-checkpoint'))$('design-export-git-checkpoint').value=designExportGitDefaultCheckpoint(newest.id);
+ if($('design-export-git-note'))$('design-export-git-note').value='';
+ if($('design-export-git-error'))$('design-export-git-error').textContent='';
+ designExportGitUpdateDestination(lab.git_binding);
+ $('design-export-git-dialog').showModal();
+}
+function designExportGitClose(){if($('design-export-git-dialog')&&typeof $('design-export-git-dialog').close==='function')$('design-export-git-dialog').close();}
+// On success this hands the job straight to git-progress.js's own quiet watch (gitStartWatch), the
+// same path a plain Save progress takes: it polls the job and, once the export reaches review_pending,
+// opens the mandatory review itself (gitReviewJob) — this file never opens the review or uploads
+// directly, and never sends {push:true,reviewed:true}.
+async function designExportGitSubmit(){
+ if($('design-export-git-error'))$('design-export-git-error').textContent='';
+ const checkpoint=String($('design-export-git-checkpoint')?$('design-export-git-checkpoint').value:'').trim();
+ if(!designExportGitValidCheckpoint(checkpoint)){
+  if($('design-export-git-error'))$('design-export-git-error').textContent='Use a checkpoint name containing letters, numbers, hyphens or underscores.';
+  return;
+ }
+ const body=designExportGitBody({requestId:designExportGitState.requestId,checkpoint,note:$('design-export-git-note')?$('design-export-git-note').value:''});
+ try{
+  const job=await json('/labs/'+encodeURIComponent(designExportGitState.labId)+'/design/generations/'+encodeURIComponent(designExportGitState.generationId)+'/git','POST',body);
+  designExportGitClose();
+  if(typeof gitRememberJob==='function')gitRememberJob(job);
+  if(typeof showTab==='function')showTab('progress');
+  if(typeof gitStartWatch==='function')gitStartWatch(job,{quiet:true});
+  if(typeof refresh==='function')await refresh();
+ }catch(error){if($('design-export-git-error'))$('design-export-git-error').textContent=error.message;}
+}
+function initDesignExportGit(){
+ if($('design-export-git'))$('design-export-git').onclick=()=>designExportGitOpen();
+ if($('design-export-git-checkpoint'))$('design-export-git-checkpoint').addEventListener('input',()=>designExportGitUpdateDestination(current()&&current().git_binding));
+ if($('design-export-git-confirm'))$('design-export-git-confirm').onclick=()=>designExportGitSubmit();
+ if($('design-export-git-dialog'))for(const b of $('design-export-git-dialog').querySelectorAll('[data-design-export-git-close]'))b.onclick=()=>designExportGitClose();
+}
+
 // --- load-time wiring: only when the Design tab's static skeleton is on the page ----------------------
 function initNetworkDesign(){
  const guidedIds=['design-ipv4','design-ipv6','design-pool-loopback-ipv4','design-pool-loopback-ipv6',
@@ -1293,5 +1387,6 @@ function initNetworkDesign(){
  });
  if($('tools-design'))$('tools-design').onclick=()=>{if(typeof showTab==='function')showTab('design');};
  initDesignApply();
+ initDesignExportGit();
 }
 if(typeof document!=='undefined'&&document.getElementById&&$('design-view'))initNetworkDesign();

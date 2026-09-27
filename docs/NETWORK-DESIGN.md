@@ -255,6 +255,17 @@ configuration beside the design survives every step; a manual change to an owned
 silently overwritten. Removing the design's protocols leaves the addressing of the initial module, removing
 the design itself leaves the devices as they are: a later plan of the same lab still knows what it owns.
 
+## Exporting a plan to Git
+
+*Export plan to Git…* on the plan card saves a plan into the lab's Git repository through the same *Save
+progress* pipeline as a configuration save, as its own checkpoint folder (`…/checkpoints/<name>`, default
+`design-<plan id>`): the design file (`network-intent.yml`), `plan.json`, the netlab `topology.yml`, the endpoint
+`mapping.json` and every generated device file (`<device>--<nn>-<module>.cfg`), with a manifest that names them
+generated artifacts (`kind: network-design`). The rules of a save apply unchanged: the lab must be bound to a
+repository, the job saves on the VM first and stops for the mandatory review, the upload is the reviewed retry, one
+save at a time. A design export is never a backup and never a restore source: its manifest carries no device rows and
+no restore artifact, so it yields no restore candidate and *Apply to running lab* never offers it.
+
 ## API
 
 All routes sit behind the same-origin guard; mutating requests carry a JSON body.
@@ -277,6 +288,7 @@ All routes sit behind the same-origin guard; mutating requests carry a JSON body
 | `POST /api/labs/{id}/design/generations/{gid}/review` | `{targets, takeover}`: the review transaction on each target (aborted), per device the report of the section above, and the single-use `token` |
 | `POST /api/labs/{id}/design/apply` | `{token, confirm_minutes, request_id, takeover, acknowledged: true}`: the apply job; idempotent by `request_id`; 409 when the review expired, the plan changed, conflicts are not taken over or another operation is busy |
 | `GET /api/labs/{id}/design/apply/jobs`, `GET /api/design/apply/jobs/{job_id}` | The lab's apply jobs, one job (public shape: per device status, stage, message, timeline, diff sample, read-back result; never the staged configuration) |
+| `POST /api/labs/{id}/design/generations/{gid}/git` | `{request_id, checkpoint, note, push}`: a Git save of kind `design` for the plan (its own checkpoint folder; 409 while a save is pending, for a plan that is not generated, or without a repository binding); the job then follows `/api/git/jobs/{id}` and its reviewed retry |
 | `GET /api/labs/{id}/design/ownership` | Per device the number of owned statements, the plan, the time and whether a read-back is pending, plus the statements themselves (masked) |
 
 `/api/state` carries per lab a `design` summary (presence, revision, label, modules, whether a plan is

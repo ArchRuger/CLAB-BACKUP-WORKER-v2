@@ -45,8 +45,11 @@ boundaries are repeated in DECISIONS.md §0.
   `TELEMETRY_*` lines that nothing reads).
 - Rebuild loop: `cd ~/projects/clab-manager-1.30.42 && sudo docker compose -f clab-backup-ui/compose.yml
   --env-file clab-backup-ui/.env up -d --build` (about 3 s without dependency changes; a `requirements.txt`
-  change rebuilds the image layer). Helpers: `sudo bash deploy/setup-operations.sh --refresh` and the other
-  `setup-*.sh --refresh` after a `host_*.py` or VERSION change; `sudo bash deploy/check-install.sh` verifies.
+  change rebuilds the image layer). Helpers after a `host_*.py` or VERSION change: `sudo bash deploy/setup-discovery.sh --update-helper`,
+  `sudo bash deploy/setup-operations.sh --lab-root /srv/containerlab-node-manager/projects`, `sudo bash deploy/setup-git.sh --refresh`
+  (`--refresh` is not an option of the first two: a wrong flag exits 64 and leaves the old helper, which is how the
+  inspect and operations helpers stayed at 1.30.42 until 1.30.46 was deployed); `sudo bash deploy/check-install.sh`
+  verifies (61 PASS, 0 FAIL, 1 WARN on 2026-09-27 after the refresh).
 - Lab `restore-square` (`/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml`,
   the four-image square of `docs/multi-platform-restore/lab/`): found with its four NOS containers exited
   (host reboot two days earlier, only `host1` running). Destroyed with `--cleanup` and redeployed on

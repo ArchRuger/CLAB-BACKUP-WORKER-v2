@@ -595,3 +595,68 @@ test('designApplyDeviceMarkup: a device whose takeover is true says how many man
  const untaken=readyTarget({takeover:false});
  assert.doesNotMatch(c.designApplyDeviceMarkup(untaken),/Taking over/);
 });
+
+// --- Export plan to Git… (git_progress.py export_design): #design-export-git is enabled only for a
+// succeeded plan on a lab with a Git binding; its request body always carries push:true (the mandatory
+// review, in git-progress.js, decides the upload — this file never uploads).
+test('designExportGitReason: no succeeded plan, then a plan with no repository bound, then ready',()=>{
+ const c=ctx();
+ const lab={id:'lab1',git_binding:{binding_id:'b',repository:{path:'/repo',branch:'main'}}};
+ assert.equal(c.designExportGitReason(lab,{generations:[]}),'Generate a plan first.');
+ assert.equal(c.designExportGitReason(lab,{generations:[{id:'g',status:'running'}]}),'Generate a plan first.');
+ const view={generations:[{id:'g',status:'succeeded'}]};
+ assert.equal(c.designExportGitReason({id:'lab1'},view),'Bind this lab to a repository under Progress first.');
+ assert.equal(c.designExportGitReason(lab,view),'');
+});
+test('designExportGitDefaultCheckpoint takes the generation id\'s first 12 characters, prefixed',()=>{
+ const c=ctx();
+ assert.equal(c.designExportGitDefaultCheckpoint('0123456789abcdef'),'design-0123456789ab');
+ assert.equal(c.designExportGitDefaultCheckpoint('short'),'design-short');
+ assert.equal(c.designExportGitDefaultCheckpoint(''),'design-');
+});
+test('designExportGitValidCheckpoint matches the server\'s checkpoint pattern exactly',()=>{
+ const c=ctx();
+ assert.equal(c.designExportGitValidCheckpoint('OSPF-plan_1'),true);
+ assert.equal(c.designExportGitValidCheckpoint('design-0123456789ab'),true);
+ assert.equal(c.designExportGitValidCheckpoint('-leading-dash'),false);
+ assert.equal(c.designExportGitValidCheckpoint('has space'),false);
+ assert.equal(c.designExportGitValidCheckpoint('slash/here'),false);
+ assert.equal(c.designExportGitValidCheckpoint(''),false);
+});
+test('designExportGitRequestId returns a 32-character lowercase hex string, different each time',()=>{
+ const c=ctx();
+ const a=c.designExportGitRequestId(),b=c.designExportGitRequestId();
+ assert.match(a,/^[0-9a-f]{32}$/);assert.match(b,/^[0-9a-f]{32}$/);assert.notEqual(a,b);
+});
+test('designExportGitBody folds a pasted note to one line, caps it at 200 characters, and always sends push:true',()=>{
+ const c=ctx();
+ const body=c.designExportGitBody({requestId:'a'.repeat(32),checkpoint:'ospf-done',note:'  line one\r\nline two\ttab  '});
+ assert.equal(body.request_id,'a'.repeat(32));assert.equal(body.checkpoint,'ospf-done');
+ assert.equal(body.note,'line one line two tab');assert.equal(body.push,true);
+ const long=c.designExportGitBody({checkpoint:'c',note:'x'.repeat(250)});
+ assert.equal(long.note.length,200);
+ assert.match(c.designExportGitBody({checkpoint:'c'}).request_id,/^[0-9a-f]{32}$/,'a request id is generated when none is supplied');
+ assert.equal(c.designExportGitBody({checkpoint:'c'}).note,'');
+});
+test('designExportGitDestinationMarkup names the repository, branch and the checkpoint folder, and escapes every value',()=>{
+ const c=ctx();
+ const binding={repository:{path:'/home/me/labs/<img onerror=1>',branch:'main<script>',prefix:'JunOS-TEST-2/working'}};
+ const html=c.designExportGitDestinationMarkup(binding,'OSPF<script>done');
+ assert.doesNotMatch(html,/<script>|<img/);
+ assert.match(html,/&lt;img onerror=1&gt;/);
+ assert.match(html,/main&lt;script&gt;/);
+ assert.match(html,/JunOS-TEST-2\/working\/checkpoints\/OSPF&lt;script&gt;done/);
+ const rootRepo=c.designExportGitDestinationMarkup({repository:{path:'/r/Course-Labs',branch:'main'}},'baseline-1');
+ assert.match(rootRepo,/<code>Course-Labs<\/code>/);assert.match(rootRepo,/checkpoints\/baseline-1/);
+ assert.equal(c.designExportGitDestinationMarkup(null,'x'),c.designExportGitDestinationMarkup({},'x'),'a missing binding renders the same as an empty one');
+});
+test('designRenderExportGitButton disables #design-export-git with the reason as its title, mirroring #design-apply',()=>{
+ const c=ctx();
+ const els={'design-export-git':{disabled:false,title:''}};
+ c.$=id=>els[id];
+ c.designRenderExportGitButton({id:'lab1'},{generations:[]});
+ assert.equal(els['design-export-git'].disabled,true);assert.equal(els['design-export-git'].title,'Generate a plan first.');
+ const lab={id:'lab1',git_binding:{binding_id:'b',repository:{path:'/r'}}};
+ c.designRenderExportGitButton(lab,{generations:[{id:'g',status:'succeeded'}]});
+ assert.equal(els['design-export-git'].disabled,false);assert.equal(els['design-export-git'].title,'');
+});

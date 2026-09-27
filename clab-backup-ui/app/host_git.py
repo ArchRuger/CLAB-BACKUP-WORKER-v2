@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.30.46'
+VERSION = '1.30.47'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -573,7 +573,12 @@ class GitRepository:
             if target not in ('latest', 'baseline', 'checkpoint'): raise ValueError('Choose latest, baseline or checkpoint.')
             for key in ('replace_baseline', 'allow_removed', 'push'):
                 if key in req and type(req[key]) is not bool: raise ValueError('Invalid save option.')
-            folders = [] if target == 'baseline' else [self.scope('latest')]
+            # A design export (a plan's generated files, `kind: network-design`) is never a configuration
+            # snapshot: it goes to its own checkpoint folder only and never touches `latest` or `baseline`.
+            design = manifest.get('kind') == 'network-design'
+            if 'kind' in manifest and not design: raise ValueError('Unsupported snapshot kind.')   # a capture manifest carries no kind
+            if design and target != 'checkpoint': raise ValueError('A design export goes to its own checkpoint folder.')
+            folders = [] if target == 'baseline' or design else [self.scope('latest')]
             if target == 'baseline':
                 old = self.read_manifest(self.scope('baseline'))
                 if old and (not req.get('replace_baseline') or req.get('expected_baseline') != digest(old)):
@@ -589,6 +594,7 @@ class GitRepository:
             expected = {}; changed = []; before_hashes = {}
             for folder in folders:
                 old = self.read_manifest(folder)
+                if old and (old.get('kind') == 'network-design') != design: raise ValueError('This folder holds a different kind of snapshot; choose another name.')
                 # Every file the existing manifest owns: each device file and, for a schema-2 snapshot,
                 # the restore-grade artifact it references. Only the device files count as devices.
                 old_names = set(); old_devices = set()

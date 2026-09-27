@@ -48,6 +48,7 @@ def create_app(data_dir=None):
     restore=RestoreService(store,runner,git_progress)
     telemetry_retirement=TelemetryRetirement(store,services)
     network_design=NetworkDesign(store)
+    git_progress.designs = network_design   # design exports go through the student's Git save (kind `design`)
     design_apply=DesignApply(store,runner,network_design)
     @asynccontextmanager
     async def lifespan(app):

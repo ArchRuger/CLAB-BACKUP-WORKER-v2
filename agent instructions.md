@@ -1,3 +1,18 @@
+# Network design, part 5: Git export, health check, final report — 1.30.47
+
+Read `docs/netlab-integration/FINAL-REPORT.md` first (the whole stream in one page), then `PICKUP.md`. Preserve,
+beside the earlier points: (1) a design export is a Git job of kind `design` (`git_progress.export_design`,
+`NetworkDesign.design_snapshot`): checkpoint target only, never `latest` or `baseline`; the same `publish` request
+to the unchanged helper (plain names `<device>--<nn>-<module>.cfg`, sizes and digests checked twice, ≤500 files);
+the review before any upload and the one-save guard are the save's own (`review_before_push` from `push`, the
+reviewed retry is the only upload path); the manifest carries `kind: network-design`, no `node` rows and no
+`restore_artifact`, which is what keeps the restore away from it: do not add device rows to it. (2)
+`GitProgress.designs` is set by `main.py`; a manager without it answers 503 for the route. (3)
+`check_install.check_design_engine` warns, never fails, on a missing engine. (4) The two families outside the
+schema (protocol secrets D9.8, plugins D9.9) stay refused by name until their own reviewed chunk. Routing observed:
+Sonnet for the export tests and the export dialog; Opus `risk-reviewer` for the export; the lead for the backend,
+the health check, the records and the live steps.
+
 # Network design, part 4: feature families — 1.30.46
 
 Read `docs/netlab-integration/PICKUP.md` first, then `LEDGER.md` (the per-family, per-image truth) and

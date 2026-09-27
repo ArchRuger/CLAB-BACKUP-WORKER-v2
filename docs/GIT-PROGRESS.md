@@ -113,7 +113,17 @@ If identity is missing, set repository-local `user.name` and `user.email` to you
 intended author name and email before the first manager save. Authentication
 alone does not supply these settings.
 
-### Recovery after manually committing a failed manager export
+### Design exports
+
+*Export plan to Git…* on a lab's Design tab saves a generated network-design plan through this same pipeline as a
+save of kind `design`: the design file, the plan, the netlab topology, the endpoint mapping and every generated
+device file, with a manifest of kind `network-design`. Such a save goes to its own checkpoint folder
+(`…/checkpoints/<name>`) and never to `latest` or `baseline`; a checkpoint folder holds either configurations or a
+design, never both. It carries no device rows and no restore artifact, so the history lists it as view and download
+only and *Apply to running lab* never offers it. Everything else is a save's: the repository binding, the review
+before any upload, one save at a time, the pending-save guard on folder moves and reconnects.
+
+## Recovery after manually committing a failed manager export
 
 If you already committed the exported files from the CLI, finish publishing that
 manual commit as the repository owner. For a checkout on `main` with `origin`:
