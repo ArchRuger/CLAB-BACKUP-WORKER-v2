@@ -1,3 +1,97 @@
+# Network design, part 2: the Design tab — 1.30.44
+
+Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.43 (`b96cb89`, CI green). The Design tab
+(`network-design.js`, the `index.html` skeleton, `app.js` and `shell.js` additions, `test_network_design_ui.js`) was
+built by a Sonnet worker (observed `claude-sonnet-5`); the two further risk-review passes ran on the Opus
+`risk-reviewer` (observed `claude-opus-5-5`); the review fixes, the two browser tools and their runs, the deployment and
+the records are the lead's (Fable). Routing per task: `docs/netlab-integration/TESTS.md`.
+
+- **Risk review, passes two and three (Opus):** the second pass verified six chunk-1 fixes and found two more must-fix
+  items (prefixes inside module settings and VRF loopbacks unchecked against the management network; Remove lab and
+  Start fresh racing a running generation, leaving files) plus a regression (a VRF could no longer be attached to a
+  link); the third pass verified those and found one more must-fix (a topology without a `mgmt` block left
+  containerlab's default management network and gateway unguarded) and two should-fix items (dict-form VRF
+  loopbacks; `False` and a VRF name accepted at the device and global levels, which crash the engine). All applied and
+  pinned (`SecondPassRegression*`, `ThirdPassRegression*`, `CrashContractTests`); the reviewer's optional items are
+  listed in DECISIONS.md.
+- **Unit and real engine (this checkout, `netlab` on PATH):** `python -m unittest discover -s tests -t tests`
+  1439 OK (1 skipped, 341 s); the design files: `test_design_engine.py` 14, `test_design_capabilities.py` 21,
+  `test_design_intent.py` 138, `test_design_adapter.py` 71, `test_network_design.py` 61 (all with the real engine
+  where they generate). `node --test tests/*.js` 307 pass (281 before: `test_network_design_ui.js` adds 26: every
+  state word, the guided form to intent and back, plan, compatibility, generation-line and problems markup with
+  escaping, the draft helpers). `node --check`, `python -W error -c "import app.main"`, `verify-release.py`,
+  `check_links.py`, `git diff --check`.
+- **Browser, fixture (real app on scratch data, real engine, no VM; `docs/netlab-integration/tools/check_design_ui.py`,
+  report `docs/netlab-integration/evidence/browser-design-ui.md`, screenshots in `evidence/shots/`):** 20 of 20 checks
+  on the seeded `ospf-basics` lab (two cEOS, one XRv9k, no `mgmt` block), Chromium 153: the tab opens from the route,
+  a lab without a design says so, the devices table with profiles, a pool inside the (default) management network
+  refused with its path in view, editing marks the design unsaved, save, the advanced editor mirrors the guided
+  values, a real plan with every device, containerlab ports beside device ports, BGP sessions, compatibility
+  "generated, not yet tested live", the files card, the ZIP link, a file opened in a dialog, EIGRP on cEOS failing
+  before the engine with device and reason, a reload keeping the design, history, the export item, no overflow at
+  tablet width and nothing added to the shell's own overflow at phone width; 0 console errors, 0 page errors. Two
+  defects the first run found were fixed before the second: the page built intents without `schema: 1` (every save
+  refused) and the problems list sat inside the closed Advanced section.
+- **Live product on the dev VM:** `docker compose up -d --build` rebuilt `clab-backup:1.30.44` and recreated the
+  manager (state kept: the one lab, its jobs); `/api/state` answers 1.30.44 and the page serves
+  `network-design.js?v=1.30.44`. `docs/netlab-integration/tools/check_design_live.py` (report
+  `evidence/live-design-restore-square.md`, screenshot `live-restore-square-plan.png`): 17 of 17 checks on the real
+  `restore-square` lab: engine available at `/usr/local/bin/netlab` inside the image, the design saved, a plan
+  generated inside the product for the four images plus the host (files for every included device, ledger pinned,
+  engine 26.09, the plan carrying `Gi0/0/0/0` and `et-0/0/0` as containerlab ports), the ZIP downloaded, a second
+  plan of the same design with no renumbering and the same ledger, `/api/state` carrying the summary and never the
+  intent, the tab showing the plan in Chromium with no console or page errors. Generation only: no device, VM file
+  or Docker action; the devices' configurations are untouched.
+- **Not done in this release:** applying a plan to devices (milestone D), so every capability stays
+  `generated_not_live_tested` at best in the ledger; cJunosEvolved in `restore-square` was reboot-looping inside its
+  container (131 boot banners) and the lab needs a redeploy before any live device work; the shell's own width at
+  phone size (428 px on every tab) is a pre-existing layout debt recorded in the handoff.
+
+# Network design, part 1: engine boundary and data model — 1.30.43
+
+Prepared on `claude/netlab-integration` on 2026-09-26 from `origin/main` `1e72899` (1.30.42). Backend only: the
+intent schema, the adapter and the service were written by the lead (Fable); the engine runner, the capability
+model with its data tool, and the three test files by Sonnet workers (observed `claude-sonnet-5` in every task's
+transcript metadata); the engine boundary, routes and ledger were reviewed by the Opus `risk-reviewer`
+(three passes: the first found two must-fix and nine should-fix items, the second verified six fixes and found two more
+must-fix items and a regression, all applied and pinned by the `ReviewRegression*` and `SecondPassRegression*`
+tests; the third pass, on those last fixes, was still running when this checkpoint was committed at the owner's
+request and is recorded in the next release's entry). Routing and evidence per task: `docs/netlab-integration/TESTS.md`.
+
+- **Unit and real engine (this checkout, venv with `networklab==26.9`, `netlab` on PATH):**
+  `python -m unittest discover -s tests -t tests` 1433 OK (1 skipped, 335 s; 1134 before this stream); the new files run the pinned engine for
+  real: `test_design_engine.py` 13 (argv, environment, cwd, stdin and session contract, the statistics opt-out,
+  timeout kill, cancel, error contract, no-network contract on the installed `stats.py`),
+  `test_design_capabilities.py` 21 (the committed data equals a fresh regeneration by the tool; profiles; EIGRP,
+  SRv6, anycast, GRE, WireGuard resolutions; prerequisites; matrix; catalogue), `test_design_intent.py` 135
+  (envelope, pools, families, module settings against the engine's own schema, VLANs, VRFs, targets, nodes,
+  links, endpoints, overrides, ledger, size limit), `test_design_adapter.py` 69 (link parsing, management
+  networks, endpoint mapping per kind, the built topology, exclusions, blocks, pins, collisions and their fix,
+  overlaps, plan summary, one real generation), `test_network_design.py` 61 (the routes on
+  scratch state through the real app: validation, revision guard, server-owned ledger, generation with the real
+  engine, artifacts and digests, ZIP, export/import, unsupported feature refused, one generation at a time, no
+  socket and no helper during a generation, restart reconciliation, bounded history).
+  `node --test tests/*.js` 281 pass; `node --check`; `python -W error -c "import app.main"`;
+  `verify-release.py`; `check_links.py`; `git diff --check`.
+- **Real-engine properties proven by the lead's smoke runs on the acceptance lab's topology file (session
+  scratch, recorded in DECISIONS.md):** the four-image square compiles under `provider: external` with explicit
+  `ifname`, `mgmt.ipv4` and `mgmt.ifname`; a reordered topology file yields byte-identical artifacts; pinned ids,
+  loopbacks and link prefixes survive an inserted link with no renumbering; netlab allocates a new link on top of
+  a pinned prefix (`10.1.0.0/31` twice), which the second pass fixes (`10.1.0.8/31`, `2001:db8:1:4::/64`) with no
+  overlap and untouched files identical.
+- **Packaging (this VM, Docker 29.8.1):** `docker compose -f clab-backup-ui/compose.yml build` produced
+  `clab-backup:1.30.43` (567 MB, 494 MB before: the engine and its dependencies add 73 MB); inside the image
+  `netlab version` answers `26.09` from `/usr/local/bin/netlab` as the unprivileged `worker` (the distribution
+  metadata that `engine_status()` reads without starting a process spells the same release `26.9`); a real
+  generation (two devices, OSPF and BGP, dual stack) ran inside the image with `--network none` (offline) through
+  the application's own modules and produced the ordered artifacts, once before and once after the review fixes
+  (rebuilt on the final code). The image was built, not deployed.
+- **Not done in this release:** no page in the manager UI (API only), no device or VM access of any kind by the
+  new code (by design), no live protocol evidence (the ledger marks every capability `generated_not_live_tested`
+  at best), no deployment of this build on the dev VM yet (the running manager stays 1.30.42 until the page
+  exists). The acceptance lab `restore-square` was redeployed at the start of the stream and its devices run
+  containerlab's startup configurations; cJunosEvolved had not opened SSH 45 minutes after the deploy.
+
 # Technical audit, part 4: backend and state — 1.30.42
 
 Prepared on `claude/technical-audit` on 2026-09-23 after 1.30.41 (`e192ead`, CI green). Backend changes in
