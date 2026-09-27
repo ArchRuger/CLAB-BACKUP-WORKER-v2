@@ -1,0 +1,798 @@
+{
+ "started": "2026-09-27T21:04:26+00:00",
+ "manager": "1.30.49",
+ "containerlab": "0.79.0",
+ "lab": "restore-square",
+ "lab_id": "174386ec12ee496190c585c5796b2662",
+ "device": "clab-restore-square-ceos",
+ "label": "ceos",
+ "kind": "arista_ceos",
+ "runs": {
+  "map-running": {
+   "before": {
+    "clab-restore-square-ceos": {
+     "id": "1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a",
+     "started": "2026-09-27T20:33:47.675161284Z",
+     "status": "running",
+     "pid": 3420715
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5",
+     "started": "2026-09-27T20:13:31.729226962Z",
+     "status": "running",
+     "pid": 3336650
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de",
+     "started": "2026-09-27T18:45:24.008831742Z",
+     "status": "running",
+     "pid": 3124584
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d",
+     "started": "2026-09-27T20:58:45.79517717Z",
+     "status": "running",
+     "pid": 3478402
+    },
+    "clab-restore-square-host1": {
+     "id": "f70592ffd78eb5eb3bc248fb96ee0fee0b0c48a3acacb7461f4f4be5cbaedc1a",
+     "started": "2026-09-27T20:34:13.041937123Z",
+     "status": "running",
+     "pid": 3423325
+    }
+   },
+   "links_before": [
+    "cpu",
+    "fabric",
+    "fabric1",
+    "fabric2",
+    "fabric3",
+    "fwd0",
+    "mirror0",
+    "mirror1",
+    "mirror2",
+    "mirror3",
+    "arpsnoop",
+    "arpinject",
+    "eth1@if374",
+    "eth3@if380",
+    "eth2@if384"
+   ],
+   "entry": "map",
+   "design_before": {
+    "design_revision": "c80a6c7278ecb6083bc9e883",
+    "design_updated": "2026-09-27T02:53:26.674998+00:00",
+    "generations": [
+     [
+      "d6334bf4f22c425d849432b6cdd20ea4",
+      "succeeded"
+     ],
+     [
+      "9c4456611e754e71a88b7ddea6311926",
+      "succeeded"
+     ],
+     [
+      "44871fdd6f244fe4af50c734a2d19961",
+      "succeeded"
+     ],
+     [
+      "f99b9f8605c4451f8f18b94dc50b54ac",
+      "succeeded"
+     ],
+     [
+      "b37045342ee0408282eadf0f5d718f42",
+      "succeeded"
+     ],
+     [
+      "07503fb90ae34fa2ba7caa73783bb9a3",
+      "failed"
+     ],
+     [
+      "6a7f2374899447039254253e49baed30",
+      "succeeded"
+     ],
+     [
+      "ad5faba619c44dcdae4ebc6f77276acf",
+      "succeeded"
+     ],
+     [
+      "57371369e14e483bb7e25ee6f64c6f3f",
+      "succeeded"
+     ]
+    ],
+    "git_binding": {
+     "binding_id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+     "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2",
+     "repository": {
+      "id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+      "label": "CLAB-MNGR-DEV-LLM / restore-square/qa-1-30-37",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "restore-square/qa-1-30-37",
+      "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "last_deployed": ""
+   },
+   "confirmed_at": "2026-09-27T21:04:32+00:00",
+   "job": {
+    "id": "8aec66a1a0c245ff9e9195c47ad85a92",
+    "action": "restart-node",
+    "node": "clab-restore-square-ceos",
+    "node_label": "ceos",
+    "status": "succeeded",
+    "exit_code": 0,
+    "message": "Operation completed \u00b7 3 links restored",
+    "created": "2026-09-27T21:04:32.376011+00:00",
+    "started": "2026-09-27T21:04:32.387782+00:00",
+    "finished": "2026-09-27T21:04:36.460316+00:00"
+   },
+   "job_output": "21:04:32 INFO Parsing & checking topology file=restore-square.clab.yml\n21:04:34 INFO Restored link node=ceos interface=eth1\n21:04:34 INFO Restored link node=ceos interface=eth2\n21:04:34 INFO Restored link node=ceos interface=eth3\n",
+   "after": {
+    "clab-restore-square-ceos": {
+     "id": "1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a",
+     "started": "2026-09-27T21:04:33.867271302Z",
+     "status": "running",
+     "pid": 3507484
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5",
+     "started": "2026-09-27T20:13:31.729226962Z",
+     "status": "running",
+     "pid": 3336650
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de",
+     "started": "2026-09-27T18:45:24.008831742Z",
+     "status": "running",
+     "pid": 3124584
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d",
+     "started": "2026-09-27T20:58:45.79517717Z",
+     "status": "running",
+     "pid": 3478402
+    },
+    "clab-restore-square-host1": {
+     "id": "f70592ffd78eb5eb3bc248fb96ee0fee0b0c48a3acacb7461f4f4be5cbaedc1a",
+     "started": "2026-09-27T20:34:13.041937123Z",
+     "status": "running",
+     "pid": 3423325
+    }
+   },
+   "links_after": [
+    "eth1@if374",
+    "eth3@if380",
+    "eth2@if384"
+   ],
+   "readiness": {
+    "states": [
+     [
+      "2026-09-27T21:04:36+00:00",
+      "booting"
+     ],
+     [
+      "2026-09-27T21:04:57+00:00",
+      "ready"
+     ]
+    ],
+    "ready_at": "2026-09-27T21:04:56.766087+00:00",
+    "budget_s": 300
+   },
+   "design_after": {
+    "design_revision": "c80a6c7278ecb6083bc9e883",
+    "design_updated": "2026-09-27T02:53:26.674998+00:00",
+    "generations": [
+     [
+      "d6334bf4f22c425d849432b6cdd20ea4",
+      "succeeded"
+     ],
+     [
+      "9c4456611e754e71a88b7ddea6311926",
+      "succeeded"
+     ],
+     [
+      "44871fdd6f244fe4af50c734a2d19961",
+      "succeeded"
+     ],
+     [
+      "f99b9f8605c4451f8f18b94dc50b54ac",
+      "succeeded"
+     ],
+     [
+      "b37045342ee0408282eadf0f5d718f42",
+      "succeeded"
+     ],
+     [
+      "07503fb90ae34fa2ba7caa73783bb9a3",
+      "failed"
+     ],
+     [
+      "6a7f2374899447039254253e49baed30",
+      "succeeded"
+     ],
+     [
+      "ad5faba619c44dcdae4ebc6f77276acf",
+      "succeeded"
+     ],
+     [
+      "57371369e14e483bb7e25ee6f64c6f3f",
+      "succeeded"
+     ]
+    ],
+    "git_binding": {
+     "binding_id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+     "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2",
+     "repository": {
+      "id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+      "label": "CLAB-MNGR-DEV-LLM / restore-square/qa-1-30-37",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "restore-square/qa-1-30-37",
+      "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "last_deployed": ""
+   }
+  },
+  "devices-running": {
+   "before": {
+    "clab-restore-square-ceos": {
+     "id": "1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a",
+     "started": "2026-09-27T21:04:33.867271302Z",
+     "status": "running",
+     "pid": 3507484
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5",
+     "started": "2026-09-27T20:13:31.729226962Z",
+     "status": "running",
+     "pid": 3336650
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de",
+     "started": "2026-09-27T18:45:24.008831742Z",
+     "status": "running",
+     "pid": 3124584
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d",
+     "started": "2026-09-27T20:58:45.79517717Z",
+     "status": "running",
+     "pid": 3478402
+    },
+    "clab-restore-square-host1": {
+     "id": "f70592ffd78eb5eb3bc248fb96ee0fee0b0c48a3acacb7461f4f4be5cbaedc1a",
+     "started": "2026-09-27T20:34:13.041937123Z",
+     "status": "running",
+     "pid": 3423325
+    }
+   },
+   "links_before": [
+    "cpu",
+    "fabric",
+    "fabric1",
+    "fabric2",
+    "fabric3",
+    "fwd0",
+    "mirror0",
+    "mirror1",
+    "mirror2",
+    "mirror3",
+    "arpsnoop",
+    "arpinject",
+    "eth1@if374",
+    "eth3@if380",
+    "eth2@if384"
+   ],
+   "entry": "devices",
+   "design_before": {
+    "design_revision": "c80a6c7278ecb6083bc9e883",
+    "design_updated": "2026-09-27T02:53:26.674998+00:00",
+    "generations": [
+     [
+      "d6334bf4f22c425d849432b6cdd20ea4",
+      "succeeded"
+     ],
+     [
+      "9c4456611e754e71a88b7ddea6311926",
+      "succeeded"
+     ],
+     [
+      "44871fdd6f244fe4af50c734a2d19961",
+      "succeeded"
+     ],
+     [
+      "f99b9f8605c4451f8f18b94dc50b54ac",
+      "succeeded"
+     ],
+     [
+      "b37045342ee0408282eadf0f5d718f42",
+      "succeeded"
+     ],
+     [
+      "07503fb90ae34fa2ba7caa73783bb9a3",
+      "failed"
+     ],
+     [
+      "6a7f2374899447039254253e49baed30",
+      "succeeded"
+     ],
+     [
+      "ad5faba619c44dcdae4ebc6f77276acf",
+      "succeeded"
+     ],
+     [
+      "57371369e14e483bb7e25ee6f64c6f3f",
+      "succeeded"
+     ]
+    ],
+    "git_binding": {
+     "binding_id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+     "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2",
+     "repository": {
+      "id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+      "label": "CLAB-MNGR-DEV-LLM / restore-square/qa-1-30-37",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "restore-square/qa-1-30-37",
+      "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "last_deployed": ""
+   },
+   "confirmed_at": "2026-09-27T21:05:03+00:00",
+   "job": {
+    "id": "303fa1af793145729a78c9077996e62e",
+    "action": "restart-node",
+    "node": "clab-restore-square-ceos",
+    "node_label": "ceos",
+    "status": "succeeded",
+    "exit_code": 0,
+    "message": "Operation completed \u00b7 3 links restored",
+    "created": "2026-09-27T21:05:03.461252+00:00",
+    "started": "2026-09-27T21:05:03.473456+00:00",
+    "finished": "2026-09-27T21:05:07.927018+00:00"
+   },
+   "job_output": "21:05:03 INFO Parsing & checking topology file=restore-square.clab.yml\n21:05:05 INFO Restored link node=ceos interface=eth1\n21:05:05 INFO Restored link node=ceos interface=eth2\n21:05:05 INFO Restored link node=ceos interface=eth3\n",
+   "after": {
+    "clab-restore-square-ceos": {
+     "id": "1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a",
+     "started": "2026-09-27T21:05:04.953431836Z",
+     "status": "running",
+     "pid": 3510486
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5",
+     "started": "2026-09-27T20:13:31.729226962Z",
+     "status": "running",
+     "pid": 3336650
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de",
+     "started": "2026-09-27T18:45:24.008831742Z",
+     "status": "running",
+     "pid": 3124584
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d",
+     "started": "2026-09-27T20:58:45.79517717Z",
+     "status": "running",
+     "pid": 3478402
+    },
+    "clab-restore-square-host1": {
+     "id": "f70592ffd78eb5eb3bc248fb96ee0fee0b0c48a3acacb7461f4f4be5cbaedc1a",
+     "started": "2026-09-27T20:34:13.041937123Z",
+     "status": "running",
+     "pid": 3423325
+    }
+   },
+   "links_after": [
+    "eth1@if374",
+    "eth3@if380",
+    "eth2@if384"
+   ],
+   "readiness": {
+    "states": [
+     [
+      "2026-09-27T21:05:08+00:00",
+      "booting"
+     ],
+     [
+      "2026-09-27T21:05:29+00:00",
+      "ready"
+     ]
+    ],
+    "ready_at": "2026-09-27T21:05:28.267131+00:00",
+    "budget_s": 300
+   },
+   "design_after": {
+    "design_revision": "c80a6c7278ecb6083bc9e883",
+    "design_updated": "2026-09-27T02:53:26.674998+00:00",
+    "generations": [
+     [
+      "d6334bf4f22c425d849432b6cdd20ea4",
+      "succeeded"
+     ],
+     [
+      "9c4456611e754e71a88b7ddea6311926",
+      "succeeded"
+     ],
+     [
+      "44871fdd6f244fe4af50c734a2d19961",
+      "succeeded"
+     ],
+     [
+      "f99b9f8605c4451f8f18b94dc50b54ac",
+      "succeeded"
+     ],
+     [
+      "b37045342ee0408282eadf0f5d718f42",
+      "succeeded"
+     ],
+     [
+      "07503fb90ae34fa2ba7caa73783bb9a3",
+      "failed"
+     ],
+     [
+      "6a7f2374899447039254253e49baed30",
+      "succeeded"
+     ],
+     [
+      "ad5faba619c44dcdae4ebc6f77276acf",
+      "succeeded"
+     ],
+     [
+      "57371369e14e483bb7e25ee6f64c6f3f",
+      "succeeded"
+     ]
+    ],
+    "git_binding": {
+     "binding_id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+     "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2",
+     "repository": {
+      "id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+      "label": "CLAB-MNGR-DEV-LLM / restore-square/qa-1-30-37",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "restore-square/qa-1-30-37",
+      "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2"
+     },
+     "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+     "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+     ],
+     "review_before_push": true
+    },
+    "last_deployed": ""
+   }
+  }
+ },
+ "reviews": {
+  "map-running": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 18 hours ago to Git.\n\n1 device affected: ceos (clab-restore-square-ceos, running). The other devices of restore-square are not restarted.\n\nTechnical details\n\nRuns on the lab VM. If the lab changes before you confirm, this check is repeated.\n\nCancel\nSave progress first\nRestart device",
+  "devices-running": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 18 hours ago to Git.\n\n1 device affected: ceos (clab-restore-square-ceos, running). The other devices of restore-square are not restarted.\n\nTechnical details\n\nRuns on the lab VM. If the lab changes before you confirm, this check is repeated.\n\nCancel\nSave progress first\nRestart device"
+ },
+ "chromium": "153.0.8010.12",
+ "checks": [
+  {
+   "name": "the map menu offers Restart device\u2026 for the device",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "name": "the review is titled for the one device",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with it"
+  },
+  {
+   "name": "the review names the device and the lab and the native operation",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "the review says what drops and does not promise unrelated traffic is untouched",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "the review says nothing is saved, backed up, reset or reapplied",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "the affected list is the one device",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "the command names exactly one --node, followed by the device",
+   "ok": false,
+   "detail": "t (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 18 hours ago to Git.\n\n1 device affected: ceos (clab-restore-square-ceos, running). "
+  },
+  {
+   "name": "the confirm button is the destructive Restart device",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the review carries no known-limit note for this image",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "Cancel starts nothing",
+   "ok": true,
+   "detail": "jobs grew"
+  },
+  {
+   "name": "Cancel leaves the container untouched",
+   "ok": true,
+   "detail": "{\"id\": \"1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a\", \"started\": \"2026-09-27T20:33:47.675161284Z\", \"status\": \"running\", \"pid\": 3420715}"
+  },
+  {
+   "name": "the device reads Restarting while the job runs",
+   "ok": true,
+   "detail": "pill: Restarting"
+  },
+  {
+   "name": "the lab banner names the device being restarted",
+   "ok": true,
+   "detail": "Restarting ceos\u2026DetailsExecuting on the VMStart labView outputView progressTry againRetryDetailsCheck credentialsVM connection\u2026Match to a running lab\u2026Review and remove\u2026Dismiss\u00d7"
+  },
+  {
+   "name": "one Restart device job exists for the device",
+   "ok": true,
+   "detail": "{\"id\": \"8aec66a1a0c245ff9e9195c47ad85a92\", \"lab_id\": \"174386ec12ee496190c585c5796b2662\", \"name\": \"restore-square\", \"action\": \"restart-node\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"created\": \"2026-09-27T21:04:32.376011+00:00\", \"status\": \"running\", \""
+  },
+  {
+   "name": "the job succeeded",
+   "ok": true,
+   "detail": "Operation completed \u00b7 3 links restored"
+  },
+  {
+   "name": "the job output is containerlab's own restart log",
+   "ok": true,
+   "detail": "21:04:32 INFO Parsing & checking topology file=restore-square.clab.yml\n21:04:34 INFO Restored link node=ceos interface=eth1\n21:04:34 INFO Restored link node=ceos interface=eth2\n21:04:34 INFO Restored "
+  },
+  {
+   "name": "the job message counts the restored links",
+   "ok": true,
+   "detail": "Operation completed \u00b7 3 links restored"
+  },
+  {
+   "name": "every dataplane link of the device was restored",
+   "ok": true,
+   "detail": "restored 3, expected 3"
+  },
+  {
+   "name": "the target kept its container id and has a new start time",
+   "ok": true,
+   "detail": "{\"id\": \"1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a\", \"started\": \"2026-09-27T21:04:33.867271302Z\", \"status\": \"running\", \"pid\": 3507484}"
+  },
+  {
+   "name": "the other containers kept their ids, start times and processes",
+   "ok": true,
+   "detail": "{\"clab-restore-square-cjunosevolved\": {\"id\": \"5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5\", \"started\": \"2026-09-27T20:13:31.729226962Z\", \"status\": \"running\", \"pid\": 3336650}, \"clab-restore-square-vjunos-switch\": {\"id\": \"919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de\", \"started\": \"2026-09-27T18:45:24.008831742Z\", \"status\": \"running\", \"pid\": 3124584}, \"clab-res"
+  },
+  {
+   "name": "the device has its dataplane interfaces back",
+   "ok": true,
+   "detail": "eth1@if374, eth3@if380, eth2@if384"
+  },
+  {
+   "name": "the device went back through Starting (its old proof was dropped)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T21:04:36+00:00\", \"booting\"], [\"2026-09-27T21:04:57+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "no false credentials failure between Starting and Ready",
+   "ok": true,
+   "detail": "[[\"2026-09-27T21:04:36+00:00\", \"booting\"], [\"2026-09-27T21:04:57+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the device is Ready again with a check made after the restart (within 300 s)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T21:04:36+00:00\", \"booting\"], [\"2026-09-27T21:04:57+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the rail reads Ready for the device again",
+   "ok": true,
+   "detail": "Ready"
+  },
+  {
+   "name": "the design, its plans, the Git binding and the deployment time are untouched",
+   "ok": true,
+   "detail": "{\"before\": {\"design_revision\": \"c80a6c7278ecb6083bc9e883\", \"design_updated\": \"2026-09-27T02:53:26.674998+00:00\", \"generations\": [[\"d6334bf4f22c425d849432b6cdd20ea4\", \"succeeded\"], [\"9c4456611e754e71a88b7ddea6311926\", \"succeeded\"], [\"44871fdd6f244fe4af50c734a2d19961\", \"succeeded\"], [\"f99b9f8605c4451f8f18b94dc50b54ac\", \"succeeded\"], [\"b37045342ee0408282eadf0f5d718f42\", \"succeeded\"], [\"07503fb90ae34f"
+  },
+  {
+   "name": "the device panel offers Restart device\u2026 among the per-device actions",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "name": "Restart device\u2026 is reachable by keyboard in the device panel",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the review is titled for the one device",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with it"
+  },
+  {
+   "name": "the review names the device and the lab and the native operation",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "the review says what drops and does not promise unrelated traffic is untouched",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "the review says nothing is saved, backed up, reset or reapplied",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "the affected list is the one device",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "the command names exactly one --node, followed by the device",
+   "ok": false,
+   "detail": "t (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 18 hours ago to Git.\n\n1 device affected: ceos (clab-restore-square-ceos, running). "
+  },
+  {
+   "name": "the confirm button is the destructive Restart device",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the review carries no known-limit note for this image",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration"
+  },
+  {
+   "name": "the device panel stays open under the review (focus returns to its button afterwards)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the device reads Restarting while the job runs",
+   "ok": true,
+   "detail": "pill: Restarting"
+  },
+  {
+   "name": "the lab banner names the device being restarted",
+   "ok": true,
+   "detail": "Restarting ceos\u2026DetailsExecuting on the VMStart labView outputView progressTry againRetryDetailsCheck credentialsVM connection\u2026Match to a running lab\u2026Review and remove\u2026Dismiss\u00d7"
+  },
+  {
+   "name": "one Restart device job exists for the device",
+   "ok": true,
+   "detail": "{\"id\": \"303fa1af793145729a78c9077996e62e\", \"lab_id\": \"174386ec12ee496190c585c5796b2662\", \"name\": \"restore-square\", \"action\": \"restart-node\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"created\": \"2026-09-27T21:05:03.461252+00:00\", \"status\": \"running\", \""
+  },
+  {
+   "name": "the job succeeded",
+   "ok": true,
+   "detail": "Operation completed \u00b7 3 links restored"
+  },
+  {
+   "name": "the job output is containerlab's own restart log",
+   "ok": true,
+   "detail": "21:05:03 INFO Parsing & checking topology file=restore-square.clab.yml\n21:05:05 INFO Restored link node=ceos interface=eth1\n21:05:05 INFO Restored link node=ceos interface=eth2\n21:05:05 INFO Restored "
+  },
+  {
+   "name": "the job message counts the restored links",
+   "ok": true,
+   "detail": "Operation completed \u00b7 3 links restored"
+  },
+  {
+   "name": "every dataplane link of the device was restored",
+   "ok": true,
+   "detail": "restored 3, expected 3"
+  },
+  {
+   "name": "the target kept its container id and has a new start time",
+   "ok": true,
+   "detail": "{\"id\": \"1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a\", \"started\": \"2026-09-27T21:05:04.953431836Z\", \"status\": \"running\", \"pid\": 3510486}"
+  },
+  {
+   "name": "the other containers kept their ids, start times and processes",
+   "ok": true,
+   "detail": "{\"clab-restore-square-cjunosevolved\": {\"id\": \"5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5\", \"started\": \"2026-09-27T20:13:31.729226962Z\", \"status\": \"running\", \"pid\": 3336650}, \"clab-restore-square-vjunos-switch\": {\"id\": \"919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de\", \"started\": \"2026-09-27T18:45:24.008831742Z\", \"status\": \"running\", \"pid\": 3124584}, \"clab-res"
+  },
+  {
+   "name": "the device has its dataplane interfaces back",
+   "ok": true,
+   "detail": "eth1@if374, eth3@if380, eth2@if384"
+  },
+  {
+   "name": "the device went back through Starting (its old proof was dropped)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T21:05:08+00:00\", \"booting\"], [\"2026-09-27T21:05:29+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "no false credentials failure between Starting and Ready",
+   "ok": true,
+   "detail": "[[\"2026-09-27T21:05:08+00:00\", \"booting\"], [\"2026-09-27T21:05:29+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the device is Ready again with a check made after the restart (within 300 s)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T21:05:08+00:00\", \"booting\"], [\"2026-09-27T21:05:29+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the rail reads Ready for the device again",
+   "ok": true,
+   "detail": "Ready"
+  },
+  {
+   "name": "the design, its plans, the Git binding and the deployment time are untouched",
+   "ok": true,
+   "detail": "{\"before\": {\"design_revision\": \"c80a6c7278ecb6083bc9e883\", \"design_updated\": \"2026-09-27T02:53:26.674998+00:00\", \"generations\": [[\"d6334bf4f22c425d849432b6cdd20ea4\", \"succeeded\"], [\"9c4456611e754e71a88b7ddea6311926\", \"succeeded\"], [\"44871fdd6f244fe4af50c734a2d19961\", \"succeeded\"], [\"f99b9f8605c4451f8f18b94dc50b54ac\", \"succeeded\"], [\"b37045342ee0408282eadf0f5d718f42\", \"succeeded\"], [\"07503fb90ae34f"
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "shots": [
+  "ceos-2104-map-running-01-map-menu.png",
+  "ceos-2104-map-running-02-review.png",
+  "ceos-2104-map-running-03-restarting.png",
+  "ceos-2104-map-running-04-ready-again.png",
+  "ceos-2104-devices-running-01-device-panel.png",
+  "ceos-2104-devices-running-02-review.png",
+  "ceos-2104-devices-running-03-restarting.png",
+  "ceos-2104-devices-running-04-ready-again.png"
+ ],
+ "finished": "2026-09-27T21:05:34+00:00"
+}

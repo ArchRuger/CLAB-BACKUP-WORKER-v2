@@ -1,0 +1,449 @@
+{
+ "started": "2026-09-27T20:35:41+00:00",
+ "manager": "1.30.48",
+ "lab_id": "174386ec12ee496190c585c5796b2662",
+ "other_lab": {
+  "name": "netlab-test",
+  "id": "f1840c803b434644a1e7405fc8ad19fe",
+  "node": "clab-netlab-test-ptx1"
+ },
+ "cases": [
+  {
+   "case": "preview clab-restore-square-vjunos-switch",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-vjunos-switch"
+   },
+   "status": 200,
+   "response": {
+    "warnings": [
+     "Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0.79.0."
+    ],
+    "argv": [
+     "/usr/bin/containerlab",
+     "restart",
+     "-t",
+     "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+     "--name",
+     "restore-square",
+     "--node",
+     "vjunos-switch"
+    ],
+    "affected": [
+     {
+      "name": "clab-restore-square-vjunos-switch",
+      "id": "919f92641f07",
+      "state": "running"
+     }
+    ],
+    "action": "restart-node",
+    "node": "clab-restore-square-vjunos-switch",
+    "node_label": "vjunos-switch",
+    "token_issued": true
+   },
+   "response_keys": [
+    "action",
+    "affected",
+    "argv",
+    "container",
+    "digest",
+    "name",
+    "node",
+    "node_label",
+    "path",
+    "source_hash",
+    "source_name",
+    "steps",
+    "token",
+    "warnings"
+   ]
+  },
+  {
+   "case": "preview clab-restore-square-xrv9k",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-xrv9k"
+   },
+   "status": 200,
+   "response": {
+    "warnings": [
+     "Known limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (proven on cisco_xrv9k 24.3.1 with containerlab 0.79.0). Back up the configuration first and use Replace running configuration afterwards."
+    ],
+    "argv": [
+     "/usr/bin/containerlab",
+     "restart",
+     "-t",
+     "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+     "--name",
+     "restore-square",
+     "--node",
+     "xrv9k"
+    ],
+    "affected": [
+     {
+      "name": "clab-restore-square-xrv9k",
+      "id": "520eaf6e1cff",
+      "state": "running"
+     }
+    ],
+    "action": "restart-node",
+    "node": "clab-restore-square-xrv9k",
+    "node_label": "xrv9k",
+    "token_issued": true
+   },
+   "response_keys": [
+    "action",
+    "affected",
+    "argv",
+    "container",
+    "digest",
+    "name",
+    "node",
+    "node_label",
+    "path",
+    "source_hash",
+    "source_name",
+    "steps",
+    "token",
+    "warnings"
+   ]
+  },
+  {
+   "case": "preview clab-restore-square-ceos (control)",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-ceos"
+   },
+   "status": 200,
+   "response": {
+    "warnings": [],
+    "argv": [
+     "/usr/bin/containerlab",
+     "restart",
+     "-t",
+     "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+     "--name",
+     "restore-square",
+     "--node",
+     "ceos"
+    ],
+    "affected": [
+     {
+      "name": "clab-restore-square-ceos",
+      "id": "1f5d55773644",
+      "state": "running"
+     }
+    ],
+    "action": "restart-node",
+    "node": "clab-restore-square-ceos",
+    "node_label": "ceos",
+    "token_issued": true
+   },
+   "response_keys": [
+    "action",
+    "affected",
+    "argv",
+    "container",
+    "digest",
+    "name",
+    "node",
+    "node_label",
+    "path",
+    "source_hash",
+    "source_name",
+    "steps",
+    "token",
+    "warnings"
+   ]
+  },
+  {
+   "case": "refusal: node of another lab",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-netlab-test-ptx1"
+   },
+   "status": 404,
+   "response": {
+    "detail": "This device is not in the lab."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: made-up node name",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-nosuchdevice"
+   },
+   "status": 404,
+   "response": {
+    "detail": "This device is not in the lab."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: short name instead of the container name",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "ceos"
+   },
+   "status": 404,
+   "response": {
+    "detail": "This device is not in the lab."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: options with node set",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-ceos",
+    "options": {
+     "node": "ceos"
+    }
+   },
+   "status": 400,
+   "response": {
+    "detail": "The device selector is resolved by the manager, not sent by the page."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: options with node set (no top-level node)",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "options": {
+     "node": "ceos"
+    }
+   },
+   "status": 400,
+   "response": {
+    "detail": "The device selector is resolved by the manager, not sent by the page."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: options with container set",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-ceos",
+    "options": {
+     "container": "clab-restore-square-xrv9k"
+    }
+   },
+   "status": 400,
+   "response": {
+    "detail": "The device selector is resolved by the manager, not sent by the page."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: other options",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-ceos",
+    "options": {
+     "force": true
+    }
+   },
+   "status": 400,
+   "response": {
+    "detail": "Restart device takes no options."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: path set",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-ceos",
+    "path": "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml"
+   },
+   "status": 400,
+   "response": {
+    "detail": "Restart device uses the lab's own topology file."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: no node",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662"
+   },
+   "status": 400,
+   "response": {
+    "detail": "Choose the device to restart."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: node on the lab-wide restart",
+   "request": {
+    "action": "restart",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-ceos"
+   },
+   "status": 400,
+   "response": {
+    "detail": "Only Restart device names a single device."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "refusal: comma list as node",
+   "request": {
+    "action": "restart-node",
+    "lab_id": "174386ec12ee496190c585c5796b2662",
+    "node": "clab-restore-square-ceos,clab-restore-square-xrv9k"
+   },
+   "status": 404,
+   "response": {
+    "detail": "This device is not in the lab."
+   },
+   "response_keys": [
+    "detail"
+   ]
+  },
+  {
+   "case": "foreign Origin",
+   "status": 403,
+   "response": {
+    "detail": "Use this manager from its own browser page."
+   }
+  }
+ ],
+ "checks": [
+  {
+   "name": "clab-restore-square-vjunos-switch preview answers 200",
+   "ok": true,
+   "detail": "200 {\"action\": \"restart-node\", \"name\": \"restore-square\", \"source_name\": \"restore-square\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"source_hash\": \"3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5\", \"affected\": [{\"name\": \"clab-restore-squar"
+  },
+  {
+   "name": "clab-restore-square-vjunos-switch preview carries the known-limit warning (cannot be started a second time)",
+   "ok": true,
+   "detail": "['Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0.79.0.']"
+  },
+  {
+   "name": "clab-restore-square-vjunos-switch preview names exactly one --node, the topology node",
+   "ok": true,
+   "detail": "{\"action\": \"restart-node\", \"name\": \"restore-square\", \"source_name\": \"restore-square\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"source_hash\": \"3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5\", \"affected\": [{\"name\": \"clab-restore-square-vjunos-switch\", \"id\": \"919f92641f07\", \"state\": \"running\"}], \"argv\": [\"/usr/bin/containerlab\", \"restart\", \"-t\", \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"--name\", \"restore-square\", \"--node\", \"vjunos-switch\"], \"steps\": [], \"node\": \"clab-restore-square-vjunos-"
+  },
+  {
+   "name": "clab-restore-square-xrv9k preview answers 200",
+   "ok": true,
+   "detail": "200 {\"action\": \"restart-node\", \"name\": \"restore-square\", \"source_name\": \"restore-square\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"source_hash\": \"3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5\", \"affected\": [{\"name\": \"clab-restore-squar"
+  },
+  {
+   "name": "clab-restore-square-xrv9k preview carries the known-limit warning (factory configuration)",
+   "ok": true,
+   "detail": "['Known limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (proven on cisco_xrv9k 24.3.1 with containerlab 0.79.0). Back up the configuration first and use Replace running configuration afterwards.']"
+  },
+  {
+   "name": "clab-restore-square-xrv9k preview names exactly one --node, the topology node",
+   "ok": true,
+   "detail": "{\"action\": \"restart-node\", \"name\": \"restore-square\", \"source_name\": \"restore-square\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"source_hash\": \"3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5\", \"affected\": [{\"name\": \"clab-restore-square-xrv9k\", \"id\": \"520eaf6e1cff\", \"state\": \"running\"}], \"argv\": [\"/usr/bin/containerlab\", \"restart\", \"-t\", \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"--name\", \"restore-square\", \"--node\", \"xrv9k\"], \"steps\": [], \"node\": \"clab-restore-square-xrv9k\", \"container\": \"c"
+  },
+  {
+   "name": "control: the cEOS preview carries no known-limit note and no neighbour note while all neighbours run",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "refused: node of another lab (4xx, no token)",
+   "ok": true,
+   "detail": "404 {\"detail\": \"This device is not in the lab.\"}"
+  },
+  {
+   "name": "refused: made-up node name (4xx, no token)",
+   "ok": true,
+   "detail": "404 {\"detail\": \"This device is not in the lab.\"}"
+  },
+  {
+   "name": "refused: short name instead of the container name (4xx, no token)",
+   "ok": true,
+   "detail": "404 {\"detail\": \"This device is not in the lab.\"}"
+  },
+  {
+   "name": "refused: options with node set (4xx, no token)",
+   "ok": true,
+   "detail": "400 {\"detail\": \"The device selector is resolved by the manager, not sent by the page.\"}"
+  },
+  {
+   "name": "refused: options with node set (no top-level node) (4xx, no token)",
+   "ok": true,
+   "detail": "400 {\"detail\": \"The device selector is resolved by the manager, not sent by the page.\"}"
+  },
+  {
+   "name": "refused: options with container set (4xx, no token)",
+   "ok": true,
+   "detail": "400 {\"detail\": \"The device selector is resolved by the manager, not sent by the page.\"}"
+  },
+  {
+   "name": "refused: other options (4xx, no token)",
+   "ok": true,
+   "detail": "400 {\"detail\": \"Restart device takes no options.\"}"
+  },
+  {
+   "name": "refused: path set (4xx, no token)",
+   "ok": true,
+   "detail": "400 {\"detail\": \"Restart device uses the lab's own topology file.\"}"
+  },
+  {
+   "name": "refused: no node (4xx, no token)",
+   "ok": true,
+   "detail": "400 {\"detail\": \"Choose the device to restart.\"}"
+  },
+  {
+   "name": "refused: node on the lab-wide restart (4xx, no token)",
+   "ok": true,
+   "detail": "400 {\"detail\": \"Only Restart device names a single device.\"}"
+  },
+  {
+   "name": "refused: comma list as node (4xx, no token)",
+   "ok": true,
+   "detail": "404 {\"detail\": \"This device is not in the lab.\"}"
+  },
+  {
+   "name": "a foreign Origin is refused (403)",
+   "ok": true,
+   "detail": "403 {'detail': 'Use this manager from its own browser page.'}"
+  },
+  {
+   "name": "no operation job was created by any of these requests",
+   "ok": true,
+   "detail": "114 -> 114"
+  }
+ ],
+ "finished": "2026-09-27T20:35:44+00:00"
+}

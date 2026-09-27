@@ -27,7 +27,10 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
   kept; a stopped device is started and its links restored. It goes through the reviewed operation
   dialog like every lab command, names the device and the lab, and saves, backs up, resets or
   reapplies nothing. The device reads *Restarting*, then *Starting* until it answers a login again
-  (its earlier login proof is dropped, so an old *Ready* never survives a restart).
+  (its earlier login proof is dropped, so an old *Ready* never survives a restart). For fifteen minutes
+  after a restart, start or deploy the manager itself performed, a refused login still reads *Starting*
+  ("SSH answers but the saved login is not accepted yet"): IOS XR answers SSH minutes before it accepts
+  logins, and that is a boot, not wrong credentials.
 - **Back up configuration** queues only this node using the NOS backup engine. This works even
   when the node is excluded from scheduled backups, and does not reset the lab
   schedule. The single backup queue still allows one job at a time.

@@ -1,0 +1,39 @@
+# Pass 2 (Opus): static checks, unit suites, named regression tests and mutation checks
+# Tree: worktree /home/clabllm/projects/clab-manager-1.30.42, HEAD b4329d3 (1.30.48); app/, tests/ and deploy/ identical to HEAD (git diff HEAD -- clab-backup-ui/app clab-backup-ui/tests deploy: 0 lines)
+
+## Step 1 (2026-09-27T20:22:42Z)
+$ python3 deploy/verify-release.py            -> exit 0
+Source release verified: 1.30.48
+Documentation names only release 1.30.48.
+$ git diff --check                             -> exit 2
+docs/netlab-ui-qa/probes-report.md:400: new blank line at EOF.     (uncommitted working-tree edit, file mtime 20:17:40Z)
+$ git diff --check b4329d3~1 b4329d3           -> exit 2 (the release commit itself)
+docs/netlab-ui-qa/COVERAGE.md:296: new blank line at EOF.
+docs/netlab-ui-qa/evidence/restart/ceos-1727-waits-for-interfaces.txt:2..9: trailing whitespace. (8 lines)
+$ for f in clab-backup-ui/app/static/*.js; do node --check $f; done   (node v18.19.1) -> 22 files, 0 failures
+$ python3 docs/maintenance-audit/tools/check_links.py -> "165 files, 0 problems", exit 0
+
+## Step 2
+$ (clab-backup-ui) PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests
+start 2026-09-27T20:22:39Z end 2026-09-27T20:26:12Z: "Ran 1701 tests in 211.867s" / "OK (skipped=1)", exit 0
+(one "ERROR:    Exception in ASGI application" line in the log is a server-side log line of a WebSocket test, not a test error)
+$ (clab-backup-ui) node --test tests/*.js      (22 files)
+start 2026-09-27T20:26:30Z end 2026-09-27T20:26:31Z: tests 379, pass 379, fail 0, cancelled 0, skipped 0, exit 0
+
+## Step 5: named regression tests, each on its own (2026-09-27T20:25:33Z Python, 20:25:41Z node)
+QA-012 test_design_intent.py -k test_bgp_as_must_be_present_and_in_range ................................. ok (Ran 1, OK)
+QA-016 test_design_intent.py -k test_engine_identifiers_follow_netlabs_16_character_rule .................. ok (Ran 1, OK)
+QA-014 test_lab_operations.py -k test_a_restart_whose_container_exits_right_after_is_a_failed_job_with_the_reason ok (Ran 1, OK)
+QA-017 test_lab_operations.py -k test_the_xrv9k_review_names_the_fresh_disk_limit_and_other_kinds_get_no_note ok (Ran 1, OK)
+QA-018 test_lab_operations.py -k test_a_neighbour_that_is_not_running_is_named_in_the_review_and_the_job_counts_the_links ok (Ran 1, OK)
+QA-001 node --test --test-name-pattern='designStateOf: a saved design with no plan yet' tests/test_network_design_ui.js -> pass 1 fail 0 (#2)
+QA-006 node --test --test-name-pattern='^P4: Generate with unsaved changes' tests/test_network_design_ui.js -> pass 1 fail 0 (#72)
+QA-015 node --test --test-name-pattern='^QA-015: ' tests/test_network_design_ui.js -> pass 2 fail 0 (#84, #85)
+
+## Step 5: mutation checks (scratch copy of app/ and tests/, never the tree; 2026-09-27T20:26:03Z-20:26:18Z)
+Each fix was undone in the copy and its regression test rerun: the test must FAIL.
+QA-017 drop RESTART_KNOWN_LIMITS['cisco_xrv9k']                        -> test FAILED (failures=1)
+QA-016 NAME widened to {0,63} (64 characters)                           -> test FAILED ("no error at path 'vlans.aaaaaaaaaaaaaaaaa'")
+QA-015 designViewFresh without the sequence comparison                  -> "QA-015: two overlapping loads ..." not ok; lab-switch test still ok
+QA-014 settled_after_restart() result ignored (exited = "")             -> test FAILED ('succeeded' != 'failed')
+QA-018 the "n of m links restored" branch disabled                      -> test FAILED ('1 of 2 links restored (no link to r2 ...)' not found in 'Operation completed · 1 link restored')

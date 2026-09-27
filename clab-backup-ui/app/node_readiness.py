@@ -30,6 +30,10 @@ SCAN_INTERVAL = 5
 BOOT_RETRY = 20      # a node that has not answered yet is asked again after this many seconds
 AUTH_RETRY = 60      # a node that keeps refusing the saved login is asked again less often
 REFUSALS_BEFORE_FAILED = 3   # early boot can refuse a valid login; report a failure only when it persists
+# After a restart, start or deploy accepted by the manager, a NOS may answer SSH for minutes before it accepts any login
+# (IOS XR does, for 1.5–4.5 minutes): during this window a refused login still reads as booting, with its own words,
+# instead of the red "login failed" that would send a student to check credentials that are right (QA-019).
+LOGIN_GRACE = 900
 MAX_TEST_ATTEMPTS = 3        # automatic login tests per boot cycle before a human has to look
 CLI_COMMAND = 'show version'
 # A node with no NOS platform (a plain Linux image, generic SSH profile or the
@@ -44,6 +48,7 @@ MESSAGES = {
     'reachable': 'NOS accepted SSH login and answered show version (automatic check)',
     'booting': 'Container is running; the NOS has not answered an SSH login and show version yet',
     'failed': 'SSH login refused with the saved credentials. Assign a credential profile, then Test login.',
+    'booting_login': 'Container is running; SSH answers but the saved login is not accepted yet (a NOS accepts logins only late in its boot)',
 }
 
 
@@ -79,7 +84,9 @@ def login_state(lab, node, available, check):
         return {'status': 'ready', 'message': check.get('message', ''), 'at': check.get('at')}
     if status == 'failed':
         return {'status': 'failed', 'message': check.get('message', ''), 'at': check.get('at')}
-    return {'status': 'booting', 'message': MESSAGES['booting'], 'at': (check or {}).get('at')}
+    # The grace-window words (a login answered but not accepted yet) travel with the state; everything else reads as plain booting.
+    message = (check or {}).get('message') if (check or {}).get('message') == MESSAGES['booting_login'] else MESSAGES['booting']
+    return {'status': 'booting', 'message': message, 'at': (check or {}).get('at')}
 
 
 def summarize(states):
@@ -273,12 +280,19 @@ class ReadinessMonitor:
             # The node's proof was invalidated (a restart was accepted, a signature changed) while this
             # probe ran: its answer is about the device as it was, and is dropped. The next scan asks again.
             if self.epoch.get(key, 0) > started: return
+            message = None
             if status == 'failed':
-                self.refusals[key] = self.refusals.get(key, 0) + 1
-                if self.refusals[key] < REFUSALS_BEFORE_FAILED: status = 'booting'
+                since = self.epoch.get(key)
+                if since is not None and time.monotonic() - since < LOGIN_GRACE:
+                    # The manager itself restarted, started or deployed this device moments ago: a refused login is
+                    # the NOS still booting, not wrong credentials (the count starts once the window is over).
+                    status = 'booting'; message = MESSAGES['booting_login']
+                else:
+                    self.refusals[key] = self.refusals.get(key, 0) + 1
+                    if self.refusals[key] < REFUSALS_BEFORE_FAILED: status = 'booting'
             else:
                 self.refusals.pop(key, None)
-        entry = {'status': status, 'at': now(), 'message': MESSAGES[status], 'source': 'automatic'}
+        entry = {'status': status, 'at': now(), 'message': message or MESSAGES[status], 'source': 'automatic'}
         with self.services.lock:
             previous = self.services.checks.get(key)
             self.services.checks[key] = entry

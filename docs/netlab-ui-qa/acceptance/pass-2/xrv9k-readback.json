@@ -1,0 +1,80 @@
+{
+ "device": "xrv9k",
+ "tool": "docs/multi-platform-restore/tools/nodecli.py (independent SSH, not the manager); sanitised extract, raw transcript kept outside Git",
+ "before": {
+  "at": "2026-09-27T20:36:01Z",
+  "commands": [
+   "show running-config interface Loopback0",
+   "show ospf neighbor"
+  ],
+  "lines": [
+   "show running-config interface Loopback0",
+   "interface Loopback0",
+   " ipv4 address 10.255.0.4 255.255.255.255",
+   "10.255.0.3      128   FULL/  -        00:00:37    10.0.34.0       GigabitEthernet0/0/0/0",
+   "10.255.0.1      0     FULL/  -        00:00:39    10.0.41.1       GigabitEthernet0/0/0/1",
+   "Total neighbor count: 2"
+  ]
+ },
+ "after_1": {
+  "at": "2026-09-27T20:41:59Z",
+  "commands": [
+   "show running-config interface Loopback0",
+   "show ospf neighbor"
+  ],
+  "lines": [
+   "show running-config interface Loopback0",
+   "interface Loopback0",
+   " ipv4 address 10.255.0.4 255.255.255.255",
+   "10.255.0.3      128   EXSTART/  -     00:00:38    10.0.34.0       GigabitEthernet0/0/0/0",
+   "10.255.0.1      0     INIT/  -        00:00:38    10.0.41.1       GigabitEthernet0/0/0/1",
+   "Total neighbor count: 2"
+  ]
+ },
+ "after_2": {
+  "at": "2026-09-27T20:42:16Z",
+  "commands": [
+   "show ospf neighbor",
+   "show ipv4 interface brief"
+  ],
+  "lines": [
+   "10.255.0.3      128   FULL/  -        00:00:35    10.0.34.0       GigabitEthernet0/0/0/0",
+   "10.255.0.1      0     FULL/  -        00:00:35    10.0.41.1       GigabitEthernet0/0/0/1",
+   "Total neighbor count: 2",
+   "Loopback0                      10.255.0.4      Up              Up       default",
+   "GigabitEthernet0/0/0/0         10.0.34.1       Up              Up       default",
+   "GigabitEthernet0/0/0/1         10.0.41.0       Up              Up       default"
+  ]
+ },
+ "disks_before": {
+  "at": "2026-09-27T20:36:07Z",
+  "cmd": "sudo docker exec clab-restore-square-xrv9k sh -c 'ls -la / | grep qcow2'",
+  "lines": [
+   "-rw-r--r--    1 root root 4955963392 20:36:07 clab-24.3.1-overlay.qcow2",
+   "-rw-r--r--    2 root root 1704658432 21:09:04 clab-24.3.1.qcow2",
+   "-rw-r--r--    1 root root 4982636544 19:57:58 xrv9k-fullk9-24.3.1-overlay.qcow2",
+   "-rw-r--r--    2 root root 1704658432 21:09:04 xrv9k-fullk9-24.3.1.qcow2"
+  ]
+ },
+ "disks_after": {
+  "at": "2026-09-27T20:42:04Z",
+  "lines": [
+   "-rw-r--r--    1 root root  498204672 20:42:04 clab-24.3.1-overlay-overlay.qcow2",
+   "-rw-r--r--    1 root root 4956291072 20:36:31 clab-24.3.1-overlay.qcow2",
+   "-rw-r--r--    2 root root 1704658432 21:09:04 clab-24.3.1.qcow2",
+   "-rw-r--r--    1 root root 4982636544 19:57:58 xrv9k-fullk9-24.3.1-overlay.qcow2",
+   "-rw-r--r--    2 root root 1704658432 21:09:04 xrv9k-fullk9-24.3.1.qcow2"
+  ]
+ },
+ "square_final": {
+  "at": "2026-09-27T20:44:16Z",
+  "ceos": [
+   "10.255.0.2      1        default  128 FULL                   00:00:35    10.0.12.1       Ethernet1",
+   "10.255.0.4      1        default  1   FULL                   00:00:34    10.0.41.0       Ethernet2"
+  ],
+  "vjunos-switch": [
+   "10.0.23.0        ge-0/0/0.0             Full            10.255.0.2       128    33",
+   "10.0.34.1        ge-0/0/1.0             Full            10.255.0.4         1    32"
+  ]
+ }
+}

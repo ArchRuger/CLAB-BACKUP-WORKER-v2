@@ -54,8 +54,9 @@ feature. Companion records in this folder:
 
 ## Exact next action
 
-Release 1.30.48 is cut on the working tree (markers moved, the three history sections written, `verify-release.py`
-green, Python 1701 OK, browser 378, deployed on the dev VM at 16:31 UTC) and **not yet committed**. Running or just
+Release 1.30.48 is committed as `b4329d3` and pushed (remote verified); **PR #56** (`claude/netlab-integration` → `main`,
+covering 1.30.44–1.30.48) is open and CI is green on `b4329d3` (runs 36339238311 and 36339241324). Markers moved, the three history sections written, `verify-release.py`
+green, Python 1701 OK, browser 379, deployed on the dev VM (rebuilt at 17:57 UTC with the final wording). Running or just
 finished when this was written: the final-build live runs (`session scratch: final-live.sh` → cEOS full run, the
 neighbour check `tools/check_restart_neighbour.py`, two-tabs on `host1`, XRv9k restart 1 (fresh disk expected) →
 configuration A → restart 2 (Devices view) with read-backs), and the coverage closure is done (Sonnet agent, `tools/coverage_run.py`: 112 PASS, 0 FAIL, 8 BLOCKED, 3 NOT RUN of 123 rows,
@@ -63,9 +64,17 @@ configuration A → restart 2 (Devices view) with read-backs), and the coverage 
 configuration A): cEOS 78/78 (16:45), two-tabs 13/13 (16:50), XRv9k 27/27 + 52/52 with the known-limit note in every
 review and the first restart losing its configuration (16:50–17:15), the later-restart persistence proof 27/27 with the
 configuration kept (17:19–17:25), the neighbour checks in both stop modes (17:25, 17:26: parked link comes back, destroyed
-link reported as `2 of 3 links restored`, cEOS then waits five minutes for the missing interface: `CLAB_INTFS`). A last
-chain (`session scratch: final3.sh`) rebuilds the manager with the final wording, redeploys, reruns both neighbour checks
-and two-tabs, and redeploys again for the acceptance passes.
+link reported as `2 of 3 links restored`, cEOS then waits five minutes for the missing interface: `CLAB_INTFS`). The last
+chain rebuilt the manager with the final wording (17:57), redeployed, reran both neighbour checks (20/20 each) and two-tabs
+(13/13), and redeployed again (18:45) for the acceptance passes; cJunosEvolved's VM hung after that redeploy (guest soft
+lockups) and was brought back with *Restart device…* itself (27/27 on the final build, 20:13) plus configuration A.
+**Acceptance pass 1 (Sonnet, 19:29–20:11): CLEAN** (`acceptance/PASS-1-sonnet.md`; its finding F1 = three stale probe
+assertions, corrected in `tools/probes/design_probes.py`). **Pass 2 (Opus, 20:22–20:49): NOT CLEAN** (`acceptance/PASS-2-opus.md`):
+F-1 trailing whitespace in three evidence files, F-2 a false credentials failure during every XRv9k boot after a restart
+(**QA-019**, product), F-3 the stale probe assertions, F-4 two live-check assertions that could not fail (TOOL-002). All four
+fixed; **release 1.30.49 cut** for them (markers, history sections, `verify-release.py` green); the manager is rebuilt at
+1.30.49 and the QA-019 live retest runs (XRv9k restart with the strengthened check), after which both acceptance passes are
+taken again on 1.30.49 (the gate is two clean passes on one build), then the evidence commit, push and CI.
 
 Then: add the final3 neighbour rerun records to `DEFECTS.md` (QA-018, Live) and `EVIDENCE.md` in the evidence commit; `python3 deploy/verify-release.py`;
 commit the intended files only (never `git add -A`: `.claude/`, the three prompt files in the worktree root and any

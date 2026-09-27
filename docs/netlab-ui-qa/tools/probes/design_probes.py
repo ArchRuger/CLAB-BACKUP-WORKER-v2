@@ -564,10 +564,12 @@ def probe7(ctx, page, base, labs):
     # revives the design tab's own dead poll (see below) — this window isolates the design-specific
     # poll's OWN behaviour right after the fault, before that unrelated timer can interfere.
     page.wait_for_timeout(3000)
-    state_shortly_after_fault = ctx.text('#design-state')
+    state_shortly_after_fault = ctx.text('#design-state'); detail_shortly_after_fault = ctx.text('#design-detail')
     ctx.shot('P7-02-shortly-after-injected-500')
-    ctx.check(n, "CONFIRMED-target: the design tab's own poll dies silently on the first failed request (no retry, no error shown) — still \"Generating…\" 3s after a single injected 500, well past its normal 2s cadence",
-               'Generating' in state_shortly_after_fault, state_shortly_after_fault)
+    # The label under #design-state reads "Generating the plan…" for the whole busy period whatever happens to the
+    # poll; the retry notice ("attempt 1 of 5 … Trying again") is written to #design-detail (QA-009).
+    ctx.check(n, "CONFIRMED-target: the design tab's own poll dies silently on the first failed request (no retry notice, no error shown) 3s after a single injected 500, well past its normal 2s cadence",
+               'Generating' in state_shortly_after_fault and 'attempt' not in detail_shortly_after_fault, state_shortly_after_fault + ' | ' + detail_shortly_after_fault)
 
     page.wait_for_timeout(8000)   # give app.js's unrelated global refresh (every 4s) a chance to land
     state_later = ctx.text('#design-state')
@@ -618,18 +620,20 @@ def probe8(ctx, page, base, labs, context):
     page.locator('#design-ospf-area').dispatch_event('change')
     blur_form(page)
     ctx.shot('P8-01-unsaved-edit-with-storage-failing')
-    unsaved_shown = 'Unsaved' in ctx.text('#design-state')
+    unsaved_shown = 'Unsaved' in ctx.text('#design-state'); detail_before_reload = ctx.text('#design-detail')
     page_errors_during = list(ctx.pageerrors)
     ctx.check(n, 'the app tolerates a throwing localStorage.setItem without crashing (no uncaught page error)', len(page_errors_during) == 0, page_errors_during)
     ctx.check(n, 'the edit is shown as an in-memory unsaved draft', unsaved_shown, ctx.text('#design-state'))
+    # The fix (QA-010) is a red warning while the edit is still on screen; once the write has failed and the page is
+    # reloaded there is nothing left to recover, so the moment to look is before the reload.
+    ctx.check(n, 'CONFIRMED-target: no message tells the student the edit could not be kept in this browser (a plain "Unsaved changes" with no warning)', 'could not be kept' not in detail_before_reload, detail_before_reload)
 
     page.reload()
     goto_design(page, base, lab_id)
     ctx.shot('P8-02-after-reload-storage-had-failed')
     area_after_reload = ctx.val('#design-ospf-area')
-    detail_after_reload = ctx.text('#design-detail')
-    ctx.check(n, 'CONFIRMED-target: the edit is gone after reload (never persisted, only ever in memory)', area_after_reload == '0.0.0.0', area_after_reload)
-    ctx.check(n, 'CONFIRMED-target: no message at all tells the student their edit was lost (contrast with the stale-draft-discard message)', 'discarded' not in detail_after_reload.lower() and detail_after_reload.strip() != '', detail_after_reload)
+    # Inherent, not a defect: the browser could not store the draft, so a reload starts from the saved design.
+    ctx.check(n, 'after the reload the page starts from the saved design (the browser held no draft)', area_after_reload == '0.0.0.0', area_after_reload)
 
     # --- 8b: contrast case — a genuinely stale draft (revision mismatch) DOES get an explicit message ---
     # Written through window.__origSetItem (captured before the fault above), since the page-wide
@@ -781,6 +785,11 @@ def probe10(ctx, page, base, labs):
     problems_right_after = ctx.text('#design-problems')
     ctx.check(n, 'no message explains the desync at this point', problems_right_after.strip() == '', problems_right_after)
 
+    # Steps 10a/10b left an AS of 0 and a blank p2p prefix, which the fixed product refuses by name (QA-012): valid values
+    # go back in so the Save below can succeed and the checkbox path can be judged.
+    page.fill('#design-bgp-as', '65020'); page.locator('#design-bgp-as').dispatch_event('change')
+    page.fill('#design-pool-p2p-prefix', '31'); page.locator('#design-pool-p2p-prefix').dispatch_event('change')
+    blur_form(page)
     save(page)
     vrf_checked_after_save = page.locator('input[name="design-module"][value="vrf"]').is_checked()
     advanced_after_save = ctx.val('#design-advanced')

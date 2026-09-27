@@ -1,0 +1,5 @@
+show running-config interface Loopback0
+Sun Sep 27 20:09:05.533 UTC
+% No such configuration item(s)
+
+RP/0/RP0/CPU0:xrv9k#

@@ -1,3 +1,25 @@
+# Netlab UI/UX campaign, part 2: acceptance findings fixed — 1.30.49
+
+What was actually run for this release. Same environment as 1.30.48 (dev VM `clab-llm-dev2`, containerlab 0.79.0, lab
+`restore-square`, Chromium 153.0.8010.12 through Playwright 1.63).
+
+## Static and unit
+
+- `python3 deploy/verify-release.py`: source and documentation at 1.30.49; `git diff --check` on the staged tree clean;
+  `check_links.py` clean; `node --check` on the changed scripts.
+- Python: `python -m unittest discover -s tests -t tests` → 1703 tests OK (1 skipped), 210 s; new tests: `test_node_readiness.py` (a refused login inside the grace window reads booting
+  with its own words; the three-refusal rule after it) and `test_lab_operations.py` (a deploy job forgets every device).
+- Browser: `node --test tests/*.js` → 379 pass, 0 fail (unchanged from 1.30.48).
+
+## Live (development VM, deployed product)
+
+- Deployed at 1.30.49 with `sudo bash deploy/start-manager.sh --manager-only` (helpers verified at 1.30.49).
+- QA-019 retest: `evidence/restart/xrv9k-2026-09-27T205833+0000.json` on 1.30.49 (deployed 20:58 UTC): *Restart device…* from the map at 20:58:38 (`2 links restored`, same container), readiness `booting` from 20:58:48 straight to `ready` at 21:03:51 with no `failed` state in between (the strengthened check "no false credentials failure between Starting and Ready" passed); the configuration survived (Loopback0 read back before and after). 27 of 28 checks passed; the one failure was the tool's own new argv assertion, which read the review's prose and now reads the API preview's argv (TOOL-002).
+- Acceptance passes on this build (two fresh agents, one after the other, the same script as on 1.30.48): taken after this
+  commit; their reports (`docs/netlab-ui-qa/acceptance/PASS-3-*.md`, `PASS-4-*.md`) come with the evidence commit that follows.
+- cEOS on 1.30.49 with the corrected live check: 28 of 28 (`ceos-2026-09-27T210714+0000.json`); the two runs made before the argv assertion was corrected
+  (`xrv9k-2026-09-27T205833+0000.json` 27/28, `ceos-2026-09-27T210426+0000.json` 52/54) fail only that assertion.
+
 # Restart device and the netlab UI/UX campaign, part 1 — 1.30.48
 
 What was actually run for this release, by layer. Live evidence is on the development VM `clab-llm-dev2`
@@ -72,7 +94,11 @@ claims a run that did not happen; the per-run records are under `docs/netlab-ui-
   map and Devices entry points), and after the first restart the loopback and OSPF were gone again (read-back at 17:02).
   Whether a later restart keeps what is configured after the first one: **proven on the final build**: configuration A applied at 17:17:43 and read back on the device (Loopback0 present) before the restart; one restart from the map at 17:19 (record `xrv9k-2026-09-27T171848+0000.json` (27/27, the review named the limit; job 17:18:53–17:19:26, `2 links restored`, *Ready* 17:24:27)); read-back at 17:25: `interface Loopback0 … ipv4 address 10.255.0.4`, OSPF FULL with 10.255.0.3 and 10.255.0.1, Loopback0 Up; the disk listing shows the boot chained a new overlay on the previous one (`…-overlay-overlay-overlay-overlay.qcow2` on `…-overlay-overlay-overlay.qcow2`). So only the first restart after a deploy loses the configuration; what is configured after it survives the next restarts.. Independent traffic probes per run (`traffic_probe.py`), the reference command on `host1`,
   the `docker stop` limitation, all in `RESTART-PARITY.md`.
-- Adversarial (`tools/check_restart_two_tabs.py`, `host1`, final build): 13 of 13 (a double click makes one job; an older
+- QA-018 live (`tools/check_restart_neighbour.py`, cEOS with host1, final wording build): the parked case 20/20 (a neighbour stopped
+  with `containerlab stop` keeps its link ends; `3 links restored`) and the destroyed case 20/20 (`docker stop`: `2 of 3 links
+  restored (no link to host1 …)`, cEOS boots after the five minutes containerlab gives a missing interface, host1's start
+  `no links restored`); earlier runs of the same tool on the 17:17 build found the two cases and a count artefact in the tool.
+- Adversarial (`tools/check_restart_two_tabs.py`, `host1`, final build): 13 of 13 twice (16:50 and 18:38 UTC) (a double click makes one job; an older
   tab's review is refused after the restart; two simultaneous confirmations start at most one job). Persistence markers on
   cEOS (`tools/persistence_markers.py`, independent SSH read-back): the saved marker survived the product-driven restart,
   the running-only marker did not, nothing was saved by the manager.

@@ -882,6 +882,20 @@ class OperationAPITests(unittest.TestCase):
             preview=self.preview('restart-node',node=node)
             self.assertFalse(any('is not running.' in w for w in preview['warnings']),preview['warnings'])
 
+    def test_a_lab_wide_lifecycle_job_drops_every_device_login_proof_for_the_grace_window(self):
+        # QA-019: a deploy, redeploy, start or restart of the whole lab boots every device; each one's proven login is
+        # history and each gets the login grace window (forget() marks the epoch), exactly like a single restarted device.
+        with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
+            lab=self.store.lab(self.lab_id);keys=[(self.lab_id,n['name']) for n in lab['nodes']]
+            preview=self.preview('deploy');job=self.confirm(preview['token']).json()
+            readiness=self.app.state.readiness
+            with patch.object(readiness,'forget',wraps=readiness.forget) as forget:
+                args=submit.call_args.args;args[0](*args[1:])
+            called=[c.args[0] for c in forget.call_args_list]
+            for key in keys: self.assertEqual(called.count(key),3,(key,called))
+            for key in keys: self.assertIn(key,readiness.epoch,'the grace window is open for every device of the lab')
+            saved=next(j for j in self.store.state['operations'] if j['id']==job['id']);self.assertEqual(saved['status'],'succeeded')
+
     def test_a_restart_whose_container_exits_right_after_is_a_failed_job_with_the_reason(self):
         with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
             lab=self.store.lab(self.lab_id);node=lab['nodes'][0]['name']

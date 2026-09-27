@@ -1,0 +1,240 @@
+{
+ "started": "2026-09-27T19:52:38+00:00",
+ "manager": "1.30.48",
+ "lab": "restore-square",
+ "lab_id": "174386ec12ee496190c585c5796b2662",
+ "device": "clab-restore-square-ceos",
+ "neighbour": "clab-restore-square-host1",
+ "kind": "arista_ceos",
+ "stop_mode": "containerlab",
+ "steps": {
+  "stop_neighbour": {
+   "mode": "containerlab",
+   "exit": 0,
+   "output": "19:52:40 INFO Parsing & checking topology file=restore-square.clab.yml\n"
+  },
+  "before": {
+   "clab-restore-square-ceos": {
+    "id": "1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a",
+    "started": "2026-09-27T19:51:30.42167896Z",
+    "status": "running",
+    "pid": 3283408
+   },
+   "clab-restore-square-cjunosevolved": {
+    "id": "5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5",
+    "started": "2026-09-27T18:45:24.009177087Z",
+    "status": "running",
+    "pid": 3124580
+   },
+   "clab-restore-square-vjunos-switch": {
+    "id": "919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de",
+    "started": "2026-09-27T18:45:24.008831742Z",
+    "status": "running",
+    "pid": 3124584
+   },
+   "clab-restore-square-xrv9k": {
+    "id": "520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d",
+    "started": "2026-09-27T18:45:24.008478259Z",
+    "status": "running",
+    "pid": 3124572
+   },
+   "clab-restore-square-host1": {
+    "id": "f70592ffd78eb5eb3bc248fb96ee0fee0b0c48a3acacb7461f4f4be5cbaedc1a",
+    "started": "2026-09-27T19:52:20.357482736Z",
+    "status": "exited",
+    "pid": 0
+   }
+  },
+  "job": {
+   "id": "82b2d759754449fbb46a9e1cfee1187e",
+   "status": "succeeded",
+   "message": "Operation completed \u00b7 3 links restored",
+   "created": "2026-09-27T19:52:58.403007+00:00",
+   "finished": "2026-09-27T19:53:02.608945+00:00",
+   "exit_code": 0,
+   "links_expected": 3,
+   "neighbours_down": [
+    "host1"
+   ]
+  },
+  "after": {
+   "clab-restore-square-ceos": {
+    "id": "1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a",
+    "started": "2026-09-27T19:52:59.948790815Z",
+    "status": "running",
+    "pid": 3290746
+   },
+   "clab-restore-square-cjunosevolved": {
+    "id": "5a13a6d6c86668ce22c105155c4600cca2d83b09d7b8fe05b83bfaca8b45d0f5",
+    "started": "2026-09-27T18:45:24.009177087Z",
+    "status": "running",
+    "pid": 3124580
+   },
+   "clab-restore-square-vjunos-switch": {
+    "id": "919f92641f078e1e1d851342d0139227a35b7920fc4ad32d72fb717d175e60de",
+    "started": "2026-09-27T18:45:24.008831742Z",
+    "status": "running",
+    "pid": 3124584
+   },
+   "clab-restore-square-xrv9k": {
+    "id": "520eaf6e1cff3ee519d5b73b51498532ca51c7b19e83fb7c9cacb88d19b5ac3d",
+    "started": "2026-09-27T18:45:24.008478259Z",
+    "status": "running",
+    "pid": 3124572
+   },
+   "clab-restore-square-host1": {
+    "id": "f70592ffd78eb5eb3bc248fb96ee0fee0b0c48a3acacb7461f4f4be5cbaedc1a",
+    "started": "2026-09-27T19:52:20.357482736Z",
+    "status": "exited",
+    "pid": 0
+   }
+  },
+  "device_links_after": [
+   "eth1@if374",
+   "eth3@if380",
+   "eth2@if384"
+  ],
+  "readiness": [
+   [
+    "2026-09-27T19:53:03+00:00",
+    "booting"
+   ],
+   [
+    "2026-09-27T19:53:24+00:00",
+    "ready"
+   ]
+  ],
+  "neighbour_job": {
+   "id": "297f7a93a79d409f8ef53b725cec99f7",
+   "status": "succeeded",
+   "message": "Operation completed \u00b7 2 links restored",
+   "created": "2026-09-27T19:53:25.950507+00:00",
+   "finished": "2026-09-27T19:53:28.989136+00:00",
+   "exit_code": 0
+  },
+  "neighbour_links_after": [
+   "eth1@if377",
+   "eth2@if379"
+  ],
+  "device_links_final": [
+   "eth1@if374",
+   "eth3@if380",
+   "eth2@if384"
+  ]
+ },
+ "reviews": {
+  "device": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nhost1 is not running. If it was stopped by the manager, the VS Code extension or containerlab stop, its link to ceos is parked and comes back with this restart. If it exited on its own or was stopped with docker stop, that link is gone: containerlab restores only 2 of 3 links and the job says so, and the device then waits for all its interfaces before it boots (cEOS gives up waiting after five minutes, a VM-based image waits for good) and stays at Starting until host1 runs again. Start host1 first (Restart device\u2026 on it takes the start/restore path), then this device, or redeploy the lab.\n\nOnly ceos in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 16 hours ago to Git.\n\n1 device affected: ceos (clab-restore-square-ceos, running). The other devices of restore-square are not restarted.\n\nTechnical details\n\nRuns on the lab VM. If the lab changes before you confirm, this check is repeated.\n\nCancel\nSave progress first\nRestart device",
+  "neighbour": "Restart host1?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nThis device is exited, so containerlab takes its start/restore path: it starts the container and restores its links instead of stopping it first. Links are restored only if containerlab parked them (a stop from the manager, the VS Code extension or containerlab stop); a device stopped with docker stop has already lost its links, and redeploying the lab is the way to get them back.\n\nOnly host1 in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 16 hours ago to Git.\n\n1 device affected: host1 (clab-restore-square-host1, exited). The other devices of restore-square are not restarted.\n\nTechnical details\n\nRuns on the lab VM. If the lab changes before you confirm, this check is repeated.\n\nCancel\nSave progress first\nRestart device"
+ },
+ "chromium": "153.0.8010.12",
+ "finished": "2026-09-27T19:53:34+00:00",
+ "checks": [
+  {
+   "name": "the neighbour was stopped with containerlab stop --node (links parked)",
+   "ok": true,
+   "detail": "19:52:40 INFO Parsing & checking topology file=restore-square.clab.yml\n"
+  },
+  {
+   "name": "the manager lists the neighbour as exited",
+   "ok": true,
+   "detail": "Exited (137) 14 seconds ago"
+  },
+  {
+   "name": "the review names the neighbour that is not running and the parked case",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nhost1 is not running. If it was stopped by the manager, the VS Code extension or containerlab stop, its link to ceos is parked and comes back with this restart. If it exited on its own or was stopped with docker stop, that link is gone: containerlab restores only 2 of 3 links and the jo"
+  },
+  {
+   "name": "the review names the destroyed case with the count",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nhost1 is not running. If it was stopped by the manager, the VS Code extension or containerlab stop, its link to ceos is parked and comes back with this restart. If it exited on its own or was stopped with docker stop, that link is gone: containerlab restores only 2 of 3 links and the jo"
+  },
+  {
+   "name": "the review says the device waits for its interfaces and how to proceed",
+   "ok": true,
+   "detail": "Restart ceos?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nhost1 is not running. If it was stopped by the manager, the VS Code extension or containerlab stop, its link to ceos is parked and comes back with this restart. If it exited on its own or was stopped with docker stop, that link is gone: containerlab restores only 2 of 3 links and the jo"
+  },
+  {
+   "name": "the API preview carries the same warning",
+   "ok": true,
+   "detail": "(200, ['host1 is not running. If it was stopped by the manager, the VS Code extension or containerlab stop, its link to ceos is parked and comes back with this restart. If it exited on its own or was stopped with docker stop, that link is gone: containerlab restores only 2 of 3 links and the job says so, and the device then waits for all its interfaces before it boots (cEOS gives up waiting after "
+  },
+  {
+   "name": "one Restart device job exists for the device",
+   "ok": true,
+   "detail": "82b2d759754449fbb46a9e1cfee1187e"
+  },
+  {
+   "name": "the job succeeded (containerlab restored what it could)",
+   "ok": true,
+   "detail": "Operation completed \u00b7 3 links restored"
+  },
+  {
+   "name": "the job message counts every link (the parked link came back)",
+   "ok": true,
+   "detail": "Operation completed \u00b7 3 links restored"
+  },
+  {
+   "name": "the target kept its container id",
+   "ok": true,
+   "detail": "('1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a', '1f5d55773644f338b2da5fae8ecb9f735ab5676102d5eb2a2e2e18525b62536a')"
+  },
+  {
+   "name": "the device has all its dataplane links",
+   "ok": true,
+   "detail": "['eth1@if374', 'eth3@if380', 'eth2@if384']"
+  },
+  {
+   "name": "the device is Ready again",
+   "ok": true,
+   "detail": "[('2026-09-27T19:53:03+00:00', 'booting'), ('2026-09-27T19:53:24+00:00', 'ready')]"
+  },
+  {
+   "name": "Restart device\u2026 is offered for the exited neighbour",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the neighbour review takes the start/restore path",
+   "ok": true,
+   "detail": "Restart host1?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nThis device is exited, so containerlab takes its start/restore path: it starts the container and restores its links instead of stopping it first. Links are restored only if containerlab parked them (a stop from the manager, the VS Code extension or containerlab stop); a device stopped "
+  },
+  {
+   "name": "the neighbour started again through the product",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "the neighbour job counts its own links",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "the neighbour has its dataplane links back",
+   "ok": true,
+   "detail": "['eth1@if377', 'eth2@if379']"
+  },
+  {
+   "name": "the device has all its links once the neighbour runs",
+   "ok": true,
+   "detail": "['eth1@if374', 'eth3@if380', 'eth2@if384']"
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "shots": [
+  "neighbour-containerlab-ceos-1952-01-map-menu.png",
+  "neighbour-containerlab-ceos-1952-02-review.png",
+  "neighbour-containerlab-ceos-1952-03-after-restart.png",
+  "neighbour-containerlab-ceos-1952-04-neighbour-review.png",
+  "neighbour-containerlab-ceos-1952-05-neighbour-back.png"
+ ]
+}
