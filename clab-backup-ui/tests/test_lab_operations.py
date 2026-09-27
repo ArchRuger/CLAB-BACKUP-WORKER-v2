@@ -943,6 +943,26 @@ class OperationAPITests(unittest.TestCase):
             self.store.lab(self.lab_id)['nodes'][0]['definition_node']='r1'
             plain=self.preview('inspect');self.assertEqual(self.confirm(plain['token']).status_code,200)
 
+    def test_a_stale_restart_review_hears_the_stale_reason_while_the_previous_job_still_refreshes(self):
+        # The executor keeps the busy guard raised for its discovery refresh after the job already reads succeeded;
+        # a second tab confirming its older review in that window must be told the review is stale, not to wait
+        # (acceptance pass 4 of the netlab campaign, QA-020). The guard itself still holds for new work.
+        with self.fixture(),patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit') as submit:
+            node=self.store.lab(self.lab_id)['nodes'][0]['name'];operations=self.app.state.operations
+            first=self.preview('restart-node',node=node);second=self.preview('restart-node',node=node)
+            job=self.confirm(first['token']).json();args=submit.call_args.args;args[0](*args[1:])
+            self.assertEqual(next(j for j in self.store.state['operations'] if j['id']==job['id'])['status'],'succeeded')
+            operations.active.add(job['id'])   # the follow-up refresh has not released the guard yet
+            try:
+                stale=self.confirm(second['token']);self.assertEqual(stale.status_code,409);self.assertIn('ran after this review',stale.text)
+                self.assertNotIn('Wait for the current',stale.text);self.assertEqual(len(self.store.state['operations']),1)
+                busy=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='restart-node',lab_id=self.lab_id,node=node))
+                self.assertEqual(busy.status_code,409);self.assertIn('Wait for the current lab operation',busy.text)
+            finally:
+                operations.active.discard(job['id'])
+            fresh=self.preview('restart-node',node=node);self.assertEqual(self.confirm(fresh['token']).status_code,200)
+            self.assertEqual(len(self.store.state['operations']),2)
+
     def test_a_restart_device_review_is_stale_when_a_lifecycle_job_lands_during_its_own_helper_calls(self):
         # Tab B confirms a lab-wide restart while tab A's review is still asking the helper: A's review must not
         # outlive it (the helper digest cannot tell, a restart keeps every container id and state).

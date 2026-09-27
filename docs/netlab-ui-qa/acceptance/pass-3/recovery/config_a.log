@@ -1,0 +1,29 @@
+2026-09-27T22:06:14Z watcher started; pending ceos,cjunosevolved,vjunos-switch,xrv9k
+2026-09-27T22:06:14Z ceos ready (login ready): applying configuration A, attempt 1
+2026-09-27T22:06:15Z ceos apply rc=0 (1038 chars of transcript kept outside Git)
+2026-09-27T22:06:15Z ceos readback rc=0 loopback present=True
+2026-09-27T22:06:15Z pending: cjunosevolved=booting, vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:06:45Z pending: cjunosevolved=booting, vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:07:15Z pending: cjunosevolved=booting, vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:07:45Z pending: cjunosevolved=booting, vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:08:15Z pending: cjunosevolved=booting, vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:08:45Z pending: cjunosevolved=booting, vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:09:15Z pending: cjunosevolved=booting, vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:09:45Z pending: cjunosevolved=booting, vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:10:15Z cjunosevolved ready (login ready): applying configuration A, attempt 1
+2026-09-27T22:10:21Z cjunosevolved apply rc=0 (1135 chars of transcript kept outside Git)
+2026-09-27T22:10:21Z cjunosevolved readback rc=0 loopback present=True
+2026-09-27T22:10:21Z pending: vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:10:51Z pending: vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:11:21Z pending: vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:11:51Z pending: vjunos-switch=booting, xrv9k=booting
+2026-09-27T22:12:21Z xrv9k ready (login ready): applying configuration A, attempt 1
+2026-09-27T22:12:30Z xrv9k apply rc=0 (1705 chars of transcript kept outside Git)
+2026-09-27T22:12:31Z xrv9k readback rc=0 loopback present=True
+2026-09-27T22:12:31Z pending: vjunos-switch=booting
+2026-09-27T22:13:01Z pending: vjunos-switch=booting
+2026-09-27T22:13:32Z pending: vjunos-switch=booting
+2026-09-27T22:14:02Z vjunos-switch ready (login ready): applying configuration A, attempt 1
+2026-09-27T22:14:22Z vjunos-switch apply rc=0 (1206 chars of transcript kept outside Git)
+2026-09-27T22:14:23Z vjunos-switch readback rc=0 loopback present=True
+2026-09-27T22:14:23Z LAB-READY written: {"ceos": "2026-09-27T22:06:15Z", "cjunosevolved": "2026-09-27T22:10:21Z", "xrv9k": "2026-09-27T22:12:31Z", "vjunos-switch": "2026-09-27T22:14:23Z"}

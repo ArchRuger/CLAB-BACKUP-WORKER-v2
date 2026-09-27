@@ -1,0 +1,25 @@
+ Image clab-capture-service:1.30.49 Building
+ Image clab-capture-service:1.30.49 Built
+ Network clab-manager-capture Creating
+ Network clab-manager-capture Creating
+ Network clab-manager-capture Created
+ Network clab-manager-capture Created
+ Container clab-manager-capture-gostwire-1 Recreate
+ Container clab-manager-capture-gostwire-1 Recreated
+ Container clab-manager-capture-packetflix-1 Recreate
+ Container clab-manager-capture-packetflix-1 Recreated
+ Container clab-manager-capture-sessions-1 Recreate
+ Container clab-manager-capture-sessions-1 Recreated
+ Container clab-manager-capture-gostwire-1 Starting
+ Container clab-manager-capture-gostwire-1 Started
+ Container clab-manager-capture-packetflix-1 Starting
+ Container clab-manager-capture-packetflix-1 Started
+ Container clab-manager-capture-sessions-1 Starting
+ Container clab-manager-capture-sessions-1 Started
+Browser capture services installed: Edgeshark on 127.0.0.1:5001 and the session service on 127.0.0.1:5801. No workstation plugin or tunnel is needed.
+Recreating the manager from the source-build installation (clab-backup-ui/compose.yml).
+ Container containerlab-node-manager-backup-ui-1 Running
+NAME                                    IMAGE                 COMMAND                  SERVICE     CREATED             STATUS         PORTS
+containerlab-node-manager-backup-ui-1   clab-backup:1.30.49   "/usr/bin/tini -g --…"   backup-ui   About an hour ago   Up 3 minutes
+Manager recreated with the current settings; saved data and the VM password are retained.
+See docs/CAPTURE.md.

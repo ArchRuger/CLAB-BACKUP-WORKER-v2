@@ -1,0 +1,9 @@
+=== XRv9k POST-RESTART READBACK 2026-09-27T22:49:09Z ===
+show running-config interface Loopback0
+Sun Sep 27 22:49:10.060 UTC
+% No such configuration item(s)
+
+RP/0/RP0/CPU0:xrv9k#show ospf neighbor
+Sun Sep 27 22:49:10.790 UTC
+RP/0/RP0/CPU0:xrv9k#
+EXIT=0

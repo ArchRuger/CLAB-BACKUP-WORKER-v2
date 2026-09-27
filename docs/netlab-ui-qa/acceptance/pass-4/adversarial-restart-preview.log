@@ -1,0 +1,5 @@
+  ok   client-supplied path on restart-node preview is refused (400, exact message)
+  ok   an undeclared extra field is refused (422)
+  ok   a shell/path-traversal-looking node name is refused cleanly, never 200 or 500
+  ok   a confirm with a never-issued token is refused (409, review expired)
+4 checks, 0 failed

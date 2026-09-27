@@ -1,0 +1,11 @@
+=== verify-release.py START 2026-09-27T22:09:06Z ===
+Source release verified: 1.30.49
+Documentation names only release 1.30.49.
+EXIT=0
+=== git diff --check START 2026-09-27T22:09:06Z ===
+EXIT=0
+=== node --check START 2026-09-27T22:09:06Z ===
+node --check done EXIT=0
+=== check_links.py START 2026-09-27T22:09:08Z ===
+169 files, 0 problems
+EXIT=0

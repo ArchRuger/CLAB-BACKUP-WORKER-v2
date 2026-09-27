@@ -1,0 +1,59 @@
+{
+  "check": "adversarial QA-007 cross-lab guard: Renumber and Remove design (not replayed by stress_design.py race, which only covers save/plan-load)",
+  "started": "2026-09-27T21:26:58+00:00",
+  "finished": "2026-09-27T21:27:29+00:00",
+  "chromium": "153.0.8010.12",
+  "port": 8143,
+  "results": [
+    {
+      "action": "QA-007-adversarial Renumber",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "ok": true,
+      "intercepted": 1,
+      "title_after": "BGP_TheoryToPractice",
+      "js_lab_after": "c0ad8d51e1dc4d92ac9803f800bb4858"
+    },
+    {
+      "action": "QA-007-adversarial Remove design",
+      "src": "ospf-basics",
+      "dst": "BGP_TheoryToPractice",
+      "ok": true,
+      "intercepted": 1,
+      "title_after": "BGP_TheoryToPractice",
+      "js_lab_after": "c0ad8d51e1dc4d92ac9803f800bb4858"
+    }
+  ],
+  "summary": {
+    "checks_total": 4,
+    "checks_failed": 0,
+    "failed": [],
+    "checks": [
+      {
+        "name": "QA-007-adversarial Renumber: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "QA-007-adversarial Renumber (ospf-basics -> BGP_TheoryToPractice): the stale answer never lands on BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True dialog_gone=True detail='Choose addressing, protocols and services below, save the design, then Generate plan.' intercepted=1"
+      },
+      {
+        "name": "QA-007-adversarial Remove design: the request under test was actually held",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "QA-007-adversarial Remove design (ospf-basics -> BGP_TheoryToPractice): the stale answer never lands on BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "title=BGP_TheoryToPractice js_lab_is_dst=True dialog_gone=True detail='Choose addressing, protocols and services below, save the design, then Generate plan.' intercepted=1"
+      }
+    ],
+    "console_errors_total": 0,
+    "console_errors_unhandled": [],
+    "page_errors": [],
+    "requests_failed": [],
+    "anomalies": []
+  }
+}

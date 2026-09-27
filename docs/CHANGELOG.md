@@ -4,6 +4,25 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.50
+
+The first acceptance pass on 1.30.49 (`docs/netlab-ui-qa/acceptance/PASS-4-sonnet.md`) found one small product
+defect; this release fixes it and the campaign's two clean acceptance passes are taken again on it.
+
+- A second browser tab that confirms an older *Restart device…* review right after another tab's restart of the
+  same device now hears the real reason at once, "Another lab operation ran after this review. Review the restart
+  again." (QA-020). Until now the manager checked its busy guard first, and that guard stays raised for a few
+  seconds after a job already reads *succeeded* while the manager refreshes its view of the VM, so the stale tab was
+  told "Wait for the current lab operation to finish." and would have been told to review again only on its retry.
+  The consent checks of a device restart (same device, no lifecycle operation since the review) now run before the
+  busy guard; the guard itself is unchanged and still refuses new work while that refresh runs.
+- Tooling: the two-tabs live check keeps writing its record when a control stays unavailable instead of aborting
+  (TOOL-004).
+- Records: acceptance pass 3 on 1.30.49 was lost with the development VM's crash at 21:32 UTC and is recorded as
+  interrupted; pass 4 (Sonnet) on 1.30.49 is recorded with its two findings, one of them a wrong criterion in the
+  pass's charter (a request without an `Origin` header is not refused by design: the same-origin guard refuses a
+  mismatched origin or a cross-site fetch, which is what browsers send; the manager's own tests post without one).
+
 ## Changes in 1.30.49
 
 The second independent acceptance pass of the netlab UI/UX campaign (`docs/netlab-ui-qa/acceptance/PASS-2-opus.md`)

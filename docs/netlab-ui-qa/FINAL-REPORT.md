@@ -1,7 +1,8 @@
 # Relentless netlab UI/UX QA campaign and Restart device: final report
 
-Campaign of 2026-09-27 on `claude/netlab-integration`, from release 1.30.47 (`3194ec4`) to **release 1.30.48**
-(`b4329d3`, PR #56, CI green). The assignment was the owner's `CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md`
+Campaign of 2026-09-27 on `claude/netlab-integration`, from release 1.30.47 (`3194ec4`) through **release 1.30.48**
+(`b4329d3`, PR #56, merged 18:12 UTC), **1.30.49** (`14c2f05`, PR #57, merged 21:55 UTC) to **release 1.30.50** (this
+build, the fix of the last acceptance finding). The assignment was the owner's `CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md`
 with the folded-in `CLAB_Single_Device_Restart_Addendum.md`. Companion records in this folder: `PICKUP.md`
 (state), `DEFECTS.md` (ledger), `RESTART-PARITY.md` (parity record), `EVIDENCE.md` (index), `COVERAGE.md` /
 `coverage.json` (inventory and results), `probes-report.md`, `usability-report.md`, `evidence/stress/REPORT.md`,
@@ -67,7 +68,8 @@ no SSH or NOS reboot, no destroy/redeploy.
 
 ## Versions and commands tested
 
-- Manager 1.30.48 (`clab-backup:1.30.48`), helpers 1.30.48; the same working tree at 1.30.47 for the earlier live
+- Manager 1.30.48 (`clab-backup:1.30.48`), helpers 1.30.48, then 1.30.49 (QA-019, deployed 20:58 UTC and again after the
+  VM's crash at 22:02) and 1.30.50 (QA-020); the same working tree at 1.30.47 for the earlier live
   runs (13:37, 14:45 and 15:16 UTC builds). Dev VM `clab-llm-dev2`: Docker 29.8.1, containerlab 0.79.0
   (`restart --node` present), Python 3.12.3, Node 18 (system) / 24 (editor bundle only). Browser evidence:
   Chromium 153.0.8010.12 through Playwright 1.63.0 (Firefox 155.0 for the usability review; WebKit could not launch).
@@ -142,5 +144,24 @@ spot-checks):
    live-check assertions that could not fail, one of which is how F-2 slipped through (TOOL-002, fixed).
 3. Because a product change followed, the gate "two clean passes on the same final build" restarted on **1.30.49**
    (QA-019 retested live first: XRv9k `booting → ready` with no `failed` state, `xrv9k-2026-09-27T205833+0000.json`).
-   The two passes on 1.30.49 are taken after the 1.30.49 commit and recorded in the evidence commit that follows:
-   `acceptance/PASS-3-*.md` and `PASS-4-*.md`.
+   **Pass 3, Sonnet** (`acceptance/pass-3/`, 21:12–21:32 UTC) completed its static, unit and fixture steps, its own
+   QA-007 adversarial check, cEOS 81/81 and two-tabs 13/13, all clean, and was lost with the session when the
+   development VM crashed at 21:32 UTC (`acceptance/pass-3/INTERRUPTED.md`: the crash, Docker's corrupted network
+   store, the lab redeployed and configuration A reapplied, the capture stack reinstalled). No report, no verdict: it
+   neither counts nor resets the count.
+4. **Pass 4, Sonnet** (`acceptance/PASS-4-sonnet.md`, evidence `acceptance/pass-4/`, 22:15–22:57 UTC, on 1.30.49
+   recreated after the recovery): **NOT CLEAN**, two findings, everything else passed (static, Python 1703, browser 379,
+   `check_design_ui` 29/29, poll retry 9/9, stress 80/80 and 43/43, coverage 112/0/8/3 row for row, probes as required,
+   its own adversarial preview check, cEOS 81/81, neighbour 20/20, previews, XRv9k 28/28 straight `booting → ready` in
+   16.5 min with the first-restart configuration loss reproduced and configuration A reapplied, twelve regression tests
+   rerun singly). **F1** is a real P3 defect, **QA-020**: a second tab confirming its older review right after another
+   tab's restart of the same device was told "Wait for the current lab operation to finish" instead of "Another lab
+   operation ran after this review", because `confirm()` consulted the busy guard, which the executor holds through its
+   follow-up discovery refresh after the job already reads *succeeded*, before the consent checks; on the recovered VM
+   that refresh took 5–8 s, so a check that had passed in every earlier run failed three times. Nothing was restarted
+   twice. **F2** was a wrong criterion in the charter of this round (a request without an `Origin` header is accepted by
+   design; OBS-003), corrected for the passes that follow.
+5. **1.30.50** fixes QA-020 (the consent checks run before the busy guard; unit test; the two-tabs tool keeps its record
+   when a control stays unavailable, TOOL-004). The gate restarted once more on 1.30.50: QA-020 retested live first,
+   then the two independent passes, **pass 5 (Sonnet)** and **pass 6 (Opus)**, recorded in `acceptance/PASS-5-*.md` and
+   `PASS-6-*.md` with the evidence commit that follows.

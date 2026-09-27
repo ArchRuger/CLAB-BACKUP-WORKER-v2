@@ -1,3 +1,21 @@
+# Netlab UI/UX campaign, part 3: the stale-review reason before the busy guard — 1.30.50
+
+Read `docs/netlab-ui-qa/PICKUP.md` first, then `FINAL-REPORT.md`. What the next agent must preserve beyond the 1.30.49
+and 1.30.48 sections below: (1) in `LabOperations.confirm()` the Restart device consent checks (the device is still that
+node with that container, no lifecycle job of the lab since the review's stamp) run **before** `self.guard()`, because the
+executor holds the busy guard through its follow-up `discovery.refresh()` after the job already reads *succeeded*
+(`execute()`'s `finally`); a stale review must hear "Another lab operation ran after this review" in that window, never
+"Wait for the current lab operation to finish" (QA-020, `test_a_stale_restart_review_hears_the_stale_reason_while_the_previous_job_still_refreshes`).
+Do not move the guard back and do not release `active` before the refresh: the refresh is what keeps the inventory
+consistent before the next operation. (2) The same-origin guard in `main.py` refuses a mismatched `Origin` or
+`Sec-Fetch-Site: cross-site`, not an absent header; an acceptance criterion that demands a 4xx for a request without
+`Origin` is wrong (pass 4's F2), and the unit tests depend on the current behaviour. (3) The VM's crash of
+2026-09-27 21:32 UTC and the recovery (Docker's `local-kv.db` moved aside, lab redeployed, capture stack reinstalled at
+1.30.49) are in `docs/netlab-ui-qa/acceptance/pass-3/INTERRUPTED.md`; a gate pass that dies with its session is
+recorded as interrupted and retaken, it neither counts nor resets the count. (4) The map's device menu is rendered
+when it opens and not again while open (`openNodeMenu`); a live tool must wait for the page's own `busy()` to clear before
+it opens a menu right after a job (OBS-004, `wait_idle` in `check_restart_two_tabs.py`), which is not a product change.
+
 # Netlab UI/UX campaign, part 2: acceptance findings fixed — 1.30.49
 
 Read `docs/netlab-ui-qa/PICKUP.md` first, then `FINAL-REPORT.md`. What the next agent must preserve beyond the 1.30.48
