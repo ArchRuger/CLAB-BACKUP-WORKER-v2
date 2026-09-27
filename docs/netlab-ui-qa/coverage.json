@@ -1,0 +1,3577 @@
+{
+ "generated": "2026-09-27T13:34:39+00:00",
+ "build": "1.30.47",
+ "rows": [
+  {
+   "id": "ND-NAV-001",
+   "surface": "Lab tabs bar (#lab-tabs)",
+   "control": "Design tab button #tab-design (role=tab, aria-controls=design-view)",
+   "preconditions": "A lab is open, any tab active",
+   "states": [
+    "inactive (aria-selected=false, tabindex=-1)",
+    "active (aria-selected=true, tabindex=0, class active)"
+   ],
+   "intent": "Reach the Design tab from any other tab",
+   "expected_visible": "Panel #design-view unhidden, #tools-view etc. hidden; showTab('design') runs",
+   "expected_backend": "client-side only: setTab/showTab (app.js:254-262); no request",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_shell_ui.js (tab route round-trip, generic)",
+    "check_design_ui.py: \"Design tab opens from the route\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": true
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:108 defines the six PANELS tabs incl. #tab-design; app.js:8 PANELS array names 'design'. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: aria-selected/tabindex flip correctly and #design-view/#topology-view toggle hidden with #tab-design"
+  },
+  {
+   "id": "ND-NAV-002",
+   "surface": "Hash route",
+   "control": "Deep link `#lab=<id>&view=design`",
+   "preconditions": "Any lab id valid, any view before navigation",
+   "states": [
+    "fresh load",
+    "reload with a route already set",
+    "back/forward through history"
+   ],
+   "intent": "Bookmark or share a direct link to a lab's Design tab",
+   "expected_visible": "On load, shell.js applies the route and calls showTab('design') (shell.js:43); designLoad(labId) fires once per lab id change",
+   "expected_backend": "GET /api/labs/{id}/design (network_design.py:528)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "check_design_ui.py: page.goto(base+'/#lab='+id+'&view=design')"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": true
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "shell.js:15-43 currentRoute()/writeRoute() round trip; verified live via inventory_dom.py nav_deep_link. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: a fresh load and a reload of #lab=<id>&view=design both land on #design-view (tab selected) and fetch GET .../design"
+  },
+  {
+   "id": "ND-NAV-003",
+   "surface": "Tools tab (#tools-view)",
+   "control": "Shortcut button #tools-design (\"Design this lab\u2026\")",
+   "preconditions": "Tools tab open",
+   "states": [
+    "default"
+   ],
+   "intent": "Reach Design from the Tools tab's tool-card list",
+   "expected_visible": "onclick calls showTab('design') (network-design.js:1388)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "check_design_ui.py does not exercise this path directly; no dedicated UI test found"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": true
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:283 tool-card \"Network design\"; network-design.js:1388 `if($('tools-design'))...showTab('design')`. Verified live: inventory_dom.py nav_after_tools_shortcut. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Tools tab #tools-design shortcut opened #design-view"
+  },
+  {
+   "id": "ND-NAV-004",
+   "surface": "Lab tabs bar",
+   "control": "Arrow-key / Home / End tab navigation reaching #tab-design",
+   "preconditions": "Focus on any tab button",
+   "states": [
+    "keyboard-focused"
+   ],
+   "intent": "Move focus to Design with the keyboard (roving tabindex)",
+   "expected_visible": "tabKeydown (app.js:264-269) moves focus and calls showTab",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "no dedicated design-tab keyboard test found (generic tab-bar behaviour, not design-specific)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "app.js:264-269; PANELS.map($('tab-'+name)) includes tab-design. Not separately re-driven for Design in this recon. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: ArrowRight x3 from #tab-topology moved focus to #tab-design (topology->devices->progress->design) and tabKeydown's showTab ran (panel visible)"
+  },
+  {
+   "id": "ND-NAV-005",
+   "surface": "Leaving the tab",
+   "control": "Switching to another tab (#tab-topology etc.) while a plan is generating",
+   "preconditions": "A generation is queued/running",
+   "states": [
+    "generation continues in background while #design-view is hidden"
+   ],
+   "intent": "Not lose a running generation by looking at another tab",
+   "expected_visible": "designMaybeStartWatch (network-design.js:703-726) is lab-scoped, not tab-scoped: the 2s poll keeps running and refresh() keeps /api/state (with design summary/generating) current regardless of the active tab",
+   "expected_backend": "GET /api/labs/{id}/design (poll)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not exercised live in this recon (would need to switch tabs mid-generation and inspect designWatch); flagged only from source reading. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: switching to Topology and back while a 13-device generation was running: state now \"Plan ready to review Plan ready to review\" (the watch is lab-scoped, not tab-scoped)"
+  },
+  {
+   "id": "ND-NAV-006",
+   "surface": "Lab switch",
+   "control": "Selecting a different lab while the Design tab is active (selectLab)",
+   "preconditions": "Design tab active for lab A",
+   "states": [
+    "switches to lab B's design, or resets to \"topology\" per selectLab default"
+   ],
+   "intent": "See lab B's own design, not a leftover of lab A",
+   "expected_visible": "selectLab(id, view) (app.js:33) defaults view to 'topology' unless a route names 'design'; renderNetworkDesign (network-design.js:835-840) reloads only when designState.labId !== lab.id",
+   "expected_backend": "GET /api/labs/{id}/design for the new lab",
+   "forbidden_side_effects": "must not show lab A's intent/plan under lab B's heading",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "app.js:33; network-design.js:838. Not driven live in this recon. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: clicking another lab in the sidebar switcher while Design was active reset the view to Topology (selectLab's own default)"
+  },
+  {
+   "id": "ND-NAV-007",
+   "surface": "Design tab exit",
+   "control": "Design watch teardown / draft handling on leaving the app or reloading mid-edit",
+   "preconditions": "Unsaved draft present, generation possibly running",
+   "states": [
+    "reload",
+    "close tab"
+   ],
+   "intent": "Not lose an unsaved edit silently, and not leave a stuck poll",
+   "expected_visible": "writeDesignDraft persists the draft to browser storage keyed by lab id + revision (network-design.js:930-934); a reload restores it via designApplyDraft (network-design.js:672-679) if the revision still matches",
+   "expected_backend": "none (client storage only)",
+   "forbidden_side_effects": "must discard the draft when the saved revision moved on (designState.draftDiscarded)",
+   "existing_tests": [
+    "test_network_design_ui.js:388 \"the design draft is written, read back by matching revision, and dropped when the revision moved on\"",
+    "test_network_design_ui.js:399 \"a stored draft with no intent, or malformed JSON, reads back as no draft\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Draft persistence pure functions are unit-tested; the reload-in-browser path itself was not re-driven live in this recon (check_design_ui.py does cover a reload keeping a *saved* design, not an unsaved draft). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: draft persistence across reload confirmed above (ND-SAVE-003); the same writeDesignDraft/clearDesignDraft mechanism"
+  },
+  {
+   "id": "ND-GUIDED-001",
+   "surface": "Design settings form",
+   "control": "Address family checkboxes #design-ipv4, #design-ipv6",
+   "preconditions": "Design tab open, any intent state",
+   "states": [
+    "unchecked/checked per intent.families",
+    "focused (form re-render suppressed)"
+   ],
+   "intent": "Choose IPv4-only, IPv6-only or dual stack",
+   "expected_visible": "designRenderForm sets .checked from designFormFromIntent (network-design.js:757-758)",
+   "expected_backend": "none until Save; then PUT /api/labs/{id}/design carries families",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:99 \"designIntentFromForm writes families, pools, modules...\"",
+    "test_network_design_ui.js:148 \"designFormFromIntent reads defaults from an empty intent\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:177; network-design.js:56,199. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: both families default checked (empty_intent dual stack) and unchecking IPv6 is reflected at once"
+  },
+  {
+   "id": "ND-GUIDED-002",
+   "surface": "Design settings form",
+   "control": "Addressing pool inputs (loopback/p2p/lan \u00d7 IPv4/IPv6, p2p/lan prefix size)",
+   "preconditions": "Design tab open",
+   "states": [
+    "empty (placeholder shown)",
+    "filled",
+    "invalid (overlaps mgmt network -> #design-problems on Save)"
+   ],
+   "intent": "Set the address pools the engine allocates from",
+   "expected_visible": "designRenderForm fills each input from values.pools (network-design.js:759-766); on change, designOnGuidedChange rebuilds the draft intent",
+   "expected_backend": "POST /api/labs/{id}/design/validate on Save-time check; pool overlap with mgmt is refused (design_intent.py, see test_design_intent.py:175)",
+   "forbidden_side_effects": "never silently truncates/clamps an invalid pool string client-side",
+   "existing_tests": [
+    "test_design_intent.py:170 test_two_pools_overlapping_is_refused",
+    "test_design_intent.py:175 test_pool_overlapping_management_network_is_refused",
+    "test_design_intent.py:153 test_prefix_size_below_pool_length_is_refused",
+    "check_design_ui.py: \"a pool inside the management network is refused\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:180-182; network-design.js:759-766. Reproduced live: inventory_dom.py invalid_problems state (172.20.20.0/24 refused, path addressing.lan.ipv4). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: a design with nothing saved yet shows the schema default pool value (designEmptyIntent(), matching the input's own placeholder '10.255.0.0/24'); a filled value round-trips (10.5.0.0/16 kept until reverted); the invalid (management-overlap) case is exercised next by ND-ERROR-001, same pools"
+  },
+  {
+   "id": "ND-GUIDED-003",
+   "surface": "Design settings form",
+   "control": "Protocol/service module checklist #design-modules (17 checkboxes, DESIGN_MODULE_LABELS)",
+   "preconditions": "Design tab open",
+   "states": [
+    "none selected",
+    "one or more selected",
+    "a module a device kind cannot do (blocks generation, not the form)"
+   ],
+   "intent": "Turn on OSPF, BGP, IS-IS, EIGRP, RIP, BFD, DHCP, VLANs, VRFs, LAG, STP, gateway, VXLAN, EVPN, MPLS, SR, SRv6 or routing/static",
+   "expected_visible": "designModulesMarkup renders one checkbox per DESIGN_MODULE_LABELS entry (network-design.js:9-12,221-223); ticking one shows its settings block via designToggleModuleSettings",
+   "expected_backend": "modules[] written into the intent on Save; compatibility checked per device at generate time (network_design.py: compatibility())",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:220 \"designModulesMarkup ticks the selected modules and uses student words\"",
+    "check_design_ui.py: \"EIGRP on cEOS fails the plan with the device and the reason named\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:185; network-design.js:734-740 designToggleModuleSettings only knows ospf/bgp/isis/gateway -- the other 13 modules (eigrp, ripv2, bfd, dhcp, vlan, vrf, lag, stp, vxlan, evpn, mpls, sr, srv6, routing) have no dedicated settings block at all; their settings exist only under Advanced JSON. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: 17 module checkboxes rendered (DESIGN_MODULE_LABELS)"
+  },
+  {
+   "id": "ND-GUIDED-004",
+   "surface": "Design settings form",
+   "control": "OSPF settings #design-ospf-settings (area input #design-ospf-area)",
+   "preconditions": "ospf module ticked",
+   "states": [
+    "hidden (module off)",
+    "visible (module on), value from intent.ospf.area or default 0.0.0.0"
+   ],
+   "intent": "Set the OSPF area",
+   "expected_visible": "designToggleModuleSettings toggles .hidden (network-design.js:736); designIntentFromForm writes intent.ospf.area (line 66)",
+   "expected_backend": "saved in intent.ospf on PUT",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:99"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:186. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: OSPF settings become visible with area defaulted to 0.0.0.0 once the module is ticked"
+  },
+  {
+   "id": "ND-GUIDED-005",
+   "surface": "Design settings form",
+   "control": "BGP settings #design-bgp-settings (#design-bgp-as, #design-bgp-rr route-reflector select)",
+   "preconditions": "bgp module ticked",
+   "states": [
+    "hidden",
+    "visible, AS from intent.bgp.as or 65000 default",
+    "route-reflector select populated from router devices (designRenderDeviceOptions)"
+   ],
+   "intent": "Set the BGP AS number and, optionally, which router is the route reflector",
+   "expected_visible": "network-design.js:68,745-750; designRenderDeviceOptions rebuilds the <select> options from view.nodes filtered to role=router",
+   "expected_backend": "intent.bgp.as and node[name].bgp.rr on PUT",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:99",
+    "check_design_ui.py: \"BGP sessions appear in the plan\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:187; network-design.js:741-751. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: BGP settings visible, AS field editable, reflector checklist lists every router (3)"
+  },
+  {
+   "id": "ND-GUIDED-006",
+   "surface": "Design settings form",
+   "control": "IS-IS settings #design-isis-settings (#design-isis-area, #design-isis-type level select)",
+   "preconditions": "isis module ticked",
+   "states": [
+    "hidden",
+    "visible, area default 49.0001, level default level-2"
+   ],
+   "intent": "Set the IS-IS area and level (1/2/1-2)",
+   "expected_visible": "network-design.js:70,209-210",
+   "expected_backend": "intent.isis.{area,type} on PUT",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:112 \"designIntentFromForm writes IS-IS area/type and the gateway protocol only while their module is ticked\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:188. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: IS-IS settings appear with area 49.0001 and level level-2 defaults"
+  },
+  {
+   "id": "ND-GUIDED-007",
+   "surface": "Design settings form",
+   "control": "Gateway settings #design-gateway-settings (#design-gateway-protocol: anycast/VRRP)",
+   "preconditions": "gateway module ticked",
+   "states": [
+    "hidden",
+    "visible, default anycast"
+   ],
+   "intent": "Choose the first-hop gateway protocol",
+   "expected_visible": "network-design.js:72,211",
+   "expected_backend": "intent.gateway.protocol on PUT",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:112"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:189. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Gateway settings appear with protocol defaulted to anycast"
+  },
+  {
+   "id": "ND-GUIDED-008",
+   "surface": "Devices table (#design-devices)",
+   "control": "Per-device role select [data-design-role] (router/host/exclude)",
+   "preconditions": "Lab has devices with a topology",
+   "states": [
+    "no profile mapped (select disabled, reason shown as title + Notes column)",
+    "router (default)",
+    "host",
+    "excluded"
+   ],
+   "intent": "Exclude a device, or mark it a support host instead of a router",
+   "expected_visible": "designDeviceRow renders one <tr> per device (network-design.js:228-241); designRolesFromDom reads them back on change",
+   "expected_backend": "node[name].role on PUT (empty/omitted for the router default)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:227 \"designDevicesMarkup shows the blocked reason and disables the role select without a profile\"",
+    "test_network_design_ui.js:119 \"an excluded device gets role \\\"exclude\\\"; a router gets no role key\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:190-191. Live: check_design_ui.py devices table lists r1/r2/r3 with kind and profile. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: per-device role select accepts host/exclude/router; r1 switched to host"
+  },
+  {
+   "id": "ND-GUIDED-009",
+   "surface": "VRFs table (#design-vrfs)",
+   "control": "Per-row name input, loopback checkbox, Remove button [data-design-vrf-remove]",
+   "preconditions": "vrf module may or may not be ticked yet",
+   "states": [
+    "empty (\"No VRFs yet\")",
+    "one or more rows",
+    "a row mid-rename (keyed by original name via data-design-vrf-key)"
+   ],
+   "intent": "Define VRFs and choose whether each gets a loopback",
+   "expected_visible": "designVrfRow/designVrfsMarkup (network-design.js:247-258); reads back via designVrfsFromDom (872-877)",
+   "expected_backend": "PUT writes intent.vrfs; defining a VRF turns the vrf module on automatically if a table write touched it (network-design.js:181)",
+   "forbidden_side_effects": "never duplicates the vrf module toggle if it is already on",
+   "existing_tests": [
+    "test_network_design_ui.js:244 \"designVrfsMarkup renders each VRF with its loopback checkbox and escapes a hostile name\"",
+    "test_network_design_ui.js:286 \"designIntentFromForm VRFs: builds intent.vrfs...\"",
+    "test_network_design_ui.js:298 \"...renaming a VRF keeps its other settings under the new name\"",
+    "test_network_design_ui.js:369 \"...defining a VRF or VLAN does not duplicate a module that is already selected\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:192-195. Live: check_design_ui.py adds VRF \"red\" with loopback ticked, reaches the JSON. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: a VRF row (name input + loopback checkbox + Remove) is keyed by name, editable and checkable"
+  },
+  {
+   "id": "ND-GUIDED-010",
+   "surface": "VRFs table",
+   "control": "Add VRF button #design-vrf-add",
+   "preconditions": "Design tab open",
+   "states": [
+    "default"
+   ],
+   "intent": "Add a new VRF row with an auto-generated name (vrf1, vrf2, \u2026)",
+   "expected_visible": "designAddVrf (network-design.js:971-976) patches the draft intent directly, bypassing the empty-row-drop rule so a brand-new row is never lost",
+   "expected_backend": "none until Save",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js VRF suite (see ND-GUIDED-009)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:195; network-design.js:961-963 designNextName. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: \"No VRFs yet.\" shown before Add VRF; Add VRF inserted an editable row"
+  },
+  {
+   "id": "ND-GUIDED-011",
+   "surface": "VLANs table (#design-vlans)",
+   "control": "Per-row name input, id number input, Remove button [data-design-vlan-remove]",
+   "preconditions": "vlan module may or may not be ticked yet",
+   "states": [
+    "empty (\"No VLANs yet\")",
+    "one or more rows"
+   ],
+   "intent": "Define VLANs with a numeric id (1-4094)",
+   "expected_visible": "designVlanRow/designVlansMarkup (network-design.js:259-270); designVlansFromDom (878-883)",
+   "expected_backend": "PUT writes intent.vlans; defining one turns the vlan module on automatically",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:253 \"designVlansMarkup renders each VLAN's id and escapes a hostile name\"",
+    "test_network_design_ui.js:306 \"designIntentFromForm VLANs: builds intent.vlans...\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:196-199. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: a VLAN row (name + numeric id via designNextVlanId + Remove) rendered, id auto-filled (1)"
+  },
+  {
+   "id": "ND-GUIDED-012",
+   "surface": "VLANs table",
+   "control": "Add VLAN button #design-vlan-add",
+   "preconditions": "Design tab open",
+   "states": [
+    "default"
+   ],
+   "intent": "Add a new VLAN row with an auto-generated name and the next free id",
+   "expected_visible": "designAddVlan (network-design.js:986-991); designNextVlanId (982-985) picks the first unused id up to 4094",
+   "expected_backend": "none until Save",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js VLAN suite"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:199. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: \"No VLANs yet.\" shown before Add VLAN; Add VLAN inserted an editable row"
+  },
+  {
+   "id": "ND-GUIDED-013",
+   "surface": "Links table (#design-links)",
+   "control": "Per-link VRF select, access-VLAN select, trunk-VLAN text input, \"also set under Advanced\" caption",
+   "preconditions": "Lab has at least one designable link",
+   "states": [
+    "no designable links (\"This lab has no designable links yet.\")",
+    "a link with no vrf/vlan set",
+    "a link with vrf set",
+    "a link with access vlan set",
+    "a link with trunk vlans set (comma list)",
+    "a link with other settings only editable under Advanced (caption shown)"
+   ],
+   "intent": "Attach a link's interfaces to a VRF and/or set its access or trunk VLANs",
+   "expected_visible": "designLinksMarkup/designLinkVrfVlanRow (network-design.js:284-302); trunk wins over access when both are set (designIntentFromForm:135-138); designLinkOtherKeysCaption (279-283) lists any other per-link key (prefix, pool, \u2026) the table does not cover",
+   "expected_backend": "PUT writes intent.links[key].{vrf,vlan}; a link left with nothing set at all is dropped from intent.links rather than kept empty",
+   "forbidden_side_effects": "never touches a link not shown in the table (a stale key)",
+   "existing_tests": [
+    "test_network_design_ui.js:262 \"designLinksMarkup shows each link's ends, pre-selects its VRF/VLAN settings, and flags settings the table does not cover\"",
+    "test_network_design_ui.js:316 \"...attaches a VRF, keeps the link's other settings, and drops the vrf key (not the link) when none is chosen\"",
+    "test_network_design_ui.js:326 \"...sets vlan access or trunk (trunk wins over access), and drops a link with nothing set at all\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:200-202. Live: check_design_ui.py attaches a link to VRF \"red\". run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the links table lists this lab's links with a VRF/access/trunk row each; attached \"red\" to the first link"
+  },
+  {
+   "id": "ND-GUIDED-014",
+   "surface": "Static routes table (#design-static)",
+   "control": "Per-row device select, prefix input, next-hop-type select (discard/address), next-hop-address input, Remove button",
+   "preconditions": "Lab has at least one router device",
+   "states": [
+    "empty (\"No static routes yet.\")",
+    "a discard route",
+    "an address next-hop route",
+    "address input disabled while next-hop-type=discard"
+   ],
+   "intent": "Add a static (discard or next-hop) route to a device's routing table",
+   "expected_visible": "designStaticRouteRow/designStaticMarkup (network-design.js:307-328); designStaticFromDom (892-899) keyed by device+index so a mid-list removal or rename does not scramble other rows",
+   "expected_backend": "PUT writes node[device].routing.static[]; defining one turns the routing module on automatically (but never removes it automatically when the last route is deleted)",
+   "forbidden_side_effects": "a next-hop address row with no address is dropped, not saved half-filled",
+   "existing_tests": [
+    "test_network_design_ui.js:274 \"designStaticMarkup shows each device's static routes with a discard or address next hop\"",
+    "test_network_design_ui.js:340 \"...builds routing.static per device, keeps other node settings, and drops an empty-prefix row\"",
+    "test_network_design_ui.js:353 \"...an address next hop with no address is dropped\"",
+    "test_network_design_ui.js:361 \"...clearing every route drops routing.static but never removes the routing module automatically\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:203-206. Live: check_design_ui.py adds a discard route 192.0.2.0/24. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: \"No static routes yet.\" shown before adding; the row supports a discard route with a prefix"
+  },
+  {
+   "id": "ND-GUIDED-015",
+   "surface": "Static routes table",
+   "control": "Add static route button #design-static-add",
+   "preconditions": "At least one router device exists",
+   "states": [
+    "default",
+    "no-op when there is no router device (designAddStaticRoute returns early)"
+   ],
+   "intent": "Add a new static-route row against the first router device",
+   "expected_visible": "network-design.js:997-1008",
+   "expected_backend": "none until Save",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:206; network-design.js:999-1000 (`if(!routers.length)return;`). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Add static route inserted one row with a device select, prefix input and next-hop type"
+  },
+  {
+   "id": "ND-GUIDED-016",
+   "surface": "Design settings form",
+   "control": "Problems alert #design-problems (role=alert), shown inline above Advanced",
+   "preconditions": "A validate/save/import returned problems",
+   "states": [
+    "empty",
+    "one or more {path,message} entries, escaped"
+   ],
+   "intent": "See exactly what is wrong and where before trying to save again",
+   "expected_visible": "designProblemsMarkup (network-design.js:217-219); populated by designSave (1041-1044), designValidate (1029), designOnAdvancedChange JSON-parse failure (948-951), designImportFile (1116)",
+   "expected_backend": "none (client render of server-returned problems, or a client-side JSON-parse message)",
+   "forbidden_side_effects": "never shows raw exception text or a stack trace, only {path, message}",
+   "existing_tests": [
+    "test_network_design_ui.js:210 \"designProblemsMarkup escapes the path and the message\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:207. Live: inventory_dom.py invalid_problems (\"addressing.lan.ipv4: ... management ...\"). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the same #design-problems (role=alert) rendered the {path,message} entry above Advanced"
+  },
+  {
+   "id": "ND-GUIDED-017",
+   "surface": "Design settings form",
+   "control": "Form focus guard (designFormFocused)",
+   "preconditions": "A guided input/select/textarea has focus",
+   "states": [
+    "focused (re-render of guided controls suppressed)",
+    "not focused (full re-render on every state change)"
+   ],
+   "intent": "Never have the field a student is typing in overwritten mid-keystroke by a background poll or another edit",
+   "expected_visible": "designFormFocused (network-design.js:728-733) checks document.activeElement is inside #design-form and not a button",
+   "expected_backend": "none (client-only)",
+   "forbidden_side_effects": "must not block the ledger (#design-ledger) or the module-settings visibility from updating even while a field is focused (network-design.js:780-781 run unconditionally)",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not independently re-driven with a live focus-and-poll race in this recon; behaviour inferred from source. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: a focused field's in-progress edit (\"0.0.0.5\") survived the 4 s heartbeat re-render (designFormFocused suppressed it)"
+  },
+  {
+   "id": "ND-GUIDED-018",
+   "surface": "Design settings form",
+   "control": "Guided-to-Advanced sync",
+   "preconditions": "Any guided-field change",
+   "states": [
+    "guided edit reflected in #design-advanced JSON",
+    "Advanced edit reflected back in the guided controls when it parses"
+   ],
+   "intent": "Let either the guided controls or the raw JSON be the editing surface, always in sync",
+   "expected_visible": "designOnGuidedChange (935-942) rebuilds the draft via designIntentFromForm then re-renders the textarea; designOnAdvancedChange (943-956) parses the textarea on change (blur) and rebuilds the guided controls",
+   "expected_backend": "none until Save (both write to the same in-memory/local-storage draft)",
+   "forbidden_side_effects": "an unparsable or non-object Advanced edit must not silently discard the guided state -- it is reported in #design-problems and the draft is not overwritten (network-design.js:948,950)",
+   "existing_tests": [
+    "test_network_design_ui.js:90 \"designIntentFromForm keeps every field the guided controls do not own\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:209 form-help text describes this contract explicitly. Live: check_design_ui.py reads #design-advanced after a guided save and finds the guided values in the JSON. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: guided-to-Advanced sync confirmed by the same textarea content (add-then-remove of the VLAN row round-tripped too)"
+  },
+  {
+   "id": "ND-GUIDED-019",
+   "surface": "Design settings form",
+   "control": "Devices table Notes column (blocked reason) and disabled role select without a mapped profile",
+   "preconditions": "A device kind has no design profile (design_capabilities.PROFILES)",
+   "states": [
+    "profile mapped (role select enabled)",
+    "no profile (role select disabled, reason as both cell text and title)"
+   ],
+   "intent": "Understand why a device cannot be part of the design at all",
+   "expected_visible": "designDeviceRow (network-design.js:228-234)",
+   "expected_backend": "such a device is left out of the generation entirely (network_design.py context()/compatibility())",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:227"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:191. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the Notes column and disabled-role-with-reason path are designDeviceRow's no-profile branch (network-design.js:273); not reproduced live -- every fixture lab device kind (arista_ceos/cisco_xrv9k/juniper_cjunosevolved/linux) resolves to a known profile (design_capabilities.PROFILES), so \"No design profile is mapped to this kind of device\" was not rendered live in this recon; the disabled-select/reason wiring is exercised by test_network_design_ui.js:227"
+  },
+  {
+   "id": "ND-GUIDED-020",
+   "surface": "Design settings form",
+   "control": "Devices table Kind/Profile columns",
+   "preconditions": "Lab has devices",
+   "states": [
+    "profile shown",
+    "profile blank with the reason as a neutral pill"
+   ],
+   "intent": "See which netlab device profile each kind maps to (cEOS->eos, vJunos-switch->vjunos-switch, cJunosEvolved->vptx (stand-in), XRv9k->iosxr (stand-in), linux->linux support host)",
+   "expected_visible": "network-design.js:231-232; profiles come from design_capabilities.PROFILES via network_design.py context()",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "docs/NETWORK-DESIGN.md \"Identity and endpoint mapping\" documents the exact profile table. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: devices table lists r1/r2/r3 with a resolved Kind/Profile each: [{\"name\": \"r1\", \"kind\": \"arista_ceos\", \"profile\": \"eos\", \"roleDisabled\": false, \"notes\": \"\"}, {\"name\": \"r2\", \"kind\": \"arista_ceos\", \"profile\": \"eos\", \"roleDisabled\": false, \"notes\": \"\"}, {\"name\": \"r3\", \"kind\": \"cisco_xrv9k\", \"profile\": \"iosxr\", \"roleDisabled\": false, \"notes\": \"\"}] | also on BGP_TheoryToPractice: Backup-Worker (linux support host) resolves a profile with an enabled role select (True): {'name': 'Backup-Worker', 'profile': 'linux', 'disabled': False, 'options': ['router', 'host', 'exclude']}"
+  },
+  {
+   "id": "ND-ADVANCED-001",
+   "surface": "Advanced section",
+   "control": "Advanced <details>/<summary> #design-advanced-details",
+   "preconditions": "Design tab open",
+   "states": [
+    "closed (default)",
+    "open"
+   ],
+   "intent": "Opt into the raw JSON and read-only ledger/ownership views most students never need",
+   "expected_visible": "plain <details>; opening it also triggers designApplyLoadOwnership via a \"toggle\" listener (network-design.js:1300)",
+   "expected_backend": "GET /api/labs/{id}/design/ownership fires only once opened",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:208-218. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the <details> opened via its <summary> (screenshot shows the expanded Advanced section, JSON, ledger and owned settings)"
+  },
+  {
+   "id": "ND-ADVANCED-002",
+   "surface": "Advanced section",
+   "control": "Advanced JSON textarea #design-advanced",
+   "preconditions": "Advanced open",
+   "states": [
+    "reflects the saved intent",
+    "reflects an unsaved draft",
+    "holds unparsable text (problem shown, draft not overwritten)",
+    "holds a parseable non-object (array/primitive; refused with a message)"
+   ],
+   "intent": "Edit any field the guided controls do not expose (per-link settings, VLAN/VRF objects, interface overrides, module options)",
+   "expected_visible": "network-design.js:778 (render), 943-956 designOnAdvancedChange (parse on change/blur)",
+   "expected_backend": "validated the same as a guided edit on Save; PUT/validate reject unknown/refused keys per design_intent.py's allowlist and safe-text guard",
+   "forbidden_side_effects": "never executes or evaluates the JSON text; JSON.parse only",
+   "existing_tests": [
+    "test_network_design_ui.js:90",
+    "test_design_intent.py (recursive guard / refused-key tests, e.g. line 757 test_a_password_under_a_vrf_is_refused_by_name)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:210. Live: inventory_dom.py advanced_open shows the saved intent JSON. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Advanced JSON textarea reflects every guided edit (VRF red+loopback, static route, bgp AS) and no longer carries the VLAN that was added then removed"
+  },
+  {
+   "id": "ND-ADVANCED-003",
+   "surface": "Advanced section",
+   "control": "Check button #design-validate",
+   "preconditions": "Advanced open (or any time)",
+   "states": [
+    "default"
+   ],
+   "intent": "Validate the current draft without saving it",
+   "expected_visible": "designValidate (network-design.js:1024-1032)",
+   "expected_backend": "POST /api/labs/{id}/design/validate (network_design.py:532-538)",
+   "forbidden_side_effects": "never persists anything",
+   "existing_tests": [
+    "test_network_design.py (validate-route tests, e.g. line 191 test_invalid_intent_with_unknown_top_level_key_is_refused, line 209 test_invalid_intent_with_a_pool_overlapping_management_is_refused)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:211. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Check called POST .../design/validate and re-rendered #design-problems"
+  },
+  {
+   "id": "ND-ADVANCED-004",
+   "surface": "Advanced section",
+   "control": "Allocation ledger #design-ledger (read-only device loopback / link prefix tables)",
+   "preconditions": "A plan has been generated at least once",
+   "states": [
+    "no allocations yet (caption)",
+    "device + link tables populated"
+   ],
+   "intent": "See exactly which ids/addresses the manager has pinned, without being able to edit them here",
+   "expected_visible": "designLedgerMarkup (network-design.js:329-337)",
+   "expected_backend": "read-only render of intent.allocations; cleared only via Renumber",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:212-214. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the ledger shows its empty caption before any plan has been generated"
+  },
+  {
+   "id": "ND-ADVANCED-005",
+   "surface": "Advanced section",
+   "control": "Owned settings #design-ownership (per-device <details> of statements the design owns on real devices)",
+   "preconditions": "Advanced opened at least once",
+   "states": [
+    "no owned settings anywhere (\"No settings are owned by the design on any device yet.\")",
+    "one or more devices with a statement count, plan id, applied time and an optional \"Read-back pending\" pill",
+    "load failed (fetch error caption)"
+   ],
+   "intent": "See what the manager has actually applied and still owns, per device, without re-opening Apply",
+   "expected_visible": "designApplyLoadOwnership (network-design.js:1278-1284) -> GET /api/labs/{id}/design/ownership (design_apply.py:680-687); designApplyOwnershipMarkup/DeviceMarkup (592-598)",
+   "expected_backend": "statements shown are masked (design_apply.py masked(), cap 400)",
+   "forbidden_side_effects": "never shows a staged/candidate configuration, only what is owned already",
+   "existing_tests": [
+    "test_network_design_ui.js:495 \"designApplyOwnershipMarkup: shows the statement count, plan id, applied time and a pending flag\"",
+    "test_design_apply.py:1267 test_public_ownership_counts"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:215-217. Live (apply_export mode): not reached with real ownership data in this recon since no apply actually completed against a real device; only the empty-state text was captured. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: opening Advanced fired GET .../design/ownership once, showing \"No settings are owned by the design on any device yet.\""
+  },
+  {
+   "id": "ND-ADVANCED-006",
+   "surface": "Advanced section",
+   "control": "Advanced round-trip of guided-table objects (VRF/VLAN objects, per-link settings) not covered by the guided controls",
+   "preconditions": "A VRF/VLAN/link carries a setting the guided tables do not expose (rd, import/export, MTU, bandwidth, unnumbered, per-endpoint overrides, module options)",
+   "states": [
+    "visible only under Advanced JSON, never in the guided tables"
+   ],
+   "intent": "Reach every field of the schema, even ones no guided control was built for",
+   "expected_visible": "design_intent.py's generic engine-schema type checker (docs/NETWORK-DESIGN.md \"The intent document\")",
+   "expected_backend": "validated the same as everything else",
+   "forbidden_side_effects": "refuses code/file/manager keys by name (config, plugin, defaults, validate, tools, _include, device, id, ifname, mgmt, password, \u2026)",
+   "existing_tests": [
+    "test_design_intent.py:822 test_vlan_body_is_checked_against_the_engine_schema",
+    "test_design_intent.py:836 test_vrf_body_is_checked_against_the_engine_schema"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Documented, not independently re-typed into the Advanced textarea live in this recon beyond the guided-table round trip already covered by ND-GUIDED-018. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the vrf/routing modules were turned on automatically because the guided tables defined a VRF and a static route (the vlan module was turned on the same way when \"blue\" was added, then explicitly unticked again -- see ND-GUIDED-011/012)"
+  },
+  {
+   "id": "ND-SAVE-001",
+   "surface": "Head actions",
+   "control": "Save design button #design-save",
+   "preconditions": "A design is dirty (draft) or unchanged",
+   "states": [
+    "enabled always (no client-side disabled reason is computed for this button)"
+   ],
+   "intent": "Persist the current draft as the lab's design",
+   "expected_visible": "designSave (network-design.js:1034-1058): validates first, then PUT",
+   "expected_backend": "POST /api/labs/{id}/design/validate then PUT /api/labs/{id}/design (network_design.py:532-538,540-564)",
+   "forbidden_side_effects": "never saves when the validate pre-check reports problems (400 path handled client-side before the PUT even fires)",
+   "existing_tests": [
+    "test_network_design.py:224 test_saving_a_valid_intent_succeeds_and_is_stripped_from_public_state",
+    "test_network_design.py:247 test_stale_revision_is_refused_then_a_changed_label_gets_a_new_revision_and_a_no_op_keeps_it",
+    "check_design_ui.py: \"the design saves without problems\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:159. Live: inventory_dom.py saved_clean. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Save validated then PUT the design; state left \"Unsaved\" for \"Design saved, no plan yet Design saved, no plan yet\""
+  },
+  {
+   "id": "ND-SAVE-002",
+   "surface": "Head actions",
+   "control": "Stale-revision conflict on Save (409)",
+   "preconditions": "The design changed elsewhere (another tab, or a page left open across a reload) since this page loaded it",
+   "states": [
+    "409 with designStaleMessage() matching text -> showActionError + reload via designLoad"
+   ],
+   "intent": "Never silently overwrite a newer save with stale local edits",
+   "expected_visible": "designSave catch block (network-design.js:1052-1056); server compares revision (network_design.py:545-546)",
+   "expected_backend": "PUT returns 409 \"The design changed since this page loaded...\"",
+   "forbidden_side_effects": "never force-overwrites the newer server copy",
+   "existing_tests": [
+    "test_network_design.py:247"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not reproduced live in this single-browser recon (would need two concurrent sessions editing the same lab). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Save behind a real stale revision was refused (409) and handled: banner='That did not work. The details below say why.\\n\\nDetails\\nDismiss\\n\u00d7' detail='Your unsaved changes were older than the saved design and were discarded.'"
+  },
+  {
+   "id": "ND-SAVE-003",
+   "surface": "Client-side draft",
+   "control": "Unsaved-draft persistence across a reload (browser storage, per lab id, keyed to the loaded revision)",
+   "preconditions": "An edit was made but not yet saved",
+   "states": [
+    "draft matches the currently loaded revision (restored)",
+    "draft is older than the current revision (discarded, #design-detail explains why)"
+   ],
+   "intent": "Not lose an edit to an accidental reload, but never resurrect an edit that is now stale",
+   "expected_visible": "readDesignDraft/writeDesignDraft/clearDesignDraft (referenced network-design.js:674,678,933,1048,1100,1121) -- implemented in shell.js/app.js storage helpers, not in this file",
+   "expected_backend": "client storage only; never sent to the server until Save",
+   "forbidden_side_effects": "never restores a draft against the wrong lab id or a moved-on revision",
+   "existing_tests": [
+    "test_network_design_ui.js:388",
+    "test_network_design_ui.js:399"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Draft object shape asserted in unit tests; not re-driven live in this recon. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: an unsaved draft (VLAN module ticked, not saved) survived a reload and is restored (matching revision)"
+  },
+  {
+   "id": "ND-SAVE-004",
+   "surface": "Head actions",
+   "control": "\"Unsaved changes\" -> \"No design yet\"/\"Plan ready\u2026\" transition on successful Save",
+   "preconditions": "A draft exists and Save succeeds",
+   "states": [
+    "before: pill=warn \"Unsaved changes\"",
+    "after: pill matches whatever the newest generation/problems dictate"
+   ],
+   "intent": "Immediate, correct feedback that the save took",
+   "expected_visible": "designSave clears designState.draft then calls designRenderAll (network-design.js:1047,1051)",
+   "expected_backend": "PUT response replaces designState.view wholesale",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "check_design_ui.py: \"editing marks the design as unsaved\" / \"the design saves without problems\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py unsaved_dirty -> saved_clean. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the header moved to \"Design saved, no plan yet\" on a successful Save (QA-001 fix)"
+  },
+  {
+   "id": "ND-SAVE-005",
+   "surface": "Server",
+   "control": "Allocation ledger is never client-writable through Save",
+   "preconditions": "A save body includes an \"allocations\" key",
+   "states": [
+    "client value ignored; server always substitutes its own stored ledger"
+   ],
+   "intent": "Prevent a stale/forged client copy of the ledger from corrupting future generations",
+   "expected_visible": "network_design.py:549 `submitted['allocations'] = copy.deepcopy((current or {}).get('allocations') or {})`",
+   "expected_backend": "PUT /api/labs/{id}/design",
+   "forbidden_side_effects": "client cannot forge allocations via Save or Import",
+   "existing_tests": [
+    "test_network_design.py:266 test_client_supplied_allocations_never_overwrite_the_server_ledger",
+    "test_network_design.py:978 test_import_requires_the_current_revision_and_keeps_the_server_ledger"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Backend contract; not something the DOM can show directly (the Advanced textarea round-trips the *server's* allocations, so this is invisible from the client). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: a client-supplied allocations block is discarded server-side (network_design.py:549); validated by test_network_design.py:266 test_client_supplied_allocations_are_ignored (not independently re-derived here beyond confirming the route accepts/normalises the request rather than trusting the client value: status=200)"
+  },
+  {
+   "id": "ND-GENERATE-001",
+   "surface": "Head actions",
+   "control": "Generate plan button #design-generate",
+   "preconditions": "has_topology true, engine available, no generation currently busy",
+   "states": [
+    "enabled",
+    "disabled: engine unavailable (title = diagnostic)",
+    "disabled: already generating (title = \"A plan is already being generated for this lab.\")",
+    "disabled: no topology file (title = \"This lab has no topology file yet.\")"
+   ],
+   "intent": "Turn the current design into per-device configuration",
+   "expected_visible": "designRenderHeader (network-design.js:791-798) computes .disabled/.title/menuReasonSafe",
+   "expected_backend": "POST /api/labs/{id}/design/generate (network_design.py:598-600, submit() at 278-309)",
+   "forbidden_side_effects": "refuses (409/400) rather than silently no-op when busy, stale-revision or invalid",
+   "existing_tests": [
+    "test_network_design.py:342 test_generate_without_a_design_is_409",
+    "test_network_design.py:348 test_generate_without_a_topology_file_is_409",
+    "test_network_design.py:360 test_generate_with_a_stale_revision_is_409",
+    "test_network_design.py:484 test_two_generations_at_once_are_refused"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:158. Live: inventory_dom.py generating, plan_succeeded. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: [fault injection, as above] Generate plan is disabled with the engine diagnostic as its title when the engine is unavailable (this completes the row alongside the earlier enabled-and-clicked state)"
+  },
+  {
+   "id": "ND-GENERATE-002",
+   "surface": "Plan card",
+   "control": "Cancel button #design-cancel (hidden unless a generation is queued/running)",
+   "preconditions": "A generation is queued or running",
+   "states": [
+    "hidden (no busy generation)",
+    "visible"
+   ],
+   "intent": "Stop a plan that is taking too long or was started by mistake",
+   "expected_visible": "designRenderPlanCard (network-design.js:817) toggles .hidden from DESIGN_BUSY_GENERATION.includes(newest.status)",
+   "expected_backend": "POST /api/labs/{id}/design/generations/{gid}/cancel (network_design.py:602-609)",
+   "forbidden_side_effects": "a cancelled generation is recorded failed with message \"Generation cancelled.\" (network_design.py:383), never silently vanishes",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:222. Live: inventory_dom.py cancel_clicked / post_cancel_attempt (the fixture's engine sometimes finishes before the click lands -- itself a race worth knowing about for anyone trying to test this reliably). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Cancel button appeared during a busy generation and called POST .../cancel (True)"
+  },
+  {
+   "id": "ND-GENERATE-003",
+   "surface": "Design state line",
+   "control": "\"Generating the plan\u2026\" busy pill + 2s poll",
+   "preconditions": "status in (queued, running)",
+   "states": [
+    "queued",
+    "running"
+   ],
+   "intent": "See live progress without a manual refresh",
+   "expected_visible": "designMaybeStartWatch (network-design.js:703-726) polls every 2000ms while busy",
+   "expected_backend": "GET /api/labs/{id}/design repeated",
+   "forbidden_side_effects": "poll stops itself once the status leaves queued/running (designStopWatch)",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py generating. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: \"Generating the plan\u2026\" busy state observed while the 2 s poll ran"
+  },
+  {
+   "id": "ND-GENERATE-004",
+   "surface": "Plan card",
+   "control": "Generation outcome variety: succeeded / failed (with errors) / interrupted / cancelled",
+   "preconditions": "Depends on engine result",
+   "states": [
+    "succeeded",
+    "failed (unsupported module, engine error, address exhaustion, overlap, still-colliding-after-fix)",
+    "interrupted (manager restart mid-generation)",
+    "cancelled (message \"Generation cancelled.\")"
+   ],
+   "intent": "Understand exactly why a plan did or did not come out, with the failing device/reason named",
+   "expected_visible": "network_design.py execute()/_generate() (321-437) covers every branch",
+   "expected_backend": "errors[] shown verbatim in #design-plan-errors, never a stack trace",
+   "forbidden_side_effects": "engine lines are scrubbed of the data/work directory paths before being recorded (_scrub, network_design.py:362-368)",
+   "existing_tests": [
+    "test_network_design.py:541 test_an_unsupported_module_fails_the_generation_before_the_engine_runs",
+    "test_network_design.py:590 test_a_running_generation_is_marked_interrupted_on_construction",
+    "test_network_design.py:994 test_scrub_removes_the_data_and_work_paths_from_engine_lines",
+    "check_design_ui.py: \"EIGRP on cEOS fails the plan...\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py post_cancel_attempt reached the \"failed\"/\"Generation cancelled.\" case; the unsupported-module failure case was only exercised in check_design_ui.py, not re-driven in this recon. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: a succeeded generation reached \"Plan ready to review\" via the real netlab engine (state now: 'Plan ready to review Plan ready to review') | a failed generation (unsupported eigrp on cEOS) was also observed live | interrupted outcome also reproduced live (kill+restart, see ND-STATE-005)"
+  },
+  {
+   "id": "ND-GENERATE-005",
+   "surface": "Plan card",
+   "control": "Collision-fix notice #design-plan-collisions",
+   "preconditions": "A generation needed a second engine pass to avoid a pinned-prefix collision",
+   "states": [
+    "hidden (no collisions)",
+    "visible with a count (\"\u2026 reassigned automatically (N links).\")"
+   ],
+   "intent": "Understand that some addresses moved automatically to avoid a clash, without having to read the diff",
+   "expected_visible": "network-design.js:810-814; collision_fixes populated by network_design.py:396-404 (adapter.fix_collisions, passes:2)",
+   "expected_backend": "none (read-only report)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not reproduced live in this recon (needs a pinned ledger plus a new colliding link); read from source and docs/NETWORK-DESIGN.md \"netlab's pool allocator does not skip pinned prefixes...\". run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: not reproduced live in this recon: no allocation collision was triggered by the edits made (hidden state confirmed instead: #design-plan-collisions stayed hidden). The markup/hide-toggle is source-confirmed (network-design.js:810-814) and this is a read-only report with no dedicated test named in coverage.json."
+  },
+  {
+   "id": "ND-PLAN-001",
+   "surface": "Plan card",
+   "control": "Status line #design-plan-status",
+   "preconditions": "Depends on newest generation",
+   "states": [
+    "\"No plan generated yet.\"",
+    "\"Generating the plan\u2026 <message>\"",
+    "\"Plan generated <relative time>.\"",
+    "\"Plan generation failed <relative time>.\"",
+    "\"Plan generation was interrupted <relative time>.\""
+   ],
+   "intent": "One-line summary of the newest generation's outcome and age",
+   "expected_visible": "designGenerationLine (network-design.js:434-443)",
+   "expected_backend": "none (client render)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:200 \"designGenerationLine words for succeeded, failed, interrupted and running\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:222. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: plan status line reads \"Plan generated just now.\""
+  },
+  {
+   "id": "ND-PLAN-002",
+   "surface": "Plan card",
+   "control": "Errors list #design-plan-errors-wrap / #design-plan-errors (role=alert)",
+   "preconditions": "newest generation failed",
+   "states": [
+    "hidden",
+    "visible with one <li> per error"
+   ],
+   "intent": "See exactly what blocked the plan",
+   "expected_visible": "designRenderPlanCard (network-design.js:804-805)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "never raw exception text (see ND-GENERATE-004)",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:223. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: no errors: #design-plan-errors-wrap stays hidden on a succeeded generation"
+  },
+  {
+   "id": "ND-PLAN-003",
+   "surface": "Plan card",
+   "control": "Warnings <details> #design-plan-warnings-wrap / #design-plan-warnings",
+   "preconditions": "newest generation has engine stderr Warning lines",
+   "states": [
+    "hidden (no warnings)",
+    "visible, collapsed by default"
+   ],
+   "intent": "See non-fatal engine warnings without them cluttering the default view",
+   "expected_visible": "network-design.js:806-807; engine.run_generation stderr_tail filtered to /^\\w*Warning/ (network_design.py:426)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "capped at 50 lines (network_design.py:426)",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:224. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: warnings <details> renders its hidden/visible state correctly (hidden=False)"
+  },
+  {
+   "id": "ND-PLAN-004",
+   "surface": "Plan card",
+   "control": "Renumbering table #design-plan-renumbering-wrap / #design-plan-renumbering (\"What changed\")",
+   "preconditions": "A device/link id, loopback or prefix moved versus the previous plan",
+   "states": [
+    "hidden (nothing renumbered)",
+    "visible table: Kind/Name/Family/Before/After"
+   ],
+   "intent": "See exactly what changed addressing-wise since the last plan, e.g. after adding/removing a device",
+   "expected_visible": "designRenumberingMarkup (network-design.js:357-362); intent_schema.renumbering (network_design.py:424)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design.py:926 test_renumbering_is_reported_against_the_previous_plan_not_the_cleared_ledger"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not reproduced live in this recon (needs two generations with an intervening topology change); read from source. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: not reproduced live: changing the loopback pool and regenerating kept the same allocations for this 3-device lab (netlab's own deterministic ordering); the \"hidden (nothing renumbered)\" branch was exercised (#design-plan-renumbering-wrap stayed hidden) but the \"visible\" branch needs a topology change (device add/remove) this recon did not attempt within budget. Covered by test_network_design.py:926 test_renumbering_is_reported_against_the_previous_plan."
+  },
+  {
+   "id": "ND-PLAN-005",
+   "surface": "Plan card",
+   "control": "Compatibility table #design-compatibility (one row per device, one column per requested feature)",
+   "preconditions": "A generation exists",
+   "states": [
+    "\"No compatibility information yet.\"",
+    "populated grid with pill per {level}"
+   ],
+   "intent": "See, per device and per feature, whether it is verified live, generated-not-tested, unsupported or blocked-on-a-prerequisite, with the reason in the pill's title",
+   "expected_visible": "designCompatibilityMarkup/designLevelWord (network-design.js:410-432); DESIGN_LEVEL_WORDS/DESIGN_LEVEL_CLASS (14-16)",
+   "expected_backend": "network_design.py compatibility()/design_capabilities.resolve()",
+   "forbidden_side_effects": "a blocking level (unsupported/blocked_missing_prerequisite) fails the generation instead of rendering silently downgraded",
+   "existing_tests": [
+    "test_network_design_ui.js:178 \"designCompatibilityMarkup renders the four levels in words with the reason in title\"",
+    "test_design_capabilities.py (engine/image/validation-level resolution)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:227-228. Live: check_design_ui.py \"compatibility says generated, not yet tested live\". run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: compatibility table says \"generated, not yet tested live\" per device/feature"
+  },
+  {
+   "id": "ND-PLAN-006",
+   "surface": "Plan card",
+   "control": "Plan body #design-plan-body (per-device blocks: profile/id/loopbacks/router id, interfaces table with containerlab port + neighbours + protocol notes, BGP sessions table, links table)",
+   "preconditions": "newest generation succeeded",
+   "states": [
+    "\"Generate a plan to see it here.\" (no succeeded generation)",
+    "populated"
+   ],
+   "intent": "Inspect the calculated addressing/adjacency plan device by device before applying it",
+   "expected_visible": "designPlanMarkup/designDeviceBlock/designInterfaceRow/designBgpTable/designLinkRow (network-design.js:378-409)",
+   "expected_backend": "GET /api/labs/{id}/design/generations/{gid} supplies plan.json (network_design.py:611-620)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:158 \"designPlanMarkup escapes a device name and renders interface, neighbour and BGP rows\"",
+    "check_design_ui.py: \"the plan lists every device with a loopback and interfaces\" / \"the plan shows the containerlab ports beside the device ports\" / \"BGP sessions appear in the plan\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:230. Live: inventory_dom.py plan_succeeded. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the plan body lists every device with loopbacks/interfaces (Ethernet1 for cEOS present)"
+  },
+  {
+   "id": "ND-PLAN-007",
+   "surface": "Plan card",
+   "control": "Apply to devices\u2026 button #design-apply and its disabled-reason caption [data-proxy-reason=\"design-apply\"]",
+   "preconditions": "see ND-APPLY-002",
+   "states": [
+    "see ND-APPLY-002"
+   ],
+   "intent": "see ND-APPLY area",
+   "expected_visible": "see ND-APPLY area",
+   "expected_backend": "see ND-APPLY area",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "see ND-APPLY area"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:231-232. Cross-referenced from the Plan card; the full contract is under APPLY. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Apply to devices\u2026 button and its disabled-reason caption: see ND-APPLY-002 (part 2)"
+  },
+  {
+   "id": "ND-PLAN-008",
+   "surface": "Plan card",
+   "control": "Export plan to Git\u2026 button #design-export-git and its disabled-reason caption [data-proxy-reason=\"design-export-git\"]",
+   "preconditions": "see ND-EXPORT area",
+   "states": [
+    "see ND-EXPORT area"
+   ],
+   "intent": "see ND-EXPORT area",
+   "expected_visible": "see ND-EXPORT area",
+   "expected_backend": "see ND-EXPORT area",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "see ND-EXPORT area"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:231,233. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Export plan to Git\u2026 button and its disabled-reason caption: see ND-EXPORT-002 (part 2, this lab has no git binding)"
+  },
+  {
+   "id": "ND-PLAN-009",
+   "surface": "Plan card",
+   "control": "Last apply line #design-apply-last (status) + its Show button [data-design-apply-show]",
+   "preconditions": "see ND-APPLY-013",
+   "states": [
+    "see ND-APPLY-013"
+   ],
+   "intent": "see ND-APPLY area",
+   "expected_visible": "see ND-APPLY area",
+   "expected_backend": "see ND-APPLY area",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "see ND-APPLY area"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "BLOCKED",
+   "defects": [],
+   "notes": "index.html:234. Not reached live in this recon (no apply job ever settled against a real device in either fixture run). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Last apply line + Show button needs a real apply job, which needs a real device: see ND-APPLY area (BLOCKED, part 2)"
+  },
+  {
+   "id": "ND-FILES-001",
+   "surface": "Files card",
+   "control": "Generated files list #design-files-body (grouped per device, module name + size + View button)",
+   "preconditions": "newest generation",
+   "states": [
+    "\"Generate a plan to see its files here.\" (no succeeded generation)",
+    "\"This plan has no generated files.\" (succeeded but empty)",
+    "populated, grouped by device"
+   ],
+   "intent": "See exactly what was generated for each device before deciding to apply or download it",
+   "expected_visible": "designFilesMarkup/designFileSize (network-design.js:346-356)",
+   "expected_backend": "artifact list comes from the generation record; content is fetched per-file on View",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "check_design_ui.py: \"the files card lists initial, ospf, bgp, vrf and routing for a device\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:238-239. Live: inventory_dom.py plan_succeeded shows the files list; files_view_dialog shows one file opened. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: files card lists initial/ospf/bgp module fragments per device"
+  },
+  {
+   "id": "ND-FILES-002",
+   "surface": "Files card",
+   "control": "View button [data-design-view-file][data-design-view-index] -> file dialog",
+   "preconditions": "A file exists in the list",
+   "states": [
+    "default"
+   ],
+   "intent": "Read one generated fragment's exact text",
+   "expected_visible": "designViewFile (network-design.js:1130-1138) -> GET .../artifacts/{node}/{index}, opens an opDialog with a <pre>",
+   "expected_backend": "GET /api/labs/{id}/design/generations/{gid}/artifacts/{node}/{index} (network_design.py:622-632)",
+   "forbidden_side_effects": "server re-verifies the file's sha256 before serving it (409 if it no longer matches the recorded digest)",
+   "existing_tests": [
+    "check_design_ui.py: \"a generated file opens in a dialog\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py files_view_dialog. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: View opened a dialog with the file content (60 chars)"
+  },
+  {
+   "id": "ND-FILES-003",
+   "surface": "Files card",
+   "control": "Download all files (ZIP) link #design-download",
+   "preconditions": "newest generation succeeded",
+   "states": [
+    "hidden (no succeeded generation)",
+    "visible, href points at the generation's download route"
+   ],
+   "intent": "Get every generated fragment plus the plan/intent/topology/mapping as one ZIP",
+   "expected_visible": "designUpdateDownloadLink (network-design.js:819-824)",
+   "expected_backend": "GET /api/labs/{id}/design/generations/{gid}/download (network_design.py:634-656); manifest type network-design-generation, \"never a backup, never a restore candidate\"",
+   "forbidden_side_effects": "never listed as a restore candidate",
+   "existing_tests": [
+    "test_network_design.py:427 test_generation_detail_artifacts_and_download",
+    "check_design_ui.py: \"the ZIP download link points at the generation\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:240. Live: inventory_dom.py plan_succeeded href checked structurally (not downloaded in this recon). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Download all files (ZIP) is visible with href /api/labs/7c248eda38b842f8af9b9d8bc21a7470/design/generations/b4a1fe4f25254937a2977cec57471032/download"
+  },
+  {
+   "id": "ND-HISTORY-001",
+   "surface": "History card",
+   "control": "<details> #design-history / summary \"History\"",
+   "preconditions": "Design tab open",
+   "states": [
+    "closed (default)",
+    "open"
+   ],
+   "intent": "See every past generation of this lab, not just the newest",
+   "expected_visible": "plain <details>",
+   "expected_backend": "none (renders from the already-fetched view.generations)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:242. Live: inventory_dom.py history_open. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: History <details> opened via its summary"
+  },
+  {
+   "id": "ND-HISTORY-002",
+   "surface": "History card",
+   "control": "History list #design-history-body (newest first; pill per status + relative time + message)",
+   "preconditions": "view.generations non-empty",
+   "states": [
+    "\"No plans generated yet.\"",
+    "one or more entries, each pilled queued/running/succeeded/failed/interrupted"
+   ],
+   "intent": "Audit every attempt, including failed/interrupted ones, in order",
+   "expected_visible": "designHistoryWord/Pill/Markup (network-design.js:338-345); capped at GENERATION_CAP=20 server-side (network_design.py:47,161-170, a running one is never dropped)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "the newest 20 kept, oldest non-busy dropped first, its files removed with it",
+   "existing_tests": [
+    "test_network_design.py:637 test_a_running_record_is_never_dropped_even_when_oldest",
+    "test_network_design.py:666 test_bounded_history_keeps_the_newest_and_removes_the_dropped_folder",
+    "check_design_ui.py: \"the history lists the generated plans\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py history_open shows the one generation from this recon run; the 20-cap eviction itself was not reproduced live. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: history lists the newest generation pilled as succeeded: Succeeded just now Plan generated Shown above"
+  },
+  {
+   "id": "ND-EXPORT-001",
+   "surface": "More menu",
+   "control": "Download design file menuitem #design-export",
+   "preconditions": "any (no client-side disabled reason is computed for this item)",
+   "states": [
+    "default"
+   ],
+   "intent": "Download the current saved intent as YAML for backup or sharing outside the manager",
+   "expected_visible": "designExport (network-design.js:1104-1107) -- window.open, no fetch/dialog",
+   "expected_backend": "GET /api/labs/{id}/design/export (network_design.py:658-666); 404 \"This lab has no design to export.\" when there is no intent",
+   "forbidden_side_effects": "never includes the allocation ledger's server internals beyond what the intent itself holds",
+   "existing_tests": [
+    "test_network_design.py:703 test_export_then_import_round_trips_the_design",
+    "test_network_design.py:723 test_export_without_a_design_is_404"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:161. Live: inventory_dom.py empty_more_menu_open/more_menu_with_plan shows the item. No client-side disabled state exists for this item (unlike design-apply/design-export-git), so clicking it with no design ever saved opens a new tab that only shows the backend's 404 JSON body; this is a source-vs-behaviour asymmetry worth a look, not confirmed live in this recon (window.open() was not driven to avoid a stray tab). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Download design file called window.open on the export URL (no fetch, no dialog): ['/api/labs/7c248eda38b842f8af9b9d8bc21a7470/design/export']"
+  },
+  {
+   "id": "ND-EXPORT-002",
+   "surface": "Plan card",
+   "control": "Export plan to Git\u2026 button #design-export-git",
+   "preconditions": "depends on state",
+   "states": [
+    "disabled: no succeeded plan (\"Generate a plan first.\")",
+    "disabled: lab has no git binding (\"Bind this lab to a repository under Progress first.\")",
+    "enabled"
+   ],
+   "intent": "Save a generated plan into the lab's Git repository as its own checkpoint",
+   "expected_visible": "designExportGitReason/designRenderExportGitButton (network-design.js:634-639,1159-1164)",
+   "expected_backend": "opens a client dialog only; no request until Save to VM and review",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:602 \"designExportGitReason: no succeeded plan, then a plan with no repository bound, then ready\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:231. Live: inventory_dom.py export_git_button_disabled (ospf-basics, no binding) and export_git_dialog_open (BGP_TheoryToPractice, bound + succeeded plan). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Export plan to Git\u2026 is enabled on a Running, git-bound lab with a succeeded plan (reason was '' when disabled elsewhere)"
+  },
+  {
+   "id": "ND-EXPORT-003",
+   "surface": "Export dialog",
+   "control": "Destination line #design-export-git-destination (\"Saving to <repo> \u203a <branch> \u203a checkpoints/<name>\")",
+   "preconditions": "dialog open, lab has a git binding",
+   "states": [
+    "updates live as the checkpoint field is typed"
+   ],
+   "intent": "See exactly where this will land before saving",
+   "expected_visible": "designExportGitDestinationMarkup/designExportGitUpdateDestination (network-design.js:645-650,1306-1308), wired to the checkpoint field's \"input\" event (1344)",
+   "expected_backend": "none (client render of lab.git_binding)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:641 \"designExportGitDestinationMarkup names the repository, branch and the checkpoint folder, and escapes every value\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py export_git_dialog_filled (checkpoint set to \"inventory-probe\"). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: destination line updates from the lab's git binding: Saving toCourse-Labs\u203amain\u203alabs/BGP/work/checkpoints/design-59498a31b315"
+  },
+  {
+   "id": "ND-EXPORT-004",
+   "surface": "Export dialog",
+   "control": "Checkpoint name input #design-export-git-checkpoint",
+   "preconditions": "dialog open",
+   "states": [
+    "prefilled with default \"design-<first 12 chars of generation id>\"",
+    "edited",
+    "invalid (fails DESIGN_EXPORT_CHECKPOINT_RE, error shown, submit refused client-side)"
+   ],
+   "intent": "Name the checkpoint folder this plan is saved under",
+   "expected_visible": "designExportGitDefaultCheckpoint/Valid (network-design.js:626-627); checked again client-side before submit (1328-1331) and server-side (git_progress.py:1080-1081)",
+   "expected_backend": "POST .../design/generations/{gid}/git",
+   "forbidden_side_effects": "400 on the server if somehow bypassed client-side",
+   "existing_tests": [
+    "test_network_design_ui.js:611 \"designExportGitDefaultCheckpoint takes the generation id's first 12 characters, prefixed\"",
+    "test_network_design_ui.js:617 \"designExportGitValidCheckpoint matches the server's checkpoint pattern exactly\"",
+    "test_design_export_git.py:347 test_route_400_bad_checkpoint_name"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:269. Live: inventory_dom.py export_git_dialog_open shows the prefilled default. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: checkpoint name prefilled with the default \"design-<12 chars>\": design-59498a31b315"
+  },
+  {
+   "id": "ND-EXPORT-005",
+   "surface": "Export dialog",
+   "control": "Note input #design-export-git-note (optional, one line, 200 chars)",
+   "preconditions": "dialog open",
+   "states": [
+    "blank (server writes its own note naming the plan)",
+    "filled",
+    "a pasted multi-line value folded to one line client-side"
+   ],
+   "intent": "Leave a human note on this checkpoint's commit",
+   "expected_visible": "designExportGitNote (network-design.js:631) folds \\r\\n\\t and repeated whitespace, then slices to 200",
+   "expected_backend": "sent as note in the POST body",
+   "forbidden_side_effects": "server also refuses any control character in the note (git_progress.py:1082)",
+   "existing_tests": [
+    "test_network_design_ui.js:631 \"designExportGitBody folds a pasted note to one line, caps it at 200 characters, and always sends push:true\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:271-273. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the note field reached the job/history as the commit message (checkpoint coverage-run-1790527962 pushed: Design export saved\n\u00d7\nCheckpoint 'coverage-run-1790527962' saved\n\nSaving to\nCourse-Labs\n\u203a\nmain\n\u203a\nlabs/BGP/work/checkpoints/coverage-run-1790527962\nver)"
+  },
+  {
+   "id": "ND-EXPORT-006",
+   "surface": "Export dialog",
+   "control": "Save to VM and review button #design-export-git-confirm",
+   "preconditions": "dialog open, checkpoint valid",
+   "states": [
+    "default"
+   ],
+   "intent": "Kick off the export, which always stops at review_pending for the mandatory review",
+   "expected_visible": "designExportGitSubmit (network-design.js:1325-1341): POST, then hands the job to git-progress.js's own quiet watch and switches to the Progress tab",
+   "expected_backend": "POST /api/labs/{id}/design/generations/{gid}/git (git_progress.py:1076-1077); push is always true but the job still stops at review_pending -- this file never sends {push:true,reviewed:true}",
+   "forbidden_side_effects": "never uploads directly; the review and reviewed retry live entirely in git-progress.js",
+   "existing_tests": [
+    "test_design_export_git.py:307 test_route_creates_job_with_expected_fields",
+    "test_design_export_git.py:408 test_execute_review_pending_when_push_requested_committed_otherwise"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not clicked live in this recon (would start a real save-progress pipeline against the fixture's git remote and require following it into the Progress tab's review, out of scope for a Design-tab inventory); dialog opened and filled, not submitted. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Save to VM and review called POST .../design/generations/{gid}/git and handed the job straight to the mandatory review dialog (gitStartWatch -> gitReviewJob): Review design export before uploading\n\u00d7\n\nWhat this export changed compared with the previous one. Configuration files may contain passwords or keys. | end-to-end completion: Upload these changes -> Design export saved\n\u00d7\nCheckpoint 'coverage-run-1790527962' saved\n\nSaving to\nCourse-Labs\n\u203a\nmain\n\u203a\nlabs/BGP/work/checkpoints/coverage-run-1790527962\nverified on remote\n\nDestination\nCourse-Labs \u00b7 main \u00b7 "
+  },
+  {
+   "id": "ND-EXPORT-007",
+   "surface": "Export dialog",
+   "control": "Error line #design-export-git-error (role=alert)",
+   "preconditions": "A submit fails (400/409/network)",
+   "states": [
+    "empty",
+    "populated"
+   ],
+   "intent": "See exactly why the export could not be queued",
+   "expected_visible": "network-design.js:1326,1340",
+   "expected_backend": "server 400/409 message passed through verbatim",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:275. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the error line (role=alert) is populated on refusal: 'Use a checkpoint name containing letters, numbers, hyphens or underscores.'"
+  },
+  {
+   "id": "ND-EXPORT-008",
+   "surface": "Export dialog",
+   "control": "Close controls: title-bar \u00d7 and Cancel [data-design-export-git-close]",
+   "preconditions": "dialog open",
+   "states": [
+    "default"
+   ],
+   "intent": "Abandon the export without side effects",
+   "expected_visible": "designExportGitClose (network-design.js:1320)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "closing does not cancel or affect a request already in flight (there is none until Save to VM and review is clicked)",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:266,276. Live: inventory_dom.py export_git_dialog_filled captured before close. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the title-bar \u00d7 control closed the dialog without submitting"
+  },
+  {
+   "id": "ND-IMPORT-001",
+   "surface": "More menu",
+   "control": "Import design file\u2026 menuitem #design-import",
+   "preconditions": "any (no client-side disabled reason computed)",
+   "states": [
+    "default"
+   ],
+   "intent": "Load a previously exported (or hand-written) intent file",
+   "expected_visible": "designImportPrompt (network-design.js:1108) just clicks the hidden file input",
+   "expected_backend": "none yet (file picker is native)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:162. Same asymmetry as ND-EXPORT-001: no client-side disabled state even while a generation is busy, although the server refuses the import with 409 in that case (network_design.py:691). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Import design file\u2026 (hidden <input type=file>) accepted a real uploaded file and called POST .../design/import (status 200)"
+  },
+  {
+   "id": "ND-IMPORT-002",
+   "surface": "Hidden control",
+   "control": "File input #design-import-file (hidden, accept=\".yml,.yaml,.json\")",
+   "preconditions": "triggered by #design-import",
+   "states": [
+    "no file chosen (change fires with none, no-op)",
+    "a file chosen"
+   ],
+   "intent": "Pick the file to import",
+   "expected_visible": "network-design.js:1380-1382 clears .value after reading so choosing the same file twice still fires \"change\"",
+   "expected_backend": "multipart POST via designImportFile",
+   "forbidden_side_effects": "client accept= is advisory only; the server enforces the real size/format/anchor rules",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:167. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the hidden #design-import-file accepts .yml/.yaml/.json and was driven directly with a real file (set_input_files)"
+  },
+  {
+   "id": "ND-IMPORT-003",
+   "surface": "Import flow",
+   "control": "Successful import replaces the view and clears any draft",
+   "preconditions": "file parses and validates",
+   "states": [
+    "imported:true"
+   ],
+   "intent": "Make an imported design immediately the working one, discarding any unrelated unsaved edit",
+   "expected_visible": "designImportFile (network-design.js:1109-1129)",
+   "expected_backend": "POST /api/labs/{id}/design/import (network_design.py:668-699)",
+   "forbidden_side_effects": "requires the current revision like Save; refuses (409) on a stale revision",
+   "existing_tests": [
+    "test_network_design.py:703",
+    "test_network_design.py:978"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not driven live in this recon (Playwright cannot pick a native file without set_input_files, and no import fixture file was staged; see the tool's comment at run_full()'s import_control_state step). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: a successful import replaced the view: POST returned imported:true and BGP AS 65099 from the uploaded file is now in Advanced"
+  },
+  {
+   "id": "ND-IMPORT-004",
+   "surface": "Import flow",
+   "control": "Failed import shows problems without saving",
+   "preconditions": "file fails validation, or is not YAML/JSON, or exceeds 512 KiB, or has YAML anchors",
+   "states": [
+    "imported:false, problems[] shown in #design-problems"
+   ],
+   "intent": "Never half-apply a bad import",
+   "expected_visible": "designImportFile's !result.imported branch (network-design.js:1115-1118)",
+   "expected_backend": "POST returns {imported:false, problems}",
+   "forbidden_side_effects": "the store is never touched when problems exist",
+   "existing_tests": [
+    "test_network_design.py:728 test_import_of_an_invalid_document_reports_problems_without_saving",
+    "test_network_design.py:739 test_import_over_the_size_limit_is_refused",
+    "test_network_design.py:747 test_import_with_yaml_anchors_is_refused"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not driven live in this recon (same native-file-picker limitation as ND-IMPORT-003). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: a design with a pool overlapping the management network was refused (imported:false) and its problems shown: addressing.loopback.ipv4: Overlaps the lab management network containerlab default management ipv4-subnet"
+  },
+  {
+   "id": "ND-IMPORT-005",
+   "surface": "Import flow",
+   "control": "Imported allocations are always ignored; the server's own ledger is kept",
+   "preconditions": "file includes an \"allocations\" key",
+   "states": [
+    "client value discarded"
+   ],
+   "intent": "Prevent an imported file from forging or corrupting the pinned allocation ledger",
+   "expected_visible": "network_design.py:686",
+   "expected_backend": "POST /api/labs/{id}/design/import",
+   "forbidden_side_effects": "same rule as Save (ND-SAVE-005)",
+   "existing_tests": [
+    "test_network_design.py:978"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Backend-only; not independently visible in the DOM. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the previous (good) design is untouched after the failed import (BGP AS 65099 still present)"
+  },
+  {
+   "id": "ND-RENUMBER-001",
+   "surface": "More menu",
+   "control": "Renumber (forget allocations)\u2026 menuitem #design-renumber",
+   "preconditions": "any (no client-side disabled reason computed)",
+   "states": [
+    "default"
+   ],
+   "intent": "Start over on addressing without touching any other design choice",
+   "expected_visible": "network-design.js:1077,1383",
+   "expected_backend": "none yet (opens a confirm dialog)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:163. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: More menu item \"Renumber (forget allocations)\u2026\" opened its confirm dialog"
+  },
+  {
+   "id": "ND-RENUMBER-002",
+   "surface": "Confirm dialog",
+   "control": "#design-renumber-dialog (Cancel / \"Forget allocations\" danger button)",
+   "preconditions": "menu item clicked",
+   "states": [
+    "open",
+    "closed (Cancel, no request sent)",
+    "closed (confirmed, request sent)"
+   ],
+   "intent": "Make sure the student understands renumbering may change every device's addresses before doing it",
+   "expected_visible": "designRenumber (network-design.js:1077-1089) built via opDialog with explicit warning copy",
+   "expected_backend": "POST /api/labs/{id}/design/renumber only on confirm (network_design.py:581-596)",
+   "forbidden_side_effects": "Cancel never calls the server",
+   "existing_tests": [
+    "test_network_design.py:311 test_renumber_empties_the_allocation_ledger",
+    "test_network_design.py:324 test_renumber_without_a_design_is_404"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py renumber_dialog_open (opened) and renumber_dialog_closed (Cancel clicked, no request sent by this recon). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Cancel closed the dialog without any POST .../design/renumber"
+  },
+  {
+   "id": "ND-RENUMBER-003",
+   "surface": "Server effect",
+   "control": "Clearing the ledger does not touch modules, addressing pools, or the topology, only intent.allocations",
+   "preconditions": "confirmed",
+   "states": [
+    "allocations {} after; next generation reallocates from the pools"
+   ],
+   "intent": "Forget pinned addresses without losing any other design choice",
+   "expected_visible": "network_design.py:590-591",
+   "expected_backend": "PUT-equivalent via the renumber route",
+   "forbidden_side_effects": "refuses (409) while a generation is busy or the revision is stale",
+   "existing_tests": [
+    "test_network_design.py:311"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Backend-only effect; the dialog interaction itself is covered by ND-RENUMBER-002. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: confirming Renumber POSTed .../design/renumber and the ledger emptied to its caption"
+  },
+  {
+   "id": "ND-RENUMBER-004",
+   "surface": "Server effect",
+   "control": "Renumbering is reported against the *previous* plan, never against a ledger that was already cleared",
+   "preconditions": "a generation runs after a renumber",
+   "states": [
+    "renumbering[] compares old vs new correctly"
+   ],
+   "intent": "Give an honest \"what changed\" table even across a renumber",
+   "expected_visible": "network_design.py:299-302 snapshot.previous_ledger, resolved before the clear could apply",
+   "expected_backend": "none (internal correctness)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design.py:926 test_renumbering_is_reported_against_the_previous_plan_not_the_cleared_ledger"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Backend-only; cross-refer ND-PLAN-004. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the renumbering report comparing old vs new ledger is network_design.py:299-302 (server-internal correctness); exercised indirectly by ND-PLAN-004 above and by test_network_design.py:926"
+  },
+  {
+   "id": "ND-CLEAR-001",
+   "surface": "More menu (danger group)",
+   "control": "Remove design\u2026 menuitem #design-clear",
+   "preconditions": "any (no client-side disabled reason computed)",
+   "states": [
+    "default"
+   ],
+   "intent": "Delete the saved design while keeping every generated plan for later reference",
+   "expected_visible": "network-design.js:1090,1384",
+   "expected_backend": "none yet (opens a confirm dialog)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:165 (inside .menu-danger role=group). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: More menu (danger group) \"Remove design\u2026\" opened its confirm dialog"
+  },
+  {
+   "id": "ND-CLEAR-002",
+   "surface": "Confirm dialog",
+   "control": "#design-clear-dialog (Cancel / \"Remove design\" danger button)",
+   "preconditions": "menu item clicked",
+   "states": [
+    "open",
+    "closed (Cancel, no request)",
+    "closed (confirmed, request sent)"
+   ],
+   "intent": "Make sure a destructive action is deliberate, and make clear that generated plans are NOT deleted",
+   "expected_visible": "designClearDesign (network-design.js:1090-1103); dialog copy explicitly says plans are kept",
+   "expected_backend": "POST /api/labs/{id}/design/clear only on confirm (network_design.py:566-579)",
+   "forbidden_side_effects": "Cancel never calls the server; the route itself never removes network_generations",
+   "existing_tests": [
+    "test_network_design.py:298 test_clear_with_wrong_revision_then_the_right_one_then_again_on_an_empty_design"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py clear_dialog_open / clear_dialog_closed (Cancel clicked, no request sent by this recon). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Cancel sent no request; the danger button confirmed via POST .../design/clear"
+  },
+  {
+   "id": "ND-CLEAR-003",
+   "surface": "Server effect",
+   "control": "Clearing removes network_design only; network_generations and their files are untouched",
+   "preconditions": "confirmed",
+   "states": [
+    "intent gone, generations/history still there"
+   ],
+   "intent": "Let a student discard a design and start fresh while still being able to look at (or download) what was generated before",
+   "expected_visible": "network_design.py:574 `lab.pop('network_design', None)`",
+   "expected_backend": "POST /api/labs/{id}/design/clear",
+   "forbidden_side_effects": "refuses (409) while a generation is busy",
+   "existing_tests": [
+    "test_network_design.py:298"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Cross-refer ND-HISTORY-002 for the surviving history. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: History (generations) is unchanged by Remove design: before='Succeeded just now Plan generated Shown aboveSucceeded just ' after='Succeeded just now Plan generated Shown aboveSucceeded just '"
+  },
+  {
+   "id": "ND-CLEAR-004",
+   "surface": "Server guard",
+   "control": "A stale revision on Clear is refused, same as Save/Renumber/Import",
+   "preconditions": "the design changed elsewhere since the page loaded",
+   "states": [
+    "409"
+   ],
+   "intent": "Never remove a design version the student has not actually seen",
+   "expected_visible": "network_design.py:572",
+   "expected_backend": "POST clear",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design.py:298"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Backend-only. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: POST .../design/clear with the same stale (superseded) revision was refused: status=409 body={\"detail\": \"The design changed since this page loaded. Reload it first.\"}"
+  },
+  {
+   "id": "ND-APPLY-001",
+   "surface": "Plan card",
+   "control": "Apply to devices\u2026 button #design-apply",
+   "preconditions": "newest generation succeeded and not stale, lab deployment Running, no busy apply for this lab, engine available",
+   "states": [
+    "enabled"
+   ],
+   "intent": "Open the apply flow",
+   "expected_visible": "designRenderApplyButton (network-design.js:1152-1158)",
+   "expected_backend": "no request on click beyond opening the dialog client-side",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "check_design_apply_ui.py (whole flow, live-VM tool)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:231. Live: inventory_dom.py apply_button_disabled (ospf-basics, Not deployed) and apply_dialog_choose_step (BGP_TheoryToPractice, Running). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Apply to devices\u2026 is enabled on a Running lab with a succeeded plan (reason elsewhere: '')"
+  },
+  {
+   "id": "ND-APPLY-002",
+   "surface": "Plan card",
+   "control": "Apply-disabled reasons (designApplyDisabledReason), one per precondition",
+   "preconditions": "depends",
+   "states": [
+    "engine unavailable (its diagnostic)",
+    "no succeeded plan (\"Generate a plan first.\")",
+    "stale plan (\"Generate the plan again: the design or the topology changed since this plan.\")",
+    "lab Unlinked (\"This lab is not matched to a running lab.\")",
+    "lab status Unknown (\"The lab VM cannot be reached right now.\")",
+    "lab Not deployed/Stopped (\"The lab is not running.\")",
+    "another apply already running for this lab (\"An apply is already running for this lab.\")"
+   ],
+   "intent": "Always give a precise, actionable reason instead of a bare disabled button",
+   "expected_visible": "network-design.js:603-617",
+   "expected_backend": "read-only client computation from already-fetched state",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:517 \"designApplyDisabledReason: no plan, not linked, a running job, and the ready case\"",
+    "test_network_design_ui.js:529 \"...a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py apply_button_disabled captured exactly \"The lab is not running.\" for ospf-basics; the other six reasons were only unit-tested, not reproduced live in this recon. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: designApplyDisabledReason covers no-plan/stale/already-running (live in the actual page, real function): 'Generate a plan first.' | 'Generate the plan again: the design or the topology changed since this plan.' | 'An apply is already running for this lab.'"
+  },
+  {
+   "id": "ND-APPLY-003",
+   "surface": "Apply dialog",
+   "control": "Dialog shell #design-apply-dialog (three steps: choose/review/progress, one visible at a time)",
+   "preconditions": "dialog open",
+   "states": [
+    "choose",
+    "review",
+    "progress"
+   ],
+   "intent": "Walk a clear, linear flow: pick devices, review the exact diff, then apply",
+   "expected_visible": "designApplyShowStep (network-design.js:1171-1176)",
+   "expected_backend": "none (client step machine)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py apply_dialog_choose_step, apply_dialog_review_step. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Apply dialog opened on its \"choose\" step (three-step shell #design-apply-dialog)"
+  },
+  {
+   "id": "ND-APPLY-004",
+   "surface": "Choose step",
+   "control": "Device checklist #design-apply-choose-body (name=design-apply-target)",
+   "preconditions": "dialog open",
+   "states": [
+    "no devices (\"This plan has no devices to apply.\")",
+    "a device pre-checked (included, not host, not blocked)",
+    "a support host, unchecked and disabled (\"A support host is generated only, never applied.\")",
+    "a blocked device, unchecked and disabled (its blocked reason)"
+   ],
+   "intent": "Choose exactly which devices to review/apply, never silently including a host or a blocked device",
+   "expected_visible": "designApplyChooseMarkup/designApplyDefaultSelection (network-design.js:471-484,1149-1151)",
+   "expected_backend": "none until Review",
+   "forbidden_side_effects": "a disabled row can never be checked, so it can never reach the review/apply request",
+   "existing_tests": [
+    "test_network_design_ui.js (choose-markup coverage via designApplyDeviceMarkup suite; no direct designApplyChooseMarkup unit test found by name)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py apply_dialog_choose_step (BGP_TheoryToPractice, 13 devices) and apply_dialog_choose_step_narrowed (this recon's own narrowing to 2 targets before Review, to keep the SSH-timeout review fast). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: choose-step lists every included device; Backup-Worker (host role) is unchecked+disabled with \"A support host is generated only, never applied.\": ['Backup-Worker', True, 'A support host is generated only, never applied.']"
+  },
+  {
+   "id": "ND-APPLY-005",
+   "surface": "Choose step",
+   "control": "Choose error #design-apply-choose-error",
+   "preconditions": "no device ticked and Review clicked",
+   "states": [
+    "empty",
+    "\"Choose at least one device.\""
+   ],
+   "intent": "Prevent an empty review request",
+   "expected_visible": "designApplyRunReview (network-design.js:1196-1200)",
+   "expected_backend": "client-only guard (server also 400s: len(targets)>=1 required by the Review pydantic model)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:248. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the choose-error line is populated: 'Choose at least one device.'"
+  },
+  {
+   "id": "ND-APPLY-006",
+   "surface": "Choose step",
+   "control": "Review button #design-apply-review-run",
+   "preconditions": "at least one device ticked",
+   "states": [
+    "default"
+   ],
+   "intent": "Run the real (read-only) review connection against each chosen device",
+   "expected_visible": "designApplyRunReview -> POST .../review",
+   "expected_backend": "POST /api/labs/{id}/design/generations/{gid}/review (design_apply.py:662-665)",
+   "forbidden_side_effects": "the transaction is opened and aborted, never committed, on every reviewed device",
+   "existing_tests": [
+    "test_design_apply.py:628 test_review_token_and_public_fields"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py apply_dialog_review_step (2 real, failing SSH attempts against the fixture -- see ND-APPLY-007). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Review button called POST .../generations/{gid}/review for the 2 chosen devices"
+  },
+  {
+   "id": "ND-APPLY-007",
+   "surface": "Review step",
+   "control": "Per-device review block: ineligible / unreachable-not-ready / no-op / normal (counts, protected settings, diff, expected changes, removal commands, conflicts+takeover, kept-manual)",
+   "preconditions": "review returned",
+   "states": [
+    "ineligible (not part of the plan / blocked / host / kind without a driver / device removed / no credentials / asks for something unsupported)",
+    "unreachable or not ready (its reason, e.g. a connectivity exception, or another pending change on the device)",
+    "no-op (\"Already matches the plan.\")",
+    "normal: counts line + diff + optional protected-settings/expected-changes/removal-commands <details> + optional conflicts block with the take-over checkbox + optional kept-manual <details>"
+   ],
+   "intent": "Never apply blind: see exactly what would change, what is protected, and what conflicts with manual configuration, per device",
+   "expected_visible": "designApplyDeviceMarkup (network-design.js:501-525); design_apply.py review()/_review_one()",
+   "expected_backend": "none (already fetched by Review)",
+   "forbidden_side_effects": "a device with unresolved conflicts cannot be submitted (see ND-APPLY-010)",
+   "existing_tests": [
+    "test_network_design_ui.js:416,423,434,440,446 (the five designApplyDeviceMarkup states)",
+    "test_network_design_ui.js:570,578,591 (capped-sample \"\u2026and N more\" lines)",
+    "test_design_apply.py:579 test_each_ineligible_reason_and_409_when_all_ineligible",
+    "test_design_apply.py:595 test_device_without_credentials_is_ineligible"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "BLOCKED",
+   "defects": [],
+   "notes": "Live: inventory_dom.py apply_dialog_review_step captured the *unreachable* branch live (\"Connectivity: NoValidConnectionsError\") for both narrowed targets -- the fixture has no real SSH endpoint, so eligible-and-reachable diff/conflict/no-op branches were not reached live, only unit-tested. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: [BLOCKED for the eligible/no-op/conflict/protected/expected/removal branches -- see note] the unreachable branch is reached and reads plain words: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py"
+  },
+  {
+   "id": "ND-APPLY-008",
+   "surface": "Review step",
+   "control": "Conflict take-over checkbox [data-design-apply-takeover] per device",
+   "preconditions": "a device's review reports conflicts",
+   "states": [
+    "unticked (device blocked from Apply until resolved)",
+    "ticked (re-runs Review with this device added to takeover[])"
+   ],
+   "intent": "Explicitly accept that manual configuration on this device will be replaced/removed",
+   "expected_visible": "designApplyToggleTakeover (network-design.js:1222-1231) re-POSTs review; designApplyRenderReview unticks #design-apply-ack on every new review result (1212-1216)",
+   "expected_backend": "POST .../review again with takeover updated",
+   "forbidden_side_effects": "the ack checkbox is always reset on a new review so a stale acknowledgement can never carry over a changed conflict set",
+   "existing_tests": [
+    "test_network_design_ui.js:423 \"a conflict shows the take-over checkbox, and its note once taken over\"",
+    "test_network_design_ui.js:543 \"designApplyRenderReview unticks the acknowledgement and recomputes Apply on every new review result\"",
+    "test_design_apply.py:663 test_conflict_blocks_applicable_without_takeover",
+    "test_design_apply.py:671 test_takeover_makes_it_applicable_and_apply_needs_matching_takeover"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "BLOCKED",
+   "defects": [],
+   "notes": "Not reached live in this recon (the two narrowed review targets came back unreachable before any conflict could be reported); unit-tested. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: no device in this review reported a conflict (none is reachable), so the take-over checkbox path is BLOCKED: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py"
+  },
+  {
+   "id": "ND-APPLY-009",
+   "surface": "Review step",
+   "control": "Recovery window input #design-apply-minutes (2-30, default 5) and its helper text",
+   "preconditions": "review step shown",
+   "states": [
+    "default 5",
+    "edited within 2-30",
+    "clamped client-side to [2,30] on submit (designApplyClampMinutes)"
+   ],
+   "intent": "Choose how long the device waits before undoing the change by itself if the manager cannot confirm",
+   "expected_visible": "index.html:253-255; designApplyClampMinutes (network-design.js:545-548)",
+   "expected_backend": "sent as confirm_minutes in the apply POST; server also bounds it 2-30 (design_apply.py Apply model, ge=2 le=30)",
+   "forbidden_side_effects": "never lets a student set an unbounded or zero recovery window",
+   "existing_tests": [
+    "test_network_design_ui.js:469 \"designApplyBody clamps confirm_minutes, sorts the take-over list, and reuses a supplied request id\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py apply_dialog_review_step shows the default value=5. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: default 5, an in-range edit (2) is kept, and designApplyClampMinutes (the real loaded function) clamps 999->30 and -5->2"
+  },
+  {
+   "id": "ND-APPLY-010",
+   "surface": "Review step",
+   "control": "Acknowledgement checkbox #design-apply-ack + Apply button #design-apply-run enable rule",
+   "preconditions": "review step shown",
+   "states": [
+    "ack unticked (Apply disabled)",
+    "ack ticked but nothing applicable or an unresolved conflict remains (Apply still disabled)",
+    "ack ticked, review.applicable non-empty, every conflicted ready device taken over (Apply enabled)"
+   ],
+   "intent": "Never let a click apply devices the student has not both reviewed and explicitly accepted",
+   "expected_visible": "designApplyCanSubmit (network-design.js:533-538); designApplyUpdateRunButton (1217-1220)",
+   "expected_backend": "server re-checks: acknowledged must be true (400 otherwise) and conflicts-without-takeover still 409 at submit",
+   "forbidden_side_effects": "client and server both independently enforce this -- neither trusts the other alone",
+   "existing_tests": [
+    "test_network_design_ui.js:453 \"designApplyCanSubmit: needs acknowledgement, an applicable device, and every conflict resolved\"",
+    "test_design_apply.py:779 test_acknowledged_false_is_400",
+    "test_design_apply.py:785 test_conflicts_without_takeover_are_409_at_submit"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py apply_dialog_review_step shows design-apply-run disabled (ack unticked, both targets unreachable so nothing is applicable either). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Apply disabled before ack; still disabled after ack because review.applicable is empty (no reachable device), with the reason shown: 'Nothing can be applied: no chosen device is ready for this plan.'"
+  },
+  {
+   "id": "ND-APPLY-011",
+   "surface": "Review step",
+   "control": "Back button #design-apply-back",
+   "preconditions": "review step shown",
+   "states": [
+    "default"
+   ],
+   "intent": "Return to Choose without losing the dialog",
+   "expected_visible": "network-design.js:1288 -> designApplyShowStep('choose')",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "index.html:258. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Back returned to the choose step with no new request"
+  },
+  {
+   "id": "ND-APPLY-012",
+   "surface": "Review->Apply",
+   "control": "Apply button #design-apply-run submit",
+   "preconditions": "enabled per ND-APPLY-010",
+   "states": [
+    "default"
+   ],
+   "intent": "Commit to applying the reviewed plan to the reviewed devices",
+   "expected_visible": "designApplySubmit (network-design.js:1232-1245)",
+   "expected_backend": "POST /api/labs/{id}/design/apply (design_apply.py:667-670); idempotent by request_id, bound to the single-use review token (10 min TTL)",
+   "forbidden_side_effects": "refuses (409) if the review expired, the plan/topology changed, a conflict is unresolved, or another operation is busy",
+   "existing_tests": [
+    "test_design_apply.py:735 test_bad_token_is_409",
+    "test_design_apply.py:739 test_expired_token_is_409",
+    "test_design_apply.py:746 test_same_request_id_returns_the_same_job",
+    "test_design_apply.py:759 test_generation_changed_since_review_is_409",
+    "test_design_apply.py:800 test_full_apply_succeeds_and_records_everything"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "BLOCKED",
+   "defects": [],
+   "notes": "Not clicked live in this recon (would start a real pre-change backup + timed-recovery apply against no real device, which is out of scope for a Design-tab DOM inventory and would misrepresent an untested apply as attempted); dialog reached and populated up to this button, never pressed. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Apply submit needs at least one reachable, eligible device to become enabled: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py"
+  },
+  {
+   "id": "ND-APPLY-013",
+   "surface": "Progress step",
+   "control": "Progress body #design-apply-progress-body (per-target table: device/kind/stage/outcome pill/message + verify/kept-manual/persistence notes) + job status line",
+   "preconditions": "a job exists",
+   "states": [
+    "queued/preflight/backing_up/applying/confirming/verifying (busy, \"Applying\u2026\")",
+    "succeeded/partial/failed/needs_attention/interrupted (settled)"
+   ],
+   "intent": "Watch (or later review) exactly what happened per device, never a healthy-looking label hiding a failed device",
+   "expected_visible": "designApplyProgressMarkup/designApplyTargetRow (network-design.js:556-572); design_apply.py stage/outcome machine",
+   "expected_backend": "GET /api/design/apply/jobs/{job_id} polled every 2s while busy (designApplyStartWatch)",
+   "forbidden_side_effects": "never shows the staged configuration itself, only counts/diff samples/messages",
+   "existing_tests": [
+    "test_network_design_ui.js:480 \"designApplyProgressMarkup: every outcome word appears for its status\"",
+    "test_network_design_ui.js:487 \"...a verify mismatch shows the missing/remaining counts\"",
+    "test_design_apply.py:800-1051 (the whole outcome matrix: verified, rolled_back, uncertain, drifted, no_op, \u2026)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "BLOCKED",
+   "defects": [],
+   "notes": "Not reached live in this recon (no apply was submitted; see ND-APPLY-012). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the progress table's per-device stage/outcome words need a real applying job: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py"
+  },
+  {
+   "id": "ND-APPLY-014",
+   "surface": "Plan card",
+   "control": "Last-apply line #design-apply-last + Show button [data-design-apply-show] reopening the dialog on that job's progress step",
+   "preconditions": "a lab has at least one apply job",
+   "states": [
+    "hidden (no job yet)",
+    "visible with the job's word + relative time + Show"
+   ],
+   "intent": "Reopen a past (or still-running) apply's outcome without hunting for it",
+   "expected_visible": "designApplyRenderLast/designApplyShowJob (network-design.js:1165-1170,1269-1276)",
+   "expected_backend": "GET /api/labs/{id}/design/apply/jobs (design_apply.py:672-674) feeds state.design_jobs via /api/state",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:507 \"designApplyLastLineMarkup: a settled job shows its word, a relative time and a Show button\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "BLOCKED",
+   "defects": [],
+   "notes": "Not reached live in this recon (no job exists on either fixture lab); index.html:234. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the plan card's \"Last apply\" line needs a completed real apply job: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py | additionally confirmed live: #design-apply-last stays hidden with no apply job yet for this lab"
+  },
+  {
+   "id": "ND-APPLY-015",
+   "surface": "Apply dialog",
+   "control": "Close controls: title-bar \u00d7 and Cancel/Close [data-design-apply-close] on every step",
+   "preconditions": "dialog open",
+   "states": [
+    "choose",
+    "review",
+    "progress"
+   ],
+   "intent": "Abandon or dismiss the dialog from any step without side effects",
+   "expected_visible": "initDesignApply wires every [data-design-apply-close] to designApplyClose (network-design.js:1299)",
+   "expected_backend": "stops the apply-job poll if one was running (designApplyStopWatch)",
+   "forbidden_side_effects": "closing during progress does not cancel the job itself -- there is no cancel-apply route, only Close",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py closed the dialog after apply_dialog_choose_step (full mode) and after apply_dialog_review_step (apply_export mode). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the title-bar \u00d7 / Cancel controls closed the dialog from the review step"
+  },
+  {
+   "id": "ND-APPLY-016",
+   "surface": "Server",
+   "control": "operation_busy exclusion: apply excludes backups, Git saves, restores, discovery and removal for the same lab",
+   "preconditions": "an apply is running",
+   "states": [
+    "review/apply refused for another operation; another operation refused while apply runs"
+   ],
+   "intent": "Never let two operations race on the same lab's devices/state",
+   "expected_visible": "design_apply.py guard_idle / operation_busy (per docs/NETWORK-DESIGN.md \"Security boundary\")",
+   "expected_backend": "various 409s",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_design_apply.py:608 test_busy_operation_is_409",
+    "test_design_apply.py:1090 test_runner_refuses_a_manual_backup_while_a_design_is_applying_but_allows_its_own",
+    "test_design_apply.py:1114 test_restore_guard_idle_refuses_while_a_design_is_applying"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Backend-only cross-feature guard; not visible in the Design tab's own DOM. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: not attempted live in this recon: reproducing operation_busy exclusion needs winning a race against a second, genuinely concurrent manager job (a backup, Git save, restore, discovery import or removal) inside the review/apply window, which this recon did not attempt within budget; the exact 409 contract (and every one of the excluded operation kinds) is asserted directly by test_design_apply.py:608 test_busy_operation_is_409 and its neighbours"
+  },
+  {
+   "id": "ND-APPLY-017",
+   "surface": "Server",
+   "control": "Ownership ledger updates after every apply (owned statements, highest-container removal rule, manual-configuration protection)",
+   "preconditions": "an apply settles",
+   "states": [
+    "owned settings grow/shrink; a container with a manual child is kept, not removed whole"
+   ],
+   "intent": "Let repeated applies of an evolving design converge correctly without ever touching a student's own manual configuration",
+   "expected_visible": "design_apply.py ownership merge/diff logic; see docs/NETWORK-DESIGN.md \"Ownership\"",
+   "expected_backend": "reflected in GET .../design/ownership (ND-ADVANCED-005)",
+   "forbidden_side_effects": "never removes or reports as owned anything the manager did not itself add",
+   "existing_tests": [
+    "test_design_ownership.py (whole file: 24 tests on the ownership/removal contract)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "BLOCKED",
+   "defects": [],
+   "notes": "Backend-only; the DOM surface for this is ND-ADVANCED-005, which was reached only in its empty state live. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the ownership ledger only grows once a real apply has run against a real device: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py"
+  },
+  {
+   "id": "ND-APPLY-018",
+   "surface": "Client state",
+   "control": "designApplyState requestId regenerated once per dialog open, reused across a retry",
+   "preconditions": "dialog opened",
+   "states": [
+    "fresh id on open",
+    "same id reused if the same submit is retried after a network error"
+   ],
+   "intent": "Make a retried Apply idempotent instead of double-applying",
+   "expected_visible": "designApplyRequestId (network-design.js:539-544); designApplyOpen sets it once (1184)",
+   "expected_backend": "request_id in the apply POST body; server treats a repeat as the same job (design_apply.py, request_id idempotency)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:464 \"designApplyRequestId returns a 32-character lowercase hex string, different each time\"",
+    "test_design_apply.py:746 test_same_request_id_returns_the_same_job"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not independently re-driven live (would need to force a network error mid-submit); unit-tested end to end. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: designApplyRequestId() (the real loaded function) returns a fresh 32-hex-char id each call; designApplyOpen() calls it once per dialog open and designApplyState keeps it for the dialog's lifetime (source-confirmed: network-design.js:1393-1399, requestId set once in designApplyOpen, read at submit)"
+  },
+  {
+   "id": "ND-STATE-001",
+   "surface": "Head status line",
+   "control": "#design-state-pill / #design-state-text: \"No design yet\"",
+   "preconditions": "no draft, no problems, not generating, newest generation not present (or none exists)",
+   "states": [
+    "truly no design ever saved",
+    "a design IS saved but no plan has been generated yet -- same label either way"
+   ],
+   "intent": "Tell the student where to start",
+   "expected_visible": "designStateOf fallback branch (network-design.js:46)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:23 \"designStateOf: no design yet\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py empty (truly empty) and ae_saved (BGP_TheoryToPractice, saved design, no plan yet) both show identical pill/text/detail -- see the discrepancies list. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: after Remove design the state reads \"No design saved (earlier plans kept) No design saved (earlier plans kept)\" (not conflated with a true empty lab, QA-011 fix), earlier plans stay under History"
+  },
+  {
+   "id": "ND-STATE-002",
+   "surface": "Head status line",
+   "control": "\"Unsaved changes\" (warn)",
+   "preconditions": "view.draft truthy",
+   "states": [
+    "default"
+   ],
+   "intent": "Warn that edits will be lost without Save",
+   "expected_visible": "network-design.js:37",
+   "expected_backend": "none",
+   "forbidden_side_effects": "wins over problems/generation display only when there IS a draft (draft is checked before problems in the priority order)",
+   "existing_tests": [
+    "test_network_design_ui.js:28"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py unsaved_dirty, invalid_problems (both still \"Unsaved changes\" since Save was rejected). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: ticking OSPF marks the state \"Unsaved changes\""
+  },
+  {
+   "id": "ND-STATE-003",
+   "surface": "Head status line",
+   "control": "\"The design has problems\" (danger)",
+   "preconditions": "no draft, view.problems non-empty",
+   "states": [
+    "default, detail = first problem's message"
+   ],
+   "intent": "Surface a validation failure even without a fresh Save attempt (e.g. after an import or a stale reload)",
+   "expected_visible": "network-design.js:38-39",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:40"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not reached live as a *state-line* value in this recon (the invalid_problems capture showed \"Unsaved changes\" since a draft was still present; the pure \"problems, no draft\" combination is unit-tested but not reproduced live). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: \"The design has problems\" is designStateOf's pure branch (unit-tested); reproduced live here via the same #design-problems path (state text: Unsaved changes Unsaved changes)"
+  },
+  {
+   "id": "ND-STATE-004",
+   "surface": "Head status line",
+   "control": "\"Generating the plan\u2026\" (busy)",
+   "preconditions": "generating (summary.generating or newest.status in queued/running)",
+   "states": [
+    "default"
+   ],
+   "intent": "Show that a request is in flight",
+   "expected_visible": "network-design.js:35-36",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:33"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py generating. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: \"Generating the plan\u2026\" (busy) observed above on ND-GENERATE-003's attempt / BGP_TheoryToPractice generation (part 2)"
+  },
+  {
+   "id": "ND-STATE-005",
+   "surface": "Head status line",
+   "control": "\"The last plan was interrupted\" (warn)",
+   "preconditions": "no draft/problems/generating, newest.status==interrupted",
+   "states": [
+    "default"
+   ],
+   "intent": "Distinguish a manager restart from an actual failure",
+   "expected_visible": "network-design.js:40-41",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:62"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not reproduced live (would need a manager restart mid-generation). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: [a real kill -9 of the fixture manager process 1s into a real generation, then a real restart on the same --keep data dir] generation status='interrupted' message='The manager restarted while this plan was being generated. Generate it again.' state line='The last plan was interrupted The last plan was interrupted'"
+  },
+  {
+   "id": "ND-STATE-006",
+   "surface": "Head status line",
+   "control": "\"The last plan failed\" (danger)",
+   "preconditions": "no draft/problems/generating/interrupted, newest.status==failed",
+   "states": [
+    "default"
+   ],
+   "intent": "Point at the plan errors below",
+   "expected_visible": "network-design.js:42",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:56"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py post_cancel_attempt landed here via \"Generation cancelled.\" (a failed status with that message). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: state reads \"The last plan failed The last plan failed\" after a failed generation"
+  },
+  {
+   "id": "ND-STATE-007",
+   "surface": "Head status line",
+   "control": "\"Plan is older than the design\" / stale (warn)",
+   "preconditions": "newest.status==succeeded and summary.stale",
+   "states": [
+    "default"
+   ],
+   "intent": "Prompt a regenerate before Apply/Export are trusted",
+   "expected_visible": "network-design.js:43-44",
+   "expected_backend": "none",
+   "forbidden_side_effects": "this is also exactly the condition ND-APPLY-002/ND-EXPORT-002 gate on",
+   "existing_tests": [
+    "test_network_design_ui.js:51"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not reproduced live in this recon (would need to edit and re-save the design after a plan already succeeded, without regenerating). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: state reads \"Plan is older than the design Plan is older than the design\" once the design changed after the last succeeded plan"
+  },
+  {
+   "id": "ND-STATE-008",
+   "surface": "Head status line",
+   "control": "\"Plan ready to review\" (ok)",
+   "preconditions": "newest.status==succeeded and not stale",
+   "states": [
+    "default"
+   ],
+   "intent": "Confirm the plan below is current and trustworthy",
+   "expected_visible": "network-design.js:45",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:46"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py plan_succeeded, ae_plan_succeeded. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: designStateOf's \"ready\" branch: state reads \"Plan ready to review Plan ready to review\" after a succeeded generation"
+  },
+  {
+   "id": "ND-STATE-009",
+   "surface": "Head status line + banner",
+   "control": "\"Design engine unavailable\" (danger) + #design-engine banner, wins over every other state",
+   "preconditions": "view.engine.available===false",
+   "states": [
+    "default, detail/banner text = engine.diagnostic"
+   ],
+   "intent": "Make an infrastructure problem (netlab missing/broken) impossible to mistake for a design problem",
+   "expected_visible": "designStateOf checks engine first, before draft/generating/problems (network-design.js:32-33); designRenderHeader also unhides #design-engine (789-790)",
+   "expected_backend": "GET /api/design/engine (network_design.py:524-526)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:67 \"designStateOf: design engine unavailable, and it wins over every other state\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not reproduced live (this recon's venv has netlab installed and on PATH, so the engine is always available); documented purely from source/tests. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: [fault injection: GET .../design response body patched with engine.available=false, labelled] state=\"Design engine unavailable Design engine unavailable\" banner=\"netlab is not installed on this manager.\""
+  },
+  {
+   "id": "ND-ERROR-001",
+   "surface": "Guided form",
+   "control": "Pool overlapping the lab's management network is refused with the exact path named",
+   "preconditions": "a pool prefix falls inside the mgmt network",
+   "states": [
+    "#design-problems shows \"addressing.<pool>.<family>: \u2026 management \u2026\""
+   ],
+   "intent": "Give an exact, fixable reason instead of a generic \"invalid design\"",
+   "expected_visible": "design_intent.py pool-overlap-with-management check",
+   "expected_backend": "POST validate / PUT save both 400 with the same {path,message}",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_design_intent.py:175 test_pool_overlapping_management_network_is_refused"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py invalid_problems reproduced this exactly (172.20.20.0/24 against ospf-basics' management network). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: PUT/validate refused the overlap with the exact path addressing.lan.ipv4 and \"management\" in the message: addressing.lan.ipv4: Overlaps the lab management network containerlab default management ipv4-subnet"
+  },
+  {
+   "id": "ND-ERROR-002",
+   "surface": "Server",
+   "control": "Unknown top-level intent key is refused",
+   "preconditions": "Advanced JSON (or an import) adds an unrecognised top-level key",
+   "states": [
+    "400 with the key named"
+   ],
+   "intent": "Fail closed on anything the schema does not know, rather than silently ignoring it",
+   "expected_visible": "design_intent.py allowlist",
+   "expected_backend": "validate/save/import all 400",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design.py:191 test_invalid_intent_with_unknown_top_level_key_is_refused"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not reproduced live via the Advanced textarea in this recon. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: POST .../design/validate reports the unknown key as a structured problem at 200 ({\"problems\": [{\"path\": \"not_a_real_key\", \"message\": \"Unknown design field\"}], \"valid\": false}); PUT .../design (the actual save) refuses it with 400 naming the key: {\"detail\": \"Fix the design first: not_a_real_key: Unknown design field\"}"
+  },
+  {
+   "id": "ND-ERROR-003",
+   "surface": "Save/Renumber/Clear/Import",
+   "control": "Stale-revision conflict (409) refuses every mutating route the same way",
+   "preconditions": "the stored revision moved on since this page loaded",
+   "states": [
+    "409 with a reload-first message"
+   ],
+   "intent": "Never let an old tab silently clobber a newer edit",
+   "expected_visible": "network_design.py:545-546 (save), 572 (clear), 588 (renumber), 684-685 (import)",
+   "expected_backend": "various 409s",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design.py:247,298",
+    "test_network_design.py:978"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Cross-refer ND-SAVE-002; not reproduced live (needs two concurrent sessions). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: Save is refused on a stale revision with a reload-first message (this session's own edit was not silently accepted or silently dropped)"
+  },
+  {
+   "id": "ND-ERROR-004",
+   "surface": "Plan card",
+   "control": "Generation errors list shows the device and the exact reason (not a generic failure)",
+   "preconditions": "compatibility blocking, engine failure, address exhaustion, or overlap",
+   "states": [
+    "e.g. \"eigrp on cEOS ... arista_ceos\""
+   ],
+   "intent": "Let the student fix the actual problem instead of guessing",
+   "expected_visible": "network_design.py compatibility()/_generate() (261-276,370-434)",
+   "expected_backend": "errors[] recorded on the generation",
+   "forbidden_side_effects": "never a Python traceback (the outer except in execute() converts any unexpected exception to a generic manager-log message, network_design.py:331-333)",
+   "existing_tests": [
+    "test_network_design.py:541 test_an_unsupported_module_fails_the_generation_before_the_engine_runs",
+    "check_design_ui.py: \"EIGRP on cEOS fails the plan with the device and the reason named\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not reproduced live in this recon's own runs (the OSPF/BGP designs generated cleanly); previously proven live by check_design_ui.py. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: the failed generation names eigrp and arista_ceos in its error: r1: eigrp is not supported on kind arista_ceos (netlab 26.09 module 'eigrp' does not support device profile 'eos')r2: eigrp is not supported on kind arista_ceos (netlab 26.09 module 'eigrp' does not s"
+  },
+  {
+   "id": "ND-ERROR-005",
+   "surface": "Apply choose step",
+   "control": "\"Choose at least one device.\" on empty Review",
+   "preconditions": "no target ticked",
+   "states": [
+    "#design-apply-choose-error populated"
+   ],
+   "intent": "Prevent a pointless review round-trip",
+   "expected_visible": "network-design.js:1200",
+   "expected_backend": "client + server (Review model min_length=1) both refuse",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not explicitly re-driven in this recon (both fixture labs always had a default selection); the server-side Field(min_length=1) is exercised by design_apply.py tests. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: reviewing with nothing chosen shows \"Choose at least one device.\" and sends no request: 'Choose at least one device.'"
+  },
+  {
+   "id": "ND-ERROR-006",
+   "surface": "Apply review step",
+   "control": "\"Connectivity: <ExceptionType>\" per unreachable device",
+   "preconditions": "device SSH connection fails during review",
+   "states": [
+    "visible as the device's \"reason\" text in place of a diff"
+   ],
+   "intent": "Tell the student the device could not be reached at all, distinct from \"reviewed and ineligible\"",
+   "expected_visible": "design_apply.py review()/work() catches any exception and records it scrubbed (line 257)",
+   "expected_backend": "part of the review response",
+   "forbidden_side_effects": "the raw exception message is never shown, only `_scrubbed(...)`",
+   "existing_tests": [
+    "test_design_apply.py:595 test_device_without_credentials_is_ineligible (adjacent ineligible-vs-unreachable distinction)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py apply_dialog_review_step -- both narrowed BGP_TheoryToPractice targets came back \"Connectivity: NoValidConnectionsError\" against the fixture's non-existent SSH endpoint. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: \"Connectivity: <ExceptionType>\" shown per unreachable device: ['NoValidConnectionsError', 'NoValidConnectionsError']"
+  },
+  {
+   "id": "ND-ERROR-007",
+   "surface": "Apply run",
+   "control": "\"Changed since the review\" per device at Apply time",
+   "preconditions": "a device's live configuration moved between Review and Apply",
+   "states": [
+    "that device fails with this exact reason; others proceed"
+   ],
+   "intent": "Never apply against a configuration that is no longer the one reviewed",
+   "expected_visible": "docs/NETWORK-DESIGN.md \"Apply\" step 3",
+   "expected_backend": "per-target status failed with this message",
+   "forbidden_side_effects": "that single device is skipped, not the whole job",
+   "existing_tests": [
+    "test_design_apply.py:907 test_drift_between_review_and_apply_fails_the_device_and_arms_nothing"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "BLOCKED",
+   "defects": [],
+   "notes": "Not reproduced live (no apply was submitted in this recon). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: \"Changed since the review\" per device at Apply time needs a real device that answers at Review time and then drifts before the Apply POST -- both steps need a reachable device: needs real devices behind the review: the fixture has no SSH endpoint, so every device reports Connectivity: NoValidConnectionsError (proven live here); the eligible, no-op, conflict, protected-settings, expected-changes and removal-command review branches, a real Apply submit and its progress/ownership effects were proven live earlier on real devices: docs/netlab-integration/evidence/live-apply-*.md, check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py; proven live by test_design_apply.py:907 test_drift_between_review_and_apply_fails_only_that_device"
+  },
+  {
+   "id": "ND-ERROR-008",
+   "surface": "Export Git dialog",
+   "control": "\"Use a checkpoint name containing letters, numbers, hyphens or underscores.\" (client) / 400 (server)",
+   "preconditions": "checkpoint fails DESIGN_EXPORT_CHECKPOINT_RE",
+   "states": [
+    "inline error, submit refused before any request"
+   ],
+   "intent": "Catch a bad checkpoint name before round-tripping to the server",
+   "expected_visible": "network-design.js:1328-1331",
+   "expected_backend": "server re-checks the identical pattern (git_progress.py:1080-1081)",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:617",
+    "test_design_export_git.py:347"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not typed into the field live in this recon (only a valid checkpoint was tried). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: an invalid checkpoint name is refused client-side before any request: 'Use a checkpoint name containing letters, numbers, hyphens or underscores.'"
+  },
+  {
+   "id": "ND-ERROR-009",
+   "surface": "Advanced editor",
+   "control": "\"This is not valid JSON: <parser message>\" / \"The design must be a JSON object.\"",
+   "preconditions": "the Advanced textarea holds unparsable text, or a parseable non-object (array/primitive/null)",
+   "states": [
+    "#design-problems shows the client-side message; the draft is left unchanged"
+   ],
+   "intent": "Catch a typo before it ever reaches the server, and never let a malformed edit silently wipe the working draft",
+   "expected_visible": "designOnAdvancedChange (network-design.js:947-951)",
+   "expected_backend": "none (pure client-side JSON.parse)",
+   "forbidden_side_effects": "never eval()s or otherwise executes the text",
+   "existing_tests": [
+    "test_network_design_ui.js (advanced-editor coverage is implicit in the intent-round-trip suite; no test named directly for the parse-error branch was found)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not typed into the field live in this recon (only the round-trip of a valid saved intent was verified, ND-GUIDED-018). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: an unparseable Advanced edit is named as invalid JSON: state=\"Advanced JSON is not valid Advanced JSON is not valid\" detail=\"Fix the JSON under Advanced (or Discard changes) before saving, checking or generating.\""
+  },
+  {
+   "id": "ND-ERROR-010",
+   "surface": "Import flow",
+   "control": "Import failure keeps the previous design untouched and shows problems, never a partial/half-applied intent",
+   "preconditions": "uploaded file fails validation/size/anchors/format",
+   "states": [
+    "imported:false"
+   ],
+   "intent": "Make a bad import a pure no-op from the student's point of view",
+   "expected_visible": "network_design.py:687-688",
+   "expected_backend": "response body only, no store mutation",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design.py:728,739,747"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Not reproduced live (native file picker limitation, see ND-IMPORT-003/004). run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: import failure keeps the previous design untouched and shows problems only in the response"
+  },
+  {
+   "id": "ND-A11Y-001",
+   "surface": "Tab bar",
+   "control": "role=tab / aria-selected / aria-controls / roving tabindex on #tab-design",
+   "preconditions": "always",
+   "states": [
+    "inactive",
+    "active"
+   ],
+   "intent": "Keyboard and screen-reader users can identify and reach the Design tab the same way as any other tab",
+   "expected_visible": "index.html:108; app.js:259 sets aria-selected/tabIndex on every tab button",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py nav_lab_tabs/lab_tabs_on_design capture the six tab buttons' aria attributes each time. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: role=tab, aria-selected, aria-controls=design-view and roving tabindex all present on #tab-design (checked above)"
+  },
+  {
+   "id": "ND-A11Y-002",
+   "surface": "Design panel",
+   "control": "role=tabpanel + aria-labelledby=\"tab-design\" on #design-view",
+   "preconditions": "always",
+   "states": [
+    "hidden",
+    "visible"
+   ],
+   "intent": "Associate the panel with its tab for assistive tech",
+   "expected_visible": "index.html:150",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Structural; present in every capture. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: #design-view has role=tabpanel aria-labelledby=tab-design"
+  },
+  {
+   "id": "ND-A11Y-003",
+   "surface": "Status line",
+   "control": "role=status on #design-state (live region)",
+   "preconditions": "always",
+   "states": [
+    "every STATE value"
+   ],
+   "intent": "Announce a state change (e.g. plan finished) without the student having to be looking at the screen",
+   "expected_visible": "index.html:154",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Cross-refer the whole STATE area. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: #design-state has role=status"
+  },
+  {
+   "id": "ND-A11Y-004",
+   "surface": "Problems / error lines",
+   "control": "role=alert on #design-problems, #design-plan-errors, #design-apply-choose-error, #design-apply-review-error, #design-export-git-error",
+   "preconditions": "a problem/error exists",
+   "states": [
+    "populated"
+   ],
+   "intent": "Interrupt and announce validation/failure text immediately",
+   "expected_visible": "index.html:207,223,248,257,275",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py invalid_problems captured #design-problems with role=alert populated. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: role=alert present on #design-problems/#design-plan-errors/#design-apply-choose-error/#design-export-git-error (checked structurally throughout this run)"
+  },
+  {
+   "id": "ND-A11Y-005",
+   "surface": "Dialogs",
+   "control": "Native <dialog> with aria-labelledby + a labelled close icon-button (aria-label=\"Close\")",
+   "preconditions": "any of the four dialogs open",
+   "states": [
+    "open"
+   ],
+   "intent": "Let a screen reader announce the dialog's purpose and give every dialog a discoverable, consistently-labelled close control",
+   "expected_visible": "index.html:243-244,265-266 (Apply, Export-Git); network-design.js:1079-1081,1092-1094 (Renumber/Clear dialogs built via the shared opDialog helper)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py renumber_dialog_open, clear_dialog_open, export_git_dialog_open, apply_dialog_choose_step all show the dialog element with open=true. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: native <dialog> elements carry aria-labelledby and a labelled close icon-button (checked on the export/apply/renumber/clear dialogs above)"
+  },
+  {
+   "id": "ND-A11Y-006",
+   "surface": "Compatibility table",
+   "control": "scope=\"row\" row headers, <caption>-equivalent via a semantic <table>/<thead>",
+   "preconditions": "a plan exists",
+   "states": [
+    "populated"
+   ],
+   "intent": "Let a screen-reader user navigate the feature-by-device grid by row/column header rather than by raw cell position",
+   "expected_visible": "network-design.js:429 (`<th scope=\"row\">`)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py plan_succeeded includes the compatibility table. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: th[scope=row] pattern is source-confirmed (network-design.js:429); this lab's compatibility table currently has 3 such headers"
+  },
+  {
+   "id": "ND-A11Y-007",
+   "surface": "Checkbox rows",
+   "control": ".checkbox-label wrapping pattern (label wraps its input) used throughout (families, modules, VRF loopback, apply targets, take-over, acknowledgement)",
+   "preconditions": "always",
+   "states": [
+    "every checkbox in the tab"
+   ],
+   "intent": "Give every checkbox a clickable, associated label rather than a bare, unlabelled input",
+   "expected_visible": "network-design.js:177 (index.html), :223,250,257,481,521 (markup functions)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Consistent across every capture; spot-checked on #design-ipv4/#design-ipv6 and the apply-choose rows. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: .checkbox-label wraps every checkbox throughout the Design tab (56 found)"
+  },
+  {
+   "id": "ND-A11Y-008",
+   "surface": "Narrow viewport (390\u00d7844)",
+   "control": "Design tab adds no horizontal overflow beyond what the shell chrome already has",
+   "preconditions": "phone-width viewport",
+   "states": [
+    "default"
+   ],
+   "intent": "Keep the tab usable on a phone without introducing a new horizontal scrollbar",
+   "expected_visible": "no dedicated CSS rule found in source for this; behavioural, checked by the existing tool",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "check_design_ui.py: \"the Design tab adds no horizontal overflow at phone width beyond the shell\""
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "PASS",
+   "defects": [],
+   "notes": "Live: inventory_dom.py narrow_viewport/narrow_viewport_lab_tabs captured the DOM at 390x844 in both fixture runs; this recon did not re-measure scrollWidth itself (check_design_ui.py already asserts the pixel comparison), only that every control is still present and not silently removed at that width. run 2026-09-27 16:53 UTC on the 1.30.47 working tree, Chromium 153.0.8010.12: at 390x844, the Design tab (scrollWidth=428) adds no horizontal overflow beyond the shell chrome (scrollWidth=428)"
+  }
+ ],
+ "transitions": [
+  {
+   "id": "ND-STATE-T01",
+   "surface": "Design state machine",
+   "control": "empty -> dirty",
+   "preconditions": "no draft",
+   "states": [
+    "empty",
+    "dirty"
+   ],
+   "intent": "first edit marks the design unsaved",
+   "expected_visible": "pill flips neutral->warn",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:28"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Live: empty -> unsaved_dirty."
+  },
+  {
+   "id": "ND-STATE-T02",
+   "surface": "Design state machine",
+   "control": "dirty -> invalid (validating, then refused)",
+   "preconditions": "Save clicked with a problem present",
+   "states": [
+    "dirty",
+    "invalid"
+   ],
+   "intent": "catch a bad value at Save time",
+   "expected_visible": "PUT rejected 400, #design-problems populated, pill stays \"Unsaved changes\"",
+   "expected_backend": "POST validate embedded in designSave, then no PUT is even attempted",
+   "forbidden_side_effects": "never saves a design with known problems",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Live: unsaved_dirty -> invalid_problems."
+  },
+  {
+   "id": "ND-STATE-T03",
+   "surface": "Design state machine",
+   "control": "invalid -> clean/saved",
+   "preconditions": "the problem is fixed and Save clicked again",
+   "states": [
+    "invalid",
+    "clean"
+   ],
+   "intent": "confirm the fix worked",
+   "expected_visible": "pill leaves \"Unsaved changes\"; #design-problems clears",
+   "expected_backend": "PUT succeeds",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Live: invalid_problems -> saved_clean."
+  },
+  {
+   "id": "ND-STATE-T04",
+   "surface": "Generation state machine",
+   "control": "clean -> queued -> generating",
+   "preconditions": "Generate clicked",
+   "states": [
+    "queued",
+    "running"
+   ],
+   "intent": "kick off a plan",
+   "expected_visible": "\"Generating the plan\u2026\" pill; #design-cancel appears",
+   "expected_backend": "POST generate, then poll",
+   "forbidden_side_effects": "a second Generate click while busy is refused (409), not queued twice",
+   "existing_tests": [
+    "test_network_design.py:484"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Live: saved_clean -> generating."
+  },
+  {
+   "id": "ND-STATE-T05",
+   "surface": "Generation state machine",
+   "control": "generating -> succeeded",
+   "preconditions": "engine finishes cleanly",
+   "states": [
+    "running",
+    "succeeded"
+   ],
+   "intent": "see the finished plan",
+   "expected_visible": "\"Plan ready to review\"; plan/files/compatibility populate; download link appears",
+   "expected_backend": "poll stops itself",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Live: generating -> plan_succeeded."
+  },
+  {
+   "id": "ND-STATE-T06",
+   "surface": "Generation state machine",
+   "control": "generating -> cancelled/failed",
+   "preconditions": "Cancel clicked, or the engine/compat check fails",
+   "states": [
+    "running",
+    "cancelled"
+   ],
+   "intent": "stop a plan that is not wanted, or learn why it failed",
+   "expected_visible": "\"The last plan failed\" with message \"Generation cancelled.\" (cancel path) or the specific engine/compat reason",
+   "expected_backend": "POST cancel sets a threading.Event; the worker checks it between passes",
+   "forbidden_side_effects": "a cancelled generation is still recorded, never silently dropped",
+   "existing_tests": [
+    "test_network_design.py:484 (busy-refusal, adjacent)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Live: generating -> cancel_clicked -> post_cancel_attempt (\"Generation cancelled.\")."
+  },
+  {
+   "id": "ND-STATE-T07",
+   "surface": "Generation state machine",
+   "control": "succeeded -> stale",
+   "preconditions": "the saved design changes again after a plan succeeded",
+   "states": [
+    "succeeded",
+    "stale"
+   ],
+   "intent": "warn that the shown plan no longer matches the design",
+   "expected_visible": "\"Plan is older than the design\"; Apply/Export-Git both gate on this too",
+   "expected_backend": "none (client + summary computation)",
+   "forbidden_side_effects": "Apply/Export must not proceed against a stale plan",
+   "existing_tests": [
+    "test_network_design_ui.js:51"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not reproduced live in this recon."
+  },
+  {
+   "id": "ND-STATE-T08",
+   "surface": "Generation state machine",
+   "control": "any -> interrupted",
+   "preconditions": "manager restarts while queued/running",
+   "states": [
+    "queued/running",
+    "interrupted"
+   ],
+   "intent": "never leave a plan looking falsely \"in progress\" forever",
+   "expected_visible": "NetworkDesign.__init__ marks every busy generation interrupted at startup (network_design.py:182-188)",
+   "expected_backend": "none",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design.py:590,605"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not reproduced live (would require killing the fixture mid-generation)."
+  },
+  {
+   "id": "ND-STATE-T09",
+   "surface": "Apply job state machine",
+   "control": "choose -> review (queued -> running review connections -> settled)",
+   "preconditions": "Review clicked",
+   "states": [
+    "queued",
+    "running",
+    "settled"
+   ],
+   "intent": "run the real, read-only review",
+   "expected_visible": "per-device blocks replace the empty choose body",
+   "expected_backend": "POST review, synchronous (not polled) -- the whole review completes before the response returns",
+   "forbidden_side_effects": "none",
+   "existing_tests": [],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Live: apply_dialog_choose_step_narrowed -> apply_dialog_review_step."
+  },
+  {
+   "id": "ND-STATE-T10",
+   "surface": "Apply job state machine",
+   "control": "review -> conflicting (per device) -> takeover -> re-reviewed",
+   "preconditions": "a device has conflicts",
+   "states": [
+    "conflicting",
+    "takeover-ticked",
+    "re-reviewed"
+   ],
+   "intent": "accept full responsibility for replacing manual configuration, per device",
+   "expected_visible": "ack unticked again on every new review result",
+   "expected_backend": "POST review again with the updated takeover[]",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design_ui.js:543"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not reached live (no eligible device reached the review in this recon's fixture-only environment)."
+  },
+  {
+   "id": "ND-STATE-T11",
+   "surface": "Apply job state machine",
+   "control": "submitted -> queued -> preflight -> backing_up -> applying -> armed -> confirming -> verifying -> settled",
+   "preconditions": "Apply clicked (enabled)",
+   "states": [
+    "queued",
+    "preflight",
+    "backing_up",
+    "applying",
+    "armed",
+    "confirming",
+    "verifying",
+    "verified/applied/no_op/failed/rolled_back/uncertain/drifted/interrupted"
+   ],
+   "intent": "apply the plan device by device with a mandatory backup and a timed, self-undoing change",
+   "expected_visible": "progress table updates every 2s while any target is busy",
+   "expected_backend": "GET /api/design/apply/jobs/{id} polled",
+   "forbidden_side_effects": "never confirms a change that is not the manager's own pending one; an unconfirmed change is reported rolled_back only after a fresh read-back proved it, otherwise uncertain",
+   "existing_tests": [
+    "test_design_apply.py:800-1051 (the whole outcome matrix)"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not reached live in this recon; no apply was submitted (ND-APPLY-012)."
+  },
+  {
+   "id": "ND-STATE-T12",
+   "surface": "Apply job state machine",
+   "control": "settled job -> reopened via Show",
+   "preconditions": "a past job exists",
+   "states": [
+    "settled",
+    "reopened"
+   ],
+   "intent": "revisit a past outcome without re-running anything",
+   "expected_visible": "designApplyShowJob re-enters the progress step read-only (or resumes polling if it is still somehow busy)",
+   "expected_backend": "GET /api/design/apply/jobs/{job_id}",
+   "forbidden_side_effects": "reopening never re-submits anything",
+   "existing_tests": [
+    "test_network_design_ui.js:507"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not reached live (no job exists in either fixture)."
+  },
+  {
+   "id": "ND-STATE-T13",
+   "surface": "Export-to-Git state machine",
+   "control": "dialog filled -> submitted -> queued Git job -> review_pending",
+   "preconditions": "Save to VM and review clicked",
+   "states": [
+    "queued",
+    "review_pending"
+   ],
+   "intent": "stage the export on the VM and force the same mandatory review as any other save",
+   "expected_visible": "designExportGitSubmit hands off to gitStartWatch(job,{quiet:true}) and switches to Progress",
+   "expected_backend": "POST .../git, then the job is watched by git-progress.js, not this file",
+   "forbidden_side_effects": "this file never sends the reviewed retry itself",
+   "existing_tests": [
+    "test_design_export_git.py:408"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not submitted live in this recon (ND-EXPORT-006)."
+  },
+  {
+   "id": "ND-STATE-T14",
+   "surface": "Design engine availability",
+   "control": "available -> unavailable (e.g. netlab uninstalled/broken) -> every action gated",
+   "preconditions": "engine.available becomes false",
+   "states": [
+    "available",
+    "unavailable"
+   ],
+   "intent": "immediately block Generate and explain why, without touching anything already saved",
+   "expected_visible": "designStateOf/designRenderHeader check engine first, unconditionally (network-design.js:32-33,789-790)",
+   "expected_backend": "GET /api/design/engine",
+   "forbidden_side_effects": "Save/guided editing/Advanced/Import/Export-design-file remain usable (only Generate truly needs the engine)",
+   "existing_tests": [
+    "test_network_design_ui.js:67"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not reproduced live (this recon's venv always has a working netlab)."
+  },
+  {
+   "id": "ND-STATE-T15",
+   "surface": "Draft vs saved revision",
+   "control": "clean -> edited elsewhere (import, or another tab) -> local draft now stale -> discarded on next load",
+   "preconditions": "the stored revision advances past the local draft's revision",
+   "states": [
+    "clean",
+    "draft-now-stale",
+    "discarded"
+   ],
+   "intent": "never silently resurrect an edit that is provably older than what is saved",
+   "expected_visible": "designApplyDraft (network-design.js:672-679) compares stored.revision to view.intent.revision",
+   "expected_backend": "none (client-only)",
+   "forbidden_side_effects": "must show #design-detail's explicit discard message, never fail silently",
+   "existing_tests": [
+    "test_network_design_ui.js:388,399"
+   ],
+   "sources": {
+    "source": true,
+    "dom": true,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Unit-tested; not reproduced live as a real cross-tab race in this recon."
+  },
+  {
+   "id": "ND-STATE-T16",
+   "surface": "Missing topology precondition",
+   "control": "has_topology:false blocks Generate specifically (not Save/guided editing)",
+   "preconditions": "lab has no definition_yaml",
+   "states": [
+    "no-topology"
+   ],
+   "intent": "let a student design intent before a topology even exists, but stop them from generating nonsense",
+   "expected_visible": "network_design.py NO_TOPOLOGY message; designRenderHeader's noTopology check (network-design.js:792,796)",
+   "expected_backend": "POST generate -> 409 NO_TOPOLOGY",
+   "forbidden_side_effects": "none",
+   "existing_tests": [
+    "test_network_design.py:348 test_generate_without_a_topology_file_is_409"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Not reproduced live (both fixture labs used here have a topology)."
+  },
+  {
+   "id": "ND-STATE-T17",
+   "surface": "Unsupported-target precondition",
+   "control": "a requested feature is unsupported/blocked-missing-prerequisite for a device's kind",
+   "preconditions": "compatibility.resolve() returns a blocking level",
+   "states": [
+    "blocked"
+   ],
+   "intent": "refuse before spending an engine run, and name the exact device+feature+reason",
+   "expected_visible": "network_design.py compatibility()/execute() (261-276,376-382)",
+   "expected_backend": "generation fails with status failed, errors[] naming device+feature+kind",
+   "forbidden_side_effects": "nothing is silently dropped or downgraded",
+   "existing_tests": [
+    "test_network_design.py:541,907,916",
+    "check_design_ui.py"
+   ],
+   "sources": {
+    "source": true,
+    "dom": false,
+    "navigation": false
+   },
+   "result": "NOT RUN",
+   "defects": [],
+   "notes": "Previously proven live by check_design_ui.py; not re-driven in this recon."
+  }
+ ],
+ "discrepancies": [
+  {
+   "kind": "dom-vs-source",
+   "severity": "note",
+   "description": "The \"No design yet\" pill/text/detail (designStateOf's fallback branch, network-design.js:46) is identical for two different underlying preconditions: a lab with no network_design at all, and a lab with a saved network_design but no generation yet. Confirmed live: dom_states_full.json \"empty\" (ospf-basics, nothing saved) and dom_states_apply_export.json \"ae_saved\" (BGP_TheoryToPractice, an OSPF design just saved) render byte-identical #design-state-pill/#design-state-text/#design-detail text. The two states are distinguishable only from the surrounding form (module checkboxes ticked, VRF/VLAN/static tables non-empty), never from the state line a screen-reader user would hear.",
+   "rows": [
+    "ND-STATE-001"
+   ]
+  },
+  {
+   "kind": "source-vs-behaviour",
+   "severity": "note",
+   "description": "#design-export (\"Download design file\") and #design-import (\"Import design file\u2026\") menu items have the <small class=\"menu-reason\"> markup the house style uses for a disabled reason (same pattern as #design-generate via menuReasonSafe, and as operations.js's generic menuReason()), but network-design.js never calls menuReason for either of them, and neither button is ever .disabled. The backend, however, does refuse both: export 404s with no design (network_design.py:662), and import 409s while a generation is busy (network_design.py:691). #design-renumber and #design-clear have the same markup and are likewise never client-disabled, although their backend routes 404/409 on no-design/busy. #design-apply and #design-export-git, by contrast, DO compute and show a disabled reason (designApplyDisabledReason, designExportGitReason). This is an inconsistency in the More menu, not confirmed live for the failure path (no fetch was attempted through a stray window.open in this recon), so it is reported as a note rather than a defect.",
+   "rows": [
+    "ND-EXPORT-001",
+    "ND-IMPORT-001",
+    "ND-RENUMBER-001",
+    "ND-CLEAR-001"
+   ]
+  },
+  {
+   "kind": "source-only",
+   "severity": "info",
+   "description": "designToggleModuleSettings (network-design.js:734-740) only knows four modules with a dedicated settings block: ospf, bgp, isis, gateway. The remaining 13 modules in DESIGN_MODULE_LABELS (eigrp, ripv2, bfd, dhcp, vlan, vrf, lag, stp, vxlan, evpn, mpls, sr, srv6, routing) have no guided settings surface at all beyond the checkbox itself; their options exist only under the Advanced JSON textarea. This is documented behaviour (docs/NETWORK-DESIGN.md lists exactly this set of common settings), not a bug, but it means the \"GUIDED\" area's per-module settings coverage caps out at 4 of 17 modules -- the rest fall through to ND-ADVANCED-002/006.",
+   "rows": [
+    "ND-GUIDED-003"
+   ]
+  },
+  {
+   "kind": "dom-vs-navigation",
+   "severity": "info",
+   "description": "Two states in the \"full\" tour (dom_states_full.json) could not be reached on ospf-basics because that fixture lab is deliberately Not deployed and has no git binding (by fixture_manager.py's own design): export_git_dialog_open and apply_dialog_choose_step. Both were then reached in a second, separate run (dom_states_apply_export.json, --mode apply_export) against BGP_TheoryToPractice (Running, git-bound). No control is actually missing; the split is a fixture-data limitation of a single lab, addressed by running the tool twice against two different seeded labs.",
+   "rows": [
+    "ND-EXPORT-002",
+    "ND-APPLY-001"
+   ]
+  },
+  {
+   "kind": "not-reached",
+   "severity": "info",
+   "description": "The Apply review step was reached live, but only its \"unreachable\" branch (Connectivity: NoValidConnectionsError) -- the fixture manager has no real SSH endpoint behind BGP_TheoryToPractice's scripted devices. The eligible-and-reachable branches (normal diff, no-op, conflicts+takeover, protected settings, expected changes, removal commands) exist only in source and in test_design_apply.py/test_network_design_ui.js's designApplyDeviceMarkup unit tests, and were previously proven live (against real devices) by docs/netlab-integration/tools/check_design_apply_ui.py and docs/netlab-integration/evidence/live-apply-*.md, which this recon did not re-run.",
+   "rows": [
+    "ND-APPLY-007",
+    "ND-APPLY-008",
+    "ND-APPLY-012",
+    "ND-APPLY-013",
+    "ND-APPLY-014",
+    "ND-APPLY-017"
+   ]
+  },
+  {
+   "kind": "not-reached",
+   "severity": "info",
+   "description": "The Import design file\u2026 flow (both the success and failure paths) could not be exercised live: Playwright cannot drive a native OS file-picker headlessly, and clicking #design-import only calls .click() on a hidden <input type=file> (network-design.js:1108). Reaching it would need page.set_input_files() against a staged fixture .network-intent.yml, which this recon did not stage since the tool's scope is DOM-state enumeration, not functional testing. The control's presence and hidden-input wiring were confirmed in source and in the \"import_control_state\" DOM capture (the button and hidden input both present, unhidden, enabled).",
+   "rows": [
+    "ND-IMPORT-003",
+    "ND-IMPORT-004"
+   ]
+  },
+  {
+   "kind": "not-reached",
+   "severity": "info",
+   "description": "Several stale-revision / concurrent-edit error states (ND-SAVE-002, ND-ERROR-003) require two sessions racing the same lab's revision and were not reproduced with a single Playwright page in this recon; they are covered by test_network_design.py's revision tests instead.",
+   "rows": [
+    "ND-SAVE-002",
+    "ND-ERROR-003"
+   ]
+  },
+  {
+   "kind": "in-source-not-rendered",
+   "severity": "info",
+   "description": "The \"Design engine unavailable\" state (network-design.js:32-33, DESIGN state key \"engine\", which wins over every other state including a busy generation) was never rendered in either fixture run: the recon's virtualenv always has a working, on-PATH netlab, so engine.available is always true. This is the one STATE-area branch that is source- and test-only in this inventory.",
+   "rows": [
+    "ND-STATE-009"
+   ]
+  },
+  {
+   "kind": "doc-vs-code",
+   "severity": "info",
+   "description": "docs/NETWORK-DESIGN.md's \"The Design tab\" section describes the tab top-to-bottom in prose and matches the actual DOM order found live (state/actions, design settings incl. Advanced, plan, files, history, Apply/Export-Git on the plan card) with no section named in the doc that is absent from the DOM, and no DOM section absent from the doc's description. No documentation-vs-code discrepancy was found in this recon beyond the two \"note\"-level menu-disabling asymmetries above, which the doc does not claim either way.",
+   "rows": []
+  }
+ ]
+}

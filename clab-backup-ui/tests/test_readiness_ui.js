@@ -93,3 +93,34 @@ test('the deployment bar reports NOS readiness in plain words',()=>{
  delete lab.nos_readiness;h.context.renderManagement();
  assert.equal(h.element('deployment-nos').textContent,'');
 });
+
+test('Restart device… sits with the per-device actions and reaches the shared operation with the lab and the device',async()=>{
+ const h=appHarness();
+ const n={name:'r1',short_name:'R1',ssh_ready:true,login_configured:true,readiness:'Ready',nos_login:{status:'ready'},discovered:true,runtime_state:'running'};
+ assert.match(vm.runInContext('nodeActions('+JSON.stringify(n)+',true)',h.context),/data-restart="r1" disabled title="Not available on this page"/,'without operations.js the button explains itself');
+ const asked=[];h.context.opRestartState=(lab,node,discovery,isBusy)=>{asked.push({node:node.name,isBusy});return {ok:true,reason:''};};
+ const html=vm.runInContext('nodeActions('+JSON.stringify(n)+',true)',h.context);
+ assert.match(html,/<button class="danger-action" data-restart="r1" >Restart device…<\/button>/);assert.deepEqual(asked,[{node:'r1',isBusy:false}]);
+ assert.ok(html.indexOf('data-backup')<html.indexOf('data-restart'),'after Back up configuration');
+ assert.doesNotMatch(html,/data-details/,'the panel variant has no Details button');
+ const row=vm.runInContext('nodeActions('+JSON.stringify(n)+')',h.context);assert.ok(row.indexOf('data-restart')<row.indexOf('data-details'),'the table variant keeps Details last');
+ h.context.opRestartState=()=>({ok:false,reason:'The lab is not running'});
+ assert.match(vm.runInContext('nodeActions('+JSON.stringify(n)+',true)',h.context),/data-restart="r1" disabled title="The lab is not running"/);
+ const ran=[];h.context.opTask=async(dialog,fn)=>{await fn();};h.context.opRestartDevice=async(labId,name,opener)=>{ran.push([labId,name,opener]);};vm.runInContext("activeId='lab-a'",h.context);
+ const dialog=h.document.getElementById('details-dialog');dialog.open=true;dialog.close=()=>{dialog.open=false;};
+ const button={disabled:false,dataset:{restart:'r1'},closest:()=>null};
+ await h.context.handleNodeAction({target:{closest:()=>button}});
+ assert.deepEqual(ran,[['lab-a','r1',button]],'the panel button is the control the review gives focus back to (U-02)');assert.equal(dialog.open,true,'the device panel stays open under the review');
+ await h.context.handleNodeAction({target:{closest:()=>({disabled:true,dataset:{restart:'r1'}})}});assert.equal(ran.length,1,'a disabled button does nothing');
+});
+
+test('U-09: the device panel says in words why Restart device… or Back up configuration is unavailable',()=>{
+ const h=appHarness();
+ const n={name:'r1',short_name:'R1',ssh_ready:true,readiness:'Needs credentials'};
+ h.context.opRestartState=()=>({ok:false,reason:'The lab is not running'});h.context.nodeBackupReason=()=>'Add credentials first';h.context.captureStatusLine=()=>'';
+ assert.equal(h.context.nodeActionNotes(n),'Restart device… is not available: The lab is not running. Back up configuration is not available: Add credentials first.');
+ h.context.opRestartState=()=>({ok:true,reason:''});h.context.nodeBackupReason=()=>'';
+ assert.equal(h.context.nodeActionNotes(n),'');
+ h.context.captureStatusLine=()=>'Packet capture is not set up on this VM.';assert.equal(h.context.nodeActionNotes(n),'Packet capture is not set up on this VM.');
+ assert.match(vm.runInContext('nodeActions({name:"clab-x-r1",short_name:"r1",ssh_ready:true})',h.context),/aria-label="Details for r1"/,'Details is named after the device, not its container (U-19)');
+});

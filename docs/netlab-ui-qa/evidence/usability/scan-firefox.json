@@ -1,0 +1,345 @@
+{
+ "browser": "firefox",
+ "started": "2026-09-27T14:18:25+00:00",
+ "checks": [
+  {
+   "area": "design",
+   "name": "state pill and text are not the same words twice",
+   "ok": false,
+   "detail": "'No design yet' / 'No design yet'"
+  },
+  {
+   "area": "design",
+   "name": "the Generated files card does not say applying is unavailable while Apply to devices exists",
+   "ok": false,
+   "detail": "Generated files\n      Generated configuration fragments, not backups. Applying them to devices is not available yet.\n      Generate a plan to see its files here"
+  },
+  {
+   "area": "design",
+   "name": "Generate plan with nothing saved is disabled with a reason, or the guidance says to save first",
+   "ok": false,
+   "detail": "enabled; detail says 'Choose addressing, protocols and services below, then Generate plan.'; click gives toast 'Save a design first.'"
+  },
+  {
+   "area": "design",
+   "name": "editing shows Unsaved changes",
+   "ok": true,
+   "detail": "Unsaved changes Unsaved changes"
+  },
+  {
+   "area": "design",
+   "name": "the OSPF area field appears near the OSPF checkbox (under 200 px)",
+   "ok": false,
+   "detail": "distance 621 px"
+  },
+  {
+   "area": "design",
+   "name": "a saved design without a plan says it is saved",
+   "ok": true,
+   "detail": "Design saved, no plan yet Design saved, no plan yet"
+  },
+  {
+   "area": "design",
+   "name": "Generate with an unsaved edit either uses it or says it did not",
+   "ok": true,
+   "detail": "plan has area 0.0.0.9: True; toast 'Design saved. Generating the plan\u2026'; plan status 'Plan generated just now.'; state 'Plan ready to review Plan ready to review'"
+  },
+  {
+   "area": "design",
+   "name": "plan ready",
+   "ok": false,
+   "detail": "Generating the plan\u2026 Generating the plan\u2026"
+  },
+  {
+   "area": "design",
+   "name": "the Advanced JSON editor has an accessible name",
+   "ok": false,
+   "detail": ""
+  },
+  {
+   "area": "design",
+   "name": "the Advanced JSON editor is at least 400 px wide at 1366 px",
+   "ok": false,
+   "detail": "182 px"
+  },
+  {
+   "area": "design",
+   "name": "after Add VRF focus moves to the new row (or stays on Add)",
+   "ok": true,
+   "detail": "button#design-vrf-add \"Add VRF\""
+  },
+  {
+   "area": "design",
+   "name": "after Remove focus is not lost to the page body",
+   "ok": false,
+   "detail": "BODY"
+  },
+  {
+   "area": "design",
+   "name": "View buttons name their file",
+   "ok": false,
+   "detail": "View"
+  },
+  {
+   "area": "design",
+   "name": "plan warnings are visible without opening a fold or carry a count",
+   "ok": false,
+   "detail": "summary 'Warnings', collapsed, 2 warnings"
+  },
+  {
+   "area": "apply",
+   "name": "the Review request shows that it is working (disabled button, busy text or aria-busy)",
+   "ok": false,
+   "detail": "after 1.5 s: {'buttonDisabled': False, 'buttonText': 'Review', 'ariaBusy': None, 'dialogText': False}; review took 54.8 s"
+  },
+  {
+   "area": "apply",
+   "name": "the review step receives focus when it replaces the choose step",
+   "ok": false,
+   "detail": "BODY"
+  },
+  {
+   "area": "apply",
+   "name": "the review step starts at its top (title visible)",
+   "ok": false,
+   "detail": "dialog scrollTop 77"
+  },
+  {
+   "area": "apply",
+   "name": "a disabled Apply button says why",
+   "ok": false,
+   "detail": "disabled=True title/error=''"
+  },
+  {
+   "area": "apply",
+   "name": "the review step has a Cancel/Close control besides Back and the title-bar x",
+   "ok": false,
+   "detail": "controls: Back, Apply"
+  },
+  {
+   "area": "design",
+   "name": "after Back with a field focused, lab B shows lab B's form and Save writes only B's settings",
+   "ok": false,
+   "detail": "B before={'modules': ['ospf'], 'bgp': None, 'vrfs': [], 'ospf': {'area': '0.0.0.0'}, 'lan_prefix': 24}; shown={'title': 'BGP_TheoryToPractice', 'device_rows': 3, 'bgp_ticked': True, 'bgp_as': '65123', 'state': 'Plan ready to review Plan ready to review'}; B after Save={'modules': ['ospf', 'bgp'], 'bgp': {'as': 65123}, 'vrfs': [], 'ospf': {'area': '0.0.0.9'}, 'lan_prefix': 25}"
+  },
+  {
+   "area": "restart",
+   "name": "the review dialog has an accessible name",
+   "ok": false,
+   "detail": "no aria-labelledby/aria-label on dialog#operation-review"
+  },
+  {
+   "area": "restart",
+   "name": "the ContextMenu key opens the device menu",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "area": "restart",
+   "name": "no mutating request reached the deployed manager",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "keyboard": [
+  {
+   "control": "Design tab (#tab-design)",
+   "keys": "focus Topology tab, ArrowRight x3",
+   "reachable": true,
+   "operable": true,
+   "focus_return": "n/a",
+   "detail": "button#tab-design[role=tab] \"Design\""
+  },
+  {
+   "control": "More menu (#design-more-button)",
+   "keys": "Enter; ArrowDown x5; Escape",
+   "reachable": true,
+   "operable": true,
+   "focus_return": true,
+   "detail": "first=button#design-export[role=menuitem] \"Download design file\"; arrows=['button#design-import[role=menuitem] \"Import design file\u2026\"', 'button#design-renumber[role=menuitem] \"Renumber (forget allocations)\u2026\"', 'button#design-clear[role=menuitem] \"Remove design\u2026\"', 'button#design-export[role=menuitem] \"Download design file\"', 'button#design-import[role=menuitem] \"Import design file\u2026\"']"
+  },
+  {
+   "control": "Renumber dialog (#design-renumber-dialog)",
+   "keys": "More: Enter, ArrowDown to item, Enter; Tab x5; Escape",
+   "reachable": true,
+   "operable": true,
+   "focus_return": true,
+   "detail": "focus in=button \"Close\" in dialog#design-renumber-dialog; tab order=['button \"Cancel\" in dialog#design-renumber-dialog', 'button#design-renumber-run \"Forget allocations\" in dialog#design-renumber-dialog', 'button#design-renumber-run \"Forget allocations\" in dialog#design-renumber-dialog', 'button#design-renumber-run \"Forget allocations\" in dialog#design-renumber-dialog', 'button#design-renumber-run"
+  },
+  {
+   "control": "Remove design dialog (#design-clear-dialog)",
+   "keys": "More: Enter, ArrowDown to item, Enter; Tab x5; Escape",
+   "reachable": true,
+   "operable": true,
+   "focus_return": true,
+   "detail": "focus in=button \"Close\" in dialog#design-clear-dialog; tab order=['button \"Cancel\" in dialog#design-clear-dialog', 'button#design-clear-run \"Remove design\" in dialog#design-clear-dialog', 'button#design-clear-run \"Remove design\" in dialog#design-clear-dialog', 'button#design-clear-run \"Remove design\" in dialog#design-clear-dialog', 'button#design-clear-run \"Remove design\" in dialog#design-clear-di"
+  },
+  {
+   "control": "Advanced (<details>, #design-advanced)",
+   "keys": "focus summary, Enter, Tab",
+   "reachable": true,
+   "operable": true,
+   "focus_return": "n/a",
+   "detail": "textarea focused=True; width=182px; labelled=False"
+  },
+  {
+   "control": "Add VRF / Remove (#design-vrf-add, [data-design-vrf-remove])",
+   "keys": "Enter on Add VRF; Enter on Remove",
+   "reachable": true,
+   "operable": true,
+   "focus_return": "n/a",
+   "detail": "after Add focus=button#design-vrf-add \"Add VRF\"; after Remove focus=BODY"
+  },
+  {
+   "control": "Generated file View (dialog#design-file-dialog)",
+   "keys": "Enter on View; Escape",
+   "reachable": true,
+   "operable": true,
+   "focus_return": true,
+   "detail": "button name='View'; focus in=button \"Close\" in dialog#design-file-dialog"
+  },
+  {
+   "control": "Export plan to Git (dialog#design-export-git-dialog)",
+   "keys": "Enter on Export plan to Git\u2026; Tab x6; Escape",
+   "reachable": true,
+   "operable": true,
+   "focus_return": true,
+   "detail": "tab order=['input#design-export-git-checkpoint \"design-60607684385e\" in dialog#design-export-git-dialog', 'input#design-export-git-note \"\" in dialog#design-export-git-dialog', 'button \"Cancel\" in dialog#design-export-git-dialog', 'button#design-export-git-confirm \"Save to VM and review\" in dialog#design-export-git-dialog', 'button#design-export-git-confirm \"Save to VM and review\" in dialog#design-"
+  },
+  {
+   "control": "Apply to devices (dialog#design-apply-dialog)",
+   "keys": "Enter on Apply to devices\u2026; Enter on Review; Escape",
+   "reachable": true,
+   "operable": true,
+   "focus_return": true,
+   "detail": "review took 54.8 s; focus after review=BODY"
+  },
+  {
+   "control": "Restart device review from the map (mouse)",
+   "keys": "right click; click item; click Cancel",
+   "reachable": true,
+   "operable": true,
+   "focus_return": false,
+   "detail": "focus after Cancel=BODY"
+  },
+  {
+   "control": "Restart device review from the map (keyboard)",
+   "keys": "focus device; Shift+F10; ArrowDown to item; Enter; Tab x6; Escape",
+   "reachable": true,
+   "operable": true,
+   "focus_return": false,
+   "detail": "focus in=button \"Close\" in dialog#operation-review; tab order=['summary \"Technical details\" in dialog#operation-review', 'button#op-cancel \"Cancel\" in dialog#operation-review', 'button#op-save-first \"Save progress first\" in dialog#operation-review', 'button#op-confirm \"Restart device\" in dialog#operation-review', 'button#op-confirm \"Restart device\" in dialog#operation-review', 'button#op-confirm \""
+  },
+  {
+   "control": "Restart device review from the device panel (keyboard)",
+   "keys": "Details (Enter); Tab to Restart device\u2026; Enter; Tab to Cancel; Enter",
+   "reachable": true,
+   "operable": true,
+   "focus_return": false,
+   "detail": "panel still open under the review=False; focus after Cancel=BODY; panel open after Cancel=False; Details button name='Details for clab-restore-square-host1'"
+  }
+ ],
+ "viewports": [
+  {
+   "viewport": "390x844",
+   "screens": {
+    "live-map-menu": {
+     "left": 23,
+     "right": 382,
+     "top": 553,
+     "bottom": 831,
+     "vw": 390,
+     "vh": 844
+    },
+    "live-restart-review": {
+     "fitsWidth": true,
+     "innerScroll": false,
+     "cancelInsideDialog": true
+    }
+   }
+  },
+  {
+   "viewport": "zoom200-1366x768",
+   "screens": {
+    "live-map-menu": {
+     "left": 316,
+     "right": 675,
+     "top": 97,
+     "bottom": 376,
+     "vw": 683,
+     "vh": 384
+    },
+    "live-restart-review": {
+     "fitsWidth": true,
+     "innerScroll": true,
+     "cancelInsideDialog": true
+    }
+   }
+  }
+ ],
+ "axe": {},
+ "console_errors": [],
+ "notes": [
+  "plan card captions on ospf-basics: ['Generating the plan\u2026 Generating the plan', 'No compatibility information yet.', 'Generate a plan to see it here.', 'Generate a plan first.', 'Generate a plan first.']",
+  "apply review per-device reasons (first 6): ['cisco_xrv9k', 'Connectivity: NoValidConnectionsError', 'juniper_cjunosevolved', 'Connectivity: NoValidConnectionsError', 'arista_ceos', 'Connectivity: NoValidConnectionsError']"
+ ],
+ "version": "155.0",
+ "fixture": {
+  "url": "http://127.0.0.1:8103",
+  "data": "/tmp/claude-1000/-home-clabllm-projects-clab-manager-1-30-42/5248bba7-3cca-409d-b1cd-6742369f6838/scratchpad/usability/runs/usability-fixture-95ao1_kc",
+  "version": "1.30.47"
+ },
+ "lab_switch_repro": {
+  "lab_a": "fcc772bfdd6643a18d690227487a678c",
+  "lab_b": "65f7844ce8fd4b35be7239073873d94b",
+  "b_before": {
+   "modules": [
+    "ospf"
+   ],
+   "bgp": null,
+   "vrfs": [],
+   "ospf": {
+    "area": "0.0.0.0"
+   },
+   "lan_prefix": 24
+  },
+  "shown_under_b": {
+   "title": "BGP_TheoryToPractice",
+   "device_rows": 3,
+   "bgp_ticked": true,
+   "bgp_as": "65123",
+   "state": "Plan ready to review Plan ready to review"
+  },
+  "b_after_save": {
+   "modules": [
+    "ospf",
+    "bgp"
+   ],
+   "bgp": {
+    "as": 65123
+   },
+   "vrfs": [],
+   "ospf": {
+    "area": "0.0.0.9"
+   },
+   "lan_prefix": 25
+  },
+  "contaminated": true
+ },
+ "live_version": "1.30.47",
+ "live_menu_item": {
+  "text": "Restart device\u2026",
+  "disabled": false,
+  "title": null,
+  "class": "danger",
+  "color": "rgb(179, 38, 30)"
+ },
+ "live_review_text": "Restart host1?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly host1 in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 11 hours ago to Git.\n\nOpen CLI sessions to this device will disconnect.\n\n1 device affected: host1 (clab-restore-square-host1, running). The other devices of restore-square are not restarted.\n\nTechnical details\n\nRuns on the lab VM. If the lab changes before you confirm, this check is repeated.\n\nCancel\nSave progress first\nRestart device",
+ "live_requests": {
+  "passed": 100,
+  "blocked": [],
+  "previews": 5,
+  "confirm_attempted": false
+ },
+ "finished": "2026-09-27T14:20:11+00:00"
+}

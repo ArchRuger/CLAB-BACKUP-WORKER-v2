@@ -7,7 +7,7 @@
 // Pills are ok | warn | danger | neutral | busy (busy = something is in progress right now).
 // "Devices", never "routers"; "Not connected" is reserved for the VM. Nothing here touches the DOM,
 // so the harness tests call these functions directly. operations.js keeps its own imperative table.
-const STATUS_OPERATION_LABELS={deploy:'Starting lab',redeploy:'Redeploying lab',destroy:'Destroying lab',start:'Starting devices',stop:'Stopping devices',restart:'Restarting devices',apply:'Updating the lab from its topology file',save:'Saving device configurations',inspect:'Checking lab status','inspect-all':'Checking running labs',create:'Creating topology file',delete:'Deleting topology file',clone:'Downloading lab files'};
+const STATUS_OPERATION_LABELS={deploy:'Starting lab',redeploy:'Redeploying lab',destroy:'Destroying lab',start:'Starting devices',stop:'Stopping devices',restart:'Restarting all devices','restart-node':'Restarting device',apply:'Updating the lab from its topology file',save:'Saving device configurations',inspect:'Checking lab status','inspect-all':'Checking running labs',create:'Creating topology file',delete:'Deleting topology file',clone:'Downloading lab files'};
 const STATUS_OPERATION_BUSY=['queued','running'];
 const STATUS_OPERATION_FAILED=['failed','interrupted'];
 const STATUS_GIT_BUSY=['queued','capturing','exporting','pushing'];
@@ -15,7 +15,8 @@ const STATUS_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirm
 const STATUS_RESTORE_FAILED=['failed','preflight_failed','interrupted'];
 const STATUS_BADGE_LABELS={reachable:'Login OK',unreachable:'Login failed',succeeded:'Succeeded',failed:'Failed',interrupted:'Interrupted',partial:'Partly succeeded',queued:'Queued',running:'Running',Ready:'Ready'};
 function plural(count,word,pluralWord){const n=Number(count)||0;return n+' '+(n===1?word:(pluralWord||word+'s'));}
-function operationLabel(action){return STATUS_OPERATION_LABELS[action]||'Lab operation';}
+// Restart device names its one device when the job is at hand ("Restarting ceos"); the table's word otherwise.
+function operationLabel(action,job){if(action==='restart-node'&&job?.node_label)return 'Restarting '+job.node_label;return STATUS_OPERATION_LABELS[action]||'Lab operation';}
 function statusDeviceName(node){return node?.short_name||node?.definition_node||node?.name||'This device';}
 // Timestamps arrive as ISO strings (manager jobs) or Unix seconds (Git); both become epoch ms, invalid → 0.
 function statusEpoch(value){if(!value)return 0;const time=typeof value==='number'?value*(value<1e12?1000:1):new Date(value).getTime();return Number.isNaN(time)?0:time;}
@@ -68,7 +69,7 @@ function labState(lab,ctx={}){
  const credentials=credentialsNeeded(lab),notRunning=nodes.filter(statusNotRunning).length;
  const readyText=`${ready} of ${total} devices ready`+(credentials?` · ${credentials} ${credentials===1?'needs':'need'} login credentials`:'')+(notRunning?` · ${notRunning} not running`:'');
  const activity=labActivity(lab,ctx);
- if(activity.operation)return {key:'working',label:operationLabel(activity.operation.action),detail:activity.operation.message||'Running on the lab VM.',ready,total,pill:'busy',job:activity.operation};
+ if(activity.operation)return {key:'working',label:operationLabel(activity.operation.action,activity.operation),detail:activity.operation.message||'Running on the lab VM.',ready,total,pill:'busy',job:activity.operation};
  if(activity.restore)return {key:'working',label:'Replacing configuration',detail:activity.restore.message||'Applying a saved configuration.',ready,total,pill:'busy',job:activity.restore};
  const failure=labFailure(lab,ctx);
  if(failure)return {key:'attention',label:'Needs attention',detail:`${failure.label} did not finish.`,ready,total,pill:'danger',job:failure.job};
@@ -89,6 +90,9 @@ function labState(lab,ctx={}){
 function deviceState(node){
  const name=statusDeviceName(node),login=node?.nos_login?.status;
  if(!node)return {key:'unknown',label:'Unknown',detail:'',next:'',cli:false,pill:'neutral'};
+ // Restart device is running for this one device (the server says so while its job is queued or running):
+ // it is neither ready nor merely booting, whatever the container state of the moment says.
+ if(login==='restarting')return {key:'working',label:'Restarting',detail:`${name} is restarting on the VM. Its CLI opens again once it accepts a login.`,next:'',cli:false,pill:'busy'};
  if(node.ssh_ready)return {key:'ready',label:'Ready',detail:login==='unmonitored'?'Connected with the saved address.':`${name} is accepting SSH logins.`,next:'',cli:true,pill:'ok'};
  if(statusNotRunning(node))return {key:'unavailable',label:'Unavailable',detail:`${name} is not running, or the lab status is out of date.`,next:'Start lab',cli:false,pill:'neutral'};
  // A refresh (Test logins, or this device's own Test login) is answering right now; only a

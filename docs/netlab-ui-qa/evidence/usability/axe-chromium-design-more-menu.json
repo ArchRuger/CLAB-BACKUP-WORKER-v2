@@ -1,0 +1,108 @@
+{
+ "violations": [
+  {
+   "id": "empty-table-header",
+   "impact": "minor",
+   "help": "Table header text should not be empty",
+   "nodes": [
+    {
+     "target": ".table-wrap:nth-child(15) > table > thead > tr > th:nth-child(3)",
+     "html": "<th></th>",
+     "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers"
+    },
+    {
+     "target": ".table-wrap:nth-child(19) > table > thead > tr > th:nth-child(3)",
+     "html": "<th></th>",
+     "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers"
+    },
+    {
+     "target": ".table-wrap:nth-child(23) > table > thead > tr > th:nth-child(5)",
+     "html": "<th></th>",
+     "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers"
+    },
+    {
+     "target": ".table-wrap:nth-child(26) > table > thead > tr > th:nth-child(5)",
+     "html": "<th></th>",
+     "summary": "Fix any of the following:\n  Element does not have text that is visible to screen readers"
+    }
+   ]
+  },
+  {
+   "id": "label",
+   "impact": "critical",
+   "help": "Form elements must have labels",
+   "nodes": [
+    {
+     "target": "#design-pool-p2p-prefix",
+     "html": "<input id=\"design-pool-p2p-prefix\" type=\"number\" min=\"1\" max=\"127\" value=\"31\" style=\"\">",
+     "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+    },
+    {
+     "target": "#design-pool-lan-prefix",
+     "html": "<input id=\"design-pool-lan-prefix\" type=\"number\" min=\"1\" max=\"127\" value=\"24\" style=\"\">",
+     "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+    }
+   ]
+  },
+  {
+   "id": "select-name",
+   "impact": "critical",
+   "help": "Select element must have an accessible name",
+   "nodes": [
+    {
+     "target": "select[data-design-role=\"r1\"]",
+     "html": "<select data-design-role=\"r1\"><option value=\"router\" selected=\"\">Router</option><option value=\"host\">Host</option><option value=\"exclude\">Exclude</option></select>",
+     "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+    },
+    {
+     "target": "select[data-design-role=\"r2\"]",
+     "html": "<select data-design-role=\"r2\"><option value=\"router\" selected=\"\">Router</option><option value=\"host\">Host</option><option value=\"exclude\">Exclude</option></select>",
+     "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+    },
+    {
+     "target": "select[data-design-role=\"r3\"]",
+     "html": "<select data-design-role=\"r3\"><option value=\"router\" selected=\"\">Router</option><option value=\"host\">Host</option><option value=\"exclude\">Exclude</option></select>",
+     "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+    },
+    {
+     "target": "tr[data-design-link-key=\"r1:eth1--r2:eth1\"] > td:nth-child(2) > select[data-design-link-field=\"vrf\"]",
+     "html": "<select data-design-link-field=\"vrf\"><option value=\"\">None</option></select>",
+     "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+    },
+    {
+     "target": "tr[data-design-link-key=\"r1:eth1--r2:eth1\"] > td:nth-child(3) > select[data-design-link-field=\"vlan-access\"]",
+     "html": "<select data-design-link-field=\"vlan-access\"><option value=\"\">None</option></select>",
+     "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+    },
+    {
+     "target": "tr[data-design-link-key=\"r2:eth2--r3:Gi0/0/0/0\"] > td:nth-child(2) > select[data-design-link-field=\"vrf\"]",
+     "html": "<select data-design-link-field=\"vrf\"><option value=\"\">None</option></select>",
+     "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+    },
+    {
+     "target": "tr[data-design-link-key=\"r2:eth2--r3:Gi0/0/0/0\"] > td:nth-child(3) > select[data-design-link-field=\"vlan-access\"]",
+     "html": "<select data-design-link-field=\"vlan-access\"><option value=\"\">None</option></select>",
+     "summary": "Fix any of the following:\n  Element does not have an implicit (wrapped) <label>\n  Element does not have an explicit <label>\n  aria-label attribute does not exist or is empty\n  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty\n  Elem"
+    }
+   ]
+  }
+ ],
+ "incomplete": [
+  {
+   "id": "aria-allowed-role",
+   "impact": "minor",
+   "count": 1
+  },
+  {
+   "id": "aria-valid-attr-value",
+   "impact": "critical",
+   "count": 1
+  },
+  {
+   "id": "color-contrast",
+   "impact": "serious",
+   "count": 1
+  }
+ ],
+ "version": "4.13.0"
+}

@@ -208,13 +208,15 @@ class Runner:
         self.pool.shutdown(wait=False,cancel_futures=True)
         if self.scheduler: self.scheduler.join(timeout=2)
     def submit(self, lab_id, operation='backup', source='manual', node_names=None, progress_id=None, progress_context=None):
-        from .lab_operations import operation_busy, RESTORE_BUSY
+        from .lab_operations import operation_busy, RESTORE_BUSY, DESIGN_APPLY_BUSY
         with self.store.lock:
             if operation_busy(self.store.state,lab_id,progress_id=progress_id): raise ValueError('Wait for the lab operation to finish.')
-            # A restore's own pre/post backups pass their restore job id as progress_id and
-            # are allowed; any other backup waits for the restore (on any lab) to finish.
+            # A restore's (or a design apply's) own pre/post backups pass their job id as progress_id and
+            # are allowed; any other backup waits for the restore or apply (on any lab) to finish.
             if any(j.get('status') in RESTORE_BUSY and j.get('id') != progress_id for j in self.store.state.get('restore_jobs',[])):
                 raise ValueError('A configuration restore is in progress. Wait for it to finish.')
+            if any(j.get('status') in DESIGN_APPLY_BUSY and j.get('id') != progress_id for j in self.store.state.get('design_jobs',[])):
+                raise ValueError('A network design is being applied. Wait for it to finish.')
             if self.store.reset_pending: raise ValueError('Finish the manager reset before starting a job.')
             if any(j['status'] in ('queued','running') for j in self.store.state['jobs']):
                 raise ValueError('A job is already running. Wait for it to finish.')

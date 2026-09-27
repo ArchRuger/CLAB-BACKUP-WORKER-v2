@@ -36,7 +36,7 @@ FORMATS = {'juniper_cjunosevolved': 'junos-display-set', 'juniper_vqfx': 'junos-
            'arista_ceos': 'eos-running-config'}
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'created', 'finished', 'status', 'message', 'backup_job_id',
               'commit', 'pushed', 'target', 'checkpoint', 'changed_files', 'snapshot_path', 'note', 'review_before_push',
-              'reviewed', 'destination')
+              'reviewed', 'destination', 'kind', 'generation_id')
 # A save with a filename that changed between releases (Junos moved its human backup extension from
 # `.set` to `.cfg`, `snapshot_suffix` above) still reads as one changed file to a person, never a
 # removed-plus-added pair. Built from PLATFORMS so a future extension change stays covered without
@@ -466,8 +466,13 @@ def snapshot_diff(before_manifest, before_files, after_manifest, after_files):
 
 
 class GitProgress:
+    designs = None   # set by main.py: the NetworkDesign service, for design exports (kind `design`)
+
     def __init__(self, store, runner):
         self.store = store; self.runner = runner; self.stopping = threading.Event()
+        # One helper call at a time from this manager: the helper takes a non-blocking lock per repository, and a page
+        # reading the history while a save publishes would otherwise turn the save into "already running" (seen live).
+        self.helper_lock = threading.Lock()
         self.pool = ThreadPoolExecutor(max_workers=1)
         with store.lock:
             for job in store.state.setdefault('git_jobs', []):
@@ -492,7 +497,8 @@ class GitProgress:
             if binding.get('host_identity') != host_identity(host):
                 raise ValueError('The VM identity changed. Return to the original VM or reconnect the repository.')
             request = dict(request, binding_id=binding['binding_id'], revision=binding['revision'])
-        try: return remote_git(host, request, self.stopping)
+        try:
+            with self.helper_lock: return remote_git(host, request, self.stopping)
         except ValueError as exc:
             with self.store.lock: message = scrub(str(exc), self.store.state)
             raise ValueError(message[:600])
@@ -571,6 +577,39 @@ class GitProgress:
                     result = self.invoke({'mode': 'push', 'operation_id': job_id}, binding)
                 self.finish(job, result)
                 return
+            if job.get('kind') == 'design':
+                # A design export: the plan's files instead of a capture; the same review, publication and push.
+                with self.store.lock:
+                    lab = copy.deepcopy(self.store.lab(job['lab_id']))
+                    generation = next((g for g in (lab or {}).get('network_generations', []) if g['id'] == job.get('generation_id')), None)
+                if not lab or not generation or self.designs is None:
+                    raise ValueError('The plan of this export is gone; dismiss this export, generate the plan again and start a new one.')
+                try: snapshot = self.designs.design_snapshot(lab, generation, lab_name=job.get('lab_name'))
+                except ValueError as exc:
+                    if job.get('published_attempt'): raise   # the VM may hold the commit: stay pending, never failed
+                    self.update(job_id, status='failed', message=str(exc), finished=now()); return
+                fingerprint = digest(snapshot)
+                if job.get('snapshot_digest') and fingerprint != job['snapshot_digest']:
+                    raise ValueError('The plan changed since this export was started. It will not replace the repository snapshot.')
+                self.update(job_id, status='exporting', snapshot_digest=fingerprint, message='Saving the plan to the VM repository.')
+                request = copy.deepcopy(job['request'])
+                if 'expected_head' not in job:
+                    status = self.invoke({'mode': 'status'}, binding)
+                    if not status.get('ready'): raise ValueError(status.get('problem') or 'Repository needs attention before exporting.')
+                    expected_head = status.get('head', '')
+                    self.update(job_id, expected_head=expected_head)
+                else: expected_head = job['expected_head']
+                request.update(mode='publish', operation_id=job_id, expected_head=expected_head, snapshot=snapshot)
+                self.update(job_id, published_attempt=True)   # a lost answer leaves the job pending, never failed: the VM may hold the commit
+                result = self.invoke(request, binding)
+                if result.get('commit'):
+                    self.update(job_id, commit=result['commit'], changed_files=result.get('changed_files', []), snapshot_path=result.get('snapshot_path', ''))
+                if (job.get('retry_push', job.get('want_push', False)) and result.get('commit')
+                        and result.get('status') != 'needs_attention' and not result.get('pushed')):
+                    self.update(job_id, status='pushing', commit=result['commit'], message='Pushing the exported plan.')
+                    result = self.invoke({'mode': 'push', 'operation_id': job_id}, binding)
+                self.finish(job, result)
+                return
             backup_id = job.get('backup_job_id', '')
             if not backup_id:
                 if job.get('retry'):
@@ -623,7 +662,7 @@ class GitProgress:
                 if isinstance(result, dict) and re.fullmatch(r'[0-9a-f]{40,64}', str(result.get('commit', ''))):
                     existing['commit'] = result['commit']
                 message = scrub(str(exc), self.store.state) if isinstance(exc, (ValueError, HTTPException)) else 'Git save interrupted. The local capture is retained; retry to reconcile.'
-            status = 'interrupted' if self.stopping.is_set() else 'push_pending' if existing.get('commit') else 'export_pending' if existing.get('backup_job_id') else 'failed'
+            status = 'interrupted' if self.stopping.is_set() else 'push_pending' if existing.get('commit') else 'export_pending' if (existing.get('backup_job_id') or existing.get('published_attempt')) else 'failed'
             recovery = dict(status=status, message=message[:600], finished=now(),
                             backup_job_id=existing.get('backup_job_id', ''), commit=existing.get('commit', ''))
             try: self.update(job_id, **recovery)
@@ -1021,6 +1060,50 @@ class GitProgress:
                            # binding that may have moved by the time the save is reviewed or shown later.
                            destination=job_destination(binding, data.target, data.checkpoint),
                            node_names=copy.deepcopy(names), capture_context=context)
+                _append_git_job(self.store.state, job)
+                try: self.store.save()
+                except OSError:
+                    self.store.state['git_jobs'].remove(job); raise HTTPException(500, 'Could not save the request. No work was submitted.')
+            return self.schedule(job)
+
+        class DesignExport(BaseModel):
+            model_config = ConfigDict(extra='forbid')
+            request_id: str = Field(pattern=r'^[0-9a-f]{32}$')
+            checkpoint: str = Field(min_length=1, max_length=100)
+            note: str = Field(default='', max_length=200)
+            push: bool = False
+
+        @app.post('/api/labs/{lab_id}/design/generations/{generation_id}/git')
+        def export_design(lab_id: str, generation_id: str, data: DesignExport):
+            """A design export is a Git save of kind `design`: its own checkpoint folder, the plan's files with a
+            manifest that names them generated artifacts, the same mandatory review before any upload."""
+            if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,99}', data.checkpoint):
+                raise HTTPException(400, 'Use a checkpoint name containing letters, numbers, hyphens or underscores.')
+            if any(ord(c) < 32 for c in data.note): raise HTTPException(400, 'Use a single-line note.')
+            if self.designs is None: raise HTTPException(503, 'Design exports are not available.')
+            request_digest = digest(dict(lab_id=lab_id, generation_id=generation_id, **data.model_dump()))
+            with self.store.lock:
+                previous = next((j for j in self.store.state['git_jobs'] if j['id'] == data.request_id), None)
+                if previous:
+                    if previous.get('request_digest') != request_digest: raise HTTPException(409, 'Request ID already belongs to a different save.')
+                    return public_job(previous)
+                self.idle(); binding = self.binding(lab_id)
+                lab = self.store.lab(lab_id)
+                if binding['host_identity'] != host_identity(self.store.state.get('host', {})):
+                    raise HTTPException(409, 'Reconnect the original VM before exporting.')
+                generation = next((g for g in lab.get('network_generations', []) if g['id'] == generation_id), None)
+                if not generation: raise HTTPException(404, 'Plan not found in this lab.')
+                if generation.get('status') != 'succeeded': raise HTTPException(409, 'Only a generated plan can be exported.')
+                try: snapshot = self.designs.design_snapshot(lab, generation)
+                except ValueError as exc: raise HTTPException(400, str(exc))
+                note = data.note.strip() or ('Design plan ' + generation_id[:12] + (' (' + str(generation.get('label') or '') + ')' if generation.get('label') else ''))
+                request = dict(target='checkpoint', checkpoint=data.checkpoint, push=False, replace_baseline=False, expected_baseline='',
+                               allow_removed=False, message=note)   # the helper writes a design to its own checkpoint folder only
+                job = dict(id=data.request_id, request_digest=request_digest, lab_id=lab_id, lab_name=lab['name'], kind='design',
+                           generation_id=generation_id, created=now(), status='queued', message='Design export queued.', backup_job_id='',
+                           target='checkpoint', checkpoint=data.checkpoint, note=note, pushed=False, review_before_push=data.push,
+                           binding_digest=digest(binding), request=request, want_push=False, snapshot_digest=digest(snapshot),
+                           destination=job_destination(binding, 'checkpoint', data.checkpoint), node_names=[], capture_context={})
                 _append_git_job(self.store.state, job)
                 try: self.store.save()
                 except OSError:

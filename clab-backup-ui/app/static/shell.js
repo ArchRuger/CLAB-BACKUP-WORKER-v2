@@ -86,7 +86,10 @@ function initMenu(button){
  };
  const toggles=()=>[...list.querySelectorAll('[data-menu-group]')];
  const close=restore=>{if(list.hidden)return false;list.hidden=true;button.setAttribute('aria-expanded','false');if(restore&&typeof button.focus==='function')button.focus();return true;};
- const open=()=>{closeMenus(wrapper);for(const toggle of toggles())setGroup(toggle,false,false);list.hidden=false;button.setAttribute('aria-expanded','true');const first=items()[0];if(first&&typeof first.focus==='function')first.focus();if(typeof CustomEvent==='function'&&typeof list.dispatchEvent==='function')list.dispatchEvent(new CustomEvent('menuopen'));};
+ // A list is right-aligned to its button; near the left edge of a narrow screen that would put its items
+ // off screen, so it anchors to the button's left instead (menu-clamped), measured each time it opens.
+ const clamp=()=>{if(typeof list.getBoundingClientRect!=='function'||!list.classList)return;list.classList.remove('menu-clamped');if(list.getBoundingClientRect().left<8)list.classList.add('menu-clamped');};
+ const open=()=>{closeMenus(wrapper);for(const toggle of toggles())setGroup(toggle,false,false);list.hidden=false;clamp();button.setAttribute('aria-expanded','true');const first=items()[0];if(first&&typeof first.focus==='function')first.focus();if(typeof CustomEvent==='function'&&typeof list.dispatchEvent==='function')list.dispatchEvent(new CustomEvent('menuopen'));};
  button._menuClose=close;button._menuOpen=open;
  button.addEventListener('click',()=>{if(list.hidden)open();else close(false);});
  button.addEventListener('keydown',e=>{if(e.key==='ArrowDown'&&list.hidden){e.preventDefault();open();}});
@@ -155,8 +158,12 @@ function shellErrorSentence(message){
  if(/Configured devices changed/i.test(text))return 'The devices in this lab changed since the save location was set up. Check the devices under Progress › Save settings.';
  if(/Reconnect the original VM/i.test(text))return 'This lab was set up on a different VM. Reconnect that VM before saving.';
  if(/not connected|VM connection|discovery is not configured/i.test(text))return 'The lab VM is not connected. Choose Manager › VM connection… to set it up.';
+ if(/^Restart device… is not available: /.test(text))return text;   // the reason is the sentence
  return 'That did not work. The details below say why.';
 }
+// Leaving the page with an unsaved Design draft the browser could not store (network-design.js's
+// designLeaveGuard) gets the browser's own "leave site?" prompt: that draft exists nowhere else.
+if(typeof window!=='undefined'&&typeof window.addEventListener==='function')window.addEventListener('beforeunload',e=>{if(typeof designLeaveGuard==='function'&&designLeaveGuard()){e.preventDefault();e.returnValue='';}});
 function showActionError(message){
  const text=String(message||'Something went wrong.'),lab=typeof activeId==='string'?activeId:'';
  if(!lab||!shellEl('lab-banner')||typeof renderLabBanner!=='function'){if(typeof notify==='function')notify(text);return false;}

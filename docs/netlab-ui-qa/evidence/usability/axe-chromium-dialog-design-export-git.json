@@ -1,0 +1,11 @@
+{
+ "violations": [],
+ "incomplete": [
+  {
+   "id": "color-contrast",
+   "impact": "serious",
+   "count": 1
+  }
+ ],
+ "version": "4.13.0"
+}

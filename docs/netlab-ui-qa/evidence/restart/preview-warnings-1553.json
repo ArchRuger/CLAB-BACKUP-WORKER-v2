@@ -1,0 +1,50 @@
+{
+ "clab-restore-square-vjunos-switch": {
+  "node_label": "vjunos-switch",
+  "warnings": [
+   "Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0.79.0.",
+   "This device is exited, so containerlab takes its start/restore path: it starts the container and restores its links instead of stopping it first. Links are restored only if containerlab parked them (a stop from the manager, the VS Code extension or containerlab stop); a device stopped with docker stop has already lost its links, and redeploying the lab is the way to get them back."
+  ],
+  "notes": null,
+  "affected": [
+   {
+    "name": "clab-restore-square-vjunos-switch",
+    "state": "exited",
+    "status": null
+   }
+  ],
+  "command": [
+   "/usr/bin/containerlab",
+   "restart",
+   "-t",
+   "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+   "--name",
+   "restore-square",
+   "--node",
+   "vjunos-switch"
+  ]
+ },
+ "clab-restore-square-xrv9k": {
+  "node_label": "xrv9k",
+  "warnings": [],
+  "notes": null,
+  "affected": [
+   {
+    "name": "clab-restore-square-xrv9k",
+    "state": "running",
+    "status": null
+   }
+  ],
+  "command": [
+   "/usr/bin/containerlab",
+   "restart",
+   "-t",
+   "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+   "--name",
+   "restore-square",
+   "--node",
+   "xrv9k"
+  ]
+ },
+ "_taken": "2026-09-27T16:04:33+00:00 on the deployed manager (working tree built 15:16 UTC, before the XRv9k note existed)"
+}

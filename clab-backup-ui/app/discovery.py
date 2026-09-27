@@ -123,6 +123,13 @@ def parse_inspect(raw):
             entry = dict(name=container, address=ip,
                          state=literal(row.get('state', 'unknown'), 'Container state', 40),
                          kind=literal(row.get('kind', ''), 'Container kind', 120))
+            # The runtime's status line ("Up 2 minutes", "Exited (0) 5 minutes ago"): the only start-time
+            # evidence containerlab's inspect gives, kept for uptime_seconds() below. Optional: an older
+            # inspect without it, or an odd value, never fails the whole inspection.
+            status = row.get('status')
+            if isinstance(status, str) and status:
+                try: entry['status'] = literal(status, 'Container status', 80)
+                except ValueError: pass
             bucket = groups.setdefault(name, [])
             if any(n['name'] == container for n in bucket): raise ValueError('Duplicate container identity')
             bucket.append(entry)
@@ -192,6 +199,31 @@ def node_available(state, lab, node):
                 (node.get('endpoint_mode') == 'manual' or node.get('discovered_address')))
 
 
+def expected_container(lab, node):
+    """The container containerlab gives this node of a linked lab: <prefix>-<lab>-<node>, the bare node
+    name for an empty prefix, or '' when the manager has no topology node name for it (a device that came
+    from an inventory file, or a lab without a deployment name) — then nothing can be matched exactly."""
+    short = node.get('definition_node') or node.get('short_name') or ''
+    if not short or not lab.get('deployment_name'): return ''
+    prefix = lab.get('container_prefix', 'clab')
+    return f'{prefix}-{lab["deployment_name"]}-{short}' if prefix else short
+
+
+UPTIME = re.compile(r'^Up (?:Less than a second|(\d+) seconds?|About a minute|(\d+) minutes?)(?:\s|$|\()')
+
+
+def uptime_seconds(status):
+    """The container's uptime from the runtime's status line, when it is under an hour and to the minute
+    or better ("Up 5 seconds", "Up About a minute", "Up 12 minutes (healthy)"); None for anything else
+    (hours, days, exited, paused, absent). Docker floors the value, so the real uptime is at most 59 s
+    more than a minutes value: a start time derived from it is late by up to a minute, never early."""
+    match = UPTIME.match(status or '')
+    if not match: return None
+    if match.group(1) is not None: return int(match.group(1))
+    if match.group(2) is not None: return int(match.group(2)) * 60
+    return 0 if 'Less than' in match.group(0) else 60
+
+
 def reconcile(state):
     groups = state.get('discovery', {}).get('labs', {})
     for lab in state['labs']:
@@ -203,7 +235,8 @@ def reconcile(state):
             expected = f'{prefix}-{lab["deployment_name"]}-{short}' if prefix and short else short
             found = rows.get(expected) if expected else rows.get(node['name'])
             node.update(discovered=bool(found), runtime_state=found['state'] if found else 'absent',
-                        discovered_address=found['address'] if found else '')
+                        discovered_address=found['address'] if found else '',
+                        runtime_status=(found.get('status') or '') if found else '')
             if found and found['address'] and node.get('endpoint_mode') == 'auto':
                 node.update(address=found['address'], port=22)
 
@@ -446,6 +479,7 @@ class Discovery:
             # Save and test connection: no first-use key pinning in the background.
             if not host.get('enabled') or host.get('bootstrap_pending'): return self.public()
             error = ''; labs = None; fingerprint = ''
+            inspected_epoch = time.time()   # before the pass: a container's start derived from its uptime is never early
             try:
                 labs, fingerprint = inspect_host(host, self.stopping)
             except paramiko.AuthenticationException:
@@ -458,7 +492,7 @@ class Discovery:
             with self.store.lock:
                 if self.store.state.get('host', {}).get('revision') != host.get('revision'): return self.public()
                 previous = self.store.state.get('discovery', {})
-                info = {**previous, 'ok': not error, 'error': error, 'checked_at': stamp(), 'checked_epoch': time.time()}
+                info = {**previous, 'ok': not error, 'error': error, 'checked_at': stamp(), 'checked_epoch': time.time(), 'inspected_epoch': inspected_epoch}
                 if not error:
                     info.update(labs=dict(labs), last_success=info['checked_at'], file_reader=getattr(labs, 'reader', 'inspect-only'), helper_version=getattr(labs, 'helper_version', None))
                     self.store.state['host']['fingerprint'] = fingerprint

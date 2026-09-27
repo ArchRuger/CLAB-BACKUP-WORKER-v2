@@ -75,7 +75,7 @@ function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.30.44';$('app-version').textContent='v'+version;
+ const version=state.version||'1.30.48';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
@@ -181,12 +181,12 @@ function renderLabBanner(){
  const start=()=>({'banner-start':{label:startLabel(),run:startLab,disabled:!!$('lab-start')?.disabled,title:$('lab-start')?.title||''}});
  let spec={};
  if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
- else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
+ else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action,runningOp):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
  else if(runningRestore)spec={tone:'info',icon:'clock',running:true,text:'Replacing configuration…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
  else if(ls.key==='attention'&&ls.job){
   const job=ls.job,isRestore=restores.includes(job),actions={'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissJob==='function')dismissJob(job.id);render();}}};
   if(isRestore)actions['banner-restore']={label:'Details',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(job.id);}};
-  else{actions['banner-output']={label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(job.id);}};actions['banner-try-again']={label:'Try again',run:()=>{if(typeof opReview==='function'&&typeof opTask==='function')opTask(null,()=>opReview({lab_id:lab.id,action:job.action,options:job.options||{}}));}};}
+  else{actions['banner-output']={label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(job.id);}};actions['banner-try-again']={label:'Try again',run:()=>{if(typeof opReview==='function'&&typeof opTask==='function')opTask(null,()=>opReview({lab_id:lab.id,action:job.action,options:job.options||{},...(job.node?{node:job.node}:{})}));}};}
   spec={tone:'danger',icon:'alert',text:ls.detail,detail:job.message||'',actions};
  }
  else if(ps&&ps.problem)spec={tone:'warn',icon:'alert',text:'Saving to Git is not possible right now.',detail:ps.problem,actions:{'banner-save-details':{label:'Save location settings',run:()=>{if(typeof gitOpenRepository==='function')gitOpenRepository();}}}};
@@ -208,7 +208,18 @@ function renderLabBanner(){
 function renderNodes(){const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();const nodes=lab.nodes.filter(n=>(n.name+' '+n.address+' '+platformLabel(n.platform)).toLowerCase().includes(term));
  const markup=nodes.map(n=>{const h=nodeHealth(n.name);return `<tr><td><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''} aria-label="Include ${esc(n.name)} in backups"></td><td><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="endpoint">${esc(n.address)}:${n.port}</span></td><td><span class="badge platform">${esc(platformLabel(n.platform))}</span><span class="secondary-text">${esc(profileName(lab,n))}</span></td><td>${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<span class="timestamp">${h?.ssh?.at?esc(utcDisplay(h.ssh.at)):'No check yet'}</span></td><td>${h?.backup?badge(h.backup.status):'<span class="status-neutral">No backup yet</span>'}<span class="timestamp">${h?.backup?.at?esc(utcDisplay(h.backup.at)):''}</span></td><td><div class="node-actions">${nodeActions(n)}</div></td></tr>`;}).join('')||'<tr><td colspan="6" class="table-empty">No devices match. Try another name, address or platform.</td></tr>';setMarkup($('nodes'),markup);
 }
-function nodeActions(n,details=false){const hint=sshHint(n);return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button><button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}`;}
+// The per-device actions of the Devices view (its technical table and the device panel): Open CLI,
+// Capture traffic…, Back up configuration, Restart device… (operations.js decides its eligibility, the
+// same way the map's right-click menu does) and, outside the panel, Details.
+function nodeActions(n,details=false){const hint=sshHint(n),restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:false,reason:'Not available on this page'};return `<button class="ssh-action" data-terminal="${esc(n.name)}" ${!n.ssh_ready?`disabled title="${esc(hint)}"`:''}>Open CLI <span aria-hidden="true">↗</span></button><button data-capture="${esc(n.name)}" ${typeof captureActionAttrs==='function'?captureActionAttrs():''}>Capture traffic…</button><button data-backup="${esc(n.name)}" ${busy()||n.readiness!=='Ready'?'disabled title="Available when the device has a supported network OS and credentials and no other backup is running"':''}>Back up configuration</button><button class="danger-action" data-restart="${esc(n.name)}" ${restart.ok?'':`disabled title="${esc(restart.reason)}"`}>Restart device…</button>${details?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}`;}
+// The device panel's line under its actions: why a disabled action is unavailable, in words a keyboard or touch
+// user can reach (a disabled button's title is hover-only), plus the capture caption when there is one.
+function nodeActionNotes(n){
+ const notes=[];const capture=typeof captureStatusLine==='function'?captureStatusLine():'';if(capture)notes.push(capture);
+ const restart=typeof opRestartState==='function'?opRestartState(current(),n,state.discovery,busy()):{ok:true};if(!restart.ok)notes.push('Restart device… is not available: '+restart.reason+'.');
+ const backup=typeof nodeBackupReason==='function'?nodeBackupReason(n):'';if(backup)notes.push('Back up configuration is not available: '+backup+'.');
+ return notes.join(' ');
+}
 // The drawer's Advanced section: check the saved login now, or change the connection settings.
 function nodeDrawerActions(n){return `<button data-check="${esc(n.name)}" ${!(n.login_configured??n.ssh_ready)?'disabled title="Add credentials first"':''}>Test login</button><button data-edit="${esc(n.name)}">Edit connection…</button>`;}
 // A readable id per device name; the hash keeps names that differ only in punctuation apart.
@@ -219,7 +230,7 @@ function deviceRow(n,rail){
  const ds=typeof deviceState==='function'?deviceState(n):{key:n.ssh_ready?'ready':'unknown',label:n.ssh_ready?'Ready':'Not ready',detail:n.ssh_ready?'':sshHint(n),cli:!!n.ssh_ready,pill:n.ssh_ready?'ok':'neutral'};
  const why=(rail?'why-rail-':'why-')+deviceSlug(n.name),reason=!ds.cli&&ds.detail?`<small class="row-reason" id="${esc(why)}">${esc(ds.detail)}</small>`:'';
  const open=$('details-dialog').open&&detailName===n.name;
- return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span></div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.name)}">Details</button>`}</div></li>`;
+ return `<li class="device-row state-${esc(ds.key)}" ${open?'aria-current="true"':''}><div><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="badge platform">${esc(platformLabel(n.platform))}</span></div><div><span class="pill ${esc(ds.pill||'neutral')}">${esc(ds.label)}</span>${reason}</div><div class="node-actions"><button class="ssh-action" data-terminal="${esc(n.name)}" ${ds.cli?'':`disabled title="${esc(ds.detail)}"${reason?` aria-describedby="${esc(why)}"`:''}`}>Open CLI <span aria-hidden="true">↗</span></button>${rail?'':`<button class="details-action" data-details="${esc(n.name)}" aria-label="Details for ${esc(n.short_name||n.name)}">Details</button>`}</div></li>`;
 }
 function renderDeviceList(){
  const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();
@@ -293,6 +304,11 @@ async function handleNodeAction(e){const b=e.target.closest('button');if(!b||b.d
  if(b.dataset.details)openDetails(b.dataset.details);
  if(b.dataset.terminal){const url='/static/terminal.html#'+new URLSearchParams({lab:activeId,node:b.dataset.terminal,label:current().name});window.open(url,'_blank');}
  if(b.dataset.backup){$('details-dialog').close();startJob('backup',[b.dataset.backup]);}
+ // Restart device: the map menu, the Devices table and the device panel all end up here, and here in
+ // one reviewed operation (operations.js) that names the device and the lab.
+ // The device panel stays open under the review (its button gets focus back when the review closes); from the
+ // map menu, which closes itself, the drawn device is the control to return to.
+ if(b.dataset.restart){const labId=activeId,name=b.dataset.restart;const opener=typeof b.closest==='function'&&b.closest('#node-context-menu')?(typeof contextNode!=='undefined'&&contextNode)||null:b;if(typeof opRestartDevice==='function'&&typeof opTask==='function')opTask(null,()=>opRestartDevice(labId,name,opener));}
  if(b.dataset.check){const labId=activeId;b.disabled=true;try{const result=await json('/labs/'+labId+'/ssh-check','POST',{name:b.dataset.check});notify(result.message);if(activeId===labId)await refreshHealth();}catch(error){notify(error.message);}finally{b.disabled=false;}}
 }
 for(const id of ['nodes','details-dialog','device-list','topology-devices'])$(id).addEventListener('click',handleNodeAction);
@@ -357,7 +373,7 @@ function renderDetails(){
  if($('details-state')){$('details-state').textContent=ds?ds.label:'';$('details-state').className='pill '+(ds?ds.pill||'neutral':'neutral');}
  for(const id of ['details-prev','details-next'])if($(id))$(id).disabled=lab.nodes.length<2;
  setMarkup($('details-actions'),nodeActions(n,true));
- if($('details-actions-note')){const note=typeof captureStatusLine==='function'?captureStatusLine():'';$('details-actions-note').textContent=note;$('details-actions-note').hidden=!note;}
+ if($('details-actions-note')){const note=nodeActionNotes(n);$('details-actions-note').textContent=note;$('details-actions-note').hidden=!note;}
  setMarkup($('details-advanced-actions'),nodeDrawerActions(n));
  if($('details-status-text'))$('details-status-text').textContent=recheckPending(n)?`Checking ${n.short_name||n.name} again… (automatic within a minute — or Test login now)`:ds?ds.detail:(h?.ssh?.message||'');
  setMarkup($('details-status-actions'),statusActions(n,ds));

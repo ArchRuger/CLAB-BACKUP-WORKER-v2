@@ -120,7 +120,7 @@ def topology(r):
     menu = r.js('''() => { const m = document.getElementById('node-context-menu');
       return {items: [...m.querySelectorAll('[role=menuitem]')].map(b => ({text: b.textContent.trim().slice(0, 80), disabled: b.disabled, reason: b.querySelector('small')?.textContent})),
               header: m.querySelector('.context-node-name')?.textContent, focused: document.activeElement?.closest('#node-context-menu') !== null}; }''')
-    r.check('menu: order CLI, capture, backup, details', [i['text'].split(' ')[0] for i in menu['items']] == ['Open', 'Capture', 'Back', 'Device'], menu)
+    r.check('menu: order CLI, capture, backup, restart, details', [i['text'].split(' ')[0] for i in menu['items']] == ['Open', 'Capture', 'Back', 'Restart', 'Device'], menu)
     r.check('menu: a starting device explains why the CLI is unavailable', menu['items'][0]['disabled'] and 'still starting' in (menu['items'][0]['reason'] or ''), menu['items'][0])
     r.check('menu: header shows the state, not the address', 'Starting' in (menu['header'] or '') and '172.' not in (menu['header'] or ''), menu['header'])
     r.check('menu: focus moves into the menu', menu['focused'])

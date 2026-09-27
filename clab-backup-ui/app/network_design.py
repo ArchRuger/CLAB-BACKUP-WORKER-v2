@@ -15,6 +15,7 @@ opt-in and nothing migrates, renumbers or configures anything.
 Applying a generation to devices is a separate contract (the provisioning drivers) and is not in this
 module.
 """
+import base64
 import copy
 import hashlib
 import io
@@ -125,11 +126,12 @@ def requested_features(intent, modules=None, node=None):
 
 
 def effective_modules(intent, name, row):
-    """The modules one device really gets: the lab's modules plus the device's extras, or none for a host
-    without explicit modules (the adapter emits `module: []` for it)."""
+    """The modules one device really gets: its own `modules` list when it has one (netlab's rule: the list
+    replaces the design's), else the design's modules, or none for a host without explicit modules (the
+    adapter emits `module: []` for it)."""
     settings = (intent.get('nodes') or {}).get(name) or {}
     modules = set(intent.get('modules') or [])
-    if isinstance(settings.get('modules'), list): return modules | set(settings['modules'])
+    if isinstance(settings.get('modules'), list): return set(settings['modules'])
     if row.get('role') == 'host': return set()
     return modules
 
@@ -452,6 +454,51 @@ class NetworkDesign:
                 if not re.fullmatch(r'[a-z0-9_.-]{1,40}', module): continue
                 _write(node_dir / ('%02d-%s' % (index, module)), text_)
         return folder
+
+    def design_snapshot(self, lab, generation, lab_name=None):
+        """The reviewed export set of one plan for the student's Git save (`git_progress`, kind `design`): the intent,
+        the plan, the netlab topology, the endpoint mapping and every generated file, base64 like a capture, with a
+        manifest that names them generated artifacts. Never a backup: no node rows, no restore artifact, so the
+        restore lists such a version as view and download only."""
+        if generation.get('status') != 'succeeded': raise ValueError('Only a generated plan can be exported.')
+        folder = self.folder(lab['id'], generation['id'])
+        files, rows, total = {}, [], 0
+
+        def put(name, raw, **extra):
+            nonlocal total
+            if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,180}', name) or name in files: raise ValueError('The export has an unusable file name.')
+            if not raw or len(raw) > 2 * 1024 * 1024: raise ValueError('A generated file is empty or too large to export.')
+            total += len(raw)
+            if total > 16 * 1024 * 1024 or len(files) >= 500: raise ValueError('The export exceeds the transfer limits.')
+            files[name] = base64.b64encode(raw).decode()
+            rows.append({'path': name, 'size': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(), 'artifact': 'network-design', **extra})
+
+        try: intent = json.loads((folder / 'intent.json').read_text())   # the intent this plan was built from, not the design as it is now
+        except (OSError, ValueError): raise ValueError('The intent of this plan is missing; generate the plan again.')
+        if not isinstance(intent, dict): raise ValueError('The intent of this plan is unreadable; generate the plan again.')
+        stamp = generation.get('finished') or generation.get('created', '')   # reproducible: the digest binds the export at creation and at execution
+        name = lab_name if lab_name is not None else lab.get('name', '')   # the job's frozen name: a renamed lab does not change a pending export
+        document = {'containerlab_node_manager': {'type': 'network-intent', 'exported': stamp, 'lab': name, 'generation': generation['id']}, **intent}
+        put('network-intent.yml', yaml.safe_dump(document, sort_keys=False, allow_unicode=True).encode(), kind='intent')
+        for name, kind in (('plan.json', 'plan'), ('topology.yml', 'topology'), ('mapping.json', 'mapping')):
+            try: raw = (folder / name).read_bytes()
+            except OSError: raise ValueError('A file of this plan is missing; generate the plan again.')
+            put(name, raw, kind=kind)
+        for node, entries in sorted((generation.get('artifacts') or {}).items()):
+            if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,199}', node): raise ValueError('A device name of this plan cannot be exported.')
+            for index, entry in enumerate(entries):
+                path = folder / 'nodes' / node / ('%02d-%s' % (index, entry['module']))
+                try: raw = path.read_bytes()
+                except OSError: raise ValueError('A generated file of this plan is missing; generate the plan again.')
+                if hashlib.sha256(raw).hexdigest() != entry['sha256']: raise ValueError('A generated file of this plan changed on disk; generate the plan again.')
+                if not raw: continue   # netlab writes an empty file for a module with nothing to say on a device; an export carries no empty file
+                put('%s--%02d-%s.cfg' % (node, index, entry['module']), raw, kind='fragment', device=node, module=entry['module'])
+        manifest = {'schema': 2, 'kind': 'network-design', 'lab_id': lab['id'], 'lab_name': name,
+                    'generation_id': generation['id'], 'intent_revision': generation.get('intent_revision', ''),
+                    'topology_digest': generation.get('topology_digest', ''), 'engine_version': generation.get('engine_version', ''),
+                    'generated_at': generation.get('finished') or generation.get('created', ''), 'modules': list(generation.get('modules') or []),
+                    'devices': sorted({r['device'] for r in rows if r.get('device')}), 'node_names': [], 'restore_capable_nodes': 0, 'files': rows}
+        return {'manifest': manifest, 'files': files}
 
     def forget_lab(self, lab_id):
         """Remove a removed lab's generated plans (plain-text copies of its intent and configuration)."""

@@ -97,11 +97,14 @@ silently. The ledger of what is verified where is [docs/netlab-integration/LEDGE
 
 `design_intent.py` defines schema 1: `families`, `addressing` (the pools `loopback`, `p2p`, `lan`,
 `vrf_loopback`, `router_id` or a custom name; never `mgmt`), `modules` (from the supported list),
-`targets`, per-module settings at the global level, `nodes` (role, loopback, extra modules,
+`targets`, per-module settings at the global level, `nodes` (role, loopback, the device's own module list, which replaces the design's for that device: netlab's rule, so a device that cannot carry a module is left out of it,
 per-module settings, `vlans`, `vrfs`), `links` (prefix, pool, role, type, name, MTU, bandwidth,
 unnumbered, per-module settings and per-endpoint addresses and settings), `vlans`, `vrfs`,
 `interfaces` (endpoint overrides) and `allocations` (the ledger, written by the manager). Before anything else looks at a document, a recursive guard walks it: every key at every depth
 must be a plain identifier-like name that does not start with `_` and is not a refused name, every
+name the engine types as an identifier (a VRF, VLAN, address pool, named prefix or routing policy)
+follows netlab's own rule of up to 16 characters (letters, digits and underscores, starting with a
+letter or an underscore) so that a name the manager accepts never fails the plan later, every
 string must be safe text (no control characters, quotes, braces, semicolons, backslashes or
 backticks, because names and descriptions end up inside generated NOS text), and depth and size are
 bounded. Then two layers of validation run on every save, validate and generate:
@@ -120,6 +123,32 @@ bounded. Then two layers of validation run on every save, validate and generate:
 Every problem is reported at once as a list of `{path, message}`. A save carries the revision it was
 loaded from; a stale revision is refused (409) so an old tab cannot overwrite newer edits. The
 revision covers the student's content, not the ledger.
+
+## Feature families
+
+Every family the assignment names is in the schema and the capability model; the ledger
+`docs/netlab-integration/LEDGER.md` says per family and per image what is upstream support, what generates, what
+was applied live, and what the limit is. As of this release, on the four acceptance images:
+
+- **Proven live through the product** (generated, applied with *Apply to devices…*, read back on the device and
+  in its control plane; `docs/netlab-integration/evidence/live-apply-families.md`): IPv4/IPv6 addressing, OSPFv2/v3,
+  BGP (iBGP, eBGP, default origination), IS-IS (adjacencies on every link), VRFs (a VRF on the host links with its
+  loopback and VRF-scoped BGP), static routes (a discard route per router), route policies and prefix lists,
+  redistribution (IS-IS into BGP through a policy, connected into IS-IS), VLANs (an access port with its SVI on
+  cEOS and vJunos-switch), and the removal of each of those again.
+- **Generated with the real engine, not applied live on this lab** (the lab has no parallel links, no shared
+  segment with two routers and no second VTEP pair): link aggregation (`lag.members`), VRRP and anycast gateways,
+  VXLAN and EVPN, STP, BFD. They are offered with the capability level *generated, not yet tested live*.
+- **Refused by the capability model per image, before the engine runs**: EIGRP (none of the four), RIPv2 and DHCP
+  (cEOS only), VLANs, VXLAN, BFD, LAG, anycast (not on XRv9k), STP (cEOS only), SRv6 (XRv9k only); a plan that asks
+  one of those of a device that cannot do it names the device and generates nothing.
+- **Not yet in the schema**: the GRE and WireGuard plugins (`tunnel.*`), and protocol authentication (the
+  secret-reference model): `password` and key attributes stay refused by name.
+
+Two rules of the intent that the families rely on: a device's own `modules` list *replaces* the design's list
+for that device (netlab's rule), which is how a device that cannot carry a module is left out of it while the
+others keep it; and `links.<key>.lag.members` names the other member links of an aggregation carried by that
+link (the member ports are then netlab's, by index, and never links of their own).
 
 ## Generation
 
@@ -154,31 +183,101 @@ preview and download only.
 
 Every lab has a **Design** tab (beside Topology, Devices and Progress). Top to bottom:
 
-- **State and actions.** One line says where the design stands: *No design yet*, *Unsaved changes*, *Generating
-  the plan…*, *The design has problems*, *Plan ready to review*, *Plan is older than the design*, *The last plan
-  failed*, *The last plan was interrupted*, *Design engine unavailable* (with the engine's diagnostic). These are
-  the design's own words, never the devices' readiness or the saved-progress state. *Generate plan*, *Save design*
-  and *More* (download the design file, import one, *Renumber* to forget the pinned allocations, *Remove design*).
+- **State and actions.** One line says where the design stands: *No design yet*, *Design saved, no plan yet*,
+  *Unsaved changes* (in red when the browser could not keep the draft in its storage: save now), *Advanced JSON
+  is not valid*, *Generating the plan…*, *Plan progress unknown* (the progress check failed and five retries failed too; reload
+  or open the tab again), *The design has problems*, *Plan ready to review*, *Plan is older than the design*,
+  *The last plan failed*, *The last plan was interrupted*, *No design saved (earlier plans kept)* after
+  *Remove design*, *Design engine unavailable* (with the engine's diagnostic). These are the design's own words,
+  never the devices' readiness or the saved-progress state. *Generate plan* (unsaved changes are saved first,
+  and the page says so; text under Advanced that is not JSON blocks it), *Save design*, *Discard changes*
+  (back to the saved design; shown while there are unsaved changes) and *More* (download the saved design
+  file, import one, *Renumber* to forget the pinned allocations, *Remove design*; an item that cannot run now
+  says why underneath: no saved design yet, a plan being generated, or unsaved changes for the download and
+  the import).
 - **Design settings.** Address families; the loopback, point-to-point and shared-link pools with their allocation
   sizes; the protocols and services (OSPF, BGP, IS-IS, EIGRP, RIP, BFD, DHCP, VLANs, VRFs, link aggregation,
   spanning tree, first-hop gateway, VXLAN, EVPN, MPLS, segment routing, SRv6, routing policies and static routes)
-  with the common settings that appear when one is ticked (OSPF area, BGP AS and route reflector, IS-IS area and
-  type, gateway protocol); a devices table with each device's kind, profile and role (router, host, excluded) and
+  with the common settings that appear when one is ticked (OSPF area, BGP AS number and the route reflectors as
+  a checklist of the routers, IS-IS area and type, gateway protocol); a number typed as 0 or left blank is
+  refused by name, never replaced by a default; a devices table with each device's kind, profile and role (router, host, excluded) and
   the reason when a device cannot take part. Under **Advanced**, the whole design as JSON for everything the
   controls do not cover (per-link settings, VLAN and VRF objects, interface overrides, module options), a *Check*
   button that lists every problem with its path, and the allocation ledger read-only. Problems are shown above
   the Advanced section, in view.
-- **Plan.** The newest plan: its status, engine version and passes; errors when it failed; warnings; what it
+- **Plan.** The newest plan (or the one chosen under History, with *Back to newest plan*): its status, engine version and passes; errors when it failed; warnings; what it
   renumbered; the compatibility of every device in words; then per device the id, loopback, router id, the
   interfaces with their containerlab port, addresses, neighbours and protocol notes, the BGP sessions; and the
   links. A plan being generated can be cancelled.
 - **Files.** The generated configuration fragments per device, in netlab's order, each viewable, and one ZIP
-  download. They are not backups and are not applied by this page yet.
-- **History.** Every plan of the lab.
+  download. They are not backups; what reaches a device goes through *Apply to devices…* below.
+- **History.** Every plan of the lab, newest first; *View* on an earlier plan shows it, its files and its download
+  in the cards above (marked as an earlier plan) until *Back to newest plan*. After *Remove design* the plans
+  stay listed here for reference and are marked as belonging to a removed design.
+- **Apply to devices…** on the plan card, and the last apply's outcome under it; the owned settings per device
+  under Advanced. See the next section.
 
 Unsaved edits are kept in the browser per lab and restored on reload while the saved design has not moved on; a
 page that is behind the saved design is refused when it saves. The tab reads the design through
 `GET /api/labs/{id}/design` and polls it while a plan is being generated.
+
+## Applying a plan to devices
+
+*Apply to devices…* puts a generated plan onto the running devices the student selects, through the same
+direct node SSH the backups and *Apply to running lab* use, inside each NOS's own transaction with its own
+timed recovery, and never as a whole-configuration replacement. The contract with every rule and its reason
+is `docs/netlab-integration/PROVISIONING.md`; the live proofs on the four-node acceptance lab are
+`docs/netlab-integration/evidence/live-apply-{ceos,junos,iosxr}.md`. In the page:
+
+1. **Choose devices.** Every device the plan includes is offered; a support host, a blocked device or a kind
+   without a driver is listed with the reason. Applying is available for cEOS, vJunos-switch, cJunosEvolved
+   and XRv9k, the kinds proven live.
+2. **Review.** The manager connects to each chosen device, runs the whole transaction and aborts it, then
+   shows per device: the settings of the fragment it leaves out (hostname, logins, the management interface,
+   name mappings, netlab's `delete:` tags: identity and reachability stay the containerlab deployment's), the
+   device's own diff, the counts of added, removed and stale statements, the *expected changes* (an IOS XR
+   port coming out of `shutdown`, EOS `ip routing` switched on), the removal commands it will send, and the
+   *conflicts*: manual settings the plan would replace or remove. A device with conflicts cannot be applied to
+   until the student ticks *Take over these settings on this device*, which re-runs the review; the overwritten
+   settings then become the design's. A device that already matches is marked so and left alone. The review
+   is bound to a single-use token (ten minutes) that carries the plan, the devices, their current
+   configuration and the take-over choice. A plan older than the design or the topology cannot be applied:
+   the button says to generate it again.
+3. **Apply.** The recovery window (2–30 minutes, default 5) and an acknowledgement. The job first backs up
+   every chosen device (visible in the backups as `design-pre`); a device whose backup fails is not touched.
+   Then, per device: the configuration is read again and compared with the review (a change in between
+   refuses that device: *Changed since the review*), the removals and the generated configuration are
+   staged, the timed recovery is armed (EOS `commit timer`, Junos `commit confirmed`, IOS XR
+   `commit confirmed minutes` on a session kept open), a fresh connection proves management still works,
+   the manager confirms only its own pending change, reads the device back and saves (EOS `write memory`).
+   A post-change backup (`design-post`) records the result.
+4. **Outcomes** per device: *Applied and verified*, *Applied, read-back differs* (with what is missing or
+   remaining), *Already matched*, *Not changed* (with the reason), *Undone by the device* (the recovery timer
+   ran out before the manager could confirm, and the configuration from before was read back), *Outcome
+   unknown* (the device must be looked at; the next review reads it back and settles what is owned),
+   *Interrupted* (a manager restart: the device is read back at start-up; a pending change the manager can
+   still confirm is confirmed, an IOS XR trial is left to the device's timer). The job is *Applied*, *Partly
+   applied*, *Not applied* or *Needs attention*; a healthy label never hides a failed or unverified device.
+
+**Ownership.** The manager owns exactly the statements its own commits added to a device, kept per device in
+the lab's private ledger and shown under Advanced as *Owned settings*. The next apply removes only owned
+statements the plan no longer wants (a changed link prefix, a removed BGP peer, a dropped protocol), at the
+highest container it created when everything under it is its own (`no router ospf 1`, `delete protocols bgp`,
+one `no neighbor X` on EOS); a container that also holds manual configuration is kept and said so. Manual
+configuration beside the design survives every step; a manual change to an owned setting is a conflict, never
+silently overwritten. Removing the design's protocols leaves the addressing of the initial module, removing
+the design itself leaves the devices as they are: a later plan of the same lab still knows what it owns.
+
+## Exporting a plan to Git
+
+*Export plan to Git…* on the plan card saves a plan into the lab's Git repository through the same *Save
+progress* pipeline as a configuration save, as its own checkpoint folder (`…/checkpoints/<name>`, default
+`design-<plan id>`): the design file (`network-intent.yml`), `plan.json`, the netlab `topology.yml`, the endpoint
+`mapping.json` and every generated device file (`<device>--<nn>-<module>.cfg`), with a manifest that names them
+generated artifacts (`kind: network-design`). The rules of a save apply unchanged: the lab must be bound to a
+repository, the job saves on the VM first and stops for the mandatory review, the upload is the reviewed retry, one
+save at a time. A design export is never a backup and never a restore source: its manifest carries no device rows and
+no restore artifact, so it yields no restore candidate and *Apply to running lab* never offers it.
 
 ## API
 
@@ -199,10 +298,15 @@ All routes sit behind the same-origin guard; mutating requests carry a JSON body
 | `GET /api/labs/{id}/design/generations/{gid}/download` | A ZIP: the files (`nodes/<device>/<nn>-<module>.cfg`), the plan, the intent, the netlab topology, the mapping and a manifest of type `network-design-generation` (never a backup, never a restore candidate) |
 | `GET /api/labs/{id}/design/export` | The intent as `<lab>.network-intent.yml` |
 | `POST /api/labs/{id}/design/import` | An intent file (YAML or JSON, up to 512 KiB, no anchors) with the current `revision`; validated before it replaces the stored intent; the ledger in the file is ignored |
+| `POST /api/labs/{id}/design/generations/{gid}/review` | `{targets, takeover}`: the review transaction on each target (aborted), per device the report of the section above, and the single-use `token` |
+| `POST /api/labs/{id}/design/apply` | `{token, confirm_minutes, request_id, takeover, acknowledged: true}`: the apply job; idempotent by `request_id`; 409 when the review expired, the plan changed, conflicts are not taken over or another operation is busy |
+| `GET /api/labs/{id}/design/apply/jobs`, `GET /api/design/apply/jobs/{job_id}` | The lab's apply jobs, one job (public shape: per device status, stage, message, timeline, diff sample, read-back result; never the staged configuration) |
+| `POST /api/labs/{id}/design/generations/{gid}/git` | `{request_id, checkpoint, note, push}`: a Git save of kind `design` for the plan (its own checkpoint folder; 409 while a save is pending, for a plan that is not generated, or without a repository binding); the job then follows `/api/git/jobs/{id}` and its reviewed retry |
+| `GET /api/labs/{id}/design/ownership` | Per device the number of owned statements, the plan, the time and whether a read-back is pending, plus the statements themselves (masked) |
 
 `/api/state` carries per lab a `design` summary (presence, revision, label, modules, whether a plan is
-being generated, the newest generation's id and status, and whether it is stale); the intent and the
-generations never appear there.
+being generated, the newest generation's id and status, and whether it is stale) and the public apply jobs
+as `design_jobs`; the intent, the generations and the ownership ledger never appear there.
 
 ## Security boundary
 
@@ -220,6 +324,11 @@ generations never appear there.
   secret-reference model for protocol authentication exists; public views carry no engine output.
 - Existing credentials stay authoritative for every connection; the design never sets a device
   password, user or management address.
+- Applying goes over direct node SSH only (no helper, no VM path), inside the NOS's own transaction with its
+  timed recovery armed, after a mandatory backup, behind a review token bound to the reviewed configuration,
+  and it confirms only the manager's own pending change; the apply, the backups, the Git saves and the
+  restores exclude each other through `operation_busy`. Job records and events carry counts, masked
+  statements and controlled messages, never a staged configuration or raw device output.
 
 ## Engine and licence
 

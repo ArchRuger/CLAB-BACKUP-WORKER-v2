@@ -291,6 +291,7 @@ def check_docker(ctx):
         ctx.base_url = ''
         return
     ctx.add('http', 'PASS', 'Manager HTTP', 'Version response passed at ' + ctx.base_url + '. Workstation access is a separate check.')
+    check_design_engine(ctx)
 
 
 STORAGE_PROBE = '''import json, os
@@ -308,6 +309,20 @@ try:
 except Exception: pass
 print(json.dumps(r))
 '''
+
+
+def check_design_engine(ctx):
+    """The pinned network design engine inside the running image: available, and the version the manager expects."""
+    result, engine = ctx.http('/api/design/engine')
+    if not result.ok or not isinstance(engine, dict):
+        ctx.add('design-engine', 'WARN', 'Network design engine', 'The manager did not answer /api/design/engine: ' + (result.reason or 'unexpected response'),
+                'Rebuild the image with ' + ctx.command('install.sh') + '; planning stays unavailable until then.')
+        return
+    if engine.get('available'):
+        ctx.add('design-engine', 'PASS', 'Network design engine', 'netlab ' + str(engine.get('version') or '?') + ' inside the image; planning and Apply to devices are available.')
+    else:
+        ctx.add('design-engine', 'WARN', 'Network design engine', 'Unavailable: ' + str(engine.get('diagnostic') or engine.get('message') or 'no diagnostic')[:200],
+                'Rebuild the image with ' + ctx.command('install.sh') + '. Every other feature keeps working.')
 
 
 def check_storage(ctx, docker, mounts):

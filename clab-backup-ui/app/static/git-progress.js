@@ -592,7 +592,17 @@ function gitRememberJob(job){
  const context=gitContexts.get(job.lab_id);if(context)context.jobs=[job,...(context.jobs||[]).filter(item=>item.id!==job.id)];
  state.git_jobs=[job,...(state.git_jobs||[]).filter(item=>item.id!==job.id)];
 }
-function gitJobTitle(job){if(gitActiveStates.has(job.status))return 'Saving progress';if(['synced','unchanged','committed','review_pending'].includes(job.status))return 'Progress saved';if(['failed','capture_incomplete'].includes(job.status))return 'Save failed';if(job.target==='update')return 'Repository update';return 'Save needs attention';}
+// A design export (job.kind==='design', created by network-design.js's Export plan to Git…) is a Git
+// save like any other, but is never worded as "Save progress": it carries no captured device backup,
+// its checkpoint holds the plan and generated files, and it is never a restore source.
+function gitJobTitle(job){
+ const design=job.kind==='design';
+ if(gitActiveStates.has(job.status))return design?'Design export in progress':'Saving progress';
+ if(['synced','unchanged','committed','review_pending'].includes(job.status))return design?'Design export saved':'Progress saved';
+ if(['failed','capture_incomplete'].includes(job.status))return design?'Design export failed':'Save failed';
+ if(job.target==='update')return 'Repository update';
+ return design?'Design export needs attention':'Save needs attention';
+}
 async function gitShowJob(id,known){
  const job=known||await(await api('/git/jobs/'+encodeURIComponent(id))).json();gitRememberJob(job);gitDialogJob=id;
  closeDialogsExcept();
@@ -624,7 +634,8 @@ async function gitReviewJob(job){
  const waiting=gitPendingStates.has(job.status),decide=waiting&&gitNeedsReview(job),context=gitContexts.get(job.lab_id),host=(typeof statusHost==='function'&&statusHost(gitRepository(context?.binding).push_url))||'the online repository';
  const others=decide?gitLabJobs(job.lab_id,context).filter(item=>item.id!==job.id&&item.commit&&!item.pushed&&gitPendingStates.has(item.status)).length:0;
  closeDialogsExcept();
- const dialog=opDialog('git-diff-dialog',decide?'Review before uploading':'Review this save',`<p>What this save changed compared with the previous one. Configuration files may contain passwords or keys.</p>${gitDestinationMarkup(job.destination,job)}${decide?`<p class="op-notice" id="git-review-decision">This save is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${others?` Uploading also sends ${others} earlier ${others===1?'save':'saves'} that ${others===1?'is':'are'} still waiting on the VM.`:''}</p>`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${gitFilesDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?'<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button><button class="button primary" id="git-review-push">Upload these changes</button>':waiting?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
+ const design=job.kind==='design',title=design?(decide?'Review design export before uploading':'Review this design export'):(decide?'Review before uploading':'Review this save');
+ const dialog=opDialog('git-diff-dialog',title,`<p>What this ${design?'export':'save'} changed compared with the previous one. Configuration files may contain passwords or keys.</p>${gitDestinationMarkup(job.destination,job)}${decide?`<p class="op-notice" id="git-review-decision">This ${design?'export':'save'} is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${others?` Uploading also sends ${others} earlier ${others===1?'save':'saves'} that ${others===1?'is':'are'} still waiting on the VM.`:''}</p>`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${gitFilesDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?'<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button><button class="button primary" id="git-review-push">Upload these changes</button>':waiting?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
  gitFocusDialog(dialog);
  $('git-review-files').onclick=()=>opTask(dialog,()=>gitViewVersion(job.lab_id,{commit:job.commit,path:job.snapshot_path?'/'+job.snapshot_path:gitSnapshotPath(context?.binding,gitTargetPath(job))}));
  if($('git-review-cancel'))$('git-review-cancel').onclick=()=>{dialog.close();notify('Not uploaded. The save stays on the lab VM; upload it from Progress › Recent saves when you are ready.');};

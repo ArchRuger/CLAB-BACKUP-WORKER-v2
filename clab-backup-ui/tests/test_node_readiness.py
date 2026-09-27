@@ -1,5 +1,6 @@
 """Automatic NOS login readiness: probes, SSH gating, restarts and the one-time login test."""
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 import tempfile
 import threading
@@ -128,6 +129,62 @@ class ReadinessTests(unittest.TestCase):
             self.rescan()
             self.assertEqual(self.public()['nos_readiness']['status'], 'ready')
             self.assertEqual(len(self.test_jobs()), 1, 'a new boot cycle earns one new login test')
+
+    def test_a_login_proof_from_before_a_restart_epoch_is_dropped_and_the_uptime_reveals_an_external_restart(self):
+        key = ('lab', 'clab-demo-r1'); self.answers = {n['name']: 'reachable' for n in self.lab['nodes']}
+        # A probe in flight when a Restart device job is accepted: forget() during the probe starts a new epoch.
+        real = self.monitor.probe
+        def late(item, creds):
+            if item['name'] == 'clab-demo-r1': self.monitor.forget(key)
+            return real(item, creds)
+        self.monitor.probe = late
+        with patch.object(self.app.state.runner.pool, 'submit'):
+            self.monitor.scan()
+            with self.app.state.node_services.lock: checks = dict(self.app.state.node_services.checks)
+            self.assertNotIn(key, checks, 'the answer from before the epoch never marks the restarted device ready')
+            self.assertEqual(checks[('lab', 'clab-demo-r2')]['status'], 'reachable')
+            self.monitor.probe = real; self.rescan()
+            with self.app.state.node_services.lock: self.assertEqual(self.app.state.node_services.checks[key]['status'], 'reachable', 'the next probe counts')
+            self.assertEqual(self.public()['nodes'][0]['nos_login']['status'], 'ready')
+            # An external restart (VS Code, the CLI): the same container id, running throughout, but the runtime says it is 5 s old.
+            self.store.state['discovery']['checked_epoch'] = time.time() + 600
+            self.lab['nodes'][0]['runtime_status'] = 'Up 5 seconds'
+            self.answers['clab-demo-r1'] = 'booting'
+            self.rescan()
+            self.assertEqual(self.public()['nodes'][0]['nos_login']['status'], 'booting', 'the old proof is gone; the device must answer again')
+            self.assertEqual(self.public()['nodes'][1]['nos_login']['status'], 'ready', 'the neighbour keeps its proof')
+            # Once it answers again it is ready; a coarse or old uptime, or none, says nothing more.
+            self.answers['clab-demo-r1'] = 'reachable'; self.rescan(); self.assertEqual(self.public()['nodes'][0]['nos_login']['status'], 'ready')
+            for status in ('Up 2 hours', 'Up 3 days', '', 'Exited (0) 2 minutes ago', 'Up About an hour'):
+                self.lab['nodes'][0]['runtime_status'] = status; self.store.state['discovery']['checked_epoch'] = time.time() + 7200; self.rescan()
+                self.assertEqual(self.public()['nodes'][0]['nos_login']['status'], 'ready', status)
+            # A minutes value is floored by the runtime: a proof from just before that start is still trusted (a minute of margin).
+            self.store.state['discovery']['checked_epoch'] = time.time() + 130; self.lab['nodes'][0]['runtime_status'] = 'Up 2 minutes'; self.rescan()
+            self.assertEqual(self.public()['nodes'][0]['nos_login']['status'], 'ready', 'checked 130 s later, up 120 s: the start is not 60 s after the proof')
+            # The start is measured from the moment the discovery pass began, not from its end: a slow pass never
+            # turns a proof taken after the start into a "restart" (the review's reproducer: proven 1.5 s after the
+            # start, "Up About a minute" at 119.5 s, the pass ending 2.5 s later).
+            base = time.time(); proof = {'status': 'reachable', 'at': datetime.fromtimestamp(base + 1.5, timezone.utc).isoformat()}
+            slow = {'discovery': {'inspected_epoch': base + 119.5, 'checked_epoch': base + 122}}
+            self.assertFalse(self.monitor.restarted_since(slow, {'runtime_status': 'Up About a minute'}, proof))
+            self.assertTrue(self.monitor.restarted_since({'discovery': {'inspected_epoch': base + 300, 'checked_epoch': base + 302}}, {'runtime_status': 'Up 5 seconds'}, proof), 'a real restart 5 s before a pass is seen')
+            self.assertFalse(self.monitor.restarted_since({'discovery': {'checked_epoch': base + 122}}, {'runtime_status': 'Up About a minute'}, {'status': 'reachable', 'at': datetime.fromtimestamp(base + 61.5, timezone.utc).isoformat()}), 'without inspected_epoch the pass end is used, with the same margin')
+
+    def test_a_device_with_a_restart_job_reads_restarting_and_counts_as_booting(self):
+        self.assertEqual(summarize([{'status': 'ready'}, {'status': 'restarting'}]), {'status': 'booting', 'total': 2, 'ready': 1, 'booting': 1, 'failed': 0})
+        self.store.state['operations'] = [dict(id='op', lab_id='lab', action='restart-node', node='clab-demo-r1', node_label='r1', status='running')]
+        self.answers = {n['name']: 'reachable' for n in self.lab['nodes']}
+        with patch.object(self.app.state.runner.pool, 'submit'):
+            self.rescan()
+            nodes = self.public()['nodes']
+            self.assertEqual(nodes[0]['nos_login']['status'], 'restarting'); self.assertFalse(nodes[0]['ssh_ready'])
+            self.assertIn('containerlab restart --node', nodes[0]['nos_login']['message'])
+            self.assertEqual(nodes[1]['nos_login']['status'], 'booting', 'the lab is busy while the job runs, so no probe has run yet for the neighbour either')
+            self.assertEqual(self.public()['nos_readiness']['status'], 'booting')
+            self.store.state['operations'][0]['status'] = 'succeeded'
+            self.assertEqual(self.public()['nodes'][0]['nos_login']['status'], 'booting', 'after the job the device reads Starting until it answers again (no proof exists yet)')
+            self.rescan()
+            self.assertEqual([n['nos_login']['status'] for n in self.public()['nodes']], ['ready', 'ready'], 'the lab is free again: both devices are probed and answer')
 
     def test_a_refused_login_is_reported_only_when_it_persists_and_never_opens_ssh(self):
         self.answers = {'clab-demo-r1': 'failed', 'clab-demo-r2': 'reachable'}

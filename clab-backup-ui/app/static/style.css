@@ -167,6 +167,10 @@ a:hover { color: var(--accent-strong); }
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
+/* A visually hidden header text (.sr-only, absolutely positioned) inside a table that scrolls in its wrapper
+   must be positioned by its own cell: otherwise its static position, far to the right of a wide table, widens
+   the whole page at phone width. */
+.table-wrap th { position: relative; }
 
 /* --------------------------------------------------------------------------
    3. Typography & utilities
@@ -746,6 +750,8 @@ footer {
 .node-context-menu button:hover, .node-context-menu button:focus { background: var(--surface-2); outline: none; }
 .node-context-menu button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -3px; box-shadow: none; }
 /* disabled: mute the label and fade only the icon slot; the inline <small> reason stays at 5.51:1 */
+.node-context-menu button.danger { color: var(--danger); }
+.node-context-menu button.danger:hover:not(:disabled), .node-context-menu button.danger:focus:not(:disabled) { background: var(--danger-soft); color: var(--danger-strong); }
 .node-context-menu button:disabled { opacity: 1; color: var(--muted); cursor: not-allowed; }
 .node-context-menu button:disabled > span:not(.pill) { opacity: .55; }
 .node-context-menu button small { flex-basis: 100%; font-size: 12px; color: var(--muted); }
@@ -1371,6 +1377,10 @@ tr:last-child td { border-bottom: 0; }
 .node-actions .ssh-action { background: var(--accent); border-color: var(--accent); color: #fff; }
 .node-actions .ssh-action:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); }
 .node-actions .details-action { border-color: transparent; background: transparent; color: var(--accent-strong); }
+/* Restart device…: the one destructive per-device action, red like the menus' danger items. */
+.node-actions .danger-action { color: var(--danger); }
+.node-actions .danger-action:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger-strong); }
+.node-actions .danger-action:disabled { color: var(--muted); }
 .node-actions .details-action:hover:not(:disabled) { background: var(--accent-soft); }
 .ssh-action:not(.node-actions .ssh-action) { color: var(--accent-strong); }
 
@@ -1882,6 +1892,16 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 .diagram-properties input, .diagram-properties select, .diagram-properties textarea { width: 100%; min-width: 0; padding: 6px 8px; min-height: 32px; font-weight: 400; }
 .diagram-properties input[type=color] { height: 34px; padding: 2px; }
 .diagram-properties fieldset { border: 0; padding: 0; margin: 0; }
+/* The Design tab's route-reflector checklist: a labelled group inside the BGP settings, no box of its own. */
+.design-check-list { border: 0; padding: 0; margin: 10px 0 0; }
+/* The Advanced editor fills its card; the module checklist is a grid, so a module's settings (shown right
+   under the list) are never a screen away from its checkbox; a menu that would open off screen anchors left. */
+#design-advanced { width: 100%; box-sizing: border-box; }
+.design-module-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 14px; }
+.design-module-settings { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; }
+.design-module-settings label { display: inline-flex; flex-direction: column; gap: 4px; }
+.menu-list.menu-clamped { right: auto; left: 0; }
+.design-check-list legend { font-weight: 600; padding: 0; margin-bottom: 4px; }
 .diagram-properties legend { font-size: 12px; font-weight: 600; margin-bottom: 8px; }
 .diagram-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .diagram-properties textarea { resize: vertical; }
@@ -2346,7 +2366,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .banner-actions { margin-left: 0; }
   input[type=search] { width: 100%; }
   .table-wrap table { min-width: 730px; }
-  .table-wrap thead th { position: static; }
+  .table-wrap thead th { position: relative; }   /* not sticky on a narrow screen, but still the containing block of its hidden header text */
   .schedule-form { justify-content: flex-start; }
   .job summary { flex-wrap: wrap; }
   footer { flex-direction: column; gap: 8px; }
@@ -2510,3 +2530,18 @@ tr.diff-ctx .diff-marker { color: var(--muted); }
 @media (max-width: 600px) {
   .dialog-viewport { width: 100vw; height: 100vh; border-radius: 0; margin: 0; }
 }
+
+/* ---- Apply to devices (design_apply.py): the review/apply dialog on the plan card, one block per
+   device (choose, review, progress) and the owned-settings list under Advanced. ---- */
+#design-apply-dialog { width: min(920px, calc(100vw - 32px)); }
+.design-apply-device { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 12px 0; }
+.design-apply-device h4 { margin: 0 0 6px; }
+.design-apply-device h5 { margin: 10px 0 4px; font-size: 13px; }
+.design-apply-diff { max-height: 260px; overflow: auto; margin: 6px 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-size: 12px; line-height: 1.45; white-space: pre; }
+.design-apply-conflict { padding: 8px 10px; margin: 8px 0; border-left: 3px solid var(--warn); border-radius: 0 var(--radius) var(--radius) 0; background: var(--warn-soft); }
+.design-apply-conflict .checkbox-label { margin-top: 6px; }
+.design-apply-compat { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 6px 0 0; padding: 0; }
+.design-apply-owned summary { cursor: pointer; }
+.design-apply-owned { margin: 6px 0; }
+#design-apply-choose-body .checkbox-label { align-items: flex-start; padding: 4px 0; }
+#design-apply-choose-body .checkbox-label small { display: block; color: var(--muted); }

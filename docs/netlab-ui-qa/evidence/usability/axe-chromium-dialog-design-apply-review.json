@@ -1,0 +1,18 @@
+{
+ "violations": [
+  {
+   "id": "heading-order",
+   "impact": "moderate",
+   "help": "Heading levels should only increase by one",
+   "nodes": [
+    {
+     "target": ".design-apply-device:nth-child(1) > h4",
+     "html": "<h4>GTW-1 <span class=\"caption\">cisco_xrv9k</span></h4>",
+     "summary": "Fix any of the following:\n  Heading order invalid"
+    }
+   ]
+  }
+ ],
+ "incomplete": [],
+ "version": "4.13.0"
+}

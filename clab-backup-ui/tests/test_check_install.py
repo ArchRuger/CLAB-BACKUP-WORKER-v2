@@ -51,7 +51,7 @@ def discovery():
                      'auth': 'password', 'command_mode': 'helper', 'username': 'clab-discovery'}}
 
 
-def browse_router(folders=None, discovery_value=None):
+def browse_router(folders=None, discovery_value=None, engine_value=None):
     folders = folders or {ROOT: []}
 
     def request(path, payload=None, **kwargs):
@@ -66,12 +66,33 @@ def browse_router(folders=None, discovery_value=None):
             return check.Result(0), {'path': target, 'entries': folders[target]}
         if path == '/api/git/repositories':
             return check.Result(0), {'repositories': [], 'protocol': 'clab-manager-git-v1', 'version': VERSION}
+        if path == '/api/design/engine':
+            return check.Result(0), engine_value if engine_value is not None else {'available': True, 'version': '26.9', 'path': '/usr/local/bin/netlab', 'diagnostic': ''}
         return check.Result(reason='unexpected route'), None
     return request
 
 
 def by_id(ctx, ident):
     return next(record for record in ctx.checks if record['id'] == ident)
+
+
+class DesignEngineCheckTests(unittest.TestCase):
+    def test_an_available_engine_passes_with_its_version(self):
+        ctx = context()
+        ctx.http = Mock(side_effect=browse_router())
+        check.check_design_engine(ctx)
+        row = by_id(ctx, 'design-engine')
+        self.assertEqual(row['status'], 'PASS'); self.assertIn('netlab 26.9', row['detail'])
+
+    def test_a_missing_engine_warns_with_the_managers_diagnostic_and_keeps_the_rest(self):
+        ctx = context()
+        ctx.http = Mock(side_effect=browse_router(engine_value={'available': False, 'version': '', 'path': '', 'diagnostic': 'netlab is not installed in the image'}))
+        check.check_design_engine(ctx)
+        row = by_id(ctx, 'design-engine')
+        self.assertEqual(row['status'], 'WARN'); self.assertIn('not installed', row['detail']); self.assertIn('Every other feature keeps working', str(row))
+        ctx.http = Mock(side_effect=lambda *a, **k: (check.Result(reason='manager HTTP unavailable'), None))
+        check.check_design_engine(ctx)
+        self.assertEqual(by_id(ctx, 'design-engine')['status'], 'WARN')
 
 
 class InstallationCheckTests(unittest.TestCase):

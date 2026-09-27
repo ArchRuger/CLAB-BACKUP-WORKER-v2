@@ -1,3 +1,172 @@
+# Restart device and the netlab UI/UX campaign, part 1 — 1.30.48
+
+What was actually run for this release, by layer. Live evidence is on the development VM `clab-llm-dev2`
+(containerlab 0.79.0, Docker 29.8.1) against lab `restore-square` (one instance of each baseline image plus
+`host1`); browser evidence is Chromium 153.0.8010.12 (Playwright 1.63) unless said otherwise. Nothing here
+claims a run that did not happen; the per-run records are under `docs/netlab-ui-qa/evidence/`.
+
+## Static and unit
+
+- `python3 deploy/verify-release.py`: source and documentation at 1.30.48; `git diff --check` clean;
+  `node --check` on every changed script; `docs/maintenance-audit/tools/check_links.py`: 156 files, 0 problems.
+- Python: `python -m unittest discover -s tests -t tests` → 1701 tests OK (1 skipped), 222 s on the final tree (the baseline was 1686); new tests in
+  `test_lab_operations.py` (Restart device: selector fail-closed, exact single `--node`, container binding, run-time
+  refusal after redeploy/state change, every container naming shape, the manager's resolution and refusals, stale
+  consent after a lifecycle job and during the review's own helper calls, readiness invalidation, the exited-container
+  outcome), `test_node_readiness.py` (readiness epoch, the uptime hint and its slow-pass reproducer, the restarting
+  state), `test_discovery.py` (status line, uptime parsing, expected container names), `test_design_intent.py`
+  (BGP AS range, globally or per device; netlab's 16-character identifier rule), the XRv9k known-limit note.
+- Browser (`node --test tests/*.js`): 379 pass, 0 fail (the baseline was 347); new tests in `test_operations_ui.js`, `test_topology_menu_ui.js`,
+  `test_status_ui.js`, `test_readiness_ui.js`, `test_shell_ui.js`, `test_capture_ui.js` and `test_network_design_ui.js`
+  (one test per repaired probe P1…P10, U-01, the usability batch, the Design-tab state words and menu reasons).
+
+## Fixture and browser (real app on scratch state, real netlab engine, no VM)
+
+- `docs/netlab-integration/tools/check_design_ui.py`: 29 of 29 checks after the batch (it caught the one CSS
+  regression, a hidden header text widening the page at phone width, which was fixed), and 29 of 29 again on the final
+  tree (17:19 UTC).
+- `docs/netlab-ui-qa/tools/probes/design_probes.py` (the ten §6 reproductions): every "bug present" check of P1–P6,
+  P9 and P10 now fails on the fixed build (the bug is gone); P7 and P8 are covered by positive checks instead
+  (`tools/check_design_poll_retry.py` 9 of 9; the unit tests for the storage-failure warning and the leave guard).
+  Rerun on the final tree (17:24 UTC): 15 of the 18 failing checks are the bugs' own; the other three are a probe's
+  set-up steps the fixed product no longer allows (the loss it waited for, the Generate it expected unblocked, the
+  module box it could not untick: U-21, a notice now says why).
+- `docs/netlab-ui-qa/tools/usability_scan.py` and `evidence/usability/`: the independent review (Chromium and
+  Firefox 155.0; WebKit 26.6 could not launch on this VM); its findings U-01…U-20 are repaired in this release except
+  U-13 in full.
+- Coverage closure (`docs/netlab-ui-qa/tools/coverage_run.py`, an independent Sonnet agent, 16:53 UTC, fixture manager with the
+  real engine, Chromium 153.0.8010.12): all 123 rows of `coverage.json` executed with an assertion each: **112 PASS, 0 FAIL,
+  8 BLOCKED** (Apply review branches that need a reachable device; each row cites the live record of 1.30.45–1.30.47 that
+  covers it), **3 NOT RUN** (an allocation collision and a concurrent-job race, each covered by a named unit test).
+  `COVERAGE.md` has the Results section and a Result column; `evidence/coverage/results.json` and 87 screenshots.
+- The stress, race and longevity pass (`docs/netlab-ui-qa/tools/stress_design.py`, `evidence/stress/REPORT.md`, an
+  independent Sonnet agent, 1.30.47 working tree): core loop ×25 with 24 lab switches clean; 100 seeded mixed actions
+  clean; the 20-generation retention boundary exact; 30 minutes idle with a flat DOM; the cross-lab race (pass 2a)
+  clean in 20/20 replays; the out-of-order poll race (pass 2b, fault injection) reproduced 20/20 → QA-015, fixed,
+  and the same replays rerun on the fixed tree: 0/20 stale-wins, 80/80 checks; a 64-character VRF name accepted by the manager and refused by the engine → QA-016, fixed
+  (unit test, and the stress tool's pass 5 rerun on the fixed tree with the real engine: 43/43, the 17-character
+  name refused at Save in the manager's words, the 16-character one generated).
+- Adjacent workflows on the same tree, each on a fresh fixture: `docs/redesign/tools/verify_after.py` 0 failures (its
+  device-menu expectation now includes *Restart device…*), `docs/lab-builder/tools/student_workflow.py` 0 failures,
+  `docs/ui-review-001/tools/check_ui001/002a/002b/003/003b/004/006/007ab/008b` pass. `check_ui005`, `check_ui007c`
+  and `check_ui008a` fail on this tree and identically on the untouched HEAD checkout `3194ec4`: pre-existing tooling
+  debt of that stream (TOOL-001 in `DEFECTS.md`), not a regression.
+
+## Live (development VM, deployed product, real devices)
+
+- Deployed at 1.30.48 with `sudo bash deploy/start-manager.sh --manager-only` (image rebuilt, the discovery, operations and
+  Git helpers refreshed and verified at 1.30.48), then `sudo bash deploy/check-install.sh`: PASS 62, FAIL 0, WARN 1 (the folder
+  coverage cap of 20 folders), INFO 4. The browser Wireshark stack was not rebuilt (unchanged in this release; its container
+  keeps the image it had).
+- Restart device through the deployed product (`docs/netlab-ui-qa/tools/check_restart_device.py`, real clicks on both
+  entry points, the stopped path, a browser CLI and a new capture): cEOS 66/66; cJunosEvolved 70/73 then 50/51 (the
+  first run's stalled second boot and the capture port mapping, both recorded); vJunos-switch: the first run executed the restart and lost the device (its launcher cannot start the container a
+  second time, QA-014); the rerun on the fixed build reports the job *failed* with the reason and *Redeploy the lab*
+  (26 checks, 7 of them the expected failures of that image); XRv9k 75/75 (three restarts of one container, 2 links
+  restored each, *Ready* after 11.2, 5.1 and 5.1 min), but the independent traffic probe showed the path through it never
+  came back: the first restart after a deploy boots the image from a fresh disk and the device returns with its factory
+  configuration (QA-017, the mechanism read in the container's launcher; the first attempt to prove what a later restart keeps
+  ran into QA-018 and the proof was completed on the final build, below). The review now names that
+  limit; seen live on the final build (1.30.48, redeployed lab, configuration A committed at 16:34): the review carried the
+  XRv9k note in all three restarts (`xrv9k-2026-09-27T165016+0000.json` 27/27, `xrv9k-2026-09-27T170416+0000.json` 52/52,
+  map and Devices entry points), and after the first restart the loopback and OSPF were gone again (read-back at 17:02).
+  Whether a later restart keeps what is configured after the first one: **proven on the final build**: configuration A applied at 17:17:43 and read back on the device (Loopback0 present) before the restart; one restart from the map at 17:19 (record `xrv9k-2026-09-27T171848+0000.json` (27/27, the review named the limit; job 17:18:53–17:19:26, `2 links restored`, *Ready* 17:24:27)); read-back at 17:25: `interface Loopback0 … ipv4 address 10.255.0.4`, OSPF FULL with 10.255.0.3 and 10.255.0.1, Loopback0 Up; the disk listing shows the boot chained a new overlay on the previous one (`…-overlay-overlay-overlay-overlay.qcow2` on `…-overlay-overlay-overlay.qcow2`). So only the first restart after a deploy loses the configuration; what is configured after it survives the next restarts.. Independent traffic probes per run (`traffic_probe.py`), the reference command on `host1`,
+  the `docker stop` limitation, all in `RESTART-PARITY.md`.
+- Adversarial (`tools/check_restart_two_tabs.py`, `host1`, final build): 13 of 13 (a double click makes one job; an older
+  tab's review is refused after the restart; two simultaneous confirmations start at most one job). Persistence markers on
+  cEOS (`tools/persistence_markers.py`, independent SSH read-back): the saved marker survived the product-driven restart,
+  the running-only marker did not, nothing was saved by the manager.
+- Not run live: the Containerlab VS Code extension's own UI (only its source at `6df8e96` and the identical CLI
+  command were exercised); a paused container; WebKit.
+
+# Network design, part 5: Git export, health check, final report — 1.30.47
+
+Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.46 (`0439abb`, CI green). Routing observed: a
+Sonnet worker (observed `claude-sonnet-5`) wrote the export tests, another the export dialog; the Opus
+`risk-reviewer` (observed `claude-opus-5-5`) reviewed the export; the lead (Fable) wrote the backend, the health
+check, the records and ran the live and browser steps. Per task: `docs/netlab-integration/TESTS.md` chunk 5.
+
+- **Risk review (Opus):** two passes on the export. The first found seven items, three of them must-fix: a fresh timestamp made every export fail its own digest check; the unchanged helper wrote `latest/` for every checkpoint publish, so an export would have replaced the lab's configuration snapshot with a plan; the current intent was exported instead of the plan's own; a lost helper answer left the job `failed`; a looser request id than the helper's; docs ahead of the code; a skipped device still listed. All fixed (the helper gained its one rule: a `network-design` manifest goes to its own checkpoint folder only, the two kinds never share a folder). The second pass verified every fix, could not get a design into `latest` or `baseline` by any path, and found two should-fix items (a retry after a lost answer could end `failed`; a renamed lab broke a pending export) plus hardening (any other manifest `kind` refused; the helper tests as a plain test case; the guide's restore wording), all applied.
+- **Unit (this checkout, `netlab` on PATH):** `python -m unittest discover -s tests -t tests` 1686 OK (1 skipped, 217 s);
+  `test_design_export_git.py` 24 (the snapshot's files and manifest, the route's refusals and idempotency,
+  the execution against a fake helper, the reviewed retry, the restore's refusal of a design version),
+  `test_check_install.py` 40 (+2: the engine item). `node --test tests/*.js` 347 pass
+  (`test_network_design_ui.js` 64, +7 for the export dialog; `test_git_progress_ui.js` 41, +2 for the *Design export* labels). `node --check`, `verify-release.py`, `check_links.py`, `git diff --check`.
+- **Live, the deployed product (`docs/netlab-integration/evidence/live-export-git.md`):** three runs of `check_design_export_ui.py` against the rebuilt manager and the lab bound to the QA repository: the first refused by an empty generated fragment (now left out), the second failed on the helper's per-repository lock held by the page's history read (helper calls from one manager are now serialised), the third 12 of 12 checks: the dialog, the job of kind `design`, the mandatory review it stopped at, the upload through the review's own button, the repository history listing the checkpoint with a `network-design` manifest and no restore candidate. The VM checkout confirms the commit touches only `checkpoints/design-…/` (26 files) and `latest/` is untouched; the commit is on the remote.
+- **Browser:** `check_design_export_ui.py` as above (Chromium 153; screenshots `evidence/shots/design-export-0{1,2,3}.png`); the Design tab and apply checks of 1.30.46 unchanged.
+- **Fresh install in a nested VM (`docs/technical-audit/tools/fresh_install_vm.py`, Ubuntu 24.04 cloud image,
+  isolated from the host's manager):** started after this commit from its own `git archive`; the result is recorded in `docs/netlab-integration/evidence/fresh-install-1.30.47.md` by the follow-up evidence commit (a nested VM cannot install a commit that does not exist yet).
+- **Health check on the development VM:** 61 PASS, 0 FAIL, 1 WARN (folder coverage) after the helpers were
+  refreshed to the running release; the new engine item passes with `netlab 26.9 inside the image`.
+
+# Network design, part 4: feature families — 1.30.46
+
+Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.45 (`7bb45af`, CI green). Routing observed: two
+Sonnet workers (observed `claude-sonnet-5`) wrote the real-engine family tests and one wrote the guided tables; the
+lead (Fable) wrote the schema, adapter and driver rules, ran every live step and the records. Per task:
+`docs/netlab-integration/TESTS.md` chunk 4.
+
+- **Live, the deployed product on `restore-square` (`docs/netlab-integration/evidence/live-apply-families.md`):**
+  the lab redeployed to containerlab's startup configurations and the product's OSPF + BGP plan applied to all four
+  routers first, so the product owned every statement. Then, each through `PUT …/design`, a generation and
+  `POST …/apply` on all four routers, read back with `nodecli.py`: E1 IS-IS instead of OSPF (adjacencies up on every
+  link, iBGP kept), E2 a VRF on the host links plus a static discard route per router, E3 prefix list, route policy,
+  redistribution both ways and a default-route origination, E4 VLAN access ports with SVIs on cEOS and
+  vJunos-switch with XRv9k left out through its module list, E5 VXLAN/EVPN: applied and verified on cEOS,
+  refused by vJunos-switch at its own `commit check` (job `partial`, device untouched), E6 the revert. Every
+  applied device `verified` and saved; every removal at the right level.
+- **Real engine, unit (this checkout, `netlab` on PATH):** `python -m unittest discover -s tests -t tests`
+  1656 OK (1 skipped, 202 s); the family files: `test_design_families_routing.py` 20, `test_design_families_l2.py`
+  25 (IS-IS, static routes, VRFs, BGP policy, BFD; VLANs, LAG, gateways, VXLAN/EVPN, STP on the four profiles);
+  `test_design_intent.py` 140, `test_design_adapter.py` 72, `test_network_design.py` 61, `test_design_junos.py` 28.
+  `node --test tests/*.js` 338 pass (`test_network_design_ui.js` 57, of which 13 are new for the guided tables). `node --check`, `verify-release.py`,
+  `check_links.py`, `git diff --check`.
+- **Browser, fixture (`docs/netlab-integration/tools/check_design_ui.py`, Chromium 153):** `check_design_ui.py` extended with the guided tables (a VRF with its loopback, a link attached to it and a static route entered through the form, mirrored into the JSON, saved, generated with the real engine: the files card then lists `vrf` and `routing`): 29 of 29 checks, 0 console errors, 0 page errors (report `docs/netlab-integration/evidence/browser-design-ui.md`). A focused *Add VRF* button used to block the form's re-render (found by this run, fixed in `designFormFocused`).
+- **Not done:** LAG, VRRP/anycast, STP and BFD were not applied live (the lab has no parallel links and no shared
+  segment with two routers); MLAG untested; no fresh-VM install of this release.
+
+# Network design, part 3: Apply to devices — 1.30.45
+
+Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.44 (`64c954e`, CI green). Routing observed: the lead
+(Fable) wrote the drivers, the ownership algebra, the provisioning filter, the apply service and ran every live step;
+Sonnet workers (observed `claude-sonnet-5`) wrote the fake-channel tests of the three drivers, the apply-service tests,
+the apply UI and its tests, the Playwright tool, the LEDGER/TESTS and DECISIONS/PICKUP drafts, the provisioning
+hardening and the UI review fixes; the fourth risk-review pass ran on the Opus `risk-reviewer` (observed
+`claude-opus-5-5`). Per task: `docs/netlab-integration/TESTS.md`.
+
+- **Live, cEOS 4.35.0F (`docs/netlab-integration/evidence/live-apply-ceos.md`):** ten steps through the real
+  service path from a scratch `create_app` (real Ansible backups; never the deployed data), each read back
+  independently with `nodecli.py`: create, no-op re-apply, a manual conflict blocking and its take-over, a
+  renumbered link, a removed BGP peer, both modules dropped with a manual peer kept under `router bgp`, an
+  unconfirmed apply killed after arming and undone by the device's own timer (`rolled_back`, ledger untouched), a
+  manager restart inside the recovery window (confirmed, `verified`), the module drop again with the new EOS
+  rules, and re-creation. Manual `Loopback99` and the manual peer survived every step.
+- **Live, Junos (`evidence/live-apply-junos.md`):** vJunos-switch 23.2R1.14 and cJunosEvolved 26.2R1.7-EVO: review,
+  apply of both at once (`commit confirmed` with the design's comment, confirmed by `commit check`, verified), a
+  removed peer, both modules dropped at the top-level containers, re-creation. Both display-set forms proven
+  identical first.
+- **Live, IOS XR 24.3.1 (`evidence/live-apply-iosxr.md`):** review, apply through the held session (armed on the
+  kept session, confirmed from a fresh connection, OSPF neighbours FULL), no-op, the BGP AS change refused by the
+  device in one commit (clean failure, nothing changed), both modules dropped, re-creation on all four routers.
+- **Live, the deployed product (`evidence/live-apply-product.md`):** the image rebuilt from this tree and recreated
+  on the development VM; reviews of all five devices through the real API (conflicts for what another manager
+  had put there, host1 ineligible), an apply with take-over on xrv9k, the take-over of an exclusive sibling
+  proven after its fix, a review answering 409 during the lab's scheduled backup.
+- **Browser (`evidence/browser-design-apply-ui.md`, `docs/netlab-integration/tools/check_design_apply_ui.py`,
+  Chromium 153):** run 1 reviewed `ceos` without applying (14 of 14 checks: the dialog, the disabled support host, no overflow at 1280×900, the counts and the 16 protected settings as the API returned them, the diff, *Apply* gated on the acknowledgement, closing without applying); runs 2–4 applied from the dialog (run 2 `ceos verified` from the real progress view, the device's session committed and saved; two tool defects fixed in between; run 4 16 of 16 checks with a no-op apply and *Owned settings* under Advanced).
+- **Risk review, pass four (Opus):** three must-fix and six should-fix findings, all applied and pinned
+  (PROVISIONING.md §8 "Fourth review pass"); the reviewer could not break the secret stripping, the confirmation
+  identity per platform, the token bindings, the rollback reporting, the "nothing unowned is removed" rule or
+  the frontend escaping.
+- **Unit (this checkout, `netlab` on PATH):** `python -m unittest discover -s tests -t tests` 1606 tests, OK (1 skipped) once this section led the file (the release-consistency test is the only one that reads it); the new
+  files: `test_design_provision.py` 12, `test_design_ownership.py` 26, `test_design_eos.py` 26,
+  `test_design_junos.py` 27, `test_design_iosxr.py` 31, `test_design_apply.py` 45 (FastAPI `TestClient`
+  against `create_app`, fake driver and runner). `node --test tests/*.js` 325 pass
+  (`test_network_design_ui.js` 44, of which 18 are new for the apply dialog, progress, ownership, last-apply line and the review-pass fixes). `node --check`, `verify-release.py`, `check_links.py`,
+  `git diff --check`, `bash -n` on no changed script (none changed).
+- **Not done:** no fresh-VM install of this release; the lab builder bundle is untouched; the browser check at
+  phone width covers the dialog's overflow only.
+
 # Network design, part 2: the Design tab — 1.30.44
 
 Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.43 (`b96cb89`, CI green). The Design tab

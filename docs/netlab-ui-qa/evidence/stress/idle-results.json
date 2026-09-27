@@ -1,0 +1,99 @@
+{
+  "pass": "idle",
+  "started": "2026-09-27T14:48:01+00:00",
+  "finished": "2026-09-27T15:18:12+00:00",
+  "minutes": 30.0,
+  "interval_minutes": 5.0,
+  "chromium": "153.0.8010.12",
+  "data_dir": "/tmp/stress-idle-gyuu7i4r",
+  "port": 8102,
+  "checkpoints": [
+    {
+      "label": "t0",
+      "elapsed_min": 0.0,
+      "fetches_hidden_delta": 0,
+      "fetches_visible_10s_delta": 4,
+      "nodes": 1436,
+      "memory_used": 10000000,
+      "state_text": "Unsaved changes Unsaved changes",
+      "title": "ospf-basics",
+      "marker_present": true
+    },
+    {
+      "label": "t5",
+      "elapsed_min": 5.0,
+      "fetches_hidden_delta": 144,
+      "fetches_visible_10s_delta": 6,
+      "nodes": 1436,
+      "memory_used": 10000000,
+      "state_text": "Unsaved changes Unsaved changes",
+      "title": "ospf-basics",
+      "marker_present": true
+    },
+    {
+      "label": "t10",
+      "elapsed_min": 10.0,
+      "fetches_hidden_delta": 144,
+      "fetches_visible_10s_delta": 6,
+      "nodes": 1436,
+      "memory_used": 10000000,
+      "state_text": "Unsaved changes Unsaved changes",
+      "title": "ospf-basics",
+      "marker_present": true
+    },
+    {
+      "label": "t15",
+      "elapsed_min": 15.0,
+      "fetches_hidden_delta": 144,
+      "fetches_visible_10s_delta": 6,
+      "nodes": 1436,
+      "memory_used": 10000000,
+      "state_text": "Unsaved changes Unsaved changes",
+      "title": "ospf-basics",
+      "marker_present": true
+    },
+    {
+      "label": "t20",
+      "elapsed_min": 20.0,
+      "fetches_hidden_delta": 144,
+      "fetches_visible_10s_delta": 6,
+      "nodes": 1436,
+      "memory_used": 10000000,
+      "state_text": "Unsaved changes Unsaved changes",
+      "title": "ospf-basics",
+      "marker_present": true
+    },
+    {
+      "label": "t25",
+      "elapsed_min": 25.0,
+      "fetches_hidden_delta": 144,
+      "fetches_visible_10s_delta": 6,
+      "nodes": 1436,
+      "memory_used": 10000000,
+      "state_text": "Unsaved changes Unsaved changes",
+      "title": "ospf-basics",
+      "marker_present": true
+    },
+    {
+      "label": "t30",
+      "elapsed_min": 30.0,
+      "fetches_hidden_delta": 144,
+      "fetches_visible_10s_delta": 6,
+      "nodes": 1436,
+      "memory_used": 10000000,
+      "state_text": "Unsaved changes Unsaved changes",
+      "title": "ospf-basics",
+      "marker_present": true
+    }
+  ],
+  "summary": {
+    "checks_total": 21,
+    "checks_failed": 0,
+    "failed": [],
+    "console_errors_total": 0,
+    "console_errors_unhandled": [],
+    "page_errors": [],
+    "requests_failed": [],
+    "anomalies": []
+  }
+}

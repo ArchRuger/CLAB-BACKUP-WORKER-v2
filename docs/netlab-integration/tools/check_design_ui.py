@@ -123,6 +123,34 @@ def main():
             advanced = page.locator('#design-advanced').input_value()
             r.check('the advanced editor shows the saved intent with the guided values', '"bgp"' in advanced and '65010' in advanced and '"ospf"' in advanced, advanced[:200])
             r.shot('03-saved')
+            # The guided tables of 1.30.46: a VRF, a static route and a link's VRF through the form, mirrored into the JSON.
+            for table in ('design-vrfs', 'design-vlans', 'design-links', 'design-static'):
+                r.check('the %s table is rendered' % table, page.locator('#' + table).count() == 1)
+            page.click('#design-vrf-add')
+            page.wait_for_selector('[data-design-vrf-key]', timeout=5000)
+            name_box = page.locator('[data-design-vrf-key] [data-design-vrf-field="name"]').first
+            name_box.fill('red'); name_box.dispatch_event('change')
+            page.locator('#design-view h2').first.click()   # the row is keyed by its name once the field is left
+            page.wait_for_selector('[data-design-vrf-key="red"]', timeout=5000)
+            loop_box = page.locator('[data-design-vrf-key="red"] [data-design-vrf-field="loopback"]').first
+            if not loop_box.is_checked(): loop_box.check()
+            link_vrf = page.locator('[data-design-link-key] [data-design-link-field="vrf"]').first
+            link_vrf.select_option('red'); link_vrf.dispatch_event('change')
+            page.click('#design-static-add')
+            page.wait_for_selector('[data-design-static-key]', timeout=5000)
+            prefix_box = page.locator('[data-design-static-key] [data-design-static-field="prefix"]').first
+            prefix_box.fill('192.0.2.0/24'); prefix_box.dispatch_event('change')
+            page.locator('#design-view h2').first.click()
+            page.wait_for_timeout(400)
+            advanced = page.locator('#design-advanced').input_value()
+            r.check('a VRF added through the table reaches the JSON with its loopback', '"red"' in advanced and '"loopback": true' in advanced, advanced[:300])
+            r.check('the link table attaches the link to the VRF', '"vrf": "red"' in advanced, advanced[:300])
+            r.check('a static route added through the table reaches the JSON', '"static"' in advanced and '192.0.2.0/24' in advanced and '"discard": true' in advanced, advanced[:300])
+            r.check('the vrf and routing modules were switched on with the tables', '"vrf"' in advanced and '"routing"' in advanced, advanced[:300])
+            page.click('#design-save')
+            page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Unsaved")', timeout=10000)
+            r.check('the design with the guided tables saves without problems', r.text('#design-problems').strip() == '', r.text('#design-problems'))
+            r.shot('03b-tables')
             # Generate with the real engine.
             page.click('#design-generate')
             r.wait_state('Generating', timeout=10000)
@@ -134,7 +162,7 @@ def main():
             compat = r.text('#design-compatibility')
             r.check('compatibility says generated, not live tested', 'not yet tested live' in compat.lower() or 'not live' in compat.lower(), compat[:300])
             files = r.text('#design-files')
-            r.check('the files card lists initial, ospf and bgp for a device', all(m in files for m in ('initial', 'ospf', 'bgp')), files[:300])
+            r.check('the files card lists initial, ospf, bgp, vrf and routing for a device', all(m in files for m in ('initial', 'ospf', 'bgp', 'vrf', 'routing')), files[:300])
             r.check('the ZIP download link points at the generation', '/design/generations/' in (page.locator('#design-download').get_attribute('href') or ''), page.locator('#design-download').get_attribute('href'))
             r.shot('04-plan')
             page.locator('#design-files button', has_text='View').first.click()

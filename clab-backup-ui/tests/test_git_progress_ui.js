@@ -499,3 +499,32 @@ test('E1: pending list rows read as label · when, with the status as a secondar
  assert.match(html,/<strong>Saved on this VM — upload needs attention<\/strong>/,'an older job without a label falls back to the status sentence');
  assert.match(html,/<span class="pill \w+">Saved on this VM — upload needs attention<\/span>/);
 });
+// A design export (job.kind==='design', created by network-design.js's Export plan to Git…) is never
+// worded as "Save progress": it carries no captured device backup and is not a restore source.
+test('a design export job window is titled "Design export…"; an ordinary save keeps its own wording',()=>{
+ const context=makeContext();
+ const design={id:'d',lab_id:'lab',kind:'design',status:'queued',target:'checkpoint',checkpoint:'design-abc'};
+ assert.equal(context.gitJobTitle(design),'Design export in progress');
+ assert.equal(context.gitJobTitle({...design,status:'review_pending'}),'Design export saved');
+ assert.equal(context.gitJobTitle({...design,status:'committed'}),'Design export saved');
+ assert.equal(context.gitJobTitle({...design,status:'failed'}),'Design export failed');
+ assert.equal(context.gitJobTitle({...design,status:'push_pending'}),'Design export needs attention');
+ assert.equal(context.gitJobTitle({id:'s',status:'queued',target:'latest'}),'Saving progress');
+ assert.equal(context.gitJobTitle({id:'s',status:'committed',target:'latest'}),'Progress saved');
+});
+test('the review dialog for a design export says "Design export…", not "Save progress"; an ordinary save keeps its own title',async()=>{
+ const context=makeContext(),elements=new Map(),dialogs=new Map();
+ const element=()=>({onclick:null,innerHTML:'',listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},querySelectorAll:()=>[]});
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;context.opTask=async(dialog,fn)=>fn();
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
+ context.json=async endpoint=>endpoint.endsWith('/compare')?{files:[]}:{};
+ const pending={id:'d',lab_id:'lab',kind:'design',status:'review_pending',target:'checkpoint',checkpoint:'design-abc',commit:'c'.repeat(40),created:'2026-09-11T12:00:00Z'};
+ await context.gitReviewJob(pending);
+ assert.equal(dialogs.get('git-diff-dialog').title,'Review design export before uploading');
+ assert.match(dialogs.get('git-diff-dialog').html,/What this export changed/);
+ await context.gitReviewJob({...pending,status:'synced',pushed:true});
+ assert.equal(dialogs.get('git-diff-dialog').title,'Review this design export');
+ const save={id:'s',lab_id:'lab',status:'review_pending',target:'latest',commit:'c'.repeat(40),created:'2026-09-11T12:00:00Z'};
+ await context.gitReviewJob(save);
+ assert.equal(dialogs.get('git-diff-dialog').title,'Review before uploading');
+});

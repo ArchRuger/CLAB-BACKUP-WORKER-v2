@@ -76,7 +76,7 @@ DIFF_MAX_LINES = 400
 # keys after `localized`, `auth`, `priv` or `encrypted` (`snmp-server user u g v3 localized <engine> auth sha <key>
 # priv aes <key>`), SSH public keys follow `authentication` (Junos) or `sshkey` (EOS).
 SECRET_WORD = re.compile(r'(?i)\b(secret|encrypted-password|password|passphrase|authentication-key|pre-shared-key|'
-                         r'community|key-string|key-chain|key|md5|sha|sha1|sha256|sha512|hash|certificate|private|'
+                         r'(?<!send-)community|key-string|key-chain|key|md5|sha|sha1|sha256|sha512|hash|certificate|private|'
                          r'encrypted|localized|auth|authentication|priv|sshkey|psk)\b')
 
 

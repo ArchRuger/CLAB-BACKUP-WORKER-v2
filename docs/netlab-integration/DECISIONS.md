@@ -185,13 +185,20 @@ first pass' outcome is in VALIDATION.md for 1.30.43, the second and third in the
   with the NOS's own timed recovery, a fresh reconnect before confirmation (IOS XR confirms only from the
   arming session), a mandatory pre-change backup through the Runner, per-node outcomes (confirmed, reverted,
   failed, interrupted, unknown) and restart reconciliation, reusing the direct node-SSH path, credential
-  precedence, the shell helpers and the scrubbing that restore already has.
+  precedence, the shell helpers and the scrubbing that restore already has. *Superseded in its naming and
+  filled in with the mechanics by §8 (milestone D, implemented and live-proven 2026-09-27): the provisional
+  `design_drivers.py` became `design_provision.py` (filtering) plus one module per platform (`design_eos.py`,
+  `design_junos.py`, `design_iosxr.py`) and the pure algebra `design_ownership.py`, orchestrated by
+  `design_apply.py`.*
 - D4.4 Ownership: the manager persists, per target, the exact statements a generation added (the set of
   design-owned statements in the platform's comparable form), so a later generation can remove what it no
   longer generates (an address, a BGP peer, a protocol instance, a VRF) statement by statement, and never
   deletes a whole hierarchy to simplify reconciliation. A manual statement that conflicts with a managed one
   blocks with an explanation or needs an explicit reviewed ownership decision. A full replacement route, if
-  ever offered, needs an explicit choice, a complete candidate and the restore-grade contract.
+  ever offered, needs an explicit choice, a complete candidate and the restore-grade contract. *Refined by
+  §8.2–§8.4: ownership is computed as set differences between device-rendered snapshots, never by parsing the
+  fragment or a NOS diff, and removal happens at the highest created ancestor whose subtree is entirely owned
+  and stale, not leaf by leaf.*
 - D4.5 The apply job joins the existing coordination: `operation_busy` (a new busy family), the Runner's
   single worker for its backups, lifespan close and interrupted-job reconciliation at startup, `Store.event`
   with controlled metadata only, and public serialisers that strip secrets and candidates.
@@ -212,6 +219,18 @@ first pass' outcome is in VALIDATION.md for 1.30.43, the second and third in the
   generated artifacts, never as backups); ordinary *Save progress* is unchanged. Imports validate schema,
   sizes, hashes and artifact types. Publication of a sidecar on the VM, if needed, goes through a bounded
   helper action with the same guarantees as `publish`/`revise` (D6.2, provisional).
+  *Implemented in 1.30.47 as a Git save of kind `design`* (`git_progress.export_design`,
+  `NetworkDesign.design_snapshot`): the plan's files go to the lab's repository as their own checkpoint folder
+  through the `publish` request of the Git helper (plain file names, sizes and digests checked twice), with the
+  same mandatory review before any upload and the same one-save-at-a-time guard; the manifest carries no device
+  rows and no restore artifact, which is what keeps such a version out of the restore's candidates without a
+  change to the restore. The helper gained one rule (its only change): a manifest of kind `network-design` is
+  written to its own checkpoint folder only, never to `latest` or `baseline` (an ordinary checkpoint save also
+  refreshes `latest`, which would have replaced the lab's configuration snapshot with a plan: found by the Opus
+  review), and the two kinds never share a folder. The exported intent is the plan's own (`intent.json` of the
+  generation), stamped with the plan's time, so the export is byte-identical at creation and at execution. D6.2
+  stays provisional: the design lives in the manager's state and in Git; a VM-side sidecar was not needed for any
+  workflow of milestones D and E.
 
 ## 7. Routing
 
@@ -220,3 +239,179 @@ first pass' outcome is in VALIDATION.md for 1.30.43, the second and third in the
   consequential designs and reviews (ownership and removal semantics, candidate transactions, security
   boundaries, host helper changes) to Opus (`claude-opus-5-5`, the project's `risk-reviewer`). Requested and
   observed models are recorded per task in TESTS.md.
+
+## 8. Provisioning: milestone D (safe apply to devices, implemented and live-proven 2026-09-27)
+
+The full contract with every rule, its platform shapes and the review findings is
+[PROVISIONING.md](PROVISIONING.md); this section records only the decisions and why, each with the evidence
+that settled it. Live evidence: `evidence/live-apply-{ceos,junos,iosxr}.md`, run on `restore-square`. These
+decisions refine D4.3 and D4.4 (noted there) rather than replace them.
+
+- D8.1 A generated fragment is merged into the running configuration inside the NOS's own transaction
+  (EOS configuration session, Junos exclusive candidate, IOS XR exclusive session), never sent through the
+  whole-configuration replacement of *Apply to running lab* (`restore.py`/`restore_drivers.py`). Reason: a
+  design fragment is partial by construction (management, AAA, logins, hostname and identity are filtered out,
+  §1 of PROVISIONING.md) and must coexist with whatever manual configuration and containerlab defaults are
+  already on the device; a replacement candidate has to be complete and would discard both. Evidence: manual
+  `Loopback99` and the manual BGP peer `192.0.2.200` on cEOS survive every create/modify/remove cycle
+  (`evidence/live-apply-ceos.md` steps 3–10); the two features keep separate job lists, drivers and words
+  (PROVISIONING.md §1, "Nothing here replaces *Apply to running lab*").
+- D8.2 Ownership is computed as set differences between device-rendered snapshots (EOS/IOS XR: running-config
+  lines with parents; Junos: `display set` statements), never by parsing the generated fragment and never by
+  reading a NOS's own diff view. Reason: the fragment text is not what lands on the device (the device adds its
+  own defaults, moves statements, renders differently), and a NOS diff can actively mislead. Evidence:
+  cEOS `show session-config` already carries `max-lsa 12000` under a fresh OSPF process that the fragment never
+  mentioned (PROVISIONING.md §7); IOS XR `show configuration changes diff` prints a merge as if the whole
+  running configuration were replaced (§7, verified, review S7). This is the *(review M5)* fix and refines
+  D4.4.
+- D8.3 The desired set is the candidate alone, rendered by the device itself on an empty base, not the parsed
+  input text (the parsed fragment is kept only as a fallback where the device cannot render it). Reason: only
+  the device's own renderer normalises syntax exactly the way the merge will store it (Junos unit shorthand,
+  EOS moved `network` lines, device defaults); computing "desired" from our own text would drift from what the
+  device actually considers present. Evidence: the throwaway-session/private-candidate/plain-`configure`
+  mechanics per platform, each verified live (PROVISIONING.md §2 row "Desired set"; review M1).
+- D8.4 Removal happens at the highest created ancestor whose current subtree is entirely owned and stale (one
+  `no router ospf 1` rather than every leaf under it), refined per platform from live failures rather than
+  assumed:
+  - **EOS BGP neighbours are one object.** Per-line negation left orphaned `no neighbor X activate` lines in
+    the running configuration when every line of a neighbour was actually stale. Fixed: a neighbour removed
+    whole is one `no neighbor X`; a neighbour with a manual line under it still comes off leaf by leaf.
+    Evidence: `evidence/live-apply-ceos.md` step 5.
+  - **EOS `network` statements move to the process level when an address family is removed**, they are not
+    deleted with it. Fixed: an address family removed whole has its `network` statements removed by name
+    first. Evidence: `evidence/live-apply-ceos.md` step 6 (four relocated `network` lines found owned and
+    stale after the family was gone).
+  - **Junos created ancestors are limited to the device's own blocks.** The raw word-prefixes of an added
+    `set` statement include keyword-only levels Junos cannot `delete` (`set protocols bgp group X neighbor`);
+    taking every prefix as an "ancestor" produced 158–173 unusable entries. Fixed: the driver also returns the
+    device's own hierarchical `show` of the would-be configuration, and `design_ownership.junos_blocks` limits
+    ancestors to that rendering (`X.N {` interface shorthand becomes `X` and `X unit N`). Evidence:
+    `evidence/live-apply-junos.md` step 3 and finding (b); PROVISIONING.md §8, review M2.
+  - **IOS XR typed negations are verified as the absence of their positive form.** `show configuration merge`
+    never prints `no shutdown` or `no management enable`; a read-back that expected to see them literally
+    reported four correct statements as missing. Fixed: verification checks absence, not a literal negated
+    line. Evidence: `evidence/live-apply-iosxr.md` facts and step 2 (the first apply's `verify_mismatch`
+    defect).
+  - **A vanishing `shutdown` under a design-configured interface is an expected change, not a conflict.**
+    IOS XR data ports ship `shutdown`; the design's `no shutdown` removes an unowned line, but doing so is the
+    point of a first apply. Fixed: named as an *expected change* and never re-applied on later removal of the
+    same interface. Evidence: `evidence/live-apply-iosxr.md` step 1 (reported as 2 conflicts before the rule,
+    0 after); PROVISIONING.md §3, review S3.
+- D8.5 A conflict (an unowned statement the candidate would touch) blocks the apply outright; the only way
+  through is the student's explicit, reviewed *Take over these settings* choice for that device, which
+  re-runs the review and whose token then carries the exact take-over list (the apply refuses a body whose
+  list differs). Reason: a manual setting must never be silently overwritten, but the student needs a
+  deliberate way to reclaim it, and that decision must be re-reviewed like any other apply. Evidence:
+  `evidence/live-apply-ceos.md` steps 3/3b (a manual `description` on the owned `Ethernet1` blocks with
+  `applicable: []` until `takeover: [ceos]` is given, after which it applies and the design's description
+  comes back while the untouched manual `Loopback99` and peer stay put). Review S6.
+- D8.6 The review token binds the generation id, the selected targets, the intent revision, the topology and
+  endpoint-mapping digests, and each target's `before` digest and take-over list; it is single-use, expires in
+  ten minutes, and is checked once at submit rather than on every later read. Reason: apply must never touch
+  bytes other than the ones the student reviewed, and drift or a plan change between review and apply must be
+  refused rather than silently re-applied. Evidence: PROVISIONING.md §4; review O1. This is the filled-in form
+  of D4.2, which named "topology and intent hashes… and the live baseline digest" without the take-over list
+  or the once-at-submit rule.
+- D8.7 A pre-change backup of every target through the Runner (`source='design-pre'`) is mandatory before any
+  device is touched; a device whose backup fails is not changed. Reason: parity with *Apply to running lab*'s
+  own invariant, and it gives every changed device a restore path independent of the design feature. Evidence:
+  PROVISIONING.md §4 step 2; `design-pre`/`design-post` backups recorded as succeeded in
+  `evidence/live-apply-ceos.md` step 1 and `evidence/live-apply-junos.md` step 2.
+- D8.8 Settle rules mirror the restore's caution: a device is reported `rolled_back` only after the `before`
+  snapshot has actually been read back from a fresh connection; anything else the manager cannot positively
+  confirm is `uncertain`, with a pending ledger entry that blocks the next review of that device until a later
+  read-back resolves it. Reason: declaring a rollback that was never independently verified is worse than
+  admitting the outcome is unknown. Evidence: `evidence/live-apply-ceos.md` step 7 ("The change was not
+  confirmed in time and the device undid it; the configuration from before is active.", stated only after the
+  independent read-back matched); PROVISIONING.md §3.
+- D8.9 On IOS XR, only the session that armed `commit confirmed` can confirm it; unlike EOS (identified by its
+  named session with a pending timer) and Junos (identified by the commit comment on entry 0), a fresh
+  connection cannot confirm an IOS XR trial by name alone. A manager restart therefore keeps the persisted
+  deadline and waits for the device's own timer to resolve the trial (auto-rollback) before reading the device
+  back, instead of attempting one immediate pass with a new session. Reason: there is no safe way to confirm
+  from outside the arming session, and starting a new session while one is armed is itself a conflict the
+  driver refuses; waiting for the device's own timed recovery is the only action that cannot make things
+  worse. Evidence: PROVISIONING.md §8 ("the recheck keeps the persisted deadline and waits for the device's
+  own timer… instead of one immediate pass"); the driver's `_HELD` table and held-session design in
+  `design_iosxr.py`.
+- D8.10 An interrupted job states, per device, what the read-back actually came to ("Read back afterwards:
+  ceos applied and verified" / "… undone by the device"), not a blanket "undone by the device". Reason: after
+  a restart the manager may still confirm its own pending change (EOS/Junos) and the device ends up matching
+  the design; a fixed "undone" wording would misreport that case. Evidence: `evidence/live-apply-ceos.md`
+  step 8 (killed after arming, restarted inside the window, the recheck confirmed the manager's own pending
+  session and read back `verified`); PROVISIONING.md §8.
+- D8.11 A BGP AS (or OSPF process id) change on IOS XR that IOS XR itself refuses to commit in one step (remove
+  `router bgp 65000`, add `router bgp 65100` together) is reported as a clean failure with the device's own
+  reason, and the way through is left to two separate applies (drop the module, then add it back with the new
+  AS) rather than built as an orchestrated two-commit transaction. Reason: a two-commit transaction would need
+  its own recovery and confirmation semantics on top of the existing per-apply ones, doubling the failure
+  surface for a case the device itself will not accept atomically anyway; two ordinary applies reuse every
+  existing safety mechanism unchanged. Evidence: `evidence/live-apply-iosxr.md` step 4 ("IOS XR refuses to
+  remove `router bgp 65000` and create `router bgp 65100` in one commit… the way through is two applies"); the
+  driver surfaces the device's own `show configuration failed` reasons in the failure message.
+- D8.12 `send-community` is no longer masked in a review's diff; only genuine secrets (for example
+  `snmp-server community`) stay redacted. Reason: it is a well-known BGP capability keyword, not a secret, and
+  the restore masker's substring match on "community" was hiding legitimate, non-sensitive configuration from
+  the student in every review. Evidence: `evidence/live-apply-ceos.md`, "Words the students see"; PROVISIONING.md
+  §8.
+- D8.13 The cEOSLab management-interface LLDP-off lines (`no lldp transmit` / `no lldp receive`) are left out
+  of the candidate entirely on cEOS, and the whole management block is named among the protected settings,
+  rather than sent and handled as a failure. Reason: this is a proven image limitation (cEOSLab 4.35.0F refuses
+  the lines with `% Invalid input`), not a design choice to negotiate; `lldp run` therefore also covers the
+  management port on cEOS, which is recorded as a known limit rather than worked around. Evidence:
+  PROVISIONING.md §1, verified through the driver on 2026-09-27.
+- D8.14 The apply page reuses the restore dialog's shape (review → recovery-window acknowledgement → live
+  per-device progress with stages and outcomes → an ownership view under Advanced) instead of a new
+  interaction pattern, and defines one specific word per outcome (`verified`, `applied_unverified`,
+  `verify_mismatch`, `kept_manual`, `failed`, `rolled_back`, `uncertain`, `interrupted`, `ineligible`,
+  `drifted`, `conflict`, `no_op`). Reason: students already know the restore dialog; reusing it keeps *Apply
+  to running lab* and *Apply to devices* consistent, and a job-level "healthy" label must never be allowed to
+  hide one failed or unverified device behind it. Evidence: `docs/NETWORK-DESIGN.md` "Applying a plan to
+  devices" step 4; PROVISIONING.md §5 ("the live progress per device (the restore dialog's shape…)") and §4
+  (the outcome list).
+- D8.15 A fourth risk-review pass (Opus) ran after the live proof and before the release; its nine findings are
+  applied and listed in PROVISIONING.md §8 "Fourth review pass". The decisions it forced: a held IOS XR session is
+  released on every path that does not confirm; a refused commit's reasons reach the job only as fixed phrases
+  (job messages never carry device text); a pending ledger entry is resolved by the next review's read-back rather
+  than blocking the device; a plan is applied only while it is the current design's and topology's plan; an armed
+  change the manager could not compare with the review is compared with the would-be digest before confirming;
+  the busy guard is manager-wide for applies and restores because the Runner is.
+
+## 9. Feature families: milestone E (2026-09-27)
+
+Evidence: `tests/test_design_families_routing.py`, `tests/test_design_families_l2.py` (real engine, all four
+profiles) and `evidence/live-apply-families.md` (the deployed product on `restore-square`).
+
+- D9.1 **A device's `modules` list replaces the design's list** (netlab's own rule), instead of adding to it as in
+  chunks 1–3. Reason: the families differ per image (XRv9k has no `vlan`, `bfd`, `lag`), and a design must be able
+  to keep such a device out of one module while the others carry it; "extra modules" could only add. The adapter,
+  `effective_modules`, the validation and the guide changed together; a device with no list keeps the design's.
+- D9.2 **Link aggregation is expressed on the link that carries it**: `links.<key>.lag.members` lists the other
+  member links by key (one to eight, same two devices, present in the lab). The adapter emits one netlab link with
+  `lag.members` and never the members as links of their own; member ports are named by netlab `ifindex`, because
+  netlab keeps only `ifindex` on member interfaces and an `ifname` there leaks onto the bundle (verified with the
+  engine: "overlapping interface name Ethernet1 between interfaces #1 and #30000"). `members` stays a denied key
+  everywhere else. The acceptance lab has no parallel links, so LAG is generation-tested only.
+- D9.3 **The `net` type takes an IS-IS area** (`49.0001`) as well as a full NET: netlab types `isis.area` as `net`
+  but builds the NET from the area itself (verified: `net 49.0001.0000.0000.0001.00`).
+- D9.4 **A zero-length prefix is not an address**: the management-overlap guard exempts `0.0.0.0/0` and `::/0`, so
+  `bgp.originate` can carry a real default route (proven live: E3).
+- D9.5 **An empty redistribution entry is refused** (`bgp.import: {ospf: null}` crashes the engine's BGP template
+  on eos and iosxr although its schema allows it): the schema asks for `true` or a mapping with the policy.
+- D9.6 **VRF-level module settings stay refused**: netlab's VRF object takes none; VRF routing is the attached
+  links plus the enabled module (proven live: E2, VRF-scoped BGP address families and the VRF loopback).
+- D9.7 **What cannot be proven on `restore-square` stays "generated, not live-tested"**: VRRP and anycast (no
+  multi-access segment with two routers), LAG (no parallel links), VXLAN/EVPN (no second VTEP segment), STP,
+  BFD (no BFD on XRv9k; the others unexercised). The ledger says so per row rather than claiming support.
+- D9.8 **Protocol authentication stays outside the design in this stream.** netlab's `password`/key attributes
+  (OSPF, IS-IS, BGP, BFD authentication, WireGuard private keys) remain refused by name (`DENIED_KEYS`), so no
+  secret can enter the intent, an export, a manifest, a log or `/api/state`. The secret-reference model the
+  assignment asks for (a named secret kept in the manager's encrypted state, referenced from the intent by name
+  only, injected into the netlab topology in the private job directory at generation time, never written to a
+  generated file that leaves the manager, and applied through the same drivers) is designed but not implemented:
+  it needs its own review pass (where the secret is materialised, how the ownership ledger treats a line that
+  carries it, how a review masks it) and a live proof per platform. Recorded as remaining work, not as support.
+- D9.9 **Plugins stay out of reach.** netlab plugins (`tunnel.gre`, `tunnel.wireguard`, …) load code; the
+  security decisions of chunk 1 refuse `plugin` by name. An allowlist of built-in plugins by exact name, with the
+  capability model's per-image answer (GRE renders on `eos` only among the four; WireGuard on none), is the shape
+  a later chunk would take; nothing of it is in the schema today, and the ledger says "not in the schema".

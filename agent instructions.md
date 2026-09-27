@@ -1,3 +1,125 @@
+# Restart device and the netlab UI/UX campaign, part 1 — 1.30.48
+
+The owner's campaign (`CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md`, untracked in the worktree root, with
+the folded-in `CLAB_Single_Device_Restart_Addendum.md`) runs on `claude/netlab-integration`. **Read
+`docs/netlab-ui-qa/PICKUP.md` first**; `DEFECTS.md` is the ledger, `RESTART-PARITY.md` the parity record,
+`EVIDENCE.md` the index. What the next agent must preserve:
+
+(1) **Restart device is containerlab's node-scoped restart and nothing else.** `restart-node` in
+`app/host_operations.py` builds `containerlab restart -t <topology> --name <lab> --node <node>` with exactly
+one `--node`; `node_selector(options, lab)` accepts one literal node and a container that is exactly
+`<prefix>-<lab>-<node>`, `<lab>-<node>` or `<node>`; the options whitelist for this action is `{node,
+container}` and no other action accepts either key; the target's container id and state are in `affected`
+and therefore in the digest. Never let a missing or odd selector fall through to the lab-wide `restart`,
+never substitute `docker restart`, an SSH reboot, destroy+deploy or redeploy, and never rebuild wiring by
+hand (a `docker stop` destroys both ends of a node's veths; see RESTART-PARITY.md).
+(2) **The manager resolves and binds the device** (`lab_operations.py` preview): the page sends the manager's
+node name only; `expected_container()` (`discovery.py`) and `parse_definition()` of the VM file must agree
+with the node record; page-supplied `options.node`, `options.container` and `path` are refused; the review
+stamp is taken under the first lock, and confirm refuses when any `LIFECYCLE_JOBS` job of the lab was
+created at or after it, or when the device no longer resolves to the same container. Keep the stamp
+early (an Opus review found the late-stamp window).
+(3) **Readiness epoch.** `ReadinessMonitor.forget()` records `epoch[key]`; `run()` drops an answer whose
+probe began before it. `LabOperations.execute()` invalidates the restarted device before the helper runs,
+right after it returns and when the job closes; `public_lab` reports `nos_login.status == 'restarting'`
+for a device with a queued/running job (never `ssh_ready`). `restarted_since()` derives a container's start
+from `inspected_epoch` (taken before the discovery pass) minus the uptime in the runtime's status line;
+containerlab reports only `healthy` for health-checked containers, so that hint covers only the others.
+(4) **UI.** One eligibility rule, `opRestartState()` (operations.js), for the map menu (`data-restart`,
+class `danger`), the device panel and the Devices technical view; `opRestartDevice()` re-checks it and calls
+`opReview({action:'restart-node', node})`; the review copy names the device and the lab and promises nothing
+about unrelated traffic; `operationLabel(action, job)` names the device; `mapStateKey` marks only the job's
+device as working; `deviceState` handles `restarting` before `ssh_ready`. `opLifecycle`/`opDisruptive`
+include `restart-node`.
+(5) **Live evidence** is per image in `docs/netlab-ui-qa/evidence/restart/` and summarised in
+RESTART-PARITY.md; the tools are `docs/netlab-ui-qa/tools/check_restart_device.py` (both entry points,
+stopped path, terminal reconnect, new capture, design non-mutation), `check_restart_two_tabs.py`,
+`traffic_probe.py`, `persistence_markers.py`. Never rebuild the manager container while one of them runs.
+(5b) **Image limits are facts, not product bugs, and the review must name them.** `RESTART_KNOWN_LIMITS` in
+`lab_operations.py` holds two: vJunos-switch cannot start its container a second time (the job fails with the reason),
+and XRv9k's first restart after a deploy boots from a fresh disk (factory configuration; the launcher's sorted-listdir
+disk choice, `DEFECTS.md` QA-017). Add a kind only with a live proof; never add an automatic backup or restore to a
+restart (parity with the extension); the traffic probe (`traffic_probe.py`) is what shows a path loss the product's own
+checks cannot see, keep running it beside every live run.
+(5c) **A restart restores only the links whose other end still exists.** A neighbour stopped with `containerlab stop`
+keeps its ends parked (the link comes back); one that exited on its own or was `docker stop`ped took the link with it,
+and the restarted device then waits for the missing interface (`CLAB_INTFS`: cEOS five minutes, a vrnetlab VM for good).
+`restart_links()` (lab_operations.py) reads the device's links from the lab's drawing and names not-running neighbours
+in the review with both cases; the counts travel into the job (`links_expected`, `neighbours_down`) for the
+`n of m links restored` message (QA-018). Keep the drawing as the source (it is parsed from the topology file the
+helper will use), keep both cases in the wording (the manager cannot tell them apart) and never refuse the restart.
+(6) **Design tab repairs** QA-001…QA-016 and U-01…U-20 are in `DEFECTS.md` with their regression tests; the
+inventory (`COVERAGE.md`, 123 rows) and the §6 probe report drive the rest. Two rules worth keeping: every read
+of a design is numbered when sent and applied only if nothing newer landed (`designViewRequest` /
+`designViewFresh` / `designViewWritten` in network-design.js, QA-015: never go back to a lab-id-only guard), and
+`design_intent.NAME` is netlab's 16-character identifier rule for every `id`-typed name while `ID` (64) stays
+for setting keys (QA-016).
+(7) **Tooling.** `check_ui005/007c/008a` of UI review 001 fail on HEAD as well (TOOL-001): fix or retire them in
+their own stream, do not read them as a regression of this one.
+
+# Network design, part 5: Git export, health check, final report — 1.30.47
+
+Read `docs/netlab-integration/FINAL-REPORT.md` first (the whole stream in one page), then `PICKUP.md`. Preserve,
+beside the earlier points: (1) a design export is a Git job of kind `design` (`git_progress.export_design`,
+`NetworkDesign.design_snapshot`): checkpoint target only, never `latest` or `baseline`; the same `publish` request
+to the unchanged helper (plain names `<device>--<nn>-<module>.cfg`, sizes and digests checked twice, ≤500 files);
+the review before any upload and the one-save guard are the save's own (`review_before_push` from `push`, the
+reviewed retry is the only upload path); the manifest carries `kind: network-design`, no `node` rows and no
+`restore_artifact`, which is what keeps the restore away from it: do not add device rows to it. (2)
+`GitProgress.designs` is set by `main.py`; a manager without it answers 503 for the route. (3)
+`check_install.check_design_engine` warns, never fails, on a missing engine. (4) The two families outside the
+schema (protocol secrets D9.8, plugins D9.9) stay refused by name until their own reviewed chunk. Routing observed:
+Sonnet for the export tests and the export dialog; Opus `risk-reviewer` for the export; the lead for the backend,
+the health check, the records and the live steps.
+
+# Network design, part 4: feature families — 1.30.46
+
+Read `docs/netlab-integration/PICKUP.md` first, then `LEDGER.md` (the per-family, per-image truth) and
+`evidence/live-apply-families.md`. Preserve, beside the 1.30.43–1.30.45 points: (1) a device's `modules` list
+replaces the design's list for that device (`design_adapter`, `network_design.effective_modules`, the validation's
+`node_modules`): never make it additive again, it is how a device is kept out of a module it cannot carry. (2)
+`links.<key>.lag.members` is validated by `design_intent._lag_members` (other links of the lab, same two devices,
+one to eight) and `members` stays denied everywhere else; the adapter emits the bundle after its members with the
+member ports by netlab `ifindex` (`ifname` there leaks onto the bundle). (3) The `net` type accepts an IS-IS area;
+`guard_address` exempts a zero-length prefix; an `import` entry of `None` is refused. (4) `design_adapter.overlaps`
+treats access ports of one VLAN as one segment. (5) `design_junos.CHECK_PHRASES` and `design_iosxr.FAILURE_PHRASES`
+are the only way a device's refusal reaches a job: classes, never text. (6) The ledger's "Live" column says
+exactly what was applied on `restore-square` and what was only generated; VXLAN/EVPN is "attempted, refused by
+vJunos-switch"; do not promote a row without a new live record. (7) The lab ends at the E4 design (IS-IS + BGP,
+policy, static routes, two VLANs), every statement owned by the deployed product. Routing observed: Sonnet for the
+two family test files and the guided tables; the lead for the schema, adapter and driver rules and every live step.
+
+# Network design, part 3: Apply to devices — 1.30.45
+
+Read `docs/netlab-integration/PICKUP.md` first, then `PROVISIONING.md` (the contract; §8 is what the live proof
+changed) and the evidence files `docs/netlab-integration/evidence/live-apply-*.md`. Preserve, beside the 1.30.43 and
+1.30.44 points: (1) `design_apply.py` knows no NOS command; every device word is in `design_eos.py`, `design_junos.py`,
+`design_iosxr.py`, behind one contract (documented in `design_eos.py`: `snapshot`, `render_desired`, `stage(arm)`,
+`confirm`, `pending`, `cleanup`, `persist`, `options`); a review is `stage(arm=False)` and never commits; `commit
+check` on Junos runs only when arming (it would confirm anybody's pending change). (2) The session identity is the
+design's own (`clabdsg-` + 8 hex as EOS session name, Junos commit comment, IOS XR held session in
+`design_iosxr._HELD`) and never the restore's `clabmgr-`; each driver confirms only its own pending change from a fresh
+connection; IOS XR confirms on the held channel, the service never closes a `held` connection, and after a restart
+the recheck waits out the persisted deadline. (3) Ownership is `design_ownership.py`, pure: statements in ownership
+form, created ancestors (Junos: only `junos_blocks` of the device's own `show`), `stale = (owned − desired) ∩ before`,
+conflicts = removed − owned plus `EXCLUSIVE`, removal at the highest owned-and-stale ancestor, EOS neighbours as one
+object and address-family `network` lines first, `ADMIN_STATE` never re-applied, IOS XR `split_negations`; `verify()`
+takes `kept` and accepts what the design put back under a removed container. Nothing is ever removed that is not
+owned or explicitly taken over (`takeover_leftovers` → a second review pass). (4) `design_provision.prepare` is the
+only path from a fragment to a device; its protected list (hostname, logins, AAA, management interface and VRF,
+host mappings, `mac-address`, `normalize`, Junos `delete:` tags) never shrinks; the cEOS management block stays out.
+(5) The apply job: `DESIGN_APPLY_BUSY` in `operation_busy`, the Runner refusing other backups meanwhile, the
+mandatory `design-pre` backup, drift by `_before_digest`, `_mismatch` never confirmed, `rolled_back` only after the
+before snapshot is read back, otherwise `uncertain` with a pending ledger entry that blocks the next review; the
+ledger is written in the same store update as the outcome; `public_job` strips every `_` key. (6) The UI
+(`network-design.js` `designApply*`, the static `#design-apply-dialog`, `#design-ownership`) posts JSON bodies,
+re-reviews when the take-over choice changes, and enables *Apply* only when acknowledged and applicable. (7) Tests:
+`test_design_{provision,ownership,eos,junos,iosxr,apply}.py`, the 13 `designApply*` browser tests; the live rerun is
+described in PICKUP (a scratch `create_app`, never the deployed data); the deployed manager on the dev VM listens on
+the LAN address, port 8081. Routing observed: Sonnet for the fake-channel tests, the apply UI, the Playwright tool
+and the records drafts; Opus `risk-reviewer` for the review; the lead wrote the drivers, the algebra, the service and
+ran every live step (`docs/netlab-integration/TESTS.md`).
+
 # Network design, part 2: the Design tab — 1.30.44
 
 Read `docs/netlab-integration/PICKUP.md` first, then `DECISIONS.md` and `docs/NETWORK-DESIGN.md`. Preserve, beside the

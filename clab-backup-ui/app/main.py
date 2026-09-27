@@ -23,7 +23,7 @@ from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
 from .discovery import Discovery, lab_status, node_available, reconcile
 from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
-from .lab_operations import LabOperations, last_deployed, operation_busy
+from .lab_operations import LabOperations, last_deployed, operation_busy, restarting_nodes
 from .git_progress import GitProgress, public_job as public_git_job
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
@@ -31,6 +31,7 @@ from .diagnostics import Diagnostics
 from .capture import Captures
 from .telemetry_retirement import TelemetryRetirement, migrate_retired_telemetry, public_retired_telemetry
 from .network_design import NetworkDesign, public_design
+from .design_apply import DesignApply, public_job as public_design_job
 
 APP=Path(__file__).parent
 
@@ -42,19 +43,23 @@ def create_app(data_dir=None):
     services=NodeServices(store)
     readiness_monitor=ReadinessMonitor(store,services,runner)
     discovery=Discovery(store)
-    operations=LabOperations(store,discovery)
+    operations=LabOperations(store,discovery,readiness_monitor)
     git_progress=GitProgress(store,runner)
     restore=RestoreService(store,runner,git_progress)
     telemetry_retirement=TelemetryRetirement(store,services)
     network_design=NetworkDesign(store)
+    git_progress.designs = network_design   # design exports go through the student's Git save (kind `design`)
+    design_apply=DesignApply(store,runner,network_design)
     @asynccontextmanager
     async def lifespan(app):
         print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
         runner.start()
         restore.start()
+        design_apply.start()
         discovery.start()
         readiness_monitor.start()
         yield
+        design_apply.close()
         network_design.close()
         telemetry_retirement.close()
         restore.close()
@@ -86,6 +91,8 @@ def create_app(data_dir=None):
     telemetry_retirement.install(app)
     app.state.network_design=network_design
     network_design.install(app)
+    app.state.design_apply=design_apply
+    design_apply.install(app)
     @app.middleware('http')
     async def guard(request, call_next):
         if request.url.path.startswith('/api/'):
@@ -133,10 +140,11 @@ def create_app(data_dir=None):
         if not lab: raise HTTPException(404,'Lab not found')
         return lab
     def public_lab(lab):
-        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','telemetry_retired','annotations','annotations_for','network_design','network_generations')}
+        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','telemetry_retired','annotations','annotations_for','network_design','network_generations','network_ownership')}
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
         result['nodes']=[]
         with services.lock: checks={k:copy.deepcopy(v) for k,v in services.checks.items() if k[0]==lab['id']}
+        restarting=restarting_nodes(store.state,lab['id'])
         for n in lab['nodes']:
             row={k:copy.deepcopy(v) for k,v in n.items() if k not in ('username','password','enable_password','container_name')}
             row['available']=node_available(store.state,lab,n)
@@ -147,6 +155,9 @@ def create_app(data_dir=None):
             # SSH opens once the NOS has answered a login (linked labs); labs without a
             # deployment keep offering SSH whenever a login is configured.
             row['nos_login']=login_state(lab,n,row['available'],checks.get((lab['id'],n['name'])))
+            # A device with a Restart device job queued or running is neither ready nor merely booting:
+            # its login is proven again only after the restart has run (the job drops the old proof).
+            if n['name'] in restarting: row['nos_login']={'status':'restarting','message':'Restarting on the VM (containerlab restart --node); its login is checked again afterwards.'}
             row['ssh_ready']=row['login_configured'] and row['nos_login']['status'] in ('ready','unmonitored')
             result['nodes'].append(row)
         result['deployment']=lab_status(store.state,lab)
@@ -198,6 +209,7 @@ def create_app(data_dir=None):
                     'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
                     'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])],
                     'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])],
+                    'design_jobs':[public_design_job(j) for j in store.state.get('design_jobs', [])],
                     'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])]}
     class RemoveLab(BaseModel):
         model_config = ConfigDict(extra='forbid')
@@ -221,6 +233,7 @@ def create_app(data_dir=None):
             updated['jobs'] = [j for j in updated['jobs'] if j['lab_id'] != lab_id]
             updated['git_jobs'] = [j for j in updated.get('git_jobs', []) if j['lab_id'] != lab_id]
             updated['restore_jobs'] = [j for j in updated.get('restore_jobs', []) if j['lab_id'] != lab_id]
+            updated['design_jobs'] = [j for j in updated.get('design_jobs', []) if j['lab_id'] != lab_id]
             ignored = set(updated.get('ignored_labs', []))
             if data.prevent_reimport: ignored.add(name)
             else: ignored.discard(name)

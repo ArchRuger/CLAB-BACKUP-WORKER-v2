@@ -1,0 +1,17 @@
+# XRv9k container clab-restore-square-xrv9k, launcher output after the 16:00:44 UTC restart (its neighbour vjunos-switch was exited, so only 1 of its 2 links was restored). Selected lines of 'docker logs' (no credentials).
+Press RETURN to get started.
+Press RETURN to get started.
+Press RETURN to get started.
+Press RETURN to get started.
+Press RETURN to get started.
+Press RETURN to get started.
+Press RETURN to get started.
+Press RETURN to get started.
+Press RETURN to get started.
+2026-09-27 16:01:00,782: vrnetlab   	INFO Launching XRv9k_vm arch x86_64 with 2 SMP/VCPU and 16384 M of RAM
+2026-09-27 16:01:00,782: vrnetlab   	DEBUG number of provisioned data plane interfaces is 2
+2026-09-27 16:01:00,782: vrnetlab   	DEBUG waiting for provisioned interfaces to appear...
+# docker inspect at 16:20:56: 2026-09-27T16:01:00.584734023Z running health=unhealthy
+# container interfaces:
+eth0@if244       UP             7e:3f:37:77:99:e2 <BROADCAST,MULTICAST,UP,LOWER_
+eth2@if216       UP             aa:c1:ab:c7:00:57 <BROADCAST,MULTICAST,UP,LOWER_

@@ -1,0 +1,119 @@
+{
+ "started": "2026-09-27T16:49:57+00:00",
+ "manager": "1.30.48",
+ "device": "clab-restore-square-host1",
+ "steps": {
+  "double_click": {
+   "jobs": 3,
+   "job": {
+    "id": "2d7e6afb666d4776aa477f04a1f11131",
+    "status": "succeeded",
+    "message": "Operation completed \u00b7 2 links restored",
+    "created": "2026-09-27T16:50:02.087859+00:00",
+    "finished": "2026-09-27T16:50:05.141124+00:00"
+   },
+   "before": {
+    "id": "70066f79021cb3bf88326d6bf9f082335d0349331cd99bb4ad2deb79c60c530e",
+    "started": "2026-09-27T16:22:39.455768784Z",
+    "status": "exited",
+    "pid": 0
+   },
+   "after": {
+    "id": "70066f79021cb3bf88326d6bf9f082335d0349331cd99bb4ad2deb79c60c530e",
+    "started": "2026-09-27T16:50:02.523376226Z",
+    "status": "running",
+    "pid": 2860168
+   }
+  },
+  "stale_review": {
+   "error": "Another lab operation ran after this review. Review the restart again.",
+   "after": {
+    "id": "70066f79021cb3bf88326d6bf9f082335d0349331cd99bb4ad2deb79c60c530e",
+    "started": "2026-09-27T16:50:02.523376226Z",
+    "status": "running",
+    "pid": 2860168
+   }
+  },
+  "race": {
+   "new_jobs": 1,
+   "errors": [
+    "",
+    "Wait for the current lab operation to finish."
+   ],
+   "open": [
+    false,
+    true
+   ],
+   "started_before": "2026-09-27T16:50:02.523376226Z",
+   "started_after": "2026-09-27T16:50:11.254538891Z"
+  }
+ },
+ "checks": [
+  {
+   "name": "two tabs can each open a review for the same device",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "a double click creates exactly one job",
+   "ok": true,
+   "detail": "jobs: 2 before, 3 now"
+  },
+  {
+   "name": "the job succeeded",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "the device restarted once (new start time, same id)",
+   "ok": true,
+   "detail": "{\"id\": \"70066f79021cb3bf88326d6bf9f082335d0349331cd99bb4ad2deb79c60c530e\", \"started\": \"2026-09-27T16:50:02.523376226Z\", \"status\": \"running\", \"pid\": 2860168}"
+  },
+  {
+   "name": "the older review is refused with the reason",
+   "ok": true,
+   "detail": "Another lab operation ran after this review. Review the restart again."
+  },
+  {
+   "name": "the refused tab keeps its dialog open with the reason inline",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "no second job and no second restart",
+   "ok": true,
+   "detail": "{\"id\": \"70066f79021cb3bf88326d6bf9f082335d0349331cd99bb4ad2deb79c60c530e\", \"started\": \"2026-09-27T16:50:02.523376226Z\", \"status\": \"running\", \"pid\": 2860168}"
+  },
+  {
+   "name": "Cancel closes the refused dialog",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "a fresh review after the refusal is offered again",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "two simultaneous confirmations start at most one job",
+   "ok": true,
+   "detail": "new jobs: 1"
+  },
+  {
+   "name": "the loser sees a busy or stale refusal, the winner's dialog closed",
+   "ok": true,
+   "detail": "{\"errors\": [\"\", \"Wait for the current lab operation to finish.\"], \"open\": [false, true]}"
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "finished": "2026-09-27T16:50:15+00:00"
+}

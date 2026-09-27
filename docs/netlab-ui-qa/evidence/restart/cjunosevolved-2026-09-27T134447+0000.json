@@ -1,0 +1,708 @@
+{
+ "started": "2026-09-27T13:44:47+00:00",
+ "manager": "1.30.47",
+ "containerlab": "0.79.0",
+ "lab": "restore-square",
+ "lab_id": "174386ec12ee496190c585c5796b2662",
+ "device": "clab-restore-square-cjunosevolved",
+ "label": "cjunosevolved",
+ "runs": {
+  "map-running": {
+   "before": {
+    "clab-restore-square-ceos": {
+     "id": "e0c7880e10fb9bb1ee69ff76a5885120a9655df43b4ad8c4f4e4815c550b29b7",
+     "started": "2026-09-27T13:43:24.61385855Z",
+     "status": "running",
+     "pid": 2179680
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8",
+     "started": "2026-09-27T13:10:08.665185829Z",
+     "status": "running",
+     "pid": 2070109
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "ec830d4fa6c4170afcb75cff7fc2a47cdff50b63edf0eebc40779108bff3f5c7",
+     "started": "2026-09-27T13:10:08.664763183Z",
+     "status": "running",
+     "pid": 2070105
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "cc25f934369b4fe33eb9ad27e996a861820075b7e82712c2855f87c3d21008be",
+     "started": "2026-09-27T13:10:08.66538892Z",
+     "status": "running",
+     "pid": 2070099
+    },
+    "clab-restore-square-host1": {
+     "id": "27bd5e30d351877f071eeef926a63265b158e4eacccf496ebc4fcdbe954cfd8d",
+     "started": "2026-09-27T13:33:33.787979005Z",
+     "status": "running",
+     "pid": 2152269
+    }
+   },
+   "links_before": [
+    "eth1",
+    "eth2",
+    "eth3",
+    "cspp-fpc-br",
+    "fake-fabric-br",
+    "eth4@if154",
+    "eth5@if158"
+   ],
+   "entry": "map",
+   "confirmed_at": "2026-09-27T13:44:56+00:00",
+   "job": {
+    "id": "4dc11cc5a53841178cc873cdcdeb6e8f",
+    "action": "restart-node",
+    "node": "clab-restore-square-cjunosevolved",
+    "node_label": "cjunosevolved",
+    "status": "succeeded",
+    "exit_code": 0,
+    "message": "Operation completed \u00b7 2 links restored",
+    "created": "2026-09-27T13:44:56.165707+00:00",
+    "started": "2026-09-27T13:44:56.176823+00:00",
+    "finished": "2026-09-27T13:45:16.436401+00:00"
+   },
+   "job_output": "13:44:56 INFO Parsing & checking topology file=restore-square.clab.yml\n13:45:16 INFO Restored link node=cjunosevolved interface=eth4\n13:45:16 INFO Restored link node=cjunosevolved interface=eth5\n",
+   "after": {
+    "clab-restore-square-ceos": {
+     "id": "e0c7880e10fb9bb1ee69ff76a5885120a9655df43b4ad8c4f4e4815c550b29b7",
+     "started": "2026-09-27T13:43:24.61385855Z",
+     "status": "running",
+     "pid": 2179680
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8",
+     "started": "2026-09-27T13:45:16.270081611Z",
+     "status": "running",
+     "pid": 2186486
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "ec830d4fa6c4170afcb75cff7fc2a47cdff50b63edf0eebc40779108bff3f5c7",
+     "started": "2026-09-27T13:10:08.664763183Z",
+     "status": "running",
+     "pid": 2070105
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "cc25f934369b4fe33eb9ad27e996a861820075b7e82712c2855f87c3d21008be",
+     "started": "2026-09-27T13:10:08.66538892Z",
+     "status": "running",
+     "pid": 2070099
+    },
+    "clab-restore-square-host1": {
+     "id": "27bd5e30d351877f071eeef926a63265b158e4eacccf496ebc4fcdbe954cfd8d",
+     "started": "2026-09-27T13:33:33.787979005Z",
+     "status": "running",
+     "pid": 2152269
+    }
+   },
+   "links_after": [
+    "eth4@if154",
+    "eth5@if158"
+   ],
+   "readiness": {
+    "states": [
+     [
+      "2026-09-27T13:45:17+00:00",
+      "booting"
+     ],
+     [
+      "2026-09-27T13:51:59+00:00",
+      "ready"
+     ]
+    ],
+    "ready_at": "2026-09-27T13:51:58.375785+00:00",
+    "budget_s": 780
+   }
+  },
+  "devices-running": {
+   "before": {
+    "clab-restore-square-ceos": {
+     "id": "e0c7880e10fb9bb1ee69ff76a5885120a9655df43b4ad8c4f4e4815c550b29b7",
+     "started": "2026-09-27T13:43:24.61385855Z",
+     "status": "running",
+     "pid": 2179680
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8",
+     "started": "2026-09-27T13:45:16.270081611Z",
+     "status": "running",
+     "pid": 2186486
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "ec830d4fa6c4170afcb75cff7fc2a47cdff50b63edf0eebc40779108bff3f5c7",
+     "started": "2026-09-27T13:10:08.664763183Z",
+     "status": "running",
+     "pid": 2070105
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "cc25f934369b4fe33eb9ad27e996a861820075b7e82712c2855f87c3d21008be",
+     "started": "2026-09-27T13:10:08.66538892Z",
+     "status": "running",
+     "pid": 2070099
+    },
+    "clab-restore-square-host1": {
+     "id": "27bd5e30d351877f071eeef926a63265b158e4eacccf496ebc4fcdbe954cfd8d",
+     "started": "2026-09-27T13:33:33.787979005Z",
+     "status": "running",
+     "pid": 2152269
+    }
+   },
+   "links_before": [
+    "eth1",
+    "eth2",
+    "eth3",
+    "cspp-fpc-br",
+    "fake-fabric-br",
+    "eth4@if154",
+    "eth5@if158"
+   ],
+   "entry": "devices",
+   "confirmed_at": "2026-09-27T13:52:10+00:00",
+   "job": {
+    "id": "bba35e2eefcd418186fc5881ca9b057b",
+    "action": "restart-node",
+    "node": "clab-restore-square-cjunosevolved",
+    "node_label": "cjunosevolved",
+    "status": "succeeded",
+    "exit_code": 0,
+    "message": "Operation completed \u00b7 2 links restored",
+    "created": "2026-09-27T13:52:10.198933+00:00",
+    "started": "2026-09-27T13:52:10.210652+00:00",
+    "finished": "2026-09-27T13:53:18.336815+00:00"
+   },
+   "job_output": "13:52:10 INFO Parsing & checking topology file=restore-square.clab.yml\n13:53:18 INFO Restored link node=cjunosevolved interface=eth4\n13:53:18 INFO Restored link node=cjunosevolved interface=eth5\n",
+   "after": {
+    "clab-restore-square-ceos": {
+     "id": "e0c7880e10fb9bb1ee69ff76a5885120a9655df43b4ad8c4f4e4815c550b29b7",
+     "started": "2026-09-27T13:43:24.61385855Z",
+     "status": "running",
+     "pid": 2179680
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8",
+     "started": "2026-09-27T13:53:18.168430724Z",
+     "status": "running",
+     "pid": 2223861
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "ec830d4fa6c4170afcb75cff7fc2a47cdff50b63edf0eebc40779108bff3f5c7",
+     "started": "2026-09-27T13:10:08.664763183Z",
+     "status": "running",
+     "pid": 2070105
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "cc25f934369b4fe33eb9ad27e996a861820075b7e82712c2855f87c3d21008be",
+     "started": "2026-09-27T13:10:08.66538892Z",
+     "status": "running",
+     "pid": 2070099
+    },
+    "clab-restore-square-host1": {
+     "id": "27bd5e30d351877f071eeef926a63265b158e4eacccf496ebc4fcdbe954cfd8d",
+     "started": "2026-09-27T13:33:33.787979005Z",
+     "status": "running",
+     "pid": 2152269
+    }
+   },
+   "links_after": [
+    "eth4@if154",
+    "eth5@if158"
+   ],
+   "readiness": {
+    "states": [
+     [
+      "2026-09-27T13:53:18+00:00",
+      "booting"
+     ]
+    ],
+    "ready_at": null,
+    "budget_s": 780
+   }
+  },
+  "map-stopped": {
+   "before": {
+    "clab-restore-square-ceos": {
+     "id": "e0c7880e10fb9bb1ee69ff76a5885120a9655df43b4ad8c4f4e4815c550b29b7",
+     "started": "2026-09-27T13:43:24.61385855Z",
+     "status": "running",
+     "pid": 2179680
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8",
+     "started": "2026-09-27T13:53:18.168430724Z",
+     "status": "exited",
+     "pid": 0
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "ec830d4fa6c4170afcb75cff7fc2a47cdff50b63edf0eebc40779108bff3f5c7",
+     "started": "2026-09-27T13:10:08.664763183Z",
+     "status": "running",
+     "pid": 2070105
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "cc25f934369b4fe33eb9ad27e996a861820075b7e82712c2855f87c3d21008be",
+     "started": "2026-09-27T13:10:08.66538892Z",
+     "status": "running",
+     "pid": 2070099
+    },
+    "clab-restore-square-host1": {
+     "id": "27bd5e30d351877f071eeef926a63265b158e4eacccf496ebc4fcdbe954cfd8d",
+     "started": "2026-09-27T13:33:33.787979005Z",
+     "status": "running",
+     "pid": 2152269
+    }
+   },
+   "links_before": [],
+   "entry": "map (stopped device)",
+   "confirmed_at": "2026-09-27T14:08:52+00:00",
+   "job": {
+    "id": "9d3444598de94bfdb18fdf7d2896b879",
+    "action": "restart-node",
+    "node": "clab-restore-square-cjunosevolved",
+    "node_label": "cjunosevolved",
+    "status": "succeeded",
+    "exit_code": 0,
+    "message": "Operation completed \u00b7 2 links restored",
+    "created": "2026-09-27T14:08:52.642738+00:00",
+    "started": "2026-09-27T14:08:52.653313+00:00",
+    "finished": "2026-09-27T14:08:53.202225+00:00"
+   },
+   "job_output": "14:08:53 INFO Parsing & checking topology file=restore-square.clab.yml\n14:08:53 INFO Restored link node=cjunosevolved interface=eth4\n14:08:53 INFO Restored link node=cjunosevolved interface=eth5\n",
+   "after": {
+    "clab-restore-square-ceos": {
+     "id": "e0c7880e10fb9bb1ee69ff76a5885120a9655df43b4ad8c4f4e4815c550b29b7",
+     "started": "2026-09-27T13:43:24.61385855Z",
+     "status": "running",
+     "pid": 2179680
+    },
+    "clab-restore-square-cjunosevolved": {
+     "id": "edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8",
+     "started": "2026-09-27T14:08:53.043085874Z",
+     "status": "running",
+     "pid": 2296653
+    },
+    "clab-restore-square-vjunos-switch": {
+     "id": "ec830d4fa6c4170afcb75cff7fc2a47cdff50b63edf0eebc40779108bff3f5c7",
+     "started": "2026-09-27T13:10:08.664763183Z",
+     "status": "running",
+     "pid": 2070105
+    },
+    "clab-restore-square-xrv9k": {
+     "id": "cc25f934369b4fe33eb9ad27e996a861820075b7e82712c2855f87c3d21008be",
+     "started": "2026-09-27T13:10:08.66538892Z",
+     "status": "running",
+     "pid": 2070099
+    },
+    "clab-restore-square-host1": {
+     "id": "27bd5e30d351877f071eeef926a63265b158e4eacccf496ebc4fcdbe954cfd8d",
+     "started": "2026-09-27T13:33:33.787979005Z",
+     "status": "running",
+     "pid": 2152269
+    }
+   },
+   "links_after": [
+    "eth4@if154",
+    "eth5@if158"
+   ],
+   "readiness": {
+    "states": [
+     [
+      "2026-09-27T14:08:53+00:00",
+      "booting"
+     ],
+     [
+      "2026-09-27T14:16:21+00:00",
+      "ready"
+     ]
+    ],
+    "ready_at": "2026-09-27T14:16:19.670897+00:00",
+    "budget_s": 780
+   }
+  }
+ },
+ "chromium": "153.0.8010.12",
+ "stop_output": "14:06:26 INFO Parsing & checking topology file=restore-square.clab.yml\n",
+ "checks": [
+  {
+   "name": "a browser CLI to the device connects before the restart",
+   "ok": true,
+   "detail": "Connected"
+  },
+  {
+   "name": "the CLI answered a typed command",
+   "ok": true,
+   "detail": "2026 from 172.20.20.1\n--- JUNOS 26.2R1.7-EVO Linux (none) 5.15.164-10.22.33.18-yocto-standard-juniper-19183-g14666b62b00b #1 SMP PREE\nMPT Thu May 14 16:03:56 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux\nadmin@HOSTNAME> show clock\n                     ^\nsyntax error, expecting <command>.\nadmin@HOSTNAME>  "
+  },
+  {
+   "name": "the map menu offers Restart device\u2026 for the device",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "name": "the review is titled for the one device",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and start"
+  },
+  {
+   "name": "the review names the device and the lab and the native operation",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is b"
+  },
+  {
+   "name": "the review says what drops and does not promise unrelated traffic is untouched",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is b"
+  },
+  {
+   "name": "the review says nothing is saved, backed up, reset or reapplied",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is b"
+  },
+  {
+   "name": "the affected list is the one device",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is b"
+  },
+  {
+   "name": "the command names exactly one --node",
+   "ok": true,
+   "detail": "drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 10 hours ago to Git.\n\nOpen CLI sessions to this device will disconnect.\n\n1 device affected: cjunosevolved (clab-restore-square-cjunosevolved, running). "
+  },
+  {
+   "name": "the confirm button is the destructive Restart device",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "Cancel starts nothing",
+   "ok": true,
+   "detail": "jobs grew"
+  },
+  {
+   "name": "Cancel leaves the container untouched",
+   "ok": true,
+   "detail": "{\"id\": \"edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8\", \"started\": \"2026-09-27T13:10:08.665185829Z\", \"status\": \"running\", \"pid\": 2070109}"
+  },
+  {
+   "name": "the device reads Restarting while the job runs",
+   "ok": true,
+   "detail": "pill: Restarting"
+  },
+  {
+   "name": "the lab banner names the device being restarted",
+   "ok": true,
+   "detail": "Restarting cjunosevolved\u2026DetailsExecuting on the VMStart labView outputView progressTry againRetryDetailsCheck credentialsVM connection\u2026Match to a running lab\u2026Review and remove\u2026Dismiss\u00d7"
+  },
+  {
+   "name": "one Restart device job exists for the device",
+   "ok": true,
+   "detail": "{\"id\": \"4dc11cc5a53841178cc873cdcdeb6e8f\", \"lab_id\": \"174386ec12ee496190c585c5796b2662\", \"name\": \"restore-square\", \"action\": \"restart-node\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"created\": \"2026-09-27T13:44:56.165707+00:00\", \"status\": \"running\", \""
+  },
+  {
+   "name": "the job succeeded",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "the job output is containerlab's own restart log",
+   "ok": true,
+   "detail": "13:44:56 INFO Parsing & checking topology file=restore-square.clab.yml\n13:45:16 INFO Restored link node=cjunosevolved interface=eth4\n13:45:16 INFO Restored link node=cjunosevolved interface=eth5\n"
+  },
+  {
+   "name": "the job message counts the restored links",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "every dataplane link of the device was restored",
+   "ok": true,
+   "detail": "restored 2, expected 2"
+  },
+  {
+   "name": "the target kept its container id and has a new start time",
+   "ok": true,
+   "detail": "{\"id\": \"edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8\", \"started\": \"2026-09-27T13:45:16.270081611Z\", \"status\": \"running\", \"pid\": 2186486}"
+  },
+  {
+   "name": "the other containers kept their ids, start times and processes",
+   "ok": true,
+   "detail": "{\"clab-restore-square-ceos\": {\"id\": \"e0c7880e10fb9bb1ee69ff76a5885120a9655df43b4ad8c4f4e4815c550b29b7\", \"started\": \"2026-09-27T13:43:24.61385855Z\", \"status\": \"running\", \"pid\": 2179680}, \"clab-restore-square-vjunos-switch\": {\"id\": \"ec830d4fa6c4170afcb75cff7fc2a47cdff50b63edf0eebc40779108bff3f5c7\", \"started\": \"2026-09-27T13:10:08.664763183Z\", \"status\": \"running\", \"pid\": 2070105}, \"clab-restore-squar"
+  },
+  {
+   "name": "the device has its dataplane interfaces back",
+   "ok": true,
+   "detail": "eth4@if154, eth5@if158"
+  },
+  {
+   "name": "the device went back through Starting (its old proof was dropped)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T13:45:17+00:00\", \"booting\"], [\"2026-09-27T13:51:59+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the device is Ready again with a check made after the restart (within 780 s)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T13:45:17+00:00\", \"booting\"], [\"2026-09-27T13:51:59+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the rail reads Ready for the device again",
+   "ok": true,
+   "detail": "Ready"
+  },
+  {
+   "name": "the browser CLI shows the disconnection",
+   "ok": true,
+   "detail": "Disconnected"
+  },
+  {
+   "name": "Reconnect is offered",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "Reconnect gives a fresh session once the device is Ready",
+   "ok": true,
+   "detail": "Connected"
+  },
+  {
+   "name": "nothing typed earlier was replayed on reconnect",
+   "ok": true,
+   "detail": "Last login: Sun Sep 27 13:44:52 2026 from 172.20.20.1\n--- JUNOS 26.2R1.7-EVO Linux (none) 5.15.164-10.22.33.18-yocto-standard-juniper-19183-g14666b62b00b #1 SMP PREE\nMPT Thu May 14 16:03:56 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux\nadmin@HOSTNAME>  "
+  },
+  {
+   "name": "a new capture resolves the restarted device's interfaces on the VM",
+   "ok": false,
+   "detail": "Diagram ports et-0/0/0, et-0/0/1 were not found on the VM. Choose from the interfaces listed."
+  },
+  {
+   "name": "the device panel offers Restart device\u2026 among the per-device actions",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "name": "Restart device\u2026 is reachable by keyboard in the device panel",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the review is titled for the one device",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and start"
+  },
+  {
+   "name": "the review names the device and the lab and the native operation",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is b"
+  },
+  {
+   "name": "the review says what drops and does not promise unrelated traffic is untouched",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is b"
+  },
+  {
+   "name": "the review says nothing is saved, backed up, reset or reapplied",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is b"
+  },
+  {
+   "name": "the affected list is the one device",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly cjunosevolved in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is b"
+  },
+  {
+   "name": "the command names exactly one --node",
+   "ok": true,
+   "detail": "drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 10 hours ago to Git.\n\nOpen CLI sessions to this device will disconnect.\n\n1 device affected: cjunosevolved (clab-restore-square-cjunosevolved, running). "
+  },
+  {
+   "name": "the confirm button is the destructive Restart device",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the device panel closed under the review",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the device reads Restarting while the job runs",
+   "ok": true,
+   "detail": "pill: Restarting"
+  },
+  {
+   "name": "the lab banner names the device being restarted",
+   "ok": true,
+   "detail": "Restarting cjunosevolved\u2026DetailsExecuting on the VMStart labView outputView progressTry againRetryDetailsCheck credentialsVM connection\u2026Match to a running lab\u2026Review and remove\u2026Dismiss\u00d7"
+  },
+  {
+   "name": "one Restart device job exists for the device",
+   "ok": true,
+   "detail": "{\"id\": \"bba35e2eefcd418186fc5881ca9b057b\", \"lab_id\": \"174386ec12ee496190c585c5796b2662\", \"name\": \"restore-square\", \"action\": \"restart-node\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"created\": \"2026-09-27T13:52:10.198933+00:00\", \"status\": \"running\", \""
+  },
+  {
+   "name": "the job succeeded",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "the job output is containerlab's own restart log",
+   "ok": true,
+   "detail": "13:52:10 INFO Parsing & checking topology file=restore-square.clab.yml\n13:53:18 INFO Restored link node=cjunosevolved interface=eth4\n13:53:18 INFO Restored link node=cjunosevolved interface=eth5\n"
+  },
+  {
+   "name": "the job message counts the restored links",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "every dataplane link of the device was restored",
+   "ok": true,
+   "detail": "restored 2, expected 2"
+  },
+  {
+   "name": "the target kept its container id and has a new start time",
+   "ok": true,
+   "detail": "{\"id\": \"edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8\", \"started\": \"2026-09-27T13:53:18.168430724Z\", \"status\": \"running\", \"pid\": 2223861}"
+  },
+  {
+   "name": "the other containers kept their ids, start times and processes",
+   "ok": true,
+   "detail": "{\"clab-restore-square-ceos\": {\"id\": \"e0c7880e10fb9bb1ee69ff76a5885120a9655df43b4ad8c4f4e4815c550b29b7\", \"started\": \"2026-09-27T13:43:24.61385855Z\", \"status\": \"running\", \"pid\": 2179680}, \"clab-restore-square-vjunos-switch\": {\"id\": \"ec830d4fa6c4170afcb75cff7fc2a47cdff50b63edf0eebc40779108bff3f5c7\", \"started\": \"2026-09-27T13:10:08.664763183Z\", \"status\": \"running\", \"pid\": 2070105}, \"clab-restore-squar"
+  },
+  {
+   "name": "the device has its dataplane interfaces back",
+   "ok": true,
+   "detail": "eth4@if154, eth5@if158"
+  },
+  {
+   "name": "the device went back through Starting (its old proof was dropped)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T13:53:18+00:00\", \"booting\"]]"
+  },
+  {
+   "name": "the device is Ready again with a check made after the restart (within 780 s)",
+   "ok": false,
+   "detail": "[[\"2026-09-27T13:53:18+00:00\", \"booting\"]]"
+  },
+  {
+   "name": "the rail reads Ready for the device again",
+   "ok": false,
+   "detail": "Starting"
+  },
+  {
+   "name": "the manager sees the stopped device",
+   "ok": true,
+   "detail": "exited"
+  },
+  {
+   "name": "a stopped device reads Unavailable (not Ready) before the restart",
+   "ok": true,
+   "detail": "Unavailable"
+  },
+  {
+   "name": "a stopped device can be restarted (start/restore path), the menu item is enabled",
+   "ok": true,
+   "detail": "None"
+  },
+  {
+   "name": "the review warns about the start/restore path for a stopped device",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nThis device is exited, so containerlab takes its start/restore path: it starts the container and restores its links instead of stopping it first. Links are restored only if containerlab parked them (a stop from the manager, the VS Code extension or containerlab stop); a device "
+  },
+  {
+   "name": "the review lists the device as exited",
+   "ok": true,
+   "detail": "Restart cjunosevolved?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nThis device is exited, so containerlab takes its start/restore path: it starts the container and restores its links instead of stopping it first. Links are restored only if containerlab parked them (a stop from the manager, the VS Code extension or containerlab stop); a device "
+  },
+  {
+   "name": "the device reads Restarting while the job runs",
+   "ok": true,
+   "detail": "pill: Restarting"
+  },
+  {
+   "name": "the lab banner names the device being restarted",
+   "ok": true,
+   "detail": "Restarting cjunosevolved\u2026DetailsExecuting on the VMStart stopped devicesView outputView progressTry againRetryDetailsCheck credentialsVM connection\u2026Match to a running lab\u2026Review and remove\u2026Dismiss\u00d7"
+  },
+  {
+   "name": "one Restart device job exists for the device",
+   "ok": true,
+   "detail": "{\"id\": \"9d3444598de94bfdb18fdf7d2896b879\", \"lab_id\": \"174386ec12ee496190c585c5796b2662\", \"name\": \"restore-square\", \"action\": \"restart-node\", \"path\": \"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\", \"created\": \"2026-09-27T14:08:52.642738+00:00\", \"status\": \"running\", \""
+  },
+  {
+   "name": "the job succeeded",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "the job output is containerlab's own restart log",
+   "ok": true,
+   "detail": "14:08:53 INFO Parsing & checking topology file=restore-square.clab.yml\n14:08:53 INFO Restored link node=cjunosevolved interface=eth4\n14:08:53 INFO Restored link node=cjunosevolved interface=eth5\n"
+  },
+  {
+   "name": "the job message counts the restored links",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "every dataplane link of the device was restored",
+   "ok": true,
+   "detail": "restored 2, expected 2"
+  },
+  {
+   "name": "the target kept its container id and has a new start time",
+   "ok": true,
+   "detail": "{\"id\": \"edc84f99ebdb59e38f9721964815eb5c5349d1232f4906e665eb93312ec9e1e8\", \"started\": \"2026-09-27T14:08:53.043085874Z\", \"status\": \"running\", \"pid\": 2296653}"
+  },
+  {
+   "name": "the other containers kept their ids, start times and processes",
+   "ok": true,
+   "detail": "{\"clab-restore-square-ceos\": {\"id\": \"e0c7880e10fb9bb1ee69ff76a5885120a9655df43b4ad8c4f4e4815c550b29b7\", \"started\": \"2026-09-27T13:43:24.61385855Z\", \"status\": \"running\", \"pid\": 2179680}, \"clab-restore-square-vjunos-switch\": {\"id\": \"ec830d4fa6c4170afcb75cff7fc2a47cdff50b63edf0eebc40779108bff3f5c7\", \"started\": \"2026-09-27T13:10:08.664763183Z\", \"status\": \"running\", \"pid\": 2070105}, \"clab-restore-squar"
+  },
+  {
+   "name": "the device has its dataplane interfaces back",
+   "ok": true,
+   "detail": "eth4@if154, eth5@if158"
+  },
+  {
+   "name": "the device went back through Starting (its old proof was dropped)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T14:08:53+00:00\", \"booting\"], [\"2026-09-27T14:16:21+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the device is Ready again with a check made after the restart (within 780 s)",
+   "ok": true,
+   "detail": "[[\"2026-09-27T14:08:53+00:00\", \"booting\"], [\"2026-09-27T14:16:21+00:00\", \"ready\"]]"
+  },
+  {
+   "name": "the rail reads Ready for the device again",
+   "ok": true,
+   "detail": "Ready"
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "shots": [
+  "map-running-01-map-menu.png",
+  "map-running-02-review.png",
+  "map-running-03-restarting.png",
+  "map-running-04-ready-again.png",
+  "terminal-after-reconnect.png",
+  "capture-after-restart.png",
+  "devices-running-01-device-panel.png",
+  "devices-running-02-review.png",
+  "devices-running-03-restarting.png",
+  "devices-running-04-ready-again.png",
+  "map-stopped-02-review.png",
+  "map-stopped-03-restarting.png",
+  "map-stopped-04-ready-again.png"
+ ],
+ "finished": "2026-09-27T14:16:25+00:00"
+}

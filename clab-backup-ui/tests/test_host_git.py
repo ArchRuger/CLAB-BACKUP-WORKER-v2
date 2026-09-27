@@ -382,6 +382,62 @@ class HostGitTests(unittest.TestCase):
         self.assertEqual(result, {'files': []})
 
 
+class HostGitDesignExportTests(unittest.TestCase):
+    """A design export (`kind: network-design`) is a plan's generated files, never a configuration snapshot: it goes
+    to its own checkpoint folder only and never touches `latest` or `baseline`; the two kinds never share a folder.
+    The fixture methods are borrowed, not inherited, so the base class's tests do not run twice."""
+    setUp = HostGitTests.setUp
+    raw = HostGitTests.raw; request = HostGitTests.request; publish = HostGitTests.publish; capture = HostGitTests.capture
+    if hasattr(HostGitTests, 'tearDown'): tearDown = HostGitTests.tearDown
+
+    def test_a_capture_never_lands_on_a_hand_committed_design_manifest(self):
+        latest = self.repo / 'latest'; latest.mkdir(parents=True, exist_ok=True)
+        design = self.design()
+        (latest / 'manifest.json').write_text(json.dumps(design['manifest']) + '\n')
+        for name, data in design['files'].items(): (latest / name).write_bytes(base64.b64decode(data))
+        self.raw('add', '-A'); self.raw('commit', '-q', '-m', 'a design manifest committed by hand into latest')
+        req, result = self.publish()
+        self.assertEqual(result['status'], 'needs_attention', result)
+        self.assertIn('different kind', result['message'])
+        req, result = self.publish(capture={'manifest': dict(self.capture()['manifest'], kind='Network-Design'), 'files': self.capture()['files']}, target='checkpoint', checkpoint='odd')
+        self.assertEqual(result['status'], 'needs_attention', result); self.assertIn('Unsupported snapshot kind', result['message'])
+
+    def design(self):
+        raw = b'router ospf 1\n router-id 10.255.0.1\n'; intent = b'schema: 1\nmodules: [ospf]\n'
+        rows = [dict(path='ceos--01-ospf.cfg', size=len(raw), sha256=hashlib.sha256(raw).hexdigest(), artifact='network-design', kind='fragment', device='ceos', module='ospf'),
+                dict(path='network-intent.yml', size=len(intent), sha256=hashlib.sha256(intent).hexdigest(), artifact='network-design', kind='intent')]
+        return {'manifest': {'schema': 2, 'kind': 'network-design', 'lab_id': 'bgp', 'lab_name': 'BGP', 'generation_id': 'g' * 32, 'intent_revision': 'r1',
+                             'topology_digest': 'a' * 64, 'engine_version': '26.9', 'generated_at': '2026-09-27T00:00:00Z', 'modules': ['ospf'],
+                             'devices': ['ceos'], 'node_names': [], 'restore_capable_nodes': 0, 'files': rows},
+                'files': {'ceos--01-ospf.cfg': base64.b64encode(raw).decode(), 'network-intent.yml': base64.b64encode(intent).decode()}}
+
+    def test_a_design_export_writes_only_its_checkpoint_folder(self):
+        req, first = self.publish()   # the lab's configuration save in latest
+        self.assertEqual(first['status'], 'committed')
+        latest_before = sorted(p.name for p in (self.repo / 'latest').iterdir())
+        req, result = self.publish(capture=self.design(), target='checkpoint', checkpoint='design-plan1')
+        self.assertEqual(result['status'], 'committed', result)
+        self.assertEqual(result['snapshot_path'], 'checkpoints/design-plan1')
+        self.assertTrue(all(name.startswith('checkpoints/design-plan1/') for name in result['changed_files']), result['changed_files'])
+        self.assertEqual(sorted(p.name for p in (self.repo / 'checkpoints/design-plan1').iterdir()), ['ceos--01-ospf.cfg', 'manifest.json', 'network-intent.yml'])
+        self.assertEqual(sorted(p.name for p in (self.repo / 'latest').iterdir()), latest_before, 'latest is untouched by a design export')
+        self.assertEqual(json.loads((self.repo / 'checkpoints/design-plan1/manifest.json').read_text())['kind'], 'network-design')
+
+    def test_a_design_export_is_refused_at_latest_and_baseline(self):
+        for target in ('latest', 'baseline'):
+            req, result = self.publish(capture=self.design(), target=target, replace_baseline=True)
+            self.assertEqual(result['status'], 'needs_attention', result)
+            self.assertIn('own checkpoint folder', result['message'])
+        self.assertFalse((self.repo / 'latest' / 'network-intent.yml').exists())
+
+    def test_the_two_kinds_never_share_a_folder(self):
+        req, result = self.publish(capture=self.design(), target='checkpoint', checkpoint='design-plan1')
+        self.assertEqual(result['status'], 'committed')
+        req, result = self.publish(target='checkpoint', checkpoint='design-plan1')   # a capture into the design's folder
+        self.assertEqual(result['status'], 'needs_attention', result)
+        self.assertIn('already exists', result['message'])
+
+
 class HostGitProductionDispatchTests(unittest.TestCase):
     def setUp(self):
         self.binding = dict(id='a' * 32, revision='b' * 64, label='Ben lab', owner='ben', uid=1001, gid=1001,

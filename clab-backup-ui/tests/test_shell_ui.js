@@ -375,3 +375,12 @@ test('the Home list tab is kept for the browser session and never throws when st
  const h=harness();assert.equal(h.context.homeTab(),'recent');assert.equal(h.context.rememberHomeTab('all'),true);assert.equal(h.context.homeTab(),'all');
  const blocked=harness({throwStorage:true});assert.equal(blocked.context.homeTab(),'recent');assert.equal(blocked.context.rememberHomeTab('all'),false);
 });
+
+test('U-08: a menu that would open past the left edge anchors to its button instead, measured each time it opens',()=>{
+ const h=harness();const list=h.managerList;
+ const classes=new Set();list.classList={add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c)};
+ list.getBoundingClientRect=()=>({left:-102});
+ h.managerButton.dispatch('click');assert.equal(list.hidden,false);assert.equal(classes.has('menu-clamped'),true,'off the left edge (a narrow screen): anchored to the button');
+ h.managerButton.dispatch('click');assert.equal(list.hidden,true);
+ list.getBoundingClientRect=()=>({left:120});h.managerButton.dispatch('click');assert.equal(classes.has('menu-clamped'),false,'room on the left: the usual right-aligned list');
+});

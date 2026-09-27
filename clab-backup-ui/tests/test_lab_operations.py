@@ -19,6 +19,7 @@ import app.host_operations as host_operations
 import app.lab_operations as lab_operations
 from app.host_operations import HostOperations, LIFECYCLE, digest, capture, stream
 from app.lab_operations import LabOperations, OutputWindow, scrub, drawio
+from app.discovery import stamp
 from app.store import Store
 import test_discovery as discovery_tests
 from test_discovery import YAML
@@ -42,10 +43,10 @@ class HostOperationTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.root = Path(self.tmp.name)
         self.path = self.root/'training.clab.yaml'; self.path.write_bytes(YAML)
         self.rows = {'training': [dict(name='clab-training-r1', lab_name='training', state='running', container_id='original', absLabPath=str(self.path))]}
-        self.missing = set(); self.calls = []
+        self.missing = set(); self.calls = []; self.node_flag = True   # node_flag: the installed restart has --node
         def run(argv):
             self.calls.append(argv)
-            if '--help' in argv: return (1, '') if argv[1] in self.missing else (0, '--name --cleanup --graceful help')
+            if '--help' in argv: return (1, '') if argv[1] in self.missing else (0, '--name --cleanup --graceful help' + (' --node' if argv[1] == 'restart' and self.node_flag else ''))
             if argv[1:2] == ['inspect']: return 0, json.dumps(self.rows)
             return 0, 'fixture'
         self.host = HostOperations(dict(clab='/usr/bin/containerlab', git='/usr/bin/git', roots=[str(self.root)], projects=str(self.root), network=True), run)
@@ -103,6 +104,80 @@ class HostOperationTests(unittest.TestCase):
         with patch('app.host_operations.stream',return_value=7) as stream:
             self.assertEqual(self.host.execute(req,outputs.append)['exit_code'],7)
             self.assertEqual(stream.call_count,1)
+
+    def test_restart_device_names_exactly_one_node_and_binds_its_container(self):
+        """Restart device (containerlab restart --node): one literal node, one bound container, the affected list is that device alone."""
+        plan = self.host.plan(self.request('restart-node', node='r1', container='clab-training-r1'))
+        self.assertEqual(plan['argv'], ['/usr/bin/containerlab', 'restart', '-t', str(self.path), '--name', 'training', '--node', 'r1'])
+        self.assertEqual(plan['argv'].count('--node'), 1); self.assertEqual(plan['steps'], [])
+        self.assertEqual(plan['affected'], [{'name': 'clab-training-r1', 'id': 'original', 'state': 'running'}])
+        self.assertEqual((plan['node'], plan['container']), ('r1', 'clab-training-r1')); self.assertEqual(plan['warnings'], [])
+        self.assertTrue(self.host.capabilities()['actions']['restart-node']['available'])
+        # A stopped node takes containerlab's start/restore path and says so; it is not refused.
+        self.rows['training'][0]['state'] = 'exited'
+        stopped = self.host.plan(self.request('restart-node', node='r1', container='clab-training-r1'))
+        self.assertEqual(stopped['argv'][-2:], ['--node', 'r1']); self.assertIn('start/restore', stopped['warnings'][0])
+        self.assertNotEqual(stopped['digest'], plan['digest'], 'the container state is bound into the review')
+        # The lab-wide restart is unchanged and never names a node.
+        whole = self.host.plan(self.request('restart')); self.assertNotIn('--node', whole['argv']); self.assertEqual(len(whole['affected']), 1)
+        # Two deployed rows: only the named container is affected.
+        self.rows['training'][0]['state'] = 'running'
+        self.rows['training'].append(dict(name='clab-training-r2', lab_name='training', state='running', container_id='second', absLabPath=str(self.path)))
+        second = self.host.plan(self.request('restart-node', node='r2', container='clab-training-r2'))
+        self.assertEqual(second['affected'], [{'name': 'clab-training-r2', 'id': 'second', 'state': 'running'}]); self.assertEqual(second['argv'][-2:], ['--node', 'r2'])
+        self.assertEqual(len(self.host.plan(self.request('restart'))['affected']), 2, 'the lab-wide review still lists every device')
+
+    def test_restart_device_fails_closed_on_every_bad_selector_and_never_widens_to_the_lab(self):
+        bad = [{}, {'node': 'r1'}, {'container': 'clab-training-r1'}, {'node': '', 'container': 'clab-training-r1'}, {'node': None, 'container': 'clab-training-r1'},
+               {'node': ['r1'], 'container': 'clab-training-r1'}, {'node': 'r1,r2', 'container': 'clab-training-r1'}, {'node': '--node', 'container': 'clab-training-r1'},
+               {'node': '-r1', 'container': 'clab-training-r1'}, {'node': 'r1 r2', 'container': 'clab-training-r1'}, {'node': 'r1', 'container': 'clab-training-r2'},
+               {'node': 'r1', 'container': ['clab-training-r1']}, {'node': 'r1', 'container': 'clab-training-r1', 'cleanup': True},
+               {'node': 'r1', 'container': 'clab-training-r1', 'graceful': True}, {'node': 'r2', 'container': 'clab-training-r2'}, {'node': 'r1', 'container': 'clab-other-r1'},
+               {'node': 'r1', 'container': 'clab-training-r1', 'extra': 1},
+               {'node': 'switch', 'container': 'clab-training-vjunos-switch'}, {'node': 'switch', 'container': 'vjunos-switch'},
+               {'node': 'r1', 'container': 'other-r1'}, {'node': 'r1', 'container': 'x-r1'}]
+        with patch('app.host_operations.stream') as stream:
+            for options in bad:
+                with self.assertRaises(ValueError, msg=repr(options)): self.host.plan(dict(action='restart-node', name='training', path=str(self.path), options=options))
+                with self.assertRaises(ValueError, msg=repr(options)): self.host.execute(dict(action='restart-node', name='training', path=str(self.path), options=options, digest='x'), lambda _: None)
+            stream.assert_not_called()
+        # No other action takes a node selector, so a selector can never reach the lab-wide commands.
+        for action in (*LIFECYCLE, 'delete', 'inspect-all'):
+            with self.assertRaisesRegex(ValueError, 'options'): self.host.plan(dict(action=action, name='training', path=str(self.path), options={'node': 'r1', 'container': 'clab-training-r1'}))
+        # An installed containerlab whose restart has no --node refuses with the reason, and the capability says so.
+        self.node_flag = False
+        with self.assertRaisesRegex(ValueError, 'no --node'): self.host.plan(self.request('restart-node', node='r1', container='clab-training-r1'))
+        self.assertFalse(self.host.capabilities()['actions']['restart-node']['available'])
+        self.assertTrue(self.host.capabilities()['actions']['restart']['available'], 'the lab-wide restart is still there')
+        self.node_flag = True; self.missing.add('restart')
+        with self.assertRaisesRegex(ValueError, 'does not support restart'): self.host.plan(self.request('restart-node', node='r1', container='clab-training-r1'))
+        self.assertFalse(self.host.capabilities()['actions']['restart-node']['available'])
+
+    def test_restart_device_binds_every_container_naming_shape_exactly(self):
+        from app.host_operations import node_selector
+        for container in ('clab-training-r1', 'lab-training-r1', 'training-r1', 'r1'):
+            self.assertEqual(node_selector({'node': 'r1', 'container': container}, 'training'), ('r1', container))
+        for container in ('clab-training-vjunos-r1', 'clab-other-r1', 'training-vjunos-r1', 'xr1', 'clab-training-r1 ', 'clab-training-r10'):
+            with self.assertRaises(ValueError, msg=container): node_selector({'node': 'r1', 'container': container}, 'training')
+        # In a lab with both `switch` and `vjunos-switch`, the shorter name can only bind its own container.
+        self.rows['training'].append(dict(name='clab-training-vjunos-switch', lab_name='training', state='running', container_id='vs', absLabPath=str(self.path)))
+        self.rows['training'].append(dict(name='clab-training-switch', lab_name='training', state='running', container_id='sw', absLabPath=str(self.path)))
+        plan = self.host.plan(self.request('restart-node', node='switch', container='clab-training-switch'))
+        self.assertEqual(plan['affected'][0]['id'], 'sw'); self.assertEqual(plan['argv'][-2:], ['--node', 'switch'])
+        with self.assertRaisesRegex(ValueError, 'does not belong'): self.host.plan(self.request('restart-node', node='switch', container='clab-training-vjunos-switch'))
+
+    def test_restart_device_review_is_refused_at_run_time_after_a_redeploy_or_a_state_change(self):
+        req = self.request('restart-node', node='r1', container='clab-training-r1'); req['digest'] = self.host.plan(req)['digest']
+        for change in ({'container_id': 'recreated'}, {'state': 'exited'}, {'name': 'clab-training-r1-renamed'}):
+            original = dict(self.rows['training'][0]); self.rows['training'][0].update(change)
+            with patch('app.host_operations.stream') as stream:
+                with self.assertRaises(ValueError, msg=repr(change)): self.host.execute(req, lambda _: None)
+                stream.assert_not_called()
+            self.rows['training'][0] = original
+        with patch('app.host_operations.stream', return_value=0) as stream:
+            self.assertEqual(self.host.execute(req, lambda _: None)['exit_code'], 0)
+            self.assertEqual(stream.call_args.args[0], ['/usr/bin/containerlab', 'restart', '-t', str(self.path), '--name', 'training', '--node', 'r1'])
+            self.assertEqual(stream.call_args.args[1], str(self.path.parent))
 
     def test_source_state_and_options_changes_invalidate_review(self):
         req=self.request('destroy');req['digest']=self.host.plan(req)['digest']
@@ -610,7 +685,9 @@ class OperationAPITests(unittest.TestCase):
         self.raw=YAML
         def remote(host,req,*args):
             if req['mode']=='read':return dict(text=self.raw.decode(),sha256=hashlib.sha256(self.raw).hexdigest())
-            if req['mode']=='preview':return dict(action=req['action'],name=req['name'],path=req['path'],source_hash=hashlib.sha256(self.raw).hexdigest(),digest=digest(req),warnings=[],affected=[],argv=[],steps=[])
+            if req['mode']=='preview':
+                affected=[dict(name=req['options']['container'],id='c1',state='running')] if req['action']=='restart-node' else []
+                return dict(action=req['action'],name=req['name'],path=req['path'],source_hash=hashlib.sha256(self.raw).hexdigest(),digest=digest(req),warnings=[],affected=affected,argv=[],steps=[])
             if req['mode']=='run':args[0]('first line\nhost-secret\npassword: should-not-persist\n'+self.store.token+'\n');return dict(exit_code=0)
             return {}
         return patch('app.lab_operations.remote',side_effect=remote)
@@ -720,6 +797,154 @@ class OperationAPITests(unittest.TestCase):
             self.assertEqual(self.confirm(preview['token']).status_code,409);submit.assert_not_called()
             with self.assertRaisesRegex(ValueError,'operation'):self.app.state.runner.submit(self.lab_id,'backup')
             del self.store.lab(self.lab_id)['telemetry_retired']['removing'];self.assertFalse(operation_busy(self.store.state,self.lab_id))
+
+    def test_restart_device_resolves_one_node_binds_the_review_and_shows_the_device_restarting(self):
+        with self.fixture() as remote,patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit') as submit:
+            lab=self.store.lab(self.lab_id);node=lab['nodes'][0]['name'];self.assertEqual(node,'clab-training-r1')
+            # The page names the manager's node; the server sends the helper the topology node and its container.
+            preview=self.preview('restart-node',node=node)
+            sent=next(c.args[1] for c in remote.call_args_list if c.args[1]['mode']=='preview')
+            self.assertEqual(sent['options'],{'node':'r1','container':'clab-training-r1'});self.assertEqual(sent['action'],'restart-node')
+            self.assertEqual((preview['node'],preview['node_label']),('clab-training-r1','r1'))
+            self.assertEqual([a['name'] for a in preview['affected']],['clab-training-r1'])
+            # Refusals before the helper is asked: no device, an unknown device, a selector in the options, a selector on another action, an option.
+            calls=len(remote.call_args_list)
+            for payload,code in ((dict(action='restart-node',lab_id=self.lab_id),400),(dict(action='restart-node',lab_id=self.lab_id,node='clab-training-r9'),404),
+                                 (dict(action='restart-node',lab_id=self.lab_id,node=node,options={'node':'r2'}),400),(dict(action='restart',lab_id=self.lab_id,node=node),400),
+                                 (dict(action='restart-node',lab_id=self.lab_id,node=node,options={'cleanup':True}),400),(dict(action='restart-node',node=node),400),
+                                 (dict(action='deploy',lab_id=self.lab_id,options={'container':'clab-training-r1'}),400)):
+                response=self.client.post('/api/operations/preview',headers=self.auth,json=payload)
+                self.assertEqual(response.status_code,code,response.text)
+            self.assertFalse(any(c.args[1]['mode']=='preview' for c in remote.call_args_list[calls:]),'nothing reached the helper')
+            # A device the manager cannot match to the topology file is refused, never guessed.
+            lab['nodes'][1].update(definition_node='',short_name='')
+            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='restart-node',lab_id=self.lab_id,node='clab-training-r2'))
+            self.assertEqual(response.status_code,409);self.assertIn('cannot match',response.text)
+            # Confirm: the job carries the device; the device reads as restarting and its CLI closes while the job is queued.
+            job=self.confirm(preview['token']).json()
+            self.assertEqual((job['action'],job['node'],job['node_label']),('restart-node','clab-training-r1','r1'))
+            public=next(l for l in self.client.get('/api/state',headers=self.auth).json()['labs'] if l['id']==self.lab_id)
+            r1,r2=public['nodes']
+            self.assertEqual(r1['nos_login']['status'],'restarting');self.assertFalse(r1['ssh_ready'])
+            self.assertNotEqual(r2['nos_login']['status'],'restarting','the other device keeps its own state')
+            self.assertEqual(self.client.get('/api/operations',headers=self.auth).json()[0]['node_label'],'r1')
+            # Running it drops the device's proven login before and after the helper call.
+            readiness=self.app.state.readiness;key=(self.lab_id,node)
+            with self.app.state.node_services.lock:self.app.state.node_services.checks[key]={'status':'reachable','at':'then','message':'ok'}
+            with patch.object(readiness,'forget',wraps=readiness.forget) as forget:
+                args=submit.call_args.args;args[0](*args[1:])
+            self.assertEqual([c.args for c in forget.call_args_list],[(key,)]*3,'before the helper runs, right after it returns, and once more when the job is closed')
+            with self.app.state.node_services.lock:self.assertNotIn(key,self.app.state.node_services.checks)
+            saved=next(j for j in self.store.state['operations'] if j['id']==job['id'])
+            self.assertEqual(saved['status'],'succeeded');self.assertEqual(saved['node'],node)
+            self.assertEqual(self.store.lab(self.lab_id).get('last_deployed',''),'','a device restart is not a deployment')
+            self.assertEqual(Store(self.tmp.name).state['operations'][0]['node_label'],'r1','the device travels with the persisted job')
+
+    def test_the_xrv9k_review_names_the_fresh_disk_limit_and_other_kinds_get_no_note(self):
+        # QA-017: the XRv9k image's launcher picks the VM disk by file name at every start, so the first restart after
+        # a deploy boots from a fresh disk and the device comes back with its factory configuration (proven live).
+        with self.fixture():
+            lab=self.store.lab(self.lab_id);node=lab['nodes'][0]['name']
+            lab['nodes'][0]['kind']='cisco_xrv9k'
+            preview=self.preview('restart-node',node=node)
+            self.assertTrue(any('factory configuration' in w and 'Back up the configuration first' in w for w in preview['warnings']),preview['warnings'])
+            lab['nodes'][0]['kind']='arista_ceos'
+            preview=self.preview('restart-node',node=node)
+            self.assertFalse(any('Known limit' in w for w in preview['warnings']),preview['warnings'])
+
+    def test_a_neighbour_that_is_not_running_is_named_in_the_review_and_the_job_counts_the_links(self):
+        # QA-018: containerlab restores a parked link only while its other end exists. With a neighbour exited, the
+        # link stays missing and a VM-based image waits for the interface and never boots; the review says so before
+        # the student confirms, and the job reports n of m links instead of a bare success.
+        with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
+            lab=self.store.lab(self.lab_id);node=lab['nodes'][0]['name']
+            short=lab['nodes'][0].get('definition_node') or lab['nodes'][0].get('short_name')
+            lab['nodes'].append({'name':'clab-training-r2','short_name':'r2','definition_node':'r2','kind':'juniper_vjunosswitch','discovered':True,'runtime_state':'exited'})
+            lab['nodes'].append({'name':'clab-training-r3','short_name':'r3','definition_node':'r3','kind':'arista_ceos','discovered':True,'runtime_state':'running'})
+            lab['drawing']={'nodes':[],'links':[[{'node':short,'interface':'eth1'},{'node':'r2','interface':'eth1'}],[{'node':short,'interface':'eth2'},{'node':'r3','interface':'eth1'}],[{'node':'r2','interface':'eth2'},{'node':'r3','interface':'eth2'}]]}
+            preview=self.preview('restart-node',node=node)
+            warning=next((w for w in preview['warnings'] if 'is not running.' in w),'')
+            self.assertIn('r2 is not running. If it was stopped by the manager, the VS Code extension or containerlab stop, its link to '+short+' is parked and comes back',warning)
+            self.assertIn('containerlab restores only 1 of 2 links and the job says so',warning);self.assertIn('Start r2 first',warning)
+            self.assertFalse(any('r3' in w for w in preview['warnings']),'a running neighbour is not named')
+            job=self.confirm(preview['token']).json()
+            self.assertEqual(job.get('links_expected'),2);self.assertEqual(job.get('neighbours_down'),['r2'])
+            def remote(host,req,*args):
+                args[0]('Restored link r1:eth2 <-> r3:eth1\n');return dict(exit_code=0)
+            def running(wait=False): lab['nodes'][0].update(discovered=True,runtime_state='running',runtime_status='Up 2 seconds')
+            with patch('app.lab_operations.remote',side_effect=remote),patch.object(self.service,'refresh',side_effect=running),patch('app.lab_operations.time.sleep'):
+                args=submit.call_args.args;args[0](*args[1:])
+            saved=next(j for j in self.store.state['operations'] if j['id']==job['id'])
+            self.assertEqual(saved['status'],'succeeded')
+            self.assertIn('1 of 2 links restored (no link to r2: not running, its link was gone; the device waits for it before it boots)',saved['message'])
+            # Every neighbour running: no warning, and the plain count.
+            lab['nodes'][1]['runtime_state']='running'
+            preview=self.preview('restart-node',node=node)
+            self.assertFalse(any('is not running.' in w for w in preview['warnings']),preview['warnings'])
+
+    def test_a_restart_whose_container_exits_right_after_is_a_failed_job_with_the_reason(self):
+        with self.fixture(),patch.object(self.app.state.operations.pool,'submit') as submit:
+            lab=self.store.lab(self.lab_id);node=lab['nodes'][0]['name']
+            # The review of a vJunos-switch names the known limit before the student confirms.
+            lab['nodes'][0]['kind']='juniper_vjunosswitch'
+            preview=self.preview('restart-node',node=node)
+            self.assertTrue(any('cannot be started a second time' in w for w in preview['warnings']),preview['warnings'])
+            job=self.confirm(preview['token']).json()
+            # Discovery, asked again after the command, lists the container as exited: the job fails and says why.
+            def exited(wait=False):
+                lab['nodes'][0].update(discovered=True,runtime_state='exited',runtime_status='Exited (1) 2 seconds ago')
+            with patch.object(self.service,'refresh',side_effect=exited),patch('app.lab_operations.time.sleep'):
+                args=submit.call_args.args;args[0](*args[1:])
+            saved=next(j for j in self.store.state['operations'] if j['id']==job['id'])
+            self.assertEqual(saved['status'],'failed');self.assertEqual(saved['exit_code'],0,'the command itself did succeed, and the record keeps that')
+            self.assertIn('its container is exited (Exited (1) 2 seconds ago) right after starting',saved['message'])
+            self.assertIn('cannot be started a second time',saved['message']);self.assertIn('Redeploy the lab',saved['message'])
+            self.assertEqual(self.store.lab(self.lab_id).get('last_deployed',''),'')
+            # A device that is running afterwards keeps its success (and an unknown kind gets the generic reason when it exits).
+            lab['nodes'][0]['kind']='arista_ceos'
+            preview=self.preview('restart-node',node=node);self.assertFalse(any('second time' in w for w in preview['warnings']))
+            job=self.confirm(preview['token']).json()
+            def running(wait=False): lab['nodes'][0].update(discovered=True,runtime_state='running',runtime_status='Up 2 seconds')
+            with patch.object(self.service,'refresh',side_effect=running),patch('app.lab_operations.time.sleep'):
+                args=submit.call_args.args;args[0](*args[1:])
+            self.assertEqual(next(j for j in self.store.state['operations'] if j['id']==job['id'])['status'],'succeeded')
+
+    def test_a_restart_device_review_is_stale_once_another_lifecycle_operation_ran(self):
+        with self.fixture(),patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit') as submit:
+            node=self.store.lab(self.lab_id)['nodes'][0]['name']
+            first=self.preview('restart-node',node=node);second=self.preview('restart-node',node=node)   # two tabs, two reviews
+            job=self.confirm(first['token']).json();args=submit.call_args.args;args[0](*args[1:])
+            self.assertEqual(next(j for j in self.store.state['operations'] if j['id']==job['id'])['status'],'succeeded')
+            stale=self.confirm(second['token']);self.assertEqual(stale.status_code,409);self.assertIn('ran after this review',stale.text)
+            self.assertEqual(len(self.store.state['operations']),1,'the stale consent started nothing')
+            # The same after a lab-wide operation, and after the device's identity changed in the lab.
+            third=self.preview('restart-node',node=node);whole=self.preview('stop')
+            self.confirm(whole['token']);args=submit.call_args.args;args[0](*args[1:])
+            self.assertEqual(self.confirm(third['token']).status_code,409)
+            fourth=self.preview('restart-node',node=node)
+            self.store.lab(self.lab_id)['nodes'][0]['definition_node']='r9'
+            changed=self.confirm(fourth['token']);self.assertEqual(changed.status_code,409);self.assertIn('device changed',changed.text)
+            self.assertEqual(len(self.store.state['operations']),2)
+            # A review not about a device is untouched by these checks.
+            self.store.lab(self.lab_id)['nodes'][0]['definition_node']='r1'
+            plain=self.preview('inspect');self.assertEqual(self.confirm(plain['token']).status_code,200)
+
+    def test_a_restart_device_review_is_stale_when_a_lifecycle_job_lands_during_its_own_helper_calls(self):
+        # Tab B confirms a lab-wide restart while tab A's review is still asking the helper: A's review must not
+        # outlive it (the helper digest cannot tell, a restart keeps every container id and state).
+        with self.fixture() as remote,patch.object(self.service,'refresh'),patch.object(self.app.state.operations.pool,'submit'):
+            node=self.store.lab(self.lab_id)['nodes'][0]['name'];inner=remote.side_effect
+            def during_plan(host,req,*a):
+                if req['mode']=='preview' and req['action']=='restart-node':
+                    self.store.state['operations'].append(dict(id='b',lab_id=self.lab_id,name='training',action='restart',path='',created=stamp(),status='succeeded',output='',message='',exit_code=0))
+                return inner(host,req,*a)
+            remote.side_effect=during_plan
+            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='restart-node',lab_id=self.lab_id,node=node))
+            self.assertEqual(response.status_code,409,response.text);self.assertIn('while this review was being prepared',response.text)
+            remote.side_effect=inner
+            # And a page-supplied path is refused for this action: the lab's own topology file is the only one.
+            response=self.client.post('/api/operations/preview',headers=self.auth,json=dict(action='restart-node',lab_id=self.lab_id,node=node,path='/etc/containerlab/other.clab.yaml'))
+            self.assertEqual(response.status_code,400)
 
     def test_last_deployed_is_the_real_time_of_a_succeeded_deploy_and_never_invented(self):
         from app.lab_operations import last_deployed

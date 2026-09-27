@@ -46,11 +46,20 @@ function mapCaptureInterfacesFor(drawing,node){
  for(const pair of drawing.links)for(const ep of pair)if(ids.has(ep.node)&&ep.capture_interface)result[ep.interface]=ep.capture_interface;
  return result;
 }
-function captureBox(name,checked){return `<label class="capture-interface"><input type="checkbox" value="${esc(name)}" ${checked?'checked':''}> <span>${esc(name)}</span></label>`;}
+// A box carries the container interface (what the capture runs on) and, when the diagram names that
+// port differently (ge-0/0/0 on eth1), the device's own port name beside it.
+function captureBox(name,checked,port){return `<label class="capture-interface"><input type="checkbox" value="${esc(name)}" ${checked?'checked':''}> <span>${esc(name)}</span>${port&&port!==name?` <small>${esc(port)}</small>`:''}</label>`;}
 function renderCaptureInterfaces(){
  invalidateCapture();const target=captureSelected();
- const live=target?target.interfaces:[],mapped=captureNode?captureMapInterfaces:[];
- const primary=mapped.filter(n=>live.includes(n)),missing=mapped.filter(n=>!live.includes(n));
+ const live=target?target.interfaces:[];
+ // The diagram's ports are compared with the VM's list through their container names (ge-0/0/0 is eth1 on
+ // a vJunos, Gi0/0/0/0 is eth1 on an XRv9k): a port whose veth the VM lists is a connected interface, and
+ // "not found" is said only of a port whose veth really is absent. A port with no known mapping is looked
+ // for under its own name, as a linux node's eth1 is.
+ const ports=captureNode?captureMapInterfaces:[],veth=port=>captureMapCapture[port]||port;
+ const portOf={};for(const port of ports)portOf[veth(port)]=port;
+ const mapped=[...new Set(ports.map(veth))];
+ const primary=mapped.filter(n=>live.includes(n)),missing=ports.filter(port=>!live.includes(veth(port)));
  // The tap device is the VM side of a vJunos-style image's own management link; the veth
  // (ethN) is what containerlab's Wireshark integration captures on, so a mapped port is never
  // preselected onto a tapN name even if discovery happens to list one.
@@ -67,8 +76,8 @@ function renderCaptureInterfaces(){
  }else if(primary.length===1)hinted=primary[0];
  const usePrimary=primary.length>0,rest=usePrimary?live.filter(n=>!primary.includes(n)):[];
  $('capture-primary-legend').textContent=usePrimary?'Connected interfaces':'Interfaces';captureAdvancedLabel();
- $('capture-interfaces').innerHTML=!target?'<p>Choose a device above, or open Capture traffic from a device on the map.</p>':(usePrimary?primary:live).map(n=>captureBox(n,n===hinted)).join('')||'<p>This device has no interfaces that can be captured.</p>';
- $('capture-interfaces-all').innerHTML=rest.map(n=>captureBox(n,false)).join('');
+ $('capture-interfaces').innerHTML=!target?'<p>Choose a device above, or open Capture traffic from a device on the map.</p>':(usePrimary?primary:live).map(n=>captureBox(n,n===hinted,portOf[n])).join('')||'<p>This device has no interfaces that can be captured.</p>';
+ $('capture-interfaces-all').innerHTML=rest.map(n=>captureBox(n,false,portOf[n])).join('');
  $('capture-more').hidden=!rest.length;$('capture-more').open=false;
  $('capture-more-label').textContent=`Other interfaces on this device (${rest.length})`;
  updateCapturePrepare(!!hinted);

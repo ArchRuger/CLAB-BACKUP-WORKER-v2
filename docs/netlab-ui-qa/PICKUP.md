@@ -1,0 +1,82 @@
+# Relentless netlab UI/UX campaign + Restart device: pickup file
+
+Read this first. The assignment is the owner's `CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md` (kept
+outside Git in the worktree root; revision 2 folds in `CLAB_Single_Device_Restart_Addendum.md`): validate,
+debug, repair and polish every implemented netlab workflow, and implement **Restart device** (one node,
+native `containerlab restart --node`, Containerlab VS Code extension parity) as the one authorized new
+feature. Companion records in this folder:
+
+- `COVERAGE.md` / `coverage.json`: the coverage inventory (stable IDs, one row per control/workflow/state).
+- `DEFECTS.md`: the defect ledger (P0–P3, reproduction, root cause, fix, regression test, retests).
+- `EVIDENCE.md`: index of evidence files under `evidence/` (sanitised; raw traces stay outside Git).
+- `RESTART-PARITY.md`: the compact parity record for Restart device (extension ref, CLI, command, matrix).
+- `tools/`: reusable checks (Playwright against the fixture manager or the deployed product).
+
+## Branch, build, environment (2026-09-27)
+
+- Branch `claude/netlab-integration`, worktree `~/projects/clab-manager-1.30.42`, HEAD `3194ec4` at start
+  (release 1.30.47, PR #55 open). Push with the `ArchRuger` gh account, switch back to `pruger-dev`.
+- Installed product: `clab-backup:1.30.48` since 16:31 UTC (`sudo bash deploy/start-manager.sh --manager-only`;
+  container `containerlab-node-manager-backup-ui-1`, port 8081, data `/srv/containerlab-node-manager/data`), helpers
+  1.30.48 under `/usr/local/lib/clab-manager` (verified by the launcher and `check-install.sh`: PASS 62, WARN 1 =
+  folder coverage cap), capture stack `clab-manager-capture` (session service still `clab-capture-service:1.30.42`,
+  not rebuilt: unchanged). Earlier builds of the day: the 1.30.47 working tree at 13:37, 14:45 and 15:16 UTC.
+- VM: Docker 29.8.1, **containerlab 0.79.0** (commit 5ae50094a, 2026-08-21; `restart --node` present),
+  28 CPUs, 67 GiB RAM, 22 GiB free disk. Python 3.12.3; system Node 18.19.1 (Node 24 under
+  `~/.local/node24`, only for the editor bundle). Playwright 1.63.0 in `clab-backup-ui/.venv`, Chromium
+  1243 in `~/.cache/ms-playwright`.
+- Routing: user settings `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`, `_FORCE=0`; project agents carry their model
+  (`risk-reviewer` opus, `docs-auditor` sonnet, `mechanical-editor` haiku). Requested vs observed routes
+  are recorded per chunk below.
+- Lab `restore-square` (four baseline images + `host1`) was **not deployed** at the start of the campaign
+  (containers gone, lab folder held only the YAML). Redeployed with `sudo containerlab deploy` at
+  13:10 UTC on 2026-09-27 (log: session scratch); devices start from containerlab startup configuration,
+  not from the restore record's configuration A. Boot: cEOS ~1 min, cJunosEvolved ~8, XRv9k ~11–13,
+  vJunos-switch ~17. Redeployed again at 15:15 UTC (vJunos-switch exited after its restart, QA-014) and at
+  16:22 UTC (vJunos-switch exited again after the rerun; XRv9k on a fresh disk, QA-017, then stuck waiting for
+  its link, QA-018); configuration A put back each time with `nodecli.py <node> --file …/base-configs/<node>.cli`
+  (16:22 cEOS, 16:34 XRv9k, 16:40 vJunos-switch, cJunosEvolved ~16:44). **vJunos-switch cannot be restarted** and
+  **XRv9k's first restart after a deploy loses its configuration**: plan live work around that (a redeploy plus
+  configuration A takes ~20 min).
+
+## Baseline (before any change)
+
+- Python: `python -m unittest discover -s tests -t tests` → **1686 tests OK (1 skipped)**, 200 s.
+- Browser: `node --test tests/*.js` → **347 pass, 0 fail**.
+- `python3 deploy/verify-release.py` → 1.30.47 everywhere; `git diff --check` clean. No inherited failures.
+
+## Chunks
+
+| Chunk | Phase | Content | Release | Commit | Status |
+|---|---|---|---|---|---|
+| 0 | A | Baseline, runtime identity, lab redeploy, workspace skeleton, reference fetch (extension `6df8e96`, 0.26.3; containerlab restart docs), inventory (Sonnet: `COVERAGE.md`, 123 rows) and §6 probe charters (Sonnet) | none | | done |
+| 1 | B2 | Restart device: helper action `restart-node` (fail-closed selector, one `--node`, target bound by container id/state), manager resolution and stale-consent checks, readiness epoch + `restarting` state + uptime hint, map menu and Devices/panel entry points, review copy, docs; unit tests (Python 1686→1692, browser 347→353); deployed on the dev VM 13:37 UTC; live on cEOS (66/66); cJunosEvolved first run 70/73 (map, stopped, terminal PASS; the second boot stalled in GRUB, capture list stale right after readiness → rerun on the reviewed build in progress); Opus risk review applied (RD-001…004); QA-001…QA-012 fixed (inventory + the ten §6 probes, all confirmed by the probe run) with 77 Design tab unit tests; stress pass and usability review running | 1.30.48 (not yet cut) | not yet committed | in progress |
+
+## Exact next action
+
+Release 1.30.48 is cut on the working tree (markers moved, the three history sections written, `verify-release.py`
+green, Python 1701 OK, browser 378, deployed on the dev VM at 16:31 UTC) and **not yet committed**. Running or just
+finished when this was written: the final-build live runs (`session scratch: final-live.sh` → cEOS full run, the
+neighbour check `tools/check_restart_neighbour.py`, two-tabs on `host1`, XRv9k restart 1 (fresh disk expected) →
+configuration A → restart 2 (Devices view) with read-backs), and the coverage closure is done (Sonnet agent, `tools/coverage_run.py`: 112 PASS, 0 FAIL, 8 BLOCKED, 3 NOT RUN of 123 rows,
+`evidence/coverage/`, `COVERAGE.md` › Results). Final-build live results so far (all on 1.30.48, redeployed lab with
+configuration A): cEOS 78/78 (16:45), two-tabs 13/13 (16:50), XRv9k 27/27 + 52/52 with the known-limit note in every
+review and the first restart losing its configuration (16:50–17:15), the later-restart persistence proof 27/27 with the
+configuration kept (17:19–17:25), the neighbour checks in both stop modes (17:25, 17:26: parked link comes back, destroyed
+link reported as `2 of 3 links restored`, cEOS then waits five minutes for the missing interface: `CLAB_INTFS`). A last
+chain (`session scratch: final3.sh`) rebuilds the manager with the final wording, redeploys, reruns both neighbour checks
+and two-tabs, and redeploys again for the acceptance passes.
+
+Then: add the final3 neighbour rerun records to `DEFECTS.md` (QA-018, Live) and `EVIDENCE.md` in the evidence commit; `python3 deploy/verify-release.py`;
+commit the intended files only (never `git add -A`: `.claude/`, the three prompt files in the worktree root and any
+`failure.png`/`student-workflow.json` tool droppings stay out; `docs/netlab-ui-qa/` goes in), push with the `ArchRuger`
+gh account (`gh auth switch --user ArchRuger`, push, `gh auth switch --user pruger-dev`), open a pull request to
+`main` (PR #55 covered only 1.30.43; 1.30.44–1.30.48 have none), watch CI. Then the two independent clean acceptance
+passes on the final build (fresh Sonnet and Opus agents, `docs/netlab-ui-qa/tools/` plus the live lab; never rebuild the
+manager container while one runs) and the final report (`docs/netlab-ui-qa/FINAL-REPORT.md`: "Implemented:
+individual-device restart", UI paths, versions and commands tested, per-image results, limits, "Intentionally removed
+functionality: None", every BLOCKED/NOT RUN named).
+
+Open findings to carry: TOOL-001 (three UI-review tools fail on HEAD too), OBS-001/OBS-002 (recorded, not changed),
+U-13 (partial). Known image facts: `RESTART_KNOWN_LIMITS` (vJunos-switch, XRv9k) and the neighbour-down behaviour
+(`restart_links`) in `lab_operations.py`, all proven live on 2026-09-27.

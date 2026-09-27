@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.30.44'
+VERSION = '1.30.48'
 LIMIT = 1024 * 1024
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 # The lab builder publishes a new lab folder (publish) and saves again over a lab that is not
@@ -39,6 +39,26 @@ def identity(value):
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def node_selector(options, lab):
+    """The one topology node of a single-device action, and the container it must be on the VM.
+
+    Fails closed: each must be one plain literal string (the node as containerlab names it in the
+    topology, the container as `inspect` lists it). A list, a comma-separated pair, an option-like
+    value, an empty or absent selector is refused here, so a request without a valid selector can
+    never continue into the lab-wide restart. The container must be exactly what containerlab names
+    that node of this lab: <prefix>-<lab>-<node> for any prefix, <lab>-<node> for the `__lab-name`
+    prefix, or the bare node name for an empty prefix; a bare suffix match would let `switch` bind
+    `…-vjunos-switch`."""
+    node = options.get('node'); container = options.get('container')
+    if not isinstance(node, str) or not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}', node):
+        raise ValueError('Choose one device by its literal topology node name.')
+    if not isinstance(container, str) or not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,252}', container):
+        raise ValueError('The device has no valid container name.')
+    if container != node and container != lab + '-' + node and not container.endswith('-' + lab + '-' + node):
+        raise ValueError('The container name does not belong to this topology node.')
+    return node, container
 
 
 def capture(argv, cwd='/', timeout=15):
@@ -143,6 +163,8 @@ class HostOperations:
             help_text = self.help(action)
             actions[action] = {'available': bool(help_text), 'cleanup': '--cleanup' in help_text,
                                'graceful': '--graceful' in help_text}
+            # Restart device (one node): containerlab's own node selector on its restart command.
+            if action == 'restart': actions['restart-node'] = {'available': bool(help_text) and '--node' in help_text}
         if not actions['redeploy']['available'] and actions['deploy']['available'] and actions['destroy']['available']:
             actions['redeploy'] = {**actions['destroy'], 'fallback': True}
         actions['clone'] = {'available': bool(self.config.get('network')) and os.access(self.config.get('git', '/usr/bin/git'), os.X_OK)}
@@ -214,9 +236,11 @@ class HostOperations:
 
     def plan(self, req):
         action = req.get('action')
-        if action not in (*LIFECYCLE, 'inspect-all', 'create', 'delete', 'clone', 'publish', 'revise'): raise ValueError('Unsupported lab operation.')
+        if action not in (*LIFECYCLE, 'restart-node', 'inspect-all', 'create', 'delete', 'clone', 'publish', 'revise'): raise ValueError('Unsupported lab operation.')
         options = req.get('options') or {}
-        if not isinstance(options, dict) or set(options) - {'cleanup', 'graceful', 'url', 'project', 'text', 'annotations', 'root', 'base'}:
+        # restart-node takes its two selector keys and nothing else; no other action accepts a selector.
+        allowed = {'node', 'container'} if action == 'restart-node' else {'cleanup', 'graceful', 'url', 'project', 'text', 'annotations', 'root', 'base'}
+        if not isinstance(options, dict) or set(options) - allowed:
             raise ValueError('Unsupported operation options.')
         for key in ('cleanup', 'graceful'):
             if key in options and type(options[key]) is not bool: raise ValueError('Invalid boolean option.')
@@ -265,7 +289,35 @@ class HostOperations:
                 original = row.get('absLabPath') or row.get('labPath')
                 if original and Path(original).is_absolute() and Path(original) != path:
                     raise ValueError('The deployed lab name belongs to a different topology path.')
-            if action in ('delete',):
+            if action == 'restart-node':
+                # Restart device: containerlab's node-scoped restart (the operation the VS Code
+                # extension runs as `containerlab restart -r docker --node <node> -t <topology>`), a
+                # lifecycle-aware stop+start that parks the node's dataplane interfaces and restores
+                # them; a stopped node takes the start/restore path. Exactly one node, named literally,
+                # bound to the one deployed container it must be (its id and state are in the digest, so
+                # a redeploy, a start or a stop between review and run is caught at run time).
+                node, container = node_selector(options, name)
+                help_text = self.help('restart')
+                if not help_text: raise ValueError('This Containerlab version does not support restart.')
+                if '--node' not in help_text:
+                    raise ValueError('The installed Containerlab cannot restart one device: its restart command has no --node option. Upgrade containerlab on the VM.')
+                targets = [r for r in rows if r.get('name') == container]
+                if len(targets) != 1:
+                    raise ValueError('Device ' + container + ' is not deployed in lab ' + name + '. Refresh the lab list and review again.')
+                target = targets[0]
+                affected = [{'name': target.get('name'), 'id': target.get('container_id'), 'state': target.get('state')}]
+                argv = [self.clab, 'restart', '-t', str(path)]
+                if '--name' in help_text: argv.extend(['--name', name])
+                elif req.get('source_name', name) != name: raise ValueError('This version cannot target the overridden lab name.')
+                argv.extend(['--node', node])
+                if argv.count('--node') != 1 or argv[-1] != node or ',' in node:
+                    raise ValueError('The restart command must name exactly one device.')
+                state = str(target.get('state') or '')
+                if state != 'running':
+                    warnings.append('This device is ' + (state or 'not running') + ', so containerlab takes its start/restore path: it starts the container and restores its links instead of stopping it first. '
+                                    'Links are restored only if containerlab parked them (a stop from the manager, the VS Code extension or containerlab stop); a device stopped with docker stop has already lost its links, and redeploying the lab is the way to get them back.')
+                extra = {'node': node, 'container': container}
+            elif action in ('delete',):
                 if action == 'delete' and rows: raise ValueError('Destroy the deployment before deleting its source YAML.')
                 side = Path(str(path) + ANNOTATIONS_SUFFIX)
                 if side.is_file() and not side.is_symlink():

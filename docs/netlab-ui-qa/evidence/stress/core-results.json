@@ -1,0 +1,2333 @@
+{
+  "pass": "core",
+  "started": "2026-09-27T14:49:57+00:00",
+  "finished": "2026-09-27T14:52:42+00:00",
+  "n": 25,
+  "transitions": 24,
+  "chromium": "153.0.8010.12",
+  "data_dir": "/tmp/stress-core-zzjeot2f",
+  "port": 8104,
+  "timing": [
+    {
+      "step": "tab_entry",
+      "n": 25,
+      "min": 0.116,
+      "median": 3.926,
+      "p95": 3.984,
+      "max": 3.989
+    },
+    {
+      "step": "save_ack",
+      "n": 25,
+      "min": 0.091,
+      "median": 0.105,
+      "p95": 0.12,
+      "max": 0.12
+    },
+    {
+      "step": "generating_paint",
+      "n": 25,
+      "min": 0.028,
+      "median": 0.044,
+      "p95": 0.078,
+      "max": 0.095
+    },
+    {
+      "step": "generation_complete",
+      "n": 25,
+      "min": 2.016,
+      "median": 2.02,
+      "p95": 2.054,
+      "max": 2.059
+    },
+    {
+      "step": "file_preview",
+      "n": 25,
+      "min": 0.053,
+      "median": 0.076,
+      "p95": 0.088,
+      "max": 0.088
+    },
+    {
+      "step": "history_render",
+      "n": 25,
+      "min": 0.086,
+      "median": 0.092,
+      "p95": 0.102,
+      "max": 0.114
+    },
+    {
+      "step": "download_design",
+      "n": 25,
+      "min": 0.037,
+      "median": 0.044,
+      "p95": 0.06,
+      "max": 0.061
+    },
+    {
+      "step": "download_zip",
+      "n": 25,
+      "min": 0.033,
+      "median": 0.039,
+      "p95": 0.05,
+      "max": 0.055
+    },
+    {
+      "step": "reload",
+      "n": 25,
+      "min": 0.093,
+      "median": 0.12,
+      "p95": 0.17,
+      "max": 0.171
+    }
+  ],
+  "summary": {
+    "checks_total": 422,
+    "checks_failed": 0,
+    "failed": [],
+    "checks": [
+      {
+        "name": "iter 0: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 0: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 0: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 0: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 0: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 0: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 0: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 0: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown above"
+      },
+      {
+        "name": "iter 0: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 0: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 0: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 0: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 0: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 0: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 0: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 1: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 1: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 1: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65000 in advanced JSON"
+      },
+      {
+        "name": "iter 1: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 1: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 1: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 1: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 1: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 1: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown above"
+      },
+      {
+        "name": "iter 1: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 1: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 1: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 1: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 1: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 1: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 1: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 2: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 2: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 2: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66001 in advanced JSON"
+      },
+      {
+        "name": "iter 2: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 2: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 2: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 2: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 2: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 2: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 2: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated View"
+      },
+      {
+        "name": "iter 2: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 2: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 2: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 2: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 2: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 2: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 2: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 3: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 3: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 3: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65002 in advanced JSON"
+      },
+      {
+        "name": "iter 3: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 3: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 3: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 3: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 3: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 3: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 3: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated View"
+      },
+      {
+        "name": "iter 3: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 3: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 3: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 3: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 3: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 3: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 3: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 4: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 4: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 4: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66003 in advanced JSON"
+      },
+      {
+        "name": "iter 4: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 4: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 4: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 4: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 4: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 4: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 4: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated View"
+      },
+      {
+        "name": "iter 4: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 4: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 4: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 4: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 4: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 4: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 4: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 5: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 5: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 5: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65004 in advanced JSON"
+      },
+      {
+        "name": "iter 5: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 5: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 5: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 5: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 5: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 5: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 5: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated View"
+      },
+      {
+        "name": "iter 5: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 5: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 5: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 5: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 5: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 5: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 5: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 6: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 6: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 6: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66005 in advanced JSON"
+      },
+      {
+        "name": "iter 6: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 6: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 6: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 6: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 6: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 6: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 6: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated View"
+      },
+      {
+        "name": "iter 6: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 6: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 6: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 6: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 6: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 6: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 6: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 7: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 7: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 7: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65006 in advanced JSON"
+      },
+      {
+        "name": "iter 7: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 7: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 7: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 7: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 7: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 7: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 7: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated View"
+      },
+      {
+        "name": "iter 7: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 7: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 7: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 7: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 7: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 7: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 7: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 8: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 8: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 8: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66007 in advanced JSON"
+      },
+      {
+        "name": "iter 8: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 8: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 8: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 8: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 8: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 8: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 8: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 8: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 8: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 8: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 8: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 8: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 8: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 8: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 9: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 9: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 9: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65008 in advanced JSON"
+      },
+      {
+        "name": "iter 9: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 9: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 9: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 9: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 9: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 9: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 9: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 9: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 9: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 9: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 9: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 9: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 9: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 9: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 10: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 10: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 10: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66009 in advanced JSON"
+      },
+      {
+        "name": "iter 10: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 10: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 10: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 10: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 10: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 10: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 10: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 10: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 10: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 10: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 10: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 10: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 10: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 10: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 11: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 11: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 11: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65010 in advanced JSON"
+      },
+      {
+        "name": "iter 11: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 11: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 11: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 11: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 11: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 11: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 11: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 11: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 11: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 11: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 11: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 11: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 11: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 11: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 12: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 12: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 12: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66011 in advanced JSON"
+      },
+      {
+        "name": "iter 12: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 12: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 12: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 12: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 12: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 12: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 12: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 12: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 12: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 12: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 12: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 12: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 12: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 12: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 13: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 13: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 13: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65012 in advanced JSON"
+      },
+      {
+        "name": "iter 13: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 13: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 13: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 13: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 13: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 13: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 13: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 13: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 13: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 13: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 13: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 13: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 13: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 13: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 14: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 14: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 14: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66013 in advanced JSON"
+      },
+      {
+        "name": "iter 14: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 14: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 14: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 14: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 14: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 14: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 14: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 14: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 14: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 14: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 14: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 14: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 14: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 14: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 15: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 15: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 15: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65014 in advanced JSON"
+      },
+      {
+        "name": "iter 15: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 15: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 15: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 15: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 15: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 15: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 15: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 15: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 15: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 15: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 15: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 15: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 15: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 15: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 16: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 16: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 16: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66015 in advanced JSON"
+      },
+      {
+        "name": "iter 16: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 16: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 16: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 16: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 16: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 16: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 16: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 16: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 16: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 16: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 16: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 16: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 16: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 16: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 17: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 17: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 17: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65016 in advanced JSON"
+      },
+      {
+        "name": "iter 17: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 17: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 17: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 17: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 17: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 17: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 17: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 17: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 17: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 17: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 17: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 17: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 17: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 17: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 18: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 18: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 18: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66017 in advanced JSON"
+      },
+      {
+        "name": "iter 18: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 18: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 18: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 18: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 18: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 18: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 18: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 18: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 18: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 18: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 18: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 18: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 18: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 18: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 19: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 19: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 19: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65018 in advanced JSON"
+      },
+      {
+        "name": "iter 19: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 19: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 19: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 19: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 19: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 19: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 19: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 19: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 19: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 19: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 19: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 19: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 19: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 19: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 20: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 20: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 20: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66019 in advanced JSON"
+      },
+      {
+        "name": "iter 20: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 20: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 20: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 20: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 20: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 20: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 20: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 20: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 20: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 20: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 20: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 20: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 20: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 20: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 21: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 21: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 21: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65020 in advanced JSON"
+      },
+      {
+        "name": "iter 21: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 21: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 21: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 21: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 21: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 21: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 21: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 21: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 21: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 21: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 21: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 21: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 21: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 21: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 22: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 22: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 22: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66021 in advanced JSON"
+      },
+      {
+        "name": "iter 22: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 22: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 22: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 22: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 22: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 22: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 22: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 22: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 22: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 22: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 22: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 22: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 22: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 22: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 23: shown lab is BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 23: devices table matches BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "Backup-WorkerlinuxlinuxRouterHostExcludeGTW-1cisco_xrv9kiosxrRouterHostExcludeGTW-2juniper_cjunosevolvedvptxRouterHostExcludeIXP-L2-Switcharista_ceoseosRouterHostExcludeInternetarista_ceoseosRouterHos"
+      },
+      {
+        "name": "iter 23: no draft leaked from ospf-basics on entry",
+        "ok": true,
+        "detail": "found 65022 in advanced JSON"
+      },
+      {
+        "name": "iter 23: BGP_TheoryToPractice kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 23: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 23: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 23: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 23: plan names this lab's AS number",
+        "ok": true,
+        "detail": "Backup-WorkerProfilelinuxId13Loopback IPv4Loopback IPv6Router idInterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesNo interfacesGTW-1ProfileiosxrId1Loopback IPv410.255.0.1/32Loopback IPv62001"
+      },
+      {
+        "name": "iter 23: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 23: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 23: design-file download names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 23: design-file content has this AS number",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 23: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice.network-intent.yml"
+      },
+      {
+        "name": "iter 23: zip manifest names BGP_TheoryToPractice",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 23: reload shows the same lab",
+        "ok": true,
+        "detail": "BGP_TheoryToPractice"
+      },
+      {
+        "name": "iter 23: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 23: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 24: shown lab is ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 24: devices table matches ospf-basics",
+        "ok": true,
+        "detail": "r1arista_ceoseosRouterHostExcluder2arista_ceoseosRouterHostExcluder3cisco_xrv9kiosxrRouterHostExclude"
+      },
+      {
+        "name": "iter 24: no draft leaked from BGP_TheoryToPractice on entry",
+        "ok": true,
+        "detail": "found 66023 in advanced JSON"
+      },
+      {
+        "name": "iter 24: ospf-basics kept its previous marker on entry",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      },
+      {
+        "name": "iter 24: editing marks Unsaved",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 24: save leaves no problems",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 24: plan generated",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 24: plan names this lab's AS number",
+        "ok": true,
+        "detail": "r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF a"
+      },
+      {
+        "name": "iter 24: a generated file opens",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "iter 24: history mentions Succeeded",
+        "ok": true,
+        "detail": "Succeeded just now Plan generated Shown aboveSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generated Vie"
+      },
+      {
+        "name": "iter 24: design-file download names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 24: design-file content has this AS number",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 24: design-file content has no other-lab marker",
+        "ok": true,
+        "detail": "ospf-basics.network-intent.yml"
+      },
+      {
+        "name": "iter 24: zip manifest names ospf-basics",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 24: reload shows the same lab",
+        "ok": true,
+        "detail": "ospf-basics"
+      },
+      {
+        "name": "iter 24: reload state is not Loading/Unsaved",
+        "ok": true,
+        "detail": "Plan ready to review Plan ready to review"
+      },
+      {
+        "name": "iter 24: reload keeps this marker, not the other lab's",
+        "ok": true,
+        "detail": "{\n  \"schema\": 1,\n  \"label\": \"\",\n  \"families\": {\n    \"ipv4\": true,\n    \"ipv6\": true\n  },\n  \"addressing\": {\n    \"loopback\": {\n      \"ipv4\": \"10.255.0.0/24\",\n      \"ipv6\": \"2001:db8:ff::/48\"\n    },\n    \""
+      }
+    ],
+    "console_errors_total": 0,
+    "console_errors_unhandled": [],
+    "page_errors": [],
+    "requests_failed": [],
+    "anomalies": []
+  },
+  "iterations": [
+    {
+      "i": 0,
+      "lab": "ospf-basics",
+      "as_number": 65000
+    },
+    {
+      "i": 1,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66001
+    },
+    {
+      "i": 2,
+      "lab": "ospf-basics",
+      "as_number": 65002
+    },
+    {
+      "i": 3,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66003
+    },
+    {
+      "i": 4,
+      "lab": "ospf-basics",
+      "as_number": 65004
+    },
+    {
+      "i": 5,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66005
+    },
+    {
+      "i": 6,
+      "lab": "ospf-basics",
+      "as_number": 65006
+    },
+    {
+      "i": 7,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66007
+    },
+    {
+      "i": 8,
+      "lab": "ospf-basics",
+      "as_number": 65008
+    },
+    {
+      "i": 9,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66009
+    },
+    {
+      "i": 10,
+      "lab": "ospf-basics",
+      "as_number": 65010
+    },
+    {
+      "i": 11,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66011
+    },
+    {
+      "i": 12,
+      "lab": "ospf-basics",
+      "as_number": 65012
+    },
+    {
+      "i": 13,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66013
+    },
+    {
+      "i": 14,
+      "lab": "ospf-basics",
+      "as_number": 65014
+    },
+    {
+      "i": 15,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66015
+    },
+    {
+      "i": 16,
+      "lab": "ospf-basics",
+      "as_number": 65016
+    },
+    {
+      "i": 17,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66017
+    },
+    {
+      "i": 18,
+      "lab": "ospf-basics",
+      "as_number": 65018
+    },
+    {
+      "i": 19,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66019
+    },
+    {
+      "i": 20,
+      "lab": "ospf-basics",
+      "as_number": 65020
+    },
+    {
+      "i": 21,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66021
+    },
+    {
+      "i": 22,
+      "lab": "ospf-basics",
+      "as_number": 65022
+    },
+    {
+      "i": 23,
+      "lab": "BGP_TheoryToPractice",
+      "as_number": 66023
+    },
+    {
+      "i": 24,
+      "lab": "ospf-basics",
+      "as_number": 65024
+    }
+  ]
+}

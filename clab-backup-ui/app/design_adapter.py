@@ -229,8 +229,10 @@ def build(definition_yaml, lab_nodes, intent, profile_for, pins=None):
         if loop is None: loop = (ledger.get('loopbacks') or {}).get(short)
         if loop is False: entry['loopback'] = False
         elif isinstance(loop, dict) and _strip_family(loop, families): entry['loopback'] = _strip_family(loop, families)
-        extra = settings.get('modules')
-        if isinstance(extra, list): entry['module'] = [m for m in MODULES if m in modules or m in extra]
+        own = settings.get('modules')
+        # netlab's own rule: a device's `modules` list, when given, is that device's whole module list (a device
+        # without the vlan module beside two that carry it; a device with an extra one), not an addition.
+        if isinstance(own, list): entry['module'] = [m for m in MODULES if m in own]
         elif row['role'] == 'host': entry['module'] = []
         for module in MODULES:
             if module in settings and settings[module] not in (None, {}): entry[module] = copy.deepcopy(settings[module])
@@ -238,6 +240,22 @@ def build(definition_yaml, lab_nodes, intent, profile_for, pins=None):
             if settings.get(key): entry[key] = copy.deepcopy(settings[key])
         topology['nodes'][short] = entry
     links = []; link_keys = []; mapping = {}
+    # Link aggregation: a link whose `lag.members` names other links of the lab carries the bundle; the members are
+    # emitted inside it (netlab's `lag.members`, each with the real port names) and never as links of their own.
+    lag_members = {}
+    for key, settings in (intent.get('links') or {}).items():
+        members = ((settings or {}).get('lag') or {}).get('members') if isinstance((settings or {}).get('lag'), dict) else None
+        if isinstance(members, list):
+            for member in members: lag_members[member] = key
+    member_ports = {}; bundles = []
+
+    def port_index(nos_name):
+        # netlab keeps only `ifindex` on a member's interfaces (its `lag` module rebuilds the physical links from it
+        # and names them from the device template: Ethernet{n}, ge-0/0/{n}, et-0/0/{n}, GigabitEthernet0/0/0/{n}),
+        # so a member port is named by the trailing number of its device name; `ifname` would leak onto the bundle.
+        found = re.findall(r'\d+', nos_name or '')
+        return int(found[-1]) if found else None
+
     for link in sorted(parse_links(definition_yaml), key=lambda l: (l.get('key', ''), l['index'])):
         row = {'key': link.get('key', ''), 'included': False, 'reason': '', 'endpoints': {}}
         if link['problem']: row['reason'] = link['problem']; links.append(row); continue
@@ -256,9 +274,15 @@ def build(definition_yaml, lab_nodes, intent, profile_for, pins=None):
                 blocked.setdefault(n[0], 'Link ' + row['key'] + ' has an interface the manager cannot map to a device port; map it under Advanced or leave the link out.')
             links.append(row); continue
         settings = (intent.get('links') or {}).get(row['key']) or {}
+        if row['key'] in lag_members:
+            # A member of an aggregation carried by another link: its ports belong to that bundle.
+            member_ports[row['key']] = {n: {'ifindex': port_index(m['nos'])} for n, m in row['endpoints'].items()}
+            row['included'] = True; row['reason'] = 'Member of the link aggregation carried by ' + lag_members[row['key']]
+            links.append(row); mapping[row['key']] = row['endpoints']; continue
+        bundle = isinstance(settings.get('lag'), dict) and isinstance(settings['lag'].get('members'), list)
         netlab_link = {}
         for node_name, m in row['endpoints'].items():
-            end = {'ifname': m['nos']}
+            end = {} if bundle else {'ifname': m['nos']}   # a bundle's own interface is the engine's (Port-Channel, ae, Bundle-Ether)
             for k, v in ((settings.get('endpoints') or {}).get(node_name) or {}).items():
                 if k in ('ipv4', 'ipv6') and not families.get(k, True): continue
                 end[k] = copy.deepcopy(v)
@@ -273,6 +297,15 @@ def build(definition_yaml, lab_nodes, intent, profile_for, pins=None):
             if k in settings and families.get(k, True): netlab_link[k] = settings[k]
         for module in MODULES:
             if module in settings and settings[module] not in (None, {}): netlab_link[module] = copy.deepcopy(settings[module])
+        if bundle:
+            # Its members may come later in key order: the bundle is emitted after every member port is known.
+            bundles.append((row, netlab_link, settings)); continue
+        row['included'] = True
+        links.append(row); link_keys.append(row['key']); mapping[row['key']] = row['endpoints']
+        topology['links'].append(netlab_link)
+    for row, netlab_link, settings in sorted(bundles, key=lambda b: b[0]['key']):
+        own_ports = {n: {'ifindex': port_index(m['nos'])} for n, m in row['endpoints'].items()}
+        netlab_link['lag']['members'] = [own_ports] + [member_ports[k] for k in settings['lag']['members'] if k in member_ports]
         row['included'] = True
         links.append(row); link_keys.append(row['key']); mapping[row['key']] = row['endpoints']
         topology['links'].append(netlab_link)
@@ -373,11 +406,14 @@ def overlaps(transformed, avoid=()):
     [{'family', 'a', 'b'}] with a and b naming the link index, the node or the avoided network. Empty means a
     clean plan."""
     guarded = [('ipv4' if net.version == 4 else 'ipv6', 'management ' + str(label), net) for label, net in avoid]
-    items = []
+    items = []; segment = {}   # links of one VLAN are one segment: netlab gives them the VLAN's subnet on purpose
     for index, link in enumerate(transformed.get('links') or []):
         prefix = link.get('prefix') if isinstance(link, dict) and isinstance(link.get('prefix'), dict) else {}
+        label = 'link ' + str(link.get('linkindex', index + 1))
+        access = (link.get('vlan') or {}).get('access') if isinstance(link, dict) and isinstance(link.get('vlan'), dict) else None
+        if isinstance(access, str) and access: segment[label] = 'vlan ' + access
         for family in ('ipv4', 'ipv6'):
-            try: items.append((family, 'link ' + str(link.get('linkindex', index + 1)), ipaddress.ip_network(prefix[family], strict=False)))
+            try: items.append((family, label, ipaddress.ip_network(prefix[family], strict=False)))
             except (KeyError, ValueError, TypeError): pass
     hosts = []   # every interface address (VRF loopbacks included): checked against the guarded networks only
     for name, node in (transformed.get('nodes') or {}).items():
@@ -396,6 +432,7 @@ def overlaps(transformed, avoid=()):
     found = []
     for i, (family, a, na) in enumerate(items):
         for family_b, b, nb in items[i + 1:] + guarded:   # plan items against each other and against the guarded networks, never guarded against guarded
+            if segment.get(a) and segment.get(a) == segment.get(b): continue   # two access ports of the same VLAN share its subnet
             if family == family_b and na.version == nb.version and na.overlaps(nb): found.append({'family': family, 'a': a, 'b': b})
     for family, a, na in hosts:
         for family_b, b, nb in guarded:
