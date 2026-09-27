@@ -2,15 +2,18 @@
 // markup, run the same way tests/test_restore_ui.js drives restore.js — a vm context with a fake $, esc
 // and state, no DOM. The draft helpers (shell.js) are covered at the bottom with a minimal document/window.
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const {webcrypto}=require('node:crypto');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const same=(a,b)=>assert.equal(JSON.stringify(a),JSON.stringify(b));
 const source=fs.readFileSync(path.join(__dirname,'../app/static/network-design.js'),'utf8');
 const statusSource=fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8');
-function ctx(){
+// extra merges in overrides (e.g. a fake `document` for designApplyChooseSelection's DOM path); every
+// other test keeps the plain DOM-less context the file header describes.
+function ctx(extra){
  const context=vm.createContext({esc,state:{labs:[]},$:()=>null,api:async()=>({json:async()=>({})}),
   json:async()=>({}),opDialog:()=>({querySelectorAll:()=>[]}),opTask:async()=>{},refresh:async()=>{},notify:()=>{},
   setMarkup:()=>{},menuReason:()=>{},showActionError:()=>{},closeMenus:()=>{},showTab:()=>{},current:()=>null,
-  clearTimeout:()=>{},setTimeout:()=>0});
+  clearTimeout:()=>{},setTimeout:()=>0,crypto:webcrypto,...extra});
  vm.runInContext(statusSource,context);
  vm.runInContext(source,context);
  return context;
@@ -262,4 +265,195 @@ test('a stored draft with no intent, or malformed JSON, reads back as no draft',
  c.window.localStorage.setItem('clab.design.draft.lab1',JSON.stringify({revision:'r'}));
  assert.equal(c.readDesignDraft('lab1'),null,'no intent key: not a usable draft');
  assert.equal(c.readDesignDraft(''),null);assert.equal(c.writeDesignDraft('',{}),false);assert.equal(c.clearDesignDraft(''),false);
+});
+
+// --- Apply to devices (design_apply.py, docs/netlab-integration/PROVISIONING.md §4-5) ------------------
+function readyTarget(overrides){
+ return {name:'r1',kind:'arista_ceos',eligible:true,reason:'',reachable:true,ready:true,no_op:false,
+  protected:[{module:'initial',statement:'hostname r1',reason:'device identity, access or management'}],
+  diff:['+router ospf 7','+ router-id 10.255.0.1'],added:['router ospf 7'],removed:[],stale:[],conflicts:[],
+  expected:[],removals:[],kept_manual:[],skipped:[],counts:{added:2,removed:0,stale:0,conflicts:0,expected:0,removals:0,kept_manual:0},
+  takeover:false,compatibility:[],...overrides};
+}
+test('designApplyDeviceMarkup: a ready device shows its counts and diff',()=>{
+ const c=ctx();
+ const html=c.designApplyDeviceMarkup(readyTarget());
+ assert.match(html,/r1/);assert.match(html,/Added 2/);assert.match(html,/Removed 0/);
+ assert.match(html,/router ospf 7/);
+ assert.match(html,/Protected settings left out \(1\)/);assert.match(html,/hostname r1/);
+});
+test('designApplyDeviceMarkup: a conflict shows the take-over checkbox, and its note once taken over',()=>{
+ const c=ctx();
+ const target=readyTarget({conflicts:['no shutdown'],counts:{added:1,removed:0,stale:0,conflicts:1,expected:0,removals:0,kept_manual:0}});
+ const untaken=c.designApplyDeviceMarkup(target,new Set());
+ assert.match(untaken,/data-design-apply-takeover="r1"/);
+ assert.doesNotMatch(untaken,/data-design-apply-takeover="r1" checked/);
+ assert.doesNotMatch(untaken,/become the design/);
+ const taken=c.designApplyDeviceMarkup(target,new Set(['r1']));
+ assert.match(taken,/data-design-apply-takeover="r1" checked/);
+ assert.match(taken,/become the design's/);
+});
+test('designApplyDeviceMarkup: an ineligible device shows its reason and nothing else',()=>{
+ const c=ctx();
+ const html=c.designApplyDeviceMarkup({name:'host1',kind:'linux',eligible:false,reason:'A support host is generated only, never applied.'});
+ assert.match(html,/host1/);assert.match(html,/A support host is generated only, never applied\./);
+ assert.doesNotMatch(html,/Added \d/);
+});
+test('designApplyDeviceMarkup: an unreachable/not-ready device shows its reason',()=>{
+ const c=ctx();
+ const html=c.designApplyDeviceMarkup({name:'r2',kind:'arista_ceos',eligible:true,reachable:true,ready:false,
+  reason:'Another change is waiting for confirmation on this device.'});
+ assert.match(html,/Another change is waiting for confirmation/);
+});
+test('designApplyDeviceMarkup: a no-op device says it already matches the plan',()=>{
+ const c=ctx();
+ const html=c.designApplyDeviceMarkup(readyTarget({no_op:true}));
+ assert.match(html,/Already matches the plan\./);
+ assert.doesNotMatch(html,/Added \d/);
+});
+
+test('designApplyCanSubmit: needs acknowledgement, an applicable device, and every conflict resolved',()=>{
+ const c=ctx();
+ const clean={applicable:['r1'],targets:[readyTarget()]};
+ assert.equal(c.designApplyCanSubmit(clean,new Set(),false),false,'not acknowledged');
+ assert.equal(c.designApplyCanSubmit(clean,new Set(),true),true);
+ assert.equal(c.designApplyCanSubmit({applicable:[],targets:[readyTarget()]},new Set(),true),false,'nothing applicable');
+ const conflicted={applicable:['r1'],targets:[readyTarget({conflicts:['no shutdown'],counts:{...readyTarget().counts,conflicts:1}})]};
+ assert.equal(c.designApplyCanSubmit(conflicted,new Set(),true),false,'unresolved conflict blocks submit');
+ assert.equal(c.designApplyCanSubmit(conflicted,new Set(['r1']),true),true,'taking the conflict over unblocks it');
+});
+
+test('designApplyRequestId returns a 32-character lowercase hex string, different each time',()=>{
+ const c=ctx();
+ const a=c.designApplyRequestId(),b=c.designApplyRequestId();
+ assert.match(a,/^[0-9a-f]{32}$/);assert.match(b,/^[0-9a-f]{32}$/);assert.notEqual(a,b);
+});
+test('designApplyBody clamps confirm_minutes, sorts the take-over list, and reuses a supplied request id',()=>{
+ const c=ctx();
+ const body=c.designApplyBody({token:'tok',requestId:'a'.repeat(32),confirmMinutes:'99',takeover:new Set(['r2','r1']),acknowledged:true});
+ assert.equal(body.token,'tok');assert.equal(body.request_id,'a'.repeat(32));assert.equal(body.confirm_minutes,30);
+ same(body.takeover,['r1','r2']);assert.equal(body.acknowledged,true);
+ assert.equal(c.designApplyBody({confirmMinutes:'0'}).confirm_minutes,2);
+ assert.equal(c.designApplyBody({confirmMinutes:'5'}).confirm_minutes,5);
+ assert.equal(c.designApplyBody({}).acknowledged,false);
+ assert.match(c.designApplyBody({}).request_id,/^[0-9a-f]{32}$/,'a request id is generated when none is supplied');
+});
+
+test('designApplyProgressMarkup: every outcome word appears for its status',()=>{
+ const c=ctx();
+ const statuses=['verified','verify_mismatch','applied','no_op','failed','rolled_back','uncertain','interrupted','drifted','ineligible','pending','backing_up','applying','confirming'];
+ const job={status:'partial',message:'m',targets:statuses.map(s=>({name:s,kind:'arista_ceos',status:s,stage:'applied',message:''}))};
+ const html=c.designApplyProgressMarkup(job);
+ for(const s of statuses)assert.match(html,new RegExp(c.designApplyOutcomeWord(s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')),'missing word for status '+s);
+});
+test('designApplyProgressMarkup: a verify mismatch shows the missing/remaining counts',()=>{
+ const c=ctx();
+ const job={status:'partial',targets:[{name:'r1',kind:'arista_ceos',status:'verify_mismatch',stage:'applied',
+  message:'Applied and confirmed, but the read-back differs.',verify:{missing:['a','b'],remaining:['c']}}]};
+ const html=c.designApplyProgressMarkup(job);
+ assert.match(html,/2 expected line\(s\) missing, 1 stale line\(s\) remaining\./);
+});
+
+test('designApplyOwnershipMarkup: shows the statement count, plan id, applied time and a pending flag',()=>{
+ const c=ctx();
+ const now=Date.now();
+ const ownership={summary:{r1:{statements:3,generation_id:'0123456789abcdef',applied_at:new Date(now-60000).toISOString(),pending:false},
+  r2:{statements:1,generation_id:'fedcba9876543210',applied_at:'',pending:true}},
+  statements:{r1:['router ospf 7','router-id 10.255.0.1','network 10.255.0.1/32 area 0'],r2:['ip routing']}};
+ const html=c.designApplyOwnershipMarkup(ownership);
+ assert.match(html,/r1 — 3 setting\(s\)/);assert.match(html,/0123456789ab/);assert.match(html,/router ospf 7/);
+ assert.match(html,/r2 — 1 setting\(s\)/);assert.match(html,/Read-back pending/);
+ assert.match(c.designApplyOwnershipMarkup({}),/No settings are owned/);
+});
+
+test('designApplyLastLineMarkup: a settled job shows its word, a relative time and a Show button',()=>{
+ const c=ctx();
+ const now=Date.now();
+ const html=c.designApplyLastLineMarkup({id:'job1',status:'succeeded',finished:new Date(now-120000).toISOString()},now);
+ assert.match(html,/Applied/);assert.match(html,/data-design-apply-show="job1"/);
+ const busy=c.designApplyLastLineMarkup({id:'job2',status:'applying',created:new Date(now-5000).toISOString()},now);
+ assert.match(busy,/Applying…/);
+ assert.equal(c.designApplyLastLineMarkup(null,now),'');
+});
+
+test('designApplyDisabledReason: no plan, not linked, a running job, and the ready case',()=>{
+ const c=ctx();
+ const lab={id:'lab1',deployment:{status:'Running'}};
+ assert.match(c.designApplyDisabledReason(lab,{generations:[]},[]),/Generate a plan/);
+ const view={generations:[{id:'g',status:'succeeded'}]};
+ assert.equal(c.designApplyDisabledReason(lab,view,[]),'');
+ assert.match(c.designApplyDisabledReason({id:'lab1',deployment:{status:'Unlinked'}},view,[]),/not matched to a running lab/);
+ assert.match(c.designApplyDisabledReason(lab,view,[{lab_id:'lab1',status:'applying'}]),/already running/);
+ assert.match(c.designApplyDisabledReason(lab,{...view,engine:{available:false,diagnostic:'netlab missing'}},[]),/netlab missing/);
+});
+// Risk-review finding: designApplyDisabledReason ignored view.summary.stale (the same flag designStateOf
+// already reads for "Plan is older than the design"), so a stale plan could be offered for applying.
+test('designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not',()=>{
+ const c=ctx();
+ const lab={id:'lab1',deployment:{status:'Running'}};
+ const stale={generations:[{id:'g',status:'succeeded'}],summary:{stale:true}};
+ assert.equal(c.designApplyDisabledReason(lab,stale,[]),'Generate the plan again: the design or the topology changed since this plan.');
+ const fresh={generations:[{id:'g',status:'succeeded'}],summary:{stale:false}};
+ assert.equal(c.designApplyDisabledReason(lab,fresh,[]),'');
+ const noSummary={generations:[{id:'g',status:'succeeded'}]};
+ assert.equal(c.designApplyDisabledReason(lab,noSummary,[]),'','no summary at all is not treated as stale');
+});
+
+// Risk-review finding: designApplyOpen was the only place that unticked #design-apply-ack, so a review
+// re-run after Back->Review, or a take-over re-review, left a previous acknowledgement ticked for content
+// the student had not seen yet. designApplyRenderReview is the shared render point for both paths.
+test('designApplyRenderReview unticks the acknowledgement and recomputes Apply on every new review result',async()=>{
+ const elements=new Map();
+ const field=()=>({checked:false,disabled:false,textContent:'',hidden:false,value:5});
+ const c=ctx({document:{querySelectorAll:sel=>sel==='[name="design-apply-target"]:checked'?[{value:'r1'}]:[]}});
+ c.$=id=>elements.get(id)||(elements.set(id,field()),elements.get(id));
+ const oneTarget=()=>({name:'r1',kind:'arista_ceos',eligible:true,reachable:true,ready:true,no_op:false,
+  counts:{added:0,removed:0,stale:0,conflicts:0,expected:0,removals:0,kept_manual:0},diff:[],expected:[],
+  removals:[],kept_manual:[],protected:[],compatibility:[],conflicts:[]});
+ c.json=async()=>({targets:[oneTarget()],applicable:['r1'],takeover:[]});
+ await c.designApplyRunReview();
+ c.$('design-apply-ack').checked=true;c.designApplyUpdateRunButton();
+ assert.equal(c.$('design-apply-run').disabled,false,'acknowledged and applicable: Apply is enabled');
+ // Back to choose, then Review again: a fresh review must not inherit the previous tick.
+ await c.designApplyRunReview();
+ assert.equal(c.$('design-apply-ack').checked,false,'a fresh review unticks the acknowledgement');
+ assert.equal(c.$('design-apply-run').disabled,true,'Apply is disabled again until re-acknowledged');
+ // Tick it again, then a take-over re-review must also untick it.
+ c.$('design-apply-ack').checked=true;c.designApplyUpdateRunButton();
+ assert.equal(c.$('design-apply-run').disabled,false);
+ await c.designApplyToggleTakeover('r1',true);
+ assert.equal(c.$('design-apply-ack').checked,false,'a take-over re-review unticks the acknowledgement too');
+ assert.equal(c.$('design-apply-run').disabled,true);
+});
+
+// Risk-review finding: design_apply.py's masked() caps added/removed/stale/conflicts/expected/removals/
+// kept_manual samples at SAMPLE=40 while counts[...] keeps the real total; the dialog silently hid the
+// rest. designApplyDeviceMarkup now appends "… and N more" whenever a shown sample is short of its count.
+test('designApplyDeviceMarkup: a capped conflicts sample says how many more there are; an uncapped one does not',()=>{
+ const c=ctx();
+ const capped=readyTarget({conflicts:Array.from({length:40},(_,i)=>'conflict '+i),counts:{...readyTarget().counts,conflicts:45}});
+ const html=c.designApplyDeviceMarkup(capped);
+ assert.match(html,/… and 5 more/);
+ const exact=readyTarget({conflicts:['no shutdown'],counts:{...readyTarget().counts,conflicts:1}});
+ assert.doesNotMatch(c.designApplyDeviceMarkup(exact),/… and \d+ more/);
+});
+test('designApplyDeviceMarkup: capped expected/removal-command/kept-manual samples also say how many more there are',()=>{
+ const c=ctx();
+ const expected=readyTarget({expected:Array.from({length:40},(_,i)=>'expected '+i),counts:{...readyTarget().counts,expected:44}});
+ assert.match(c.designApplyDeviceMarkup(expected),/… and 4 more/);
+ const removals=readyTarget({removals:Array.from({length:40},(_,i)=>'no '+i),counts:{...readyTarget().counts,removals:41}});
+ assert.match(c.designApplyDeviceMarkup(removals),/… and 1 more/);
+ const keptManual=readyTarget({kept_manual:Array.from({length:40},(_,i)=>'kept '+i),counts:{...readyTarget().counts,kept_manual:50}});
+ assert.match(c.designApplyDeviceMarkup(keptManual),/… and 10 more/);
+});
+
+// A device row whose `takeover` field (design_apply.py's per-target, server-confirmed flag — distinct
+// from the dialog's own take-over Set) is true says so in words, so the student sees what the
+// acknowledgement covers even without expanding the conflicts list.
+test('designApplyDeviceMarkup: a device whose takeover is true says how many manual settings are being taken over',()=>{
+ const c=ctx();
+ const taken=readyTarget({takeover:true,conflicts:['no shutdown','logging on'],counts:{...readyTarget().counts,conflicts:2}});
+ assert.match(c.designApplyDeviceMarkup(taken),/Taking over 2 manual setting\(s\)/);
+ const untaken=readyTarget({takeover:false});
+ assert.doesNotMatch(c.designApplyDeviceMarkup(untaken),/Taking over/);
 });

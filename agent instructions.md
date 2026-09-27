@@ -1,3 +1,34 @@
+# Network design, part 3: Apply to devices — 1.30.45
+
+Read `docs/netlab-integration/PICKUP.md` first, then `PROVISIONING.md` (the contract; §8 is what the live proof
+changed) and the evidence files `docs/netlab-integration/evidence/live-apply-*.md`. Preserve, beside the 1.30.43 and
+1.30.44 points: (1) `design_apply.py` knows no NOS command; every device word is in `design_eos.py`, `design_junos.py`,
+`design_iosxr.py`, behind one contract (documented in `design_eos.py`: `snapshot`, `render_desired`, `stage(arm)`,
+`confirm`, `pending`, `cleanup`, `persist`, `options`); a review is `stage(arm=False)` and never commits; `commit
+check` on Junos runs only when arming (it would confirm anybody's pending change). (2) The session identity is the
+design's own (`clabdsg-` + 8 hex as EOS session name, Junos commit comment, IOS XR held session in
+`design_iosxr._HELD`) and never the restore's `clabmgr-`; each driver confirms only its own pending change from a fresh
+connection; IOS XR confirms on the held channel, the service never closes a `held` connection, and after a restart
+the recheck waits out the persisted deadline. (3) Ownership is `design_ownership.py`, pure: statements in ownership
+form, created ancestors (Junos: only `junos_blocks` of the device's own `show`), `stale = (owned − desired) ∩ before`,
+conflicts = removed − owned plus `EXCLUSIVE`, removal at the highest owned-and-stale ancestor, EOS neighbours as one
+object and address-family `network` lines first, `ADMIN_STATE` never re-applied, IOS XR `split_negations`; `verify()`
+takes `kept` and accepts what the design put back under a removed container. Nothing is ever removed that is not
+owned or explicitly taken over (`takeover_leftovers` → a second review pass). (4) `design_provision.prepare` is the
+only path from a fragment to a device; its protected list (hostname, logins, AAA, management interface and VRF,
+host mappings, `mac-address`, `normalize`, Junos `delete:` tags) never shrinks; the cEOS management block stays out.
+(5) The apply job: `DESIGN_APPLY_BUSY` in `operation_busy`, the Runner refusing other backups meanwhile, the
+mandatory `design-pre` backup, drift by `_before_digest`, `_mismatch` never confirmed, `rolled_back` only after the
+before snapshot is read back, otherwise `uncertain` with a pending ledger entry that blocks the next review; the
+ledger is written in the same store update as the outcome; `public_job` strips every `_` key. (6) The UI
+(`network-design.js` `designApply*`, the static `#design-apply-dialog`, `#design-ownership`) posts JSON bodies,
+re-reviews when the take-over choice changes, and enables *Apply* only when acknowledged and applicable. (7) Tests:
+`test_design_{provision,ownership,eos,junos,iosxr,apply}.py`, the 13 `designApply*` browser tests; the live rerun is
+described in PICKUP (a scratch `create_app`, never the deployed data); the deployed manager on the dev VM listens on
+the LAN address, port 8081. Routing observed: Sonnet for the fake-channel tests, the apply UI, the Playwright tool
+and the records drafts; Opus `risk-reviewer` for the review; the lead wrote the drivers, the algebra, the service and
+ran every live step (`docs/netlab-integration/TESTS.md`).
+
 # Network design, part 2: the Design tab — 1.30.44
 
 Read `docs/netlab-integration/PICKUP.md` first, then `DECISIONS.md` and `docs/NETWORK-DESIGN.md`. Preserve, beside the

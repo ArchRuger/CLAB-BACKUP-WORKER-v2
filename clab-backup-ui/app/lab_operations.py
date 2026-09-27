@@ -27,11 +27,16 @@ GIT_BUSY = ('queued', 'capturing', 'exporting', 'pushing')
 # A live restore holds the lab the same way a Git save does. progress_id excludes the
 # restore job's own id so its pre/post backups are not blocked by itself.
 RESTORE_BUSY = ('queued', 'preflight', 'backing_up', 'applying', 'confirming', 'verifying')
+# A network-design apply holds the lab like a restore does (its own pre/post backups pass its id as progress_id).
+DESIGN_APPLY_BUSY = ('queued', 'preflight', 'backing_up', 'applying', 'confirming', 'verifying')
 
 
 def operation_busy(state, lab_id=None, progress_id=None):
     return (any(j['status'] in BUSY and (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('operations', [])) or
+            any(j['status'] in DESIGN_APPLY_BUSY and j.get('id') != progress_id and
+                (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
+                for j in state.get('design_jobs', [])) or
             any(j['status'] in GIT_BUSY and j.get('id') != progress_id and
                 (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('git_jobs', [])) or

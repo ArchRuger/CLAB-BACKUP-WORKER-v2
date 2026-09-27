@@ -1,3 +1,45 @@
+# Network design, part 3: Apply to devices — 1.30.45
+
+Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.44 (`64c954e`, CI green). Routing observed: the lead
+(Fable) wrote the drivers, the ownership algebra, the provisioning filter, the apply service and ran every live step;
+Sonnet workers (observed `claude-sonnet-5`) wrote the fake-channel tests of the three drivers, the apply-service tests,
+the apply UI and its tests, the Playwright tool, the LEDGER/TESTS and DECISIONS/PICKUP drafts, the provisioning
+hardening and the UI review fixes; the fourth risk-review pass ran on the Opus `risk-reviewer` (observed
+`claude-opus-5-5`). Per task: `docs/netlab-integration/TESTS.md`.
+
+- **Live, cEOS 4.35.0F (`docs/netlab-integration/evidence/live-apply-ceos.md`):** ten steps through the real
+  service path from a scratch `create_app` (real Ansible backups; never the deployed data), each read back
+  independently with `nodecli.py`: create, no-op re-apply, a manual conflict blocking and its take-over, a
+  renumbered link, a removed BGP peer, both modules dropped with a manual peer kept under `router bgp`, an
+  unconfirmed apply killed after arming and undone by the device's own timer (`rolled_back`, ledger untouched), a
+  manager restart inside the recovery window (confirmed, `verified`), the module drop again with the new EOS
+  rules, and re-creation. Manual `Loopback99` and the manual peer survived every step.
+- **Live, Junos (`evidence/live-apply-junos.md`):** vJunos-switch 23.2R1.14 and cJunosEvolved 26.2R1.7-EVO: review,
+  apply of both at once (`commit confirmed` with the design's comment, confirmed by `commit check`, verified), a
+  removed peer, both modules dropped at the top-level containers, re-creation. Both display-set forms proven
+  identical first.
+- **Live, IOS XR 24.3.1 (`evidence/live-apply-iosxr.md`):** review, apply through the held session (armed on the
+  kept session, confirmed from a fresh connection, OSPF neighbours FULL), no-op, the BGP AS change refused by the
+  device in one commit (clean failure, nothing changed), both modules dropped, re-creation on all four routers.
+- **Live, the deployed product (`evidence/live-apply-product.md`):** the image rebuilt from this tree and recreated
+  on the development VM; reviews of all five devices through the real API (conflicts for what another manager
+  had put there, host1 ineligible), an apply with take-over on xrv9k, the take-over of an exclusive sibling
+  proven after its fix, a review answering 409 during the lab's scheduled backup.
+- **Browser (`evidence/browser-design-apply-ui.md`, `docs/netlab-integration/tools/check_design_apply_ui.py`,
+  Chromium 153):** run 1 reviewed `ceos` without applying (14 of 14 checks: the dialog, the disabled support host, no overflow at 1280×900, the counts and the 16 protected settings as the API returned them, the diff, *Apply* gated on the acknowledgement, closing without applying); runs 2–4 applied from the dialog (run 2 `ceos verified` from the real progress view, the device's session committed and saved; two tool defects fixed in between; run 4 16 of 16 checks with a no-op apply and *Owned settings* under Advanced).
+- **Risk review, pass four (Opus):** three must-fix and six should-fix findings, all applied and pinned
+  (PROVISIONING.md §8 "Fourth review pass"); the reviewer could not break the secret stripping, the confirmation
+  identity per platform, the token bindings, the rollback reporting, the "nothing unowned is removed" rule or
+  the frontend escaping.
+- **Unit (this checkout, `netlab` on PATH):** `python -m unittest discover -s tests -t tests` 1606 tests, OK (1 skipped) once this section led the file (the release-consistency test is the only one that reads it); the new
+  files: `test_design_provision.py` 12, `test_design_ownership.py` 26, `test_design_eos.py` 26,
+  `test_design_junos.py` 27, `test_design_iosxr.py` 31, `test_design_apply.py` 45 (FastAPI `TestClient`
+  against `create_app`, fake driver and runner). `node --test tests/*.js` 325 pass
+  (`test_network_design_ui.js` 44, of which 18 are new for the apply dialog, progress, ownership, last-apply line and the review-pass fixes). `node --check`, `verify-release.py`, `check_links.py`,
+  `git diff --check`, `bash -n` on no changed script (none changed).
+- **Not done:** no fresh-VM install of this release; the lab builder bundle is untouched; the browser check at
+  phone width covers the dialog's overflow only.
+
 # Network design, part 2: the Design tab — 1.30.44
 
 Prepared on `claude/netlab-integration` on 2026-09-27 after 1.30.43 (`b96cb89`, CI green). The Design tab

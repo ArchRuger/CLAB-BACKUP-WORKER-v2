@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.44"><script src="/static/status.js?v=1.30.44" defer></script><script src="/static/shell.js?v=1.30.44" defer></script><script src="/static/app.js?v=1.30.44" defer></script><script src="/static/topology-render.js?v=1.30.44" defer></script><script src="/static/topology.js?v=1.30.44" defer></script><script src="/static/home.js?v=1.30.44" defer></script><script src="/static/management.js?v=1.30.44" defer></script><script src="/static/operations.js?v=1.30.44" defer></script><script src="/static/diagram-editor.js?v=1.30.44" defer></script><script src="/static/diff-view.js?v=1.30.44" defer></script><script src="/static/git-progress.js?v=1.30.44" defer></script><script src="/static/git-places.js?v=1.30.44" defer></script><script src="/static/restore.js?v=1.30.44" defer></script><script src="/static/network-design.js?v=1.30.44" defer></script><script src="/static/capture.js?v=1.30.44" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.45"><script src="/static/status.js?v=1.30.45" defer></script><script src="/static/shell.js?v=1.30.45" defer></script><script src="/static/app.js?v=1.30.45" defer></script><script src="/static/topology-render.js?v=1.30.45" defer></script><script src="/static/topology.js?v=1.30.45" defer></script><script src="/static/home.js?v=1.30.45" defer></script><script src="/static/management.js?v=1.30.45" defer></script><script src="/static/operations.js?v=1.30.45" defer></script><script src="/static/diagram-editor.js?v=1.30.45" defer></script><script src="/static/diff-view.js?v=1.30.45" defer></script><script src="/static/git-progress.js?v=1.30.45" defer></script><script src="/static/git-places.js?v=1.30.45" defer></script><script src="/static/restore.js?v=1.30.45" defer></script><script src="/static/network-design.js?v=1.30.45" defer></script><script src="/static/capture.js?v=1.30.45" defer></script></head>
 <body>
 
 <svg hidden aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
@@ -197,6 +197,9 @@
           <h4>Allocation ledger</h4>
           <p class="caption">Device ids, loopbacks and link prefixes the manager has pinned from the last generated plan. Read-only here; Renumber (above) forgets it.</p>
           <div id="design-ledger"></div>
+          <h4>Owned settings</h4>
+          <p class="caption">What the manager has applied to devices from this design and still owns, by device. Under Advanced because most students never need it.</p>
+          <div id="design-ownership"></div>
         </details>
       </form>
     </section>
@@ -210,6 +213,9 @@
       <div id="design-compatibility"></div>
       <h3>Plan</h3>
       <div id="design-plan-body"></div>
+      <div class="actions"><button type="button" class="button primary" id="design-apply">Apply to devices…</button></div>
+      <p class="caption" data-proxy-reason="design-apply" hidden></p>
+      <p class="caption" id="design-apply-last" role="status" hidden></p>
     </section>
     <section id="design-files" class="card" aria-labelledby="design-files-title">
       <h2 id="design-files-title">Generated files</h2>
@@ -218,6 +224,28 @@
       <div class="actions"><a class="button secondary" id="design-download" download hidden>Download all files (ZIP)</a></div>
     </section>
     <details id="design-history" class="card"><summary>History</summary><div id="design-history-body"></div></details>
+    <dialog id="design-apply-dialog" aria-labelledby="design-apply-title">
+      <div class="dialog-head"><h2 id="design-apply-title">Apply to devices</h2><button type="button" class="icon-button" data-design-apply-close aria-label="Close">×</button></div>
+      <div id="design-apply-choose-step">
+        <p>Choose which devices to review the generated plan against. A support host or a device the plan could not map is listed but cannot be applied to.</p>
+        <div id="design-apply-choose-body"></div>
+        <p class="form-error" role="alert" id="design-apply-choose-error"></p>
+        <div class="dialog-actions"><button type="button" class="button secondary" data-design-apply-close>Cancel</button><button type="button" class="button primary" id="design-apply-review-run">Review</button></div>
+      </div>
+      <div id="design-apply-review-step" hidden>
+        <div id="design-apply-review-body"></div>
+        <label for="design-apply-minutes">Recovery window (minutes)</label>
+        <input id="design-apply-minutes" type="number" min="2" max="30" value="5">
+        <p class="form-help">The device undoes the change by itself if the manager cannot confirm it within this time.</p>
+        <label class="checkbox-label"><input type="checkbox" id="design-apply-ack"> I understand that the devices selected above will be changed</label>
+        <p class="form-error" role="alert" id="design-apply-review-error"></p>
+        <div class="dialog-actions"><button type="button" class="button secondary" id="design-apply-back">Back</button><button type="button" class="button danger" id="design-apply-run" disabled>Apply</button></div>
+      </div>
+      <div id="design-apply-progress-step" hidden>
+        <div id="design-apply-progress-body"></div>
+        <div class="dialog-actions"><button type="button" class="button secondary" data-design-apply-close>Close</button></div>
+      </div>
+    </dialog>
   </section>
 
   <section id="tools-view" class="view" role="tabpanel" aria-labelledby="tab-tools" hidden>

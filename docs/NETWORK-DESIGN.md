@@ -173,12 +173,61 @@ Every lab has a **Design** tab (beside Topology, Devices and Progress). Top to b
   interfaces with their containerlab port, addresses, neighbours and protocol notes, the BGP sessions; and the
   links. A plan being generated can be cancelled.
 - **Files.** The generated configuration fragments per device, in netlab's order, each viewable, and one ZIP
-  download. They are not backups and are not applied by this page yet.
+  download. They are not backups; what reaches a device goes through *Apply to devices…* below.
 - **History.** Every plan of the lab.
+- **Apply to devices…** on the plan card, and the last apply's outcome under it; the owned settings per device
+  under Advanced. See the next section.
 
 Unsaved edits are kept in the browser per lab and restored on reload while the saved design has not moved on; a
 page that is behind the saved design is refused when it saves. The tab reads the design through
 `GET /api/labs/{id}/design` and polls it while a plan is being generated.
+
+## Applying a plan to devices
+
+*Apply to devices…* puts a generated plan onto the running devices the student selects, through the same
+direct node SSH the backups and *Apply to running lab* use, inside each NOS's own transaction with its own
+timed recovery, and never as a whole-configuration replacement. The contract with every rule and its reason
+is `docs/netlab-integration/PROVISIONING.md`; the live proofs on the four-node acceptance lab are
+`docs/netlab-integration/evidence/live-apply-{ceos,junos,iosxr}.md`. In the page:
+
+1. **Choose devices.** Every device the plan includes is offered; a support host, a blocked device or a kind
+   without a driver is listed with the reason. Applying is available for cEOS, vJunos-switch, cJunosEvolved
+   and XRv9k, the kinds proven live.
+2. **Review.** The manager connects to each chosen device, runs the whole transaction and aborts it, then
+   shows per device: the settings of the fragment it leaves out (hostname, logins, the management interface,
+   name mappings, netlab's `delete:` tags: identity and reachability stay the containerlab deployment's), the
+   device's own diff, the counts of added, removed and stale statements, the *expected changes* (an IOS XR
+   port coming out of `shutdown`, EOS `ip routing` switched on), the removal commands it will send, and the
+   *conflicts*: manual settings the plan would replace or remove. A device with conflicts cannot be applied to
+   until the student ticks *Take over these settings on this device*, which re-runs the review; the overwritten
+   settings then become the design's. A device that already matches is marked so and left alone. The review
+   is bound to a single-use token (ten minutes) that carries the plan, the devices, their current
+   configuration and the take-over choice. A plan older than the design or the topology cannot be applied:
+   the button says to generate it again.
+3. **Apply.** The recovery window (2–30 minutes, default 5) and an acknowledgement. The job first backs up
+   every chosen device (visible in the backups as `design-pre`); a device whose backup fails is not touched.
+   Then, per device: the configuration is read again and compared with the review (a change in between
+   refuses that device: *Changed since the review*), the removals and the generated configuration are
+   staged, the timed recovery is armed (EOS `commit timer`, Junos `commit confirmed`, IOS XR
+   `commit confirmed minutes` on a session kept open), a fresh connection proves management still works,
+   the manager confirms only its own pending change, reads the device back and saves (EOS `write memory`).
+   A post-change backup (`design-post`) records the result.
+4. **Outcomes** per device: *Applied and verified*, *Applied, read-back differs* (with what is missing or
+   remaining), *Already matched*, *Not changed* (with the reason), *Undone by the device* (the recovery timer
+   ran out before the manager could confirm, and the configuration from before was read back), *Outcome
+   unknown* (the device must be looked at; the next review reads it back and settles what is owned),
+   *Interrupted* (a manager restart: the device is read back at start-up; a pending change the manager can
+   still confirm is confirmed, an IOS XR trial is left to the device's timer). The job is *Applied*, *Partly
+   applied*, *Not applied* or *Needs attention*; a healthy label never hides a failed or unverified device.
+
+**Ownership.** The manager owns exactly the statements its own commits added to a device, kept per device in
+the lab's private ledger and shown under Advanced as *Owned settings*. The next apply removes only owned
+statements the plan no longer wants (a changed link prefix, a removed BGP peer, a dropped protocol), at the
+highest container it created when everything under it is its own (`no router ospf 1`, `delete protocols bgp`,
+one `no neighbor X` on EOS); a container that also holds manual configuration is kept and said so. Manual
+configuration beside the design survives every step; a manual change to an owned setting is a conflict, never
+silently overwritten. Removing the design's protocols leaves the addressing of the initial module, removing
+the design itself leaves the devices as they are: a later plan of the same lab still knows what it owns.
 
 ## API
 
@@ -199,10 +248,14 @@ All routes sit behind the same-origin guard; mutating requests carry a JSON body
 | `GET /api/labs/{id}/design/generations/{gid}/download` | A ZIP: the files (`nodes/<device>/<nn>-<module>.cfg`), the plan, the intent, the netlab topology, the mapping and a manifest of type `network-design-generation` (never a backup, never a restore candidate) |
 | `GET /api/labs/{id}/design/export` | The intent as `<lab>.network-intent.yml` |
 | `POST /api/labs/{id}/design/import` | An intent file (YAML or JSON, up to 512 KiB, no anchors) with the current `revision`; validated before it replaces the stored intent; the ledger in the file is ignored |
+| `POST /api/labs/{id}/design/generations/{gid}/review` | `{targets, takeover}`: the review transaction on each target (aborted), per device the report of the section above, and the single-use `token` |
+| `POST /api/labs/{id}/design/apply` | `{token, confirm_minutes, request_id, takeover, acknowledged: true}`: the apply job; idempotent by `request_id`; 409 when the review expired, the plan changed, conflicts are not taken over or another operation is busy |
+| `GET /api/labs/{id}/design/apply/jobs`, `GET /api/design/apply/jobs/{job_id}` | The lab's apply jobs, one job (public shape: per device status, stage, message, timeline, diff sample, read-back result; never the staged configuration) |
+| `GET /api/labs/{id}/design/ownership` | Per device the number of owned statements, the plan, the time and whether a read-back is pending, plus the statements themselves (masked) |
 
 `/api/state` carries per lab a `design` summary (presence, revision, label, modules, whether a plan is
-being generated, the newest generation's id and status, and whether it is stale); the intent and the
-generations never appear there.
+being generated, the newest generation's id and status, and whether it is stale) and the public apply jobs
+as `design_jobs`; the intent, the generations and the ownership ledger never appear there.
 
 ## Security boundary
 
@@ -220,6 +273,11 @@ generations never appear there.
   secret-reference model for protocol authentication exists; public views carry no engine output.
 - Existing credentials stay authoritative for every connection; the design never sets a device
   password, user or management address.
+- Applying goes over direct node SSH only (no helper, no VM path), inside the NOS's own transaction with its
+  timed recovery armed, after a mandatory backup, behind a review token bound to the reviewed configuration,
+  and it confirms only the manager's own pending change; the apply, the backups, the Git saves and the
+  restores exclude each other through `operation_busy`. Job records and events carry counts, masked
+  statements and controlled messages, never a staged configuration or raw device output.
 
 ## Engine and licence
 

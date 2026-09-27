@@ -4,6 +4,60 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.45
+
+**Network design, part 3: *Apply to devices*, proven live on all four platforms**
+([docs/NETWORK-DESIGN.md](NETWORK-DESIGN.md) "Applying a plan to devices", the contract
+[docs/netlab-integration/PROVISIONING.md](netlab-integration/PROVISIONING.md), the live records
+`docs/netlab-integration/evidence/live-apply-{ceos,junos,iosxr,product}.md`).
+
+- **A generated plan can now be applied to the running devices.** *Apply to devices…* on the plan card: choose the
+  devices, review, apply. The review connects to each device, runs the whole transaction and aborts it, and shows
+  the settings the fragment leaves out (hostname, logins, AAA, the management interface and VRF, name mappings,
+  netlab's `delete:` tags: identity and reachability stay containerlab's), the device's own diff, the added,
+  removed and stale statements, the *expected* changes (an IOS XR port coming out of `shutdown`, EOS `ip routing`
+  switched on), the removal commands, and the *conflicts*: manual settings the plan would replace or remove, which
+  block the device until *Take over these settings on this device* is ticked (re-reviewed; a taken-over sibling
+  such as a second IPv6 address is then removed, not left beside the design's). The apply backs every chosen
+  device up first (`design-pre` in the backups), reads it again and refuses on drift, stages the removals and the
+  generated configuration inside the NOS's own merge transaction, arms the NOS's own timed recovery (EOS
+  `commit timer` in a `clabdsg-…` session, Junos `commit confirmed` with the name as comment, IOS XR
+  `commit confirmed minutes` on a session kept open), proves management with a fresh connection, confirms only its
+  own pending change, reads the device back, saves (EOS `write memory`) and records a `design-post` backup. Per
+  device: *Applied and verified*, *Applied, read-back differs*, *Already matched*, *Not changed* with the reason,
+  *Undone by the device*, *Outcome unknown*, *Interrupted*, *Changed since the review*; the job is *Applied*,
+  *Partly applied*, *Not applied* or *Needs attention*. A manager restart reads the devices back at start-up and
+  confirms a pending change it can still confirm; an IOS XR trial is left to the device's timer. Nothing here
+  replaces *Apply to running lab*: a merge is never a restore, and the two features keep separate jobs and words.
+- **Ownership.** The manager owns exactly the statements its own commits added, per device, in the lab's private
+  ledger (shown under Advanced as *Owned settings*). Later plans remove only owned statements the plan no longer
+  wants, at the highest container the manager created when everything under it is its own (`no router ospf 1`,
+  `delete protocols bgp`, one `no neighbor X` on EOS); a container that also holds manual configuration is kept
+  and said so. Manual configuration beside the design survives every step; a manual change to an owned setting is
+  a conflict, never silently overwritten. Removing the protocols leaves the addressing; removing the design leaves
+  the devices as they are.
+- **Proven live on `restore-square`** (cEOS 4.35.0F, vJunos-switch 23.2R1.14, cJunosEvolved 26.2R1.7-EVO, XRv9k
+  24.3.1): create, no-op re-apply, a manual conflict and its take-over, a renumbered link, a removed BGP peer, both
+  modules dropped and re-created, an unconfirmed apply left to the device's timer (undone, ledger untouched), a
+  manager restart inside the recovery window (confirmed and verified), and the same through the deployed product's
+  API. The live runs changed the rules in ten places (PROVISIONING.md §8), each pinned by a unit test: EOS BGP
+  neighbours removed as one object and address-family `network` statements removed by name, Junos created
+  ancestors limited to the device's own blocks, IOS XR typed negations verified as absence and a vanishing
+  `shutdown` as expected, kept containers not a verification failure, a take-over that removes the exclusive
+  sibling, an all-no-op apply a success, the interrupted job saying what the read-back came to, `send-community`
+  no longer masked as a secret, the cEOSLab management block left out (the image refuses `no lldp transmit`
+  there). Known limit: IOS XR refuses a BGP AS change in one commit ("BGP is still in process of unconfiguration");
+  the apply fails cleanly with the device's own words, and the change is two applies.
+- **Boundaries kept.** Direct node SSH only (no helper, no VM path, no Docker); `operation_busy` excludes applies,
+  backups, Git saves and restores from each other; the review token is single use and bound to the reviewed
+  configuration; job records, events and the ledger carry counts, masked statements and controlled messages,
+  never a staged configuration or raw device output; the same-origin guard and JSON bodies as everywhere.
+- **Tests and tools.** `test_design_provision.py`, `test_design_ownership.py`, `test_design_eos.py`,
+  `test_design_junos.py`, `test_design_iosxr.py`, `test_design_apply.py` (FastAPI `TestClient` against `create_app`
+  with a fake driver), 13 new browser tests in `test_network_design_ui.js`; all registered in CI. The Playwright
+  check `docs/netlab-integration/tools/check_design_apply_ui.py` drives the dialog; the independent read-backs use
+  `docs/multi-platform-restore/tools/nodecli.py`.
+
 ## Changes in 1.30.44
 
 **Network design, part 2: the Design tab, and the backend hardened by three review passes**

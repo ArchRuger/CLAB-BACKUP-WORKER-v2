@@ -31,6 +31,7 @@ from .diagnostics import Diagnostics
 from .capture import Captures
 from .telemetry_retirement import TelemetryRetirement, migrate_retired_telemetry, public_retired_telemetry
 from .network_design import NetworkDesign, public_design
+from .design_apply import DesignApply, public_job as public_design_job
 
 APP=Path(__file__).parent
 
@@ -47,14 +48,17 @@ def create_app(data_dir=None):
     restore=RestoreService(store,runner,git_progress)
     telemetry_retirement=TelemetryRetirement(store,services)
     network_design=NetworkDesign(store)
+    design_apply=DesignApply(store,runner,network_design)
     @asynccontextmanager
     async def lifespan(app):
         print('Containerlab Node Manager ready; UI login is disabled for this lab VM.',flush=True)
         runner.start()
         restore.start()
+        design_apply.start()
         discovery.start()
         readiness_monitor.start()
         yield
+        design_apply.close()
         network_design.close()
         telemetry_retirement.close()
         restore.close()
@@ -86,6 +90,8 @@ def create_app(data_dir=None):
     telemetry_retirement.install(app)
     app.state.network_design=network_design
     network_design.install(app)
+    app.state.design_apply=design_apply
+    design_apply.install(app)
     @app.middleware('http')
     async def guard(request, call_next):
         if request.url.path.startswith('/api/'):
@@ -133,7 +139,7 @@ def create_app(data_dir=None):
         if not lab: raise HTTPException(404,'Lab not found')
         return lab
     def public_lab(lab):
-        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','telemetry_retired','annotations','annotations_for','network_design','network_generations')}
+        result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','telemetry_retired','annotations','annotations_for','network_design','network_generations','network_ownership')}
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
         result['nodes']=[]
         with services.lock: checks={k:copy.deepcopy(v) for k,v in services.checks.items() if k[0]==lab['id']}
@@ -198,6 +204,7 @@ def create_app(data_dir=None):
                     'platforms':PLATFORMS, 'version':__version__, 'discovery':discovery.public(),
                     'git_jobs':[public_git_job(j) for j in store.state.get('git_jobs', [])],
                     'restore_jobs':[public_restore_job(j) for j in store.state.get('restore_jobs', [])],
+                    'design_jobs':[public_design_job(j) for j in store.state.get('design_jobs', [])],
                     'operations':[{k:v for k,v in j.items() if k not in ('output','result')} for j in store.state.get('operations',[])]}
     class RemoveLab(BaseModel):
         model_config = ConfigDict(extra='forbid')
@@ -221,6 +228,7 @@ def create_app(data_dir=None):
             updated['jobs'] = [j for j in updated['jobs'] if j['lab_id'] != lab_id]
             updated['git_jobs'] = [j for j in updated.get('git_jobs', []) if j['lab_id'] != lab_id]
             updated['restore_jobs'] = [j for j in updated.get('restore_jobs', []) if j['lab_id'] != lab_id]
+            updated['design_jobs'] = [j for j in updated.get('design_jobs', []) if j['lab_id'] != lab_id]
             ignored = set(updated.get('ignored_labs', []))
             if data.prevent_reimport: ignored.add(name)
             else: ignored.discard(name)
