@@ -203,6 +203,9 @@ class SchemaChecker:
         last = path.rsplit('.', 1)[-1]
         if schema is None and last == 'prefix' and '_prefix' in self.named:
             self.check(value, self.named['_prefix'], path, errors, depth + 1); return   # netlab types a VLAN prefix loosely
+        if last == 'loopback' and isinstance(schema, dict) and 'type' in schema and '_keys' not in schema and '_subtype' not in schema and isinstance(value, dict):
+            # netlab types a VRF loopback loosely (bool, prefix or dict): a dict takes ipv4/ipv6 prefixes and a pool.
+            self.mapping(value, {'ipv4': {'type': 'ipv4', 'use': 'prefix'}, 'ipv6': {'type': 'ipv6', 'use': 'prefix'}, 'pool': 'addr_pool'}, path, errors, depth + 1); return
         if schema is None and last == 'trunk':
             # A VLAN trunk is a list of VLAN names or a mapping of VLAN names to their (empty) per-trunk settings.
             names = value if isinstance(value, list) else list(value) if isinstance(value, dict) else None
@@ -211,7 +214,7 @@ class SchemaChecker:
             return
         if not isinstance(schema, dict):
             errors.append({'path': path, 'message': 'This attribute cannot be checked by the manager'}); return
-        if 'type' in schema or '_alt_types' in schema and not any(not k.startswith('_') and k not in ('type',) for k in schema):
+        if 'type' in schema or '_alt_types' in schema and (not isinstance(value, dict) or not any(not k.startswith('_') and k not in ('type',) for k in schema)):
             self.leaf(value, schema, path, errors, depth); return
         self.mapping(value, schema, path, errors, depth)
 
@@ -256,7 +259,10 @@ class SchemaChecker:
             if isinstance(value, bool): return True    # enable the family without an address (netlab's own rule)
             if _is_int(value): return value >= 0        # the N-th address of the link prefix
             ok = _text(value, 60) and _address(value, kind)[0] is not None
-            if ok: self.guard_address(str(_address(value, kind)[0].ip), path, errors)
+            if ok:
+                address = _address(value, kind)[0]; before = len(errors)
+                self.guard_address(str(address.ip), path, errors)
+                if len(errors) == before and '/' in value: self.guard_address(str(address.network), path, errors)   # the whole subnet too
             return ok
         if kind == 'prefix_str':
             ok = _text(value, 60) and (_prefix(value, 'ipv4')[0] or _prefix(value, 'ipv6')[0]) is not None
@@ -428,9 +434,13 @@ def _module_settings(container, path, modules, level, errors, checker, schema, a
         if module not in modules and not allow_unlisted:
             errors.append({'path': here, 'message': 'Enable ' + module + ' in the design before setting its options'}); continue
         body = container[module]
-        if body is None or body is True or body is False: continue
-        if module == 'vrf' and level in ('node', 'link', 'interface') and isinstance(body, str):
-            if body not in vrf_names: errors.append({'path': here, 'message': 'No VRF named ' + body + ' is defined in this design'})
+        if body is None or body is True: continue
+        if body is False:
+            if level in ('link', 'interface'): continue
+            errors.append({'path': here, 'message': 'Switch a module off per link or per link end; a device drops a module from its modules list'}); continue
+        if module == 'vrf' and isinstance(body, str):
+            if level not in ('link', 'interface'): errors.append({'path': here, 'message': 'A VRF is attached to a link or a link end'})
+            elif body not in vrf_names: errors.append({'path': here, 'message': 'No VRF named ' + body + ' is defined in this design'})
             continue
         if not isinstance(body, dict):
             errors.append({'path': here, 'message': 'Module settings must be a mapping'}); continue
@@ -470,11 +480,13 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
     management = list(management)
 
     def outside_management(value, family, path):
+        """False (and one problem appended) when `value` touches a management network."""
         try: network = ipaddress.ip_network(value, strict=False)
-        except (ValueError, TypeError): return
+        except (ValueError, TypeError): return True
         for label, net in management:
             if net.version == network.version and net.overlaps(network):
-                errors.append({'path': path, 'message': 'Overlaps the lab management network ' + label}); return
+                errors.append({'path': path, 'message': 'Overlaps the lab management network ' + label}); return False
+        return True
     if intent.get('schema') != SCHEMA: errors.append({'path': 'schema', 'message': 'Unsupported design schema; this manager writes schema ' + str(SCHEMA)})
     for key in intent:
         if key not in TOP_KEYS: errors.append({'path': str(key), 'message': 'Unknown design field'})
@@ -529,7 +541,7 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
                     if not address: errors.append({'path': here + '.loopback.' + family, 'message': why}); continue
                     if str(address.ip) in loopbacks: errors.append({'path': here + '.loopback.' + family, 'message': 'Duplicate loopback address, already used by ' + loopbacks[str(address.ip)]})
                     loopbacks[str(address.ip)] = name
-                    outside_management(str(address.ip), family, here + '.loopback.' + family)
+                    if outside_management(str(address.ip), family, here + '.loopback.' + family): outside_management(str(address.network), family, here + '.loopback.' + family)
         _module_settings(node, here, sorted(node_modules), 'node', errors, checker, schema, vrf_names=vrf_names)
         for key in ('vlans', 'vrfs'):
             if key in node:
@@ -609,7 +621,7 @@ def validate(intent, *, lab_nodes=None, lab_links=None, schema=None, management=
                 if family in networks and address.ip not in networks[family]: errors.append({'path': ehere + '.' + family, 'message': 'The address is outside the link prefix'})
                 if str(address.ip) in loopbacks: errors.append({'path': ehere + '.' + family, 'message': 'Duplicate address, already used as a loopback by ' + loopbacks[str(address.ip)]})
                 loopbacks[str(address.ip)] = node_name + ' on ' + key
-                outside_management(str(address.ip), family, ehere + '.' + family)
+                if outside_management(str(address.ip), family, ehere + '.' + family) and '/' in str(value): outside_management(str(address.network), family, ehere + '.' + family)
             _module_settings(endpoint, ehere, modules, 'interface', errors, checker, schema, allow_unlisted=False, vrf_names=vrf_names)
             _vlan_references(endpoint.get('vlan'), ehere + '.vlan', vlan_names, errors)
     interfaces = intent.get('interfaces', {})

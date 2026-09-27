@@ -280,8 +280,6 @@ class StatsModuleHasNoNetworkCodeTests(unittest.TestCase):
                               f'netsim/utils/stats.py unexpectedly mentions {forbidden!r}')
 
 
-if __name__ == '__main__':
-    unittest.main()
 
 
 class EngineStatusBoundaryTests(unittest.TestCase):
@@ -298,3 +296,16 @@ class EngineStatusBoundaryTests(unittest.TestCase):
         if shutil.which('netlab'):
             self.assertTrue(status['available'])
             self.assertRegex(status['version'], r'^\d+(\.\d+)+$')
+
+
+class CrashContractTests(unittest.TestCase):
+
+    def test_a_traceback_becomes_one_controlled_line_without_paths(self):
+        from app.design_engine import _error_lines, UNEXPECTED_FAILURE
+        text = 'Traceback (most recent call last):\n  File "/usr/local/lib/python3.12/site-packages/netsim/x.py", line 5, in f\n    raise BoxTypeError("bad")\nbox.exceptions.BoxTypeError: bad value at /data/network-design/work/abc\n'
+        self.assertEqual(_error_lines(text), [UNEXPECTED_FAILURE + ' (box.exceptions.BoxTypeError).'])
+        self.assertEqual(_error_lines('IncorrectValue in modules: x\nFatal error in netlab: y\n'), ['IncorrectValue in modules: x', 'Fatal error in netlab: y'])
+        self.assertEqual(_error_lines(''), [])
+
+if __name__ == '__main__':
+    unittest.main()

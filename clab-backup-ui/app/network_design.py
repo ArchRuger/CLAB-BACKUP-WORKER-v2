@@ -299,11 +299,11 @@ class NetworkDesign:
                         'nodes': copy.deepcopy(lab.get('nodes', [])), 'intent': copy.deepcopy(intent),
                         'previous_ledger': copy.deepcopy(previous['ledger']) if previous else copy.deepcopy(intent.get('allocations') or {})}
             self.store.event('design.generate', 'Plan generation queued', lab_id=lab_id, job_id=generation['id'])
+            for old in dropped: shutil.rmtree(self.root / lab_id / old, ignore_errors=True)   # under the lock: a reset cannot interleave
             try: self.pool.submit(self.execute, lab_id, generation['id'], snapshot)
             except RuntimeError:
                 generation.update(status='interrupted', message='Manager is shutting down. Generate again after the restart.'); self.store.save()
                 raise HTTPException(409, generation['message'])
-        for old in dropped: shutil.rmtree(self.root / lab_id / old, ignore_errors=True)
         return public_generation(generation)
 
     def update(self, lab_id, generation_id, **fields):

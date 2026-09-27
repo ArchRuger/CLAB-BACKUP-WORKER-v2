@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.43"><script src="/static/status.js?v=1.30.43" defer></script><script src="/static/shell.js?v=1.30.43" defer></script><script src="/static/app.js?v=1.30.43" defer></script><script src="/static/topology-render.js?v=1.30.43" defer></script><script src="/static/topology.js?v=1.30.43" defer></script><script src="/static/home.js?v=1.30.43" defer></script><script src="/static/management.js?v=1.30.43" defer></script><script src="/static/operations.js?v=1.30.43" defer></script><script src="/static/diagram-editor.js?v=1.30.43" defer></script><script src="/static/diff-view.js?v=1.30.43" defer></script><script src="/static/git-progress.js?v=1.30.43" defer></script><script src="/static/git-places.js?v=1.30.43" defer></script><script src="/static/restore.js?v=1.30.43" defer></script><script src="/static/capture.js?v=1.30.43" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.44"><script src="/static/status.js?v=1.30.44" defer></script><script src="/static/shell.js?v=1.30.44" defer></script><script src="/static/app.js?v=1.30.44" defer></script><script src="/static/topology-render.js?v=1.30.44" defer></script><script src="/static/topology.js?v=1.30.44" defer></script><script src="/static/home.js?v=1.30.44" defer></script><script src="/static/management.js?v=1.30.44" defer></script><script src="/static/operations.js?v=1.30.44" defer></script><script src="/static/diagram-editor.js?v=1.30.44" defer></script><script src="/static/diff-view.js?v=1.30.44" defer></script><script src="/static/git-progress.js?v=1.30.44" defer></script><script src="/static/git-places.js?v=1.30.44" defer></script><script src="/static/restore.js?v=1.30.44" defer></script><script src="/static/network-design.js?v=1.30.44" defer></script><script src="/static/capture.js?v=1.30.44" defer></script></head>
 <body>
 
 <svg hidden aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
@@ -105,7 +105,7 @@
 
   <div id="lab-banner" class="banner info" role="status" aria-live="polite" hidden><svg class="icon" id="lab-banner-icon" width="16" height="16" aria-hidden="true"><use id="lab-banner-glyph" href="#i-info"></use></svg><div><p id="lab-banner-text"></p><details id="lab-banner-detail" hidden><summary>Details</summary><p id="lab-banner-detail-text"></p></details></div><div class="banner-actions"><button type="button" class="button primary small" id="banner-start" hidden>Start lab</button><button type="button" class="button secondary small" id="banner-output" hidden>View output</button><button type="button" class="button secondary small" id="banner-restore" hidden>View progress</button><button type="button" class="button secondary small" id="banner-try-again" hidden>Try again</button><button type="button" class="button secondary small" id="banner-retry-save" hidden>Retry</button><button type="button" class="button secondary small" id="banner-save-details" hidden>Details</button><button type="button" class="button secondary small" id="banner-credentials" hidden>Check credentials</button><button type="button" class="button secondary small" id="banner-vm" hidden>VM connection…</button><button type="button" class="button secondary small" id="banner-link" hidden>Match to a running lab…</button><button type="button" class="button secondary small" id="banner-retired-review" hidden>Review and remove…</button><button type="button" class="button ghost small" id="banner-dismiss" hidden>Dismiss</button></div><button type="button" class="icon-button notice-close" id="lab-banner-close" aria-label="Hide this notice">×</button></div>
 
-  <div class="tabs" role="tablist" aria-label="Lab views" id="lab-tabs"><button type="button" role="tab" id="tab-topology" class="active" data-tab="topology" aria-selected="true" aria-controls="topology-view" tabindex="0">Topology</button><button type="button" role="tab" id="tab-devices" data-tab="devices" aria-selected="false" aria-controls="devices-view" tabindex="-1">Devices</button><button type="button" role="tab" id="tab-progress" data-tab="progress" aria-selected="false" aria-controls="progress-view" tabindex="-1">Progress</button><button type="button" role="tab" id="tab-tools" data-tab="tools" aria-selected="false" aria-controls="tools-view" tabindex="-1">Tools</button><button type="button" role="tab" id="tab-advanced" data-tab="advanced" aria-selected="false" aria-controls="advanced-view" tabindex="-1">Advanced</button></div>
+  <div class="tabs" role="tablist" aria-label="Lab views" id="lab-tabs"><button type="button" role="tab" id="tab-topology" class="active" data-tab="topology" aria-selected="true" aria-controls="topology-view" tabindex="0">Topology</button><button type="button" role="tab" id="tab-devices" data-tab="devices" aria-selected="false" aria-controls="devices-view" tabindex="-1">Devices</button><button type="button" role="tab" id="tab-progress" data-tab="progress" aria-selected="false" aria-controls="progress-view" tabindex="-1">Progress</button><button type="button" role="tab" id="tab-design" data-tab="design" aria-selected="false" aria-controls="design-view" tabindex="-1">Design</button><button type="button" role="tab" id="tab-tools" data-tab="tools" aria-selected="false" aria-controls="tools-view" tabindex="-1">Tools</button><button type="button" role="tab" id="tab-advanced" data-tab="advanced" aria-selected="false" aria-controls="advanced-view" tabindex="-1">Advanced</button></div>
 
   <section id="topology-view" class="view" role="tabpanel" aria-labelledby="tab-topology">
     <div class="topology-layout">
@@ -147,9 +147,83 @@
     </div>
   </section>
 
+  <section id="design-view" class="view" role="tabpanel" aria-labelledby="tab-design" hidden>
+    <section id="design-head" class="card" aria-labelledby="design-head-title">
+      <div class="section-heading">
+        <div><h2 id="design-head-title">Network design</h2>
+          <p id="design-state" role="status"><span class="pill neutral" id="design-state-pill"></span> <span id="design-state-text"></span></p>
+          <p class="caption" id="design-detail"></p>
+        </div>
+        <div class="actions">
+          <button type="button" class="button primary" id="design-generate">Generate plan</button>
+          <button type="button" class="button secondary" id="design-save">Save design</button>
+          <span class="menu"><button type="button" class="button secondary menu-button" id="design-more-button" aria-haspopup="menu" aria-expanded="false">More <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-chevron"></use></svg></button><div class="menu-list" id="design-more-menu" role="menu" hidden>
+            <button type="button" role="menuitem" id="design-export"><span>Download design file</span><small class="menu-reason" hidden></small></button>
+            <button type="button" role="menuitem" id="design-import"><span>Import design file…</span><small class="menu-reason" hidden></small></button>
+            <button type="button" role="menuitem" id="design-renumber"><span>Renumber (forget allocations)…</span><small class="menu-reason" hidden></small></button>
+            <hr class="menu-sep" role="separator">
+            <div class="menu-danger" role="group" aria-label="Destructive actions"><button type="button" role="menuitem" id="design-clear"><span>Remove design…</span><small class="menu-reason" hidden></small></button></div>
+          </div></span>
+          <input type="file" id="design-import-file" accept=".yml,.yaml,.json" hidden>
+        </div>
+      </div>
+    </section>
+    <div id="design-engine" class="banner warn" role="status" hidden><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-alert"></use></svg><div><p id="design-engine-text"></p></div></div>
+    <section id="design-settings" class="card" aria-labelledby="design-settings-title">
+      <h2 id="design-settings-title">Design settings</h2>
+      <p class="caption">Addressing, routing and services this lab's devices should get. The topology itself is never changed here.</p>
+      <form id="design-form">
+        <h3>Address families</h3>
+        <div class="actions"><label class="checkbox-label"><input type="checkbox" id="design-ipv4"> IPv4</label><label class="checkbox-label"><input type="checkbox" id="design-ipv6"> IPv6</label></div>
+        <h3>Addressing pools</h3>
+        <div class="table-wrap"><table><thead><tr><th>Pool</th><th>IPv4 prefix</th><th>IPv6 prefix</th><th>Size</th></tr></thead><tbody>
+          <tr><td>Loopbacks</td><td><input id="design-pool-loopback-ipv4" placeholder="10.255.0.0/24"></td><td><input id="design-pool-loopback-ipv6" placeholder="2001:db8:ff::/48"></td><td>—</td></tr>
+          <tr><td>Point-to-point links</td><td><input id="design-pool-p2p-ipv4" placeholder="10.1.0.0/16"></td><td><input id="design-pool-p2p-ipv6" placeholder="2001:db8:1::/48"></td><td><input id="design-pool-p2p-prefix" type="number" min="1" max="127" value="31"></td></tr>
+          <tr><td>Shared links</td><td><input id="design-pool-lan-ipv4" placeholder="172.16.0.0/16"></td><td><input id="design-pool-lan-ipv6" placeholder="2001:db8:2::/48"></td><td><input id="design-pool-lan-prefix" type="number" min="1" max="127" value="24"></td></tr>
+        </tbody></table></div>
+        <h3>Protocols and services</h3>
+        <div id="design-modules" class="design-module-list"></div>
+        <div id="design-ospf-settings" class="design-module-settings" hidden><label for="design-ospf-area">OSPF area</label><input id="design-ospf-area" placeholder="0.0.0.0"></div>
+        <div id="design-bgp-settings" class="design-module-settings" hidden><label for="design-bgp-as">BGP AS number</label><input id="design-bgp-as" type="number" min="1" max="4294967295" placeholder="65000"><label for="design-bgp-rr">Route reflector</label><select id="design-bgp-rr"><option value="">None</option></select></div>
+        <div id="design-isis-settings" class="design-module-settings" hidden><label for="design-isis-area">IS-IS area</label><input id="design-isis-area" placeholder="49.0001"><label for="design-isis-type">IS-IS level</label><select id="design-isis-type"><option value="level-1">Level 1</option><option value="level-2">Level 2</option><option value="level-1-2">Level 1-2</option></select></div>
+        <div id="design-gateway-settings" class="design-module-settings" hidden><label for="design-gateway-protocol">First-hop gateway protocol</label><select id="design-gateway-protocol"><option value="anycast">Anycast</option><option value="vrrp">VRRP</option></select></div>
+        <h3>Devices</h3>
+        <div class="table-wrap"><table><thead><tr><th>Device</th><th>Kind</th><th>Profile</th><th>Role</th><th>Notes</th></tr></thead><tbody id="design-devices"></tbody></table></div>
+        <div id="design-problems" role="alert"></div>
+        <details id="design-advanced-details"><summary>Advanced</summary>
+          <p class="form-help">The whole design as JSON, including settings the form above does not cover (per-link settings, VLAN and VRF objects, interface overrides, module options). Editing the form updates this text; editing this text (and leaving the field) updates the form when it parses.</p>
+          <textarea id="design-advanced" class="mono" rows="16" spellcheck="false"></textarea>
+          <div class="actions"><button type="button" class="button secondary" id="design-validate">Check</button></div>
+          <h4>Allocation ledger</h4>
+          <p class="caption">Device ids, loopbacks and link prefixes the manager has pinned from the last generated plan. Read-only here; Renumber (above) forgets it.</p>
+          <div id="design-ledger"></div>
+        </details>
+      </form>
+    </section>
+    <section id="design-plan" class="card" aria-labelledby="design-plan-title">
+      <div class="section-heading"><div><h2 id="design-plan-title">Generated plan</h2><p id="design-plan-status" class="caption" role="status"></p></div><button type="button" class="button secondary" id="design-cancel" hidden>Cancel</button></div>
+      <div id="design-plan-errors-wrap" hidden><ul id="design-plan-errors" class="form-error" role="alert"></ul></div>
+      <details id="design-plan-warnings-wrap" hidden><summary>Warnings</summary><ul id="design-plan-warnings"></ul></details>
+      <div id="design-plan-renumbering-wrap" hidden><h3>What changed</h3><div id="design-plan-renumbering"></div></div>
+      <p id="design-plan-collisions" class="caption" hidden></p>
+      <h3>Compatibility</h3>
+      <div id="design-compatibility"></div>
+      <h3>Plan</h3>
+      <div id="design-plan-body"></div>
+    </section>
+    <section id="design-files" class="card" aria-labelledby="design-files-title">
+      <h2 id="design-files-title">Generated files</h2>
+      <p class="caption">Generated configuration fragments, not backups. Applying them to devices is not available yet.</p>
+      <div id="design-files-body"></div>
+      <div class="actions"><a class="button secondary" id="design-download" download hidden>Download all files (ZIP)</a></div>
+    </section>
+    <details id="design-history" class="card"><summary>History</summary><div id="design-history-body"></div></details>
+  </section>
+
   <section id="tools-view" class="view" role="tabpanel" aria-labelledby="tab-tools" hidden>
     <div class="tool-grid">
       <article class="tool-card"><h3><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-capture"></use></svg> Packet capture</h3><p>Pick a link or an interface, start a capture, and Wireshark opens in your browser.</p><p class="caption" id="capture-caption" hidden></p><div class="actions"><button type="button" class="button primary" id="capture-open">Capture traffic…</button></div></article>
+      <article class="tool-card"><h3>Network design</h3><p>Plan addressing, routing and services on top of this lab's topology, then generate per-device configuration to review and download.</p><div class="actions"><button type="button" class="button primary" id="tools-design">Design this lab…</button></div></article>
       <article class="tool-card"><h3><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-save"></use></svg> Configuration backups</h3><p>Copies of each device's running configuration, kept on this VM.</p><div class="actions"><button type="button" class="button primary" id="backup">Back up now</button></div><form id="schedule-form" class="schedule-form"><label for="interval">Back up automatically every</label><input type="number" id="interval" min="0" max="10080" value="0"><span>minutes</span><button class="button secondary small" type="submit">Save</button><small>0 = only when I ask</small></form><section id="backups-view" class="view" aria-labelledby="backups-title"><h4 id="backups-title">Backups on this VM</h4><div id="jobs"></div></section></article>
     </div>
     <h2>More tools</h2>

@@ -1,3 +1,25 @@
+# Network design, part 2: the Design tab — 1.30.44
+
+Read `docs/netlab-integration/PICKUP.md` first, then `DECISIONS.md` and `docs/NETWORK-DESIGN.md`. Preserve, beside the
+1.30.43 points: (1) `app/static/network-design.js` owns the Design tab (`#tab-design`, `#design-view`, `'design'` in
+`PANELS`; `renderNetworkDesign` is called from `render()` behind a `typeof` guard); its pure functions
+(`designStateOf`, `designIntentFromForm`/`designFormFromIntent`, `designPlanMarkup`, `designCompatibilityMarkup`,
+`designGenerationLine`, `designProblemsMarkup`) are the tested contract (`tests/test_network_design_ui.js`); the
+built intent always carries `schema: 1`; the guided controls and the Advanced JSON editor are two views of one
+draft, and the form's inputs are never re-rendered while one has focus. (2) Drafts live in localStorage through
+`shell.js` (`readDesignDraft`/`writeDesignDraft`/`clearDesignDraft`, key `clab.design.draft.<lab>`), keyed by the
+saved revision and dropped when it moved on. (3) Save validates first (the PUT answers a fixed-string 400) and
+treats the fixed "changed since this page loaded" wording as a stale page; the ledger is never sent from a page.
+(4) `#design-problems` sits outside the Advanced `<details>` so problems are visible. (5)
+`design_intent.scan()`, `SchemaChecker(named_types, management)`, `object_schema()`, `management_networks()`'s
+containerlab defaults, `overlaps(avoid=)` over every interface subnet, `guard_idle()` in Remove lab and Start
+fresh, `_finish()` cleaning a vanished lab's folder and `_error_lines()`'s crash fallback are the review's
+fixes; their tests are the `ReviewRegression*`, `SecondPassRegression*`, `ThirdPassRegression*` and
+`CrashContractTests` classes: keep them. (6) `docs/netlab-integration/tools/check_design_ui.py` is the browser
+regression for the tab (fixture manager, real engine); run it before every release that touches the page.
+(7) At phone width the shell itself is 428 px wide on every tab (lab switcher, Manager menu): a pre-existing
+layout debt, not the tab's; the tool checks that the tab adds nothing to it.
+
 # Network design, part 1: engine boundary and data model — 1.30.43
 
 Read `docs/netlab-integration/PICKUP.md` first (branch, environment, chunks, routing), then `DECISIONS.md` (every

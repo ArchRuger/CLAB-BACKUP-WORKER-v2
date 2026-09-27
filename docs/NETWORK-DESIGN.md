@@ -8,7 +8,8 @@ are in [docs/netlab-integration/](netlab-integration/PICKUP.md).
 ## What it is
 
 Network design adds *network intent* to a lab: the addressing pools, address families, routing
-protocols, services and per-device or per-link settings a student wants on the lab's devices. The
+protocols, services and per-device or per-link settings a student wants on the lab's devices. Students
+reach it through the lab's **Design** tab. The
 manager calculates the addressing and adjacency plan and generates per-device configuration from
 that intent with [netlab](https://netlab.tools) (the PyPI distribution `networklab`, pinned in
 `clab-backup-ui/requirements.txt` and installed in the manager image; nothing has to be installed on
@@ -148,6 +149,36 @@ decisions record) that filters what must never be applied as generated (the mana
 stanza, `hostname`, AAA lines, MAC addresses, cEOS `normalize`, Junos `delete:` tags) and manages
 removal through an ownership ledger; until that contract exists for a platform, its files are
 preview and download only.
+
+## The Design tab
+
+Every lab has a **Design** tab (beside Topology, Devices and Progress). Top to bottom:
+
+- **State and actions.** One line says where the design stands: *No design yet*, *Unsaved changes*, *Generating
+  the plan…*, *The design has problems*, *Plan ready to review*, *Plan is older than the design*, *The last plan
+  failed*, *The last plan was interrupted*, *Design engine unavailable* (with the engine's diagnostic). These are
+  the design's own words, never the devices' readiness or the saved-progress state. *Generate plan*, *Save design*
+  and *More* (download the design file, import one, *Renumber* to forget the pinned allocations, *Remove design*).
+- **Design settings.** Address families; the loopback, point-to-point and shared-link pools with their allocation
+  sizes; the protocols and services (OSPF, BGP, IS-IS, EIGRP, RIP, BFD, DHCP, VLANs, VRFs, link aggregation,
+  spanning tree, first-hop gateway, VXLAN, EVPN, MPLS, segment routing, SRv6, routing policies and static routes)
+  with the common settings that appear when one is ticked (OSPF area, BGP AS and route reflector, IS-IS area and
+  type, gateway protocol); a devices table with each device's kind, profile and role (router, host, excluded) and
+  the reason when a device cannot take part. Under **Advanced**, the whole design as JSON for everything the
+  controls do not cover (per-link settings, VLAN and VRF objects, interface overrides, module options), a *Check*
+  button that lists every problem with its path, and the allocation ledger read-only. Problems are shown above
+  the Advanced section, in view.
+- **Plan.** The newest plan: its status, engine version and passes; errors when it failed; warnings; what it
+  renumbered; the compatibility of every device in words; then per device the id, loopback, router id, the
+  interfaces with their containerlab port, addresses, neighbours and protocol notes, the BGP sessions; and the
+  links. A plan being generated can be cancelled.
+- **Files.** The generated configuration fragments per device, in netlab's order, each viewable, and one ZIP
+  download. They are not backups and are not applied by this page yet.
+- **History.** Every plan of the lab.
+
+Unsaved edits are kept in the browser per lab and restored on reload while the saved design has not moved on; a
+page that is behind the saved design is refused when it saves. The tab reads the design through
+`GET /api/labs/{id}/design` and polls it while a plan is being generated.
 
 ## API
 

@@ -4,6 +4,43 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.44
+
+**Network design, part 2: the Design tab, and the backend hardened by three review passes**
+([docs/NETWORK-DESIGN.md](NETWORK-DESIGN.md), [docs/netlab-integration/PICKUP.md](netlab-integration/PICKUP.md)).
+
+- **A Design tab in every lab.** Beside Topology, Devices and Progress: the state of the design in words (no design
+  yet, unsaved changes, generating, problems, plan ready, plan older than the design, failed, interrupted, engine
+  unavailable), guided controls for the common workflow (address families, the three pools and their sizes, the
+  protocols and services, OSPF area, BGP AS and route reflector, IS-IS area and type, the gateway protocol, and a
+  role per device: router, host or excluded), an *Advanced* editor holding the whole design as JSON with a *Check*
+  action that lists every problem with its path, the allocation ledger read-only, then the plan (per device its
+  id, loopback, router id, interfaces with their containerlab port, addresses, neighbours and protocol notes, the
+  BGP sessions; the links), the compatibility of each device in words (verified on this image, generated but not
+  yet tested live, not supported, needs a prerequisite), what a plan renumbered, the generated files per device
+  with a viewer and a ZIP download, the history of plans, and *More*: download or import the design file,
+  *Renumber* (forget the allocations, with confirmation), *Remove design*. Unsaved edits survive navigation and
+  reloads (a draft per lab in the browser, dropped when the saved design moved on); a stale page cannot overwrite
+  newer edits. Applying generated configuration to devices is not offered yet: the files are preview and download
+  only, and the page says so.
+- **Backend hardening from the three risk-review passes** (Opus `risk-reviewer`; the first pass was applied before
+  1.30.43): a recursive guard refuses `_`-prefixed and denied keys and unsafe text (control characters, Unicode
+  line separators, quotes, braces, semicolons, backslashes, backticks) at every depth of a design; VLAN and VRF
+  objects are checked against the engine's own schemas with `links`/`members` refused; every address or prefix in
+  any setting, every interface's whole subnet and every VRF loopback (string or dict form) is refused inside the
+  lab's management network, which now falls back to containerlab's defaults (`172.20.20.0/24`, `3fff:172:20:20::/64`)
+  when the topology names none; `pool: mgmt` is refused wherever a pool is named; `False` and a VRF name are
+  accepted as module settings only at the link and link-end levels (the device and global forms crash the engine);
+  the engine status is answered from package metadata without a process; the second engine pass pins every
+  first-pass prefix and explicit prefixes count as pinned; the import route needs the current revision and keeps
+  the server's ledger; record and ledger are written in one step; compatibility resolves each device's own module
+  set and every setting value at every level and blocks missing prerequisites; Remove lab and Start fresh wait for a
+  running generation and take the lab's plans along; generated files are private (0600 in 0700 folders); engine
+  lines in a record carry no directory path and a crash becomes one controlled line.
+- **Browser check tool.** `docs/netlab-integration/tools/check_design_ui.py` drives the tab in Chromium against the
+  fixture manager (real app, real engine, no VM) through the whole student path and writes a report with
+  screenshots (`docs/netlab-integration/evidence/`).
+
 ## Changes in 1.30.43
 
 **Network design, part 1: engine boundary and data model** (the netlab integration stream,

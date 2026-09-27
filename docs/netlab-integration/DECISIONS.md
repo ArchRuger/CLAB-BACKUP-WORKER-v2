@@ -113,8 +113,17 @@ management network is checked for link prefixes, loopbacks, endpoint addresses, 
 (7) `stale` and `renumbering` compare against the previous plan; (8) compatibility resolves each device's
 effective modules, settings at every level and prerequisites, and blocks; (9) a failed save restores the
 list; (10) Remove lab and Start fresh take the plans along, files are 0600 in 0700 folders; (11) engine
-lines are scrubbed of directory paths. A second pass verified the fixes (its findings are recorded in
-VALIDATION.md for 1.30.43).
+lines are scrubbed of directory paths. The second pass verified six fixes and found two more must-fix items
+(prefixes hidden inside module settings and VRF loopbacks were not checked against the management network;
+Remove lab and Start fresh did not wait for a running generation) and a regression (a VRF could no longer be
+attached to a link), all fixed and pinned (`SecondPassRegression*`). The third pass verified those and found
+one more must-fix: a topology with no `mgmt` block left containerlab's default management network
+(`172.20.20.0/24`, `3fff:172:20:20::/64`) and its gateway unguarded; `management_networks()` now falls back
+to those defaults (and to the /24 or /64 around each device address for `auto`), interface addresses are
+guarded by their whole subnet, dict-form VRF loopbacks are checked, `False` and a VRF name are accepted only
+at the link and interface levels (the node and global forms crash the engine), and an engine traceback
+becomes one controlled line naming the exception class (`ThirdPassRegression*`, `CrashContractTests`). The
+first pass' outcome is in VALIDATION.md for 1.30.43, the second and third in the entry for 1.30.44.
 
 ## 2. Data model: three layers, one owner each
 

@@ -73,12 +73,22 @@ boundaries are repeated in DECISIONS.md §0.
 | Chunk | Milestone | Content | Release | Commit | Status |
 |---|---|---|---|---|---|
 | 0 | A | Baseline, reconnaissance, compiler-only proof, decisions, records skeleton | none (records land with chunk 1) | | done |
-| 1 | B | Engine pinned and packaged; intent schema and validation; adapter with explicit identities, stable order, pins and collision fix; engine runner; capability model and data tool; service, routes, generations, artifacts, export/import; wiring; guide; CI step | 1.30.43 | (filled at commit) | in progress |
+| 1 | B | Engine pinned and packaged; intent schema and validation; adapter with explicit identities, stable order, pins and collision fix; engine runner; capability model and data tool; service, routes, generations, artifacts, export/import; wiring; guide; CI step | 1.30.43 | `b96cb89` (pushed) | done; third-pass risk review pending at commit, recorded with chunk 2 |
+| 2 | C | The Design tab (guided controls, advanced editor, plan, compatibility, files, history, export/import, renumber), the second and third review passes' fixes and regressions, the browser check tool and its run, deployment of the build on the dev VM | 1.30.44 | (this commit) | done; deployed on the dev VM |
 
 ## Exact next action
 
-Chunk 1 closes with the 1.30.43 commit and push (records: CHANGELOG, VALIDATION, the handoff section, TESTS.md).
-Then milestone C: the *Network design* tab (`app/static/network-design.js`, a `design` panel in `index.html`,
+Chunk 1 (`b96cb89`, CI green) and chunk 2 (the Design tab) are done. Next is milestone D, safe provisioning,
+platform by platform: `restore-square` must be redeployed first (cJunosEvolved was reboot-looping inside its
+container on 2026-09-27; a whole-lab `destroy --cleanup` + `deploy` is the safe way, about 17 minutes until
+vJunos-switch answers), then the provisioning driver contract (D4.3/D4.4 in DECISIONS.md): per platform a native
+candidate or session transaction with timed recovery, the ownership ledger from the device's own diff, removal
+statement by statement, the filters for what a fragment must never apply (management stanza, hostname, AAA, MAC
+addresses, cEOS `normalize`, Junos `delete:` tags), a fresh-connection confirmation (IOS XR from the arming
+session), per-node outcomes and restart reconciliation, all behind `operation_busy` and a review token bound to
+the generation. Start with cEOS (fastest boot, EOS sessions already proven by `restore_eos.py`), have the Opus
+reviewer design-review the ownership semantics before the first live apply, and keep every live run recorded under
+`docs/netlab-integration/evidence/`. The former plan for chunk 2 read: the *Network design* tab (`app/static/network-design.js`, a `design` panel in `index.html`,
 `tests/test_network_design_ui.js` registered in CI), the guided flow (families, pools, OSPF/BGP settings, per-device
 exclusion, generate, plan, files, download, export/import) plus the schema-validated advanced editor, then a browser
 run against the fixture manager and the rebuilt product on the VM. Check `sudo containerlab inspect --all` before

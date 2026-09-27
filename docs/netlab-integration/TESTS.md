@@ -26,3 +26,13 @@ Suites and checks at the checkpoint (this checkout, `netlab` on PATH): Python 14
 pass, `node --check`, `python -W error -c "import app.main"`, `verify-release.py`, `check_links.py` (137 files),
 `git diff --check`; image `clab-backup:1.30.43` built twice (before and after the review fixes) with the offline
 in-image generation passing both times. Live device evidence: none (by design in this chunk).
+
+## Chunk 2 (milestone C: the Network design tab; the second and third review passes)
+
+| Task | Requested | Observed | Result |
+|---|---|---|---|
+| Second and third risk-review passes on the chunk 1 backend | opus (`risk-reviewer`) | claude-opus-5-5 | 2 + 1 must-fix, several should-fix, all applied; pinned by `SecondPassRegression*`, `ThirdPassRegression*`, `CrashContractTests` |
+| `network-design.js`, the Design tab, `test_network_design_ui.js` | sonnet | claude-sonnet-5 | 26 browser tests; two defects found by the lead's browser run (schema stamp, problems list placement), fixed by the lead |
+| Browser check tools `check_design_ui.py` (fixture) and `check_design_live.py` (the deployed product) and their runs | Fable (lead) | claude-fable-5-1 | 20 of 20 and 17 of 17 |
+
+Suites and checks at the checkpoint: Python 1439 OK (1 skipped), browser 307 pass, `verify-release.py`, `check_links.py`, `git diff --check`; the manager on the dev VM rebuilt and recreated at 1.30.44.

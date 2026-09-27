@@ -1006,8 +1006,6 @@ class ReviewRegressionUnitTests(unittest.TestCase):
         self.assertNotIn('static_routes', requested_features(intent2, modules={'ospf'}))
 
 
-if __name__ == '__main__':
-    unittest.main()
 
 
 @unittest.skipUnless(HAS_NETLAB, SKIP_REASON)
@@ -1093,3 +1091,6 @@ class SecondPassRegressionUnitTests(unittest.TestCase):
         self.assertIn('anycast_gateway', xrv9k)
         self.assertNotIn('static_routes', xrv9k)
         self.assertNotIn('vrrp', xrv9k)
+
+if __name__ == '__main__':
+    unittest.main()

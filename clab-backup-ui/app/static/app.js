@@ -5,7 +5,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 // sessionStorage → Home); render() shows Home whenever it is empty. tab holds one of PANELS; legacy
 // names (inventory, git, backups, credentials, logs) are normalised by setTab() so old callers still work.
 let state={labs:[],jobs:[],platforms:{}}, activeId='', tab='topology', toastTimer, subview='', devicesTechnical=false, scrollTarget='', routeApplied=false;
-const PANELS=['topology','devices','progress','tools','advanced'];
+const PANELS=['topology','devices','progress','design','tools','advanced'];
 const TAB_ALIAS={inventory:'devices',git:'progress',backups:'tools',credentials:'advanced',logs:'advanced'};
 const SUBVIEW={inventory:'technical',backups:'backups-view',credentials:'credentials-view',logs:'logs-view'};
 const APP_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
@@ -75,7 +75,7 @@ function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.30.43';$('app-version').textContent='v'+version;
+ const version=state.version||'1.30.44';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;
@@ -89,6 +89,7 @@ function render(){
  if(typeof renderManagement==='function')renderManagement();
  if(typeof renderLabOperations==='function')renderLabOperations();
  if(typeof renderGitProgress==='function')renderGitProgress();
+ if(typeof renderNetworkDesign==='function')renderNetworkDesign();
  if(typeof renderHome==='function')renderHome();
  if(!lab){renderLabBanner();syncProxies();syncRoute();return;}
  renderLabHeader(lab);renderTechnical(lab);

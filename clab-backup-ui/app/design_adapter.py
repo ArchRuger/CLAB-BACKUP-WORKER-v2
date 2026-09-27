@@ -90,24 +90,34 @@ def parse_links(definition_yaml):
     return result
 
 
+# containerlab's default management network when a topology names none (docs: the `clab` Docker network).
+DEFAULT_MANAGEMENT = {'ipv4-subnet': '172.20.20.0/24', 'ipv6-subnet': '3fff:172:20:20::/64'}
+
+
 def management_networks(definition_yaml, lab_nodes):
-    """(label, ip_network) pairs no design pool may overlap: the topology's management subnets and every
-    node's management address."""
+    """(label, ip_network) pairs no design address may overlap: the topology's management subnets (or
+    containerlab's defaults when the topology names none; with `auto` the /24 or /64 around each device
+    address as well), and every device's management address."""
     networks = []
     try:
         data = read_data(definition_yaml.encode() if isinstance(definition_yaml, str) else definition_yaml) if definition_yaml else {}
     except ValueError:
         data = {}
     mgmt = data.get('mgmt') if isinstance(data.get('mgmt'), dict) else {}
+    auto = False
     for key in ('ipv4-subnet', 'ipv6-subnet'):
         value = mgmt.get(key)
-        if isinstance(value, str) and value != 'auto':
-            try: networks.append(('mgmt ' + key, ipaddress.ip_network(value, strict=False)))
+        if value == 'auto': auto = True; continue
+        if isinstance(value, str):
+            try: networks.append(('mgmt ' + key, ipaddress.ip_network(value, strict=False))); continue
             except ValueError: pass
+        networks.append(('containerlab default management ' + key, ipaddress.ip_network(DEFAULT_MANAGEMENT[key])))
     for node in lab_nodes or []:
         address = node.get('address') if isinstance(node, dict) else None
-        try: networks.append(('device ' + str(node.get('short_name') or node.get('name')), ipaddress.ip_network(address)))
-        except (ValueError, TypeError, AttributeError): pass
+        try: host = ipaddress.ip_network(address)
+        except (ValueError, TypeError, AttributeError): continue
+        networks.append(('device ' + str(node.get('short_name') or node.get('name')), host))
+        if auto: networks.append(('management network of ' + str(node.get('short_name') or node.get('name')), host.supernet(new_prefix=24 if host.version == 4 else 64)))
     return networks
 
 
@@ -379,8 +389,10 @@ def overlaps(transformed, avoid=()):
         for interface in (node.get('interfaces') or [])[:512]:
             if not isinstance(interface, dict): continue
             for family in ('ipv4', 'ipv6'):
-                try: hosts.append((family, str(interface.get('ifname', '')) + ' of ' + str(name), ipaddress.ip_network(ipaddress.ip_interface(interface[family]).ip)))
-                except (KeyError, ValueError, TypeError): pass
+                try: value = ipaddress.ip_interface(interface[family])
+                except (KeyError, ValueError, TypeError): continue
+                hosts.append((family, str(interface.get('ifname', '')) + ' of ' + str(name), ipaddress.ip_network(value.ip)))
+                if value.network.prefixlen < value.network.max_prefixlen: hosts.append((family, 'network of ' + str(interface.get('ifname', '')) + ' of ' + str(name), value.network))
     found = []
     for i, (family, a, na) in enumerate(items):
         for family_b, b, nb in items[i + 1:] + guarded:   # plan items against each other and against the guarded networks, never guarded against guarded

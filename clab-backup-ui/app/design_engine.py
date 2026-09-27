@@ -124,8 +124,20 @@ def _kill_group(process):
         process.wait()
 
 
+_EXCEPTION_LINE = re.compile(r'^([A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception))\b')
+UNEXPECTED_FAILURE = 'The network design engine failed unexpectedly on a value it could not process'
+
+
 def _error_lines(stderr_text):
-    return [line[:500] for line in stderr_text.splitlines() if _ERROR_LINE.match(line)]
+    """netlab's own class-tagged lines; when it crashed instead (a Python traceback), one controlled line
+    naming the exception class only, never a path or a message from the traceback."""
+    lines = [line[:500] for line in stderr_text.splitlines() if _ERROR_LINE.match(line)]
+    if lines: return lines
+    tail = [line for line in stderr_text.splitlines() if line.strip()]
+    match = _EXCEPTION_LINE.match(tail[-1]) if tail else None
+    if match or any(line.startswith('Traceback') for line in tail):
+        return [UNEXPECTED_FAILURE + (' (' + match.group(1) + ').' if match else '.')]
+    return lines
 
 
 def _node_file_order(node_dir, module_list):

@@ -134,6 +134,20 @@ function dismissJob(jobId){return !!jobId&&shellSet('localStorage','clab.dismiss
 // reopens next visit rather than staying hidden forever, and closing one never touches a job record.
 function noticeDismissed(key){return !!key&&!!shellGet('sessionStorage','clab.notice.'+key);}
 function dismissNotice(key){return !!key&&shellSet('sessionStorage','clab.notice.'+key,'1');}
+// localStorage: the Network design page's unsaved draft for one lab ({revision, intent}), so a reload
+// or an accidental tab close does not lose guided or advanced edits that were never saved. network-design.js
+// drops a stored draft itself once its revision no longer matches the saved design.
+function designDraftKey(labId){return 'clab.design.draft.'+labId;}
+function readDesignDraft(labId){
+ if(!labId)return null;
+ const raw=shellGet('localStorage',designDraftKey(labId));if(!raw)return null;
+ try{const value=JSON.parse(raw);return value&&typeof value==='object'&&value.intent?value:null;}catch{return null;}
+}
+function writeDesignDraft(labId,value){
+ if(!labId)return false;
+ try{return shellSet('localStorage',designDraftKey(labId),JSON.stringify(value));}catch{return false;}
+}
+function clearDesignDraft(labId){return !!labId&&shellRemove('localStorage',designDraftKey(labId));}
 // Failures of header, menu and tool actions: a student sentence in the lab banner with the backend
 // message under Details; a toast when there is no lab page to show it on.
 function shellErrorSentence(message){

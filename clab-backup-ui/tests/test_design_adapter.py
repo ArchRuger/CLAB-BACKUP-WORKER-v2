@@ -720,8 +720,6 @@ class ReviewRegressionTests(unittest.TestCase):
         self.assertEqual(da.link_prefixes(transformed, ['a', 'b', 'c']), {'a': {'ipv4': '10.1.0.0/31', 'ipv6': '2001:db8:1::/64'}, 'b': {'ipv4': '10.1.0.2/31'}})
 
 
-if __name__ == '__main__':
-    unittest.main()
 
 
 class SecondPassRegressionTests(unittest.TestCase):
@@ -735,3 +733,27 @@ class SecondPassRegressionTests(unittest.TestCase):
         found = da.overlaps(transformed, avoid=avoid)
         self.assertEqual([(f['a'], f['b']) for f in found], [('Loopback1 of r1', 'management mgmt ipv4-subnet')],
                          'an interface address inside a link prefix is not an overlap; a VRF loopback in the management network is')
+
+
+class ThirdPassRegressionTests(unittest.TestCase):
+
+    def test_management_networks_fall_back_to_containerlabs_defaults(self):
+        import ipaddress
+        text = 'name: x\ntopology:\n  nodes:\n    r1: {kind: arista_ceos, mgmt-ipv4: 172.20.20.11}\n'
+        found = dict((label, net) for label, net in da.management_networks(text, [{'address': '172.20.20.11', 'short_name': 'r1'}]))
+        self.assertEqual(found['containerlab default management ipv4-subnet'], ipaddress.ip_network('172.20.20.0/24'))
+        self.assertEqual(found['containerlab default management ipv6-subnet'], ipaddress.ip_network('3fff:172:20:20::/64'))
+        self.assertEqual(found['device r1'], ipaddress.ip_network('172.20.20.11/32'))
+        auto = 'name: x\nmgmt:\n  ipv4-subnet: auto\ntopology:\n  nodes:\n    r1: {kind: arista_ceos}\n'
+        found = dict((label, net) for label, net in da.management_networks(auto, [{'address': '10.44.5.9', 'short_name': 'r1'}]))
+        self.assertEqual(found['management network of r1'], ipaddress.ip_network('10.44.5.0/24'))
+        self.assertNotIn('containerlab default management ipv4-subnet', found)
+
+    def test_overlaps_checks_the_whole_interface_subnet(self):
+        import ipaddress
+        transformed = {'links': [], 'nodes': {'r1': {'interfaces': [{'ifname': 'Ethernet1', 'ipv4': '172.20.0.1/16'}]}}}
+        found = da.overlaps(transformed, avoid=[('mgmt ipv4-subnet', ipaddress.ip_network('172.20.20.0/24'))])
+        self.assertEqual([(f['a'], f['b']) for f in found], [('network of Ethernet1 of r1', 'management mgmt ipv4-subnet')])
+
+if __name__ == '__main__':
+    unittest.main()

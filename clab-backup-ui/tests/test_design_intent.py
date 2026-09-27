@@ -819,8 +819,6 @@ class ReviewRegressionSchemaTests(DesignIntentTestCase):
         self.assertEqual(set(from_types), {'pfx_entry'})
 
 
-if __name__ == '__main__':
-    unittest.main()
 
 
 class SecondPassRegressionTests(DesignIntentTestCase):
@@ -835,8 +833,15 @@ class SecondPassRegressionTests(DesignIntentTestCase):
 
     def test_a_vrf_is_attached_by_name_and_a_module_can_be_switched_off(self):
         key = 'a:eth1--b:eth1'
-        intent = dict(di.empty_intent(), modules=['vrf', 'ospf'], vrfs={'red': {'id': 1}}, links={key: {'vrf': 'red', 'ospf': False, 'endpoints': {'a': {'vrf': 'red'}}}}, nodes={'a': {'vrf': 'red', 'ospf': False}})
+        intent = dict(di.empty_intent(), modules=['vrf', 'ospf'], vrfs={'red': {'id': 1}}, links={key: {'vrf': 'red', 'ospf': False, 'endpoints': {'a': {'vrf': 'red', 'ospf': False}}}})
         self.assertClean(di.validate(intent, schema=None))
+        # At the device or the global level those forms crash the engine (BoxTypeError/BoxValueError): refused here.
+        intent = dict(di.empty_intent(), modules=['vrf', 'ospf'], vrfs={'red': {'id': 1}}, nodes={'a': {'vrf': 'red', 'ospf': False}})
+        errs = di.validate(intent, schema=None)
+        self.assertError(errs, 'nodes.a.vrf', 'link')
+        self.assertError(errs, 'nodes.a.ospf', 'modules list')
+        intent = dict(di.empty_intent(), modules=['ospf'], ospf=False)
+        self.assertError(di.validate(intent, schema=None), 'ospf', 'modules list')
         intent = dict(di.empty_intent(), modules=['vrf'], vrfs={'red': {'id': 1}}, links={key: {'vrf': 'blue'}})
         self.assertError(di.validate(intent, schema=None), 'links.' + key + '.vrf', 'no vrf')
 
@@ -872,3 +877,44 @@ class SecondPassRegressionSchemaTests(DesignIntentTestCase):
         errs = di.validate(intent, schema=self.schema)
         self.assertError(errs, 'links.' + key + '.vlan.trunk', 'no vlan')
         self.assertError(errs, 'links.' + key + '.vlan.access', 'no vlan')
+
+
+class ThirdPassRegressionTests(DesignIntentTestCase):
+
+    def test_an_interface_address_is_guarded_by_its_whole_subnet(self):
+        import ipaddress
+        mgmt = [('mgmt ipv4-subnet', ipaddress.ip_network('172.20.20.0/24'))]
+        key = 'a:eth1--b:eth1'
+        intent = dict(di.empty_intent(), links={key: {'endpoints': {'a': {'ipv4': '172.20.0.1/16'}}}})
+        self.assertError(di.validate(intent, management=mgmt), 'links.' + key + '.endpoints.a.ipv4', 'management')
+        intent = dict(di.empty_intent(), nodes={'a': {'loopback': {'ipv4': '172.20.0.1/16'}}})
+        self.assertError(di.validate(intent, management=mgmt), 'nodes.a.loopback.ipv4', 'management')
+
+
+@unittest.skipUnless(shutil.which('netlab'), 'netlab is not on PATH for this test run')
+class ThirdPassRegressionSchemaTests(DesignIntentTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.schema = engine_schema()
+        import ipaddress
+        cls.mgmt = [('mgmt ipv4-subnet', ipaddress.ip_network('172.20.20.0/24'))]
+
+    def test_a_vrf_loopback_in_dict_form_is_checked_and_guarded(self):
+        import ipaddress
+        intent = dict(di.empty_intent(), modules=['vrf'], vrfs={'red': {'loopback': {'ipv4': '172.20.20.101/32'}}})
+        self.assertError(di.validate(intent, schema=self.schema, management=self.mgmt), 'vrfs.red.loopback.ipv4', 'management')
+        intent = dict(di.empty_intent(), modules=['vrf'], vrfs={'red': {'loopback': {'pool': 'mgmt'}}})
+        self.assertError(di.validate(intent, schema=self.schema, management=self.mgmt), 'vrfs.red.loopback.pool', 'management')
+        intent = dict(di.empty_intent(), modules=['vrf'], vrfs={'red': {'loopback': {'ipv4': '10.2.0.0/24'}}})
+        self.assertClean(di.validate(intent, schema=self.schema, management=self.mgmt))
+        intent = dict(di.empty_intent(), modules=['vrf'], nodes={'a': {'vrfs': {'red': {'loopback': {'ipv6': '3fff:172:20:20::5/128'}}}}})
+        mgmt6 = [('mgmt ipv6-subnet', ipaddress.ip_network('3fff:172:20:20::/64'))]
+        self.assertError(di.validate(intent, schema=self.schema, management=mgmt6), 'nodes.a.vrfs.red.loopback.ipv6', 'management')
+
+    def test_a_setting_with_alternative_scalar_types_accepts_the_scalar_form(self):
+        intent = dict(di.empty_intent(), modules=['bgp'], bgp={'as': 65000}, nodes={'a': {'bgp': {'originate': ['10.9.0.0/24']}}})
+        self.assertClean(di.validate(intent, schema=self.schema))
+
+if __name__ == '__main__':
+    unittest.main()
