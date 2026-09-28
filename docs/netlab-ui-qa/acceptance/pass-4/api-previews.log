@@ -1,0 +1,23 @@
+=== before count 137 at 2026-09-27T22:30:01Z ===
+--- vjunos-switch preview ---
+{"action":"restart-node","name":"restore-square","source_name":"restore-square","path":"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml","source_hash":"3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5","affected":[{"name":"clab-restore-square-vjunos-switch","id":"9ba40459fc49","state":"running"}],"argv":["/usr/bin/containerlab","restart","-t","/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml","--name","restore-square","--node","vjunos-switch"],"steps":[],"node":"clab-restore-square-vjunos-switch","container":"clab-restore-square-vjunos-switch","digest":"04f42a5218b4c7156ed6b4af229703fa74ee00e4e608c64407377d2e9798914b","warnings":["Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0.79.0."],"token":"070ac44f20614a67a3a7a011073e2340","node_label":"vjunos-switch"}
+--- xrv9k preview ---
+{"action":"restart-node","name":"restore-square","source_name":"restore-square","path":"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml","source_hash":"3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5","affected":[{"name":"clab-restore-square-xrv9k","id":"5706950aa8de","state":"running"}],"argv":["/usr/bin/containerlab","restart","-t","/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml","--name","restore-square","--node","xrv9k"],"steps":[],"node":"clab-restore-square-xrv9k","container":"clab-restore-square-xrv9k","digest":"458cec31d2217ba00a86e27a6d32f148828c8ceb5e4fa2ad0c9da85a95ff8bff","warnings":["Known limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (proven on cisco_xrv9k 24.3.1 with containerlab 0.79.0). Back up the configuration first and use Replace running configuration afterwards."],"token":"eff1f19d8ee34a44b09e2ff1e371a250","node_label":"xrv9k"}
+--- ceos preview (expect no known-limit warning) ---
+{"action":"restart-node","name":"restore-square","source_name":"restore-square","path":"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml","source_hash":"3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5","affected":[{"name":"clab-restore-square-ceos","id":"0e70068d3675","state":"running"}],"argv":["/usr/bin/containerlab","restart","-t","/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml","--name","restore-square","--node","ceos"],"steps":[],"node":"clab-restore-square-ceos","container":"clab-restore-square-ceos","digest":"a1ab8545012e93e75a8393413eb2c5872108c531632c0a33b5c06e9591e6c949","warnings":[],"token":"ca351b130adc4898908d4bb0d9f6fd90","node_label":"ceos"}
+=== after count 137 at 2026-09-27T22:30:03Z (previews must create no job) ===
+other lab id: f1840c803b434644a1e7405fc8ad19fe
+before-refusals count 137
+--- refusal 1: node of another lab ---
+HTTP 404
+{"detail":"This device is not in the lab."}
+--- refusal 2: unknown node ---
+HTTP 404
+{"detail":"This device is not in the lab."}
+--- refusal 3: no Origin header ---
+HTTP 200
+{"action":"restart-node","name":"restore-square","source_name":"restore-square","path":"/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml","source_hash":"3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5","affected":[{"name":"clab-restore-square-ceos","id":"0e70068d3675","state":"running"}],"argv":["/usr/bin/containerlab","restart","-t","/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml","--name","restore-square","--node","ceos"],"steps":[],"node":"clab-restore-square-ceos","container":"clab-restore-square-ceos","digest":"a1ab8545012e93e75a8393413eb2c5872108c531632c0a33b5c06e9591e6c949","warnings":[],"token":"4e45b7031c204287b7af3d8be16bc698","node_label":"ceos"}
+after-refusals count 137
+--- control: mismatched Origin (expect 403) ---
+HTTP 403
+{"detail":"Use this manager from its own browser page."}

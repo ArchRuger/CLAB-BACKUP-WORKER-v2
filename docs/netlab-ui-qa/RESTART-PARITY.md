@@ -97,6 +97,9 @@ and one restart (same id, one new start time); the other tab's older review was 
 "Another lab operation ran after this review. Review the restart again.", its dialog kept the reason inline,
 no second job and no second restart followed, Cancel closed it and a fresh review was offered; two
 confirmations fired at the same moment started at most one job, the loser reading the busy or stale refusal.
+The stale refusal's ordering was fixed in 1.30.50 (QA-020): acceptance pass 4 found that, when the older review was
+confirmed while the manager still refreshed its view of the VM after the first job (a window of 5–8 s on the recovered
+VM), the tab heard the generic busy message instead; `confirm()` now runs the consent checks before the busy guard. Retested on 1.30.50: 13 of 13 (`two-tabs-host1-2026-09-27T234527+0000.json`).
 
 ## Configuration persistence across a restart (final build)
 

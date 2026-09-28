@@ -1,0 +1,49 @@
+=== XRv9k READBACK AFTER REAPPLY 2026-09-27T22:49:51Z ===
+Exception (client): Error reading SSH protocol banner[Errno 9] Bad file descriptor
+Traceback (most recent call last):
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/paramiko/transport.py", line 2369, in _check_banner
+    buf = self.packetizer.readline(timeout)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/paramiko/packet.py", line 395, in readline
+    buf += self._read_timeout(timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/paramiko/packet.py", line 663, in _read_timeout
+    x = self.__socket.recv(128)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 9] Bad file descriptor
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/paramiko/transport.py", line 2185, in run
+    self._check_banner()
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/paramiko/transport.py", line 2373, in _check_banner
+    raise SSHException(
+paramiko.ssh_exception.SSHException: Error reading SSH protocol banner[Errno 9] Bad file descriptor
+
+show running-config interface Loopback0
+Sun Sep 27 22:50:18.589 UTC
+interface Loopback0
+ description A loopback
+ ipv4 address 10.255.0.4 255.255.255.255
+!
+
+RP/0/RP0/CPU0:xrv9k#show running-config router ospf 1
+Sun Sep 27 22:50:22.425 UTC
+router ospf 1
+ router-id 10.255.0.4
+ area 0
+  interface Loopback0
+   passive enable
+  !
+  interface GigabitEthernet0/0/0/0
+   network point-to-point
+  !
+  interface GigabitEthernet0/0/0/1
+   network point-to-point
+  !
+ !
+!
+
+RP/0/RP0/CPU0:xrv9k#
+EXIT=0

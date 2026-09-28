@@ -25,7 +25,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_restart_device import call, docker_inspect, follow_job, open_map_menu, review_open, review_text  # noqa: E402
@@ -63,6 +63,12 @@ def main():
     def check(name, ok, detail=''):
         checks.append({'name': name, 'ok': bool(ok), 'detail': str(detail)[:400]}); print(('  ok   ' if ok else '  FAIL ') + name + ('' if ok else ': ' + str(detail)[:300]), flush=True)
     record = {'started': now(), 'manager': state.get('version'), 'device': node['name'], 'steps': {}}
+    def wait_idle(page, budget=90):
+        # Seconds until the page's own busy() (app.js) reads false, or the budget when it never does.
+        t0 = time.monotonic()
+        try: page.wait_for_function("() => typeof busy === 'function' && !busy()", timeout=budget * 1000)
+        except PlaywrightTimeout: pass
+        return round(time.monotonic() - t0, 1)
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
         def tab():
@@ -103,24 +109,33 @@ def main():
         check('no second job and no second restart', len(restart_jobs(args.url, lab['id'], node['name'])) == jobs_before + 1 and after_stale['started'] == after_first['started'], json.dumps(after_stale))
         check('Cancel closes the refused dialog', b.click('#op-cancel') or b.wait_for_selector('dialog#operation-review[open]', state='hidden', timeout=5000) or True)
         record['steps']['stale_review'] = {'error': text, 'after': after_stale}
-        # A fresh review from B works.
-        open_map_menu(b, node['name']).click(); review_open(b)
-        check('a fresh review after the refusal is offered again', 'Restart ' in review_text(b))
-        b.click('#op-cancel'); b.wait_for_selector('dialog#operation-review[open]', state='hidden', timeout=5000)
-        # 4. Both confirm at the same moment.
-        open_map_menu(a, node['name']).click(); review_open(a)
-        open_map_menu(b, node['name']).click(); review_open(b)
-        jobs_now = len(restart_jobs(args.url, lab['id'], node['name'])); start_before = docker_inspect([node['name']])[node['name']]['started']
-        a.evaluate("() => document.getElementById('op-confirm').click()"); b.evaluate("() => document.getElementById('op-confirm').click()")
-        time.sleep(3)
-        jobs = restart_jobs(args.url, lab['id'], node['name'])
-        for j in jobs[:2]: follow_job(args.url, j['id'], timeout=60)
-        time.sleep(1)
-        texts = [error_text(a), error_text(b)]
-        opens = [a.evaluate("() => document.getElementById('operation-review').open"), b.evaluate("() => document.getElementById('operation-review').open")]
-        check('two simultaneous confirmations start at most one job', len(jobs) - jobs_now <= 1, 'new jobs: %d' % (len(jobs) - jobs_now))
-        check('the loser sees a busy or stale refusal, the winner\'s dialog closed', sum(opens) == 1 and any(('Wait for the current lab operation' in t) or ('ran after this review' in t) for t in texts), json.dumps({'errors': texts, 'open': opens}))
-        record['steps']['race'] = {'new_jobs': len(jobs) - jobs_now, 'errors': texts, 'open': opens, 'started_before': start_before, 'started_after': docker_inspect([node['name']])[node['name']]['started']}
+        # A fresh review from B works. From here on a control that stays unavailable (the manager still busy) is
+        # recorded as a failed check instead of aborting the run without its record.
+        try:
+            # The page decides the menu's Restart entry from its own last state poll (4 s apart); a menu opened while
+            # that poll still showed the finished job as running keeps the entry disabled until it is reopened. Wait
+            # until the tab itself reports idle, the way a student would see the entry enabled, and record the wait.
+            record['steps']['idle_waits'] = [wait_idle(b), None]
+            open_map_menu(b, node['name']).click(); review_open(b)
+            check('a fresh review after the refusal is offered again', 'Restart ' in review_text(b))
+            b.click('#op-cancel'); b.wait_for_selector('dialog#operation-review[open]', state='hidden', timeout=5000)
+            # 4. Both confirm at the same moment.
+            record['steps']['idle_waits'][1] = max(wait_idle(a), wait_idle(b))
+            open_map_menu(a, node['name']).click(); review_open(a)
+            open_map_menu(b, node['name']).click(); review_open(b)
+            jobs_now = len(restart_jobs(args.url, lab['id'], node['name'])); start_before = docker_inspect([node['name']])[node['name']]['started']
+            a.evaluate("() => document.getElementById('op-confirm').click()"); b.evaluate("() => document.getElementById('op-confirm').click()")
+            time.sleep(3)
+            jobs = restart_jobs(args.url, lab['id'], node['name'])
+            for j in jobs[:2]: follow_job(args.url, j['id'], timeout=60)
+            time.sleep(1)
+            texts = [error_text(a), error_text(b)]
+            opens = [a.evaluate("() => document.getElementById('operation-review').open"), b.evaluate("() => document.getElementById('operation-review').open")]
+            check('two simultaneous confirmations start at most one job', len(jobs) - jobs_now <= 1, 'new jobs: %d' % (len(jobs) - jobs_now))
+            check('the loser sees a busy or stale refusal, the winner\'s dialog closed', sum(opens) == 1 and any(('Wait for the current lab operation' in t) or ('ran after this review' in t) for t in texts), json.dumps({'errors': texts, 'open': opens}))
+            record['steps']['race'] = {'new_jobs': len(jobs) - jobs_now, 'errors': texts, 'open': opens, 'started_before': start_before, 'started_after': docker_inspect([node['name']])[node['name']]['started']}
+        except PlaywrightTimeout as exc:
+            check('the later steps ran without a stuck control', False, 'a control stayed unavailable: ' + str(exc).splitlines()[0][:200])
         for page in (a, b):
             if page.evaluate("() => document.getElementById('operation-review')?.open"): page.click('#op-cancel')
         unexpected = [c for c in console if not c.startswith(HANDLED)]

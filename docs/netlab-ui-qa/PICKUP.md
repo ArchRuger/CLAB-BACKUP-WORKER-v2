@@ -19,8 +19,8 @@ feature. Companion records in this folder:
 - Installed product: `clab-backup:1.30.48` since 16:31 UTC (`sudo bash deploy/start-manager.sh --manager-only`;
   container `containerlab-node-manager-backup-ui-1`, port 8081, data `/srv/containerlab-node-manager/data`), helpers
   1.30.48 under `/usr/local/lib/clab-manager` (verified by the launcher and `check-install.sh`: PASS 62, WARN 1 =
-  folder coverage cap), capture stack `clab-manager-capture` (session service still `clab-capture-service:1.30.42`,
-  not rebuilt: unchanged). Earlier builds of the day: the 1.30.47 working tree at 13:37, 14:45 and 15:16 UTC.
+  folder coverage cap), capture stack `clab-manager-capture` (its session service ran `clab-capture-service:1.30.42`
+  until the host crash of 21:32 UTC; reinstalled with `setup-capture.sh` at 22:02, now `clab-capture-service:1.30.49`). Earlier builds of the day: the 1.30.47 working tree at 13:37, 14:45 and 15:16 UTC.
 - VM: Docker 29.8.1, **containerlab 0.79.0** (commit 5ae50094a, 2026-08-21; `restart --node` present),
   28 CPUs, 67 GiB RAM, 22 GiB free disk. Python 3.12.3; system Node 18.19.1 (Node 24 under
   `~/.local/node24`, only for the editor bundle). Playwright 1.63.0 in `clab-backup-ui/.venv`, Chromium
@@ -72,9 +72,23 @@ lockups) and was brought back with *Restart device…* itself (27/27 on the fina
 assertions, corrected in `tools/probes/design_probes.py`). **Pass 2 (Opus, 20:22–20:49): NOT CLEAN** (`acceptance/PASS-2-opus.md`):
 F-1 trailing whitespace in three evidence files, F-2 a false credentials failure during every XRv9k boot after a restart
 (**QA-019**, product), F-3 the stale probe assertions, F-4 two live-check assertions that could not fail (TOOL-002). All four
-fixed; **release 1.30.49 cut** for them (markers, history sections, `verify-release.py` green); the manager is rebuilt at
-1.30.49 and the QA-019 live retest runs (XRv9k restart with the strengthened check), after which both acceptance passes are
-taken again on 1.30.49 (the gate is two clean passes on one build), then the evidence commit, push and CI.
+fixed; **release 1.30.49 committed as `14c2f05` and pushed** (PR #57 carried it and was merged to `main` at 21:55 UTC as `e42d3b6`; CI green, run 36350623338): markers,
+history sections, `verify-release.py` green, Python 1703 OK, browser 379, the manager rebuilt at 1.30.49 (20:58 UTC) and the
+QA-019 live retest done (XRv9k `booting → ready`, no `failed`, configuration kept; cEOS 28/28 with the corrected tool). Both
+acceptance passes were taken again on 1.30.49 (the gate is two clean passes on one build). **Pass 3 (Sonnet, started
+21:12) was lost with the session when the VM crashed at 21:32** (`acceptance/pass-3/INTERRUPTED.md`: what it completed,
+all clean; the crash; Docker's corrupted network store moved aside; lab redeployed 22:00 and configuration A reapplied;
+capture stack reinstalled, session service now 1.30.49). **Pass 4 (Sonnet, 22:15–22:57, `acceptance/PASS-4-sonnet.md`):
+NOT CLEAN**: F1 = **QA-020** (a second tab's stale review told to wait instead of to review again: `confirm()` consulted
+the busy guard, held through the executor's follow-up `discovery.refresh()`, before the consent checks), F2 = a wrong
+charter criterion (a request without `Origin` is accepted by design, OBS-003). **Release 1.30.50** fixes QA-020 (consent
+checks before the guard, unit test `test_a_stale_restart_review_hears_the_stale_reason_while_the_previous_job_still_refreshes`;
+the two-tabs tool keeps its record on a stuck control and waits for the tab's idle before reopening a menu, TOOL-004,
+OBS-004): markers moved, the three history sections written, `verify-release.py` green, Python 1704 OK (1 skipped) on the
+rerun, browser 379, `check_links.py` clean, the manager rebuilt at 1.30.50 (23:17 UTC, helpers 1.30.50; capture stack left
+at its 1.30.49 build, unchanged code), the QA-020 live retest done (two-tabs 13/13 at 23:45). Next: the 1.30.50 commit and
+push (a new pull request: PR #57 is merged), then **pass 5 (Sonnet)** and **pass 6 (Opus)** on 1.30.50 with the corrected
+charter (`acceptance/PASS-5-*.md`, `PASS-6-*.md`), then the evidence commit with `FINAL-REPORT.md` completed.
 
 Then: add the final3 neighbour rerun records to `DEFECTS.md` (QA-018, Live) and `EVIDENCE.md` in the evidence commit; `python3 deploy/verify-release.py`;
 commit the intended files only (never `git add -A`: `.claude/`, the three prompt files in the worktree root and any

@@ -485,18 +485,22 @@ class LabOperations:
                 if not preview or preview['expires'] < time.monotonic(): raise HTTPException(409, 'Review expired; preview the operation again.')
                 if preview['revision'] != self.store.state.get('host', {}).get('revision'): raise HTTPException(409, 'VM changed. Preview again.')
                 if preview['lab_id'] and not self.store.lab(preview['lab_id']): raise HTTPException(409, 'Saved lab was removed. Preview again.')
-                self.guard(preview['lab_id'])
                 if preview.get('node'):
                     # Restart device: the consent was for one device of one deployment. The device must
                     # still be that node of the lab, and no lifecycle operation may have run on the lab
                     # since the review (a restart keeps container ids, so the helper's digest alone
-                    # would let a second tab's stale review restart the device again).
+                    # would let a second tab's stale review restart the device again). These checks come
+                    # before the busy guard: the executor keeps that guard raised for its follow-up
+                    # discovery refresh after the job already reads succeeded, and a stale review can
+                    # never be confirmed, so its tab must hear the reason at once, not "wait" and then,
+                    # on its retry, "review again" (QA-020).
                     lab = self.store.lab(preview['lab_id']); target = next((n for n in lab['nodes'] if n['name'] == preview['node']), None)
                     if not target or expected_container(lab, target) != preview['request']['options'].get('container'):
                         raise HTTPException(409, 'The device changed after this review. Review the restart again.')
                     if any(j.get('lab_id') == preview['lab_id'] and j.get('action') in LIFECYCLE_JOBS and j.get('created', '') >= preview['stamp']
                            for j in self.store.state['operations']):
                         raise HTTPException(409, 'Another lab operation ran after this review. Review the restart again.')
+                self.guard(preview['lab_id'])
                 req = {**preview['request'], 'mode': 'run', 'digest': preview['digest']}
                 job = {'id': uuid.uuid4().hex, 'lab_id': preview['lab_id'], 'name': req['name'], 'action': req['action'],
                        'path': req['path'], 'created': stamp(), 'status': 'queued', 'output': '', 'message': 'Queued', 'exit_code': None}

@@ -1,3 +1,35 @@
+# Netlab UI/UX campaign, part 3: the stale-review reason before the busy guard — 1.30.50
+
+What was actually run for this release. Same environment as 1.30.49 (dev VM `clab-llm-dev2`, containerlab 0.79.0, lab
+`restore-square` redeployed 22:00 UTC after the VM's crash, Chromium 153.0.8010.12 through Playwright 1.63), after the
+recovery recorded in `docs/netlab-ui-qa/acceptance/pass-3/INTERRUPTED.md`.
+
+## Static and unit
+
+- `python3 deploy/verify-release.py`: source and documentation at 1.30.50; `git diff --check` clean; `node --check` on
+  every `app/static/*.js`.
+- Python: `python -m unittest discover -s tests -t tests` → 1704 tests. The first full run, started while the markers
+  already read 1.30.50 but before these history sections existed, reported 1703 OK and 1 error, the release-consistency
+  documentation test (`test_documentation_names_only_the_current_release`), which is what that test is for; it passes
+  alone once the sections exist, and the full suite is rerun after them (result below). New test:
+  `test_lab_operations.py` `test_a_stale_restart_review_hears_the_stale_reason_while_the_previous_job_still_refreshes`
+  (the busy guard held by hand after the job succeeded: the stale review hears its reason, a fresh review is still
+  refused as busy, a fresh review runs once the guard is released).
+- Browser: `node --test tests/*.js` → 379 pass, 0 fail (unchanged).
+
+## Live (development VM, deployed product)
+
+- Deployed at 1.30.50 with `sudo bash deploy/start-manager.sh --manager-only` at 23:17 UTC (helpers verified at 1.30.50; the
+  capture stack was not recreated: its code is unchanged, the session service keeps running the 1.30.49 build).
+- QA-020 retest: `docs/netlab-ui-qa/tools/check_restart_two_tabs.py` on host1, twice (`docs/netlab-ui-qa/evidence/restart/two-tabs-host1-2026-09-27T233946+0000.json`:
+  the older review refused with the stale reason at once, the run's later step stalled on a menu opened while the tab still
+  read the finished job as running, OBS-004, tool amended; `…T234527+0000.json`: 13 of 13, idle waits 0.0 s and 0.2 s).
+- The full Python suite was rerun after the history sections existed: 1704 tests OK (1 skipped), 455 s, while the manager
+  image was being built; `check_links.py` 169 files, 0 problems.
+- Acceptance passes on this build (two fresh agents, one after the other, the charter corrected for pass 4's F2): taken
+  after this commit; their reports (`docs/netlab-ui-qa/acceptance/PASS-5-*.md`, `PASS-6-*.md`) come with the evidence
+  commit that follows.
+
 # Netlab UI/UX campaign, part 2: acceptance findings fixed — 1.30.49
 
 What was actually run for this release. Same environment as 1.30.48 (dev VM `clab-llm-dev2`, containerlab 0.79.0, lab

@@ -1,0 +1,15 @@
+  ok   two tabs can each open a review for the same device
+  ok   a double click creates exactly one job
+  ok   the job succeeded
+  ok   the device restarted once (new start time, same id)
+  FAIL the older review is refused with the reason: Wait for the current lab operation to finish.
+  ok   the refused tab keeps its dialog open with the reason inline
+  ok   no second job and no second restart
+  ok   Cancel closes the refused dialog
+  ok   a fresh review after the refusal is offered again
+  ok   two simultaneous confirmations start at most one job
+  ok   the loser sees a busy or stale refusal, the winner's dialog closed
+  ok   no unexpected console errors
+  ok   no page errors
+13 checks, 1 failed
+EXIT=1

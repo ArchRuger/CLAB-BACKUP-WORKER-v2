@@ -1,0 +1,23 @@
+Next: configure the device to a state, then:
+  python3 deploy/scaffold-lab.py snapshot bgp-core start
+Created bgp-core/reference/{start} and bgp-core/work.
+Lab "bgp-core" now saves to bgp-core/work.
+Next: configure the device to a state, then:
+  python3 deploy/scaffold-lab.py snapshot bgp-core start
+Saved into bgp-core/reference/broken-01 on the lab VM (aaaaaaaaaaaa).
+  bgp-core/reference/broken-01/latest/r1.cfg
+Configuration files may contain passwords or keys.
+Captured the running configuration into bgp-core/reference/broken-01 and uploaded. Lab rebound to bgp-core/work.....................................................................................................................
+----------------------------------------------------------------------
+Ran 1703 tests in 253.768s
+
+OK (skipped=1)
+
+Saved into bgp-core/reference/broken-01 on the lab VM (aaaaaaaaaaaa).
+  bgp-core/reference/broken-01/latest/r1.cfg
+Configuration files may contain passwords or keys.
+Captured the running configuration into bgp-core/reference/broken-01 and uploaded. Lab rebound to bgp-core/work.
+Saved into bgp-core/reference/broken-01 on the lab VM (aaaaaaaaaaaa).
+  bgp-core/reference/broken-01/latest/r1.cfg
+Configuration files may contain passwords or keys.
+EXIT=0

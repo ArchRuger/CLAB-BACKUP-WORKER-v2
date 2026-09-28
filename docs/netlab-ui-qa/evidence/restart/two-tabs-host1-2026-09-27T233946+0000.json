@@ -1,0 +1,96 @@
+{
+ "started": "2026-09-27T23:39:46+00:00",
+ "manager": "1.30.50",
+ "device": "clab-restore-square-host1",
+ "steps": {
+  "double_click": {
+   "jobs": 28,
+   "job": {
+    "id": "92f2bfb3acc04141896fb2390f2a40c1",
+    "status": "succeeded",
+    "message": "Operation completed \u00b7 2 links restored",
+    "created": "2026-09-27T23:39:53.067161+00:00",
+    "finished": "2026-09-27T23:39:56.955436+00:00"
+   },
+   "before": {
+    "id": "8f8dbe30cad08509bcbfb222d68c7e324f3017148d034d4aaf93e1958a13aa0c",
+    "started": "2026-09-27T22:29:24.725583658Z",
+    "status": "running",
+    "pid": 112127
+   },
+   "after": {
+    "id": "8f8dbe30cad08509bcbfb222d68c7e324f3017148d034d4aaf93e1958a13aa0c",
+    "started": "2026-09-27T23:39:54.006281425Z",
+    "status": "running",
+    "pid": 276931
+   }
+  },
+  "stale_review": {
+   "error": "Another lab operation ran after this review. Review the restart again.",
+   "after": {
+    "id": "8f8dbe30cad08509bcbfb222d68c7e324f3017148d034d4aaf93e1958a13aa0c",
+    "started": "2026-09-27T23:39:54.006281425Z",
+    "status": "running",
+    "pid": 276931
+   }
+  }
+ },
+ "checks": [
+  {
+   "name": "two tabs can each open a review for the same device",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "a double click creates exactly one job",
+   "ok": true,
+   "detail": "jobs: 27 before, 28 now"
+  },
+  {
+   "name": "the job succeeded",
+   "ok": true,
+   "detail": "Operation completed \u00b7 2 links restored"
+  },
+  {
+   "name": "the device restarted once (new start time, same id)",
+   "ok": true,
+   "detail": "{\"id\": \"8f8dbe30cad08509bcbfb222d68c7e324f3017148d034d4aaf93e1958a13aa0c\", \"started\": \"2026-09-27T23:39:54.006281425Z\", \"status\": \"running\", \"pid\": 276931}"
+  },
+  {
+   "name": "the older review is refused with the reason",
+   "ok": true,
+   "detail": "Another lab operation ran after this review. Review the restart again."
+  },
+  {
+   "name": "the refused tab keeps its dialog open with the reason inline",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "no second job and no second restart",
+   "ok": true,
+   "detail": "{\"id\": \"8f8dbe30cad08509bcbfb222d68c7e324f3017148d034d4aaf93e1958a13aa0c\", \"started\": \"2026-09-27T23:39:54.006281425Z\", \"status\": \"running\", \"pid\": 276931}"
+  },
+  {
+   "name": "Cancel closes the refused dialog",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "the later steps ran without a stuck control",
+   "ok": false,
+   "detail": "a control stayed unavailable: Locator.click: Timeout 30000ms exceeded."
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ],
+ "finished": "2026-09-27T23:40:29+00:00"
+}

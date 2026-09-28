@@ -1,0 +1,47 @@
+START 2026-09-27T22:32:39Z
+=== Pass 5: larger synthetic records + the generation-retention boundary (cap=20) ===
+  ok   long-identifier boundary: a 17-character VRF name is refused at save time (400)
+  ok   long-identifier boundary: the refusal names the real 16-character limit in the manager's words
+  ok   long-identifier boundary: a 16-character VRF name (the engine's maximum) is accepted at save time
+  ok   long-identifier boundary: generate is accepted for the 16-character name
+  ok   long-identifier boundary: the generation settles within 60s (no hang)
+  ok   long-identifier boundary: the engine accepts the 16-character name (the manager's rule is the engine's)
+  ok   bulk setup: read the empty design
+  ok   bulk setup: PUT with 300 VRFs + 300 VLANs + 60 static routes saves
+  ok   bulk: the VRF table rendered all 300 rows
+  ok   bulk: the VLAN table rendered all 300 rows
+  ok   bulk generation #1 settles (succeeded or a clean failure)
+  ok   bulk: plan card mentions this design's AS number
+  ok   bulk: files list is non-empty
+  ok   bulk: history is non-empty after the first generation
+  ok   bulk generation #2 settles (succeeded or a clean failure)
+  ok   bulk generation #3 settles (succeeded or a clean failure)
+  ok   bulk generation #4 settles (succeeded or a clean failure)
+  ok   bulk generation #5 settles (succeeded or a clean failure)
+  ok   bulk generation #6 settles (succeeded or a clean failure)
+  ok   bulk generation #7 settles (succeeded or a clean failure)
+  ok   bulk generation #8 settles (succeeded or a clean failure)
+  ok   bulk generation #9 settles (succeeded or a clean failure)
+  ok   bulk generation #10 settles (succeeded or a clean failure)
+  ok   bulk generation #11 settles (succeeded or a clean failure)
+  ok   bulk generation #12 settles (succeeded or a clean failure)
+  ok   bulk generation #13 settles (succeeded or a clean failure)
+  ok   bulk generation #14 settles (succeeded or a clean failure)
+  ok   bulk generation #15 settles (succeeded or a clean failure)
+  ok   bulk generation #16 settles (succeeded or a clean failure)
+  ok   bulk generation #17 settles (succeeded or a clean failure)
+  ok   bulk generation #18 settles (succeeded or a clean failure)
+  ok   bulk generation #19 settles (succeeded or a clean failure)
+  ok   bulk generation #20 settles (succeeded or a clean failure)
+  ok   bulk generation #21 settles (succeeded or a clean failure)
+  ok   bulk generation #22 settles (succeeded or a clean failure)
+  ok   bulk generation #23 settles (succeeded or a clean failure)
+  ok   bulk generation #24 settles (succeeded or a clean failure)
+  ok   bulk boundary: exactly 20 generations retained after 24 requests
+  ok   bulk boundary: the oldest 4 generations were the ones pruned
+  ok   bulk boundary: the UI history list also shows exactly 20 entries
+  ok   bulk boundary: a pruned generation's detail is refused cleanly (404)
+  ok   bulk boundary: a pruned generation's file is refused cleanly (404)
+  ok   bulk boundary: a still-present generation's file still opens in the UI
+Pass 5 done: 43/43 checks passed, 24 generations run, PUT took 0.03s
+EXIT=0 END 2026-09-27T22:34:59Z
