@@ -162,6 +162,26 @@ spot-checks):
    twice. **F2** was a wrong criterion in the charter of this round (a request without an `Origin` header is accepted by
    design; OBS-003), corrected for the passes that follow.
 5. **1.30.50** fixes QA-020 (the consent checks run before the busy guard; unit test; the two-tabs tool keeps its record
-   when a control stays unavailable, TOOL-004). The gate restarted once more on 1.30.50: QA-020 retested live first,
-   then the two independent passes, **pass 5 (Sonnet)** and **pass 6 (Opus)**, recorded in `acceptance/PASS-5-*.md` and
-   `PASS-6-*.md` with the evidence commit that follows.
+   when a control stays unavailable and waits for the tab's own idle before reopening a menu, TOOL-004, OBS-004). QA-020 was
+   retested live first (two-tabs 13/13, `evidence/restart/two-tabs-host1-2026-09-27T234527+0000.json`), the release committed
+   as `1e12f37` with one hygiene commit `9aa25c3` (PR #58, CI green), and the gate restarted on it.
+6. **Pass 5, Sonnet** (`acceptance/PASS-5-sonnet.md`, evidence `acceptance/pass-5/`, 23:48–00:14 UTC, on 1.30.50 `9aa25c3`):
+   **CLEAN**, no finding. Static clean; Python 1704 OK, browser 379; `check_design_ui` 29/29, poll retry 9/9, stress 80/80 and
+   43/43, coverage 112/0/8/3 row for row, probes as required; its own browser check of QA-002's fix 21/21; live cEOS 81/81,
+   two-tabs 13/13 with the QA-020 wording, neighbour 20/20, previews and refusals, XRv9k 28/28 straight `booting → ready` in
+   4.7 min with configuration A read back unchanged before and after this later restart, the traffic probe's loss on the
+   restarted path only, ten regression tests rerun singly. Four observations, none contradicting a record (OBS-005 among
+   them: the probe driver's exit status).
+7. **Pass 6, Opus** (`acceptance/PASS-6-opus.md`, evidence `acceptance/pass-6/`, 00:22–00:35 UTC, on 1.30.50 `9aa25c3`,
+   the adversarial pass: warm and returned sessions, its own state-transition checks 15/15, nine fixes undone in a scratch
+   copy with their tests seen failing): **NOT CLEAN** on one tooling finding; every product check passed (static, Python
+   1704, browser 379, the five fixture tools at their reference figures row for row, cEOS 81/81, neighbour 20/20, previews
+   and refusals 14/14, XRv9k 28/28 straight `booting → ready` with configuration A unchanged). **F-1 = TOOL-005**: the
+   two-tabs tool still crashed without a record when the manager was busy with another lab's operation, because TOOL-004's
+   guard did not cover its first step; the operation was the maintainer's own `Quick-Test` lab, published, deployed,
+   destroyed and deleted on the live manager during the pass (its observation O-1), which the charter had said would not
+   happen. Eight observations, none contradicting a product record (OBS-006 and OBS-007 recorded from them).
+8. The tool was revised (one guard around every step, an idle wait before the first; retest 13/13,
+   `evidence/restart/two-tabs-host1-2026-09-28T010451+0000.json`), committed with passes 5 and 6, and the gate restarted
+   on that test-suite revision of the same build: **pass 7 (Sonnet)** and **pass 8 (Opus)**, recorded in
+   `acceptance/PASS-7-*.md` and `PASS-8-*.md` with the evidence commit that follows.

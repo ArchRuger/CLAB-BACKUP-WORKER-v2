@@ -1,0 +1,13 @@
+# 2026-09-28T00:35:13Z docker ps (manager and capture)
+CONTAINER ID   IMAGE                                       CREATED AT                      STATUS                     NAMES
+ea4604b1f576   clab-backup:1.30.50                         2026-09-27 23:18:08 +0000 UTC   Up About an hour           containerlab-node-manager-backup-ui-1
+e37858c11696   clab-capture-service:1.30.49                2026-09-27 22:02:11 +0000 UTC   Up 3 hours                 clab-manager-capture-sessions-1
+1e91f195d46d   78bddc205684                                2026-09-27 22:02:11 +0000 UTC   Up 3 hours                 clab-manager-capture-packetflix-1
+6fbcc14bf90f   a01295061e2d                                2026-09-27 22:02:11 +0000 UTC   Up 3 hours                 clab-manager-capture-gostwire-1
+# sudo containerlab inspect --all --format json (read-only), condensed
+restore-square clab-restore-square-ceos n24l/ceos:4.35.0F running
+restore-square clab-restore-square-cjunosevolved n24l/cjunosevolved:26.2R1.7-EVO running
+restore-square clab-restore-square-host1 ghcr.io/srl-labs/network-multitool:latest running
+restore-square clab-restore-square-vjunos-switch n24l/vjunos-switch:23.2R1.14 running
+restore-square clab-restore-square-xrv9k n24l/cisco_xrv9k:24.3.1 running
+containerlab 0.79.0

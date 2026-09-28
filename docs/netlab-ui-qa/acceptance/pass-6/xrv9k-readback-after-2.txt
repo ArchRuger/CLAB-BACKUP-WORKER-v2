@@ -1,0 +1,31 @@
+# nodecli.py xrv9k read-back, 2026-09-28T00:35:30Z
+show running-config interface Loopback0
+Mon Sep 28 00:35:29.249 UTC
+interface Loopback0
+ description A loopback
+ ipv4 address 10.255.0.4 255.255.255.255
+!
+
+RP/0/RP0/CPU0:xrv9k#show ospf neighbor
+Mon Sep 28 00:35:29.389 UTC
+
+* Indicates MADJ interface
+# Indicates Neighbor awaiting BFD session up
+
+Neighbors for OSPF 1
+
+Neighbor ID     Pri   State           Dead Time   Address         Interface
+10.255.0.3      128   EXSTART/  -     00:00:36    10.0.34.0       GigabitEthernet0/0/0/0
+    Neighbor is up for 00:00:03
+10.255.0.1      0     FULL/  -        00:00:38    10.0.41.1       GigabitEthernet0/0/0/1
+    Neighbor is up for 00:00:01
+
+Total neighbor count: 2
+RP/0/RP0/CPU0:xrv9k#show ipv4 interface brief
+Mon Sep 28 00:35:29.437 UTC
+
+Interface                      IP-Address      Status          Protocol Vrf-Name
+Loopback0                      10.255.0.4      Up              Up       default
+GigabitEthernet0/0/0/0         10.0.34.1       Up              Up       default
+GigabitEthernet0/0/0/1         10.0.41.0       Up              Up       default
+RP/0/RP0/CPU0:xrv9k#

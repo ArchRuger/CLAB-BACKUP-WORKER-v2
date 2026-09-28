@@ -1,0 +1,87 @@
+manager 1.30.50, containerlab 0.79.0, lab restore-square, device ceos (clab-restore-square-ceos)
+  ok   a browser CLI to the device connects before the restart
+  ok   the CLI answered a typed command
+-- map-running: map --
+  ok   the map menu offers Restart device… for the device
+  ok   the review is titled for the one device
+  ok   the review names the device and the lab and the native operation
+  ok   the review says what drops and does not promise unrelated traffic is untouched
+  ok   the review says nothing is saved, backed up, reset or reapplied
+  ok   the affected list is the one device
+  ok   the confirm button is the destructive Restart device
+  ok   the review carries no known-limit note for this image
+  ok   the helper runs containerlab restart with exactly one --node, followed by the device
+  ok   Cancel starts nothing
+  ok   Cancel leaves the container untouched
+  ok   the device reads Restarting while the job runs
+  ok   the lab banner names the device being restarted
+  ok   one Restart device job exists for the device
+  ok   the job succeeded
+  ok   the job output is containerlab's own restart log
+  ok   the job message counts the restored links
+  ok   every dataplane link of the device was restored
+  ok   the target kept its container id and has a new start time
+  ok   the other containers kept their ids, start times and processes
+  ok   the device has its dataplane interfaces back
+  ok   the device went back through Starting (its old proof was dropped)
+  ok   no false credentials failure between Starting and Ready
+  ok   the device is Ready again with a check made after the restart (within 300 s)
+  ok   the rail reads Ready for the device again
+  ok   the design, its plans, the Git binding and the deployment time are untouched
+  ok   the browser CLI shows the disconnection
+  ok   Reconnect is offered
+  ok   Reconnect gives a fresh session once the device is Ready
+  ok   nothing typed earlier was replayed on reconnect
+  ok   a new capture resolves the restarted device's interfaces on the VM
+-- devices-running: devices --
+  ok   the device panel offers Restart device… among the per-device actions
+  ok   Restart device… is reachable by keyboard in the device panel
+  ok   the review is titled for the one device
+  ok   the review names the device and the lab and the native operation
+  ok   the review says what drops and does not promise unrelated traffic is untouched
+  ok   the review says nothing is saved, backed up, reset or reapplied
+  ok   the affected list is the one device
+  ok   the confirm button is the destructive Restart device
+  ok   the review carries no known-limit note for this image
+  ok   the helper runs containerlab restart with exactly one --node, followed by the device
+  ok   the device panel stays open under the review (focus returns to its button afterwards)
+  ok   the device reads Restarting while the job runs
+  ok   the lab banner names the device being restarted
+  ok   one Restart device job exists for the device
+  ok   the job succeeded
+  ok   the job output is containerlab's own restart log
+  ok   the job message counts the restored links
+  ok   every dataplane link of the device was restored
+  ok   the target kept its container id and has a new start time
+  ok   the other containers kept their ids, start times and processes
+  ok   the device has its dataplane interfaces back
+  ok   the device went back through Starting (its old proof was dropped)
+  ok   no false credentials failure between Starting and Ready
+  ok   the device is Ready again with a check made after the restart (within 300 s)
+  ok   the rail reads Ready for the device again
+  ok   the design, its plans, the Git binding and the deployment time are untouched
+-- stopping ceos with containerlab stop --node (the extension's Stop node) --
+  ok   the manager sees the stopped device
+  ok   a stopped device reads Unavailable (not Ready) before the restart
+  ok   a stopped device can be restarted (start/restore path), the menu item is enabled
+  ok   the review warns about the start/restore path for a stopped device
+  ok   the review lists the device as exited
+  ok   the review carries no known-limit note for this image
+  ok   the device reads Restarting while the job runs
+  ok   the lab banner names the device being restarted
+  ok   one Restart device job exists for the device
+  ok   the job succeeded
+  ok   the job output is containerlab's own restart log
+  ok   the job message counts the restored links
+  ok   every dataplane link of the device was restored
+  ok   the target kept its container id and has a new start time
+  ok   the other containers kept their ids, start times and processes
+  ok   the device has its dataplane interfaces back
+  ok   the device went back through Starting (its old proof was dropped)
+  ok   no false credentials failure between Starting and Ready
+  ok   the device is Ready again with a check made after the restart (within 300 s)
+  ok   the rail reads Ready for the device again
+  ok   no unexpected console errors
+  ok   no page errors
+81 checks, 0 failed; record in /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/acceptance/pass-5
+EXIT:0

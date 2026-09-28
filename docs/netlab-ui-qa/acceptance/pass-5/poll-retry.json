@@ -1,0 +1,50 @@
+{
+ "finished": "2026-09-27T23:52:42+00:00",
+ "checks": [
+  {
+   "name": "A: the state line names the failed check and the retry",
+   "ok": true,
+   "detail": "Could not check the plan's progress (attempt 1 of 5): injected. Trying again\u2026"
+  },
+  {
+   "name": "A: the header still reads Generating (the plan may well be generating)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "A: the plan reaches Plan ready to review without a reload",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "name": "A: the retry notice is gone once a poll succeeded",
+   "ok": true,
+   "detail": "Plan generated"
+  },
+  {
+   "name": "B: after the retries the state reads Plan progress unknown with the way out",
+   "ok": true,
+   "detail": "Could not check the plan's progress after 5 retries. Reload the page, or open the Design tab again, to see where it stands."
+  },
+  {
+   "name": "B: six failed polls (the first, then five retries) were made before giving up",
+   "ok": true,
+   "detail": "failed polls: 6"
+  },
+  {
+   "name": "B: no further design polls for 15 s (the watch stayed stopped)",
+   "ok": true,
+   "detail": "polls 7 -> 7"
+  },
+  {
+   "name": "B: Generate plan again loads the design afresh (progress is watched again or the plan is ready)",
+   "ok": true,
+   "detail": "Generating the plan\u2026 Generating the plan\u2026"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]"
+  }
+ ]
+}

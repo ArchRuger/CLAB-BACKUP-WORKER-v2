@@ -1,0 +1,17 @@
+# nodecli.py xrv9k show ospf neighbor, 2026-09-28T00:35:37Z
+show ospf neighbor
+Mon Sep 28 00:35:36.861 UTC
+
+* Indicates MADJ interface
+# Indicates Neighbor awaiting BFD session up
+
+Neighbors for OSPF 1
+
+Neighbor ID     Pri   State           Dead Time   Address         Interface
+10.255.0.3      128   FULL/  -        00:00:37    10.0.34.0       GigabitEthernet0/0/0/0
+    Neighbor is up for 00:00:10
+10.255.0.1      0     FULL/  -        00:00:34    10.0.41.1       GigabitEthernet0/0/0/1
+    Neighbor is up for 00:00:08
+
+Total neighbor count: 2
+RP/0/RP0/CPU0:xrv9k#

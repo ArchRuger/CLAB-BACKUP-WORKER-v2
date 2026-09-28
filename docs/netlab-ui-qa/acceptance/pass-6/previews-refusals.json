@@ -1,0 +1,202 @@
+{
+ "started": "2026-09-28T00:29:41+00:00",
+ "rows": [
+  {
+   "name": "preview clab-restore-square-vjunos-switch carries its known limit verbatim",
+   "status": 200,
+   "has_token": true,
+   "ok": true,
+   "body": {
+    "action": "\u2026",
+    "name": "\u2026",
+    "source_name": "\u2026",
+    "path": "\u2026",
+    "source_hash": "\u2026",
+    "affected": "\u2026",
+    "argv": [
+     "/usr/bin/containerlab",
+     "restart",
+     "-t",
+     "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+     "--name",
+     "restore-square",
+     "--node",
+     "vjunos-switch"
+    ],
+    "steps": "\u2026",
+    "node": "\u2026",
+    "container": "\u2026",
+    "digest": "\u2026",
+    "warnings": [
+     "Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0.79.0."
+    ],
+    "token": "\u2026",
+    "node_label": "\u2026"
+   }
+  },
+  {
+   "name": "preview clab-restore-square-xrv9k carries its known limit verbatim",
+   "status": 200,
+   "has_token": true,
+   "ok": true,
+   "body": {
+    "action": "\u2026",
+    "name": "\u2026",
+    "source_name": "\u2026",
+    "path": "\u2026",
+    "source_hash": "\u2026",
+    "affected": "\u2026",
+    "argv": [
+     "/usr/bin/containerlab",
+     "restart",
+     "-t",
+     "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+     "--name",
+     "restore-square",
+     "--node",
+     "xrv9k"
+    ],
+    "steps": "\u2026",
+    "node": "\u2026",
+    "container": "\u2026",
+    "digest": "\u2026",
+    "warnings": [
+     "Known limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (proven on cisco_xrv9k 24.3.1 with containerlab 0.79.0). Back up the configuration first and use Replace running configuration afterwards."
+    ],
+    "token": "\u2026",
+    "node_label": "\u2026"
+   }
+  },
+  {
+   "name": "preview clab-restore-square-ceos carries no known-limit text",
+   "status": 200,
+   "has_token": true,
+   "ok": true,
+   "body": {
+    "action": "\u2026",
+    "name": "\u2026",
+    "source_name": "\u2026",
+    "path": "\u2026",
+    "source_hash": "\u2026",
+    "affected": "\u2026",
+    "argv": [
+     "/usr/bin/containerlab",
+     "restart",
+     "-t",
+     "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+     "--name",
+     "restore-square",
+     "--node",
+     "ceos"
+    ],
+    "steps": "\u2026",
+    "node": "\u2026",
+    "container": "\u2026",
+    "digest": "\u2026",
+    "warnings": [],
+    "token": "\u2026",
+    "node_label": "\u2026"
+   }
+  },
+  {
+   "name": "refusal: node of another lab",
+   "status": 404,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "This device is not in the lab."
+   }
+  },
+  {
+   "name": "refusal: node of restore-square under another lab id",
+   "status": 404,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "This device is not in the lab."
+   }
+  },
+  {
+   "name": "refusal: unknown node",
+   "status": 404,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "This device is not in the lab."
+   }
+  },
+  {
+   "name": "refusal: foreign Origin",
+   "status": 403,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "Use this manager from its own browser page."
+   }
+  },
+  {
+   "name": "refusal: Sec-Fetch-Site cross-site",
+   "status": 403,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "Use this manager from its own browser page."
+   }
+  },
+  {
+   "name": "refusal: option-shaped node name",
+   "status": 404,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "This device is not in the lab."
+   }
+  },
+  {
+   "name": "refusal: short name with a comma list",
+   "status": 404,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "This device is not in the lab."
+   }
+  },
+  {
+   "name": "refusal: empty body",
+   "status": 413,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "Upload limit is 2.5 MB per request; content length is required."
+   }
+  },
+  {
+   "name": "refusal: unknown lab id",
+   "status": 404,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "Lab not found."
+   }
+  },
+  {
+   "name": "refusal: confirm with a forged token (never a real one)",
+   "status": 409,
+   "has_token": false,
+   "ok": true,
+   "body": {
+    "detail": "Review expired; preview the operation again."
+   }
+  },
+  {
+   "name": "no operation job created",
+   "ok": true,
+   "status": null,
+   "has_token": false,
+   "body": "160 before, 160 after"
+  }
+ ],
+ "ops_before": 160,
+ "ops_after": 160,
+ "finished": "2026-09-28T00:29:43+00:00"
+}

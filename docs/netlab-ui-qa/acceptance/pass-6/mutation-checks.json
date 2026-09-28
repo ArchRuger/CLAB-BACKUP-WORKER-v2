@@ -1,0 +1,130 @@
+{
+ "started": "2026-09-28T00:31:25+00:00",
+ "copy": "/tmp/tmp.DODLvBu25y/clab-backup-ui",
+ "rows": [
+  {
+   "id": "QA-020",
+   "file": "app/lab_operations.py",
+   "mutation": "guard() moved back ahead of the consent checks in confirm()",
+   "test": "test_a_stale_restart_review_hears_the_stale_reason_while_the_previous_job_still_refreshes",
+   "occurrences": 1,
+   "pristine_rc": 0,
+   "pristine": "Ran 1 test in 2.112s | OK",
+   "mutant_rc": 1,
+   "mutant": "Ran 1 test in 2.098s | FAILED (failures=1)",
+   "verdict": "KILLED (test fails with the fix undone)"
+  },
+  {
+   "id": "QA-019",
+   "file": "app/node_readiness.py",
+   "mutation": "login grace window disabled (a refusal always counts)",
+   "test": "test_a_refused_login_right_after_a_manager_restart_reads_booting_until_the_grace_window_closes",
+   "occurrences": 1,
+   "pristine_rc": 0,
+   "pristine": "Ran 1 test in 0.100s | OK",
+   "mutant_rc": 1,
+   "mutant": "Ran 1 test in 0.078s | FAILED (failures=1)",
+   "verdict": "KILLED (test fails with the fix undone)"
+  },
+  {
+   "id": "QA-017",
+   "file": "app/lab_operations.py",
+   "mutation": "the XRv9k known limit removed from RESTART_KNOWN_LIMITS",
+   "test": "test_the_xrv9k_review_names_the_fresh_disk_limit_and_other_kinds_get_no_note",
+   "occurrences": 1,
+   "pristine_rc": 0,
+   "pristine": "Ran 1 test in 0.091s | OK",
+   "mutant_rc": 1,
+   "mutant": "Ran 1 test in 0.106s | FAILED (failures=1)",
+   "verdict": "KILLED (test fails with the fix undone)"
+  },
+  {
+   "id": "QA-018",
+   "file": "app/lab_operations.py",
+   "mutation": "restart_links() never reports a neighbour that is down",
+   "test": "test_a_neighbour_that_is_not_running_is_named_in_the_review_and_the_job_counts_the_links",
+   "occurrences": 1,
+   "pristine_rc": 0,
+   "pristine": "Ran 1 test in 0.100s | OK",
+   "mutant_rc": 1,
+   "mutant": "Ran 1 test in 0.091s | FAILED (failures=1)",
+   "verdict": "KILLED (test fails with the fix undone)"
+  },
+  {
+   "id": "QA-014",
+   "file": "app/lab_operations.py",
+   "mutation": "the post-restart settle check skipped (exit status alone decides)",
+   "test": "test_a_restart_whose_container_exits_right_after_is_a_failed_job_with_the_reason",
+   "occurrences": 1,
+   "pristine_rc": 0,
+   "pristine": "Ran 1 test in 0.108s | OK",
+   "mutant_rc": 1,
+   "mutant": "Ran 1 test in 0.097s | FAILED (failures=1)",
+   "verdict": "KILLED (test fails with the fix undone)"
+  },
+  {
+   "id": "RD-001",
+   "file": "app/lab_operations.py",
+   "mutation": "the preview-time lifecycle refusal removed",
+   "test": "test_a_restart_device_review_is_stale_when_a_lifecycle_job_lands_during_its_own_helper_calls",
+   "occurrences": 1,
+   "pristine_rc": 0,
+   "pristine": "Ran 1 test in 0.090s | OK",
+   "mutant_rc": 1,
+   "mutant": "Ran 1 test in 0.096s | FAILED (failures=1)",
+   "verdict": "KILLED (test fails with the fix undone)"
+  },
+  {
+   "id": "QA-016",
+   "file": "app/design_intent.py",
+   "mutation": "NAME back to 64 characters",
+   "test": "test_engine_identifiers_follow_netlabs_16_character_rule",
+   "occurrences": 1,
+   "pristine_rc": 0,
+   "pristine": "Ran 1 test in 0.001s | OK",
+   "mutant_rc": 1,
+   "mutant": "Ran 1 test in 0.001s | FAILED (failures=1)",
+   "verdict": "KILLED (test fails with the fix undone)"
+  },
+  {
+   "id": "QA-012",
+   "file": "app/design_intent.py",
+   "mutation": "the BGP AS range check not called",
+   "test": "test_bgp_as_must_be_present_and_in_range",
+   "occurrences": 1,
+   "pristine_rc": 0,
+   "pristine": "Ran 1 test in 2.919s | OK",
+   "mutant_rc": 1,
+   "mutant": "Ran 1 test in 2.730s | FAILED (failures=1)",
+   "verdict": "KILLED (test fails with the fix undone)"
+  },
+  {
+   "id": "QA-015",
+   "file": "app/static/network-design.js",
+   "mutation": "the sequence guard in designViewFresh removed (lab identity only)",
+   "test": "QA-015",
+   "occurrences": 1,
+   "pristine_rc": 0,
+   "pristine": "# tests 86 | # pass 2 | # fail 0",
+   "mutant_rc": 1,
+   "mutant": "# tests 86 | # pass 1 | # fail 1",
+   "verdict": "KILLED (test fails with the fix undone)"
+  },
+  {
+   "id": "TOOL-002",
+   "mutation": "synthetic inputs to check_argv and the failed-between expression",
+   "cases": {
+    "exact argv accepted": true,
+    "two --node refused": true,
+    "wrong node refused": true,
+    "no --node refused": true,
+    "destroy instead of restart refused": true,
+    "the failed-between check expression is the one in the tool": true,
+    "booting \u2192 failed \u2192 booting \u2192 ready refused": true,
+    "booting \u2192 ready accepted": true
+   },
+   "verdict": "HOLDS"
+  }
+ ],
+ "finished": "2026-09-28T00:31:40+00:00"
+}

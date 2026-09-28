@@ -1,0 +1,6 @@
+# postflight /api/state 2026-09-28T00:35:38Z
+ceos ready Ready running
+cjunosevolved ready Ready running
+vjunos-switch ready Ready running
+xrv9k ready Ready running
+host1 ready Choose NOS running

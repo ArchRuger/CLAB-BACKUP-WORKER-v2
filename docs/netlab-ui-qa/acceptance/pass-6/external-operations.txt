@@ -1,0 +1,13 @@
+operations list read 2026-09-28T00:27:32Z
+c33fc3d441d443f4896cd97aa0541a31 restore-square restart-node clab-restore-square-host1 succeeded 2026-09-28T00:02:15.629067+00:00 2026-09-28T00:02:18.686719+00:00 Operation completed · 2 links restored
+c67d5c34fe734cd9a5b0546498aca8c3 restore-square restart-node clab-restore-square-host1 succeeded 2026-09-28T00:02:24.197235+00:00 2026-09-28T00:02:27.273019+00:00 Operation completed · 2 links restored
+575e18ffb9ec40ec9166b0c7c218b5f2 restore-square restart-node clab-restore-square-ceos succeeded 2026-09-28T00:06:09.818034+00:00 2026-09-28T00:06:13.854070+00:00 Operation completed · 3 links restored
+f8591a31d0744d5183fc21e5444845ef restore-square restart-node clab-restore-square-host1 succeeded 2026-09-28T00:06:36.684949+00:00 2026-09-28T00:06:39.575833+00:00 Operation completed · 2 links restored
+753fb53b6c574a3eb93cc78591ba6250 restore-square restart-node clab-restore-square-xrv9k succeeded 2026-09-28T00:08:10.097583+00:00 2026-09-28T00:08:16.094766+00:00 Operation completed · 2 links restored
+c5e2913bee5341faaa20dddb1b680515 Quick-Test publish - succeeded 2026-09-28T00:22:38.820009+00:00 2026-09-28T00:22:39.072542+00:00 Operation completed
+028da14648d24726b150c79697302708 Quick-Test deploy - succeeded 2026-09-28T00:22:44.510682+00:00 2026-09-28T00:23:09.204294+00:00 Operation completed
+7837e4c489ef4d48be999bb2d258e922 restore-square restart-node clab-restore-square-ceos succeeded 2026-09-28T00:23:22.965823+00:00 2026-09-28T00:23:27.734435+00:00 Operation completed · 3 links restored
+4a7407722bec443ab86d23ed8ca7107f restore-square restart-node clab-restore-square-ceos succeeded 2026-09-28T00:24:01.084227+00:00 2026-09-28T00:24:05.754471+00:00 Operation completed · 3 links restored
+47edf23413124322b7d00e92feaee4ce restore-square restart-node clab-restore-square-ceos succeeded 2026-09-28T00:25:35.775183+00:00 2026-09-28T00:25:39.027299+00:00 Operation completed · 3 links restored
+7dc83b8fe70a4c1bb43ac4f21014bbc0 Quick-Test destroy - succeeded 2026-09-28T00:26:36.830019+00:00 2026-09-28T00:26:38.470073+00:00 Operation completed
+2f29059bcb1c4a91b90546dda72a0d02 Quick-Test delete - succeeded 2026-09-28T00:26:52.674511+00:00 2026-09-28T00:26:53.030324+00:00 Operation completed

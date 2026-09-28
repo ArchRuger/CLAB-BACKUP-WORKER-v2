@@ -1,0 +1,12 @@
+## verify-release 2026-09-28T00:22:14Z
+Source release verified: 1.30.50
+Documentation names only release 1.30.50.
+exit 0
+## git diff --check 2026-09-28T00:22:14Z
+exit 0
+## node --check
+files 22 failures 0
+## check_links 2026-09-28T00:22:15Z
+173 files, 0 problems
+exit 0
+## end 2026-09-28T00:22:15Z

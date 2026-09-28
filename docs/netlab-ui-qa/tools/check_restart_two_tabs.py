@@ -13,6 +13,10 @@ the restarts themselves take a fraction of a second.
   4. Two tabs racing at the same moment (both confirm within milliseconds): at most one job runs; the
      loser sees "Wait for the current lab operation to finish." or the stale-review refusal.
 
+Before each step that opens a menu the tool waits until the page's own busy() reads false (the manager is one
+process with one busy guard, so another lab's operation would otherwise make a step look stuck); the waits are
+recorded. A control that still stays unavailable is a failed check and the JSON record is written anyway.
+
     PATH="$PWD/clab-backup-ui/.venv/bin:$PATH" clab-backup-ui/.venv/bin/python \\
         docs/netlab-ui-qa/tools/check_restart_two_tabs.py --url http://127.0.0.1:8081 --lab restore-square --device host1
 
@@ -80,38 +84,41 @@ def main():
             return page
         a, b = tab(), tab()
         before = docker_inspect([node['name']])[node['name']]; jobs_before = len(restart_jobs(args.url, lab['id'], node['name']))
-        # 1. Two valid reviews.
-        open_map_menu(a, node['name']).click(); review_open(a)
-        open_map_menu(b, node['name']).click(); review_open(b)
-        check('two tabs can each open a review for the same device', 'Restart ' in review_text(a) and 'Restart ' in review_text(b))
-        # 2. Double click in A.
-        a.locator('#op-confirm').dblclick()
-        a.wait_for_selector('dialog#operation-review[open]', state='hidden', timeout=20000)
-        time.sleep(1.5)
-        jobs = restart_jobs(args.url, lab['id'], node['name'])
-        check('a double click creates exactly one job', len(jobs) == jobs_before + 1, 'jobs: %d before, %d now' % (jobs_before, len(jobs)))
-        job = follow_job(args.url, jobs[0]['id']) if jobs else None
-        check('the job succeeded', bool(job) and job['status'] == 'succeeded', job and job.get('message'))
-        after_first = docker_inspect([node['name']])[node['name']]
-        check('the device restarted once (new start time, same id)', after_first['id'] == before['id'] and after_first['started'] > before['started'], json.dumps(after_first))
-        record['steps']['double_click'] = {'jobs': len(jobs), 'job': job and {k: job.get(k) for k in ('id', 'status', 'message', 'created', 'finished')}, 'before': before, 'after': after_first}
-        # 3. B confirms its stale review.
-        b.click('#op-confirm')
-        for _ in range(20):
-            if error_text(b): break
-            b.wait_for_timeout(500)
-        text = error_text(b)
-        check('the older review is refused with the reason', 'ran after this review' in text, text)
-        check('the refused tab keeps its dialog open with the reason inline', b.evaluate("() => document.getElementById('operation-review').open"))
-        b.screenshot(path=str(out / 'two-tabs-stale-review.png'))
-        time.sleep(1.5)
-        after_stale = docker_inspect([node['name']])[node['name']]
-        check('no second job and no second restart', len(restart_jobs(args.url, lab['id'], node['name'])) == jobs_before + 1 and after_stale['started'] == after_first['started'], json.dumps(after_stale))
-        check('Cancel closes the refused dialog', b.click('#op-cancel') or b.wait_for_selector('dialog#operation-review[open]', state='hidden', timeout=5000) or True)
-        record['steps']['stale_review'] = {'error': text, 'after': after_stale}
-        # A fresh review from B works. From here on a control that stays unavailable (the manager still busy) is
-        # recorded as a failed check instead of aborting the run without its record.
+        # Every step runs inside one guard: a control that stays unavailable (the manager busy with another lab's
+        # operation, a menu opened while the tab still read a finished job as running) is recorded as a failed check
+        # and the record is still written, instead of the run aborting without it (TOOL-004, TOOL-005).
+        record['steps']['idle_before_start'] = max(wait_idle(a), wait_idle(b))
         try:
+            # 1. Two valid reviews.
+            open_map_menu(a, node['name']).click(); review_open(a)
+            open_map_menu(b, node['name']).click(); review_open(b)
+            check('two tabs can each open a review for the same device', 'Restart ' in review_text(a) and 'Restart ' in review_text(b))
+            # 2. Double click in A.
+            a.locator('#op-confirm').dblclick()
+            a.wait_for_selector('dialog#operation-review[open]', state='hidden', timeout=20000)
+            time.sleep(1.5)
+            jobs = restart_jobs(args.url, lab['id'], node['name'])
+            check('a double click creates exactly one job', len(jobs) == jobs_before + 1, 'jobs: %d before, %d now' % (jobs_before, len(jobs)))
+            job = follow_job(args.url, jobs[0]['id']) if jobs else None
+            check('the job succeeded', bool(job) and job['status'] == 'succeeded', job and job.get('message'))
+            after_first = docker_inspect([node['name']])[node['name']]
+            check('the device restarted once (new start time, same id)', after_first['id'] == before['id'] and after_first['started'] > before['started'], json.dumps(after_first))
+            record['steps']['double_click'] = {'jobs': len(jobs), 'job': job and {k: job.get(k) for k in ('id', 'status', 'message', 'created', 'finished')}, 'before': before, 'after': after_first}
+            # 3. B confirms its stale review.
+            b.click('#op-confirm')
+            for _ in range(20):
+                if error_text(b): break
+                b.wait_for_timeout(500)
+            text = error_text(b)
+            check('the older review is refused with the reason', 'ran after this review' in text, text)
+            check('the refused tab keeps its dialog open with the reason inline', b.evaluate("() => document.getElementById('operation-review').open"))
+            b.screenshot(path=str(out / 'two-tabs-stale-review.png'))
+            time.sleep(1.5)
+            after_stale = docker_inspect([node['name']])[node['name']]
+            check('no second job and no second restart', len(restart_jobs(args.url, lab['id'], node['name'])) == jobs_before + 1 and after_stale['started'] == after_first['started'], json.dumps(after_stale))
+            check('Cancel closes the refused dialog', b.click('#op-cancel') or b.wait_for_selector('dialog#operation-review[open]', state='hidden', timeout=5000) or True)
+            record['steps']['stale_review'] = {'error': text, 'after': after_stale}
+            # A fresh review from B works.
             # The page decides the menu's Restart entry from its own last state poll (4 s apart); a menu opened while
             # that poll still showed the finished job as running keeps the entry disabled until it is reopened. Wait
             # until the tab itself reports idle, the way a student would see the entry enabled, and record the wait.
@@ -135,7 +142,7 @@ def main():
             check('the loser sees a busy or stale refusal, the winner\'s dialog closed', sum(opens) == 1 and any(('Wait for the current lab operation' in t) or ('ran after this review' in t) for t in texts), json.dumps({'errors': texts, 'open': opens}))
             record['steps']['race'] = {'new_jobs': len(jobs) - jobs_now, 'errors': texts, 'open': opens, 'started_before': start_before, 'started_after': docker_inspect([node['name']])[node['name']]['started']}
         except PlaywrightTimeout as exc:
-            check('the later steps ran without a stuck control', False, 'a control stayed unavailable: ' + str(exc).splitlines()[0][:200])
+            check('every step ran without a stuck control', False, 'a control stayed unavailable: ' + str(exc).splitlines()[0][:200])
         for page in (a, b):
             if page.evaluate("() => document.getElementById('operation-review')?.open"): page.click('#op-cancel')
         unexpected = [c for c in console if not c.startswith(HANDLED)]

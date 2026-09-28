@@ -1,0 +1,882 @@
+== U-01 ==
+TAP version 13
+# Subtest: designStateOf: no design yet
+ok 1 - designStateOf: no design yet # SKIP test name does not match pattern
+  ---
+  duration_ms: 1.088955
+  ...
+# Subtest: designStateOf: a saved design with no plan yet is not "No design yet"
+ok 2 - designStateOf: a saved design with no plan yet is not "No design yet" # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.063046
+  ...
+# Subtest: the More menu items carry the reason the route would refuse, and none otherwise
+ok 3 - the More menu items carry the reason the route would refuse, and none otherwise # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.037143
+  ...
+# Subtest: designStateOf: unsaved changes (draft)
+ok 4 - designStateOf: unsaved changes (draft) # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.04253
+  ...
+# Subtest: designStateOf: generating
+ok 5 - designStateOf: generating # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.036009
+  ...
+# Subtest: designStateOf: the design has problems
+ok 6 - designStateOf: the design has problems # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.034207
+  ...
+# Subtest: designStateOf: plan ready to review
+ok 7 - designStateOf: plan ready to review # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.030433
+  ...
+# Subtest: designStateOf: plan is older than the design (stale)
+ok 8 - designStateOf: plan is older than the design (stale) # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.039789
+  ...
+# Subtest: designStateOf: the last plan failed
+ok 9 - designStateOf: the last plan failed # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.049791
+  ...
+# Subtest: designStateOf: the last plan was interrupted
+ok 10 - designStateOf: the last plan was interrupted # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.1041
+  ...
+# Subtest: designStateOf: design engine unavailable, and it wins over every other state
+ok 11 - designStateOf: design engine unavailable, and it wins over every other state # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.038364
+  ...
+# Subtest: designIntentFromForm keeps every field the guided controls do not own
+ok 12 - designIntentFromForm keeps every field the guided controls do not own # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.030418
+  ...
+# Subtest: designIntentFromForm writes families, pools, modules, OSPF area, BGP AS and the rr flag
+ok 13 - designIntentFromForm writes families, pools, modules, OSPF area, BGP AS and the rr flag # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.026802
+  ...
+# Subtest: designIntentFromForm writes IS-IS area/type and the gateway protocol only while their module is ticked
+ok 14 - designIntentFromForm writes IS-IS area/type and the gateway protocol only while their module is ticked # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.080563
+  ...
+# Subtest: designIntentFromForm: an excluded device gets role "exclude"; a router gets no role key
+ok 15 - designIntentFromForm: an excluded device gets role "exclude"; a router gets no role key # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.030337
+  ...
+# Subtest: designIntentFromForm drops a module's settings when the module is unticked
+ok 16 - designIntentFromForm drops a module's settings when the module is unticked # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.02696
+  ...
+# Subtest: designFormFromIntent is the inverse of designIntentFromForm for the fields the guided controls own
+ok 17 - designFormFromIntent is the inverse of designIntentFromForm for the fields the guided controls own # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.098317
+  ...
+# Subtest: designFormFromIntent reads defaults from an empty intent
+ok 18 - designFormFromIntent reads defaults from an empty intent # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.1075
+  ...
+# Subtest: designPlanMarkup escapes a device name and renders interface, neighbour and BGP rows
+ok 19 - designPlanMarkup escapes a device name and renders interface, neighbour and BGP rows # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.041287
+  ...
+# Subtest: designPlanMarkup: no plan yet
+ok 20 - designPlanMarkup: no plan yet # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.032403
+  ...
+# Subtest: designCompatibilityMarkup renders the four levels in words with the reason in title
+ok 21 - designCompatibilityMarkup renders the four levels in words with the reason in title # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.084669
+  ...
+# Subtest: designCompatibilityMarkup: nothing to show yet
+ok 22 - designCompatibilityMarkup: nothing to show yet # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028484
+  ...
+# Subtest: designGenerationLine words for succeeded, failed, interrupted and running
+ok 23 - designGenerationLine words for succeeded, failed, interrupted and running # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.024544
+  ...
+# Subtest: designProblemsMarkup escapes the path and the message
+ok 24 - designProblemsMarkup escapes the path and the message # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.024989
+  ...
+# Subtest: designModulesMarkup ticks the selected modules and uses student words
+ok 25 - designModulesMarkup ticks the selected modules and uses student words # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.052754
+  ...
+# Subtest: designDevicesMarkup shows the blocked reason and disables the role select without a profile
+ok 26 - designDevicesMarkup shows the blocked reason and disables the role select without a profile # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.024746
+  ...
+# Subtest: designVrfsMarkup renders each VRF with its loopback checkbox and escapes a hostile name
+ok 27 - designVrfsMarkup renders each VRF with its loopback checkbox and escapes a hostile name # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.023171
+  ...
+# Subtest: designVlansMarkup renders each VLAN's id and escapes a hostile name
+ok 28 - designVlansMarkup renders each VLAN's id and escapes a hostile name # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.017937
+  ...
+# Subtest: designLinksMarkup shows each link's ends, pre-selects its VRF/VLAN settings, and flags settings the table does not cover
+ok 29 - designLinksMarkup shows each link's ends, pre-selects its VRF/VLAN settings, and flags settings the table does not cover # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.017964
+  ...
+# Subtest: designStaticMarkup shows each device's static routes with a discard or address next hop
+ok 30 - designStaticMarkup shows each device's static routes with a discard or address next hop # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.017905
+  ...
+# Subtest: designIntentFromForm VRFs: builds intent.vrfs, keeps an uncovered key, omits loopback when false, and drops an empty-name row
+ok 31 - designIntentFromForm VRFs: builds intent.vrfs, keeps an uncovered key, omits loopback when false, and drops an empty-name row # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.016653
+  ...
+# Subtest: designIntentFromForm VRFs: renaming a VRF keeps its other settings under the new name
+ok 32 - designIntentFromForm VRFs: renaming a VRF keeps its other settings under the new name # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.016549
+  ...
+# Subtest: designIntentFromForm VLANs: builds intent.vlans, keeps an uncovered key, and drops an empty-name row
+ok 33 - designIntentFromForm VLANs: builds intent.vlans, keeps an uncovered key, and drops an empty-name row # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.025684
+  ...
+# Subtest: designIntentFromForm links: attaches a VRF, keeps the link's other settings, and drops the vrf key (not the link) when none is chosen
+ok 34 - designIntentFromForm links: attaches a VRF, keeps the link's other settings, and drops the vrf key (not the link) when none is chosen # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018734
+  ...
+# Subtest: designIntentFromForm links: sets vlan access or trunk (trunk wins over access), and drops a link with nothing set at all
+ok 35 - designIntentFromForm links: sets vlan access or trunk (trunk wins over access), and drops a link with nothing set at all # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.016632
+  ...
+# Subtest: designIntentFromForm static routes: builds routing.static per device, keeps other node settings, and drops an empty-prefix row
+ok 36 - designIntentFromForm static routes: builds routing.static per device, keeps other node settings, and drops an empty-prefix row # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.025951
+  ...
+# Subtest: designIntentFromForm static routes: an address next hop with no address is dropped
+ok 37 - designIntentFromForm static routes: an address next hop with no address is dropped # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.022729
+  ...
+# Subtest: designIntentFromForm static routes: clearing every route drops routing.static but never removes the routing module automatically
+ok 38 - designIntentFromForm static routes: clearing every route drops routing.static but never removes the routing module automatically # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019258
+  ...
+# Subtest: designIntentFromForm: defining a VRF or VLAN does not duplicate a module that is already selected
+ok 39 - designIntentFromForm: defining a VRF or VLAN does not duplicate a module that is already selected # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018936
+  ...
+# Subtest: the design draft is written, read back by matching revision, and dropped when the revision moved on
+ok 40 - the design draft is written, read back by matching revision, and dropped when the revision moved on # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.01955
+  ...
+# Subtest: a stored draft with no intent, or malformed JSON, reads back as no draft
+ok 41 - a stored draft with no intent, or malformed JSON, reads back as no draft # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020127
+  ...
+# Subtest: designApplyDeviceMarkup: a ready device shows its counts and diff
+ok 42 - designApplyDeviceMarkup: a ready device shows its counts and diff # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.01901
+  ...
+# Subtest: designApplyDeviceMarkup: a conflict shows the take-over checkbox, and its note once taken over
+ok 43 - designApplyDeviceMarkup: a conflict shows the take-over checkbox, and its note once taken over # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.0191
+  ...
+# Subtest: designApplyDeviceMarkup: an ineligible device shows its reason and nothing else
+ok 44 - designApplyDeviceMarkup: an ineligible device shows its reason and nothing else # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.092345
+  ...
+# Subtest: designApplyDeviceMarkup: an unreachable/not-ready device shows its reason
+ok 45 - designApplyDeviceMarkup: an unreachable/not-ready device shows its reason # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.030384
+  ...
+# Subtest: designApplyDeviceMarkup: a no-op device says it already matches the plan
+ok 46 - designApplyDeviceMarkup: a no-op device says it already matches the plan # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.021956
+  ...
+# Subtest: designApplyCanSubmit: needs acknowledgement, an applicable device, and every conflict resolved
+ok 47 - designApplyCanSubmit: needs acknowledgement, an applicable device, and every conflict resolved # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020932
+  ...
+# Subtest: designApplyRequestId returns a 32-character lowercase hex string, different each time
+ok 48 - designApplyRequestId returns a 32-character lowercase hex string, different each time # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019484
+  ...
+# Subtest: designApplyBody clamps confirm_minutes, sorts the take-over list, and reuses a supplied request id
+ok 49 - designApplyBody clamps confirm_minutes, sorts the take-over list, and reuses a supplied request id # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020307
+  ...
+# Subtest: designApplyProgressMarkup: every outcome word appears for its status
+ok 50 - designApplyProgressMarkup: every outcome word appears for its status # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020602
+  ...
+# Subtest: designApplyProgressMarkup: a verify mismatch shows the missing/remaining counts
+ok 51 - designApplyProgressMarkup: a verify mismatch shows the missing/remaining counts # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020068
+  ...
+# Subtest: designApplyOwnershipMarkup: shows the statement count, plan id, applied time and a pending flag
+ok 52 - designApplyOwnershipMarkup: shows the statement count, plan id, applied time and a pending flag # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018687
+  ...
+# Subtest: designApplyLastLineMarkup: a settled job shows its word, a relative time and a Show button
+ok 53 - designApplyLastLineMarkup: a settled job shows its word, a relative time and a Show button # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.042875
+  ...
+# Subtest: designApplyDisabledReason: no plan, not linked, a running job, and the ready case
+ok 54 - designApplyDisabledReason: no plan, not linked, a running job, and the ready case # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028752
+  ...
+# Subtest: designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not
+ok 55 - designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020964
+  ...
+# Subtest: designApplyRenderReview unticks the acknowledgement and recomputes Apply on every new review result
+ok 56 - designApplyRenderReview unticks the acknowledgement and recomputes Apply on every new review result # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020969
+  ...
+# Subtest: designApplyDeviceMarkup: a capped conflicts sample says how many more there are; an uncapped one does not
+ok 57 - designApplyDeviceMarkup: a capped conflicts sample says how many more there are; an uncapped one does not # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019337
+  ...
+# Subtest: designApplyDeviceMarkup: capped expected/removal-command/kept-manual samples also say how many more there are
+ok 58 - designApplyDeviceMarkup: capped expected/removal-command/kept-manual samples also say how many more there are # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.023373
+  ...
+# Subtest: designApplyDeviceMarkup: a device whose takeover is true says how many manual settings are being taken over
+ok 59 - designApplyDeviceMarkup: a device whose takeover is true says how many manual settings are being taken over # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019039
+  ...
+# Subtest: designExportGitReason: no succeeded plan, then a plan with no repository bound, then ready
+ok 60 - designExportGitReason: no succeeded plan, then a plan with no repository bound, then ready # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018617
+  ...
+# Subtest: designExportGitDefaultCheckpoint takes the generation id's first 12 characters, prefixed
+ok 61 - designExportGitDefaultCheckpoint takes the generation id's first 12 characters, prefixed # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.029282
+  ...
+# Subtest: designExportGitValidCheckpoint matches the server's checkpoint pattern exactly
+ok 62 - designExportGitValidCheckpoint matches the server's checkpoint pattern exactly # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.023253
+  ...
+# Subtest: designExportGitRequestId returns a 32-character lowercase hex string, different each time
+ok 63 - designExportGitRequestId returns a 32-character lowercase hex string, different each time # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.026281
+  ...
+# Subtest: designExportGitBody folds a pasted note to one line, caps it at 200 characters, and always sends push:true
+ok 64 - designExportGitBody folds a pasted note to one line, caps it at 200 characters, and always sends push:true # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020029
+  ...
+# Subtest: designExportGitDestinationMarkup names the repository, branch and the checkpoint folder, and escapes every value
+ok 65 - designExportGitDestinationMarkup names the repository, branch and the checkpoint folder, and escapes every value # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.021272
+  ...
+# Subtest: designRenderExportGitButton disables \#design-export-git with the reason as its title, mirroring \#design-apply
+ok 66 - designRenderExportGitButton disables \#design-export-git with the reason as its title, mirroring \#design-apply # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019521
+  ...
+# Subtest: P1: an unrelated guided edit keeps the pools the form has no control for, and every extra pool key
+ok 67 - P1: an unrelated guided edit keeps the pools the form has no control for, and every extra pool key # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019697
+  ...
+# Subtest: P2: several route reflectors survive an unrelated guided edit; the checklist is the truth only for the routers it shows
+ok 68 - P2: several route reflectors survive an unrelated guided edit; the checklist is the truth only for the routers it shows # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028228
+  ...
+# Subtest: P10a: 0, a blank and a non-number are kept as typed for the server to name, never turned into 65000 or 31
+ok 69 - P10a: 0, a blank and a non-number are kept as typed for the server to name, never turned into 65000 or 31 # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.01912
+  ...
+# Subtest: P10b: the module checkboxes are synced from the values on every render, even when the markup string did not change
+ok 70 - P10b: the module checkboxes are synced from the values on every render, even when the markup string did not change # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.036091
+  ...
+# Subtest: P3: text under Advanced that is not JSON blocks Save, Check and Generate, is named in the state line, and stays on screen
+ok 71 - P3: text under Advanced that is not JSON blocks Save, Check and Generate, is named in the state line, and stays on screen # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.022466
+  ...
+# Subtest: P4: Generate with unsaved changes saves them first and says so; the download and import wait for a save
+ok 72 - P4: Generate with unsaved changes saves them first and says so; the download and import wait for a save # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.01901
+  ...
+# Subtest: P5: a save answered after the student moved to another lab never lands on that lab
+ok 73 - P5: a save answered after the student moved to another lab never lands on that lab # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018835
+  ...
+# Subtest: P6: a plan fetched for a generation that is no longer the one shown is discarded; History › View pins an earlier plan
+ok 74 - P6: a plan fetched for a generation that is no longer the one shown is discarded; History › View pins an earlier plan # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.03592
+  ...
+# Subtest: P7: a failed progress poll is retried a bounded number of times with the student told, then stops with a way out
+ok 75 - P7: a failed progress poll is retried a bounded number of times with the student told, then stops with a way out # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.025836
+  ...
+# Subtest: P8: a draft the browser could not keep is said so in red, instead of vanishing silently on reload
+ok 76 - P8: a draft the browser could not keep is said so in red, instead of vanishing silently on reload # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020738
+  ...
+# Subtest: P9: after Remove design the state says so and the kept plans are not presented as current
+ok 77 - P9: after Remove design the state says so and the kept plans are not presented as current # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019883
+  ...
+# Subtest: P10b (browser path): a focused checkbox does not block the re-render that redraws the module it changed; a text field does
+ok 78 - P10b (browser path): a focused checkbox does not block the re-render that redraws the module it changed; a text field does # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018291
+  ...
+# Subtest: P8 (leave guard): the page asks before leaving only while an unsaved draft exists that the browser could not store
+ok 79 - P8 (leave guard): the page asks before leaving only while an unsaved draft exists that the browser could not store # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.165292
+  ...
+# Subtest: U-01: when another lab's design arrives, the form is redrawn even while a field has focus, and a stale form is never saved into the new lab
+ok 80 - U-01: when another lab's design arrives, the form is redrawn even while a field has focus, and a stale form is never saved into the new lab
+  ---
+  duration_ms: 4.208422
+  ...
+# Subtest: U-10/U-15/U-16: Generate on nothing says why, the warnings fold carries its count, and a shared reason is said once
+ok 81 - U-10/U-15/U-16: Generate on nothing says why, the warnings fold carries its count, and a shared reason is said once # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.639688
+  ...
+# Subtest: U-05/U-06: the apply review names itself, explains an empty review in words and says why Apply is off
+ok 82 - U-05/U-06: the apply review names itself, explains an empty review in words and says why Apply is off # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.024292
+  ...
+# Subtest: U-07: removing a row gives focus to the table's Add button
+ok 83 - U-07: removing a row gives focus to the table's Add button # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.015625
+  ...
+# Subtest: QA-015: two overlapping loads of one lab, the older answer arriving last, leave the newer generation shown
+ok 84 - QA-015: two overlapping loads of one lab, the older answer arriving last, leave the newer generation shown # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.015301
+  ...
+# Subtest: QA-015: the lab-switch guard still holds with the sequence guard in place
+ok 85 - QA-015: the lab-switch guard still holds with the sequence guard in place # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.014136
+  ...
+# Subtest: U-21: designKeptModulesNotice names the modules kept on and why, and stays silent otherwise
+ok 86 - U-21: designKeptModulesNotice names the modules kept on and why, and stays silent otherwise # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.051525
+  ...
+1..86
+# tests 86
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 85
+# todo 0
+# duration_ms 113.462058
+== QA-015 ==
+TAP version 13
+# Subtest: designStateOf: no design yet
+ok 1 - designStateOf: no design yet # SKIP test name does not match pattern
+  ---
+  duration_ms: 1.039323
+  ...
+# Subtest: designStateOf: a saved design with no plan yet is not "No design yet"
+ok 2 - designStateOf: a saved design with no plan yet is not "No design yet" # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.05848
+  ...
+# Subtest: the More menu items carry the reason the route would refuse, and none otherwise
+ok 3 - the More menu items carry the reason the route would refuse, and none otherwise # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.036688
+  ...
+# Subtest: designStateOf: unsaved changes (draft)
+ok 4 - designStateOf: unsaved changes (draft) # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.035084
+  ...
+# Subtest: designStateOf: generating
+ok 5 - designStateOf: generating # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.035346
+  ...
+# Subtest: designStateOf: the design has problems
+ok 6 - designStateOf: the design has problems # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.034228
+  ...
+# Subtest: designStateOf: plan ready to review
+ok 7 - designStateOf: plan ready to review # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.030036
+  ...
+# Subtest: designStateOf: plan is older than the design (stale)
+ok 8 - designStateOf: plan is older than the design (stale) # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.046005
+  ...
+# Subtest: designStateOf: the last plan failed
+ok 9 - designStateOf: the last plan failed # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.051802
+  ...
+# Subtest: designStateOf: the last plan was interrupted
+ok 10 - designStateOf: the last plan was interrupted # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.092397
+  ...
+# Subtest: designStateOf: design engine unavailable, and it wins over every other state
+ok 11 - designStateOf: design engine unavailable, and it wins over every other state # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.05305
+  ...
+# Subtest: designIntentFromForm keeps every field the guided controls do not own
+ok 12 - designIntentFromForm keeps every field the guided controls do not own # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.037317
+  ...
+# Subtest: designIntentFromForm writes families, pools, modules, OSPF area, BGP AS and the rr flag
+ok 13 - designIntentFromForm writes families, pools, modules, OSPF area, BGP AS and the rr flag # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028395
+  ...
+# Subtest: designIntentFromForm writes IS-IS area/type and the gateway protocol only while their module is ticked
+ok 14 - designIntentFromForm writes IS-IS area/type and the gateway protocol only while their module is ticked # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.075115
+  ...
+# Subtest: designIntentFromForm: an excluded device gets role "exclude"; a router gets no role key
+ok 15 - designIntentFromForm: an excluded device gets role "exclude"; a router gets no role key # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028297
+  ...
+# Subtest: designIntentFromForm drops a module's settings when the module is unticked
+ok 16 - designIntentFromForm drops a module's settings when the module is unticked # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.025958
+  ...
+# Subtest: designFormFromIntent is the inverse of designIntentFromForm for the fields the guided controls own
+ok 17 - designFormFromIntent is the inverse of designIntentFromForm for the fields the guided controls own # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.104154
+  ...
+# Subtest: designFormFromIntent reads defaults from an empty intent
+ok 18 - designFormFromIntent reads defaults from an empty intent # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.113411
+  ...
+# Subtest: designPlanMarkup escapes a device name and renders interface, neighbour and BGP rows
+ok 19 - designPlanMarkup escapes a device name and renders interface, neighbour and BGP rows # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.039146
+  ...
+# Subtest: designPlanMarkup: no plan yet
+ok 20 - designPlanMarkup: no plan yet # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.027822
+  ...
+# Subtest: designCompatibilityMarkup renders the four levels in words with the reason in title
+ok 21 - designCompatibilityMarkup renders the four levels in words with the reason in title # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.062017
+  ...
+# Subtest: designCompatibilityMarkup: nothing to show yet
+ok 22 - designCompatibilityMarkup: nothing to show yet # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.026049
+  ...
+# Subtest: designGenerationLine words for succeeded, failed, interrupted and running
+ok 23 - designGenerationLine words for succeeded, failed, interrupted and running # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.021488
+  ...
+# Subtest: designProblemsMarkup escapes the path and the message
+ok 24 - designProblemsMarkup escapes the path and the message # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028691
+  ...
+# Subtest: designModulesMarkup ticks the selected modules and uses student words
+ok 25 - designModulesMarkup ticks the selected modules and uses student words # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.650871
+  ...
+# Subtest: designDevicesMarkup shows the blocked reason and disables the role select without a profile
+ok 26 - designDevicesMarkup shows the blocked reason and disables the role select without a profile # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.036403
+  ...
+# Subtest: designVrfsMarkup renders each VRF with its loopback checkbox and escapes a hostile name
+ok 27 - designVrfsMarkup renders each VRF with its loopback checkbox and escapes a hostile name # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.02168
+  ...
+# Subtest: designVlansMarkup renders each VLAN's id and escapes a hostile name
+ok 28 - designVlansMarkup renders each VLAN's id and escapes a hostile name # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.017829
+  ...
+# Subtest: designLinksMarkup shows each link's ends, pre-selects its VRF/VLAN settings, and flags settings the table does not cover
+ok 29 - designLinksMarkup shows each link's ends, pre-selects its VRF/VLAN settings, and flags settings the table does not cover # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.01654
+  ...
+# Subtest: designStaticMarkup shows each device's static routes with a discard or address next hop
+ok 30 - designStaticMarkup shows each device's static routes with a discard or address next hop # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.01683
+  ...
+# Subtest: designIntentFromForm VRFs: builds intent.vrfs, keeps an uncovered key, omits loopback when false, and drops an empty-name row
+ok 31 - designIntentFromForm VRFs: builds intent.vrfs, keeps an uncovered key, omits loopback when false, and drops an empty-name row # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.016007
+  ...
+# Subtest: designIntentFromForm VRFs: renaming a VRF keeps its other settings under the new name
+ok 32 - designIntentFromForm VRFs: renaming a VRF keeps its other settings under the new name # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028475
+  ...
+# Subtest: designIntentFromForm VLANs: builds intent.vlans, keeps an uncovered key, and drops an empty-name row
+ok 33 - designIntentFromForm VLANs: builds intent.vlans, keeps an uncovered key, and drops an empty-name row # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.023793
+  ...
+# Subtest: designIntentFromForm links: attaches a VRF, keeps the link's other settings, and drops the vrf key (not the link) when none is chosen
+ok 34 - designIntentFromForm links: attaches a VRF, keeps the link's other settings, and drops the vrf key (not the link) when none is chosen # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.017419
+  ...
+# Subtest: designIntentFromForm links: sets vlan access or trunk (trunk wins over access), and drops a link with nothing set at all
+ok 35 - designIntentFromForm links: sets vlan access or trunk (trunk wins over access), and drops a link with nothing set at all # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.016169
+  ...
+# Subtest: designIntentFromForm static routes: builds routing.static per device, keeps other node settings, and drops an empty-prefix row
+ok 36 - designIntentFromForm static routes: builds routing.static per device, keeps other node settings, and drops an empty-prefix row # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.0261
+  ...
+# Subtest: designIntentFromForm static routes: an address next hop with no address is dropped
+ok 37 - designIntentFromForm static routes: an address next hop with no address is dropped # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019306
+  ...
+# Subtest: designIntentFromForm static routes: clearing every route drops routing.static but never removes the routing module automatically
+ok 38 - designIntentFromForm static routes: clearing every route drops routing.static but never removes the routing module automatically # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019831
+  ...
+# Subtest: designIntentFromForm: defining a VRF or VLAN does not duplicate a module that is already selected
+ok 39 - designIntentFromForm: defining a VRF or VLAN does not duplicate a module that is already selected # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018994
+  ...
+# Subtest: the design draft is written, read back by matching revision, and dropped when the revision moved on
+ok 40 - the design draft is written, read back by matching revision, and dropped when the revision moved on # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.266491
+  ...
+# Subtest: a stored draft with no intent, or malformed JSON, reads back as no draft
+ok 41 - a stored draft with no intent, or malformed JSON, reads back as no draft # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.023084
+  ...
+# Subtest: designApplyDeviceMarkup: a ready device shows its counts and diff
+ok 42 - designApplyDeviceMarkup: a ready device shows its counts and diff # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.02071
+  ...
+# Subtest: designApplyDeviceMarkup: a conflict shows the take-over checkbox, and its note once taken over
+ok 43 - designApplyDeviceMarkup: a conflict shows the take-over checkbox, and its note once taken over # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018935
+  ...
+# Subtest: designApplyDeviceMarkup: an ineligible device shows its reason and nothing else
+ok 44 - designApplyDeviceMarkup: an ineligible device shows its reason and nothing else # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.06866
+  ...
+# Subtest: designApplyDeviceMarkup: an unreachable/not-ready device shows its reason
+ok 45 - designApplyDeviceMarkup: an unreachable/not-ready device shows its reason # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.026772
+  ...
+# Subtest: designApplyDeviceMarkup: a no-op device says it already matches the plan
+ok 46 - designApplyDeviceMarkup: a no-op device says it already matches the plan # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.046683
+  ...
+# Subtest: designApplyCanSubmit: needs acknowledgement, an applicable device, and every conflict resolved
+ok 47 - designApplyCanSubmit: needs acknowledgement, an applicable device, and every conflict resolved # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.022276
+  ...
+# Subtest: designApplyRequestId returns a 32-character lowercase hex string, different each time
+ok 48 - designApplyRequestId returns a 32-character lowercase hex string, different each time # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.030971
+  ...
+# Subtest: designApplyBody clamps confirm_minutes, sorts the take-over list, and reuses a supplied request id
+ok 49 - designApplyBody clamps confirm_minutes, sorts the take-over list, and reuses a supplied request id # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.022076
+  ...
+# Subtest: designApplyProgressMarkup: every outcome word appears for its status
+ok 50 - designApplyProgressMarkup: every outcome word appears for its status # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.044063
+  ...
+# Subtest: designApplyProgressMarkup: a verify mismatch shows the missing/remaining counts
+ok 51 - designApplyProgressMarkup: a verify mismatch shows the missing/remaining counts # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020419
+  ...
+# Subtest: designApplyOwnershipMarkup: shows the statement count, plan id, applied time and a pending flag
+ok 52 - designApplyOwnershipMarkup: shows the statement count, plan id, applied time and a pending flag # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019167
+  ...
+# Subtest: designApplyLastLineMarkup: a settled job shows its word, a relative time and a Show button
+ok 53 - designApplyLastLineMarkup: a settled job shows its word, a relative time and a Show button # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018919
+  ...
+# Subtest: designApplyDisabledReason: no plan, not linked, a running job, and the ready case
+ok 54 - designApplyDisabledReason: no plan, not linked, a running job, and the ready case # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018948
+  ...
+# Subtest: designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not
+ok 55 - designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019155
+  ...
+# Subtest: designApplyRenderReview unticks the acknowledgement and recomputes Apply on every new review result
+ok 56 - designApplyRenderReview unticks the acknowledgement and recomputes Apply on every new review result # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019402
+  ...
+# Subtest: designApplyDeviceMarkup: a capped conflicts sample says how many more there are; an uncapped one does not
+ok 57 - designApplyDeviceMarkup: a capped conflicts sample says how many more there are; an uncapped one does not # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018179
+  ...
+# Subtest: designApplyDeviceMarkup: capped expected/removal-command/kept-manual samples also say how many more there are
+ok 58 - designApplyDeviceMarkup: capped expected/removal-command/kept-manual samples also say how many more there are # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020505
+  ...
+# Subtest: designApplyDeviceMarkup: a device whose takeover is true says how many manual settings are being taken over
+ok 59 - designApplyDeviceMarkup: a device whose takeover is true says how many manual settings are being taken over # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019893
+  ...
+# Subtest: designExportGitReason: no succeeded plan, then a plan with no repository bound, then ready
+ok 60 - designExportGitReason: no succeeded plan, then a plan with no repository bound, then ready # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018266
+  ...
+# Subtest: designExportGitDefaultCheckpoint takes the generation id's first 12 characters, prefixed
+ok 61 - designExportGitDefaultCheckpoint takes the generation id's first 12 characters, prefixed # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018253
+  ...
+# Subtest: designExportGitValidCheckpoint matches the server's checkpoint pattern exactly
+ok 62 - designExportGitValidCheckpoint matches the server's checkpoint pattern exactly # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.033063
+  ...
+# Subtest: designExportGitRequestId returns a 32-character lowercase hex string, different each time
+ok 63 - designExportGitRequestId returns a 32-character lowercase hex string, different each time # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.02272
+  ...
+# Subtest: designExportGitBody folds a pasted note to one line, caps it at 200 characters, and always sends push:true
+ok 64 - designExportGitBody folds a pasted note to one line, caps it at 200 characters, and always sends push:true # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020096
+  ...
+# Subtest: designExportGitDestinationMarkup names the repository, branch and the checkpoint folder, and escapes every value
+ok 65 - designExportGitDestinationMarkup names the repository, branch and the checkpoint folder, and escapes every value # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018507
+  ...
+# Subtest: designRenderExportGitButton disables \#design-export-git with the reason as its title, mirroring \#design-apply
+ok 66 - designRenderExportGitButton disables \#design-export-git with the reason as its title, mirroring \#design-apply # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019045
+  ...
+# Subtest: P1: an unrelated guided edit keeps the pools the form has no control for, and every extra pool key
+ok 67 - P1: an unrelated guided edit keeps the pools the form has no control for, and every extra pool key # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018749
+  ...
+# Subtest: P2: several route reflectors survive an unrelated guided edit; the checklist is the truth only for the routers it shows
+ok 68 - P2: several route reflectors survive an unrelated guided edit; the checklist is the truth only for the routers it shows # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.02688
+  ...
+# Subtest: P10a: 0, a blank and a non-number are kept as typed for the server to name, never turned into 65000 or 31
+ok 69 - P10a: 0, a blank and a non-number are kept as typed for the server to name, never turned into 65000 or 31 # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018706
+  ...
+# Subtest: P10b: the module checkboxes are synced from the values on every render, even when the markup string did not change
+ok 70 - P10b: the module checkboxes are synced from the values on every render, even when the markup string did not change # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019218
+  ...
+# Subtest: P3: text under Advanced that is not JSON blocks Save, Check and Generate, is named in the state line, and stays on screen
+ok 71 - P3: text under Advanced that is not JSON blocks Save, Check and Generate, is named in the state line, and stays on screen # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018097
+  ...
+# Subtest: P4: Generate with unsaved changes saves them first and says so; the download and import wait for a save
+ok 72 - P4: Generate with unsaved changes saves them first and says so; the download and import wait for a save # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.01883
+  ...
+# Subtest: P5: a save answered after the student moved to another lab never lands on that lab
+ok 73 - P5: a save answered after the student moved to another lab never lands on that lab # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018149
+  ...
+# Subtest: P6: a plan fetched for a generation that is no longer the one shown is discarded; History › View pins an earlier plan
+ok 74 - P6: a plan fetched for a generation that is no longer the one shown is discarded; History › View pins an earlier plan # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019357
+  ...
+# Subtest: P7: a failed progress poll is retried a bounded number of times with the student told, then stops with a way out
+ok 75 - P7: a failed progress poll is retried a bounded number of times with the student told, then stops with a way out # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.01913
+  ...
+# Subtest: P8: a draft the browser could not keep is said so in red, instead of vanishing silently on reload
+ok 76 - P8: a draft the browser could not keep is said so in red, instead of vanishing silently on reload # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.018436
+  ...
+# Subtest: P9: after Remove design the state says so and the kept plans are not presented as current
+ok 77 - P9: after Remove design the state says so and the kept plans are not presented as current # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028401
+  ...
+# Subtest: P10b (browser path): a focused checkbox does not block the re-render that redraws the module it changed; a text field does
+ok 78 - P10b (browser path): a focused checkbox does not block the re-render that redraws the module it changed; a text field does # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.020926
+  ...
+# Subtest: P8 (leave guard): the page asks before leaving only while an unsaved draft exists that the browser could not store
+ok 79 - P8 (leave guard): the page asks before leaving only while an unsaved draft exists that the browser could not store # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.153697
+  ...
+# Subtest: U-01: when another lab's design arrives, the form is redrawn even while a field has focus, and a stale form is never saved into the new lab
+ok 80 - U-01: when another lab's design arrives, the form is redrawn even while a field has focus, and a stale form is never saved into the new lab # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.02548
+  ...
+# Subtest: U-10/U-15/U-16: Generate on nothing says why, the warnings fold carries its count, and a shared reason is said once
+ok 81 - U-10/U-15/U-16: Generate on nothing says why, the warnings fold carries its count, and a shared reason is said once # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.022693
+  ...
+# Subtest: U-05/U-06: the apply review names itself, explains an empty review in words and says why Apply is off
+ok 82 - U-05/U-06: the apply review names itself, explains an empty review in words and says why Apply is off # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.021734
+  ...
+# Subtest: U-07: removing a row gives focus to the table's Add button
+ok 83 - U-07: removing a row gives focus to the table's Add button # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.019673
+  ...
+# Subtest: QA-015: two overlapping loads of one lab, the older answer arriving last, leave the newer generation shown
+ok 84 - QA-015: two overlapping loads of one lab, the older answer arriving last, leave the newer generation shown
+  ---
+  duration_ms: 18.886953
+  ...
+# Subtest: QA-015: the lab-switch guard still holds with the sequence guard in place
+ok 85 - QA-015: the lab-switch guard still holds with the sequence guard in place
+  ---
+  duration_ms: 2.191701
+  ...
+# Subtest: U-21: designKeptModulesNotice names the modules kept on and why, and stays silent otherwise
+ok 86 - U-21: designKeptModulesNotice names the modules kept on and why, and stays silent otherwise # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.045159
+  ...
+1..86
+# tests 86
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 84
+# todo 0
+# duration_ms 114.028717

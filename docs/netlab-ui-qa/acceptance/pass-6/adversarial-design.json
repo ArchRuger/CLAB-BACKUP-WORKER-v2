@@ -1,0 +1,109 @@
+{
+ "started": "2026-09-28T00:33:16+00:00",
+ "s3_tab2_initial_as": "65111",
+ "s3_tab1_before_save": {
+  "as": "65111",
+  "state": "Unsaved changes Unsaved changes"
+ },
+ "s3": {
+  "final_as": 65200,
+  "tab1_message": " | Your unsaved changes were older than the saved design and were discarded. | ",
+  "tab1_state": "Design saved, no plan yet Design saved, no plan yet"
+ },
+ "checks": [
+  {
+   "name": "S1 B saved with area 0.0.0.7",
+   "ok": true,
+   "detail": "{'area': '0.0.0.7'}",
+   "at": "2026-09-28T00:33:19+00:00"
+  },
+  {
+   "name": "S1 A saved with AS 65123",
+   "ok": true,
+   "detail": "{'as': 65123}",
+   "at": "2026-09-28T00:33:20+00:00"
+  },
+  {
+   "name": "S1 after Back the form is B's (area 0.0.0.7, not A's AS 65123)",
+   "ok": true,
+   "detail": "area='0.0.0.7' as='' adv_has_65123=False",
+   "at": "2026-09-28T00:33:21+00:00"
+  },
+  {
+   "name": "S1 Save in B stores B's edit only",
+   "ok": true,
+   "detail": "{\"modules\": [\"ospf\"], \"bgp\": null, \"ospf\": {\"area\": \"0.0.0.8\"}}",
+   "at": "2026-09-28T00:33:22+00:00"
+  },
+  {
+   "name": "S1 A untouched by the Back",
+   "ok": true,
+   "detail": "{'as': 65123}",
+   "at": "2026-09-28T00:33:22+00:00"
+  },
+  {
+   "name": "S2 the edit reads Unsaved",
+   "ok": true,
+   "detail": "Unsaved changes Unsaved changes",
+   "at": "2026-09-28T00:33:22+00:00"
+  },
+  {
+   "name": "S2 a reopened page offers the abandoned draft as Unsaved (65124), not silently lost",
+   "ok": true,
+   "detail": "state='Unsaved changes Unsaved changes' as='65124'",
+   "at": "2026-09-28T00:33:25+00:00"
+  },
+  {
+   "name": "S2 the abandoned draft was never saved",
+   "ok": true,
+   "detail": "{'as': 65123}",
+   "at": "2026-09-28T00:33:25+00:00"
+  },
+  {
+   "name": "S2 Discard changes restores the saved 65123 and clears Unsaved",
+   "ok": true,
+   "detail": "as='65123' state='Design saved, no plan yet Design saved, no plan yet'",
+   "at": "2026-09-28T00:33:26+00:00"
+  },
+  {
+   "name": "S2 after a reload the saved design is not \"No design yet\" (QA-001)",
+   "ok": true,
+   "detail": "s='Design saved, no plan yet Design saved, no plan yet'",
+   "at": "2026-09-28T00:33:26+00:00"
+  },
+  {
+   "name": "S3 (note) tab 2 opened showing the shared browser draft, discarding it first",
+   "ok": true,
+   "detail": "65111",
+   "at": "2026-09-28T00:33:27+00:00"
+  },
+  {
+   "name": "S3 tab 2 saved AS 65200",
+   "ok": true,
+   "detail": "{'as': 65200}",
+   "at": "2026-09-28T00:33:28+00:00"
+  },
+  {
+   "name": "S3 tab 1's older edit does not silently overwrite tab 2's save (either refused with a reason, or it was the student's visible latest value)",
+   "ok": true,
+   "detail": "{\"final_as\": 65200, \"tab1_message\": \" | Your unsaved changes were older than the saved design and were discarded. | \", \"tab1_state\": \"Design saved, no plan yet Design saved, no plan yet\"}",
+   "at": "2026-09-28T00:33:35+00:00"
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]",
+   "at": "2026-09-28T00:33:36+00:00"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]",
+   "at": "2026-09-28T00:33:36+00:00"
+  }
+ ],
+ "console": [
+  "Failed to load resource: the server responded with a status of 409 (Conflict)"
+ ],
+ "finished": "2026-09-28T00:33:36+00:00"
+}

@@ -14,7 +14,8 @@ consistent before the next operation. (2) The same-origin guard in `main.py` ref
 1.30.49) are in `docs/netlab-ui-qa/acceptance/pass-3/INTERRUPTED.md`; a gate pass that dies with its session is
 recorded as interrupted and retaken, it neither counts nor resets the count. (4) The map's device menu is rendered
 when it opens and not again while open (`openNodeMenu`); a live tool must wait for the page's own `busy()` to clear before
-it opens a menu right after a job (OBS-004, `wait_idle` in `check_restart_two_tabs.py`), which is not a product change.
+it opens a menu right after a job (OBS-004, `wait_idle` in `check_restart_two_tabs.py`), and every step of that tool
+runs inside one guard so a busy manager gives a failed check with the record kept (TOOL-005); neither is a product change.
 
 # Netlab UI/UX campaign, part 2: acceptance findings fixed — 1.30.49
 
