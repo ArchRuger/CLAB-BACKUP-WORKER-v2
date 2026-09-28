@@ -1,0 +1,11 @@
+# nodecli.py xrv9k read-back right after Ready, 2026-09-28T00:35:23Z (12 s after the manager's Ready)
+show running-config interface Loopback0
+Mon Sep 28 00:35:23.077 UTC
+interface Loopback0
+ description A loopback
+ ipv4 address 10.255.0.4 255.255.255.255
+!
+
+RP/0/RP0/CPU0:xrv9k#show ospf neighbor
+Mon Sep 28 00:35:23.509 UTC
+RP/0/RP0/CPU0:xrv9k#

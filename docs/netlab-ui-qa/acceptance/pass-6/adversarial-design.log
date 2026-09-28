@@ -1,0 +1,16 @@
+  ok   S1 B saved with area 0.0.0.7
+  ok   S1 A saved with AS 65123
+  ok   S1 after Back the form is B's (area 0.0.0.7, not A's AS 65123)
+  ok   S1 Save in B stores B's edit only
+  ok   S1 A untouched by the Back
+  ok   S2 the edit reads Unsaved
+  ok   S2 a reopened page offers the abandoned draft as Unsaved (65124), not silently lost
+  ok   S2 the abandoned draft was never saved
+  ok   S2 Discard changes restores the saved 65123 and clears Unsaved
+  ok   S2 after a reload the saved design is not "No design yet" (QA-001)
+  ok   S3 (note) tab 2 opened showing the shared browser draft, discarding it first
+  ok   S3 tab 2 saved AS 65200
+  ok   S3 tab 1's older edit does not silently overwrite tab 2's save (either refused with a reason, or it was the student's visible latest value)
+  ok   no unexpected console errors
+  ok   no page errors
+15 checks, 0 failed

@@ -1,0 +1,19 @@
+restore-square operation jobs since 00:23 UTC (from /api/operations):
+  7837e4c4 restart-node clab-restore-square-ceos 00:23:22 - 00:23:27 succeeded | Operation completed · 3 links restored
+  4a740772 restart-node clab-restore-square-ceos 00:24:01 - 00:24:05 succeeded | Operation completed · 3 links restored
+  47edf234 restart-node clab-restore-square-ceos 00:25:35 - 00:25:39 succeeded | Operation completed · 3 links restored
+  442e4feb restart-node clab-restore-square-host1 00:27:37 - 00:27:40 succeeded | Operation completed · 2 links restored
+  de9ec0ba restart-node clab-restore-square-host1 00:27:45 - 00:27:48 succeeded | Operation completed · 2 links restored
+  4c425331 restart-node clab-restore-square-ceos 00:28:33 - 00:28:37 succeeded | Operation completed · 3 links restored
+  22fbd748 restart-node clab-restore-square-host1 00:28:59 - 00:29:02 succeeded | Operation completed · 2 links restored
+  0fd2ab68 restart-node clab-restore-square-xrv9k 00:30:11 - 00:30:24 succeeded | Operation completed · 2 links restored
+traffic probe: 71 rounds 00:23:08 - 00:31:01, from cjunosevolved; crossing 10.255.0.1 (cEOS), other 10.255.0.3 (vJunos-switch)
+other-path loss rounds: 0; ssh failures: 0
+rounds with an unparsed result (null loss): ['00:25:12', '00:25:17', '00:25:23', '00:25:29', '00:25:35', '00:25:41', '00:25:47', '00:25:53', '00:26:00']
+crossing-path loss window: last clean round 00:23:15, first lossy 00:23:22, last lossy 00:23:38 (3 rounds), first clean again 00:23:46
+crossing-path loss window: last clean round 00:23:53, first lossy 00:24:00, last lossy 00:25:04 (9 rounds), first clean again 00:25:12
+crossing-path loss window: last clean round 00:28:30, first lossy 00:28:37, last lossy 00:28:44 (2 rounds), first clean again 00:28:52
+Recomputed with a null (no parsable ping answer) counted as not clean:
+crossing-path outage: last clean round 00:23:15, first bad 00:23:22, last bad 00:23:38 (3 rounds), first clean again 00:23:46
+crossing-path outage: last clean round 00:23:53, first bad 00:24:00, last bad 00:26:00 (18 rounds), first clean again 00:26:06
+crossing-path outage: last clean round 00:28:30, first bad 00:28:37, last bad 00:28:44 (2 rounds), first clean again 00:28:52

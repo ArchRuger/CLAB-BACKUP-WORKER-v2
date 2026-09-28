@@ -26,9 +26,12 @@ recovery recorded in `docs/netlab-ui-qa/acceptance/pass-3/INTERRUPTED.md`.
   read the finished job as running, OBS-004, tool amended; `…T234527+0000.json`: 13 of 13, idle waits 0.0 s and 0.2 s).
 - The full Python suite was rerun after the history sections existed: 1704 tests OK (1 skipped), 455 s, while the manager
   image was being built; `check_links.py` 169 files, 0 problems.
-- Acceptance passes on this build (two fresh agents, one after the other, the charter corrected for pass 4's F2): taken
-  after this commit; their reports (`docs/netlab-ui-qa/acceptance/PASS-5-*.md`, `PASS-6-*.md`) come with the evidence
-  commit that follows.
+- Acceptance passes on this build (fresh agents, one after the other, the charter corrected for pass 4's F2): pass 5
+  (Sonnet, `docs/netlab-ui-qa/acceptance/PASS-5-sonnet.md`, 23:48–00:14 UTC) **CLEAN**; pass 6 (Opus, `PASS-6-opus.md`,
+  00:22–00:35 UTC) **NOT CLEAN** on one tooling finding (TOOL-005: the two-tabs tool crashed without a record while the
+  maintainer's own lab operation kept the manager busy; every product check passed). The tool was revised and retested
+  (`evidence/restart/two-tabs-host1-2026-09-28T010451+0000.json`, 13 of 13); passes 7 and 8 on that revision follow in the
+  evidence commit.
 
 # Netlab UI/UX campaign, part 2: acceptance findings fixed — 1.30.49
 

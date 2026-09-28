@@ -1,0 +1,110 @@
+=== vjunos-switch preview ===
+HTTP:200
+{
+    "action": "restart-node",
+    "name": "restore-square",
+    "source_name": "restore-square",
+    "path": "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+    "source_hash": "3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5",
+    "affected": [
+        {
+            "name": "clab-restore-square-vjunos-switch",
+            "id": "9ba40459fc49",
+            "state": "running"
+        }
+    ],
+    "argv": [
+        "/usr/bin/containerlab",
+        "restart",
+        "-t",
+        "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+        "--name",
+        "restore-square",
+        "--node",
+        "vjunos-switch"
+    ],
+    "steps": [],
+    "node": "clab-restore-square-vjunos-switch",
+    "container": "clab-restore-square-vjunos-switch",
+    "digest": "04f42a5218b4c7156ed6b4af229703fa74ee00e4e608c64407377d2e9798914b",
+    "warnings": [
+        "Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0.79.0."
+    ],
+    "token": "f696489fab5b4e208861faef94eb13e0",
+    "node_label": "vjunos-switch"
+}
+=== xrv9k preview ===
+HTTP:200
+{
+    "action": "restart-node",
+    "name": "restore-square",
+    "source_name": "restore-square",
+    "path": "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+    "source_hash": "3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5",
+    "affected": [
+        {
+            "name": "clab-restore-square-xrv9k",
+            "id": "5706950aa8de",
+            "state": "running"
+        }
+    ],
+    "argv": [
+        "/usr/bin/containerlab",
+        "restart",
+        "-t",
+        "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+        "--name",
+        "restore-square",
+        "--node",
+        "xrv9k"
+    ],
+    "steps": [],
+    "node": "clab-restore-square-xrv9k",
+    "container": "clab-restore-square-xrv9k",
+    "digest": "458cec31d2217ba00a86e27a6d32f148828c8ceb5e4fa2ad0c9da85a95ff8bff",
+    "warnings": [
+        "Known limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (proven on cisco_xrv9k 24.3.1 with containerlab 0.79.0). Back up the configuration first and use Replace running configuration afterwards."
+    ],
+    "token": "72e14278cfc6425596ca5b99c1ec88f6",
+    "node_label": "xrv9k"
+}
+=== ceos preview (no known limit expected) ===
+HTTP:200
+{
+    "action": "restart-node",
+    "name": "restore-square",
+    "source_name": "restore-square",
+    "path": "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+    "source_hash": "3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5",
+    "affected": [
+        {
+            "name": "clab-restore-square-ceos",
+            "id": "0e70068d3675",
+            "state": "running"
+        }
+    ],
+    "argv": [
+        "/usr/bin/containerlab",
+        "restart",
+        "-t",
+        "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+        "--name",
+        "restore-square",
+        "--node",
+        "ceos"
+    ],
+    "steps": [],
+    "node": "clab-restore-square-ceos",
+    "container": "clab-restore-square-ceos",
+    "digest": "a1ab8545012e93e75a8393413eb2c5872108c531632c0a33b5c06e9591e6c949",
+    "warnings": [],
+    "token": "ceaf738906b747d79f223837161d26cb",
+    "node_label": "ceos"
+}
+=== refusal 1: node of another lab ===
+HTTP:404
+{"detail":"Lab not found."}=== refusal 2: unknown node ===
+HTTP:404
+{"detail":"This device is not in the lab."}=== refusal 3: foreign Origin ===
+HTTP:403
+{"detail":"Use this manager from its own browser page."}

@@ -86,9 +86,13 @@ checks before the guard, unit test `test_a_stale_restart_review_hears_the_stale_
 the two-tabs tool keeps its record on a stuck control and waits for the tab's idle before reopening a menu, TOOL-004,
 OBS-004): markers moved, the three history sections written, `verify-release.py` green, Python 1704 OK (1 skipped) on the
 rerun, browser 379, `check_links.py` clean, the manager rebuilt at 1.30.50 (23:17 UTC, helpers 1.30.50; capture stack left
-at its 1.30.49 build, unchanged code), the QA-020 live retest done (two-tabs 13/13 at 23:45). Next: the 1.30.50 commit and
-push (a new pull request: PR #57 is merged), then **pass 5 (Sonnet)** and **pass 6 (Opus)** on 1.30.50 with the corrected
-charter (`acceptance/PASS-5-*.md`, `PASS-6-*.md`), then the evidence commit with `FINAL-REPORT.md` completed.
+at its 1.30.49 build, unchanged code), the QA-020 live retest done (two-tabs 13/13 at 23:45). Committed as `1e12f37` + hygiene `9aa25c3`, pushed,
+**PR #58** open with CI green. **Pass 5 (Sonnet, 23:48–00:14): CLEAN.** **Pass 6 (Opus, 00:22–00:35): NOT CLEAN** on one
+tooling finding (TOOL-005: the two-tabs tool crashed without a record while the maintainer's own `Quick-Test` lab was being
+destroyed on the manager; every product check passed). The tool was revised (one guard around every step, idle wait first)
+and retested 13/13 at 01:04. Next: commit the tool revision with passes 5 and 6, push, then **pass 7 (Sonnet)** and **pass 8
+(Opus)** on 1.30.50 with that tool revision (the maintainer asked to leave the manager alone meanwhile), then the evidence
+commit with `FINAL-REPORT.md` completed.
 
 Then: add the final3 neighbour rerun records to `DEFECTS.md` (QA-018, Live) and `EVIDENCE.md` in the evidence commit; `python3 deploy/verify-release.py`;
 commit the intended files only (never `git add -A`: `.claude/`, the three prompt files in the worktree root and any

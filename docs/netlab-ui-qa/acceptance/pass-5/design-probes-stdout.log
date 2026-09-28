@@ -1,0 +1,326 @@
+Run started 2026-09-28T00:04:18+00:00 against http://127.0.0.1:8164, data dir /tmp/pass5-probes-data
+Labs: {'BGP_TheoryToPractice': 'bb9c6fd2def94ce29ff50e195063dd40', 'ospf-basics': '1493615f1c464bc48951cef48e4f006f', 'vlan-lab': '9b9a0792b7024bb0893c8bfb5a657b19', 'switching-basics': 'a57567fb8d0b4679bf4eaf8c49485494'}
+Chromium 153.0.8010.12
+
+=== Probe 1 ===
+  PASS [P1] baseline with vrf_loopback/router_id pools and extra lan pool keys parses with no problems
+  PASS [P1] baseline saves without problems
+  PASS [P1] a reload shows the extra pools were actually stored (not just accepted client-side)
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P1-01-baseline-saved.png
+  PASS [P1] editing an unrelated guided field (OSPF area) is reflected
+  FAIL [P1] CONFIRMED-target: an unrelated guided edit silently drops the vrf_loopback pool: {
+  "schema": 1,
+  "label": "P1",
+  "families": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "addressing": {
+    "loopback": {
+      "ipv4": "10.255.0.0/24",
+      "ipv6": "2001:db8:ff::/48"
+    },
+    "p2p": {
+      "ipv4": "10.1.0.0/16",
+      "ipv6": "2001:db8:1::/48",
+      "prefix": 31
+    },
+    "lan": {
+      "ipv4": "172.16.0.0/16",
+      "ipv6": "2001:db8:2::/48",
+      "prefix": 24,
+
+  FAIL [P1] CONFIRMED-target: an unrelated guided edit silently drops the router_id pool: {
+  "schema": 1,
+  "label": "P1",
+  "families": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "addressing": {
+    "loopback": {
+      "ipv4": "10.255.0.0/24",
+      "ipv6": "2001:db8:ff::/48"
+    },
+    "p2p": {
+      "ipv4": "10.1.0.0/16",
+      "ipv6": "2001:db8:1::/48",
+      "prefix": 31
+    },
+    "lan": {
+      "ipv4": "172.16.0.0/16",
+      "ipv6": "2001:db8:2::/48",
+      "prefix": 24,
+
+  FAIL [P1] CONFIRMED-target: an unrelated guided edit silently drops the lan pool's start/allocation keys: {
+  "schema": 1,
+  "label": "P1",
+  "families": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "addressing": {
+    "loopback": {
+      "ipv4": "10.255.0.0/24",
+      "ipv6": "2001:db8:ff::/48"
+    },
+    "p2p": {
+      "ipv4": "10.1.0.0/16",
+      "ipv6": "2001:db8:1::/48",
+      "prefix": 31
+    },
+    "lan": {
+      "ipv4": "172.16.0.0/16",
+      "ipv6": "2001:db8:2::/48",
+      "prefix": 24,
+
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P1-02-after-unrelated-guided-edit.png
+  PASS [P1] no warning is shown that data was dropped
+  FAIL [P1] the loss is permanent: gone again after Save + reload: {
+  "schema": 1,
+  "label": "P1",
+  "families": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "addressing": {
+    "loopback": {
+      "ipv4": "10.255.0.0/24",
+      "ipv6": "2001:db8:ff::/48"
+    },
+    "p2p": {
+      "ipv4": "10.1.0.0/16",
+      "ipv6": "2001:db8:1::/48",
+      "prefix": 31
+    },
+    "lan": {
+      "ipv4": "172.16.0.0/16",
+      "ipv6": "2001:db8:2::/48",
+      "prefix": 24,
+
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P1-03-after-save-and-reload.png
+
+=== Probe 2 ===
+  PASS [P2] a two-reflector design (r1 and r2 both bgp.rr=true) saves without problems
+  PASS [P2] both route reflectors are actually stored after reload
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P2-01-two-reflectors-saved.png
+  FAIL [P2] CONFIRMED-target: an unrelated guided edit collapses two route reflectors to at most one: rr_count=2 advanced={
+  "schema": 1,
+  "label": "P2",
+  "families": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "addressing": {
+    "loopback": {
+      "ipv4": "10.255.0.0/24",
+      "ipv6": "2001:db8:ff::/48"
+    },
+    "p2p": {
+      "ipv4": "10.1.0.0/16",
+      "ipv6": "2001:db8:1::/48",
+      "prefix": 31
+    },
+    "lan": {
+      "ipv4": "172.16.0.0/16",
+      "ipv6": "2001:db8:2::/48",
+
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P2-02-after-unrelated-guided-edit.png
+  PASS [P2] no warning is shown that a route reflector was silently dropped
+
+=== Probe 3 ===
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P3-00-baseline-saved.png
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P3-01-malformed-typed-not-yet-blurred.png
+  PASS [P3] the textarea shows the malformed text before any blur
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P3-02-after-click-save.png
+  FAIL [P3] CONFIRMED-target: Save proceeded using the stale (pre-edit) intent, not the malformed on-screen text: None
+  FAIL [P3] CONFIRMED-target: the screen reverts to the stale content with no explicit "your edit was discarded" message: detail='Fix the JSON under Advanced (or Discard changes) before saving, checking or generating.' textarea={ "schema": 1, "label": "P3-BROKEN-EDIT", "families": {"ipv4": true "ipv6": true
+  ..   [P3] design-problems at the moment of blur: "advanced: This is not valid JSON: Expected ',' or '}' after property value in JSON at position 68 (line 1 column 69)"
+  ..   [P3] design-state after Save click: 'Advanced JSON is not valid Advanced JSON is not valid'
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P3-03-malformed-before-generate.png
+  ..   [P3] Generate did not start: Page.wait_for_function: Timeout 8000ms exceeded.
+  FAIL [P3] Generate was not blocked by the malformed on-screen text (no disabled state, no refusal):
+
+=== Probe 4 ===
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P4-01-plan-with-as-65001.png
+  PASS [P4] the first generated plan reflects AS 65001
+  PASS [P4] the edit is held as an unsaved draft
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P4-02-unsaved-edit-to-65099.png
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P4-03-plan-after-clicking-generate-while-unsaved.png
+  PASS [P4] Generate never sent the draft intent, only a revision
+  FAIL [P4] CONFIRMED-target: the "new" plan still reflects the OLD saved AS 65001, not the unsaved 65099: r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2BGP sessionsNeighbourASTypeIPv4IPv6r265099ibgp10.255.0.22001:db8:ff:2::1r365099ibgp10.255.0.32001:db8:ff:3::1r2ProfileeosId2Loopback IPv410.255.0.2/32Loopback IPv62001:db8:ff:2::1/64Router id10.255.0.2Inter
+  FAIL [P4] CONFIRMED-target: the header still shows "Unsaved changes" even though a plan was just generated successfully (view.draft is checked before the newest-generation branch in designStateOf): Plan ready to review Plan ready to review
+  PASS [P4] the guided AS field still shows the unsaved 65099 the whole time (contradicts the plan just shown)
+  FAIL [P4] CONFIRMED-target: "Download design file" while unsaved exports the OLD saved AS 65001, not 65099: containerlab_node_manager:
+  type: network-intent
+  exported: '2026-09-28T00:04:38.792329+00:00'
+  lab: ospf-basics
+schema: 1
+label: P4
+families:
+  ipv4: true
+  ipv6: true
+addressing:
+  loopback:
+    ipv4: 10.255.0.0/24
+    ipv6: 2001:db8:ff::/48
+  p2p:
+    ipv4: 10.1.0.0/16
+    ipv6: 2001:db8:1::/48
+    prefix: 31
+  lan:
+    ipv4: 172.16.0.0/16
+    ipv6: 2001:db8:2::/48
+    prefix: 24
+modules:
+-
+
+=== Probe 5 ===
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P5-01-lab-b-immediately-after-switch.png
+  PASS [P5] lab B initially shows its own (no-design) state, not lab A's
+Exception in callback SyncBase._sync.<locals>.<lambda>(<Task finishe...> result=None>) at /home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py:111
+handle: <Handle SyncBase._sync.<locals>.<lambda>(<Task finishe...> result=None>) at /home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py:111>
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py", line 111, in <lambda>
+    task.add_done_callback(lambda _: g_self.switch())
+                                     ^^^^^^^^^^^^^^^
+greenlet.error: cannot switch to a different thread (which happens to have exited)
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P5-02-lab-b-after-lab-a-save-resolved.png
+  FAIL [P5] CONFIRMED-target: lab A's delayed Save response overwrote what is shown under lab B's Design tab: still_on_design_tab=True state='No design yet No design yet' area='0.0.0.0' advanced={
+  "schema": 1,
+  "label": "",
+  "families": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "addressing": {
+    "loopback": {
+      "ipv4": "10.255.0.0/24",
+      "ipv6": "2001:db8:ff::/48"
+    },
+    "p2p": {
+      "ipv4": "10.1.0.0/16",
+      "ipv6": "2001:db8:1::/48",
+      "prefix": 31
+    },
+
+  ..   [P5] server-side lab B intent: None
+  PASS [P5] server-side lab B was never actually touched (this is a rendering race, not a server bug)
+
+=== Probe 6 ===
+  ..   [P6] G1 id = 1465f7bc685447ad880c545d4db47008
+  PASS [P6] G1 generated and its id was recovered from the download link
+  PASS [P6] G1's plan does not mention bgp (ospf-only design)
+  ..   [P6] G2 id = 6c6a4a1c0d014cf392862621e91d240d (started while G1's delayed fetch was still in flight)
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P6-01-g2-ready-immediately.png
+  PASS [P6] G2 is correctly shown immediately after it succeeds (mentions bgp/65077)
+Exception in callback SyncBase._sync.<locals>.<lambda>(<Task finishe...> result=None>) at /home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py:111
+handle: <Handle SyncBase._sync.<locals>.<lambda>(<Task finishe...> result=None>) at /home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py:111>
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/asyncio/events.py", line 88, in _run
+    self._context.run(self._callback, *self._args)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/playwright/_impl/_sync_base.py", line 111, in <lambda>
+    task.add_done_callback(lambda _: g_self.switch())
+                                     ^^^^^^^^^^^^^^^
+greenlet.error: cannot switch to a different thread (which happens to have exited)
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P6-02-after-delayed-g1-fetch-lands.png
+  FAIL [P6] CONFIRMED-target: the delayed G1 fetch overwrote the plan body with stale G1 content after G2 was already shown correctly: plan_final=r1ProfileeosId1Loopback IPv410.255.0.1/32Loopback IPv62001:db8:ff:1::1/64Router id10.255.0.1InterfaceContainerlab portIPv4IPv6Neighbour(s)Protocol notesEthernet1eth110.1.0.0/312001:db8:1::1/64r2OSPF area 0.0.0.0BGP sessionsNeighbourASTypeIPv4IPv6r265077ibgp10.255.0.22001:db8:ff:2::1r365077ibgp10.255 download_href=/api/labs/1493615f1c464bc48951cef48e4f006f/design/generations/6c6a4a1c0d01
+
+=== Probe 7 ===
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P7-01-generating-before-fault.png
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P7-02-shortly-after-injected-500.png
+  FAIL [P7] CONFIRMED-target: the design tab's own poll dies silently on the first failed request (no retry notice, no error shown) 3s after a single injected 500, well past its normal 2s cadence: Generating the plan… Generating the plan… | Could not check the plan's progress (attempt 1 of 5): The manager did not respond. Try again.. Trying again…
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P7-03-well-after-fault-recovered-via-the-global-refresh.png
+  ..   [P7] server-side newest generation status (fetched directly, bypassing the page): 'succeeded'
+  ..   [P7] state ~11s after the fault: 'Plan ready to review Plan ready to review' (recovered by app.js's unrelated 4s refresh calling designRenderAll(), which restarts designMaybeStartWatch() as a side effect of designWatch having been nulled — not by the poll's own retry, which never fires again)
+  PASS [P7] the tab does eventually recover, but only via an unrelated global timer, never the poll's own logic — a student on a lab the global refresh does not reach (navigated away and the lab no longer resolves via current()) would stay stuck indefinitely
+  PASS [P7] no error/retry indication was ever shown to the user at any point after the injected failure
+  ..   [P7] design GET requests observed by the page during the window: 4
+
+=== Probe 8 ===
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P8-01-unsaved-edit-with-storage-failing.png
+  PASS [P8] the app tolerates a throwing localStorage.setItem without crashing (no uncaught page error)
+  PASS [P8] the edit is shown as an in-memory unsaved draft
+  FAIL [P8] CONFIRMED-target: no message tells the student the edit could not be kept in this browser (a plain "Unsaved changes" with no warning): Your changes could not be kept in this browser (its storage is unavailable). Save the design now, or they are lost when you leave this page.
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P8-02-after-reload-storage-had-failed.png
+  PASS [P8] after the reload the page starts from the saved design (the browser held no draft)
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P8-03-stale-draft-discard-message-for-contrast.png
+  PASS [P8] contrast: a stale (revision-mismatched) draft DOES get an explicit discard message
+
+=== Probe 9 ===
+  ..   [P9] G1 (succeeded, ospf-only) id = f3e574fe26ee466d9a5daae867edcfed
+  PASS [P9] the failed generation (G2) names the device and the unsupported protocol
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P9-01-g2-failed.png
+  ..   [P9] G3 (succeeded again) id = 1f81f399e8ec48428b6bfef171e99a86
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P9-02-g3-ready-history-has-three.png
+  PASS [P9] history lists all three generations (by count of pills/messages)
+  FAIL [P9] CONFIRMED-target: history has no link/button to open a superseded generation's own plan or errors (G1 and G2 become unreachable once G3 exists): clickable_elements=6 body=Succeeded just now Plan generated Shown aboveFailed just now The design asks for something a device in this lab cannot do. Nothing was generated. ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded just now Plan generated ViewSucceeded 1 minute ago Plan generate
+  PASS [P9] the one Download link always points at the newest generation only (G3), never G1
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P9-03-after-remove-design.png
+  FAIL [P9] CONFIRMED-target: the header still says "Plan ready to review" (not "No design yet") right after Remove design, because designStateOf() never checks whether an intent is actually saved — a retained plan masquerades as belonging to a current design: No design saved (earlier plans kept) No design saved (earlier plans kept)
+  PASS [P9] meanwhile the guided form and Advanced JSON correctly show the design is gone (no modules checked, empty intent) — a direct, visible contradiction with the still-"ready" header/plan card on the same page
+  PASS [P9] history still lists the retained generations after Remove design (server keeps them, per the event message)
+  PASS [P9] the last succeeded generation (G3) is still downloadable after Remove design
+  ..   [P9] G1/G2 remain server-side but have no path back to their own files/errors through the UI once superseded (same gap as before Remove design)
+
+=== Probe 10 ===
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-01-as-zero-coerced.png
+  FAIL [P10] CONFIRMED-target: typing AS 0 is silently coerced to the default 65000 (falsy Number(...)||65000), not flagged as invalid: field='0' advanced={
+  "schema": 1,
+  "label": "P10",
+  "families": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "addressing": {
+    "loopback": {
+      "ipv4": "10.255.0.0/24",
+      "ipv6": "2001:db8:ff::/48"
+    },
+
+  PASS [P10] no problem/warning is raised about the 0 being replaced
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-02-p2p-prefix-blank-coerced.png
+  FAIL [P10] CONFIRMED-target: a blank p2p prefix size is silently coerced to the default 31:
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-03-vrf-module-auto-checked-after-naming-a-vrf.png
+  PASS [P10] defining a VRF auto-enables the vrf module (documented behaviour)
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-04-vrf-checkbox-immediately-after-manual-uncheck.png
+  FAIL [P10] CONFIRMED-target: the checkbox visually stays unchecked (a checkbox click gets no follow-up blur re-render), but the underlying draft silently kept the vrf module on — an invisible desync: checkbox_checked=True draft_modules=['bgp', 'vrf']
+  PASS [P10] no message explains the desync at this point
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-05-vrf-checkbox-after-save-still-shows-unchecked.png
+  FAIL [P10] CONFIRMED-target: after Save succeeds, the checkbox still visually shows unchecked (setMarkup's string-equality cache skips the DOM update) even though the saved intent still has the vrf module on — a persistent, invisible desync, not a visible revert: checkbox_checked=True advanced={
+  "schema": 1,
+  "label": "P10",
+  "families": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "addressing": {
+    "loopback": {
+      "ipv4": "10.255.0.0/24",
+      "ipv6": "2001:db8:ff::/48"
+    },
+    "p2p": {
+      "ipv4": "10.1.0.0/16",
+      "ipv6": "2001:db8:1::/48",
+      "prefix": 31
+    },
+
+  shot: /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/probes/P10-06-vrf-checkbox-corrects-itself-only-after-a-full-reload.png
+  PASS [P10] only a full page reload (a fresh render with no stale setMarkup cache) reveals the module was in fact still on the whole time
+
+=== Summary ===
+P1: 5/9 checks passed
+P2: 3/4 checks passed
+P3: 1/4 checks passed
+P4: 4/7 checks passed
+P5: 2/3 checks passed
+P6: 3/4 checks passed
+P7: 2/3 checks passed
+P8: 4/5 checks passed
+P9: 6/8 checks passed
+P10: 4/8 checks passed
+Console errors: 1, page errors: 0
+  console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+EXIT:0

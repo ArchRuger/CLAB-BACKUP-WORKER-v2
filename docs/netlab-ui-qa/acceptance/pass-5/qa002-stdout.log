@@ -1,0 +1,24 @@
+  ok   QA-002/1 Download design file is disabled before a design exists
+  ok   QA-002/1 Download design file reason says to save first
+  ok   QA-002/1 Renumber is disabled before a design exists
+  ok   QA-002/1 Renumber reason says to save first
+  ok   QA-002/1 Remove design is disabled before a design exists
+  ok   QA-002/1 Remove design reason says there is no design
+  ok   QA-002/1 design-export carries a visible reason line
+  ok   QA-002/1 design-renumber carries a visible reason line
+  ok   QA-002/1 design-clear carries a visible reason line
+  ok   QA-002/1 forcing a click on a disabled Download design file opens no popup/tab
+  ok   QA-002/2 design-export is enabled once a design is saved
+  ok   QA-002/2 design-import is enabled once a design is saved
+  ok   QA-002/2 design-renumber is enabled once a design is saved
+  ok   QA-002/2 design-clear is enabled once a design is saved
+  ok   QA-002/3 Import design file is disabled while generating
+  ok   QA-002/3 Import reason names the busy wait
+  ok   QA-002/3 Renumber is disabled while generating
+  ok   QA-002/3 Renumber reason names the busy wait
+  ok   QA-002/3 Remove design is disabled while generating
+  ok   QA-002/3 Remove design reason names the busy wait
+  ok   QA-002/3 Download design file stays enabled while generating (saved, non-draft)
+21 checks, 0 failed
+wrote /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/acceptance/pass-5/qa002-more-menu-results.json
+EXIT:0

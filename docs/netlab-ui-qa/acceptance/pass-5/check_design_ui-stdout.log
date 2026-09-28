@@ -1,0 +1,31 @@
+  ok   Design tab opens from the route
+  ok   a lab without a design says so
+  ok   the devices table lists the three devices with their profiles
+  ok   a pool inside the management network is refused
+  ok   editing marks the design as unsaved
+  ok   the design saves without problems
+  ok   the advanced editor shows the saved intent with the guided values
+  ok   the design-vrfs table is rendered
+  ok   the design-vlans table is rendered
+  ok   the design-links table is rendered
+  ok   the design-static table is rendered
+  ok   a VRF added through the table reaches the JSON with its loopback
+  ok   the link table attaches the link to the VRF
+  ok   a static route added through the table reaches the JSON
+  ok   the vrf and routing modules were switched on with the tables
+  ok   the design with the guided tables saves without problems
+  ok   the plan lists every device with a loopback and interfaces
+  ok   the plan shows the containerlab ports beside the device ports
+  ok   BGP sessions appear in the plan
+  ok   compatibility says generated, not live tested
+  ok   the files card lists initial, ospf, bgp, vrf and routing for a device
+  ok   the ZIP download link points at the generation
+  ok   a generated file opens in a dialog
+  ok   EIGRP on cEOS fails the plan with the device and the reason named
+  ok   a reload keeps the saved design
+  ok   the history lists the generated plans
+  ok   the export item is present
+  ok   no horizontal scroll at tablet width
+  ok   the Design tab adds no horizontal overflow at phone width beyond the shell
+29 of 29 checks passed; 0 console errors (0 handled HTTP responses); 0 page errors.
+EXIT:0

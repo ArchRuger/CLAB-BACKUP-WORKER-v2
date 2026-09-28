@@ -1,0 +1,112 @@
+{
+  "started": "2026-09-27T23:58:15+00:00",
+  "finished": "2026-09-27T23:58:19+00:00",
+  "checks": [
+    {
+      "name": "QA-002/1 Download design file is disabled before a design exists",
+      "ok": true,
+      "detail": "Save a design first."
+    },
+    {
+      "name": "QA-002/1 Download design file reason says to save first",
+      "ok": true,
+      "detail": "Save a design first."
+    },
+    {
+      "name": "QA-002/1 Renumber is disabled before a design exists",
+      "ok": true,
+      "detail": "Save a design first."
+    },
+    {
+      "name": "QA-002/1 Renumber reason says to save first",
+      "ok": true,
+      "detail": "Save a design first."
+    },
+    {
+      "name": "QA-002/1 Remove design is disabled before a design exists",
+      "ok": true,
+      "detail": "There is no design to remove."
+    },
+    {
+      "name": "QA-002/1 Remove design reason says there is no design",
+      "ok": true,
+      "detail": "There is no design to remove."
+    },
+    {
+      "name": "QA-002/1 design-export carries a visible reason line",
+      "ok": true,
+      "detail": "Save a design first."
+    },
+    {
+      "name": "QA-002/1 design-renumber carries a visible reason line",
+      "ok": true,
+      "detail": "Save a design first."
+    },
+    {
+      "name": "QA-002/1 design-clear carries a visible reason line",
+      "ok": true,
+      "detail": "There is no design to remove."
+    },
+    {
+      "name": "QA-002/1 forcing a click on a disabled Download design file opens no popup/tab",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "QA-002/2 design-export is enabled once a design is saved",
+      "ok": true,
+      "detail": "(False, '')"
+    },
+    {
+      "name": "QA-002/2 design-import is enabled once a design is saved",
+      "ok": true,
+      "detail": "(False, '')"
+    },
+    {
+      "name": "QA-002/2 design-renumber is enabled once a design is saved",
+      "ok": true,
+      "detail": "(False, '')"
+    },
+    {
+      "name": "QA-002/2 design-clear is enabled once a design is saved",
+      "ok": true,
+      "detail": "(False, '')"
+    },
+    {
+      "name": "QA-002/3 Import design file is disabled while generating",
+      "ok": true,
+      "detail": "Wait for the plan being generated to finish."
+    },
+    {
+      "name": "QA-002/3 Import reason names the busy wait",
+      "ok": true,
+      "detail": "Wait for the plan being generated to finish."
+    },
+    {
+      "name": "QA-002/3 Renumber is disabled while generating",
+      "ok": true,
+      "detail": "Wait for the plan being generated to finish."
+    },
+    {
+      "name": "QA-002/3 Renumber reason names the busy wait",
+      "ok": true,
+      "detail": "Wait for the plan being generated to finish."
+    },
+    {
+      "name": "QA-002/3 Remove design is disabled while generating",
+      "ok": true,
+      "detail": "Wait for the plan being generated to finish."
+    },
+    {
+      "name": "QA-002/3 Remove design reason names the busy wait",
+      "ok": true,
+      "detail": "Wait for the plan being generated to finish."
+    },
+    {
+      "name": "QA-002/3 Download design file stays enabled while generating (saved, non-draft)",
+      "ok": true,
+      "detail": "(False, '')"
+    }
+  ],
+  "popups": []
+}
