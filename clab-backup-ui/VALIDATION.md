@@ -1,3 +1,53 @@
+# UI/UX changes 2, part 3: images usable on this VM — 1.30.54
+
+What was actually run for this release (dev VM `clab-llm-dev2`, Docker 29.8.1 with `/usr/bin/docker`, Chromium 1243
+through Playwright 1.63; the fixture manager on a fresh `FIXTURE_DATA`).
+
+## Review
+
+- `risk-reviewer` (Opus, read-only) reviewed the helper and manager diff before the release: no privilege widening and
+  no weakened invariant; two correctness findings (a trailing newline passed the reference check, a list or dict `kind`
+  crashed the topology walk) and four operational ones (a registry's pull allowance spent by repeated probes, no
+  concurrency limit, the helper's probe queue not cancelled on a signal, a broken credential helper read as "not
+  found"; the Docker client's error line reaching the browser) are all applied: `fullmatch`, the type guard,
+  TTLs of 3600/1800/120 s, a single-flight lock, `cancel_futures`, the credential case read as `unknown`, `detail`
+  only with `unknown`. Its advice to keep the probe off the `network` flag was followed.
+
+## Static and unit
+
+- `python3 deploy/verify-release.py` source and documentation at 1.30.54; `git diff --check` clean; `node --check` on
+  the changed scripts; `check_links.py` clean.
+- Python: `python -m unittest discover -s tests -t tests` → 1716 tests, 1715 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (passes alone once it
+  exists). New in `test_lab_operations.py`: `ImageModeTests` (the `images` command, the two probe commands with the
+  reference as the only variable element, the answers per case including a credential-helper failure, refused
+  references with newlines, option-like names and metacharacters, the no-Docker answer, the dispatch and the absence
+  of any write command), `test_image_routes_ask_the_helper_once_per_image_and_refuse_bad_input` (caching, invalid
+  names answered and never sent, stray answers dropped, extra keys refused) and
+  `test_previews_name_the_images_of_the_reviewed_topology` (deploy and publish previews, a kind that is no string).
+- Browser: `node --test tests/*.js` → 383 pass, 0 fail. New: `test_lab_builder_ui.js` (templates prefer a VM image by
+  repository name and highest tag, the Image list offers every VM image, the YAML walk, the summary line and its
+  warning cases) and `test_operations_ui.js` (`opImageLine` per answer, `opImageMissing`).
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` (helpers verified at 1.30.54, `images: true` in the
+  capabilities).
+- `docs/ui-ux-changes-2/tools/check_image_availability.py` against the deployed manager: 12 of 12 checks, zero
+  console or page errors: the helper lists the VM's images; `image-check` answers a VM image as local and
+  `vrnetlab/cisco_xrv9k:24.3.1` as absent everywhere (Docker Hub answers "denied" for that repository); a name that
+  is no reference is answered `invalid`; the builder shows no line without devices, then *on the VM* for a Linux host,
+  the Image field's list offers the VM's images, a template changed to the absent image turns the line amber with the
+  way out, the *Save to the VM…* review lists both images with the VM's answers and calls out the absent one above
+  the list while *Save lab* stays enabled (cancelled), and the *Start lab* review of `netlab-test` lists its images.
+  Screenshots in `docs/ui-ux-changes-2/evidence/item2/` (the template dialog on 1.30.52 as the before state).
+- The same tool against the fixture manager (its `fake_remote` answers both modes): 12 of 12; `docs/lab-builder/tools/student_workflow.py`
+  41 PASS, 0 FAIL on the fixture after the page changes.
+- Not exercised: a deploy that actually fails for an absent image (the review warns, nothing is deployed in this
+  release); a private registry needing a login (the wording covers it, the case was not provoked); the template default
+  taken from a VM image rather than from My labs (unit-tested; on this VM every kind already has an image in My labs,
+  so the known-images path wins live).
+
 # UI/UX changes 2, part 2: image and version as typed — 1.30.53
 
 What was actually run for this release (same environment as 1.30.52: dev VM `clab-llm-dev2`, Chromium 1243 through

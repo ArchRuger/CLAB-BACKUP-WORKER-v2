@@ -1,3 +1,22 @@
+# UI/UX changes 2, part 3: images usable on this VM — 1.30.54
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) **the helper's two image modes are
+read-only and fixed** (`images`, `image-check` in `app/host_operations.py`): `/usr/bin/docker` with fixed argv, the only
+client input a reference that passes `image_reference()` (`IMAGE_REFERENCE.fullmatch`, 255 chars, no leading dash) as one
+argv element, at most `IMAGE_CHECK_LIMIT` (16) references, `IMAGE_PROBE_TIMEOUT` (12 s) per command, four workers,
+`probe()` with stdin closed and stderr kept only to classify (`registry_answer`), the Docker client's last line travelling
+only with an `unknown` answer. Never add a pull, run, load, build or removal, never take the reference from anywhere
+else, and never consult `network` for the probe (decided with the review: that flag gates content downloads; the probe
+reaches only the registries a deploy would pull from). (2) **The manager asks once**: `image_flight` (one VM question in
+flight), the per-reference cache keyed by host revision (TTL 3600 / 1800 / 120 s), `invalid` answers for names that are
+no reference (never a 400 for the page), stray answers dropped; `topology_images()` is the one walk of a topology's
+images and skips a kind that is no string. (3) **The page never waits**: `builderImageStatus()` is debounced after
+`persist()`, drops late answers by sequence and clears the line on any failure; `opReviewImages()` fills `#op-review-images`
+after the review opened and leaves `#op-confirm` enabled. Tests: `test_lab_operations.py` `ImageModeTests` and the two
+API tests, `test_lab_builder_ui.js` (templates, the YAML walk, the summary), `test_operations_ui.js` (`opImageLine`).
+Live tool: `docs/ui-ux-changes-2/tools/check_image_availability.py` (deployed manager or fixture; the fixture's
+`fake_remote` answers both modes).
+
 # UI/UX changes 2, part 2: image and version as typed — 1.30.53
 
 Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) **`clab-backup-ui/lab-builder/patches.mjs`

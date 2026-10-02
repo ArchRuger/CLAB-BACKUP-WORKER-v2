@@ -593,6 +593,81 @@ class HostOperationTests(unittest.TestCase):
         self.assertFalse(marker.exists())
 
 
+class ImageModeTests(unittest.TestCase):
+    """The helper's two read-only image modes: fixed argv, a validated reference as the only client input,
+    bounded, and never a pull, run or removal."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.root = Path(self.tmp.name)
+        self.docker = self.root / 'docker'; self.docker.write_text('#!/bin/sh\n'); self.docker.chmod(0o755)
+        self.calls = []; self.probes = []
+        self.listing = 'n24l/ceos:4.35.0F\nghcr.io/srl-labs/network-multitool:latest\n<none>:<none>\nbad image name:x\nn24l/cisco_xrv9k:24.3.1\n'
+        self.answers = {}
+        def run(argv):
+            self.calls.append(argv)
+            if argv[:3] == [str(self.docker), 'image', 'ls']: return 0, self.listing
+            return 1, ''
+        def probe(argv, timeout):
+            self.probes.append((argv, timeout))
+            ref = argv[-1]
+            if argv[1:3] == ['image', 'inspect']: return (0, 'sha256:abc\n', '') if ref in self.answers.get('local', ()) else (1, '', 'Error: No such image: ' + ref)
+            if argv[1:3] == ['manifest', 'inspect']: return self.answers.get('registry', {}).get(ref, (1, '', 'denied: requested access to the resource is denied'))
+            raise AssertionError('unexpected probe ' + ' '.join(argv))
+        self.patch = patch.object(host_operations, 'DOCKER', str(self.docker)); self.patch.start()
+        self.host = HostOperations(dict(clab='/usr/bin/containerlab', git='/usr/bin/git', roots=[str(self.root)], projects=str(self.root), network=False), run, probe)
+    def tearDown(self): self.patch.stop(); self.tmp.cleanup()
+
+    def test_images_lists_the_vm_s_references_with_one_fixed_command(self):
+        found = self.host.images()
+        self.assertEqual(found, {'available': True, 'images': ['ghcr.io/srl-labs/network-multitool:latest', 'n24l/ceos:4.35.0F', 'n24l/cisco_xrv9k:24.3.1']})
+        self.assertEqual(self.calls, [[str(self.docker), 'image', 'ls', '--format', '{{.Repository}}:{{.Tag}}']])
+        self.assertTrue(self.host.capabilities()['images'])
+        self.docker.chmod(0o644)
+        self.assertEqual(self.host.images(), {'available': False, 'images': []}, 'no Docker client: an honest empty answer, no error')
+        self.assertFalse(self.host.capabilities()['images'])
+
+    def test_image_check_asks_the_vm_then_the_registry_with_a_validated_reference_only(self):
+        self.answers = {'local': {'n24l/ceos:4.35.0F'}, 'registry': {'ghcr.io/srl-labs/network-multitool:latest': (0, '{"schemaVersion": 2}', ''),
+                        'unreachable.example/x/y:1': (1, '', 'error pinging v2 registry: dial tcp: lookup unreachable.example: no such host'),
+                        'odd/answer:1': (1, '', 'something else entirely')}}
+        result = self.host.image_check({'references': ['n24l/ceos:4.35.0F', 'vrnetlab/cisco_xrv9k:24.3.1', 'ghcr.io/srl-labs/network-multitool:latest', 'unreachable.example/x/y:1', 'odd/answer:1']})
+        by = {i['reference']: i for i in result['images']}
+        self.assertTrue(result['available'])
+        self.assertEqual((by['n24l/ceos:4.35.0F']['local'], by['n24l/ceos:4.35.0F']['registry']), (True, 'skipped'))
+        self.assertEqual((by['vrnetlab/cisco_xrv9k:24.3.1']['local'], by['vrnetlab/cisco_xrv9k:24.3.1']['registry']), (False, 'not-found'))
+        self.assertEqual(by['vrnetlab/cisco_xrv9k:24.3.1']['detail'], '', 'a clear answer carries no client text')
+        self.assertEqual(by['ghcr.io/srl-labs/network-multitool:latest']['registry'], 'found')
+        self.assertEqual(by['unreachable.example/x/y:1']['registry'], 'unreachable')
+        self.assertEqual(by['odd/answer:1']['registry'], 'unknown')
+        self.assertEqual(by['odd/answer:1']['detail'], 'something else entirely', 'the client\'s last line travels only with an unknown answer')
+        self.assertEqual(by['unreachable.example/x/y:1']['detail'], '')
+        self.assertEqual(host_operations.registry_answer(1, 'error getting credentials - err: exec: "docker-credential-pass": executable file not found in $PATH'), 'unknown', 'a broken credential helper is no verdict about the image')
+        self.assertEqual([i['reference'] for i in result['images']], ['n24l/ceos:4.35.0F', 'vrnetlab/cisco_xrv9k:24.3.1', 'ghcr.io/srl-labs/network-multitool:latest', 'unreachable.example/x/y:1', 'odd/answer:1'], 'answers keep the request order')
+        # Every probe is one of the two fixed read-only commands, the reference its last and only variable element, bounded.
+        for argv, timeout in self.probes:
+            self.assertEqual(argv[0], str(self.docker)); self.assertIn(argv[1:3], (['image', 'inspect'], ['manifest', 'inspect']))
+            self.assertEqual(argv[:-1], [str(self.docker), 'image', 'inspect', '--format', '{{.Id}}'] if argv[1] == 'image' else [str(self.docker), 'manifest', 'inspect'])
+            self.assertEqual(timeout, host_operations.IMAGE_PROBE_TIMEOUT)
+        self.assertEqual(sum(1 for a, _ in self.probes if a[1] == 'manifest'), 4, 'a local image is not asked for in the registry')
+        self.assertEqual(self.calls, [], 'image-check never lists or pulls')
+
+    def test_image_check_refuses_bad_references_and_bounds_the_request(self):
+        for bad in ({'references': []}, {'references': ['a'] * 17}, {'references': 'alpine'}, {'references': ['alpine'], 'pull': True}, 'alpine', {'references': ['alpine', 'alpine']}):
+            with self.assertRaises(ValueError): self.host.image_check(bad)
+        for ref in ('-rm', '--format={{.Id}}', 'a b', 'Alpine', 'a;b', '$(x)', 'a/', '', 'x' * 256, 'a:tag with space', 'a@sha256:short', 'alpine\n', 'alpine:3\n', '\nalpine'):
+            with self.assertRaisesRegex(ValueError, 'image reference'): self.host.image_check({'references': [ref]})
+        self.assertEqual(self.probes, [], 'nothing runs for a refused request')
+        self.docker.chmod(0o644)
+        result = self.host.image_check({'references': ['alpine:3']})
+        self.assertEqual(result, {'available': False, 'images': [{'reference': 'alpine:3', 'local': None, 'registry': 'skipped', 'detail': 'No Docker client on the VM.'}]})
+
+    def test_main_dispatches_the_two_modes_and_nothing_wider(self):
+        source = Path(host_operations.__file__).read_text()
+        self.assertIn("elif mode == 'images': result = host.images()", source)
+        self.assertIn("elif mode == 'image-check': result = host.image_check(req.get('options') or {})", source)
+        for forbidden in ("'pull'", "'rmi'", "'run'],", "'push'", "'load'", "'build'"):
+            self.assertNotIn('DOCKER, ' + forbidden, source, 'the Docker client is used for read-only questions only')
+
+
 class OutputWindowTests(unittest.TestCase):
     """B-002: an operation's streamed output is redacted before its 512 KiB window can cut a secret."""
     def stream(self, chunks, secrets=(SECRET,)):
@@ -752,6 +827,53 @@ class OperationAPITests(unittest.TestCase):
             self.confirm(response.json()['token'])
             submit.assert_called_once();self.assertEqual(submit.call_args.args[3]['options']['annotations'],layout)
             self.assertEqual(submit.call_args.args[3]['action'],'create')
+
+    def test_image_routes_ask_the_helper_once_per_image_and_refuse_bad_input(self):
+        asked = []
+        def remote(host, req, *args):
+            asked.append(req['mode'])
+            if req['mode'] == 'images': return {'available': True, 'images': ['ceos:4.35.0F', 7, 'n24l/cisco_xrv9k:24.3.1']}
+            if req['mode'] == 'image-check':
+                self.assertEqual(set(req['options']), {'references'})
+                return {'available': True, 'images': [{'reference': r, 'local': r == 'ceos:4.35.0F', 'registry': 'skipped' if r == 'ceos:4.35.0F' else 'not-found' if r.startswith('vrnetlab/') else 'found', 'detail': 'denied' if r.startswith('vrnetlab/') else ''} for r in req['options']['references']] + [{'reference': 'stray/answer:1', 'local': True, 'registry': 'weird'}]}
+            return {}
+        self.host(); self.store.state['host']['fingerprint'] = 'SHA256:fixture'
+        with patch('app.lab_operations.remote', side_effect=remote):
+            images = self.client.get('/api/operations/images', headers=self.auth)
+            self.assertEqual(images.status_code, 200, images.text); self.assertEqual(images.json(), {'available': True, 'images': ['ceos:4.35.0F', 'n24l/cisco_xrv9k:24.3.1']})
+            self.client.get('/api/operations/images', headers=self.auth)
+            self.assertEqual(asked.count('images'), 1, 'the VM image list is cached')
+            check = lambda refs: self.client.post('/api/operations/image-check', headers=self.auth, json={'references': refs})
+            first = check(['ceos:4.35.0F', 'vrnetlab/cisco_xrv9k:24.3.1', 'ghcr.io/srl-labs/network-multitool:latest'])
+            self.assertEqual(first.status_code, 200, first.text)
+            rows = first.json()['images']
+            self.assertEqual([(r['reference'], r['local'], r['registry']) for r in rows], [('ceos:4.35.0F', True, 'skipped'), ('vrnetlab/cisco_xrv9k:24.3.1', False, 'not-found'), ('ghcr.io/srl-labs/network-multitool:latest', False, 'found')])
+            self.assertNotIn('stray/answer:1', [r['reference'] for r in rows], 'answers the manager never asked for are dropped')
+            self.assertTrue(all(r['available'] for r in rows))
+            second = check(['vrnetlab/cisco_xrv9k:24.3.1', 'ceos:4.35.0F', 'alpine:3'])
+            self.assertEqual([r['reference'] for r in second.json()['images']], ['vrnetlab/cisco_xrv9k:24.3.1', 'ceos:4.35.0F', 'alpine:3'])
+            self.assertEqual(asked.count('image-check'), 2, 'only the image not yet answered goes to the helper')
+            for bad in ([], ['x'] * 17):
+                self.assertEqual(check(bad).status_code, 422, str(bad))
+            self.assertEqual(self.client.post('/api/operations/image-check', headers=self.auth, json={'references': ['alpine:3'], 'pull': True}).status_code, 422)
+            invalid = check(['-rm', 'a b', 'Alpine:3', 'ceos:4.35.0F', 'alpine\n'])
+            self.assertEqual(invalid.status_code, 200, invalid.text)
+            self.assertEqual([(r['reference'], r['registry']) for r in invalid.json()['images']], [('-rm', 'invalid'), ('a b', 'invalid'), ('Alpine:3', 'invalid'), ('ceos:4.35.0F', 'skipped'), ('alpine\n', 'invalid')], 'a name that is no reference is answered, not refused, and never sent')
+            self.assertEqual(asked.count('image-check'), 2, 'nothing unusable and nothing cached reaches the helper')
+            lists_and_dicts = 'name: t\ntopology:\n  nodes:\n    a:\n      kind: [x]\n      image: foo:1\n    b:\n      kind: {k: v}\n      image: bar:1\n    c:\n      kind: linux\n      image: ok:1\n'
+            self.assertEqual(lab_operations.topology_images(lists_and_dicts), [{'reference': 'ok:1', 'kind': 'linux', 'nodes': ['c']}], 'a kind that is no string is skipped, never a crash')
+
+    def test_previews_name_the_images_of_the_reviewed_topology(self):
+        with self.fixture():
+            deploy = self.preview()
+            self.assertEqual(deploy['images'], [], 'the fixture topology names no image, so there is nothing to check')
+            self.raw = YAML.replace(b'    kind: cisco_xrv9k\n', b'    kind: cisco_xrv9k\n    image: n24l/cisco_xrv9k:24.3.1\n')
+            self.assertEqual(self.preview()['images'], [{'reference': 'n24l/cisco_xrv9k:24.3.1', 'kind': 'cisco_xrv9k', 'nodes': ['r1', 'r2']}], 'the default image reaches every node without one, listed once with both devices')
+            text = 'name: built\ntopology:\n  defaults:\n    image: site/default:1\n  kinds:\n    linux:\n      image: alpine:3\n  nodes:\n    a:\n      kind: linux\n    b:\n      kind: linux\n      image: "{{ templated }}"\n    c:\n      kind: arista_ceos\n      image: ceos:4.35.0F\n    d:\n      kind: arista_ceos\n      image: ceos:4.35.0F\n    e:\n      kind: cisco_xrv9k\n'
+            publish = self.client.post('/api/operations/preview', headers=self.auth, json=dict(action='publish', options={'text': text, 'annotations': '{}'}))
+            self.assertEqual(publish.status_code, 200, publish.text)
+            self.assertEqual(publish.json()['images'], [{'reference': 'alpine:3', 'kind': 'linux', 'nodes': ['a']}, {'reference': 'ceos:4.35.0F', 'kind': 'arista_ceos', 'nodes': ['c', 'd']}, {'reference': 'site/default:1', 'kind': 'cisco_xrv9k', 'nodes': ['e']}])
+            self.assertNotIn('images', self.preview('stop'), 'only the reviews that write or deploy a topology name its images')
 
     def test_known_images_come_from_the_labs_already_registered(self):
         with self.fixture():

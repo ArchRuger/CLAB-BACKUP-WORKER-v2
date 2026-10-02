@@ -67,6 +67,15 @@ automatically stopped or deleted by an upgrade; manage those on the VM if presen
 
 ## Every operation is reviewed first
 
+A review that deploys or writes a topology (*Start lab*, *Redeploy lab*, the lab builder's *Save to the
+VM…* and *Save changes to the VM…*, *Create file on the VM…*) also lists the topology's **images** and
+asks the VM about each while the review is on the screen: *on the VM*, *not on the VM yet, the deploy
+pulls it from its registry*, *not on the VM and not found in a registry* (called out above the list:
+the devices using it stay down after the deploy; choose an image the VM has, or load it on the VM
+first), or that the registry did not answer. The question is read-only on the VM (the operations
+helper runs `docker image inspect` and `docker manifest inspect`, never a pull) and never delays the
+review; the manager keeps each answer for a few minutes.
+
 A lab operation never runs from a single click. The review names the action in plain
 words (*Destroy BGP_TheoryToPractice?*, *Stop devices?*), says what happens to the
 devices, warns that **configuration changes you have not saved are lost** for the

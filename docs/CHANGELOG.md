@@ -4,6 +4,36 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.54
+
+*UI/UX changes 2*, item 2: the lab builder knows whether an image is usable on this VM and says so before the
+student commits; unusable defaults are no longer presented as if they would work.
+
+- **The VM's images reach the builder.** Two read-only modes of the operations helper (`app/host_operations.py`,
+  installed by the launcher's helper refresh): `images` lists the references the VM has (`docker image ls`, no
+  input), and `image-check` answers for up to sixteen validated references whether each is on the VM (`docker image
+  inspect`) and, when not, whether its registry offers it (`docker manifest inspect`, twelve seconds each, four at a
+  time; nothing is pulled). A reference is accepted only when it matches Docker's own reference grammar in full and
+  travels as one argv element; the gateway and its three request names are unchanged. The manager serves them as
+  `GET /api/operations/images` (cached a minute) and `POST /api/operations/image-check` (answers cached an hour when
+  found or local, half an hour when absent, two minutes when a registry did not answer; one VM question in flight at
+  a time; a name that is no reference is answered `invalid`, never sent). The Docker client's own words travel only
+  with an `unknown` answer. The independent risk review's findings (strict full match, a type guard in the topology
+  walk, the single-flight lock and the longer caches against a registry's pull allowance, prompt cancellation of the
+  helper's probes, a broken credential helper read as no verdict) are in.
+- **Defaults that can work.** A device template takes, per kind, the image the topologies in My labs use, else an
+  image the VM already has for that kind (matched by repository name, highest tag), else the placeholder; the
+  Image field's list offers every image the VM has. The guide no longer says the manager cannot see the VM's images.
+- **The check runs in the background and never holds the editor.** After each stored change the builder sends the
+  draft's images to the manager and shows one line under the bar: *on the VM*; *not on the VM yet, a deploy pulls
+  it from its registry*; *not on the VM and no registry offers it (not there, or it needs a login on the VM): a
+  deploy fails*, in amber with the way out; or that the registry did not answer. A manager or VM that is slow or
+  away leaves the line empty.
+- **Said again at the commit point.** The *Save to the VM…* review (and every *Start lab* / *Redeploy lab* /
+  *Create file on the VM…* review) lists the topology's images under *Images* and fills in the VM's answers while
+  the review is open; an image found nowhere is called out above the list with the devices that would stay down.
+  The student still decides; nothing is refused.
+
 ## Changes in 1.30.53
 
 *UI/UX changes 2*, items 3 and 4: the lab builder's Image and Version fields.

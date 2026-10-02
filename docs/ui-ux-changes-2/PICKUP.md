@@ -44,7 +44,7 @@ a first-time student is never confused, blocked or surprised by the UI.
 | 0 | Orientation, workspace, baseline, plan | none | done |
 | 1 | 1 (installer advice), 9 (hide a lab) | 1.30.52 | done: both verified live on the dev VM (evidence below) |
 | 2 | 3, 4 (image and version written as typed; no automatic latest) | 1.30.53 | done: six tracked editor patches (`lab-builder/patches.mjs`), verified live |
-| 3 | 2 (image usable on this VM: read-only helper mode, builder status) | 1.30.54 | |
+| 3 | 2 (image usable on this VM: read-only helper mode, builder status) | 1.30.54 | done: helper modes risk-reviewed (findings applied), verified live |
 | 4 | 5, 6, 7 (labels: no Apply step, four corners everywhere, Edit map uses the builder's own node editor) | 1.30.55 | |
 | 5 | 8 (topology preview investigation and fix) | 1.30.56 | |
 | 6 | 10 (topology and annotations travel with every backup, Git save and download) | 1.30.57 | |
@@ -70,7 +70,22 @@ appearance code; 8 depends on how 6 is drawn.
   (11 of 11). Regression after the bundle change, against the fixture manager: `docs/lab-builder/tools/student_workflow.py`
   41 PASS (Linux host template), `docs/ui-review-001/tools/check_ui003.py` and `check_ui003b.py` clean.
 
+- Item 2: `evidence/item2/` (1440×900): `before-template-dialog-1.30.52.png` (no image status anywhere), then the
+  builder's image line (`01-image-line-on-vm`, `03-image-line-missing`), the Image field's list (`02-…`), the save
+  review (`04-…`) and a deploy review (`05-…`) on 1.30.54. `tools/check_image_availability.py`: 12 of 12 on the
+  deployed manager and on the fixture. The risk review's findings and their fixes are in the 1.30.54 VALIDATION section.
+
 ## Exact next action
+
+Chunk 4 (items 5, 6, 7): labels and the map editor. Established by reading the pinned package (0.3.2) and upstream
+`main`: the editor's `normalizeNodeLabelPosition` (nodeStyles.ts) accepts top/right/left and draws anything else at the
+bottom; `NODE_LABEL_POSITION_OPTIONS` (BasicTab.tsx) is the select's list; the node editor's `Apply` runs `handleApply` →
+`editNode` (a topology command) while `onPreview` already redraws the label live; in view mode (map mode) the node editor
+is read-only and `editNode` is refused by the adapter. The VS Code extension 0.26.3 pins `@srl-labs/clab-ui 0.3.1` (the
+same normaliser), so a file with a corner value opens there with the label drawn at the bottom. Plan: build-time patches
+for the four corner options and their styles plus auto-apply of the appearance fields; the manager's renderer, the
+preview and the draw.io export learn the corners; in map mode the adapter translates `editNode` into an annotation-only
+document change so the editor's own node editor replaces the Device look dialog. (Superseded: chunk 3 notes below.)
 
 Chunk 3 (item 2): whether an image is usable on this VM. Facts established so far: the template defaults are
 `BUILDER_TEMPLATES` in `lab-builder-page.js` (`vrnetlab/cisco_xrv9k:24.3.1`, `vrnetlab/juniper_vjunos-switch:23.2R1.14`,

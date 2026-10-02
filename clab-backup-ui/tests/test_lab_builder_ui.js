@@ -27,6 +27,28 @@ test('templates take the image this site already uses for their kind',()=>{
  assert.equal(list.find(t=>t.kind==='arista_ceos').image,'n24l/ceos:4.35.0F');assert.equal(list.find(t=>t.kind==='linux').image,c.BUILDER_TEMPLATES.find(t=>t.kind==='linux').image);
  assert.ok(c.builderImages(list,{nokia_srlinux:['ghcr.io/nokia/srlinux']}).includes('ghcr.io/nokia/srlinux'));
 });
+test('templates prefer an image the VM has over the placeholder, the Image list offers the VM images, and the draft\'s images are read and summarised',()=>{
+ const c=load(),vm=['n24l/ceos:4.34.2F','n24l/ceos:4.35.0F','n24l/vjunos-switch:23.2R1.14','ghcr.io/srl-labs/network-multitool:latest','other/thing:1'];
+ const list=c.builderTemplateList({},vm);
+ assert.equal(list.find(t=>t.kind==='arista_ceos').image,'n24l/ceos:4.35.0F','the highest tag of a matching VM image');
+ assert.equal(list.find(t=>t.kind==='juniper_vjunosswitch').image,'n24l/vjunos-switch:23.2R1.14','matched by its repository name, not the placeholder\'s');
+ assert.equal(list.find(t=>t.kind==='cisco_xrv9k').image,'vrnetlab/cisco_xrv9k:24.3.1','no VM image for the kind: the placeholder stays');
+ assert.equal(c.builderTemplateList({arista_ceos:['site/ceos:9']},vm).find(t=>t.kind==='arista_ceos').image,'site/ceos:9','an image the labs in My labs use comes first');
+ assert.equal(c.builderTemplateList({},[]).find(t=>t.kind==='arista_ceos').image,'ceos:4.35.0F');
+ const plain=v=>JSON.parse(JSON.stringify(v));
+ assert.ok(c.builderImages(list,{},vm).includes('other/thing:1'),'every VM image is offered in the Image list');
+ assert.deepEqual(plain(c.builderYamlImages('name: x\ntopology:\n  kinds:\n    linux:\n      image: "alpine:3"\n  nodes:\n    a:\n      image: n24l/ceos:4.35.0F\n    b:\n      image: n24l/ceos:4.35.0F # same\n    c:\n      image: "{{ templated }}"\n')),['alpine:3','n24l/ceos:4.35.0F']);
+ assert.deepEqual(plain(c.builderYamlImages('')),[]);
+ const summary=c.builderImageSummary([{reference:'n24l/ceos:4.35.0F',local:true,registry:'skipped'},{reference:'vrnetlab/cisco_xrv9k:24.3.1',local:false,registry:'not-found'},{reference:'ghcr.io/x/y:1',local:false,registry:'found'},{reference:'r.example/z:1',local:false,registry:'unreachable'}]);
+ assert.equal(summary.warn,true);
+ assert.match(summary.text,/^Images: n24l\/ceos:4\.35\.0F · on the VM · vrnetlab\/cisco_xrv9k:24\.3\.1 · not on the VM and no registry offers it \(not there, or it needs a login on the VM\): a deploy fails · ghcr\.io\/x\/y:1 · not on the VM yet, a deploy pulls it from its registry · r\.example\/z:1 · not on the VM; its registry did not answer/);
+ assert.equal(c.builderImageSummary([{reference:'bad name',local:false,registry:'invalid'}]).warn,true,'a name that is no reference warns too');
+ assert.match(summary.text,/Pick an image this VM has \(the Image field lists them\) or load vrnetlab\/cisco_xrv9k:24\.3\.1 on the VM first\.$/);
+ assert.deepEqual(plain(c.builderImageSummary([{reference:'a:1',local:true,registry:'skipped'}])),{text:'Images: a:1 · on the VM',warn:false});
+ assert.deepEqual(plain(c.builderImageSummary([])),{text:'',warn:false});
+ assert.equal(c.builderImageSummary([{reference:'a:1',available:false,local:null,registry:'skipped'}]).text,'Images: this VM has no Docker client the manager can ask, so they are checked at deploy time.');
+ const html=read('lab-builder.html');assert.match(html,/id="builder-images"[^>]*hidden/,'the line is on the page, empty until the manager answers');
+});
 test('a draft edited in another tab is never overwritten silently',()=>{
  const c=load(),s=storage();
  const first=c.draftWrite(s,{id:'new:lab',name:'lab',yaml:'name: lab\n',annotations:''},undefined);assert.ok(first.revision);

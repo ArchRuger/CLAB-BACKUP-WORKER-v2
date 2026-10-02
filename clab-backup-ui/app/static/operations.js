@@ -151,6 +151,30 @@ function opSaveLine(lab,value){
  const text=never?(lab.git_binding?'Never saved.':'Never saved — this lab has no save location yet.'):`Last saved ${opWhen(ps.at)} to Git.`;
  return `<p class="op-save-line${never||stale?' danger':''}">${esc(text)}</p>`;
 }
+// One sentence per image of a reviewed topology, from the manager's answer (POST /api/operations/image-check):
+// on the VM, pullable, not found anywhere (a deploy fails for its devices), or unanswered. Pure.
+function opImageLine(item){
+ const who=(item.nodes||[]).length?' ('+item.nodes.join(', ')+')':'';
+ if(item.available===false)return item.reference+who+': this VM has no Docker client the manager can ask; checked at deploy time.';
+ if(item.local)return item.reference+who+': on the VM.';
+ if(item.registry==='found')return item.reference+who+': not on the VM yet; the deploy pulls it from its registry.';
+ if(item.registry==='not-found')return item.reference+who+': not on the VM and no registry offers it (not there, or it needs a login on the VM). The deploy fails for '+((item.nodes||[]).length?(item.nodes||[]).join(', '):'its devices')+'.';
+ if(item.registry==='invalid')return item.reference+who+': not a usable image name. The deploy fails for '+((item.nodes||[]).length?(item.nodes||[]).join(', '):'its devices')+'.';
+ if(item.registry==='unreachable')return item.reference+who+': not on the VM; its registry did not answer, so the deploy would try to pull it.';
+ return item.reference+who+': not on the VM; whether it can be pulled could not be checked.';
+}
+function opImageMissing(items){return (items||[]).filter(i=>i&&i.available!==false&&!i.local&&(i.registry==='not-found'||i.registry==='invalid'));}
+// Fills the review's image list once the manager has asked the VM; the review itself never waits for this.
+async function opReviewImages(dialog,images){
+ const list=dialog.querySelector('#op-review-images');if(!list||!images.length)return;
+ try{
+  const value=await json('/operations/image-check','POST',{references:images.slice(0,16).map(i=>i.reference)});if(!dialog.open||!list.isConnected)return;
+  const byRef=new Map((value.images||[]).map(i=>[i.reference,i])),rows=images.map(i=>({...i,...(byRef.get(i.reference)||{registry:'unknown',local:false})}));
+  list.innerHTML=rows.map(r=>`<li class="${opImageMissing([r]).length?'op-image-missing':''}">${esc(opImageLine(r))}</li>`).join('');
+  const missing=opImageMissing(rows),notice=dialog.querySelector('#op-review-images-notice');
+  if(notice){notice.hidden=!missing.length;notice.textContent=missing.length?(missing.length===1?'One image':missing.length+' images')+' cannot be pulled on this VM: '+missing.map(m=>m.reference).join(', ')+'. The devices using it stay down after the deploy. Choose an image the VM has, or load it on the VM first.':'';}
+ }catch{if(dialog.open&&list.isConnected)list.innerHTML=images.map(i=>`<li>${esc(i.reference)}: could not be checked right now.</li>`).join('');}
+}
 async function opReview(request,opener){
  const value=await json('/operations/preview','POST',request);
  // The helper's plan carries no lab id; the request does.
@@ -169,9 +193,12 @@ async function opReview(request,opener){
  // so the student sees exactly what lands on the VM, whether or not it replaces one already there.
  const mapLine=value.action==='create'&&typeof request.options?.annotations==='string'?`<p>Saved map: <code>${esc((value.path||'').split('/').pop()+'.annotations.json')}</code>${warnings.some(w=>/Replaces the existing map file/.test(w))?' — replaces the existing map file (a recovery copy is kept)':' will be written next to the topology'}</p>`:'';
  const commandBlock=`${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}<h4>Command run on the VM</h4><pre class="op-output">${esc((value.steps?.length?value.steps:[value.argv]).filter(a=>a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n')||label)}</pre>${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}`;
+ const images=Array.isArray(value.images)?value.images.filter(i=>i&&typeof i.reference==='string'):[];
+ const imageBlock=images.length?`<p class="op-notice" id="op-review-images-notice" hidden></p><details open class="op-images"><summary>Images (${images.length})</summary><ul id="op-review-images">${images.map(i=>`<li>${esc(i.reference)}${(i.nodes||[]).length?' ('+esc(i.nodes.join(', '))+')':''}: checking whether this VM has it…</li>`).join('')}</ul></details>`:'';
  const dialog=opDialog('operation-review',title,`${copy.hideName?'':`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All labs on the VM')}</p>`}
  ${warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
  <p>${esc(body)}</p>
+ ${imageBlock}
  ${mapLine}
  ${disruptive&&!['destroy','restart-node'].includes(value.action)?'<p>Configuration changes you have not saved are lost.</p>':''}
  ${opSaveLine(lab,value)}
@@ -183,6 +210,7 @@ async function opReview(request,opener){
  ${plain?'':'<p class="form-help">Runs on the lab VM. If the lab changes before you confirm, this check is repeated.</p>'}
  <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button>${lab&&lab.git_binding&&disruptive&&typeof gitSaveProgress==='function'?'<button class="button secondary" id="op-save-first">Save progress first</button>':''}<button class="button ${copy.danger?'danger':'primary'}" id="op-confirm">${esc(copy.confirm||label)}</button></div>`,opener);
  $('op-cancel').onclick=()=>dialog.close();
+ opReviewImages(dialog,images);
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
  $('op-confirm').onclick=()=>opTask(dialog,async()=>{
   const job=await json('/operations/confirm','POST',{token:value.token});dialog.close();

@@ -134,12 +134,26 @@ it and keep none; the page names the problem and its line, and the file has to b
 
 The templates cover the kinds the manager has drivers for (Arista cEOS, Juniper cJunosEvolved and
 vJunos-switch, Cisco XRv9k) plus a Linux host. Each takes the image this site already uses for its
-kind, read from the topologies in My labs; otherwise a placeholder you can change. Edit, add and
-star templates in the palette; they are kept in this browser. The image field is free text, and the
-manager cannot see which images exist on the VM: a wrong image name fails at deploy time. The
-operation output then names the images the VM does not have; correct them with *Edit visually…* (the
-device's *Image* field), save the change and deploy again. *Import templates* and *Export templates*
-in the palette move a template list between browsers.
+kind, read from the topologies in My labs; otherwise an image the VM already has for that kind (by
+its repository name, the highest tag); otherwise a placeholder you can change. Edit, add and star
+templates in the palette; they are kept in this browser. The image field is free text, and its list
+offers the images the VM has (the manager asks the VM for them when the builder opens) next to the
+ones My labs use. *Import templates* and *Export templates* in the palette move a template list
+between browsers.
+
+**Whether an image can be used is checked in the background.** A line under the bar names each image
+the draft uses and what the VM said about it: *on the VM*; *not on the VM yet, a deploy pulls it from
+its registry*; *not on the VM and not found in a registry: a deploy fails* (the line turns amber and
+says to pick an image the VM has, or to load that image on the VM first); or that the registry did not
+answer. The check never holds the editor: it runs after each stored change, the manager asks the VM
+once per image and keeps the answer for a while, and a VM or registry that is slow or away leaves the
+line empty or unanswered rather than blocking anything. The same answers appear in the *Save to the
+VM…* review (and in every *Start lab* / *Redeploy lab* review) under *Images*, so the student sees it
+again before committing; an image found nowhere is called out above the list. The VM-side check is
+read-only (`docker image inspect` and `docker manifest inspect` through the operations helper; nothing
+is pulled). A wrong image name that slips through still fails at deploy time, and the operation output
+names it; correct it with *Edit visually…* (the device's *Image* field), save the change and deploy
+again.
 
 **The image is written exactly as typed.** A template's or a device's *Image* and *Version* fields
 become `image: <image>:<version>` in the topology, nothing prepended or appended; with the *Version*

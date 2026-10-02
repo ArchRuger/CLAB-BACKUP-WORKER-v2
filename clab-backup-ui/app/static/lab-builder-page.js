@@ -4,7 +4,7 @@
 // browser, never on the manager), the device templates and the reviewed save to the VM, which goes
 // through the same preview and confirm as every other lab operation (operations.js).
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let state={labs:[],jobs:[],operations:[]},activeId='',toastTimer,builderDraft=null,builderPending=null,builderMount=null,builderCaps=null,builderCapsError='',builderKnown={};
+let state={labs:[],jobs:[],operations:[]},activeId='',toastTimer,builderDraft=null,builderPending=null,builderMount=null,builderCaps=null,builderCapsError='',builderKnown={},builderVmImages=[];
 // What the editor holds while this browser could not store it (null while everything is stored).
 let builderUnstored=null;
 // Set while the problem overlay is up: nothing the editor still does is stored over it (its keyboard
@@ -29,16 +29,40 @@ function builderNameProblem(draft){
  if(!builderName(name))return 'The lab name '+(name?'"'+name+'" ':'')+'cannot be used. Use letters, digits, dot, dash and underscore (up to 60 characters) in the editor\'s Lab settings (the gear button).';
  return '';
 }
+// image: a placeholder in the shape the kind's image usually has; match: the repository names (last path
+// component, lower case) under which this VM may hold such an image. builderTemplateList prefers, per
+// kind, an image the topologies in My labs use, then one the VM already has, then the placeholder.
 const BUILDER_TEMPLATES=[
- {name:'Arista cEOS',kind:'arista_ceos',image:'ceos:4.35.0F',baseName:'ceos',interfacePattern:'eth{n}',icon:'switch'},
- {name:'Juniper cJunosEvolved',kind:'juniper_cjunosevolved',image:'cjunosevolved:26.2R1.7-EVO',baseName:'ptx',interfacePattern:'et-0/0/{n:0}',icon:'pe'},
- {name:'Juniper vJunos-switch',kind:'juniper_vjunosswitch',image:'vrnetlab/juniper_vjunos-switch:23.2R1.14',baseName:'sw',interfacePattern:'ge-0/0/{n:0}',icon:'switch'},
- {name:'Cisco XRv9k',kind:'cisco_xrv9k',image:'vrnetlab/cisco_xrv9k:24.3.1',baseName:'xr',interfacePattern:'Gi0/0/0/{n:0}',icon:'pe'},
- {name:'Linux host',kind:'linux',image:'ghcr.io/srl-labs/network-multitool:latest',baseName:'host',interfacePattern:'eth{n}',icon:'client'},
+ {name:'Arista cEOS',kind:'arista_ceos',image:'ceos:4.35.0F',match:['ceos'],baseName:'ceos',interfacePattern:'eth{n}',icon:'switch'},
+ {name:'Juniper cJunosEvolved',kind:'juniper_cjunosevolved',image:'cjunosevolved:26.2R1.7-EVO',match:['cjunosevolved'],baseName:'ptx',interfacePattern:'et-0/0/{n:0}',icon:'pe'},
+ {name:'Juniper vJunos-switch',kind:'juniper_vjunosswitch',image:'vrnetlab/juniper_vjunos-switch:23.2R1.14',match:['vjunos-switch','juniper_vjunos-switch','vjunosswitch'],baseName:'sw',interfacePattern:'ge-0/0/{n:0}',icon:'switch'},
+ {name:'Cisco XRv9k',kind:'cisco_xrv9k',image:'vrnetlab/cisco_xrv9k:24.3.1',match:['cisco_xrv9k','xrv9k'],baseName:'xr',interfacePattern:'Gi0/0/0/{n:0}',icon:'pe'},
+ {name:'Linux host',kind:'linux',image:'ghcr.io/srl-labs/network-multitool:latest',match:['network-multitool'],baseName:'host',interfacePattern:'eth{n}',icon:'client'},
 ];
-// known: {kind:[image,…]} from the topologies already in My labs; the first one replaces the default.
-function builderTemplateList(known){return BUILDER_TEMPLATES.map(t=>({...t,image:(known&&known[t.kind]&&known[t.kind][0])||t.image}));}
-function builderImages(templates,known){return [...new Set([...templates.map(t=>t.image),...Object.values(known||{}).flat()].filter(i=>typeof i==='string'&&i))];}
+// The VM image that fits a template: its repository's last path component is one of the template's match
+// names (case-insensitive); among several, the highest tag (plain string order, so 4.35.0F after 4.34.2F).
+function builderVmImageFor(template,vmImages){
+ const names=(template.match||[]).map(m=>m.toLowerCase());if(!names.length)return '';
+ const fits=(vmImages||[]).filter(i=>typeof i==='string'&&names.includes(i.split('@')[0].replace(/:[^/]*$/,'').split('/').pop().toLowerCase())).sort();
+ return fits.length?fits[fits.length-1]:'';
+}
+// known: {kind:[image,…]} from the topologies already in My labs; vmImages: the images on the VM.
+function builderTemplateList(known,vmImages){return BUILDER_TEMPLATES.map(t=>({...t,image:(known&&known[t.kind]&&known[t.kind][0])||builderVmImageFor(t,vmImages)||t.image}));}
+function builderImages(templates,known,vmImages){return [...new Set([...templates.map(t=>t.image),...Object.values(known||{}).flat(),...(vmImages||[])].filter(i=>typeof i==='string'&&i))];}
+// The images a draft's topology names (an `image:` line per device or kind; templated values left out).
+function builderYamlImages(yaml){
+ const found=new Set();for(const m of String(yaml||'').matchAll(/^[ \t-]*image:[ \t]*["']?([^"'\s#]+)/gm))if(!m[1].includes('{{'))found.add(m[1]);
+ return [...found].slice(0,16);
+}
+// One line under the bar from the manager's answers (POST /api/operations/image-check): which of the draft's
+// images are on the VM, which the registry would give, which neither; warn=true when a deploy would fail.
+function builderImageSummary(results){
+ const list=Array.isArray(results)?results:[];if(!list.length)return {text:'',warn:false};
+ if(list.some(r=>r&&r.available===false))return {text:'Images: this VM has no Docker client the manager can ask, so they are checked at deploy time.',warn:false};
+ const word=r=>r.local?'on the VM':r.registry==='found'?'not on the VM yet, a deploy pulls it from its registry':r.registry==='not-found'?'not on the VM and no registry offers it (not there, or it needs a login on the VM): a deploy fails':r.registry==='invalid'?'not a usable image name: a deploy fails':r.registry==='unreachable'?'not on the VM; its registry did not answer, a deploy would try to pull it':'not on the VM; could not be checked';
+ const missing=list.filter(r=>!r.local&&(r.registry==='not-found'||r.registry==='invalid'));
+ return {text:'Images: '+list.map(r=>r.reference+' · '+word(r)).join(' · ')+(missing.length?' — Pick an image this VM has (the Image field lists them) or load '+missing.map(r=>r.reference).join(', ')+' on the VM first.':''),warn:missing.length>0};
+}
 // A new lab always begins as a blank canvas; devices come from dragging the palette's templates
 // (BUILDER_TEMPLATES above, which also feed builderPage.templates()/images()) onto it, not from a
 // starter shape.
@@ -151,11 +175,11 @@ const builderPage={
   if(!builderUnstored&&yaml===builderDraft.yaml&&annotations===(builderDraft.annotations||''))return;
   try{builderDraft=draftWrite(builderStore,builderNamed({...builderDraft,yaml,annotations}),builderDraft.revision);builderUnstored=null;}
   catch(e){builderUnstored={yaml,annotations};builderRenderBar();throw e;}
-  document.title=builderDraft.name+' · Lab builder · Containerlab Node Manager';builderRenderBar();
+  document.title=builderDraft.name+' · Lab builder · Containerlab Node Manager';builderRenderBar();builderImageStatus();
  },
- templates(){const stored=builderTemplatesStored();return stored?{list:stored.list,defaultName:stored.defaultName||''}:{list:builderTemplateList(builderKnown),defaultName:BUILDER_TEMPLATES[0].name};},
+ templates(){const stored=builderTemplatesStored();return stored?{list:stored.list,defaultName:stored.defaultName||''}:{list:builderTemplateList(builderKnown,builderVmImages),defaultName:BUILDER_TEMPLATES[0].name};},
  saveTemplates(list,defaultName){try{builderStore.setItem(BUILDER_PREFIX+'templates',JSON.stringify({list,defaultName}));}catch{notify('This browser could not keep the device template.');}},
- images(){return builderImages(this.templates().list,builderKnown);},
+ images(){return builderImages(this.templates().list,builderKnown,builderVmImages);},
  // The palette's Import templates: the editor leaves the file dialog to its host.
  chooseTemplates(){return new Promise((resolve,reject)=>{const input=$('builder-templates-file');input.value='';input.oncancel=()=>resolve(null);input.onchange=()=>{const file=input.files[0];if(!file)resolve(null);else if(file.size>1200*1024)reject(new Error('This file is too large to be a template file.'));else file.text().then(resolve,reject);};input.click();});},
  notify,
@@ -183,7 +207,23 @@ function builderGo(values){
  location.hash=new URLSearchParams(values).toString();
  if(kept){document.querySelectorAll('dialog[open]').forEach(d=>d.close());builderUse(kept);}else location.reload();
 }
-function builderUse(draft){builderDraft=builderNamed(draft);builderRenderBar();document.title=draft.name+' · Lab builder · Containerlab Node Manager';builderOpenEditor();}
+function builderUse(draft){builderDraft=builderNamed(draft);builderRenderBar();document.title=draft.name+' · Lab builder · Containerlab Node Manager';builderOpenEditor();builderImageStatus();}
+// The background image check: after every stored change (debounced) the draft's images are sent to the manager,
+// which asks the VM once per image and keeps the answers; a late answer for an older draft is dropped. The
+// editor is never waited on: a manager that cannot answer leaves the line empty.
+let builderImageTimer=null,builderImageSeq=0;
+function builderImageStatus(){
+ const line=$('builder-images');if(!line)return;
+ if(builderImageTimer)clearTimeout(builderImageTimer);
+ builderImageTimer=setTimeout(async()=>{
+  builderImageTimer=null;const refs=builderDraft?builderYamlImages(builderDraft.yaml):[],seq=++builderImageSeq;
+  if(!refs.length){line.textContent='';line.hidden=true;line.className='builder-images';return;}
+  try{
+   const value=await json('/operations/image-check','POST',{references:refs});if(seq!==builderImageSeq)return;
+   const summary=builderImageSummary(value.images);line.textContent=summary.text;line.hidden=!summary.text;line.className='builder-images'+(summary.warn?' warn':'');
+  }catch{if(seq===builderImageSeq){line.textContent='';line.hidden=true;line.className='builder-images';}}
+ },builderDraft?1200:0);
+}
 // The id of a new draft. A draft renamed in the editor keeps its first id, so that id can be taken by another name.
 function builderDraftId(name){const id='new:'+name;return draftRead(builderStore,id)?id+':'+draftToken():id;}
 function builderNewDialog(root){
@@ -400,7 +440,7 @@ async function builderStart(){
  builderRenderBar();
  // The editor takes its device templates when it opens, and they carry the images this site already uses,
  // so the manager is asked first. A draft is in this browser: it opens even when the manager never answers.
- const asked=(async()=>{await refresh();[,builderKnown]=await Promise.all([builderConnect(),api('/operations/known-images').then(r=>r.json()).then(v=>v.images||{}).catch(()=>({}))]);})();
+ const asked=(async()=>{await refresh();[,builderKnown,builderVmImages]=await Promise.all([builderConnect(),api('/operations/known-images').then(r=>r.json()).then(v=>v.images||{}).catch(()=>({})),api('/operations/images').then(r=>r.json()).then(v=>Array.isArray(v.images)?v.images:[]).catch(()=>[])]);})();
  await Promise.race([asked.catch(()=>{}),new Promise(done=>setTimeout(done,5000))]);
  const local=params.get('draft')?draftRead(builderStore,params.get('draft')):null;
  if(local)builderUse(local);else if(params.get('draft'))$('builder-welcome-message').textContent='That draft is not in this browser. Drafts stay in the browser they were made in: open a downloaded draft file, or start a new lab.';
