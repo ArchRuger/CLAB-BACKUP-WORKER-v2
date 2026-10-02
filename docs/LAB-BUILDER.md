@@ -141,6 +141,16 @@ operation output then names the images the VM does not have; correct them with *
 device's *Image* field), save the change and deploy again. *Import templates* and *Export templates*
 in the palette move a template list between browsers.
 
+**The image is written exactly as typed.** A template's or a device's *Image* and *Version* fields
+become `image: <image>:<version>` in the topology, nothing prepended or appended; with the *Version*
+field empty the topology gets the image alone (`image: n24l/vjunos-switch`), which the VM's Docker
+reads as that image's `latest` tag when it deploys. The *Version* field is yours: the builder never
+fills it in. Clearing it keeps it empty, and pasting or choosing another image keeps whatever version
+is typed (the tags this site already uses for a known image stay offered in the field's list). This is
+the editor's behaviour as the manager ships it: `clab-backup-ui/lab-builder/patches.mjs` lists the
+small replacements the build applies to the pinned editor package, each with its reason, and the
+build fails when an editor upgrade moves them.
+
 Any Containerlab kind can be used. A kind without a manager driver deploys normally and shows
 *Choose NOS* in the workspace (no automatic login, backup or readiness). A kind the VM's Containerlab
 does not know fails at deploy time; the editor's list of kinds comes with the editor and can be

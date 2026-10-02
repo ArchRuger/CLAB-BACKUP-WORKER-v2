@@ -43,7 +43,7 @@ a first-time student is never confused, blocked or surprised by the UI.
 |---|---|---|---|
 | 0 | Orientation, workspace, baseline, plan | none | done |
 | 1 | 1 (installer advice), 9 (hide a lab) | 1.30.52 | done: both verified live on the dev VM (evidence below) |
-| 2 | 3, 4 (image and version written as typed; no automatic latest) | 1.30.53 | |
+| 2 | 3, 4 (image and version written as typed; no automatic latest) | 1.30.53 | done: six tracked editor patches (`lab-builder/patches.mjs`), verified live |
 | 3 | 2 (image usable on this VM: read-only helper mode, builder status) | 1.30.54 | |
 | 4 | 5, 6, 7 (labels: no Apply step, four corners everywhere, Edit map uses the builder's own node editor) | 1.30.55 | |
 | 5 | 8 (topology preview investigation and fix) | 1.30.56 | |
@@ -64,14 +64,22 @@ appearance code; 8 depends on how 6 is drawn.
   labs without starting* from the topology browser). `tools/check_hide_lab.py`: 17 of 17 checks on the deployed 1.30.52,
   including a discovery pass with the card staying away and zero console/page errors.
 
+- Items 3 and 4: `evidence/item3-4/` (1440×900): `before-02-version-cleared-shows-latest.png` and
+  `before-04-yaml-latest24.3.1.png` on 1.30.52 (`tools/check_image_fields.py`: 8 of 11 checks failed, every failure the
+  developer's complaint), `after-02-version-cleared-empty.png` and `after-04-node-placed.png` on the patched bundle
+  (11 of 11). Regression after the bundle change, against the fixture manager: `docs/lab-builder/tools/student_workflow.py`
+  41 PASS (Linux host template), `docs/ui-review-001/tools/check_ui003.py` and `check_ui003b.py` clean.
+
 ## Exact next action
 
-Chunk 2 (items 3 and 4): the image and version fields of the editor's node template dialog. Facts already established
-(by reading the 0.3.2 package source under `clab-backup-ui/lab-builder/node_modules/@containerlab/clab-ui/dist`):
-`joinImageVersion(base, version)` in `chunks/chunk-TEX73Q7H.js` writes `base:${version || "latest"}`; `splitImageString`
-gives version `latest` for an image without a colon; `getVersionsForImage` falls back to `["latest"]` for an unknown base
-and `handleBaseChange` in `chunk-WM5ZW3ZW.js` takes `versions[0]`; none of it is configurable, and an adapter-side rewrite
-cannot stop the field from showing `latest`. The fix is a tracked build-time patch applied by `build.mjs` (esbuild
-`onLoad` on those two chunk files, exact anchors, build fails when an anchor is missing) with a test on the committed
-bundle and on the anchors. The template defaults (`BUILDER_TEMPLATES` in `lab-builder-page.js`, `vrnetlab/cisco_xrv9k:24.3.1`)
-belong to item 2 (chunk 3).
+Chunk 3 (item 2): whether an image is usable on this VM. Facts established so far: the template defaults are
+`BUILDER_TEMPLATES` in `lab-builder-page.js` (`vrnetlab/cisco_xrv9k:24.3.1`, `vrnetlab/juniper_vjunos-switch:23.2R1.14`,
+`ceos:4.35.0F`, `cjunosevolved:26.2R1.7-EVO`), replaced per kind by the first image the topologies in My labs use
+(`GET /api/operations/known-images`, `lab_operations.py`); a fresh install has no labs, so the placeholders are shown
+and the guide says the manager cannot see the VM's images. The operations helper (`host_operations.py`, modes
+`capabilities`/`read`/`browse`/`popular`/`preview`/`run`) runs containerlab as root; a read-only mode that lists the
+VM's local images (`docker image ls --format json`, fixed argv, no client input) and, per validated reference, asks the
+registry (`docker manifest inspect <ref>`, strict reference grammar, bounded timeout) is the planned addition, routed
+through `lab_operations.py` with a short cache and never on the editor's critical path; `risk-reviewer` must review the
+helper diff before the chunk is called done. Measured on the dev VM: `docker manifest inspect` answers in 0.2–2.3 s for
+present, absent and unresolvable references (`vrnetlab/cisco_xrv9k:24.3.1` → denied/unauthorized, i.e. not on Docker Hub).

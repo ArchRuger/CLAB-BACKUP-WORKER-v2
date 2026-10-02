@@ -1,3 +1,44 @@
+# UI/UX changes 2, part 2: image and version as typed — 1.30.53
+
+What was actually run for this release (same environment as 1.30.52: dev VM `clab-llm-dev2`, Chromium 1243 through
+Playwright 1.63; the editor bundle rebuilt with Node 24.21.0 from `~/.local/node24`).
+
+## Static and unit
+
+- `cd clab-backup-ui/lab-builder && npm ci && node build.mjs && node build.mjs --check`: 132 files, 77 packages, the
+  committed assets match a fresh build (two chunk names changed with the patched code).
+- `python3 deploy/verify-release.py` source and documentation at 1.30.53; `git diff --check` clean; `node --check` on
+  `build.mjs` and `patches.mjs`.
+- Browser: `node --test tests/*.js` → 381 pass, 0 fail. New: `test_lab_builder_ui.js` "the image is written as typed
+  and the version is never filled in" (the committed bundle holds no `||"latest"}`, `??["latest"]`, `version:"latest"`
+  or `["latest"])`, holds the patched join; `patches.mjs` is well formed, `applyPatches` refuses a missing anchor, and
+  with `node_modules` present every anchor is in the pristine package exactly once and the package on disk is
+  unpatched).
+- Python: `python -m unittest discover -s tests -t tests` → 1710 tests, 1709 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (no Python code
+  changed in this release; the test passes alone once the section exists).
+
+## Live (development VM, deployed product)
+
+- Before, on the deployed 1.30.52: `docs/ui-ux-changes-2/tools/check_image_fields.py` against the real lab builder
+  (a new draft in a fresh browser context, the Cisco XRv9k template's dialog): 8 of 11 checks failed, each the
+  developer's complaint: backspacing the Version field showed `latest`; pasting an unknown image set `latest`; the
+  placed node's YAML read `image: n24l/cisco_xrv9k:latest24.3.1` (the filled-in `latest` with the typed version
+  appended); an emptied version wrote `:latest`; the node editor did the same. Screenshots in
+  `docs/ui-ux-changes-2/evidence/item3-4/before-*.png`.
+- After, first on the rebuilt image (same release number, a fresh browser context sees the new bundle) and again on
+  the deployed 1.30.53 (`sudo bash deploy/start-manager.sh --manager-only`, helpers verified at 1.30.53): 11 of 11
+  checks, zero console or page errors: the cleared Version field stays empty (the known tag `24.3.1` is offered in
+  its list, not picked), an unknown pasted image keeps the typed version, an image pasted into an empty version
+  leaves it empty, the placed node writes `image: n24l/cisco_xrv9k:24.3.1`, an empty version writes
+  `image: n24l/vjunos-switch`, and the node editor's own fields behave the same after Apply. Screenshots in
+  `evidence/item3-4/after-*.png`.
+- Regression of the areas the bundle serves, against the fixture manager on a fresh `FIXTURE_DATA`:
+  `docs/lab-builder/tools/student_workflow.py --template "Linux host"` 41 PASS, 0 FAIL;
+  `docs/ui-review-001/tools/check_ui003.py` and `check_ui003b.py` (Edit map in map mode, every matrix row) clean.
+- Not exercised on a real NOS: no lab was deployed for this release (the change is to the text the builder writes;
+  the live deploy of builder-made labs is covered by the lab builder's own records).
+
 # UI/UX changes 2, part 1: lock advice and Hide from Home — 1.30.52
 
 What was actually run for this release, on the dev VM `clab-llm-dev2` (Ubuntu 24.04, Docker 29.8.1, containerlab

@@ -1,3 +1,17 @@
+# UI/UX changes 2, part 2: image and version as typed — 1.30.53
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) **`clab-backup-ui/lab-builder/patches.mjs`
+is the one place for build-time changes to the pinned editor**: exact anchors, one replacement each, a reason, applied by
+`build.mjs` in memory through an esbuild `onLoad` on the package's chunk files; the build throws when an anchor is not
+found exactly once or a patched chunk was never loaded. Never edit `node_modules` or the committed bundle by hand, never
+widen a patch beyond its anchor, and port or drop a patch on an editor upgrade with its reason in mind. (2) The contract
+of items 3 and 4 (`docs/LAB-BUILDER.md`): the YAML gets exactly `<image>:<version>`, an empty version writes the image
+alone, the editor never fills the version in (clearing keeps it empty, an image change keeps the typed version, known
+tags are offered, never picked). `tests/test_lab_builder_ui.js` "the image is written as typed…" pins the bundle's
+outcome; `docs/ui-ux-changes-2/tools/check_image_fields.py` is the live check (also the before-evidence producer).
+(3) A bundle change reaches browsers only with a new release number (`?v=`, `immutable`); rebuild with Node 24
+(`~/.local/node24/bin`), `npm ci && node build.mjs && node build.mjs --check`.
+
 # UI/UX changes 2, part 1: lock advice and Hide from Home — 1.30.52
 
 Read `docs/ui-ux-changes-2/PICKUP.md` first (branch, base, why the numbering starts at 1.30.52, the plan), then

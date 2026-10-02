@@ -4,6 +4,31 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.53
+
+*UI/UX changes 2*, items 3 and 4: the lab builder's Image and Version fields.
+
+- **The image is written exactly as typed (item 3).** A template's or a device's *Image* and *Version* become
+  `image: <image>:<version>` in the topology, nothing prepended or appended. The developer's screenshot had Image
+  `n24l/cisco_xrv9k`, Version `24.3.1`; reproduced in a real browser on 1.30.52, the YAML received
+  `n24l/cisco_xrv9k:latest24.3.1`: the editor fills `latest` into a cleared Version field at once, so a version typed
+  afterwards is appended to it. With this release the YAML receives `n24l/cisco_xrv9k:24.3.1`.
+- **No automatic "latest" (item 4).** The Version field is the student's: backspacing it leaves it empty, pasting or
+  choosing another image keeps whatever version is typed (and an empty one stays empty), an untagged image reads as
+  an empty version, and an unknown image offers no version. The tags this site already uses for a known image are
+  still offered in the field's list; none is picked for the student. An empty version writes the image alone
+  (`image: n24l/vjunos-switch`), which Docker on the VM reads as that image's `latest` tag at deploy time; this is
+  the documented contract (`docs/LAB-BUILDER.md`, *Device templates and images*).
+- **How: tracked build-time patches to the pinned editor, not a fork.** The behaviour lives in the editor package
+  (`joinImageVersion`, `splitImageString`, `getVersionsForImage`, `parseImageTag`, `ImageVersionFields.handleBaseChange`)
+  and is not configurable from the adapter or the page, and a rewrite after the fact could not stop the field from
+  showing `latest`. `clab-backup-ui/lab-builder/patches.mjs` lists six exact replacements with their reasons; `build.mjs`
+  applies them in memory while esbuild reads the two package chunks (the package on disk is never modified) and fails
+  when an anchor is not found exactly once, so an editor upgrade cannot silently drop them; `tests/test_lab_builder_ui.js`
+  checks the committed bundle for every outcome and, when `node_modules` is present, every anchor in the pristine
+  package. The third-party notices say so. The bundle is rebuilt (two chunk names changed), and the page reaches
+  browsers with this release number.
+
 ## Changes in 1.30.52
 
 First release of the *UI/UX changes 2* stream (`docs/ui-ux-changes-2/`: the developer's walk through a fresh install

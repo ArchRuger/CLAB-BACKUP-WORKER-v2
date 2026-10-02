@@ -321,6 +321,25 @@ test('every editor control the page hides still exists in the bundled editor',()
  for(const id of ids){const item=/^(context-menu-item|panel-tab)-(.+)$/.exec(id);assert.ok(item&&!code.includes(id)?code.includes(item[1]+'-${')&&code.includes('"'+item[2]+'"'):code.includes(id),'the bundled editor no longer has '+id);}
  assert.doesNotMatch(code,/new Function\(|\beval\(/,'the bundle must run under script-src self');
 });
+// The tracked build-time patches (lab-builder/patches.mjs): the committed bundle carries their outcome, and the
+// pristine package (when node_modules is present) still carries every anchor exactly once. An editor upgrade
+// that moves an anchor fails the build itself; this test fails when a bundle was committed without them.
+test('the image is written as typed and the version is never filled in: the tracked editor patches are in the bundle',async()=>{
+ const dir=path.join(__dirname,'../app/static/lab-builder/assets'),code=fs.readdirSync(dir).filter(f=>f.endsWith('.js')).map(f=>fs.readFileSync(path.join(dir,f),'utf8')).join('\n');
+ assert.doesNotMatch(code,/\|\|"latest"\}/,'an empty version must not become :latest');
+ assert.doesNotMatch(code,/\?\?\["latest"\]/,'an unknown image must offer no version');
+ assert.doesNotMatch(code,/version:"latest"/,'an untagged or empty image must read as an empty version');
+ assert.doesNotMatch(code,/\["latest"\]\)/,'a known untagged image must offer no version either');
+ assert.match(code,/return ([A-Za-z_$]+)\?([A-Za-z_$]+)\?`\$\{\1\}:\$\{\2\}`:\1:""/,'the join writes image:version, or the image alone');
+ const {PATCHES,applyPatches}=await import('../lab-builder/patches.mjs');
+ assert.ok(PATCHES.length>=6);for(const p of PATCHES){assert.ok(p.file instanceof RegExp&&p.find&&p.replace&&p.why,'a patch names its file, anchor, replacement and reason');assert.notEqual(p.find,p.replace);}
+ assert.throws(()=>applyPatches('chunk-TEX73Q7H.js','no anchors here'),/found 0 times/);
+ const chunks=path.join(__dirname,'../lab-builder/node_modules/@containerlab/clab-ui/dist/chunks');
+ if(fs.existsSync(chunks)){
+  const files=fs.readdirSync(chunks);
+  for(const p of PATCHES){const file=files.find(f=>p.file.test(f));assert.ok(file,'a chunk for '+p.why);const text=fs.readFileSync(path.join(chunks,file),'utf8');assert.equal(text.split(p.find).length-1,1,'anchor once in the pristine package: '+p.why);assert.ok(!text.includes(p.replace)||p.find.includes(p.replace),'the package on disk is never patched: '+p.why);}
+ }else console.log('# lab-builder/node_modules absent: the anchors are checked by the build itself (npm ci && node build.mjs --check)');
+});
 test('the committed assets are the ones the manifest names, and the page loads only versioned entry files',()=>{
  const dir=path.join(__dirname,'../app/static/lab-builder'),manifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.json'),'utf8')),crypto=require('node:crypto');
  assert.deepEqual(fs.readdirSync(path.join(dir,'assets')).sort(),Object.keys(manifest.files).sort());
