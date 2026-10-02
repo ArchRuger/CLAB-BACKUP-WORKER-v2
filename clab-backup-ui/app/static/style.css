@@ -1821,6 +1821,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 }
 .op-layout-map .map-device { cursor: grab; }
 .op-layout-map .map-device:active { cursor: grabbing; }
+#op-preview-map .map-device, #op-preview-map .map-device:active { cursor: default; }
 .op-session-list { margin-top: 20px; }
 .op-session-list p { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; border-bottom: 1px solid var(--line); padding: 12px 0; margin: 0; }
 .op-session-list strong { min-width: 160px; }

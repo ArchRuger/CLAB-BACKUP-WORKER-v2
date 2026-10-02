@@ -326,12 +326,12 @@ test('the topology preview drops the caption in both branches, sizes the dialog 
  const elements=new Map();
  const makeSvg=()=>{const attrs={};return {setAttribute(name,value){attrs[name]=value;},getAttribute:name=>attrs[name]};};
  elements.set('op-preview-map',makeSvg());
- const fitCalls=[],resizeListeners=[];
+ const fitCalls=[],resizeListeners=[],renderOptions=[];
  const dialogClasses=[];
  const dialogListeners={};
  const dialog={classList:{add(cls){dialogClasses.push(cls);}},addEventListener(type,fn){(dialogListeners[type]=dialogListeners[type]||[]).push(fn);},close(){(dialogListeners.close||[]).forEach(fn=>fn());}};
  const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),
-  topologyMarkup:drawing=>'<g id="topology-scene" data-nodes="'+drawing.nodes.length+'"></g>',
+  topologyMarkup:(drawing,states,options)=>{renderOptions.push(options);return '<g id="topology-scene" data-nodes="'+drawing.nodes.length+'"></g>';},
   measureTopology:svg=>{fitCalls.push(svg);return [10,20,30,40];},
   window:{addEventListener(type,fn){if(type==='resize')resizeListeners.push(fn);},removeEventListener(type,fn){const i=resizeListeners.indexOf(fn);if(i>=0)resizeListeners.splice(i,1);}},
   requestAnimationFrame:fn=>fn()});
@@ -340,6 +340,7 @@ test('the topology preview drops the caption in both branches, sizes the dialog 
  c.opDialog=(id,title,body)=>{capturedBody=body;capturedTitle=title;return dialog;};
  const returned=c.opMapPreview({nodes:[],links:[],decorations:[]},'demo',true);
  assert.equal(returned,dialog,'the dialog opDialog built is returned unchanged');
+ assert.deepEqual(JSON.parse(JSON.stringify(renderOptions)),[{preview:true}],'the preview renders a file, not a lab map (no "Not in this lab", no buttons)');
  assert.equal(capturedTitle,'Topology preview · demo','the title stays, only the caption goes');
  assert.doesNotMatch(capturedBody,/<p>/,'no caption paragraph — the positioned branch');
  assert.doesNotMatch(capturedBody,/Wiring from the topology file/);

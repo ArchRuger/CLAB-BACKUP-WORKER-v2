@@ -4,6 +4,40 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.56
+
+*UI/UX changes 2*, item 8: the Topology preview "looks nothing like the actual annotations.json". Investigated on
+the real product first: a lab built in the builder (a device with links on four sides, a corner and a side label, a
+group and a text), saved to the VM, then opened in the editor canvas and in the Topology file dialog's *Preview
+topology* side by side (`docs/ui-ux-changes-2/evidence/item8/before-*`). The positions, links, group and text did
+follow the map file; what did not was everything the preview said about the devices. The causes, and the fixes:
+
+- **Every device was captioned "Not in this lab", dashed, and drawn as a button.** The preview is built by
+  `POST /api/operations/parse-yaml` and drawn by the same renderer as a lab's Topology tab; that renderer treats a
+  device without an inventory binding as "drawn on the map but not one of this lab's devices", and the parse
+  endpoint never binds (binding belongs to a lab's own `/topology` route, and a file being looked at has no lab).
+  So every device of every preview was "not in this lab", with the caption added below the label. Now the parse
+  endpoint marks which drawn devices the topology file names (`in_topology`, in the preview answer only) and the
+  renderer has a preview mode (`topologyMarkup(drawing, states, {preview: true})`): no device is a button, none is
+  called *Not in this lab*, and a device the map file names but the topology does not is captioned *Not in the
+  topology file*; the state badge is not drawn either.
+- **Device names collided with interface labels.** Two things stacked: the caption sat at the height of the
+  interface label of a link leaving downward, and the renderer put an interface label 40 px along the wire whatever
+  the device's own label did, so a bottom label (24–39 px below the centre) and the first interface label of a
+  downward link (32–48 px) overlapped by a third of their height; the editor has the same overlap. The caption is
+  gone from previews, and the renderer now moves an interface label past the device label that sits in the wire's
+  way (`topologyLabelClearance`: the label's height for a bottom or top label, its width for a left or right one,
+  only when the wire leaves on that side; a corner label is met only by a diagonal wire). This applies to the
+  Topology tab as well.
+- **Icons.** The renderer knew switches, servers and "everything else is a router", so the builder's *client*,
+  *ue* and *controller* devices (the Linux host template's icon) were drawn with the router's arrows. They now get a
+  computer glyph; *leaf*, *spine* and *bridge* the switch glyph.
+- **A map uploaded from this computer never reached the preview.** `Upload a file from this computer…` carries the
+  chosen map file to the reviewed `create`, but *Preview topology* read the map from the VM path, which an upload
+  does not have yet, so the preview drew the default grid. The uploaded map is now previewed.
+- `docs/ui-ux-changes-2/tools/check_preview.py` drives the preview from the VM file and from an upload (nothing is
+  written).
+
 ## Changes in 1.30.55
 
 *UI/UX changes 2*, items 5, 6 and 7: labels and the map editor's device look. Six more tracked build-time patches

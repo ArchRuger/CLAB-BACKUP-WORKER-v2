@@ -780,6 +780,11 @@ class OperationAPITests(unittest.TestCase):
         placed=parse(annotations=annotations)
         self.assertTrue(placed['annotations_used']);self.assertTrue(placed['drawing']['placed'])
         self.assertEqual({n['id']:(n['x'],n['y']) for n in placed['drawing']['nodes']},{'r1':(380,360),'r2':(520,340)})
+        self.assertTrue(all(n['in_topology'] for n in placed['drawing']['nodes']),'a preview knows the topology file names every drawn device')
+        extra=parse(annotations=json.dumps({'nodeAnnotations':[{'id':'r1','position':{'x':1,'y':2}},{'id':'ghost','position':{'x':9,'y':9}}]}))
+        self.assertEqual({n['id']:n['in_topology'] for n in extra['drawing']['nodes']},{'r1':True,'ghost':False,'r2':True},'a device only the map file names is marked so')
+        lab=self.register()
+        self.assertNotIn('in_topology',self.client.get('/api/labs/'+lab['id']+'/topology',headers=self.auth).json()['nodes'][0],'a lab\'s own map keeps its inventory binding instead')
         self.assertEqual(len(placed['drawing']['links']),1,'the wiring still comes from the YAML')
         for options in ({},{'annotations':''},{'annotations':'{not json'},{'annotations':'{"other":1}'}):
             grid=parse(**options)

@@ -423,6 +423,10 @@ class LabOperations:
             if drawing is None:
                 try: drawing = parse_drawing(b'{"nodeAnnotations":[]}', raw)
                 except invalid: raise HTTPException(400, 'Enter a valid literal Containerlab topology.')
+            # A preview has no lab to match devices against: the renderer needs to know which drawn devices
+            # the topology file names (the rest come from the map file alone). Not stored anywhere.
+            names = {n.get('definition_node') or n['name'] for n in parsed['nodes']}
+            for node in drawing['nodes']: node['in_topology'] = node.get('alias') in names or node['id'] in names
             return {'name': parsed['name'], 'drawing': drawing, 'annotations_used': used}
 
         @app.post('/api/operations/preview')

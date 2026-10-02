@@ -19,6 +19,39 @@ test('the four corner label positions sit diagonally off the icon, anchored away
  assert.deepEqual(at('bottom'),[0,35,'middle']);assert.deepEqual(at('top'),[0,-29,'middle']);assert.deepEqual(at('left'),[-28,5,'end']);assert.deepEqual(at('right'),[28,5,'start']);
  assert.deepEqual(at('sideways'),[0,35,'middle'],'an unknown value draws at the bottom, like the editor');
 });
+test('a preview draws a file, not a lab: no device is a button or "Not in this lab", a device only the map file names is captioned so, and the state badge is absent (item 8)',()=>{
+ const inFile=context.topologyNode({id:'R1',label:'R1',x:0,y:0,in_topology:true},{},{preview:true});
+ assert.doesNotMatch(inFile,/unmatched|Not in this lab|role="button"|data-map-node|device-state-dot/);assert.match(inFile,/<title>R1<\/title>/);
+ const mapOnly=context.topologyNode({id:'ghost',label:'ghost',x:0,y:0,in_topology:false},{},{preview:true});
+ assert.match(mapOnly,/class="map-device state-neutral unmatched"/);assert.match(mapOnly,/>Not in the topology file</);assert.doesNotMatch(mapOnly,/Not in this lab|role="button"/);
+ const labMap=context.topologyNode({id:'R1',label:'R1',x:0,y:0,in_topology:true},{});
+ assert.match(labMap,/unmatched/);assert.match(labMap,/>Not in this lab</,'without preview the inventory binding still decides');
+ const whole=context.topologyMarkup({nodes:[{id:'a',label:'a',x:0,y:0,in_topology:true}],links:[],decorations:[]},{},{preview:true});
+ assert.doesNotMatch(whole,/Not in this lab|role="button"/);
+});
+test('the device glyph follows the editor\'s icon names: switches, servers, computers, else the router arrows (item 8)',()=>{
+ const glyph=icon=>/<path d="([^"]+)" class="device-symbol"/.exec(context.topologyNode({id:'x',label:'x',x:0,y:0,icon}))[1];
+ assert.equal(glyph('leaf'),glyph('switch'));assert.equal(glyph('spine'),glyph('switch'));assert.equal(glyph('bridge'),glyph('switch'));
+ assert.equal(glyph('server'),glyph('linux'));assert.equal(glyph('client'),glyph('ue'));assert.equal(glyph('client'),glyph('controller'));
+ assert.notEqual(glyph('client'),glyph('server'));assert.notEqual(glyph('client'),glyph('pe'));assert.equal(glyph('pe'),glyph('router'));assert.equal(glyph('dcgw'),glyph('router'));assert.equal(glyph(undefined),glyph('router'));
+});
+test('an interface label clears the device label that sits in the wire\'s way, and nothing else moves (item 8)',()=>{
+ const y=(pos,dy)=>{const nodes=new Map([['a',{id:'a',label:'a',x:0,y:0,labelPosition:pos}],['b',{id:'b',label:'b',x:0,y:dy}]]);const svg=context.topologyLink([{node:'a',interface:'eth1'},{node:'b',interface:'eth1'}],nodes,0,{});return [...svg.matchAll(/<text x="(-?[\d.]+)" y="(-?[\d.]+)" text-anchor="middle">eth1/g)].map(m=>[Number(m[1]),Number(m[2])]);};
+ const [downBottom,upperEnd]=y('bottom',300);
+ assert.deepEqual([downBottom,upperEnd],[[20,81],[20,283]],'a wire going down from a bottom label: its label starts 18 px further; the other end (label at the bottom, wire arriving from above) is untouched');
+ assert.deepEqual(y('top',300)[0],[20,63],'a wire going down past a top label is not in its way');
+ assert.deepEqual(y('bottom',-300)[0],[20,-17],'a wire going up from a bottom label is not in its way');
+ assert.deepEqual(y('top',-300)[0],[20,-35],'a wire going up from a top label clears it');
+ const side=(pos,dx)=>{const nodes=new Map([['a',{id:'a',label:'name',x:0,y:0,labelPosition:pos}],['b',{id:'b',label:'b',x:dx,y:0}]]);const svg=context.topologyLink([{node:'a',interface:'e1'},{node:'b',interface:'e1'}],nodes,0,{});return Number(/<text x="(-?[\d.]+)"/.exec(svg)[1]);};
+ assert.equal(side('right',300),60+Math.min(90,4*6.6+12),'a wire going right past a right label clears the label\'s width');assert.equal(side('left',300),60);
+ assert.equal(side('bottom-right',300),60,'a corner label is not met by a wire leaving sideways');
+ const corner=(pos,dx,dy)=>{const nodes=new Map([['a',{id:'a',label:'a',x:0,y:0,labelPosition:pos}],['b',{id:'b',label:'b',x:dx,y:dy}]]);const m=/<text x="(-?[\d.]+)" y="(-?[\d.]+)"/.exec(context.topologyLink([{node:'a',interface:'e1'},{node:'b',interface:'e1'}],nodes,0,{}));return [Number(m[1]),Number(m[2])];};
+ assert.ok(corner('bottom-right',300,300)[0]>20+Math.SQRT1_2*(20/Math.SQRT1_2+20),'a wire leaving diagonally towards a corner label clears it');
+ assert.deepEqual(corner('top-right',40,-120).map(Math.round),[38,-31],'a wire leaving almost straight up, a little to the right, meets a top-right label and clears it (capped at 45% of a short wire)');
+ assert.deepEqual(corner('top-right',-40,-120).map(Math.round),[7,-16],'the same wire leaning left passes beside the label: no clearance');
+ assert.deepEqual(corner('top-right',-120,-40).map(Math.round),[-19,10],'a wire leaving to the upper left, mostly sideways, is clear of a top-right label');
+ assert.deepEqual(corner('bottom-left',0,300),[20,81],'a wire straight down meets a bottom-left label');
+});
 test('endpoint labels can be hidden without removing wiring',()=>{
  const nodes=new Map([['r1',{id:'r1',label:'r1',x:0,y:0}],['r2',{id:'r2',label:'r2',x:200,y:100}]]);
  const svg=context.topologyLink([{node:'r1',interface:'eth1'},{node:'r2',interface:'eth2'}],nodes,0,{labelMode:'hide'});

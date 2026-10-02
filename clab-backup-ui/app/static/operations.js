@@ -322,8 +322,9 @@ async function opReadAnnotations(path){
  if(!path)return '';
  try{return (await json('/operations/read','POST',{path:path+'.annotations.json'})).text||'';}catch{return '';}
 }
-async function opParse(path,text){
- const annotations=await opReadAnnotations(path);
+// annotations: the map text to use (an upload's chosen map file); otherwise the VM file beside the topology.
+async function opParse(path,text,annotations){
+ if(annotations===undefined)annotations=await opReadAnnotations(path);
  const parsed=await json('/operations/parse-yaml','POST',{options:{text,annotations}});
  return {...parsed,annotations:parsed.annotations_used?annotations:''};
 }
@@ -422,7 +423,7 @@ async function opEdit(path,labId='',newPath='',upload=null){
  // Leaving for the builder from a known VM file: remembered so the way back (its "← My labs" link,
  // or the browser Back button) reopens this same dialog with a fresh read, showing any saved edit.
  $('op-build-edit')?.addEventListener('click',()=>{opRemember('vm',{path,name:value.path.split('/').pop()});opBuilderOpen({path});});
- $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
+ $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value,upload?upload.annotations||'':undefined);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
  $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value,...(upload&&upload.annotations?{annotations:upload.annotations}:{})}})));
  $('op-add-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
   // Always read the actual VM file; unsaved editor contents are not linked/imported.
@@ -518,7 +519,9 @@ function opFitPreview(svg){
 function opMapPreview(drawing,name,positioned=false){
  const dialog=opDialog('op-map-preview','Topology preview · '+name,'<svg id="op-preview-map" class="topology-map op-layout-map" role="img" aria-label="Proposed topology"></svg>');
  dialog.classList.add('dialog-viewport');
- const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing);
+ // A file being looked at, not a lab's map: no device is a button, none is "Not in this lab" (there is no
+ // lab yet); a device the map file names but the topology file does not is captioned so.
+ const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing,{},{preview:true});
  if(dialog._previewResize&&typeof window!=='undefined')window.removeEventListener('resize',dialog._previewResize);
  const fit=()=>opFitPreview(svg);
  dialog._previewResize=fit;

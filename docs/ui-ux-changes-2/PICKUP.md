@@ -46,7 +46,7 @@ a first-time student is never confused, blocked or surprised by the UI.
 | 2 | 3, 4 (image and version written as typed; no automatic latest) | 1.30.53 | done: six tracked editor patches (`lab-builder/patches.mjs`), verified live |
 | 3 | 2 (image usable on this VM: read-only helper mode, builder status) | 1.30.54 | done: helper modes risk-reviewed (findings applied), verified live |
 | 4 | 5, 6, 7 (labels: no Apply step, four corners everywhere, Edit map uses the builder's own node editor) | 1.30.55 | done: six more editor patches, verified live |
-| 5 | 8 (topology preview investigation and fix) | 1.30.56 | |
+| 5 | 8 (topology preview investigation and fix) | 1.30.56 | done: four causes, fixed, verified live |
 | 6 | 10 (topology and annotations travel with every backup, Git save and download) | 1.30.57 | |
 
 The order puts shared groundwork first: 3 and 4 touch the same template fields; 5, 6 and 7 share the label and
@@ -81,7 +81,26 @@ appearance code; 8 depends on how 6 is drawn.
   `04-map-bottom-left`, `05-topology-tab-corner` (the Topology tab drawing the saved corner).
   `tools/check_labels.py`: 20 of 20 on the deployed manager; `check_ui003.py` and `check_ui003b.py` on the fixture.
 
+- Item 8: `evidence/item8/`: `before-developer-preview.png` (the email), `before-01-editor-canvas.png` and
+  `before-02-preview-dialog-1.30.55.png` (the same builder-made lab `uiux2-prev-200859` in the editor and in the preview
+  on 1.30.55: every device "Not in this lab" and dashed, the caption on the downward link's interface label, router
+  arrows for Linux hosts), then `after-01-preview-from-vm.png` and `after-02-preview-from-upload.png`.
+  `tools/check_preview.py`: 10 of 10 on the deployed manager.
+
 ## Exact next action
+
+Chunk 6 (item 10): the topology and annotations travel with every backup. Established by reading the code: a backup
+job writes `backups/<lab>/history/<job>/<file>` and `latest/` (`runner._execute`), its job record holds per-node
+outcomes (`file`, `sha256`, `restore_file`); the Git save builds `{manifest, files}` in `git_progress.captured_snapshot`
+(schema 2; entries without `node` are accepted by the helper and ignored by restore, as the design export already
+uses), the helper `host_git.publish` refuses files outside the manifest and counts every old `path` as a device for
+the removal review; the ZIP of a backup is `main.py download()` (succeeded nodes + the decorated job as manifest.json);
+the VM's files as of the last discovery pass are `discovery.sources[deployment_name]` (`vm_files.decode_bundle`:
+definition and annotations bytes, paths, sha256) and the manager's own copies `lab['definition_yaml']` /
+`layout.map_document(lab)`. Plan: capture the topology and annotations at backup time into the job folder with
+provenance (VM file or manager copy) on the job record, carry them into Git saves as manifest entries without `node`
+(`kind: topology|annotations`), into both ZIPs, keep restore ignoring them, and have the helper not count them as
+devices; risk review of the helper diff. (Superseded: chunk 5 notes below.)
 
 Chunk 5 (item 8): the topology preview. Established by reading the code: the preview is `opMapPreview` in
 `operations.js`, opened from the Topology file dialog's *Preview topology* (`opEdit`, also the dialog the builder hands

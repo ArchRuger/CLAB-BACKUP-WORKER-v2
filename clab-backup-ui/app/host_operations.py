@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.30.55'
+VERSION = '1.30.56'
 LIMIT = 1024 * 1024
 # Read-only image questions for the lab builder and the deploy review: which images this VM already
 # has, and whether a named image is on the VM or can be pulled from its registry. Both run the Docker

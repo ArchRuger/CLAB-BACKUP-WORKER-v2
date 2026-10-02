@@ -1,3 +1,15 @@
+# UI/UX changes 2, part 5: the topology preview — 1.30.56
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) the renderer's **preview mode**
+(`topologyMarkup(drawing, states, {preview: true})`, used only by `opMapPreview`): a device is "in" when `in_topology`
+is not false, nothing is a button, the caption reads *Not in the topology file*, no state badge; without the option the
+inventory binding (`inventory_name`, set by `bind_drawing` for a lab's `/topology` route) still decides and the caption
+stays *Not in this lab*. `in_topology` is set by `POST /api/operations/parse-yaml` on its answer only and never stored
+(`annotations(drawing)` must never see it). (2) `topologyLabelClearance(node, ux, uy)` moves an interface label past a
+device label that lies in the wire's way, per end; `topologyGlyph(icon)` maps the editor's icon names. Test coordinates
+in `test_topology_ui.js` pin both. (3) `opParse(path, text, annotations)` takes an upload's map text; `opEdit`'s
+*Preview topology* passes `upload.annotations` (an empty string for an upload without a map, never the VM read).
+
 # UI/UX changes 2, part 4: labels and the map editor's device look — 1.30.55
 
 Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) **the label positions are eight**:

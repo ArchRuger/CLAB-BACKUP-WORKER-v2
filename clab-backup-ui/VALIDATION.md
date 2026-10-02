@@ -1,3 +1,45 @@
+# UI/UX changes 2, part 5: the topology preview — 1.30.56
+
+What was actually run for this release (dev VM `clab-llm-dev2`, Chromium 1243 through Playwright 1.63).
+
+## Investigation (before any change)
+
+- A lab was built in the real builder on the deployed 1.30.55 (`uiux2-prev-200859`: a Linux host with links to four
+  neighbours, a top-right and a left label, a group and a text), saved to the VM, then opened in the editor canvas
+  (`/static/lab-builder.html#path=…`) and in the Topology file dialog's *Preview topology*, both measured through the
+  DOM (`docs/ui-ux-changes-2/evidence/item8/before-*`). Positions, links, the group and the text followed the map file
+  in both; every device in the preview was dashed and captioned *Not in this lab*, the caption sat on the interface
+  label of the downward link, the Linux hosts carried the router arrows, and an uploaded map could not reach the
+  preview at all (read from the code; the fixes are in the changelog with their causes).
+
+## Static and unit
+
+- `python3 deploy/verify-release.py` source and documentation at 1.30.56; `git diff --check` clean; `node --check` on
+  the changed scripts; `check_links.py` clean.
+- Browser: `node --test tests/*.js` → 387 pass, 0 fail. New in `test_topology_ui.js`: the preview mode (no button,
+  no *Not in this lab*, *Not in the topology file* for a map-only device, no state badge, the lab map unchanged
+  without the option), the glyph mapping, and the interface label clearance with exact coordinates for a wire leaving
+  on the label's side, away from it, sideways, and towards a corner label (straight and nearly straight);
+  `test_operations_ui.js` pins that the preview renders with `{preview: true}`.
+- Python: `python -m unittest discover -s tests -t tests` → 1717 tests, 1716 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (passes alone once
+  it exists). Extended: `test_lab_operations.py` `test_parse_yaml_…` (`in_topology` for every drawn device, false for
+  a map-only one, absent from a lab's own `/topology`).
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` (helpers verified at 1.30.56). The root
+  filesystem filled up during that build (the superseded manager images and the Docker build cache of this stream's
+  rebuilds, beside the exited `restore-square` NOS containers' 18 GB of writable layers); the superseded images and
+  the build cache were pruned (8.6 GB free afterwards), the lab's containers were left alone.
+- `docs/ui-ux-changes-2/tools/check_preview.py` on the deployed 1.30.56 with `uiux2-prev-200859`: 10 of 10 checks,
+  zero console or page errors: the parse endpoint marks every drawn device as named by the topology and a map-only
+  device as not; the preview from the VM file captions nothing *Not in this lab* and makes no device a button, puts
+  the devices where the map file puts them, draws the top-right and left labels, uses the computer glyph for the
+  Linux hosts, and no interface label overlaps a device label; the same topology and map uploaded from this computer
+  reach the preview with the map's positions; nothing was created. Screenshots `evidence/item8/after-*`.
+- Not exercised: a map-only device in a real file (checked through the endpoint and the unit test, not drawn live).
+
 # UI/UX changes 2, part 4: labels and the map editor's device look — 1.30.55
 
 What was actually run for this release (dev VM `clab-llm-dev2`, Chromium 1243 through Playwright 1.63; the editor
