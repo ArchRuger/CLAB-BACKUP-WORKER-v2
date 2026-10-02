@@ -324,6 +324,31 @@ class PackageLockRecoveryTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][:2], ['sudo', 'python3'])  # the fd scan needs root
         self.assertIn('--pause-timers', run.call_args.args[0])
 
+    def test_lock_recovery_shows_the_restart_advice_once_with_or_without_a_holder_report(self):
+        # The report comes from apt_lock.py --show and already carries the advice; when sudo credentials
+        # have expired there is no report, and the installer prints the advice itself. Never twice.
+        with_report = io.StringIO()
+        report = ('Package lock held by pid 2230 (unattended-upgr) on /var/lib/dpkg/lock-frontend.\n'
+                  'Never stop unattended-upgrades.service, kill this process, or delete the lock file: let the current run finish, or wait it out here.\n'
+                  'If this appears right after a VM snapshot rollback or a reboot, a normal restart of the VM also clears it.\n')
+        with patch.object(install, 'lock_free', return_value=False), patch.object(install, 'lock_holder_text', return_value=report), \
+                patch.object(install, 'menu', return_value='3'), patch.object(install, 'run') as run, patch('sys.stdout', new=with_report):
+            self.assertFalse(install.lock_recovery({}))
+        self.assertEqual(with_report.getvalue().count('snapshot rollback'), 1)
+        without = io.StringIO()
+        with patch.object(install, 'lock_free', return_value=False), patch.object(install, 'lock_holder_text', return_value=''), \
+                patch.object(install, 'menu', return_value='3'), patch.object(install, 'run') as run, patch('sys.stdout', new=without):
+            self.assertFalse(install.lock_recovery({}))
+        text = without.getvalue()
+        self.assertEqual(text.count('snapshot rollback'), 1)
+        self.assertIn('restart of the VM', text)
+        self.assertIn('every completed setup step is kept', text)
+        self.assertLess(text.index('snapshot rollback'), text.index('Copyable command'))
+        run.assert_not_called()  # advice only: choice 3 returns to the menu and the installer restarts nothing
+        with open(install.__file__) as stream: source = stream.read()
+        for forbidden in ("'reboot'", "'shutdown'", "'poweroff'"):
+            self.assertNotIn(forbidden, source, 'the installer never restarts the VM')
+
     def test_lock_recovery_retry_now_skips_the_wait(self):
         with patch.object(install, 'lock_free', return_value=False), patch.object(install, 'lock_holder_text', return_value=''), \
                 patch.object(install, 'menu', return_value='2'), patch.object(install, 'run') as run:

@@ -14,7 +14,9 @@ are exactly what a live manager shows.
 *Starting*, *Stopped*, *Needs attention* — how many devices are ready and when progress
 was last saved; the list opens on *Recent labs* (most recently deployed first, from the manager's own record of successful deploys and redeploys; labs it has not deployed come last, by name; *All labs* lists favourites first), under the two starting choices *Deploy* (*Choose a file on the lab VM…* or *Upload a file from this computer…*) and *Build* (*Open the lab builder*). Labs that run on the
 VM but are not in the manager yet are listed under *Manager ▾ › Labs found on the VM…*,
-where one click adds them. The **Manager ▾** menu holds everything that is not about one lab: the VM
+where one click adds them. A card's ⋯ menu has *Hide from Home*: the card goes, the lab
+and everything it has stays, and the same dialog (or adding the topology again from
+*Choose a file on the lab VM…*) brings it back. The **Manager ▾** menu holds everything that is not about one lab: the VM
 connection, importing lab files, deploying a new lab, the labs running on the VM,
 operation history, manager settings and Diagnostics.
 

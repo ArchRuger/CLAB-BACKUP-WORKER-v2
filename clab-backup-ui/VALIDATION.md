@@ -1,3 +1,48 @@
+# UI/UX changes 2, part 1: lock advice and Hide from Home — 1.30.52
+
+What was actually run for this release, on the dev VM `clab-llm-dev2` (Ubuntu 24.04, Docker 29.8.1, containerlab
+0.79.0, Chromium 1243 through Playwright 1.63 in `clab-backup-ui/.venv`). The branch `claude/ui-ux-changes-2` was cut
+from `main` at 1.30.50 (`79f9a90`); the netlab stream's uncommitted 1.30.51 was set aside as a local WIP commit on its
+own branch (see `docs/ui-ux-changes-2/PICKUP.md`), which is why this release is 1.30.52.
+
+## Static and unit
+
+- Baseline on the branch point, before any change: Python `python -m unittest discover -s tests -t tests` → 1704 tests
+  (1703 OK, 1 skipped, plus the release-consistency documentation error caused by the stream's new docs folder, which
+  was created during that run and is registered as a history folder since); browser `node --test tests/*.js` → 379
+  pass, 0 fail.
+- After the change: `python3 deploy/verify-release.py` source and documentation at 1.30.52; `git diff --check` clean;
+  `node --check` on every `app/static/*.js`; `check_links.py` 177 files, 0 problems. Python → 1710 tests, 1709 OK and
+  1 skipped, plus the same documentation error because this section did not exist yet when the run started (the test
+  passes alone once it exists; result below). New: `test_apt_lock.py`
+  `test_show_recommends_a_vm_restart_after_a_snapshot_rollback_as_advice_only`, `test_install_manager.py`
+  `test_lock_recovery_shows_the_restart_advice_once_with_or_without_a_holder_report` (both stdlib, run with the system
+  `python3` as CI does: 82 tests OK), `test_remove_lab.py` `HideLabTests` (four tests: the flag and nothing else, kept
+  through two discovery polls, persisted, events; survives Sync from VM and a favourite change; adding the lab again
+  through `POST /api/lab-definitions` keeps the id and clears it; unknown keys 422, unknown lab 404). Browser → 380 pass,
+  0 fail; new `test_home_ui.js` "a lab hidden from Home is not drawn…" and the hidden list in `test_readiness_ui.js`.
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` (image `clab-backup:1.30.52`, helpers verified at
+  1.30.52, the manager on the host network at port 8081).
+- Item 9: `docs/ui-ux-changes-2/tools/check_hide_lab.py` against the deployed manager with the lab `netlab-test` (in My
+  labs, not deployed): 17 of 17 checks (the ⋯ dialog offers Hide from Home with its help line; the card leaves Home on
+  both tabs; the note under the list names both ways back; the public lab record is unchanged apart from the flag; a
+  discovery pass ran and the card stayed away; the VM labs dialog lists it under *Hidden from Home*; Show on Home puts
+  the card back; hidden again, then *Choose a file on the lab VM…* › `netlab-test.clab.yml` › *Add to My labs without
+  starting* › *Add lab* kept the same lab id, cleared the flag and the card was back; zero console and page errors).
+  Screenshots in `docs/ui-ux-changes-2/evidence/item9/`, including the before state on the previous build.
+- Item 1: `docs/ui-ux-changes-2/tools/installer_lock_repro.py`: the real installer (`deploy/install.sh`) under a
+  pseudo-terminal with `/var/lib/dpkg/lock-frontend` held by a harmless `fcntl.lockf` process and `curl` removed for the
+  run (so the prerequisites phase calls `apt-get install`, as on a fresh VM): the phase failed with the lock error, the
+  *Package lock recovery* screen showed the holder line, the rule, the new restart advice, the copyable command and the
+  three choices; choice 3 returned to the Setup menu and 6 exited; the holder was released and the packages reinstalled.
+  The screen is `docs/ui-ux-changes-2/evidence/item1/installer-lock-recovery-1.30.52.txt`. An earlier attempt without
+  removing a package showed that an installed VM never reaches `apt-get install` in that phase (the full standard path
+  ran through instead, rebuilding the same 1.30.52 and the capture stack at 1.30.52), which is why the tool removes one.
+- Not run: a real snapshot rollback (the VM is not rebooted in this stream; the advice is text, exercised as above).
+
 # Netlab UI/UX campaign, part 3: the stale-review reason before the busy guard — 1.30.50
 
 What was actually run for this release. Same environment as 1.30.49 (dev VM `clab-llm-dev2`, containerlab 0.79.0, lab

@@ -4,6 +4,36 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.52
+
+First release of the *UI/UX changes 2* stream (`docs/ui-ux-changes-2/`: the developer's walk through a fresh install
+as a student, ten items; `CHECKLIST.md` carries each one with its status). This release carries items 1 and 9.
+
+- **The package-lock recovery says that restarting the VM clears it too (item 1).** The installer's *Package lock
+  recovery* screen, and `deploy/apt_lock.py --show` / `--wait`, now add one line after the rule that nothing may be
+  killed or deleted: right after a VM snapshot rollback or a reboot the holder is usually the restored system's own
+  unattended upgrade, and a normal restart of the VM clears it as well (Ubuntu lets the running upgrade finish before
+  it shuts down); every completed setup step is kept, so the installer is simply run again. Advice only: the installer
+  and the lock tool still never kill a process, delete a lock file, stop the service or restart anything, and a test
+  now pins that no such command token exists in either script. The installer prints the line itself when the holder
+  report cannot be read (expired sudo credentials), never twice. `docs/INSTALL.md` has the sentence and the new screen.
+- **Hide a lab from Home (item 9).** A lab card's ⋯ dialog (and *All lab operations…* on the lab page) has **Hide from
+  Home** under *Lab tools*, with its help line: the card goes off Home (both tabs) and nothing else changes: the lab
+  stays in My labs with its devices, backups, backup history, saved progress and Git binding, nothing on the VM
+  changes, a running lab keeps running, and the 30-second discovery never puts the card back (it keeps updating the lab
+  and never touches the flag). Home shows a line under the list, *N labs are hidden from Home*, with the two ways back:
+  **Choose a file on the lab VM…** › the lab's topology › *Add to My labs without starting* or *Deploy lab* registers
+  the same lab again (same id, flag cleared, no second workspace), and **Manager ▾ › Labs found on the VM…** lists hidden
+  labs under *Hidden from Home* with **Show on Home** (and opens one from its name). Implementation: `hidden` on the lab
+  record through `PUT /api/labs/{id}/operations-settings` (the favourite's route; `lab.hide` / `lab.show` events),
+  cleared by `POST /api/lab-definitions`; `public_lab` passes it through; `homeVmLabs(discovery, labs)` counts hidden labs
+  with the removed-and-excluded ones. This is built on the existing settings and registration paths, beside *Remove from
+  this manager* (which forgets the workspace) rather than on it.
+- `docs/ui-ux-changes-2/` is a history folder for the release check; `tools/check_hide_lab.py` (Playwright against the
+  deployed manager or the fixture: hide, discovery pass, Show on Home, hide again, add again from the topology browser)
+  and `tools/installer_lock_repro.py` (the real installer under a pseudo-terminal with the dpkg frontend lock held by a
+  harmless process; dev VM only) are the regression tools of this release.
+
 ## Changes in 1.30.50
 
 The first acceptance pass on 1.30.49 (`docs/netlab-ui-qa/acceptance/PASS-4-sonnet.md`) found one small product

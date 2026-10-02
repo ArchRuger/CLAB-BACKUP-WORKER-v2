@@ -531,6 +531,11 @@ class LabOperations:
         class LabSettings(BaseModel):
             model_config = ConfigDict(extra='forbid')
             favorite: bool | None = None
+            # Hide from Home: a flag on the lab record and nothing else. The lab, its devices, backups,
+            # history and Git binding stay; nothing on the VM changes; background discovery keeps
+            # updating the lab without ever clearing the flag. Adding the lab again through the
+            # topology browser (POST /api/lab-definitions) or Show on Home clears it.
+            hidden: bool | None = None
             path: str | None = Field(default=None, max_length=4096)
 
         @app.put('/api/labs/{lab_id}/operations-settings')
@@ -552,8 +557,13 @@ class LabOperations:
                 if not lab: raise HTTPException(404, 'Lab was removed.')
                 if revision != self.store.state.get('host', {}).get('revision'): raise HTTPException(409, 'VM connection changed. Select the project again.')
                 if data.favorite is not None: lab['favorite'] = data.favorite
+                if data.hidden is not None:
+                    if data.hidden: lab['hidden'] = True
+                    else: lab.pop('hidden', None)
                 if data.path is not None: lab['vm_project_path'] = data.path
                 self.store.save()
+                if data.hidden is not None:
+                    self.store.event('lab.hide' if data.hidden else 'lab.show', 'Hidden from Home' if data.hidden else 'Shown on Home again', lab_id=lab_id)
             return {'saved': True}
 
         @app.get('/api/labs/{lab_id}/drawio')

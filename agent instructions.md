@@ -1,3 +1,19 @@
+# UI/UX changes 2, part 1: lock advice and Hide from Home — 1.30.52
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first (branch, base, why the numbering starts at 1.30.52, the plan), then
+`CHECKLIST.md` (the ten items, status per release). What the next agent must preserve: (1) the package-lock tooling
+gives advice only: `RESTART_HINT` in `deploy/apt_lock.py` (printed by `_describe` after `WARNING`) and the installer's
+copy (printed by `lock_recovery` only when the holder report is empty); never add a restart, kill, delete or service
+stop, the tests scan both sources for such tokens. (2) *Hide from Home* is the `hidden` flag on the lab record and
+nothing else: set through `LabSettings.hidden` on `PUT /api/labs/{id}/operations-settings` (`lab.hide` / `lab.show`
+events), cleared by `POST /api/lab-definitions` (`register`, the topology browser's *Add to My labs* / *Deploy lab*) and
+by the same route with `false` (*Show on Home* in `#hidden-labs` of the VM labs dialog); `public_lab` passes it through;
+`renderHome` filters it and writes `#home-hidden-note` (`homeHiddenNote`); `homeVmLabs(discovery, labs)` counts hidden labs
+together with `ignored_labs`. Discovery, Sync from VM (`prepare_lab` deep-copies the previous record) and favourites
+leave the flag alone; never turn a hide into a removal or an exclusion, and never let a discovery pass clear it. Tests:
+`test_remove_lab.py` `HideLabTests`, `test_home_ui.js` "a lab hidden from Home…", `test_readiness_ui.js` (the dialog).
+Live tool: `docs/ui-ux-changes-2/tools/check_hide_lab.py`.
+
 # Netlab UI/UX campaign, part 3: the stale-review reason before the busy guard — 1.30.50
 
 Read `docs/netlab-ui-qa/PICKUP.md` first, then `FINAL-REPORT.md`. What the next agent must preserve beyond the 1.30.49

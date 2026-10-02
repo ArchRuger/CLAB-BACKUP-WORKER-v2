@@ -56,7 +56,17 @@ test('Manager › Labs found on the VM lists what Home used to: labs to add, hid
  assert.doesNotMatch(h.element('discovered-labs').innerHTML,/>old<|>gone</);
  assert.match(h.element('excluded-labs').innerHTML,/data-allow-import="gone"/);assert.match(h.element('excluded-labs').innerHTML,/data-clear-exclusion="gone">Stop hiding/);
  assert.match(h.element('discovery-file-list').innerHTML,/\/labs\/a\.clab\.yml/);assert.equal(h.element('vm-labs-empty').hidden,true);
+ assert.equal(h.element('hidden-labs').innerHTML,'','no lab hidden from Home, no list');
  h.element('manager-vm-labs').onclick();assert.equal(h.element('vm-labs-dialog').open,true);
+ const hiddenLab=managementHarness({labs:[{id:'h1',name:'BEN-TEST',hidden:true,nodes:[],deployment:{status:'Not deployed'}},{id:'v1',name:'shown',nodes:[]}],discovery:{configured:true,connected:true,host:{enabled:true},discovered:[{name:'BEN-TEST',imported:true},{name:'shown',imported:true}]}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/home.js'),'utf8'),hiddenLab.context);
+ hiddenLab.context.renderManagement();
+ assert.equal(hiddenLab.element('manager-vm-labs-note').textContent,'1 hidden','a lab hidden from Home counts under the menu entry');
+ assert.match(hiddenLab.element('hidden-labs').innerHTML,/<p class="side-hint">Hidden from Home<\/p>/);
+ assert.match(hiddenLab.element('hidden-labs').innerHTML,/data-open-hidden="h1">BEN-TEST<small>Still in My labs/);
+ assert.match(hiddenLab.element('hidden-labs').innerHTML,/data-show-lab="h1">Show on Home/);
+ assert.doesNotMatch(hiddenLab.element('hidden-labs').innerHTML,/>shown</);
+ assert.equal(hiddenLab.element('vm-labs-empty').hidden,true,'the dialog is not empty while a lab is hidden');
  const none=managementHarness({discovery:{configured:true,connected:true,host:{enabled:true},discovered:[{name:'old',imported:true}]}});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/home.js'),'utf8'),none.context);none.context.renderManagement();
  assert.equal(none.element('manager-vm-labs-note').hidden,true);assert.equal(none.element('vm-labs-empty').hidden,false);assert.match(none.element('vm-labs-empty').textContent,/already in My labs/);

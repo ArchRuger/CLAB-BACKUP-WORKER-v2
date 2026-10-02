@@ -193,9 +193,17 @@ def lock_holder_text(env):
     return (result.stdout or '') if result.returncode == 0 else ''
 
 
+# The same advice apt_lock.py prints with its holder report, for the case where that report could not be
+# read (sudo credentials expired): the way out after a snapshot rollback is always on the screen.
+RESTART_HINT = ('If this appears right after a VM snapshot rollback or a reboot, a normal restart of the VM '
+                'also clears it (Ubuntu lets the running upgrade finish before it shuts down); every completed '
+                'setup step is kept, so run the installer again afterwards.')
+
+
 def lock_recovery(env):
     """A package step failed with the dpkg/apt lock signature. Show the live holder and let the
-    operator wait here, retry immediately, or return to the menu. True retries the failed step."""
+    operator wait here, retry immediately, or return to the menu. True retries the failed step.
+    The restart advice is shown every time; the installer itself never restarts anything."""
     manual_command = ['sudo', 'python3', str(APT_LOCK_SCRIPT), '--wait', '--pause-timers']
     while True:
         if lock_free(env):
@@ -204,6 +212,8 @@ def lock_recovery(env):
         report = lock_holder_text(env)
         if report:
             print(report)
+        if 'snapshot rollback' not in report:
+            print(RESTART_HINT)
         print('Copyable command, in another terminal: ' + shlex.join(manual_command))
         choice = menu('Package lock recovery', [
             ('1', 'Wait for the package lock here, then retry this step (recommended)'),

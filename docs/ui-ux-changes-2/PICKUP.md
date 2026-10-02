@@ -1,0 +1,77 @@
+# UI/UX changes 2: pickup file
+
+Read this first, then `CHECKLIST.md` (the ten requirements with status and release) and `FINAL-REPORT.md` once it
+exists. The assignment is the developer's email *Ui/Ux Changes 2* of 2026-10-02 (nine screenshots; the `.eml` stays
+outside Git in the worktree root), walked as a first-time student after a fresh install. The goal behind every item:
+a first-time student is never confused, blocked or surprised by the UI.
+
+## Branch, base, numbering
+
+- Branch `claude/ui-ux-changes-2`, cut from `origin/main` `79f9a90` (release 1.30.50, the newest release on `main`).
+  Worktree `~/projects/clab-manager-1.30.42` (the same worktree the netlab stream used; see the note below).
+- Releases of this stream start at **1.30.52**, not 1.30.51: the netlab stream's uncommitted 1.30.51 (QA-021, the
+  lab-bound design dialogs) was sitting in this worktree and its image `clab-backup:1.30.51` is built and was the
+  running manager when this stream started. Reusing the number would have produced two different 1.30.51 trees.
+- The netlab stream's uncommitted work was preserved as a local WIP commit on `claude/netlab-integration` (message
+  "WIP (set aside by the ui-ux-changes-2 stream): …"); it is **not pushed**. To continue that stream:
+  `git checkout claude/netlab-integration && git reset --soft HEAD~1` restores the uncommitted state exactly.
+- Push with the `ArchRuger` gh account (`gh auth switch --user ArchRuger`), then switch back to `pruger-dev` so lab
+  saves keep pushing. Commit the intended files only (never `git add -A`: `.claude/`, the prompt files and the `.eml`
+  in the worktree root stay out).
+
+## Environment (clab-llm-dev2, 2026-10-02)
+
+- Full dev VM: Docker 29.8.1, containerlab 0.79.0, the manager container `containerlab-node-manager-backup-ui-1`
+  on the host network at `http://192.168.132.132:8081` (data `/srv/containerlab-node-manager/data`), capture stack
+  `clab-manager-capture`. The manager compose file is this worktree's `clab-backup-ui/compose.yml`; rebuild with
+  `sudo bash deploy/start-manager.sh --manager-only` (helpers refreshed by the launcher) or, for the image alone,
+  `docker compose -f clab-backup-ui/compose.yml up -d --build`.
+- NOS images on the VM: `n24l/cisco_xrv9k:24.3.1`, `n24l/ceos:4.35.0F`, `n24l/cjunosevolved:26.2R1.7-EVO`,
+  `n24l/vjunos-switch:23.2R1.14`, `ghcr.io/srl-labs/network-multitool:latest`. Lab `restore-square` (four images +
+  `host1`) exists with its NOS containers exited at the start of the stream; `netlab-test` and `Quick-Test` are
+  in My labs, not running.
+- Tooling: Python 3.12 venv `clab-backup-ui/.venv` (app requirements, httpx, Playwright 1.63 with Chromium 1243 in
+  `~/.cache/ms-playwright`; headless Chromium needs `LD_LIBRARY_PATH=$HOME/.local/lib/chromium-deps`, exported by
+  `~/.bashrc` for login shells only). Node 24 for the editor bundle: `~/.local/node24/bin` (system Node is 18);
+  `cd clab-backup-ui/lab-builder && npm ci && node build.mjs` then `node build.mjs --check`.
+- Subagent routing: user settings force `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` for agents without a model of their own;
+  the project agents carry theirs (`risk-reviewer` opus, `docs-auditor` sonnet, `mechanical-editor` haiku).
+
+## Plan: release-sized chunks
+
+| Chunk | Items | Release | Status |
+|---|---|---|---|
+| 0 | Orientation, workspace, baseline, plan | none | done |
+| 1 | 1 (installer advice), 9 (hide a lab) | 1.30.52 | done: both verified live on the dev VM (evidence below) |
+| 2 | 3, 4 (image and version written as typed; no automatic latest) | 1.30.53 | |
+| 3 | 2 (image usable on this VM: read-only helper mode, builder status) | 1.30.54 | |
+| 4 | 5, 6, 7 (labels: no Apply step, four corners everywhere, Edit map uses the builder's own node editor) | 1.30.55 | |
+| 5 | 8 (topology preview investigation and fix) | 1.30.56 | |
+| 6 | 10 (topology and annotations travel with every backup, Git save and download) | 1.30.57 | |
+
+The order puts shared groundwork first: 3 and 4 touch the same template fields; 5, 6 and 7 share the label and
+appearance code; 8 depends on how 6 is drawn.
+
+## Evidence
+
+- Item 1: `evidence/item1/installer-lock-recovery-1.30.52.txt` is the installer's own screen on the dev VM with the dpkg
+  frontend lock held by a harmless `fcntl.lockf` process and one basic package missing (`tools/installer_lock_repro.py`,
+  which removes `curl` and its three metapackages for the run and reinstalls them): the holder line, the rule, the new
+  restart advice, the copyable command, choice 3 back to the menu, exit. Before: the developer's screenshot (no advice).
+- Item 9: `evidence/item9/` (1440×900): `before-01-card-menu-1.30.51.png` (the ⋯ dialog without Hide), then
+  `02-card-menu-hide`, `03-home-hidden` (the card gone, the note, the toast), `04-vm-labs-dialog-hidden` (*Hidden from
+  Home* with Show on Home, beside the removed-and-excluded list), `07-home-after-readd` (the card back after *Add to My
+  labs without starting* from the topology browser). `tools/check_hide_lab.py`: 17 of 17 checks on the deployed 1.30.52,
+  including a discovery pass with the card staying away and zero console/page errors.
+
+## Exact next action
+
+Chunk 2 (items 3 and 4): the image and version fields of the editor's node template dialog. Facts already established
+(by reading the 0.3.2 package source under `clab-backup-ui/lab-builder/node_modules/@containerlab/clab-ui/dist`):
+`joinImageVersion(base, version)` in `chunks/chunk-TEX73Q7H.js` writes `base:${version || "latest"}`; `splitImageString`
+gives version `latest` for an image without a colon; `getVersionsForImage` falls back to `["latest"]` for an unknown base
+and `handleBaseChange` in `chunk-WM5ZW3ZW.js` takes `versions[0]`; none of it is configurable, and an adapter-side rewrite
+cannot stop the field from showing `latest`. The fix is a tracked build-time patch applied by `build.mjs` (esbuild
+`onLoad` on those two chunk files, exact anchors, build fails when an anchor is missing) with a test on the committed
+bundle and on the anchors. The template defaults (`BUILDER_TEMPLATES` in `lab-builder-page.js`, `vrnetlab/cisco_xrv9k:24.3.1`)
+belong to item 2 (chunk 3).

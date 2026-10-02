@@ -116,6 +116,26 @@ test('labs the VM has that are not in My labs, and hidden ones, are counted for 
  assert.equal(loading.element('home-skeleton').hidden,false);
 });
 
+test('a lab hidden from Home is not drawn, is counted as hidden with the ways back, and Home still lists the others',()=>{
+ const h=harness({labs:[{...running,hidden:true},stopped],discovery:{connected:true}},{tab:'all'});
+ h.context.renderHome();
+ const cards=h.element('lab-cards').innerHTML;
+ assert.doesNotMatch(cards,/BGP core/,'the hidden lab has no card');assert.match(cards,/OSPF area 0/,'the other lab keeps its card');
+ assert.equal(h.element('home-labs').hidden,false);
+ assert.equal(h.element('home-hidden-note').hidden,false);
+ assert.equal(h.element('home-hidden-note').textContent,'1 lab is hidden from Home. Show it again under Manager ▾ › Labs found on the VM…, or add it again from Choose a file on the lab VM….');
+ const count=(d,labs)=>JSON.parse(vm.runInContext('JSON.stringify(homeVmLabs('+JSON.stringify(d)+','+JSON.stringify(labs)+'))',h.context));
+ assert.deepEqual(count({discovered:[],ignored_labs:['old']},[{id:'x',hidden:true},{id:'y'}]),{waiting:0,hidden:2,note:'2 hidden'},'removed-and-excluded labs and labs hidden from Home are counted together');
+ assert.deepEqual(count({discovered:[]},[{id:'y'}]),{waiting:0,hidden:0,note:''});
+ const all=harness({labs:[{...running,hidden:true},{...stopped,hidden:true}],discovery:{connected:true}});all.context.renderHome();
+ assert.equal(all.element('home-labs').hidden,true,'with every lab hidden the list is gone');
+ assert.equal(all.element('home-hidden-note').textContent.slice(0,27),'2 labs are hidden from Home');
+ const none=harness({labs:[running,stopped],discovery:{connected:true}});none.context.renderHome();
+ assert.equal(none.element('home-hidden-note').hidden,true);assert.equal(none.element('home-hidden-note').textContent,'');
+ const loading=harness({labs:[{...running,hidden:true}],loaded:false});loading.context.renderHome();
+ assert.equal(loading.element('home-hidden-note').hidden,true,'no note before the state is known');
+});
+
 test('card actions are delegated: Open lab selects, Start selects then starts, the star toggles the favourite, ⋯ opens lab operations',async()=>{
  const h=harness({labs:[running,stopped],discovery:{connected:true}},{quick:()=>({startAction:'deploy',canStart:true,canDestroy:false,reason:''})});
  const click=h.element('home').listeners.click;

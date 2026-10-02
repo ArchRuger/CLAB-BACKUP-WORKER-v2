@@ -48,6 +48,7 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Save device configurations | containerlab's kind-dependent save command. The manager's own backups (Tools › Configuration backups) and *Save progress* are separate. |
 | Open all CLIs ↗ | A launcher page with one row per device (state pill, Open CLI ↗) and *Open all ready CLIs*. Allow pop-ups; at most 32 CLIs at once. |
 | Add to / Remove from favourites | Sorts the lab first under *All labs* on Home; *Recent labs* is ordered by the last successful deploy or redeploy this manager ran, and nothing else (visits, saves and favourites do not reorder it). |
+| Hide from Home / Show on Home | Takes the lab's card off Home (both tabs) and nothing else: the lab stays in My labs with its devices, backups, backup history, saved progress and Git binding; nothing on the VM changes, a running lab keeps running, and the background discovery never puts the card back by itself. Home says how many labs are hidden. Two ways back: **Choose a file on the lab VM…** › the lab's topology › *Add to My labs without starting* or *Deploy lab* (the same lab, not a second workspace), or **Manager ▾ › Labs found on the VM…** › *Hidden from Home* › **Show on Home**. This is not *Remove from this manager* (Advanced › Danger zone), which forgets the workspace. |
 | Edit map | Move devices and notes, add text, boxes, circles, lines and groups, style, undo and redo, save and export the map as JSON or draw.io; never changes devices, links or the topology file (see *The map and its editor*). |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the lab is running. |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
@@ -157,7 +158,9 @@ found on the VM…** (Home itself carries no such list, except the short *Alread
 VM* list of the first-run page while My labs is empty). **Add to My labs** reads the lab's
 files, shows them for review and imports only when you confirm with **Add lab**; discovery
 never imports a lab by itself. A lab removed with the hide option stays listed there as
-hidden until **Import again** or **Stop hiding**.
+hidden until **Import again** or **Stop hiding**; a lab hidden from Home (*Hide from Home* in
+the lab's ⋯ dialog, which keeps everything) is listed under *Hidden from Home* with **Show on
+Home**, and adding its topology again from the topology browser shows it too.
 
 Discovery matches imported lab names to the original VM topology path. Open
 **Manager ▾ › Deploy a new lab…** to add an undeployed topology. **Sync topology from VM**

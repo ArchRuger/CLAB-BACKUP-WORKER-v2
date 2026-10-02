@@ -50,7 +50,7 @@ GitHub.
 ## Terminal menu
 
 ```text
-Containerlab Node Manager 1.30.50 — guided setup
+Containerlab Node Manager 1.30.52 — guided setup
 Linux account: your existing VM account
 Persistent home: /home/your-account
 Source: /home/your-account/projects/clab-manager
@@ -129,7 +129,7 @@ repositories and lab containers are retained. Source installation does not migra
 data out of an old container that lacks persistent storage; use
 [the migration guide](STANDALONE-SETUP.md) first in that case.
 
-The installer ends with `Manager 1.30.50: running; HTTP and version checks passed.`
+The installer ends with `Manager 1.30.52: running; HTTP and version checks passed.`
 and the local address, then exits to the shell (exit code 0); it does not loop back
 to the Setup menu after a successful path. A failed or cancelled step keeps
 today's behaviour instead: completed work stays in place, the affected phase's
@@ -360,6 +360,9 @@ generic retry choice:
 Package lock held by pid 2230 (unattended-upgr) on /var/lib/dpkg/lock-frontend.
 Never stop unattended-upgrades.service, kill this process, or delete the lock
 file: let the current run finish, or wait it out here.
+If this appears right after a VM snapshot rollback or a reboot, a normal restart
+of the VM also clears it (Ubuntu lets the running upgrade finish before it shuts
+down); every completed setup step is kept, so run the installer again afterwards.
 Copyable command, in another terminal: sudo python3 /home/you/projects/clab-manager/deploy/apt_lock.py --wait --pause-timers
 
 Package lock recovery
@@ -386,6 +389,15 @@ sudo python3 "$HOME/projects/clab-manager/deploy/apt_lock.py" --show   # who hol
 
 It exits 0 once released, 1 on a timeout (`--timeout SECONDS`, default 900), and
 130 on Ctrl+C.
+
+**After a snapshot rollback.** Rolling a VM back to a snapshot taken shortly after the
+Ubuntu installation restores a system whose own `unattended-upgrades` run has not
+finished yet, so the first installer run often meets this lock. The screen says so and
+names the second way out: restart the VM (a normal restart from the Ubuntu account;
+Ubuntu lets the running upgrade finish before it shuts down), then start the installer
+again. Every step the installer completed is kept, as with choice 3. The installer and
+`apt_lock.py` only give that advice: neither restarts the VM, stops the service, kills
+the process or deletes a lock file.
 
 ## lazydocker
 

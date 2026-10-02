@@ -39,6 +39,17 @@ function opCommand(action,label=opLabels[action],options={}){
 // The helper refuses the flag on a containerlab without it, so the flag is only sent when the
 // installed command is known to have it or the capabilities could not be read at all.
 function opDestroyOptions(caps=opCaps){return caps?.actions?.destroy?.cleanup===false?{}:{cleanup:true};}
+// Hide from Home takes the lab off the Home list and nothing else: the words say what stays (the lab, its
+// devices, backups, saved progress and settings; the VM untouched) and the two ways back. Pure.
+function opHideHelp(lab){
+ if(lab&&lab.hidden)return 'This lab is hidden from Home. Show on Home puts its card back; nothing else changed while it was hidden.';
+ const running=lab?.deployment?.status==='Running';
+ return 'Hide from Home takes the card off Home only'+(running?' (the lab keeps running on the VM)':'')+': its devices, backups, saved progress and settings are kept and nothing on the VM changes. Add it again from Choose a file on the lab VM…, or show it under Manager ▾ › Labs found on the VM….';
+}
+function opHideNotice(lab){
+ if(lab&&lab.hidden)return lab.name+' is back on Home.';
+ return lab.name+' is hidden from Home'+(lab?.deployment?.status==='Running'?' and keeps running on the VM':'')+'. Add it again from Choose a file on the lab VM…, or Manager ▾ › Labs found on the VM….';
+}
 async function openLabOperations(id=activeId){
  opMenuLab=id;const lab=state.labs.find(l=>l.id===id);if(!lab)return;
  const dialog=opDialog('lab-operations-dialog',lab.name,'<p>Checking what this VM can do…</p>');
@@ -48,7 +59,7 @@ async function openLabOperations(id=activeId){
  const cleanup=['deploy','redeploy'].filter(a=>opCaps?.actions[a]?.cleanup).map(a=>opCommand(a,(a==='deploy'?'Deploy lab':'Redeploy lab')+' and clear the lab folder…',{cleanup:true})).join('');
  opDialog(dialog.id,lab.name,`<p class="op-path">${path?'Topology file on the VM: '+esc(path):"This lab has no topology file on the VM yet. Import the lab's files (Advanced › Deployment details) to enable these actions."}</p>${problem?`<p class="op-notice">Couldn't check the VM's commands, so every action is shown; some may fail. Details: ${esc(problem)}</p>`:''}
  <div class="op-sections"><section><h3>Deployment</h3><div class="op-grid">${opCommand('deploy','Deploy lab')}${['redeploy','start','stop','restart','apply','inspect','save'].map(a=>opCommand(a)).join('')}</div><p class="form-help">Deploy creates and starts the devices; Start, Stop and Restart act on the running devices. "Save device configurations" uses containerlab's own save (supported device types only); your Save progress snapshots are separate.</p></section>
- <section><h3>Lab tools</h3><div class="op-grid"><button class="button secondary" data-local="ssh"><span>Open all CLIs <span aria-hidden="true">↗</span></span></button><button class="button secondary" data-local="interactive">Edit map</button><button class="button secondary" data-local="history">Operation history…</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove from favourites':'Add to favourites'}</button></div></section>
+ <section><h3>Lab tools</h3><div class="op-grid"><button class="button secondary" data-local="ssh"><span>Open all CLIs <span aria-hidden="true">↗</span></span></button><button class="button secondary" data-local="interactive">Edit map</button><button class="button secondary" data-local="history">Operation history…</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove from favourites':'Add to favourites'}</button><button class="button secondary" data-local="hide">${lab.hidden?'Show on Home':'Hide from Home'}</button></div><p class="form-help">${opHideHelp(lab)}</p></section>
  <section class="op-danger"><h3>Danger</h3><div class="op-grid">${opCommand('destroy','Destroy lab…',opDestroyOptions())}${cleanup}${opCommand('delete','Delete the topology file from the VM…')}</div><p class="form-help">Destroy removes the running devices and, when the installed containerlab supports cleanup, the lab's generated folder on the VM. Redeploy keeps that folder unless you choose the "clear the lab folder" variant.</p></section></div>`);
  dialog.querySelectorAll('[data-op-action]').forEach(b=>b.onclick=()=>{
   const action=b.dataset.opAction,options=JSON.parse(b.dataset.opOptions);
@@ -58,6 +69,7 @@ async function openLabOperations(id=activeId){
   const action=b.dataset.local;
   if(action==='ssh')opNewTab({mode:'ssh',lab:id});
   if(action==='favorite'){await json('/labs/'+id+'/operations-settings','PUT',{favorite:!lab.favorite});await refresh();dialog.close();}
+  if(action==='hide'){await json('/labs/'+id+'/operations-settings','PUT',{hidden:!lab.hidden});await refresh();dialog.close();notify(opHideNotice(lab));}
   if(action==='interactive')await opLayout(id);
   if(action==='history')await opHistory(id);
  }));
