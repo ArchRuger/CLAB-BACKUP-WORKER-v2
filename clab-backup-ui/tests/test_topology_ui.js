@@ -12,6 +12,13 @@ test('map nodes expose the exact inventory identity and imported label placement
  assert.match(svg,/data-map-node="clab-lab-R1"/);assert.match(svg,/aria-haspopup="menu"/);assert.match(svg,/y="-29"/);
  const unbound=context.topologyNode({id:'R1',label:'R1',x:30,y:40});assert.doesNotMatch(unbound,/data-map-node=/);
 });
+test('the four corner label positions sit diagonally off the icon, anchored away from it (item 6)',()=>{
+ const at=pos=>{const svg=context.topologyNode({id:'R1',inventory_name:'clab-lab-R1',label:'R1',x:0,y:0,labelPosition:pos});const m=/<text x="(-?\d+)" y="(-?\d+)" text-anchor="(\w+)">R1<\/text>/.exec(svg);return m?[Number(m[1]),Number(m[2]),m[3]]:null;};
+ assert.deepEqual(at('top-left'),[-14,-29,'end']);assert.deepEqual(at('top-right'),[14,-29,'start']);
+ assert.deepEqual(at('bottom-left'),[-14,35,'end']);assert.deepEqual(at('bottom-right'),[14,35,'start']);
+ assert.deepEqual(at('bottom'),[0,35,'middle']);assert.deepEqual(at('top'),[0,-29,'middle']);assert.deepEqual(at('left'),[-28,5,'end']);assert.deepEqual(at('right'),[28,5,'start']);
+ assert.deepEqual(at('sideways'),[0,35,'middle'],'an unknown value draws at the bottom, like the editor');
+});
 test('endpoint labels can be hidden without removing wiring',()=>{
  const nodes=new Map([['r1',{id:'r1',label:'r1',x:0,y:0}],['r2',{id:'r2',label:'r2',x:200,y:100}]]);
  const svg=context.topologyLink([{node:'r1',interface:'eth1'},{node:'r2',interface:'eth2'}],nodes,0,{labelMode:'hide'});

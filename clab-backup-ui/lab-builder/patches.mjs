@@ -32,6 +32,49 @@ export const PATCHES = [
     file: /chunk-WM5ZW3ZW\.js$/, why: "changing the image keeps the version as typed (empty stays empty); the known tags stay offered in the Version list",
     find: '      const versions = getVersionsForImage(newBase);\n      const newVersion = versions.length > 0 ? versions[0] : localVersion;', replace: '      const newVersion = localVersion;',
   },
+  // Item 6: the four corner label positions (top-left, top-right, bottom-left, bottom-right), so a device's name
+  // can sit at a 45° corner where no link covers it. The select offers them, the canvas draws them; the
+  // manager's own renderer, preview and draw.io export learn the same four values (topology-render.js,
+  // drawio_export.py). An editor that does not know a corner (the VS Code extension's pinned 0.3.1) still
+  // opens such a file and draws that label at the bottom.
+  {
+    file: /chunk-WM5ZW3ZW\.js$/, why: "the Label Position select offers the four corners",
+    find: '  { value: "left", label: "Left" },\n  { value: "right", label: "Right" }\n];\nvar NODE_DIRECTION_OPTIONS = [',
+    replace: '  { value: "left", label: "Left" },\n  { value: "right", label: "Right" },\n  { value: "top-left", label: "Top left" },\n  { value: "top-right", label: "Top right" },\n  { value: "bottom-left", label: "Bottom left" },\n  { value: "bottom-right", label: "Bottom right" }\n];\nvar NODE_DIRECTION_OPTIONS = [',
+  },
+  {
+    file: /chunk-WM5ZW3ZW\.js$/, why: "a corner is a known label position, not drawn as bottom",
+    find: 'function normalizeNodeLabelPosition(value) {\n  switch (value) {\n    case "top":\n    case "right":\n    case "left":\n      return value;',
+    replace: 'function normalizeNodeLabelPosition(value) {\n  switch (value) {\n    case "top":\n    case "right":\n    case "left":\n    case "top-left":\n    case "top-right":\n    case "bottom-left":\n    case "bottom-right":\n      return value;',
+  },
+  {
+    file: /chunk-WM5ZW3ZW\.js$/, why: "the canvas places a corner label diagonally off the icon's corner",
+    find: '    case "left":\n      return {\n        ...baseStyle,\n        right: params.iconSize - sideOverlap,\n        top: "50%",\n        transform: `translateY(-50%)${rotateTransform}`\n      };\n    default:',
+    replace: '    case "left":\n      return {\n        ...baseStyle,\n        right: params.iconSize - sideOverlap,\n        top: "50%",\n        transform: `translateY(-50%)${rotateTransform}`\n      };\n    case "top-left":\n      return { ...baseStyle, bottom: params.iconSize + verticalGap, right: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    case "top-right":\n      return { ...baseStyle, bottom: params.iconSize + verticalGap, left: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    case "bottom-left":\n      return { ...baseStyle, top: params.iconSize + verticalGap, right: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    case "bottom-right":\n      return { ...baseStyle, top: params.iconSize + verticalGap, left: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    default:',
+  },
+  // Item 5: no Apply step for the look of a device. A change of the label position, the text direction, the
+  // icon or the Transparent box (the appearance choices one clicks) is applied the moment it is chosen, as one
+  // editNode step the editor's undo takes back. The colour pickers and the corner radius keep the Apply button
+  // (they fire while dragging or typing); a device template's dialog keeps Save.
+  {
+    file: /chunk-WM5ZW3ZW\.js$/, why: "choosing a label position, text direction, icon or Transparent applies at once (one undoable step)",
+    find: '  useEffect24(() => {\n    if (!formData || readOnly || !onPreview) return;\n    onPreview(formData);\n  }, [formData, readOnly, onPreview]);',
+    replace: '  useEffect24(() => {\n    if (!formData || readOnly || !onPreview) return;\n    onPreview(formData);\n  }, [formData, readOnly, onPreview]);\n  useEffect24(() => {\n    if (!formData || readOnly || !hasChanges || formData.isCustomTemplate === true) return;\n    const base = originalData ?? {};\n    const changed = Object.keys({ ...base, ...formData }).filter((k) => formData[k] !== base[k]);\n    const atOnce = new Set(["labelPosition", "direction", "icon", "labelBackgroundColor"]);\n    if (changed.length === 0 || !changed.every((k) => atOnce.has(k))) return;\n    if (changed.includes("labelBackgroundColor") && formData.labelBackgroundColor !== "" && formData.labelBackgroundColor !== "transparent") return;\n    handleApply();\n  }, [formData, readOnly, hasChanges, originalData, handleApply]);',
+  },
+  // Item 7: Edit map (the manager's map editor, the editor's view mode) offers the editor's own node editor for a
+  // device's look instead of a page dialog: the context menu gets a "Device look" entry (the view mode has no
+  // edit items), the Basic tab shows only the icon and the label sections, and the adapter turns the resulting
+  // editNode command into an annotation-only change (main.tsx), so the topology is never touched.
+  {
+    file: /chunk-WM5ZW3ZW\.js$/, why: "the map editor's device menu opens the node editor for the look",
+    find: '  if (isEditMode) {\n    if (items.length > 0) {\n      items.push({ id: "divider-runtime-edit", label: "", divider: true });\n    }\n    items.push(...buildNodeEditItems(ctx));\n  }',
+    replace: '  if (isEditMode) {\n    if (items.length > 0) {\n      items.push({ id: "divider-runtime-edit", label: "", divider: true });\n    }\n    items.push(...buildNodeEditItems(ctx));\n  } else if (window.__CLAB_MAP_LOOK__ === true && !isNetworkNode) {\n    if (items.length > 0) items.push({ id: "divider-runtime-edit", label: "", divider: true });\n    items.push({ id: "edit-node", label: "Device look", icon: React12.createElement(EditIcon, { fontSize: "small" }), disabled: ctx.isLocked, onClick: () => { ctx.editNode(targetId); closeContextMenu(); } });\n  }',
+  },
+  {
+    file: /chunk-WM5ZW3ZW\.js$/, why: "in the map editor the node editor shows the icon and label sections only",
+    find: '    /* @__PURE__ */ jsxs21(PanelSection, { title: "Node Parameters", children: [',
+    replace: '    window.__CLAB_MAP_LOOK__ !== true && /* @__PURE__ */ jsxs21(PanelSection, { title: "Node Parameters", children: [',
+  },
 ];
 
 // Apply every patch whose file matches; each anchor must occur exactly once.

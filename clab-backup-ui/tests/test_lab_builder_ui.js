@@ -353,6 +353,11 @@ test('the image is written as typed and the version is never filled in: the trac
  assert.doesNotMatch(code,/version:"latest"/,'an untagged or empty image must read as an empty version');
  assert.doesNotMatch(code,/\["latest"\]\)/,'a known untagged image must offer no version either');
  assert.match(code,/return ([A-Za-z_$]+)\?([A-Za-z_$]+)\?`\$\{\1\}:\$\{\2\}`:\1:""/,'the join writes image:version, or the image alone');
+ // Items 5, 6 and 7: the corner options, the corner styles, the immediate apply and the map editor's device look.
+ for(const label of ['"Top left"','"Top right"','"Bottom left"','"Bottom right"'])assert.ok(code.includes(label),'the Label Position select offers '+label);
+ assert.match(code,/case"top-left":case"top-right":case"bottom-left":case"bottom-right":return/,'a corner is a known label position');
+ assert.ok(code.includes('"Device look"')&&code.includes('__CLAB_MAP_LOOK__'),'the map editor opens the node editor for the look');
+ assert.ok(code.includes('"labelPosition","direction","icon","labelBackgroundColor"'),'the choices one clicks apply at once');
  const {PATCHES,applyPatches}=await import('../lab-builder/patches.mjs');
  assert.ok(PATCHES.length>=6);for(const p of PATCHES){assert.ok(p.file instanceof RegExp&&p.find&&p.replace&&p.why,'a patch names its file, anchor, replacement and reason');assert.notEqual(p.find,p.replace);}
  assert.throws(()=>applyPatches('chunk-TEX73Q7H.js','no anchors here'),/found 0 times/);

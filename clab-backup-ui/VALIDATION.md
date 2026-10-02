@@ -1,3 +1,46 @@
+# UI/UX changes 2, part 4: labels and the map editor's device look — 1.30.55
+
+What was actually run for this release (dev VM `clab-llm-dev2`, Chromium 1243 through Playwright 1.63; the editor
+bundle rebuilt with Node 24.21.0; the fixture manager on a fresh `FIXTURE_DATA`).
+
+## Static and unit
+
+- `cd clab-backup-ui/lab-builder && node build.mjs && node build.mjs --check`: 132 files, the committed assets match a
+  fresh build; every one of the twelve anchors in `patches.mjs` found exactly once in the pristine package.
+- `python3 deploy/verify-release.py` source and documentation at 1.30.55; `git diff --check` clean; `node --check` on
+  the changed scripts; `check_links.py` clean.
+- Browser: `node --test tests/*.js` → 384 pass, 0 fail. New or rewritten: `test_topology_ui.js` (the eight label
+  positions' text coordinates and anchors, an unknown value at the bottom), `test_map_editor_ui.js` (the look through
+  `applyLook`, the four corners, `MAP_LABEL_POSITIONS`, the page dialog gone, the hidden node editor tabs, radius
+  0–32), `test_lab_builder_ui.js` (the bundle offers the four corner labels, treats them as known positions, carries
+  "Device look" and `__CLAB_MAP_LOOK__`, and the immediate-apply key set).
+- Python: `python -m unittest discover -s tests -t tests` → 1717 tests, 1716 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (passes alone once
+  it exists). New: `test_diagram_editor.py` `test_corner_label_positions_reach_the_drawio_export` (the four draw.io
+  style pairs, an unknown value at the bottom, the corner kept by the annotations export).
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` (helpers verified at 1.30.55).
+- `docs/ui-ux-changes-2/tools/check_labels.py` against the deployed manager (twice: on the rebuilt image before the
+  release bump and on the deployed 1.30.55): 20 of 20 checks, zero console or page errors. In the builder: the Label
+  Position list offers the four corners; choosing *Top right* writes `top-right` into the draft at once with no Apply
+  button on the panel; the canvas places the label above and right of the icon; the text direction applies at once
+  too; each change is one Ctrl+Z step. In Edit map on `netlab-test` (not running): the *Device look…* button and
+  dialog are gone; the device's menu offers *Device look* and no topology edit; the node editor shows the icon and
+  label sections only, the other tabs hidden; *Bottom left* is in the map document at once; the topology text is
+  unchanged and the page reads *Unsaved changes*; Undo takes the look back, Redo brings it back; after *Save map* the
+  manager's drawing carries `bottom-left`, the draw.io export carries
+  `labelPosition=left;verticalLabelPosition=bottom;align=right;verticalAlign=top;`, and the Topology tab draws the
+  label at x −14, y 35, anchored at its end; the lab's map was then restored. Screenshots in
+  `docs/ui-ux-changes-2/evidence/item5-7/` (the developer's two screenshots as the before state).
+- Regression against the fixture manager: `docs/ui-review-001/tools/check_ui003.py` (row 9 rewritten for the new
+  path and made idempotent) and `check_ui003b.py`, both clean; `docs/lab-builder/tools/student_workflow.py` 41 PASS
+  earlier in this stream on the same page code.
+- Not exercised: the VS Code extension itself (its behaviour with a corner was established from the pinned editor
+  package's code: an unknown position is drawn at the bottom and the file is never refused); a real NOS (no lab was
+  deployed; the change is to the drawing).
+
 # UI/UX changes 2, part 3: images usable on this VM — 1.30.54
 
 What was actually run for this release (dev VM `clab-llm-dev2`, Docker 29.8.1 with `/usr/bin/docker`, Chromium 1243

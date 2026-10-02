@@ -1,3 +1,23 @@
+# UI/UX changes 2, part 4: labels and the map editor's device look — 1.30.55
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) **the label positions are eight**:
+bottom, top, left, right and the four corners (`top-left`, `top-right`, `bottom-left`, `bottom-right`), read and drawn
+by the editor (patched `normalizeNodeLabelPosition` and `buildNodeLabelStyle`, the select's options), the manager's
+renderer (`topology-render.js`: a corner sets `tx=±(r-6)` with the anchor away from the icon, on top of the top/bottom
+`ty`), the draw.io export (`drawio_export.py` `label_style`) and the map editor page (`MAP_LABEL_POSITIONS`); an
+unknown value still draws at the bottom everywhere, which is also what the VS Code extension's pinned editor does.
+(2) **Immediate apply** lives in the patched `NodeEditorView` effect: only `labelPosition`, `direction`, `icon` and a
+`labelBackgroundColor` of `''` / `transparent`, never for a template (`isCustomTemplate`), never while a non-look field
+is also changed; do not widen it to the colour pickers or the corner radius (they fire while dragging or typing).
+(3) **Map mode's device look** is the editor's node editor over an annotation-only translation: `window.__CLAB_MAP_LOOK__`
+(set by the adapter for `mapOnly`) makes the patched context menu add `edit-node` ("Device look") and the Basic tab drop
+*Node Parameters*; `lab-builder.css` hides the other node editor tabs in `.map-editor`; `dispatchCommand` in `main.tsx`
+turns `editNode` into `page.applyLook(id, look)` (`mapApplyLook` in `map-editor-page.js`, radius 0–32) and one
+`setAnnotationsContent` step, refusing a rename; `MAP_COMMANDS` is unchanged and `editNode` is still not in it. Never let
+`editNode` reach the engine in map mode, never add the engine's undo/redo, and keep the topology-unchanged check after
+every settled step. (4) The former `#map-look` dialog is gone from `map-editor.html`; `check_ui003.py` row 9 and
+`docs/ui-ux-changes-2/tools/check_labels.py` drive the new path. Link labels… still has its page dialog.
+
 # UI/UX changes 2, part 3: images usable on this VM — 1.30.54
 
 Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) **the helper's two image modes are

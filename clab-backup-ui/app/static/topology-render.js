@@ -28,7 +28,10 @@ function topologyNode(n,states={}){
  const size=40,r=size/2,matched=!!n.inventory_name,state=(matched&&states&&states[n.inventory_name])||'neutral';
  const icon=(n.icon||'router').toLowerCase();
  const path=icon.includes('switch')?'M-13-8H13M-13 8H13M8-13L13-8L8-3M-8 3L-13 8L-8 13':icon.includes('server')||icon.includes('linux')||icon.includes('host')?'M-12-13H12V13H-12ZM-12-4H12M-12 4H12M-7-9H-3M-7 0H-3M-7 9H-3':'M-14-5H-5V-14M-9-10L-5-14L-1-10M5-14V-5H14M10-9L14-5L10-1M14 5H5V14M1 10L5 14L9 10M-5 14V5H-14M-10 1L-14 5L-10 9';
+ // Label placement, the editor's values: bottom (default), top, left, right and the four corners, where the
+ // label sits diagonally off the icon's corner so a link leaving the icon's side never covers the name.
  const pos=n.labelPosition||'bottom';let tx=0,ty=r+15,anchor='middle';if(pos.includes('top'))ty=-r-9;if(pos==='left'){tx=-r-8;ty=5;anchor='end';}if(pos==='right'){tx=r+8;ty=5;anchor='start';}
+ if(pos.endsWith('-left')){tx=-r+6;anchor='end';}if(pos.endsWith('-right')){tx=r-6;anchor='start';}
  const rotation={up:0,right:90,down:180,left:270}[n.direction]||0;
  const label=String(n.label??n.id??'');
  const title=matched?`${label} — click to open, right-click for more actions`:`${label} is drawn on the map but is not one of this lab's devices`;

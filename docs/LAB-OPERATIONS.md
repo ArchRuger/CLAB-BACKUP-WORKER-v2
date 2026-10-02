@@ -119,11 +119,19 @@ Choose **Edit map** (Topology tab, Tools tab or Lab actions ▾ › Advanced opt
 topology file the manager has, it opens the same editor as the [lab builder](LAB-BUILDER.md), on the
 lab's own map and for the drawing only: drag devices, use a generated layout, add and style text,
 rectangles, circles, lines and groups (drag devices into a group), copy and paste annotations, set link
-label offsets, the link label mode and the grid. The bar above the editor adds **Undo** / **Redo**
-(Ctrl+Z, Ctrl+Shift+Z; map changes only), **Device look…** (a device's icon, colours and label) and
-**Link labels…** (how far a link's interface names sit from its devices). Devices and links cannot be added, changed or removed
-there, nothing is deployed and the running lab is not touched; the editor cannot send anything but the
-map to the manager. **Save map** stores it and the Topology tab follows; **Back to the lab** asks when
+label offsets, the link label mode and the grid. A device's look (its icon and corner radius, the icon
+colour, the label's position, text direction and background) is edited as in the builder: right-click the
+device and choose **Device look**, which opens the editor's own node editor with just those sections; a
+label position, text direction, icon or the Transparent box applies the moment it is chosen (one Undo step
+each), the colour pickers and the corner radius with the panel's *Apply*. The label positions include the
+four corners (top left, top right, bottom left, bottom right), where a name sits diagonally off the icon
+so no link covers it; the Topology tab, the preview and the draw.io export draw them the same way, and
+the VS Code extension opens a map that uses a corner and draws that label below the icon. The bar
+above the editor adds **Undo** / **Redo** (Ctrl+Z, Ctrl+Shift+Z; map changes only) and **Link labels…**
+(how far a link's interface names sit from its devices). Devices and links cannot be added, changed or
+removed there, nothing is deployed and the running lab is not touched; the editor cannot send anything
+but the map to the manager (the node editor's change is turned into a change of the map document before
+the editing engine sees it). **Save map** stores it and the Topology tab follows; **Back to the lab** asks when
 something is unsaved. *Download map file* gives the full annotations document, *Export to draw.io* uses
 the saved map, and *Import map file…* replaces the map with a file from your computer. A map that was
 changed elsewhere since it was opened is not overwritten: reopen it. A lab without a topology file in the

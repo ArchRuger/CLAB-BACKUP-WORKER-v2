@@ -32,6 +32,16 @@ downloaded draft (below): the topology is read by the manager before it opens, a
 valid JSON is refused rather than silently dropped. Dropping a file over a draft that has changes not
 yet on the VM asks before replacing it; the welcome page, with nothing open to lose, does not.
 
+Right-click a device and choose **Edit Node** for its properties. In the *Basic* tab the choices one clicks
+(the label position, the label text direction, the icon, the label's *Transparent* box) apply the moment
+they are chosen, each as one step of the editor's Undo; the fields one types or drags (the name, kind,
+image, the colour pickers, the corner radius) are applied with the panel's *Apply* button. The label
+position offers the four corners (top left, top right, bottom left, bottom right) besides bottom, top,
+left and right: a corner puts the name diagonally off the icon, where no link covers it. The corners are
+written to `<file>.annotations.json` like the other values; the manager's Topology tab, the preview and
+the draw.io export draw them, and the VS Code extension (which does not know them) opens such a map and
+draws that label below the icon.
+
 The editor's *Lab settings* (the gear button) can rename the lab. A draft that is not on the VM yet
 takes the new name, in the bar, in *Drafts…* and for the folder it will be saved to. A lab that is
 already on the VM keeps its name: the page says so at once and saving stays off until the name is set

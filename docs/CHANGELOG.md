@@ -4,6 +4,39 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.55
+
+*UI/UX changes 2*, items 5, 6 and 7: labels and the map editor's device look. Six more tracked build-time patches
+to the pinned editor (`clab-backup-ui/lab-builder/patches.mjs`, applied by `build.mjs`, pinned by the bundle test).
+
+- **No Apply step for the look of a device (item 5).** In the node editor the choices one clicks (the label
+  position, the label text direction, the icon, the label's *Transparent* box) apply the moment they are chosen,
+  each as one `editNode` step the editor's Undo takes back; the Apply button appears only for the fields one types
+  or drags (name, kind, image, the colour pickers, the corner radius), which fire while typing or dragging. A
+  device template's dialog keeps its Save.
+- **Four corner label positions (item 6).** *Top left*, *Top right*, *Bottom left* and *Bottom right* join
+  bottom, top, left and right: the label sits diagonally off the icon's corner, where no link covers the name.
+  The editor's canvas draws them (`normalizeNodeLabelPosition`, `buildNodeLabelStyle`), the manager's Topology
+  tab and its preview renderer place the text diagonally with the matching anchor (`topology-render.js`), the
+  draw.io export uses the matching `labelPosition` / `verticalLabelPosition` pair, the map document keeps the
+  value as it is. **What the VS Code extension does with a corner**, established by reading the code rather than
+  by running VS Code: the extension (0.26.3) pins `@srl-labs/clab-ui 0.3.1`, whose normaliser, like upstream
+  `main`, maps any unknown position to `bottom` and never refuses the file; a map that uses a corner opens there
+  with that label drawn below the icon.
+- **Edit map uses the builder's node editor for the look (item 7).** The page's *Device look…* dialog is gone.
+  In Edit map, right-click a device and choose **Device look**: the editor's own node editor opens with only the
+  *Icon* and *Label & Direction* sections (the editor's view mode offers no edit entries, so the patched menu adds
+  this one; the Basic tab's *Node Parameters* and the other tabs are hidden in map mode), the same immediate apply
+  and corners as in the builder. The guarantees of map mode hold: the node editor's `editNode` is a topology command,
+  so the adapter (`main.tsx`) turns it into a change of the annotations document (the page's `applyLook`, the
+  former dialog's validated merge of the six look keys, corner radius now 0–32 like the manager's own bound) applied
+  as one annotation-only engine step; a payload that would rename the device is refused; the topology text is
+  checked unchanged after every step as before; the page's Undo / Redo record it as one step; nothing is deployed.
+  *Link labels…* keeps its dialog: the editor's link editor is also edit-mode only and would need the same
+  translation of `editLink`; the final report asks whether it should follow.
+- `docs/ui-review-001/tools/check_ui003.py` row 9 drives the new path; `docs/ui-ux-changes-2/tools/check_labels.py`
+  is the live check of the three items (builder, Edit map, Topology tab, draw.io).
+
 ## Changes in 1.30.54
 
 *UI/UX changes 2*, item 2: the lab builder knows whether an image is usable on this VM and says so before the

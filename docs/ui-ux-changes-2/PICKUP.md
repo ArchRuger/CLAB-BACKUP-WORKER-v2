@@ -45,7 +45,7 @@ a first-time student is never confused, blocked or surprised by the UI.
 | 1 | 1 (installer advice), 9 (hide a lab) | 1.30.52 | done: both verified live on the dev VM (evidence below) |
 | 2 | 3, 4 (image and version written as typed; no automatic latest) | 1.30.53 | done: six tracked editor patches (`lab-builder/patches.mjs`), verified live |
 | 3 | 2 (image usable on this VM: read-only helper mode, builder status) | 1.30.54 | done: helper modes risk-reviewed (findings applied), verified live |
-| 4 | 5, 6, 7 (labels: no Apply step, four corners everywhere, Edit map uses the builder's own node editor) | 1.30.55 | |
+| 4 | 5, 6, 7 (labels: no Apply step, four corners everywhere, Edit map uses the builder's own node editor) | 1.30.55 | done: six more editor patches, verified live |
 | 5 | 8 (topology preview investigation and fix) | 1.30.56 | |
 | 6 | 10 (topology and annotations travel with every backup, Git save and download) | 1.30.57 | |
 
@@ -75,7 +75,23 @@ appearance code; 8 depends on how 6 is drawn.
   review (`04-…`) and a deploy review (`05-…`) on 1.30.54. `tools/check_image_availability.py`: 12 of 12 on the
   deployed manager and on the fixture. The risk review's findings and their fixes are in the 1.30.54 VALIDATION section.
 
+- Items 5, 6, 7: `evidence/item5-7/` (1440×900): the developer's two screenshots as the before state, then
+  `01-builder-top-right` (the node editor's corner choice applied with no Apply button), `02-map-device-menu` (*Device
+  look* in Edit map's device menu), `03-map-device-look-panel` (the icon and label sections only),
+  `04-map-bottom-left`, `05-topology-tab-corner` (the Topology tab drawing the saved corner).
+  `tools/check_labels.py`: 20 of 20 on the deployed manager; `check_ui003.py` and `check_ui003b.py` on the fixture.
+
 ## Exact next action
+
+Chunk 5 (item 8): the topology preview. Established by reading the code: the preview is `opMapPreview` in
+`operations.js`, opened from the Topology file dialog's *Preview topology* (`opEdit`, also the dialog the builder hands
+over to after a save); it parses through `POST /api/operations/parse-yaml` (`parse_drawing` with the VM's
+`<topology>.annotations.json` read through the helper, else the grid) and renders with `topologyMarkup(drawing)` from
+`topology-render.js`; the parse endpoint never binds the drawing to a lab's inventory (`bind_drawing` runs only for a
+lab's own `/topology` route), so every device is `unmatched` and gets the dashed outline and the *Not in this lab*
+caption at `y=r+30`, which lands on the interface label of a downward link; an uploaded file's map (`opUpload`) is
+never passed to the preview (`path` is empty) so it draws the grid. Reproduce on the real product with a builder-made lab
+first (canvas vs preview, every difference listed), then fix. (Superseded: chunk 4 notes below.)
 
 Chunk 4 (items 5, 6, 7): labels and the map editor. Established by reading the pinned package (0.3.2) and upstream
 `main`: the editor's `normalizeNodeLabelPosition` (nodeStyles.ts) accepts top/right/left and draws anything else at the
