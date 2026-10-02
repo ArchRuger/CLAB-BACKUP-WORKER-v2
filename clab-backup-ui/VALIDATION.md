@@ -1,3 +1,281 @@
+# UI/UX changes 2, part 6: the topology travels with every backup — 1.30.57
+
+What was actually run for this release (dev VM `clab-llm-dev2`, Docker 29.8.1, containerlab 0.79.0, `n24l/ceos:4.35.0F`).
+
+## Review
+
+- `risk-reviewer` (Opus, read-only) reviewed the runner, Git-progress, Git-helper, downloads and main diff before the
+  release: the helper boundary does not widen; two must-fix findings (the read time in the manifest made every unchanged
+  save a new commit; a lab name starting with a dash gave a file name the helper refuses) and three should-fix ones (a
+  capture error could fail the backup; stale embedded files lingered in `latest/`; a restore from a capture could be
+  stopped by the embedded topology), all applied, with the optional ones that cost little (one lock for the bundle and
+  its time, the manager's map when the VM has none, the definition path first, the archive event's count, the log
+  wording). Its advice on secrets is a sentence in `docs/GIT-PROGRESS.md`.
+
+## Static and unit
+
+- `python3 deploy/verify-release.py` source and documentation at 1.30.57; `git diff --check` clean; `node --check` on
+  `app.js`; `check_links.py` clean.
+- Python: `python -m unittest discover -s tests -t tests` → 1721 tests, 1720 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (passes alone once it
+  exists). New or extended: `test_app.py` (the real Ansible pipeline: an inventory-only lab embeds nothing, a lab with a
+  topology text embeds it into history and `latest/` with a second local commit, the ZIP carries it under the lab's
+  name, a later capture without a topology clears `latest/`, an unreadable drawing costs only the map),
+  `test_downloads.py` (the download names, the public record, the ZIP's six entries, a missing embedded file fails the
+  archive clearly, devices stay downloadable one by one), `test_git_progress.py` (entries of a kind without `node`,
+  provenance `embedded`, the helper's `snapshot()` accepting the map, a tampered file refused, the save route, the
+  version view, the compare pairing by kind, the same content digest for two read times, restore reading without the
+  files, the dash-named lab), `test_host_git.py` (the real Git helper: the embedded files land in the folder, a later
+  save without them needs no removal review, dropping a device still does), `test_download_ui.js` (the backup row's
+  provenance line).
+- Browser: `node --test tests/*.js` → 387 pass, 0 fail.
+- CI on the branch: green for 1.30.52 to 1.30.56 and for the release commit of 1.30.57; the run on the follow-up
+  commit that corrected a count in this file failed in `test_restore.py`'s out-of-order outcomes test (two outcomes
+  100 ms apart swapped on the shared runner; the test passed 12 of 12 times here, idle and under CPU load). Its delays
+  were widened to 200 ms with the claim unchanged; the run after that is the one to read.
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` three times (before the review, after it, and after
+  the pipeline test caught an unsanitised name in the runner's embedding), helpers verified at 1.30.57 each time; the
+  build cache pruned after each build.
+- `docs/ui-ux-changes-2/tools/check_backup_topology.py` through the product's own API, final run on the final build:
+  18 of 18 (`docs/ui-ux-changes-2/evidence/item10/live-run-1.30.57.txt`): a lab with one cEOS and one Linux host, a
+  link and a map saved to the VM through the reviewed publish, added to My labs, deployed, its cEOS ready in about a
+  minute; a backup on demand whose record carries the topology and map read from the VM (`source: vm`, the file's path,
+  the read time) and names the download files; the ZIP with the configuration, the manifest, `<lab>.clab.yml` and
+  `<lab>.clab.yml.annotations.json`, the topology byte for byte the file on the VM, the map the file beside it; the
+  lab connected to the registered repository under `uiux2-tests/<lab>`, saved on the VM only (no upload); the saved
+  version listing both files beside `sw1.cfg`, the manifest marking them by kind without a device identity and
+  `topology_provenance: embedded`, the restore offering only the device, the embedded text the VM file; then destroyed
+  and removed. The local commit in the dev checkout (`evidence/item10/local-commit-in-the-dev-checkout.txt`) holds
+  `manifest.json`, `sw1.cfg`, `sw1.eoscfg` and the two files. An earlier run on the pre-review build passed the same
+  checks (its leftovers are in the pickup file).
+- Not exercised live: a scheduled backup (same path as on demand), a checkpoint or baseline save (same snapshot
+  builder), a restore from a save that carries the files (unit-tested through the real helper's reader and the
+  manager's resolver), a Junos or IOS XR device (cEOS only; the embedding is device-independent).
+
+# UI/UX changes 2, part 5: the topology preview — 1.30.56
+
+What was actually run for this release (dev VM `clab-llm-dev2`, Chromium 1243 through Playwright 1.63).
+
+## Investigation (before any change)
+
+- A lab was built in the real builder on the deployed 1.30.55 (`uiux2-prev-200859`: a Linux host with links to four
+  neighbours, a top-right and a left label, a group and a text), saved to the VM, then opened in the editor canvas
+  (`/static/lab-builder.html#path=…`) and in the Topology file dialog's *Preview topology*, both measured through the
+  DOM (`docs/ui-ux-changes-2/evidence/item8/before-*`). Positions, links, the group and the text followed the map file
+  in both; every device in the preview was dashed and captioned *Not in this lab*, the caption sat on the interface
+  label of the downward link, the Linux hosts carried the router arrows, and an uploaded map could not reach the
+  preview at all (read from the code; the fixes are in the changelog with their causes).
+
+## Static and unit
+
+- `python3 deploy/verify-release.py` source and documentation at 1.30.56; `git diff --check` clean; `node --check` on
+  the changed scripts; `check_links.py` clean.
+- Browser: `node --test tests/*.js` → 387 pass, 0 fail. New in `test_topology_ui.js`: the preview mode (no button,
+  no *Not in this lab*, *Not in the topology file* for a map-only device, no state badge, the lab map unchanged
+  without the option), the glyph mapping, and the interface label clearance with exact coordinates for a wire leaving
+  on the label's side, away from it, sideways, and towards a corner label (straight and nearly straight);
+  `test_operations_ui.js` pins that the preview renders with `{preview: true}`.
+- Python: `python -m unittest discover -s tests -t tests` → 1717 tests, 1716 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (passes alone once
+  it exists). Extended: `test_lab_operations.py` `test_parse_yaml_…` (`in_topology` for every drawn device, false for
+  a map-only one, absent from a lab's own `/topology`).
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` (helpers verified at 1.30.56). The root
+  filesystem filled up during that build (the superseded manager images and the Docker build cache of this stream's
+  rebuilds, beside the exited `restore-square` NOS containers' 18 GB of writable layers); the superseded images and
+  the build cache were pruned (8.6 GB free afterwards), the lab's containers were left alone.
+- `docs/ui-ux-changes-2/tools/check_preview.py` on the deployed 1.30.56 with `uiux2-prev-200859`: 10 of 10 checks,
+  zero console or page errors: the parse endpoint marks every drawn device as named by the topology and a map-only
+  device as not; the preview from the VM file captions nothing *Not in this lab* and makes no device a button, puts
+  the devices where the map file puts them, draws the top-right and left labels, uses the computer glyph for the
+  Linux hosts, and no interface label overlaps a device label; the same topology and map uploaded from this computer
+  reach the preview with the map's positions; nothing was created. Screenshots `evidence/item8/after-*`.
+- Not exercised: a map-only device in a real file (checked through the endpoint and the unit test, not drawn live).
+
+# UI/UX changes 2, part 4: labels and the map editor's device look — 1.30.55
+
+What was actually run for this release (dev VM `clab-llm-dev2`, Chromium 1243 through Playwright 1.63; the editor
+bundle rebuilt with Node 24.21.0; the fixture manager on a fresh `FIXTURE_DATA`).
+
+## Static and unit
+
+- `cd clab-backup-ui/lab-builder && node build.mjs && node build.mjs --check`: 132 files, the committed assets match a
+  fresh build; every one of the twelve anchors in `patches.mjs` found exactly once in the pristine package.
+- `python3 deploy/verify-release.py` source and documentation at 1.30.55; `git diff --check` clean; `node --check` on
+  the changed scripts; `check_links.py` clean.
+- Browser: `node --test tests/*.js` → 384 pass, 0 fail. New or rewritten: `test_topology_ui.js` (the eight label
+  positions' text coordinates and anchors, an unknown value at the bottom), `test_map_editor_ui.js` (the look through
+  `applyLook`, the four corners, `MAP_LABEL_POSITIONS`, the page dialog gone, the hidden node editor tabs, radius
+  0–32), `test_lab_builder_ui.js` (the bundle offers the four corner labels, treats them as known positions, carries
+  "Device look" and `__CLAB_MAP_LOOK__`, and the immediate-apply key set).
+- Python: `python -m unittest discover -s tests -t tests` → 1717 tests, 1716 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (passes alone once
+  it exists). New: `test_diagram_editor.py` `test_corner_label_positions_reach_the_drawio_export` (the four draw.io
+  style pairs, an unknown value at the bottom, the corner kept by the annotations export).
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` (helpers verified at 1.30.55).
+- `docs/ui-ux-changes-2/tools/check_labels.py` against the deployed manager (twice: on the rebuilt image before the
+  release bump and on the deployed 1.30.55): 20 of 20 checks, zero console or page errors. In the builder: the Label
+  Position list offers the four corners; choosing *Top right* writes `top-right` into the draft at once with no Apply
+  button on the panel; the canvas places the label above and right of the icon; the text direction applies at once
+  too; each change is one Ctrl+Z step. In Edit map on `netlab-test` (not running): the *Device look…* button and
+  dialog are gone; the device's menu offers *Device look* and no topology edit; the node editor shows the icon and
+  label sections only, the other tabs hidden; *Bottom left* is in the map document at once; the topology text is
+  unchanged and the page reads *Unsaved changes*; Undo takes the look back, Redo brings it back; after *Save map* the
+  manager's drawing carries `bottom-left`, the draw.io export carries
+  `labelPosition=left;verticalLabelPosition=bottom;align=right;verticalAlign=top;`, and the Topology tab draws the
+  label at x −14, y 35, anchored at its end; the lab's map was then restored. Screenshots in
+  `docs/ui-ux-changes-2/evidence/item5-7/` (the developer's two screenshots as the before state).
+- Regression against the fixture manager: `docs/ui-review-001/tools/check_ui003.py` (row 9 rewritten for the new
+  path and made idempotent) and `check_ui003b.py`, both clean; `docs/lab-builder/tools/student_workflow.py` 41 PASS
+  earlier in this stream on the same page code.
+- Not exercised: the VS Code extension itself (its behaviour with a corner was established from the pinned editor
+  package's code: an unknown position is drawn at the bottom and the file is never refused); a real NOS (no lab was
+  deployed; the change is to the drawing).
+
+# UI/UX changes 2, part 3: images usable on this VM — 1.30.54
+
+What was actually run for this release (dev VM `clab-llm-dev2`, Docker 29.8.1 with `/usr/bin/docker`, Chromium 1243
+through Playwright 1.63; the fixture manager on a fresh `FIXTURE_DATA`).
+
+## Review
+
+- `risk-reviewer` (Opus, read-only) reviewed the helper and manager diff before the release: no privilege widening and
+  no weakened invariant; two correctness findings (a trailing newline passed the reference check, a list or dict `kind`
+  crashed the topology walk) and four operational ones (a registry's pull allowance spent by repeated probes, no
+  concurrency limit, the helper's probe queue not cancelled on a signal, a broken credential helper read as "not
+  found"; the Docker client's error line reaching the browser) are all applied: `fullmatch`, the type guard,
+  TTLs of 3600/1800/120 s, a single-flight lock, `cancel_futures`, the credential case read as `unknown`, `detail`
+  only with `unknown`. Its advice to keep the probe off the `network` flag was followed.
+
+## Static and unit
+
+- `python3 deploy/verify-release.py` source and documentation at 1.30.54; `git diff --check` clean; `node --check` on
+  the changed scripts; `check_links.py` clean.
+- Python: `python -m unittest discover -s tests -t tests` → 1716 tests, 1715 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (passes alone once it
+  exists). New in `test_lab_operations.py`: `ImageModeTests` (the `images` command, the two probe commands with the
+  reference as the only variable element, the answers per case including a credential-helper failure, refused
+  references with newlines, option-like names and metacharacters, the no-Docker answer, the dispatch and the absence
+  of any write command), `test_image_routes_ask_the_helper_once_per_image_and_refuse_bad_input` (caching, invalid
+  names answered and never sent, stray answers dropped, extra keys refused) and
+  `test_previews_name_the_images_of_the_reviewed_topology` (deploy and publish previews, a kind that is no string).
+- Browser: `node --test tests/*.js` → 383 pass, 0 fail. New: `test_lab_builder_ui.js` (templates prefer a VM image by
+  repository name and highest tag, the Image list offers every VM image, the YAML walk, the summary line and its
+  warning cases) and `test_operations_ui.js` (`opImageLine` per answer, `opImageMissing`).
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` (helpers verified at 1.30.54, `images: true` in the
+  capabilities).
+- `docs/ui-ux-changes-2/tools/check_image_availability.py` against the deployed manager: 12 of 12 checks, zero
+  console or page errors: the helper lists the VM's images; `image-check` answers a VM image as local and
+  `vrnetlab/cisco_xrv9k:24.3.1` as absent everywhere (Docker Hub answers "denied" for that repository); a name that
+  is no reference is answered `invalid`; the builder shows no line without devices, then *on the VM* for a Linux host,
+  the Image field's list offers the VM's images, a template changed to the absent image turns the line amber with the
+  way out, the *Save to the VM…* review lists both images with the VM's answers and calls out the absent one above
+  the list while *Save lab* stays enabled (cancelled), and the *Start lab* review of `netlab-test` lists its images.
+  Screenshots in `docs/ui-ux-changes-2/evidence/item2/` (the template dialog on 1.30.52 as the before state).
+- The same tool against the fixture manager (its `fake_remote` answers both modes): 12 of 12; `docs/lab-builder/tools/student_workflow.py`
+  41 PASS, 0 FAIL on the fixture after the page changes.
+- Not exercised: a deploy that actually fails for an absent image (the review warns, nothing is deployed in this
+  release); a private registry needing a login (the wording covers it, the case was not provoked); the template default
+  taken from a VM image rather than from My labs (unit-tested; on this VM every kind already has an image in My labs,
+  so the known-images path wins live).
+
+# UI/UX changes 2, part 2: image and version as typed — 1.30.53
+
+What was actually run for this release (same environment as 1.30.52: dev VM `clab-llm-dev2`, Chromium 1243 through
+Playwright 1.63; the editor bundle rebuilt with Node 24.21.0 from `~/.local/node24`).
+
+## Static and unit
+
+- `cd clab-backup-ui/lab-builder && npm ci && node build.mjs && node build.mjs --check`: 132 files, 77 packages, the
+  committed assets match a fresh build (two chunk names changed with the patched code).
+- `python3 deploy/verify-release.py` source and documentation at 1.30.53; `git diff --check` clean; `node --check` on
+  `build.mjs` and `patches.mjs`.
+- Browser: `node --test tests/*.js` → 381 pass, 0 fail. New: `test_lab_builder_ui.js` "the image is written as typed
+  and the version is never filled in" (the committed bundle holds no `||"latest"}`, `??["latest"]`, `version:"latest"`
+  or `["latest"])`, holds the patched join; `patches.mjs` is well formed, `applyPatches` refuses a missing anchor, and
+  with `node_modules` present every anchor is in the pristine package exactly once and the package on disk is
+  unpatched).
+- Python: `python -m unittest discover -s tests -t tests` → 1710 tests, 1709 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (no Python code
+  changed in this release; the test passes alone once the section exists).
+
+## Live (development VM, deployed product)
+
+- Before, on the deployed 1.30.52: `docs/ui-ux-changes-2/tools/check_image_fields.py` against the real lab builder
+  (a new draft in a fresh browser context, the Cisco XRv9k template's dialog): 8 of 11 checks failed, each the
+  developer's complaint: backspacing the Version field showed `latest`; pasting an unknown image set `latest`; the
+  placed node's YAML read `image: n24l/cisco_xrv9k:latest24.3.1` (the filled-in `latest` with the typed version
+  appended); an emptied version wrote `:latest`; the node editor did the same. Screenshots in
+  `docs/ui-ux-changes-2/evidence/item3-4/before-*.png`.
+- After, first on the rebuilt image (same release number, a fresh browser context sees the new bundle) and again on
+  the deployed 1.30.53 (`sudo bash deploy/start-manager.sh --manager-only`, helpers verified at 1.30.53): 11 of 11
+  checks, zero console or page errors: the cleared Version field stays empty (the known tag `24.3.1` is offered in
+  its list, not picked), an unknown pasted image keeps the typed version, an image pasted into an empty version
+  leaves it empty, the placed node writes `image: n24l/cisco_xrv9k:24.3.1`, an empty version writes
+  `image: n24l/vjunos-switch`, and the node editor's own fields behave the same after Apply. Screenshots in
+  `evidence/item3-4/after-*.png`.
+- Regression of the areas the bundle serves, against the fixture manager on a fresh `FIXTURE_DATA`:
+  `docs/lab-builder/tools/student_workflow.py --template "Linux host"` 41 PASS, 0 FAIL;
+  `docs/ui-review-001/tools/check_ui003.py` and `check_ui003b.py` (Edit map in map mode, every matrix row) clean.
+- Not exercised on a real NOS: no lab was deployed for this release (the change is to the text the builder writes;
+  the live deploy of builder-made labs is covered by the lab builder's own records).
+
+# UI/UX changes 2, part 1: lock advice and Hide from Home — 1.30.52
+
+What was actually run for this release, on the dev VM `clab-llm-dev2` (Ubuntu 24.04, Docker 29.8.1, containerlab
+0.79.0, Chromium 1243 through Playwright 1.63 in `clab-backup-ui/.venv`). The branch `claude/ui-ux-changes-2` was cut
+from `main` at 1.30.50 (`79f9a90`); the netlab stream's uncommitted 1.30.51 was set aside as a local WIP commit on its
+own branch (see `docs/ui-ux-changes-2/PICKUP.md`), which is why this release is 1.30.52.
+
+## Static and unit
+
+- Baseline on the branch point, before any change: Python `python -m unittest discover -s tests -t tests` → 1704 tests
+  (1703 OK, 1 skipped, plus the release-consistency documentation error caused by the stream's new docs folder, which
+  was created during that run and is registered as a history folder since); browser `node --test tests/*.js` → 379
+  pass, 0 fail.
+- After the change: `python3 deploy/verify-release.py` source and documentation at 1.30.52; `git diff --check` clean;
+  `node --check` on every `app/static/*.js`; `check_links.py` 177 files, 0 problems. Python → 1710 tests, 1709 OK and
+  1 skipped, plus the same documentation error because this section did not exist yet when the run started (the test
+  passes alone once it exists; result below). New: `test_apt_lock.py`
+  `test_show_recommends_a_vm_restart_after_a_snapshot_rollback_as_advice_only`, `test_install_manager.py`
+  `test_lock_recovery_shows_the_restart_advice_once_with_or_without_a_holder_report` (both stdlib, run with the system
+  `python3` as CI does: 82 tests OK), `test_remove_lab.py` `HideLabTests` (four tests: the flag and nothing else, kept
+  through two discovery polls, persisted, events; survives Sync from VM and a favourite change; adding the lab again
+  through `POST /api/lab-definitions` keeps the id and clears it; unknown keys 422, unknown lab 404). Browser → 380 pass,
+  0 fail; new `test_home_ui.js` "a lab hidden from Home is not drawn…" and the hidden list in `test_readiness_ui.js`.
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` (image `clab-backup:1.30.52`, helpers verified at
+  1.30.52, the manager on the host network at port 8081).
+- Item 9: `docs/ui-ux-changes-2/tools/check_hide_lab.py` against the deployed manager with the lab `netlab-test` (in My
+  labs, not deployed): 17 of 17 checks (the ⋯ dialog offers Hide from Home with its help line; the card leaves Home on
+  both tabs; the note under the list names both ways back; the public lab record is unchanged apart from the flag; a
+  discovery pass ran and the card stayed away; the VM labs dialog lists it under *Hidden from Home*; Show on Home puts
+  the card back; hidden again, then *Choose a file on the lab VM…* › `netlab-test.clab.yml` › *Add to My labs without
+  starting* › *Add lab* kept the same lab id, cleared the flag and the card was back; zero console and page errors).
+  Screenshots in `docs/ui-ux-changes-2/evidence/item9/`, including the before state on the previous build.
+- Item 1: `docs/ui-ux-changes-2/tools/installer_lock_repro.py`: the real installer (`deploy/install.sh`) under a
+  pseudo-terminal with `/var/lib/dpkg/lock-frontend` held by a harmless `fcntl.lockf` process and `curl` removed for the
+  run (so the prerequisites phase calls `apt-get install`, as on a fresh VM): the phase failed with the lock error, the
+  *Package lock recovery* screen showed the holder line, the rule, the new restart advice, the copyable command and the
+  three choices; choice 3 returned to the Setup menu and 6 exited; the holder was released and the packages reinstalled.
+  The screen is `docs/ui-ux-changes-2/evidence/item1/installer-lock-recovery-1.30.52.txt`. An earlier attempt without
+  removing a package showed that an installed VM never reaches `apt-get install` in that phase (the full standard path
+  ran through instead, rebuilding the same 1.30.52 and the capture stack at 1.30.52), which is why the tool removes one.
+- Not run: a real snapshot rollback (the VM is not rebooted in this stream; the advice is text, exercised as above).
+
 # Netlab UI/UX campaign, part 3: the stale-review reason before the busy guard — 1.30.50
 
 What was actually run for this release. Same environment as 1.30.49 (dev VM `clab-llm-dev2`, containerlab 0.79.0, lab

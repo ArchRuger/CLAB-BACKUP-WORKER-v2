@@ -34,10 +34,17 @@ flowchart TD
     J -- Unavailable or rejected --> L[Saved locally; retry push]
 ```
 
-Only configurations and their manifest enter the Git commit. Existing topology
-YAML, annotations, README files and unrelated edits stay outside the export. The
-manifest records the lab, selected and excluded nodes, capture identity, topology
-provenance, configuration formats and file checksums. Git export uses one completed
+The configurations, their manifest, and the topology and map the capture embedded
+(`<lab>.clab.yml` and `<lab>.clab.yml.annotations.json`, the files as they were beside the
+deployed topology on the VM at capture time, or the manager's copy; see
+[NODE-FEATURES.md](../clab-backup-ui/NODE-FEATURES.md#the-topology-travels-with-every-backup))
+enter the Git commit, inside the snapshot folder. The lab folder's own topology YAML, README
+files and unrelated edits stay outside the export. A topology file can carry what the student
+wrote into it (an environment variable with a password, a startup configuration path): like the
+device configurations beside it, it reaches the repository, and the review before every upload
+shows it. The manifest records the lab, selected and
+excluded nodes, capture identity, topology provenance (`embedded` when the files travel with the
+save), configuration formats and file checksums. Git export uses one completed
 backup job, not the rolling `latest` backup directory that can contain files from
 different capture attempts.
 
@@ -148,6 +155,8 @@ BENS-BGP-LAB/
 ├── latest/
 │   ├── PE1.cfg
 │   ├── PE2.cfg
+│   ├── BENS-BGP-LAB.clab.yml                    the topology at capture time
+│   ├── BENS-BGP-LAB.clab.yml.annotations.json   and its map
 │   └── manifest.json
 ├── baseline/
 │   ├── PE1.cfg

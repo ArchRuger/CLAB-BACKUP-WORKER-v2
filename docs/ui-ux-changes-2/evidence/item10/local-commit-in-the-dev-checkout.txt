@@ -1,0 +1,10 @@
+386ba9c UI/UX changes 2 item 10 check
+6455fc6 UI/UX changes 2 item 10 check
+6fadd0c Design export check 03:28
+
+386ba9c UI/UX changes 2 item 10 check
+
+ uiux2-tests/uiux2-bk-203408/latest/manifest.json | 10 ++++------
+ uiux2-tests/uiux2-bk-203408/latest/sw1.cfg       |  4 ++--
+ uiux2-tests/uiux2-bk-203408/latest/sw1.eoscfg    |  4 ++--
+ 3 files changed, 8 insertions(+), 10 deletions(-)

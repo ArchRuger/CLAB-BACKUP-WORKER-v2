@@ -1756,6 +1756,9 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
   background: var(--surface-2);
   min-width: 0;
 }
+.op-images summary { cursor: pointer; font-weight: 600; }
+.op-images ul { margin: 6px 0 0; padding-left: 20px; }
+.op-images li.op-image-missing { color: var(--warn-strong); }
 .op-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .op-grid button, .op-history button {
   height: auto;
@@ -1818,6 +1821,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 }
 .op-layout-map .map-device { cursor: grab; }
 .op-layout-map .map-device:active { cursor: grabbing; }
+#op-preview-map .map-device, #op-preview-map .map-device:active { cursor: default; }
 .op-session-list { margin-top: 20px; }
 .op-session-list p { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; border-bottom: 1px solid var(--line); padding: 12px 0; margin: 0; }
 .op-session-list strong { min-width: 160px; }

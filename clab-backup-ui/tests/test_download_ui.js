@@ -35,6 +35,13 @@ test('history renders a button only for successful configurations and labels UTC
  const html=h.document.getElementById('jobs').innerHTML;
  assert.match(html,/data-node-index="0"/);assert.doesNotMatch(html,/data-node-index="1"/);
  assert.match(html,/Download all \(ZIP\)/);assert.match(html,/2026-09-10 01:04:00 UTC/);
+ // The topology travels with every backup (UI/UX changes 2, item 10): the row says so and where the text came from.
+ vm.runInContext(`state.jobs[0].topology={file:'topology.clab.yml',source:'vm',path:'/labs/bgp.clab.yml',annotations_file:'topology.clab.yml.annotations.json'};renderJobs();`,h.context);
+ assert.match(h.document.getElementById('jobs').innerHTML,/Topology and map embedded with this backup \(the files beside the deployed topology on the VM\)\./);
+ vm.runInContext(`state.jobs[0].topology={file:'topology.clab.yml',source:'manager'};renderJobs();`,h.context);
+ assert.match(h.document.getElementById('jobs').innerHTML,/Topology embedded with this backup \(the manager's copy\)\./);
+ vm.runInContext(`delete state.jobs[0].topology;renderJobs();`,h.context);
+ assert.doesNotMatch(h.document.getElementById('jobs').innerHTML,/embedded with this backup/,'a capture taken before carries no such line');
  vm.runInContext(`state.jobs[0].operation='test';renderJobs();`,h.context);
  assert.doesNotMatch(h.document.getElementById('jobs').innerHTML,/data-download=/);
 });

@@ -329,6 +329,31 @@ class HostGitTests(unittest.TestCase):
         _, result = self.publish()
         self.assertEqual(result['status'], 'needs_attention'); self.assertIn('manifest', result['message'])
 
+    def test_the_embedded_topology_and_map_are_owned_files_but_not_devices(self):
+        # UI/UX changes 2, item 10: a capture's snapshot carries `<lab>.clab.yml` and its map as entries of a
+        # kind; they land in the folder with the device files, a later save without them needs no removal review,
+        # and a save that drops a device still does.
+        capture = self.capture(); topology = b'name: BGP\ntopology:\n  nodes: {}\n'; layout = b'{"nodeAnnotations": []}'
+        for name, raw, kind in (('BGP.clab.yml', topology, 'topology'), ('BGP.clab.yml.annotations.json', layout, 'annotations')):
+            capture['files'][name] = base64.b64encode(raw).decode()
+            capture['manifest']['files'].append(dict(path=name, size=len(raw), sha256=hashlib.sha256(raw).hexdigest(), kind=kind, source='vm', vm_path='/srv/labs/BGP.clab.yml'))
+        capture['manifest']['schema'] = 2; capture['manifest']['topology_provenance'] = 'embedded'
+        _, first = self.publish(capture)
+        self.assertEqual(first['status'], 'committed', first)
+        self.assertEqual(sorted(p.name for p in (self.repo / 'latest').iterdir()), ['BGP.clab.yml', 'BGP.clab.yml.annotations.json', 'PE1.cfg', 'manifest.json'])
+        self.assertEqual((self.repo / 'latest/BGP.clab.yml').read_bytes(), topology)
+        _, plain = self.publish(self.capture('router bgp 65002\n'))
+        self.assertEqual(plain['status'], 'committed', 'a save without the embedded files needs no removal review: they are no devices')
+        self.assertEqual(sorted(p.name for p in (self.repo / 'latest').iterdir()), ['PE1.cfg', 'manifest.json'], 'and the folder follows the new manifest')
+        _, again = self.publish(capture)
+        self.assertEqual(again['status'], 'committed')
+        dropped = self.capture(); dropped['manifest']['node_names'] = []; dropped['manifest']['files'] = []; dropped['files'] = {}
+        dropped['files'][ 'BGP.clab.yml'] = base64.b64encode(topology).decode()
+        dropped['manifest']['files'].append(dict(path='BGP.clab.yml', size=len(topology), sha256=hashlib.sha256(topology).hexdigest(), kind='topology'))
+        _, blocked = self.publish(dropped)
+        self.assertEqual(blocked['status'], 'needs_attention', 'dropping the device PE1 still needs the removal review')
+        self.assertIn('removes previously saved devices', blocked['message'])
+
     def test_git_clean_filter_cannot_silently_change_exported_bytes(self):
         (self.repo / '.gitattributes').write_text('latest/*.cfg text eol=lf\n')
         self.raw('add', '.gitattributes'); self.raw('commit', '-m', 'Text normalization policy'); self.raw('push')

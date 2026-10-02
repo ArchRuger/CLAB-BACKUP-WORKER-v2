@@ -1,3 +1,103 @@
+# UI/UX changes 2, part 6: the topology travels with every backup — 1.30.57
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) `runner.embed_topology` runs after
+the node loop of a backup that saved something and before the local Git commit; it writes `topology.clab.yml` and
+`topology.clab.yml.annotations.json` (stable internal names, `TOPOLOGY_FILE` / `ANNOTATIONS_FILE`) into
+`history/<job>/` and `latest/`, records `job['topology']` (names, sizes, digests, `source` vm|manager, `path`,
+`read_at`) and never fails the backup. `runner.topology_source` is set by `main.py` to discovery's VM bundle of the
+deployment; `topology_capture` falls back to `definition_yaml` and `layout.map_document`. (2) `downloads.topology_names`
+is the one source of the download names (`<lab>.clab.yml`, `<lab>.clab.yml.annotations.json`), used by the ZIP and
+by `git_progress.captured_snapshot`. (3) In a save the files are manifest entries **with `kind` and without `node`**;
+`host_git.publish` counts only entries without `kind` as devices (removal review) but owns them like any file;
+`_node_slots` pairs them as `file:<kind>`; restore skips them because they have no `node` and no `restore_artifact`.
+Never give them a `node`, never bump the schema for them, never let a missing embedded file pass silently into a
+save (`captured_snapshot` refuses). (4) `jobMarkup` (app.js) shows the provenance line when `job.topology` exists.
+Tests: `test_app.py` pipeline (the inventory lab embeds nothing, a lab with a topology does; the ZIP), `test_downloads.py`,
+`test_git_progress.py` "the topology and map embedded…", `test_host_git.py` "owned files but not devices". Live tool:
+`docs/ui-ux-changes-2/tools/check_backup_topology.py` (deploys and destroys a cEOS lab; leaves a registration and a
+local commit under `uiux2-tests/` in the dev checkout).
+
+# UI/UX changes 2, part 5: the topology preview — 1.30.56
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) the renderer's **preview mode**
+(`topologyMarkup(drawing, states, {preview: true})`, used only by `opMapPreview`): a device is "in" when `in_topology`
+is not false, nothing is a button, the caption reads *Not in the topology file*, no state badge; without the option the
+inventory binding (`inventory_name`, set by `bind_drawing` for a lab's `/topology` route) still decides and the caption
+stays *Not in this lab*. `in_topology` is set by `POST /api/operations/parse-yaml` on its answer only and never stored
+(`annotations(drawing)` must never see it). (2) `topologyLabelClearance(node, ux, uy)` moves an interface label past a
+device label that lies in the wire's way, per end; `topologyGlyph(icon)` maps the editor's icon names. Test coordinates
+in `test_topology_ui.js` pin both. (3) `opParse(path, text, annotations)` takes an upload's map text; `opEdit`'s
+*Preview topology* passes `upload.annotations` (an empty string for an upload without a map, never the VM read).
+
+# UI/UX changes 2, part 4: labels and the map editor's device look — 1.30.55
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) **the label positions are eight**:
+bottom, top, left, right and the four corners (`top-left`, `top-right`, `bottom-left`, `bottom-right`), read and drawn
+by the editor (patched `normalizeNodeLabelPosition` and `buildNodeLabelStyle`, the select's options), the manager's
+renderer (`topology-render.js`: a corner sets `tx=±(r-6)` with the anchor away from the icon, on top of the top/bottom
+`ty`), the draw.io export (`drawio_export.py` `label_style`) and the map editor page (`MAP_LABEL_POSITIONS`); an
+unknown value still draws at the bottom everywhere, which is also what the VS Code extension's pinned editor does.
+(2) **Immediate apply** lives in the patched `NodeEditorView` effect: only `labelPosition`, `direction`, `icon` and a
+`labelBackgroundColor` of `''` / `transparent`, never for a template (`isCustomTemplate`), never while a non-look field
+is also changed; do not widen it to the colour pickers or the corner radius (they fire while dragging or typing).
+(3) **Map mode's device look** is the editor's node editor over an annotation-only translation: `window.__CLAB_MAP_LOOK__`
+(set by the adapter for `mapOnly`) makes the patched context menu add `edit-node` ("Device look") and the Basic tab drop
+*Node Parameters*; `lab-builder.css` hides the other node editor tabs in `.map-editor`; `dispatchCommand` in `main.tsx`
+turns `editNode` into `page.applyLook(id, look)` (`mapApplyLook` in `map-editor-page.js`, radius 0–32) and one
+`setAnnotationsContent` step, refusing a rename; `MAP_COMMANDS` is unchanged and `editNode` is still not in it. Never let
+`editNode` reach the engine in map mode, never add the engine's undo/redo, and keep the topology-unchanged check after
+every settled step. (4) The former `#map-look` dialog is gone from `map-editor.html`; `check_ui003.py` row 9 and
+`docs/ui-ux-changes-2/tools/check_labels.py` drive the new path. Link labels… still has its page dialog.
+
+# UI/UX changes 2, part 3: images usable on this VM — 1.30.54
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) **the helper's two image modes are
+read-only and fixed** (`images`, `image-check` in `app/host_operations.py`): `/usr/bin/docker` with fixed argv, the only
+client input a reference that passes `image_reference()` (`IMAGE_REFERENCE.fullmatch`, 255 chars, no leading dash) as one
+argv element, at most `IMAGE_CHECK_LIMIT` (16) references, `IMAGE_PROBE_TIMEOUT` (12 s) per command, four workers,
+`probe()` with stdin closed and stderr kept only to classify (`registry_answer`), the Docker client's last line travelling
+only with an `unknown` answer. Never add a pull, run, load, build or removal, never take the reference from anywhere
+else, and never consult `network` for the probe (decided with the review: that flag gates content downloads; the probe
+reaches only the registries a deploy would pull from). (2) **The manager asks once**: `image_flight` (one VM question in
+flight), the per-reference cache keyed by host revision (TTL 3600 / 1800 / 120 s), `invalid` answers for names that are
+no reference (never a 400 for the page), stray answers dropped; `topology_images()` is the one walk of a topology's
+images and skips a kind that is no string. (3) **The page never waits**: `builderImageStatus()` is debounced after
+`persist()`, drops late answers by sequence and clears the line on any failure; `opReviewImages()` fills `#op-review-images`
+after the review opened and leaves `#op-confirm` enabled. Tests: `test_lab_operations.py` `ImageModeTests` and the two
+API tests, `test_lab_builder_ui.js` (templates, the YAML walk, the summary), `test_operations_ui.js` (`opImageLine`).
+Live tool: `docs/ui-ux-changes-2/tools/check_image_availability.py` (deployed manager or fixture; the fixture's
+`fake_remote` answers both modes).
+
+# UI/UX changes 2, part 2: image and version as typed — 1.30.53
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) **`clab-backup-ui/lab-builder/patches.mjs`
+is the one place for build-time changes to the pinned editor**: exact anchors, one replacement each, a reason, applied by
+`build.mjs` in memory through an esbuild `onLoad` on the package's chunk files; the build throws when an anchor is not
+found exactly once or a patched chunk was never loaded. Never edit `node_modules` or the committed bundle by hand, never
+widen a patch beyond its anchor, and port or drop a patch on an editor upgrade with its reason in mind. (2) The contract
+of items 3 and 4 (`docs/LAB-BUILDER.md`): the YAML gets exactly `<image>:<version>`, an empty version writes the image
+alone, the editor never fills the version in (clearing keeps it empty, an image change keeps the typed version, known
+tags are offered, never picked). `tests/test_lab_builder_ui.js` "the image is written as typed…" pins the bundle's
+outcome; `docs/ui-ux-changes-2/tools/check_image_fields.py` is the live check (also the before-evidence producer).
+(3) A bundle change reaches browsers only with a new release number (`?v=`, `immutable`); rebuild with Node 24
+(`~/.local/node24/bin`), `npm ci && node build.mjs && node build.mjs --check`.
+
+# UI/UX changes 2, part 1: lock advice and Hide from Home — 1.30.52
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first (branch, base, why the numbering starts at 1.30.52, the plan), then
+`CHECKLIST.md` (the ten items, status per release). What the next agent must preserve: (1) the package-lock tooling
+gives advice only: `RESTART_HINT` in `deploy/apt_lock.py` (printed by `_describe` after `WARNING`) and the installer's
+copy (printed by `lock_recovery` only when the holder report is empty); never add a restart, kill, delete or service
+stop, the tests scan both sources for such tokens. (2) *Hide from Home* is the `hidden` flag on the lab record and
+nothing else: set through `LabSettings.hidden` on `PUT /api/labs/{id}/operations-settings` (`lab.hide` / `lab.show`
+events), cleared by `POST /api/lab-definitions` (`register`, the topology browser's *Add to My labs* / *Deploy lab*) and
+by the same route with `false` (*Show on Home* in `#hidden-labs` of the VM labs dialog); `public_lab` passes it through;
+`renderHome` filters it and writes `#home-hidden-note` (`homeHiddenNote`); `homeVmLabs(discovery, labs)` counts hidden labs
+together with `ignored_labs`. Discovery, Sync from VM (`prepare_lab` deep-copies the previous record) and favourites
+leave the flag alone; never turn a hide into a removal or an exclusion, and never let a discovery pass clear it. Tests:
+`test_remove_lab.py` `HideLabTests`, `test_home_ui.js` "a lab hidden from Home…", `test_readiness_ui.js` (the dialog).
+Live tool: `docs/ui-ux-changes-2/tools/check_hide_lab.py`.
+
 # Netlab UI/UX campaign, part 3: the stale-review reason before the busy guard — 1.30.50
 
 Read `docs/netlab-ui-qa/PICKUP.md` first, then `FINAL-REPORT.md`. What the next agent must preserve beyond the 1.30.49

@@ -4,6 +4,201 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.57
+
+*UI/UX changes 2*, item 10: the topology and map travel with every backup, so a configuration is never divorced
+from the topology it was taken under.
+
+- **Every backup embeds the topology and the map.** A backup that saved at least one configuration (on demand,
+  scheduled, or the capture behind a Save progress) also writes the lab's containerlab file and its
+  `.annotations.json` beside the configurations, in the job's history folder and in the lab's `latest/` (whose
+  local Git history now records them with the configurations). The text is the file beside the deployed topology
+  on the VM as of the last discovery pass (within the thirty-second interval), else the manager's own copy from the
+  last sync; the backup record says which (*the files beside the deployed topology on the VM* or *the manager's
+  copy*), the path, when it was read, and the digests of both files. A lab without a topology text in the manager
+  (an inventory-only lab) embeds nothing and the backup is not failed by that.
+- **Downloads.** *Download all (ZIP)* carries them as `<lab>.clab.yml` and `<lab>.clab.yml.annotations.json` next
+  to the configurations and the manifest, which names them; a missing embedded file fails the archive clearly like
+  a missing configuration (`NODE-FEATURES.md`, *Backup download names* and *The topology travels with every backup*).
+- **Git saves (latest, checkpoint, baseline).** The same two files enter the snapshot folder as manifest entries
+  of their kind (`kind: topology` / `annotations`, with `source`, `vm_path` and `read_at`) and never as devices;
+  the manifest's `topology_digest` is the embedded file's own and its provenance reads `embedded`. The Git helper
+  (`host_git.py`) now counts only entries without a `kind` as devices, so a later save without them needs no
+  removal review; everything else it checks (the exact file map, sizes, digests, plain unique names, foreign files)
+  applies to them as before. *Apply to running lab…* never offers them, *Compare with my latest save* pairs them by
+  kind and shows their changes, and the saved-version view lists them. Snapshots and backups made before this
+  release carry none and read, compare and restore exactly as before; the schema stays 2.
+- When the VM has no map file beside the topology, the manager's own map (the one the Topology tab shows) travels
+  instead, and the record says so (`annotations_source`). A backup after which the manager holds no topology text
+  clears the two files from the lab's `latest/`, so its local Git history never pairs new configurations with an old
+  topology; every earlier backup keeps its own copy. A topology that cannot be read (an odd stored drawing, a write
+  error) costs only the embedding, never the backup.
+- The independent risk review of the helper and manager diff found two must-fix problems and three should-fix ones,
+  all applied before this release: the read time stays on the backup record and out of the manifest (it moves with
+  every discovery pass and would have made every unchanged save a new commit); a lab whose file-safe name begins with
+  a dash gets an underscore in front (the helper takes plain names that start with a letter, digit or underscore); a
+  capture error is caught where it happens; stale embedded files are cleared from `latest/`; a restore reads a capture
+  for its device files and is never stopped by the embedded topology.
+- Limit: the manager cannot see a topology file edited on the VM after the lab was deployed without a redeploy;
+  what travels is the file as it was at capture time.
+- Test only: the parallel-restore test that lets four outcomes arrive out of order now keeps 200 ms between
+  neighbours instead of 100 ms (a shared CI runner swapped two of them once, on a documentation-only commit); its
+  claim, the settle order and the follow-up backup's target order, is unchanged.
+- `docs/ui-ux-changes-2/tools/check_backup_topology.py` proves the chain on the dev VM through the product's own
+  API (publish, deploy, backup, ZIP, connect, save on the VM only, version view).
+
+## Changes in 1.30.56
+
+*UI/UX changes 2*, item 8: the Topology preview "looks nothing like the actual annotations.json". Investigated on
+the real product first: a lab built in the builder (a device with links on four sides, a corner and a side label, a
+group and a text), saved to the VM, then opened in the editor canvas and in the Topology file dialog's *Preview
+topology* side by side (`docs/ui-ux-changes-2/evidence/item8/before-*`). The positions, links, group and text did
+follow the map file; what did not was everything the preview said about the devices. The causes, and the fixes:
+
+- **Every device was captioned "Not in this lab", dashed, and drawn as a button.** The preview is built by
+  `POST /api/operations/parse-yaml` and drawn by the same renderer as a lab's Topology tab; that renderer treats a
+  device without an inventory binding as "drawn on the map but not one of this lab's devices", and the parse
+  endpoint never binds (binding belongs to a lab's own `/topology` route, and a file being looked at has no lab).
+  So every device of every preview was "not in this lab", with the caption added below the label. Now the parse
+  endpoint marks which drawn devices the topology file names (`in_topology`, in the preview answer only) and the
+  renderer has a preview mode (`topologyMarkup(drawing, states, {preview: true})`): no device is a button, none is
+  called *Not in this lab*, and a device the map file names but the topology does not is captioned *Not in the
+  topology file*; the state badge is not drawn either.
+- **Device names collided with interface labels.** Two things stacked: the caption sat at the height of the
+  interface label of a link leaving downward, and the renderer put an interface label 40 px along the wire whatever
+  the device's own label did, so a bottom label (24–39 px below the centre) and the first interface label of a
+  downward link (32–48 px) overlapped by a third of their height; the editor has the same overlap. The caption is
+  gone from previews, and the renderer now moves an interface label past the device label that sits in the wire's
+  way (`topologyLabelClearance`: the label's height for a bottom or top label, its width for a left or right one,
+  only when the wire leaves on that side; a corner label is met only by a diagonal wire). This applies to the
+  Topology tab as well.
+- **Icons.** The renderer knew switches, servers and "everything else is a router", so the builder's *client*,
+  *ue* and *controller* devices (the Linux host template's icon) were drawn with the router's arrows. They now get a
+  computer glyph; *leaf*, *spine* and *bridge* the switch glyph.
+- **A map uploaded from this computer never reached the preview.** `Upload a file from this computer…` carries the
+  chosen map file to the reviewed `create`, but *Preview topology* read the map from the VM path, which an upload
+  does not have yet, so the preview drew the default grid. The uploaded map is now previewed.
+- `docs/ui-ux-changes-2/tools/check_preview.py` drives the preview from the VM file and from an upload (nothing is
+  written).
+
+## Changes in 1.30.55
+
+*UI/UX changes 2*, items 5, 6 and 7: labels and the map editor's device look. Six more tracked build-time patches
+to the pinned editor (`clab-backup-ui/lab-builder/patches.mjs`, applied by `build.mjs`, pinned by the bundle test).
+
+- **No Apply step for the look of a device (item 5).** In the node editor the choices one clicks (the label
+  position, the label text direction, the icon, the label's *Transparent* box) apply the moment they are chosen,
+  each as one `editNode` step the editor's Undo takes back; the Apply button appears only for the fields one types
+  or drags (name, kind, image, the colour pickers, the corner radius), which fire while typing or dragging. A
+  device template's dialog keeps its Save.
+- **Four corner label positions (item 6).** *Top left*, *Top right*, *Bottom left* and *Bottom right* join
+  bottom, top, left and right: the label sits diagonally off the icon's corner, where no link covers the name.
+  The editor's canvas draws them (`normalizeNodeLabelPosition`, `buildNodeLabelStyle`), the manager's Topology
+  tab and its preview renderer place the text diagonally with the matching anchor (`topology-render.js`), the
+  draw.io export uses the matching `labelPosition` / `verticalLabelPosition` pair, the map document keeps the
+  value as it is. **What the VS Code extension does with a corner**, established by reading the code rather than
+  by running VS Code: the extension (0.26.3) pins `@srl-labs/clab-ui 0.3.1`, whose normaliser, like upstream
+  `main`, maps any unknown position to `bottom` and never refuses the file; a map that uses a corner opens there
+  with that label drawn below the icon.
+- **Edit map uses the builder's node editor for the look (item 7).** The page's *Device look…* dialog is gone.
+  In Edit map, right-click a device and choose **Device look**: the editor's own node editor opens with only the
+  *Icon* and *Label & Direction* sections (the editor's view mode offers no edit entries, so the patched menu adds
+  this one; the Basic tab's *Node Parameters* and the other tabs are hidden in map mode), the same immediate apply
+  and corners as in the builder. The guarantees of map mode hold: the node editor's `editNode` is a topology command,
+  so the adapter (`main.tsx`) turns it into a change of the annotations document (the page's `applyLook`, the
+  former dialog's validated merge of the six look keys, corner radius now 0–32 like the manager's own bound) applied
+  as one annotation-only engine step; a payload that would rename the device is refused; the topology text is
+  checked unchanged after every step as before; the page's Undo / Redo record it as one step; nothing is deployed.
+  *Link labels…* keeps its dialog: the editor's link editor is also edit-mode only and would need the same
+  translation of `editLink`; the final report asks whether it should follow.
+- `docs/ui-review-001/tools/check_ui003.py` row 9 drives the new path; `docs/ui-ux-changes-2/tools/check_labels.py`
+  is the live check of the three items (builder, Edit map, Topology tab, draw.io).
+
+## Changes in 1.30.54
+
+*UI/UX changes 2*, item 2: the lab builder knows whether an image is usable on this VM and says so before the
+student commits; unusable defaults are no longer presented as if they would work.
+
+- **The VM's images reach the builder.** Two read-only modes of the operations helper (`app/host_operations.py`,
+  installed by the launcher's helper refresh): `images` lists the references the VM has (`docker image ls`, no
+  input), and `image-check` answers for up to sixteen validated references whether each is on the VM (`docker image
+  inspect`) and, when not, whether its registry offers it (`docker manifest inspect`, twelve seconds each, four at a
+  time; nothing is pulled). A reference is accepted only when it matches Docker's own reference grammar in full and
+  travels as one argv element; the gateway and its three request names are unchanged. The manager serves them as
+  `GET /api/operations/images` (cached a minute) and `POST /api/operations/image-check` (answers cached an hour when
+  found or local, half an hour when absent, two minutes when a registry did not answer; one VM question in flight at
+  a time; a name that is no reference is answered `invalid`, never sent). The Docker client's own words travel only
+  with an `unknown` answer. The independent risk review's findings (strict full match, a type guard in the topology
+  walk, the single-flight lock and the longer caches against a registry's pull allowance, prompt cancellation of the
+  helper's probes, a broken credential helper read as no verdict) are in.
+- **Defaults that can work.** A device template takes, per kind, the image the topologies in My labs use, else an
+  image the VM already has for that kind (matched by repository name, highest tag), else the placeholder; the
+  Image field's list offers every image the VM has. The guide no longer says the manager cannot see the VM's images.
+- **The check runs in the background and never holds the editor.** After each stored change the builder sends the
+  draft's images to the manager and shows one line under the bar: *on the VM*; *not on the VM yet, a deploy pulls
+  it from its registry*; *not on the VM and no registry offers it (not there, or it needs a login on the VM): a
+  deploy fails*, in amber with the way out; or that the registry did not answer. A manager or VM that is slow or
+  away leaves the line empty.
+- **Said again at the commit point.** The *Save to the VM…* review (and every *Start lab* / *Redeploy lab* /
+  *Create file on the VM…* review) lists the topology's images under *Images* and fills in the VM's answers while
+  the review is open; an image found nowhere is called out above the list with the devices that would stay down.
+  The student still decides; nothing is refused.
+
+## Changes in 1.30.53
+
+*UI/UX changes 2*, items 3 and 4: the lab builder's Image and Version fields.
+
+- **The image is written exactly as typed (item 3).** A template's or a device's *Image* and *Version* become
+  `image: <image>:<version>` in the topology, nothing prepended or appended. The developer's screenshot had Image
+  `n24l/cisco_xrv9k`, Version `24.3.1`; reproduced in a real browser on 1.30.52, the YAML received
+  `n24l/cisco_xrv9k:latest24.3.1`: the editor fills `latest` into a cleared Version field at once, so a version typed
+  afterwards is appended to it. With this release the YAML receives `n24l/cisco_xrv9k:24.3.1`.
+- **No automatic "latest" (item 4).** The Version field is the student's: backspacing it leaves it empty, pasting or
+  choosing another image keeps whatever version is typed (and an empty one stays empty), an untagged image reads as
+  an empty version, and an unknown image offers no version. The tags this site already uses for a known image are
+  still offered in the field's list; none is picked for the student. An empty version writes the image alone
+  (`image: n24l/vjunos-switch`), which Docker on the VM reads as that image's `latest` tag at deploy time; this is
+  the documented contract (`docs/LAB-BUILDER.md`, *Device templates and images*).
+- **How: tracked build-time patches to the pinned editor, not a fork.** The behaviour lives in the editor package
+  (`joinImageVersion`, `splitImageString`, `getVersionsForImage`, `parseImageTag`, `ImageVersionFields.handleBaseChange`)
+  and is not configurable from the adapter or the page, and a rewrite after the fact could not stop the field from
+  showing `latest`. `clab-backup-ui/lab-builder/patches.mjs` lists six exact replacements with their reasons; `build.mjs`
+  applies them in memory while esbuild reads the two package chunks (the package on disk is never modified) and fails
+  when an anchor is not found exactly once, so an editor upgrade cannot silently drop them; `tests/test_lab_builder_ui.js`
+  checks the committed bundle for every outcome and, when `node_modules` is present, every anchor in the pristine
+  package. The third-party notices say so. The bundle is rebuilt (two chunk names changed), and the page reaches
+  browsers with this release number.
+
+## Changes in 1.30.52
+
+First release of the *UI/UX changes 2* stream (`docs/ui-ux-changes-2/`: the developer's walk through a fresh install
+as a student, ten items; `CHECKLIST.md` carries each one with its status). This release carries items 1 and 9.
+
+- **The package-lock recovery says that restarting the VM clears it too (item 1).** The installer's *Package lock
+  recovery* screen, and `deploy/apt_lock.py --show` / `--wait`, now add one line after the rule that nothing may be
+  killed or deleted: right after a VM snapshot rollback or a reboot the holder is usually the restored system's own
+  unattended upgrade, and a normal restart of the VM clears it as well (Ubuntu lets the running upgrade finish before
+  it shuts down); every completed setup step is kept, so the installer is simply run again. Advice only: the installer
+  and the lock tool still never kill a process, delete a lock file, stop the service or restart anything, and a test
+  now pins that no such command token exists in either script. The installer prints the line itself when the holder
+  report cannot be read (expired sudo credentials), never twice. `docs/INSTALL.md` has the sentence and the new screen.
+- **Hide a lab from Home (item 9).** A lab card's ⋯ dialog (and *All lab operations…* on the lab page) has **Hide from
+  Home** under *Lab tools*, with its help line: the card goes off Home (both tabs) and nothing else changes: the lab
+  stays in My labs with its devices, backups, backup history, saved progress and Git binding, nothing on the VM
+  changes, a running lab keeps running, and the 30-second discovery never puts the card back (it keeps updating the lab
+  and never touches the flag). Home shows a line under the list, *N labs are hidden from Home*, with the two ways back:
+  **Choose a file on the lab VM…** › the lab's topology › *Add to My labs without starting* or *Deploy lab* registers
+  the same lab again (same id, flag cleared, no second workspace), and **Manager ▾ › Labs found on the VM…** lists hidden
+  labs under *Hidden from Home* with **Show on Home** (and opens one from its name). Implementation: `hidden` on the lab
+  record through `PUT /api/labs/{id}/operations-settings` (the favourite's route; `lab.hide` / `lab.show` events),
+  cleared by `POST /api/lab-definitions`; `public_lab` passes it through; `homeVmLabs(discovery, labs)` counts hidden labs
+  with the removed-and-excluded ones. This is built on the existing settings and registration paths, beside *Remove from
+  this manager* (which forgets the workspace) rather than on it.
+- `docs/ui-ux-changes-2/` is a history folder for the release check; `tools/check_hide_lab.py` (Playwright against the
+  deployed manager or the fixture: hide, discovery pass, Show on Home, hide again, add again from the topology browser)
+  and `tools/installer_lock_repro.py` (the real installer under a pseudo-terminal with the dpkg frontend lock held by a
+  harmless process; dev VM only) are the regression tools of this release.
+
 ## Changes in 1.30.50
 
 The first acceptance pass on 1.30.49 (`docs/netlab-ui-qa/acceptance/PASS-4-sonnet.md`) found one small product

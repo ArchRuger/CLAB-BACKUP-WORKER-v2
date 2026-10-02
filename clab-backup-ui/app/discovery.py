@@ -832,6 +832,9 @@ class Discovery:
                         n['endpoint_mode']=previous.get('endpoint_mode','manual')
                 lab.update(nodes=parsed['nodes'],deployment_name=parsed['deployed_name'],container_prefix=parsed['prefix'],
                            definition_yaml=raw.decode('utf-8-sig'),updated=stamp(),source=definition.filename or 'lab.clab.yaml')
+                # Adding a lab again (Choose a file on the lab VM… › Add to My labs / Deploy lab) is the way back
+                # for a lab hidden from Home; the flag is the only thing a hide ever set.
+                lab.pop('hidden', None)
                 self.store.state['ignored_labs'] = [n for n in self.store.state.get('ignored_labs', []) if n != parsed['deployed_name']]
                 if ann or not lab.get('drawing'):
                     from .layout import keep_document

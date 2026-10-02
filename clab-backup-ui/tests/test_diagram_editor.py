@@ -49,6 +49,24 @@ class DiagramEditorTests(unittest.TestCase):
         self.assertEqual(len(roundtrip['links']),len(original['links']))
         self.assertIn('<b>Training</b>\nNotes',[d['text'] for d in roundtrip['decorations']])
 
+    def test_corner_label_positions_reach_the_drawio_export(self):
+        # Item 6 of UI/UX changes 2: the four corners are label positions like the others, and draw.io places
+        # the label diagonally off the icon's corner (labelPosition for the side, verticalLabelPosition for top/bottom).
+        self.prepare(); lab=self.store.lab(self.lab['id'])
+        corners={'top-left':'labelPosition=left;verticalLabelPosition=top;align=right;verticalAlign=bottom;','top-right':'labelPosition=right;verticalLabelPosition=top;align=left;verticalAlign=bottom;',
+                 'bottom-left':'labelPosition=left;verticalLabelPosition=bottom;align=right;verticalAlign=top;','bottom-right':'labelPosition=right;verticalLabelPosition=bottom;align=left;verticalAlign=top;'}
+        for corner,style in corners.items():
+            lab['drawing']['nodes'][0]['labelPosition']=corner; self.store.save()
+            xml=ET.fromstring(self.client.post(self.url+'/drawio',json={}).content)
+            self.assertIn(style,xml.find('.//mxCell[@id="node-0"]').get('style'),corner)
+        lab['drawing']['nodes'][0]['labelPosition']='sideways'; self.store.save()
+        xml=ET.fromstring(self.client.post(self.url+'/drawio',json={}).content)
+        self.assertIn('verticalLabelPosition=bottom;verticalAlign=top;',xml.find('.//mxCell[@id="node-0"]').get('style'),'an unknown value is drawn at the bottom, like the editor')
+        # The manager's own export of the annotations keeps the corner for the editor and the VS Code extension.
+        lab['drawing']['nodes'][0]['labelPosition']='top-right'; self.store.save()
+        data=json.loads(self.client.post(self.url+'/annotations',json={}).content)
+        self.assertEqual(data['nodeAnnotations'][0]['labelPosition'],'top-right')
+
     def test_export_unsaved_annotations_does_not_write_and_empty_list_removes(self):
         self.prepare();before=copy.deepcopy(self.store.lab(self.lab['id'])['drawing'])
         response=self.client.post(self.url+'/annotations',json={'decorations':[{'type':'text','text':'Draft'}]})

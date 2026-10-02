@@ -48,22 +48,32 @@ function homeCard(lab){
  return `<article class="lab-card" data-lab-id="${id}"><div class="lab-card-head"><div><h3>${name}</h3></div><div class="lab-card-tools"><button type="button" class="icon-button" data-lab-favorite="${id}" aria-pressed="${favourite?'true':'false'}" aria-label="${favLabel}" title="${favLabel}"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-star"></use></svg></button><button type="button" class="icon-button" data-lab-more="${id}" aria-label="More actions for ${name}" title="More actions">⋯</button></div></div><p class="lab-status-line"><span class="pill ${esc(ls.pill||'neutral')}">${esc(ls.label)}</span><span>${esc(homeReadyLine(lab,ls))}</span></p><p>${esc(homeSavedLine(lab))}</p><p class="caption lab-card-times">${esc(times)}</p><div class="actions"><button type="button" class="button primary" data-lab="${id}">Open lab</button>${start}</div></article>`;
 }
 function homeMarkup(el,html){if(!el)return;if(typeof setMarkup==='function')setMarkup(el,html);else el.innerHTML=html;}
-// What Manager ▾ › Labs found on the VM… has to offer: labs the VM reports that are not in My labs, and
-// labs hidden after a removal. An excluded discovery counts as hidden only, never as waiting.
-function homeVmLabs(discovery){
- const d=discovery||{},waiting=(d.discovered||[]).filter(l=>!l.imported&&!l.excluded).length,hidden=(d.ignored_labs||[]).length;
+// What Manager ▾ › Labs found on the VM… has to offer: labs the VM reports that are not in My labs, labs
+// hidden after a removal and labs hidden from Home (still in My labs, with everything they have). An
+// excluded discovery counts as hidden only, never as waiting.
+function homeHiddenLabs(labs){return (labs||[]).filter(l=>!!l.hidden);}
+function homeVmLabs(discovery,labs){
+ const d=discovery||{},waiting=(d.discovered||[]).filter(l=>!l.imported&&!l.excluded).length,hidden=(d.ignored_labs||[]).length+homeHiddenLabs(labs).length;
  return {waiting,hidden,note:[waiting?waiting+' not in My labs':'',hidden?hidden+' hidden':''].filter(Boolean).join(' · ')};
+}
+// The line under the lab list (or where the list would be) when labs are hidden from Home: how many, and
+// the two ways back. Hiding changes the list only, so the sentence promises nothing else.
+function homeHiddenNote(labs){
+ const n=homeHiddenLabs(labs).length;if(!n)return '';
+ return (n===1?'1 lab is hidden from Home':n+' labs are hidden from Home')+'. Show it again under Manager ▾ › Labs found on the VM…, or add it again from Choose a file on the lab VM….';
 }
 // Called from render() on every poll; cheap because the list is diffed (setMarkup), which also keeps
 // the focus. The order depends only on the chosen tab and the labs' own fields.
 function renderHome(){
  if(!$('home'))return;
  if(typeof current==='function'&&current())return;
- const labs=state.labs||[],loaded=!!state.loaded,tab=homeCurrentTab();
+ const all=state.labs||[],labs=all.filter(l=>!l.hidden),loaded=!!state.loaded,tab=homeCurrentTab();
  if($('home-skeleton'))$('home-skeleton').hidden=loaded;
  // The two ways to start a lab lead every Home, with or without labs, as soon as the state is known.
  if($('home-start'))$('home-start').hidden=!loaded;
  if($('home-labs'))$('home-labs').hidden=!loaded||!labs.length;
+ // Hidden labs: not drawn, counted once under the list with the ways back (home-hidden-note).
+ if($('home-hidden-note')){const note=loaded?homeHiddenNote(all):'';$('home-hidden-note').textContent=note;$('home-hidden-note').hidden=!note;}
  for(const name of Object.keys(HOME_TABS)){const button=$('home-tab-'+name);if(!button)continue;const on=name===tab;if(typeof button.setAttribute==='function'){button.setAttribute('aria-selected',on?'true':'false');button.setAttribute('tabindex',on?'0':'-1');}if(button.classList&&typeof button.classList.toggle==='function')button.classList.toggle('active',on);}
  if($('home-tab-note'))$('home-tab-note').textContent=HOME_TABS[tab].note;
  const cards=$('lab-cards');if(cards){homeMarkup(cards,homeOrder(labs,tab).map(homeCard).join(''));cards.hidden=!labs.length;if(typeof cards.setAttribute==='function')cards.setAttribute('aria-labelledby','home-tab-'+tab);}

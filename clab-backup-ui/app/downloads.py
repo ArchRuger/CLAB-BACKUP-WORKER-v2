@@ -130,8 +130,28 @@ def archive_name(job):
     return f"{component(job.get('lab_name'),'lab')}_{stamp(job.get('started'),job.get('created'),job.get('finished'))}.zip"
 
 
+def topology_names(job):
+    """Download names of the topology and map embedded with a backup: `<lab>.clab.yml` and
+    `<lab>.clab.yml.annotations.json` (the lab's name made file-safe), in the ZIP and in a Git save;
+    {} when the backup carries none (captures taken before they were embedded)."""
+    record=job.get('topology')
+    if not isinstance(record,dict) or not record.get('file'): return {}
+    base=component(job.get('lab_name'),'lab')
+    # The Git helper and the manager's snapshot reader take plain filenames that start with a letter, digit or
+    # underscore (never a dash); a lab whose file-safe name begins otherwise gets an underscore in front.
+    if not re.match(r'[A-Za-z0-9_]',base): base='_'+base
+    base+='.clab.yml'
+    names={'topology':base}
+    if record.get('annotations_file'): names['annotations']=base+'.annotations.json'
+    return names
+
+
 def decorate_job(job):
     job['archive_name']=archive_name(job)
     job['download_timezone']='UTC'
     for index,name in config_names(job).items(): job['nodes'][index]['download_name']=name
+    names=topology_names(job)
+    if names:
+        job['topology']['download_name']=names['topology']
+        if names.get('annotations'): job['topology']['annotations_download_name']=names['annotations']
     return job

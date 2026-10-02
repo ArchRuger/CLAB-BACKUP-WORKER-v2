@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__
 from .discovery import PinnedHostKey, vm_password
-from .downloads import component, short_name, stored_path, stored_restore_path
+from .downloads import component, short_name, stored_file, stored_path, stored_restore_path, topology_names
 from .inventory import PLATFORMS
 from .lab_operations import operation_busy, scrub, GIT_BUSY
 from .runner import now, trim_jobs
@@ -318,7 +318,7 @@ def remote_git(host, request, stopping=None):
         client.close()
 
 
-def captured_snapshot(store, backup, context=None):
+def captured_snapshot(store, backup, context=None, embedded_files=True):
     if backup.get('operation') != 'backup' or backup.get('status') not in ('succeeded', 'partial'):
         raise ValueError('Choose a completed configuration capture.')
     nodes = backup.get('nodes', [])
@@ -387,10 +387,39 @@ def captured_snapshot(store, backup, context=None):
                          restore_capable=True)
             restore_capable += 1
         metadata.append(entry)
+    # The topology and map the backup embedded travel with the save as entries of their own kind (no `node`:
+    # restore and the device pairing leave them alone, the helper does not count them as devices). The manifest's
+    # topology digest is then the embedded file's own, provenance `embedded`; older captures keep the digest of
+    # the manager's copy at save time (`captured`) or none (`unknown`).
+    topology_digest = context.get('topology_digest'); provenance = 'captured' if topology_digest else 'unknown'
+    embedded = backup.get('topology') if isinstance(backup.get('topology'), dict) else {}
+    if embedded_files and embedded.get('file'):
+        extra_names = topology_names(backup)
+        for key, field, sha_field in (('topology', 'file', 'sha256'), ('annotations', 'annotations_file', 'annotations_sha256')):
+            if not embedded.get(field): continue
+            path = stored_file(store, backup, embedded[field])
+            if path is None: raise ValueError('The topology embedded with this capture is missing or unsafe. The repository was not changed.')
+            with path.open('rb') as stream: raw = stream.read(MAX_FILE + 1)
+            total += len(raw)
+            if not raw or len(raw) > MAX_FILE or total > MAX_TOTAL:
+                raise ValueError('Use nonempty configs up to 2 MiB each and 16 MiB per snapshot.')
+            try: raw.decode('utf-8')
+            except UnicodeError: raise ValueError('The embedded topology is not valid UTF-8 text.')
+            if embedded.get(sha_field) and hashlib.sha256(raw).hexdigest() != embedded[sha_field]:
+                raise ValueError('The embedded topology no longer matches the digest recorded when it was taken. Take a new backup.')
+            name = extra_names[key]
+            if name.casefold() == 'manifest.json' or name in files or name.casefold() in names: raise ValueError('Capture filenames collide.')
+            files[name] = base64.b64encode(raw).decode('ascii')
+            # Stable fields only: the time the file was read stays on the backup record, because an unchanged save
+            # is told from the manifest's content digest and a time that moves with every discovery pass would make
+            # every save a new commit.
+            metadata.append(dict(path=name, size=len(raw), sha256=hashlib.sha256(raw).hexdigest(), kind=key,
+                                 source=str(embedded.get('annotations_source') or embedded.get('source', '')) if key == 'annotations' else str(embedded.get('source', '')),
+                                 vm_path=str(embedded.get('path', ''))))
+            if key == 'topology': topology_digest = hashlib.sha256(raw).hexdigest(); provenance = 'embedded'
     manifest = dict(schema=2, lab_id=backup['lab_id'], lab_name=backup.get('lab_name', ''),
                     backup_job_id=backup['id'], captured_at=backup.get('finished', backup.get('created')),
-                    topology_digest=context.get('topology_digest'),
-                    topology_provenance='captured' if context.get('topology_digest') else 'unknown',
+                    topology_digest=topology_digest, topology_provenance=provenance,
                     node_names=sorted(n['name'] for n in nodes), excluded_nodes=context.get('excluded_nodes', []),
                     restore_capable_nodes=restore_capable, files=metadata)
     return dict(manifest=manifest, files=files)
@@ -434,7 +463,8 @@ def _node_slots(manifest, files):
     must still be found as the same node's file."""
     slots = {}
     for entry in manifest.get('files', []):
-        node = entry.get('node')
+        # A device by its name; the embedded topology and map by their kind, so a compare shows their changes too.
+        node = entry.get('node') or ('file:' + str(entry['kind']) if entry.get('kind') else None)
         if not node: continue
         slot = slots.setdefault(node, {})
         slot['config'] = (entry.get('path', ''), files.get(entry.get('path', '')))

@@ -17,6 +17,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from .discovery import PinnedHostKey, vm_password, parse_definition, stamp, expected_container
+from .host_operations import IMAGE_CHECK_LIMIT, image_reference
 from .inventory import read_data
 from .topology import parse_drawing
 from .drawio_export import drawio
@@ -258,12 +259,38 @@ class OutputWindow:
         return '[private key omitted]' + text[marker.end():] if marker and marker.group(1) == 'END' else text
 
 
+def topology_images(text):
+    """The container images a topology names, in the order of its nodes: [{reference, kind, nodes}], one entry
+    per image (node image, else the kind's image, else the default; templated values are left out)."""
+    try: topology = read_data(text.encode() if isinstance(text, str) else text).get('topology') or {}
+    except (ValueError, TypeError, AttributeError, RecursionError): return []
+    defaults = topology.get('defaults') if isinstance(topology.get('defaults'), dict) else {}
+    kinds = topology.get('kinds') if isinstance(topology.get('kinds'), dict) else {}
+    found = {}
+    for node_name, node in (topology.get('nodes') or {}).items() if isinstance(topology.get('nodes'), dict) else []:
+        node = node if isinstance(node, dict) else {}
+        kind = node.get('kind') or defaults.get('kind')
+        if not isinstance(kind, str): continue
+        kind_settings = kinds.get(kind) if isinstance(kinds.get(kind), dict) else {}
+        image = node.get('image') or kind_settings.get('image') or defaults.get('image')
+        if not (isinstance(kind, str) and isinstance(image, str) and 0 < len(kind) <= 120 and 0 < len(image) <= 300 and '{{' not in image): continue
+        entry = found.setdefault(image, {'reference': image, 'kind': kind, 'nodes': []})
+        if isinstance(node_name, str) and len(entry['nodes']) < 50: entry['nodes'].append(node_name)
+    return list(found.values())
+
+
 class LabOperations:
     def __init__(self, store, discovery, readiness=None):
         # readiness: the ReadinessMonitor, so a Restart device job can drop the device's proven login
         # (its readiness epoch) when the restart is accepted and again when it has run.
         self.store = store; self.discovery = discovery; self.readiness = readiness; self.previews = {}; self.stopping = threading.Event()
         self.pool = ThreadPoolExecutor(max_workers=1); self.cap_cache = None; self.active = set()
+        # Image questions are read-only and repeat (every builder edit, every review): the VM's image list is kept for
+        # a minute and each reference's answer for a while, so the helper is asked once per question, not per page.
+        self.images_cache = None; self.image_cache = {}; self.image_lock = threading.Lock()
+        # One image question on the VM at a time: tabs and reviews that miss the cache together queue here
+        # instead of each opening an SSH session and four Docker processes.
+        self.image_flight = threading.Lock()
         with store.lock:
             for job in store.state.setdefault('operations', []):
                 if job['status'] in BUSY:
@@ -323,18 +350,59 @@ class LabOperations:
             found = {}
             with self.store.lock: texts = [l.get('definition_yaml') or '' for l in self.store.state['labs']]
             for text in texts:
-                try: topology = read_data(text.encode()).get('topology') or {}
-                except (ValueError, TypeError, AttributeError, RecursionError): continue
-                defaults = topology.get('defaults') if isinstance(topology.get('defaults'), dict) else {}
-                kinds = topology.get('kinds') if isinstance(topology.get('kinds'), dict) else {}
-                for node in (topology.get('nodes') or {}).values() if isinstance(topology.get('nodes'), dict) else []:
-                    node = node if isinstance(node, dict) else {}
-                    kind = node.get('kind') or defaults.get('kind')
-                    kind_settings = kinds.get(kind) if isinstance(kinds.get(kind), dict) else {}
-                    image = node.get('image') or kind_settings.get('image') or defaults.get('image')
-                    if isinstance(kind, str) and isinstance(image, str) and 0 < len(kind) <= 120 and 0 < len(image) <= 300 and '{{' not in image:
-                        counts = found.setdefault(kind, {}); counts[image] = counts.get(image, 0) + 1
+                for entry in topology_images(text):
+                    counts = found.setdefault(entry['kind'], {}); counts[entry['reference']] = counts.get(entry['reference'], 0) + len(entry['nodes'])
             return {'images': {kind: sorted(counts, key=lambda i: (-counts[i], i))[:12] for kind, counts in sorted(found.items())}}
+
+        @app.get('/api/operations/images')
+        def vm_images():
+            """The images the VM already has (the helper's read-only `images` mode), kept for a minute."""
+            host = self.host(); key = host.get('revision')
+            with self.image_flight:
+                with self.image_lock:
+                    if self.images_cache and self.images_cache[0] == key and self.images_cache[1] > time.monotonic(): return self.images_cache[2]
+                result = self.invoke({'mode': 'images'})
+                value = {'available': bool(result.get('available')), 'images': [i for i in result.get('images', []) if isinstance(i, str)][:1000]}
+                with self.image_lock: self.images_cache = (key, time.monotonic() + 60, value)
+            return value
+
+        class ImageCheck(BaseModel):
+            model_config = ConfigDict(extra='forbid')
+            references: list[str] = Field(min_length=1, max_length=IMAGE_CHECK_LIMIT)
+
+        @app.post('/api/operations/image-check')
+        def image_check(data: ImageCheck):
+            """Is each image on the VM, and if not, does its registry know it? Read-only; answers are cached
+            (a found or local image an hour, an absent one half an hour, an unreachable registry two minutes)
+            so the builder's background check and the reviews ask the VM once per image, and a registry's
+            pull allowance is not spent on repeats. A name that is not an image reference is answered as
+            `invalid` and never sent anywhere."""
+            answers = {}; refs = []
+            for raw in dict.fromkeys(data.references):
+                try: refs.append(image_reference(raw))
+                except ValueError: answers[raw] = {'reference': raw[:300], 'local': False, 'registry': 'invalid', 'detail': '', 'available': True}
+            order = list(dict.fromkeys(data.references))
+            host = self.host(); key = host.get('revision'); now = time.monotonic()
+            with self.image_lock:
+                self.image_cache = {k: v for k, v in self.image_cache.items() if v[1] > now and v[0] == key}
+                answers.update({r: self.image_cache[r][2] for r in refs if r in self.image_cache})
+            missing = [r for r in refs if r not in answers]
+            if missing:
+                with self.image_flight:
+                    with self.image_lock: answers.update({r: self.image_cache[r][2] for r in missing if r in self.image_cache and self.image_cache[r][1] > time.monotonic()})
+                    missing = [r for r in missing if r not in answers]
+                    result = self.invoke({'mode': 'image-check', 'options': {'references': missing}}) if missing else {'images': []}
+                    available = bool(result.get('available'))
+                    for item in result.get('images', []):
+                        if not isinstance(item, dict) or item.get('reference') not in missing: continue
+                        local = item.get('local'); registry = str(item.get('registry', 'unknown'))
+                        if registry not in ('found', 'not-found', 'unreachable', 'unknown', 'skipped'): registry = 'unknown'
+                        answer = {'reference': item['reference'], 'local': local if isinstance(local, bool) else None, 'registry': registry,
+                                  'detail': str(item.get('detail', ''))[:200] if registry == 'unknown' else '', 'available': available}
+                        answers[item['reference']] = answer
+                        ttl = 3600 if local or registry == 'found' else 1800 if registry == 'not-found' else 120
+                        with self.image_lock: self.image_cache[item['reference']] = (key, time.monotonic() + ttl, answer)
+            return {'images': [answers[r] for r in order if r in answers]}
 
         @app.post('/api/operations/parse-yaml')
         def parse_yaml(data: Request):
@@ -355,6 +423,10 @@ class LabOperations:
             if drawing is None:
                 try: drawing = parse_drawing(b'{"nodeAnnotations":[]}', raw)
                 except invalid: raise HTTPException(400, 'Enter a valid literal Containerlab topology.')
+            # A preview has no lab to match devices against: the renderer needs to know which drawn devices
+            # the topology file names (the rest come from the map file alone). Not stored anywhere.
+            names = {n.get('definition_node') or n['name'] for n in parsed['nodes']}
+            for node in drawing['nodes']: node['in_topology'] = node.get('alias') in names or node['id'] in names
             return {'name': parsed['name'], 'drawing': drawing, 'annotations_used': used}
 
         @app.post('/api/operations/preview')
@@ -455,6 +527,10 @@ class LabOperations:
                 req['path'] = result.get('path', '')
             if notes: result['warnings'] = notes + list(result.get('warnings', []))
             if diff: result['diff'] = diff
+            # The images the reviewed topology names, so the page can ask whether each is usable on this VM
+            # (POST /api/operations/image-check) while the review is on the screen: the answer never delays it.
+            if data.action in ('deploy', 'redeploy', 'publish', 'revise', 'create'):
+                result['images'] = topology_images(str(options.get('text', '')) if data.action in ('publish', 'revise', 'create') else (source or {}).get('text', ''))
             if source and result.get('source_hash') != source['sha256']: raise HTTPException(409, 'Source changed during review; retry.')
             with self.store.lock:
                 if self.store.state.get('host', {}).get('revision') != host_revision: raise HTTPException(409, 'VM connection changed. Preview again.')
@@ -531,6 +607,11 @@ class LabOperations:
         class LabSettings(BaseModel):
             model_config = ConfigDict(extra='forbid')
             favorite: bool | None = None
+            # Hide from Home: a flag on the lab record and nothing else. The lab, its devices, backups,
+            # history and Git binding stay; nothing on the VM changes; background discovery keeps
+            # updating the lab without ever clearing the flag. Adding the lab again through the
+            # topology browser (POST /api/lab-definitions) or Show on Home clears it.
+            hidden: bool | None = None
             path: str | None = Field(default=None, max_length=4096)
 
         @app.put('/api/labs/{lab_id}/operations-settings')
@@ -552,8 +633,13 @@ class LabOperations:
                 if not lab: raise HTTPException(404, 'Lab was removed.')
                 if revision != self.store.state.get('host', {}).get('revision'): raise HTTPException(409, 'VM connection changed. Select the project again.')
                 if data.favorite is not None: lab['favorite'] = data.favorite
+                if data.hidden is not None:
+                    if data.hidden: lab['hidden'] = True
+                    else: lab.pop('hidden', None)
                 if data.path is not None: lab['vm_project_path'] = data.path
                 self.store.save()
+                if data.hidden is not None:
+                    self.store.event('lab.hide' if data.hidden else 'lab.show', 'Hidden from Home' if data.hidden else 'Shown on Home again', lab_id=lab_id)
             return {'saved': True}
 
         @app.get('/api/labs/{lab_id}/drawio')
