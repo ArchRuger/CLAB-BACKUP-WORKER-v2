@@ -1,0 +1,92 @@
+
+You can use the following sr attributes:
+==============================================================================
+
+_proto_map:
+  isis:
+    af:
+    - ipv4
+    - ipv6
+    module: isis
+  ospfv2:
+    af:
+    - ipv4
+    module: ospf
+global:
+  _migrate:
+    ipv6_sid_offset: node_sid_offset.ipv6
+  _obsolete:
+    srgb_range_size: The SRGB range is device-specific and must be set on node or device
+    srgb_range_start: The SRGB range is device-specific and must be set on node or device
+  af:
+    _alt_types:
+    - NoneType
+    _list_to_dict: true
+    ipv4: bool
+    ipv6: bool
+  node_sid_offset:
+    ipv4:
+      min_value: 0
+      type: int
+    ipv6:
+      min_value: 0
+      type: int
+  protocol:
+    _subtype:
+      type: str
+      valid_values:
+      - isis
+      - ospfv2
+    create_empty: true
+    empty: false
+    type: list
+node:
+  _migrate:
+    srgb_range_size: srgb.size
+    srgb_range_start: srgb.start
+  _obsolete:
+    ipv6_sid_offset: The SR SID offset must be set globally to be consistent across nodes
+  af:
+    _alt_types:
+    - NoneType
+    _list_to_dict: true
+    ipv4: bool
+    ipv6: bool
+  node_sid:
+    ipv4:
+      _alt_types:
+      - NoneType
+      min_value: 1
+      type: int
+    ipv6:
+      _alt_types:
+      - NoneType
+      min_value: 1
+      type: int
+  protocol:
+    _subtype:
+      type: str
+      valid_values:
+      - isis
+      - ospfv2
+    create_empty: true
+    empty: false
+    type: list
+  srgb:
+    dyn_size:
+      min_value: 1
+      type: int
+    dyn_start:
+      min_value: 1
+      type: int
+    size:
+      min_value: 1
+      type: int
+    start:
+      min_value: 1
+      type: int
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

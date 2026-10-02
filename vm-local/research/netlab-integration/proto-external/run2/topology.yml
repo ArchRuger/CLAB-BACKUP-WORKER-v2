@@ -1,0 +1,74 @@
+# Variant of square-v1.yml for the reorder-diff experiment (Task 4):
+#  * nodes: xrv9k and vjunos-switch swapped in the mapping order
+#  * links: link #3 and #4 swapped in list order, AND link #4's two endpoints
+#    swapped (xrv9k/ceos -> ceos/xrv9k) -- same physical links, different
+#    textual order/direction.
+name: restore-square
+
+provider: external
+
+module: [ ospf, bgp ]
+
+defaults:
+  device: linux
+
+bgp:
+  as: 65000
+
+ospf:
+  area: 0.0.0.0
+
+addressing:
+  loopback:
+    ipv4: 10.255.0.0/24
+    ipv6: 2001:db8:ff::/48
+  p2p:
+    ipv4: 10.0.0.0/16
+    ipv6: 2001:db8:1::/48
+  lan:
+    ipv4: 172.31.0.0/16
+    ipv6: 2001:db8:2::/48
+
+nodes:
+  ceos:
+    device: eos
+    mgmt.ipv4: 172.20.20.101
+  cjunosevolved:
+    device: vptx
+    mgmt.ipv4: 172.20.20.102
+  xrv9k:                       # <-- swapped: xrv9k now defined before vjunos-switch
+    device: iosxr
+    mgmt.ipv4: 172.20.20.104
+  vjunos-switch:                # <-- swapped
+    device: vjunos-switch
+    mgmt.ipv4: 172.20.20.103
+  host1:
+    device: linux
+    module: []
+    mgmt.ipv4: 172.20.20.105
+
+links:
+  - ceos:
+      ifname: Ethernet1
+    cjunosevolved:
+      ifname: et-0/0/0
+  - cjunosevolved:
+      ifname: et-0/0/1
+    vjunos-switch:
+      ifname: ge-0/0/0
+  - ceos:                        # <-- was link #4 (xrv9k/ceos), moved to position 3,
+      ifname: Ethernet2          #     endpoints reversed (ceos first instead of xrv9k)
+    xrv9k:
+      ifname: GigabitEthernet0/0/0/1
+  - vjunos-switch:                # <-- was link #3 (vjunos-switch/xrv9k), moved to position 4
+      ifname: ge-0/0/1
+    xrv9k:
+      ifname: GigabitEthernet0/0/0/0
+  - host1:
+      ifname: eth1
+    vjunos-switch:
+      ifname: ge-0/0/2
+  - host1:
+      ifname: eth2
+    ceos:
+      ifname: Ethernet3

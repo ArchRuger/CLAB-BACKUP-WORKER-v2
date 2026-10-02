@@ -1,0 +1,233 @@
+
+You can use the following ospf attributes:
+==============================================================================
+
+global:
+  af:
+    _alt_types:
+    - NoneType
+    _list_to_dict: true
+    ipv4: bool
+    ipv6: bool
+  area:
+    type: ipv4
+    use: id
+  bfd:
+    _alt_types:
+    - bool
+    ipv4: bool
+    ipv6: bool
+    strict: bool
+    strict_delay:
+      max_value: 600
+      min_value: 0
+      type: int
+  passive: bool
+  password: str
+  process:
+    min_value: 1
+    type: int
+  reference_bandwidth:
+    min_value: 1
+    type: int
+  timers:
+    dead:
+      max_value: 8192
+      min_value: 3
+      type: int
+    hello:
+      max_value: 8192
+      min_value: 1
+      type: int
+interface:
+  priority:
+    max_value: 255
+    min_value: 0
+    type: int
+link:
+  area:
+    type: ipv4
+    use: id
+  bfd: bool
+  cost:
+    max_value: 65534
+    min_value: 1
+    type: int
+  digest:
+    type: dict
+  network_type:
+    type: str
+    valid_values:
+    - point-to-point
+    - point-to-multipoint
+    - broadcast
+    - non-broadcast
+  passive: bool
+  password: str
+  timers:
+    dead:
+      max_value: 8192
+      min_value: 3
+      type: int
+    hello:
+      max_value: 8192
+      min_value: 1
+      type: int
+loopback:
+  area:
+    type: ipv4
+    use: id
+  cost:
+    max_value: 65534
+    min_value: 1
+    type: int
+node:
+  af:
+    _alt_types:
+    - NoneType
+    _list_to_dict: true
+    ipv4: bool
+    ipv6: bool
+  area:
+    type: ipv4
+    use: id
+  bfd:
+    _alt_types:
+    - bool
+    ipv4: bool
+    ipv6: bool
+    strict: bool
+    strict_delay:
+      max_value: 600
+      min_value: 0
+      type: int
+  default:
+    _alt_types:
+    - bool
+    _keys:
+      always: bool
+      cost: int
+      policy: id
+      type:
+        type: str
+        valid_values:
+        - e1
+        - e2
+    type: dict
+  digest:
+    type: dict
+  gr:
+    _remove_when_false: true
+    _value_to_dict:
+      restart: '{value}'
+    helper:
+      _keys:
+        grace_period:
+          max_value: 1800
+          min_value: 10
+          type: int
+      _remove_when_false: true
+      true_value: {}
+      type: dict
+    restart:
+      _keys:
+        grace_period:
+          max_value: 1800
+          min_value: 1
+          type: int
+      _remove_when_false: true
+      true_value: {}
+      type: dict
+  import: _r_import
+  passive: bool
+  password: str
+  priority:
+    max_value: 255
+    min_value: 0
+    type: int
+  process:
+    min_value: 1
+    type: int
+  reference_bandwidth:
+    min_value: 1
+    type: int
+  router_id:
+    type: ipv4
+    use: id
+  timers:
+    dead:
+      max_value: 8192
+      min_value: 3
+      type: int
+    hello:
+      max_value: 8192
+      min_value: 1
+      type: int
+vrf:
+  active: bool
+  af:
+    _alt_types:
+    - NoneType
+    _list_to_dict: true
+    ipv4: bool
+    ipv6: bool
+  area:
+    type: ipv4
+    use: id
+  default:
+    _alt_types:
+    - bool
+    _keys:
+      always: bool
+      cost: int
+      policy: id
+      type:
+        type: str
+        valid_values:
+        - e1
+        - e2
+    type: dict
+  digest:
+    type: dict
+  gr:
+    _remove_when_false: true
+    _value_to_dict:
+      restart: '{value}'
+    helper:
+      _keys:
+        grace_period:
+          max_value: 1800
+          min_value: 10
+          type: int
+      _remove_when_false: true
+      true_value: {}
+      type: dict
+    restart:
+      _keys:
+        grace_period:
+          max_value: 1800
+          min_value: 1
+          type: int
+      _remove_when_false: true
+      true_value: {}
+      type: dict
+  import: _r_import
+  passive: bool
+  password: str
+  router_id:
+    type: ipv4
+    use: id
+  timers:
+    dead:
+      max_value: 8192
+      min_value: 3
+      type: int
+    hello:
+      max_value: 8192
+      min_value: 1
+      type: int
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

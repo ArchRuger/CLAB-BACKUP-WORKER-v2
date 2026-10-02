@@ -1,0 +1,101 @@
+
+You can use the following mpls attributes:
+==============================================================================
+
+global:
+  6pe:
+    true_value:
+    - ibgp
+    type: list
+    valid_values:
+    - ibgp
+    - ebgp
+  bgp:
+    _alt_types:
+    - bool
+    - BoxList
+    disable_unlabeled: bool
+    explicit_null: bool
+    ipv4:
+      true_value:
+      - ibgp
+      - ebgp
+      type: list
+    ipv6:
+      true_value:
+      - ibgp
+      - ebgp
+      type: list
+  ldp:
+    _alt_types:
+    - bool
+    advertise: list
+    explicit_null: bool
+    igp_sync: bool
+    router_id:
+      type: ipv4
+      use: id
+  vpn:
+    _alt_types:
+    - bool
+    - BoxList
+    ipv4:
+      true_value:
+      - ibgp
+      type: list
+    ipv6:
+      true_value:
+      - ibgp
+      type: list
+link:
+  ldp: bool
+node:
+  6pe:
+    true_value:
+    - ibgp
+    type: list
+    valid_values:
+    - ibgp
+    - ebgp
+  bgp:
+    _alt_types:
+    - bool
+    - BoxList
+    disable_unlabeled: bool
+    explicit_null: bool
+    ipv4:
+      true_value:
+      - ibgp
+      - ebgp
+      type: list
+    ipv6:
+      true_value:
+      - ibgp
+      - ebgp
+      type: list
+  ldp:
+    _alt_types:
+    - bool
+    advertise: list
+    explicit_null: bool
+    igp_sync: bool
+    router_id:
+      type: ipv4
+      use: id
+  vpn:
+    _alt_types:
+    - bool
+    - BoxList
+    ipv4:
+      true_value:
+      - ibgp
+      type: list
+    ipv6:
+      true_value:
+      - ibgp
+      type: list
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

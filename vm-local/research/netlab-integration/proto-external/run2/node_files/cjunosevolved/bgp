@@ -1,0 +1,190 @@
+
+routing-options {
+  autonomous-system 65000;
+  router-id 10.255.0.2
+}
+
+
+policy-options {
+  delete: policy-statement next-hop-ebgp-ipv4;
+  delete: policy-statement next-hop-all-ipv4;
+  delete: policy-statement next-hop-ebgp-ipv6;
+  delete: policy-statement next-hop-all-ipv6;
+
+  delete: policy-statement bgp-default-redistribute;
+  delete: route-filter-list bgp-default-announce-ipv4;
+  delete: route-filter-list bgp-default-announce-ipv6;
+
+  policy-statement bgp-final {
+    term final-option {
+      then {
+        accept;
+      }
+    }
+  }
+
+  route-filter-list bgp-default-announce-ipv4 {
+    10.255.0.2/32 exact;
+  }
+  route-filter-list bgp-default-announce-ipv6 {
+    2001:db8:ff:2::/64 exact;
+  }
+
+  policy-statement bgp-default-redistribute {
+    term advertise-ipv4 {
+      from {
+        route-filter-list bgp-default-announce-ipv4;
+      }
+      then {
+        next policy;
+      }
+    }
+    term advertise-ipv6 {
+      from {
+        route-filter-list bgp-default-announce-ipv6;
+      }
+      then {
+        next policy;
+      }
+    }
+
+    term redis_bgp {
+      from protocol bgp;
+      then {
+        next policy;
+      }
+    }
+
+    term default {
+      then reject;
+    }
+  }
+
+
+  policy-statement next-hop-ebgp-ipv4 {
+    term next-hop-self-ipv4 {
+      from {
+        family inet;
+        route-type external;
+      }
+      then {
+        next-hop self;
+      }
+    }
+  }
+  policy-statement next-hop-all-ipv4 {
+    term next-hop-self-ipv4 {
+      from {
+        family inet;
+      }
+      then {
+        next-hop self;
+      }
+    }
+  }
+  policy-statement next-hop-ebgp-ipv6 {
+    term next-hop-self-ipv6 {
+      from {
+        family inet6;
+        route-type external;
+      }
+      then {
+        next-hop self;
+      }
+    }
+  }
+  policy-statement next-hop-all-ipv6 {
+    term next-hop-self-ipv6 {
+      from {
+        family inet6;
+      }
+      then {
+        next-hop self;
+      }
+    }
+  }
+
+  policy-statement bgp-initial {
+    term initial-cleanup {
+      then {
+        next policy;
+      }
+    }
+  }
+
+}
+protocols {
+  delete: bgp;
+}
+protocols {
+  bgp {
+    group ibgp-peers-ipv4 {
+      type internal;
+      export [ 
+          next-hop-ebgp-ipv4 next-hop-ebgp-ipv6 bgp-default-redistribute bgp-final
+        ];
+      advertise-inactive;
+      neighbor 10.255.0.1 {
+
+        local-address 10.255.0.2;
+        description ceos;
+        family inet {
+          unicast;
+        }
+      }
+      neighbor 10.255.0.3 {
+
+        local-address 10.255.0.2;
+        description xrv9k;
+        family inet {
+          unicast;
+        }
+      }
+      neighbor 10.255.0.4 {
+
+        local-address 10.255.0.2;
+        description vjunos-switch;
+        family inet {
+          unicast;
+        }
+      }
+    }
+    group ibgp-peers-ipv6 {
+      type internal;
+      export [ 
+          next-hop-ebgp-ipv4 next-hop-ebgp-ipv6 bgp-default-redistribute bgp-final
+        ];
+      advertise-inactive;
+      neighbor 2001:db8:ff:1::1 {
+
+        local-address 2001:db8:ff:2::1;
+        description ceos;
+        family inet6 {
+          unicast;
+        }
+      }
+      neighbor 2001:db8:ff:3::1 {
+
+        local-address 2001:db8:ff:2::1;
+        description xrv9k;
+        family inet6 {
+          unicast;
+        }
+      }
+      neighbor 2001:db8:ff:4::1 {
+
+        local-address 2001:db8:ff:2::1;
+        description vjunos-switch;
+        family inet6 {
+          unicast;
+        }
+      }
+    }
+    group ebgp-peers {
+      export [ 
+          bgp-default-redistribute bgp-final
+        ];
+      advertise-inactive;
+    }
+  }
+}

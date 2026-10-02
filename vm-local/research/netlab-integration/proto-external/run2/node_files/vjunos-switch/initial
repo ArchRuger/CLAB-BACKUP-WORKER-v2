@@ -1,0 +1,65 @@
+system {
+  host-name vjunos-switch;
+  static-host-mapping {
+    ceos inet 10.255.0.1;
+    cjunosevolved inet 10.255.0.2;
+    xrv9k inet 10.255.0.3;
+    host1 inet 172.31.0.5;
+  }
+}
+
+interfaces {
+
+  lo0.0 {
+
+      family inet {
+        address 10.255.0.4/32;
+      }
+      family inet6 {
+        address 2001:db8:ff:4::1/64;
+      }
+  }
+  ge-0/0/0.0 {
+    description "vjunos-switch -> cjunosevolved";
+
+      family inet {
+        address 10.0.0.6/30;
+      }
+      family inet6 {
+        address 2001:db8:1:1::2/64;
+      }
+  }
+  ge-0/0/1.0 {
+    description "vjunos-switch -> xrv9k";
+
+      family inet {
+        address 10.0.0.13/30;
+      }
+      family inet6 {
+        address 2001:db8:1:3::1/64;
+      }
+  }
+  ge-0/0/2.0 {
+    description "vjunos-switch -> host1 [stub]";
+
+      family inet {
+        address 172.31.0.4/24;
+      }
+      family inet6 {
+        address 2001:db8:2::4/64;
+      }
+  }
+}
+protocols {
+  lldp {
+    interface fxp0 {
+      disable;
+    }
+    interface all;
+  }
+  router-advertisement {
+    interface ge-0/0/0.0;
+    interface ge-0/0/1.0;
+    interface ge-0/0/2.0;
+  }
+}

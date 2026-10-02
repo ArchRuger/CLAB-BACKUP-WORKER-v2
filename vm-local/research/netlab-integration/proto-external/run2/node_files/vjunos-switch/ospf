@@ -1,0 +1,61 @@
+routing-options {
+  router-id 10.255.0.4
+}
+protocols {
+  delete: ospf;
+}
+
+protocols {
+  ospf {
+    area 0.0.0.0 {
+      interface lo0.0 {
+      }
+    }
+    area 0.0.0.0 {
+      interface ge-0/0/0.0 {
+        interface-type p2p;
+      }
+    }
+    area 0.0.0.0 {
+      interface ge-0/0/1.0 {
+        interface-type p2p;
+      }
+    }
+    area 0.0.0.0 {
+      interface ge-0/0/2.0 {
+        interface-type p2p;
+        passive;
+      }
+    }
+  }
+}
+
+protocols {
+  delete: ospf3;
+}
+
+protocols {
+  ospf3 {
+    area 0.0.0.0 {
+      interface lo0.0 {
+      }
+    }
+    area 0.0.0.0 {
+      interface ge-0/0/0.0 {
+        interface-type p2p;
+      }
+    }
+    area 0.0.0.0 {
+      interface ge-0/0/1.0 {
+        interface-type p2p;
+      }
+    }
+    area 0.0.0.0 {
+      interface ge-0/0/2.0 {
+        interface-type p2p;
+        passive;
+      }
+    }
+  }
+}
+

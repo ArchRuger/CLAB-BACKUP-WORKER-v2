@@ -1,0 +1,84 @@
+# netlab topology for the containerlab "restore-square" acceptance lab, modelled with
+# provider: external (compiler-only; this file is never used with "netlab up").
+#
+# Real containerlab file: /srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml
+# Device stand-ins (netlab has no profile for the owner's exact images -- see RECON report Task 1):
+#   ceos           -> netlab device "eos"            (clab kind arista_ceos)         -- exact match
+#   cjunosevolved  -> netlab device "vptx"            (clab kind juniper_vjunosevolved, NOT juniper_cjunosevolved) -- STAND-IN
+#   vjunos-switch  -> netlab device "vjunos-switch"   (clab kind juniper_vjunosswitch) -- exact match
+#   xrv9k          -> netlab device "iosxr"           (clab kind cisco_xrd, NOT cisco_xrv9k)                       -- STAND-IN
+#   host1          -> netlab device "linux"           (clab kind linux)               -- exact match (image differs)
+name: restore-square
+
+provider: external
+
+module: [ ospf, bgp ]
+
+defaults:
+  device: linux            # harmless global default; every node below sets its own device
+
+bgp:
+  as: 65000                 # single AS -> netlab auto-builds a full iBGP mesh over the 4 routers
+
+ospf:
+  area: 0.0.0.0
+
+addressing:
+  loopback:
+    ipv4: 10.255.0.0/24
+    ipv6: 2001:db8:ff::/48
+  p2p:
+    ipv4: 10.0.0.0/16
+    ipv6: 2001:db8:1::/48
+  lan:
+    ipv4: 172.31.0.0/16
+    ipv6: 2001:db8:2::/48
+
+nodes:
+  ceos:
+    device: eos
+    mgmt.ipv4: 172.20.20.101
+  cjunosevolved:
+    device: vptx
+    mgmt.ipv4: 172.20.20.102
+  vjunos-switch:
+    device: vjunos-switch
+    mgmt.ipv4: 172.20.20.103
+  xrv9k:
+    device: iosxr
+    mgmt.ipv4: 172.20.20.104
+  host1:
+    device: linux
+    module: []               # plain host: no OSPF/BGP daemon, just an addressed interface
+    mgmt.ipv4: 172.20.20.105
+
+links:
+  # Square edges (order matches the real clab file exactly)
+  - ceos:
+      ifname: Ethernet1
+    cjunosevolved:
+      ifname: et-0/0/0
+  - cjunosevolved:
+      ifname: et-0/0/1
+    vjunos-switch:
+      ifname: ge-0/0/0
+  - vjunos-switch:
+      ifname: ge-0/0/1
+    xrv9k:
+      ifname: GigabitEthernet0/0/0/0
+  - xrv9k:
+      ifname: GigabitEthernet0/0/0/1
+    ceos:
+      ifname: Ethernet2
+  # host1 stub links
+  - host1:
+      ifname: eth1
+    vjunos-switch:
+      ifname: ge-0/0/2
+  - host1:
+      ifname: eth2
+    ceos:
+      ifname: Ethernet3
+  # 5th square-side link (new, appended at the end): stub link on cjunosevolved
+  - cjunosevolved:
+      ifname: et-0/0/2

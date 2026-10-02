@@ -1,0 +1,2 @@
+- [Junos states carry the management address](junos-states-carry-mgmt-address.md) — restores move routers to old mgmt IPs if states predate an address change; looks like "lost SSH"
+- [Stagger Junos boots](stagger-junos-boots.md) — on boot failures use startup-delay steps (10 min asked; 0/360/720/1080 is what fits the manager's 20-min deploy limit); host reboot cleared the hang; never reset guests by hand

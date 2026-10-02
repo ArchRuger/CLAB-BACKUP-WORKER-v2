@@ -1,0 +1,77 @@
+!
+route-map next-hop-self-ipv4 permit 10
+   match route-type external
+   set ip next-hop peer-address
+!
+route-map next-hop-self-ipv4 permit 20
+!
+route-map next-hop-self-ipv6 permit 10
+   match route-type external
+   set ipv6 next-hop peer-address
+!
+route-map next-hop-self-ipv6 permit 20
+!
+!
+router bgp 65000
+  bgp advertise-inactive
+  bgp log-neighbor-changes
+  no bgp default ipv4-unicast
+  no bgp default ipv6-unicast
+  router-id 10.255.0.1
+!
+  neighbor 10.255.0.2 remote-as 65000
+  neighbor 10.255.0.2 description cjunosevolved
+  neighbor 10.255.0.2 update-source Loopback0
+  neighbor 10.255.0.2 send-community standard extended large 
+!
+  neighbor 2001:db8:ff:2::1 remote-as 65000
+  neighbor 2001:db8:ff:2::1 description cjunosevolved
+  neighbor 2001:db8:ff:2::1 update-source Loopback0
+  neighbor 2001:db8:ff:2::1 send-community standard extended large 
+!
+  neighbor 10.255.0.3 remote-as 65000
+  neighbor 10.255.0.3 description vjunos-switch
+  neighbor 10.255.0.3 update-source Loopback0
+  neighbor 10.255.0.3 send-community standard extended large 
+!
+  neighbor 2001:db8:ff:3::1 remote-as 65000
+  neighbor 2001:db8:ff:3::1 description vjunos-switch
+  neighbor 2001:db8:ff:3::1 update-source Loopback0
+  neighbor 2001:db8:ff:3::1 send-community standard extended large 
+!
+  neighbor 10.255.0.4 remote-as 65000
+  neighbor 10.255.0.4 description xrv9k
+  neighbor 10.255.0.4 update-source Loopback0
+  neighbor 10.255.0.4 send-community standard extended large 
+!
+  neighbor 2001:db8:ff:4::1 remote-as 65000
+  neighbor 2001:db8:ff:4::1 description xrv9k
+  neighbor 2001:db8:ff:4::1 update-source Loopback0
+  neighbor 2001:db8:ff:4::1 send-community standard extended large 
+!
+!
+ address-family ipv4
+
+!
+  network 10.255.0.1/32
+  network 172.31.1.0/24
+!
+  neighbor 10.255.0.2 activate
+  neighbor 10.255.0.2 route-map next-hop-self-ipv4 out
+  neighbor 10.255.0.3 activate
+  neighbor 10.255.0.3 route-map next-hop-self-ipv4 out
+  neighbor 10.255.0.4 activate
+  neighbor 10.255.0.4 route-map next-hop-self-ipv4 out
+!
+ address-family ipv6
+
+!
+  network 2001:db8:ff:1::/64
+  network 2001:db8:2:1::/64
+!
+  neighbor 2001:db8:ff:2::1 activate
+  neighbor 2001:db8:ff:2::1 route-map next-hop-self-ipv6 out
+  neighbor 2001:db8:ff:3::1 activate
+  neighbor 2001:db8:ff:3::1 route-map next-hop-self-ipv6 out
+  neighbor 2001:db8:ff:4::1 activate
+  neighbor 2001:db8:ff:4::1 route-map next-hop-self-ipv6 out

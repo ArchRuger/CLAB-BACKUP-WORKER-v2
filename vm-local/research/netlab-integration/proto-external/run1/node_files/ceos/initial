@@ -1,0 +1,58 @@
+hostname ceos
+!
+logging monitor debugging
+aaa authorization exec default local
+!
+lldp run
+ip routing
+ipv6 unicast-routing
+!
+!
+ip host cjunosevolved 10.255.0.2 10.0.0.2 10.0.0.5
+ip host host1 172.31.0.5 172.31.1.5
+ip host vjunos-switch 10.255.0.3 10.0.0.6 10.0.0.9 172.31.0.3
+ip host xrv9k 10.255.0.4 10.0.0.10 10.0.0.14
+ipv6 host cjunosevolved 2001:db8:ff:2::1
+ipv6 host host1 2001:db8:2::5
+ipv6 host vjunos-switch 2001:db8:ff:3::1
+ipv6 host xrv9k 2001:db8:ff:4::1
+!
+interface Management1
+ no lldp transmit
+ no lldp receive
+!
+interface Loopback0
+ ip address 10.255.0.1/32
+ ipv6 nd ra interval 5
+ ipv6 address 2001:db8:ff:1::1/64
+!
+interface Ethernet1
+ no switchport
+ description ceos -> cjunosevolved
+ ip address 10.0.0.1/30
+ ipv6 nd ra interval 5
+ ipv6 address 2001:db8:1::1/64
+ mac-address caf0.0001.0001
+!
+ no shutdown
+!
+interface Ethernet2
+ no switchport
+ description ceos -> xrv9k
+ ip address 10.0.0.13/30
+ ipv6 nd ra interval 5
+ ipv6 address 2001:db8:1:3::1/64
+ mac-address caf0.0001.0002
+!
+ no shutdown
+!
+interface Ethernet3
+ no switchport
+ description ceos -> host1 [stub]
+ ip address 172.31.1.1/24
+ ipv6 nd ra interval 5
+ ipv6 address 2001:db8:2:1::1/64
+ mac-address caf0.0001.0003
+!
+ no shutdown
+!

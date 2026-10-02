@@ -1,0 +1,93 @@
+
+You can use the following lag attributes:
+==============================================================================
+
+global:
+  lacp:
+    type: str
+    valid_values:
+    - 'off'
+    - slow
+    - fast
+  lacp_mode:
+    type: str
+    valid_values:
+    - passive
+    - active
+  mode:
+    type: str
+    valid_values:
+    - 802.3ad
+    - balance-xor
+interface:
+  lacp_system_id:
+    _alt_types:
+    - int
+    type: mac
+lag_l2_linkattr:
+  bandwidth: null
+  lacp_system_id: null
+  mtu: null
+lag_member_linkattr:
+  _linkname: null
+  bandwidth: null
+  interfaces: null
+  mtu: null
+lag_no_propagate:
+  _linkname: null
+  ifindex: null
+  interfaces: null
+  name: null
+link:
+  ifindex:
+    max_value: 10000
+    min_value: 0
+    type: int
+  lacp:
+    type: str
+    valid_values:
+    - 'off'
+    - slow
+    - fast
+  lacp_mode:
+    type: str
+    valid_values:
+    - passive
+    - active
+  members: null
+  mlag:
+    mac: mac
+    peergroup:
+      _alt_types:
+      - bool
+      min_value: 1
+      type: int
+  mode:
+    type: str
+    valid_values:
+    - 802.3ad
+    - balance-xor
+node:
+  lacp:
+    type: str
+    valid_values:
+    - 'off'
+    - slow
+    - fast
+  lacp_mode:
+    type: str
+    valid_values:
+    - passive
+    - active
+  mlag:
+    mac: mac
+  mode:
+    type: str
+    valid_values:
+    - 802.3ad
+    - balance-xor
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

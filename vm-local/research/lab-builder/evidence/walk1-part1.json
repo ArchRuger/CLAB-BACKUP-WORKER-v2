@@ -1,0 +1,30 @@
+{
+ "nodes_after_create": 3,
+ "edges_after_link": 2,
+ "yaml_after_links": "name: walk1\ntopology:\n  nodes:\n    ceos1:\n      kind: arista_ceos\n      image: ceos:4.35.0F\n    ptx1:\n      kind: juniper_cjunosevolved\n      image: cjunosevolved:26.2R1.7-EVO\n    host1:\n      kind: linux\n      image: ghcr.io/srl-labs/network-multitool:latest\n  links:\n    - endpoints: [ \"ceos1:eth1\", \"ptx1:et-0/0/0\" ]\n    - endpoints: [ \"ptx1:et-0/0/1\", \"host1:eth1\" ]\n",
+ "node_editor_tabs": [
+  "EDIT",
+  "NODES",
+  "ANNOTATIONS",
+  "YAML",
+  "JSON",
+  "BASIC",
+  "CONFIGURATION",
+  "RUNTIME",
+  "NETWORK",
+  "ADVANCED"
+ ],
+ "node_editor_labels": [
+  "Node Name",
+  "Kind",
+  "Image",
+  "Version",
+  "Icon",
+  "Label Position",
+  "Label Text Direction",
+  "Label Background",
+  "Transparent"
+ ],
+ "errors_so_far": [],
+ "csp_so_far": []
+}

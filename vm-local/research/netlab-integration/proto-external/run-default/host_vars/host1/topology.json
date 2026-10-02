@@ -1,0 +1,101 @@
+{
+  "module": [
+    "routing"
+  ],
+  "mgmt": {
+    "ipv4": "172.20.20.105",
+    "ifname": "eth0"
+  },
+  "interfaces": [
+    {
+      "ifname": "eth1",
+      "ipv4": "172.31.0.5/24",
+      "ipv6": "2001:db8:2::5/64",
+      "linkindex": 5,
+      "role": "stub",
+      "type": "lan",
+      "bridge": "restore-sq_5",
+      "name": "host1 -> vjunos-switch",
+      "ifindex": 1,
+      "netlab_ifname": "eth1",
+      "neighbors": [
+        {
+          "ipv4": "172.31.0.3/24",
+          "ipv6": "2001:db8:2::3/64",
+          "ifname": "ge-0/0/2",
+          "node": "vjunos-switch"
+        }
+      ],
+      "gateway": {
+        "ipv4": "172.31.0.3/24",
+        "ipv6": "2001:db8:2::3/64"
+      }
+    },
+    {
+      "ifname": "eth2",
+      "ipv4": "172.31.1.5/24",
+      "ipv6": "2001:db8:2:1::5/64",
+      "linkindex": 6,
+      "role": "stub",
+      "type": "lan",
+      "bridge": "restore-sq_6",
+      "name": "host1 -> ceos",
+      "ifindex": 2,
+      "netlab_ifname": "eth2",
+      "neighbors": [
+        {
+          "ipv4": "172.31.1.1/24",
+          "ipv6": "2001:db8:2:1::1/64",
+          "ifname": "Ethernet3",
+          "node": "ceos"
+        }
+      ]
+    }
+  ],
+  "box": "none",
+  "role": "host",
+  "af": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "routing": {
+    "static": [
+      {
+        "ipv4": "172.31.0.0/16",
+        "nexthop": {
+          "ipv4": "172.31.0.3",
+          "intf": "eth1",
+          "ipv6": "2001:db8:2::3",
+          "idx": 0
+        }
+      },
+      {
+        "ipv4": "10.255.0.0/24",
+        "nexthop": {
+          "ipv4": "172.31.0.3",
+          "intf": "eth1",
+          "ipv6": "2001:db8:2::3",
+          "idx": 0
+        }
+      },
+      {
+        "ipv4": "10.0.0.0/16",
+        "nexthop": {
+          "ipv4": "172.31.0.3",
+          "intf": "eth1",
+          "ipv6": "2001:db8:2::3",
+          "idx": 0
+        }
+      },
+      {
+        "ipv4": "10.2.0.0/24",
+        "nexthop": {
+          "ipv4": "172.31.0.3",
+          "intf": "eth1",
+          "ipv6": "2001:db8:2::3",
+          "idx": 0
+        }
+      }
+    ]
+  }
+}

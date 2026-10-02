@@ -1,7 +1,7 @@
 ---
 name: risk-reviewer
 description: Independent read-only review of a consequential change - deletions, instruction migrations, anything touching host_*.py, the gateway, trusted paths, owner-scoped Git, restore, capture privileges, state persistence or concurrency guards. Give it the diff to review and the author's claims; it tries to prove them wrong.
-model: claude-opus-5-5
+model: opus
 tools: Read, Grep, Glob, Bash
 ---
 

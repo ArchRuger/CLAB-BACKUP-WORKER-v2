@@ -1,0 +1,66 @@
+!
+! OSPFv2 configuration
+!
+router ospf 1
+ router-id 10.255.0.1
+ tunnel routes
+ interface unnumbered hello mask tx 0.0.0.0
+ timers spf delay initial 100 200 500
+ timers lsa rx min interval 100
+ timers lsa tx delay initial 100 200 500
+
+
+ passive-interface Ethernet3
+!
+interface Loopback0
+! 
+ ip ospf area 0.0.0.0
+!
+interface Ethernet1
+! ceos -> cjunosevolved
+ ip ospf area 0.0.0.0
+ ip ospf network point-to-point
+!
+interface Ethernet2
+! ceos -> xrv9k
+ ip ospf area 0.0.0.0
+ ip ospf network point-to-point
+!
+interface Ethernet3
+! ceos -> host1
+ ip ospf area 0.0.0.0
+ ip ospf network point-to-point
+!
+
+!
+! OSPFv3 configuration
+!
+interface Loopback0
+! 
+ ipv6 ospf 1 area 0.0.0.0
+!
+interface Ethernet1
+! ceos -> cjunosevolved
+ ipv6 ospf 1 area 0.0.0.0
+ ipv6 ospf network point-to-point
+!
+interface Ethernet2
+! ceos -> xrv9k
+ ipv6 ospf 1 area 0.0.0.0
+ ipv6 ospf network point-to-point
+!
+interface Ethernet3
+! ceos -> host1
+ ipv6 ospf 1 area 0.0.0.0
+ ipv6 ospf network point-to-point
+!
+!
+ipv6 router ospf 1
+ router-id 10.255.0.1
+ timers spf delay initial 100 200 500
+ timers lsa rx min interval 100
+ timers lsa tx delay initial 100 200 500
+
+
+ passive-interface Ethernet3
+

@@ -1,0 +1,1 @@
+Fatal error in netlab: Unknown attribute type bgp -- use less-specific show command to display valid attribute types

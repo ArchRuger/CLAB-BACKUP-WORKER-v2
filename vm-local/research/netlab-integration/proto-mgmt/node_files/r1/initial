@@ -1,0 +1,27 @@
+hostname r1
+!
+logging monitor debugging
+aaa authorization exec default local
+!
+lldp run
+ip routing
+no ipv6 unicast-routing
+!
+!
+ip host r2 10.0.0.9 10.9.9.1
+!
+interface Management0
+ no lldp transmit
+ no lldp receive
+!
+interface Loopback0
+ ip address 10.255.0.7/32
+!
+interface Ethernet1
+ no switchport
+ description r1 -> r2
+ ip address 10.9.9.0/31
+ mac-address caf0.0007.0001
+!
+ no shutdown
+!

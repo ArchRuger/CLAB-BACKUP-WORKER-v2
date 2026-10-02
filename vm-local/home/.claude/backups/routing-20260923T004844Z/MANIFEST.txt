@@ -1,0 +1,5 @@
+/home/clabllm/.claude/settings.json
+/home/clabllm/projects/clab-manager/.claude/settings.json
+/home/clabllm/projects/clab-manager/.claude/agents/clab-ui-reviewer.md
+/home/clabllm/projects/clab-manager/.claude/agents/risk-reviewer.md
+/home/clabllm/projects/clab-manager/.claude/rules/clab-ui-routing.md

@@ -1,0 +1,35 @@
+hostname xrv9k
+!
+domain lookup disable
+!
+lldp
+ no management enable
+!
+domain ipv4 host ceos 10.255.0.1
+domain ipv4 host cjunosevolved 10.255.0.2
+domain ipv4 host vjunos-switch 10.255.0.3
+domain ipv4 host host1 172.31.0.5
+domain ipv6 host ceos 2001:db8:ff:1::1
+domain ipv6 host cjunosevolved 2001:db8:ff:2::1
+domain ipv6 host vjunos-switch 2001:db8:ff:3::1
+domain ipv6 host host1 2001:db8:2::5
+!
+interface Loopback0
+ no shutdown
+ ipv4 address 10.255.0.4 255.255.255.255
+ ipv6 address 2001:db8:ff:4::1/64
+!
+interface GigabitEthernet0/0/0/0
+ no shutdown
+ description xrv9k -> vjunos-switch
+ ipv4 address 10.0.0.10 255.255.255.252
+ ipv6 address 2001:db8:1:2::2/64
+ ipv6 nd ra-interval 5
+!
+interface GigabitEthernet0/0/0/1
+ no shutdown
+ description xrv9k -> ceos
+ ipv4 address 10.0.0.14 255.255.255.252
+ ipv6 address 2001:db8:1:3::2/64
+ ipv6 nd ra-interval 5
+!

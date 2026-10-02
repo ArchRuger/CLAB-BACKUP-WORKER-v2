@@ -1,0 +1,54 @@
+system {
+  host-name cjunosevolved;
+  static-host-mapping {
+    ceos inet 10.255.0.1;
+    vjunos-switch inet 10.255.0.3;
+    xrv9k inet 10.255.0.4;
+    host1 inet 172.31.0.5;
+  }
+}
+
+interfaces {
+
+  lo0.0 {
+
+      family inet {
+        address 10.255.0.2/32;
+      }
+      family inet6 {
+        address 2001:db8:ff:2::1/64;
+      }
+  }
+  et-0/0/0.0 {
+    description "cjunosevolved -> ceos";
+
+      family inet {
+        address 10.0.0.2/30;
+      }
+      family inet6 {
+        address 2001:db8:1::2/64;
+      }
+  }
+  et-0/0/1.0 {
+    description "cjunosevolved -> vjunos-switch";
+
+      family inet {
+        address 10.0.0.5/30;
+      }
+      family inet6 {
+        address 2001:db8:1:1::1/64;
+      }
+  }
+}
+protocols {
+  lldp {
+    interface re0:mgmt-0 {
+      disable;
+    }
+    interface all;
+  }
+  router-advertisement {
+    interface et-0/0/0.0;
+    interface et-0/0/1.0;
+  }
+}

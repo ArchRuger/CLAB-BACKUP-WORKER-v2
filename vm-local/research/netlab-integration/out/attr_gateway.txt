@@ -1,0 +1,51 @@
+
+You can use the following gateway attributes:
+==============================================================================
+
+global:
+  anycast:
+    mac: mac
+    unicast: bool
+  id: int
+  protocol:
+    type: str
+    valid_values:
+    - anycast
+    - vrrp
+  vrrp:
+    group: int
+    preempt: bool
+    priority: int
+link:
+  anycast:
+    mac: mac
+    unicast: bool
+  id: int
+  ipv4:
+    type: ipv4
+    use: interface
+  ipv6:
+    type: ipv6
+    use: interface
+  protocol:
+    type: str
+    valid_values:
+    - anycast
+    - vrrp
+  vrrp:
+    group: int
+    preempt: bool
+    priority: int
+node:
+  anycast:
+    mac: mac
+    unicast: bool
+  vrrp:
+    group: int
+    preempt: bool
+    priority: int
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

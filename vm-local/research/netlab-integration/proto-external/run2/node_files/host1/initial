@@ -1,0 +1,101 @@
+#!/bin/bash
+#
+set -e
+#
+# Create bash profile script
+#
+cat <<'SCRIPT' >/root/.bash_profile
+#!/bin/bash
+#
+export PS1="\h(bash)$ "
+SCRIPT
+hostname host1
+#
+# Build hosts file
+#
+#
+cat <<'SCRIPT' >/tmp/hosts
+#
+# Created by netlab initial
+#
+10.255.0.1 ceos
+2001:db8:ff:1::1 ceos
+10.0.0.1 Ethernet1.ceos
+2001:db8:1::1 Ethernet1.ceos
+10.0.0.9 Ethernet2.ceos
+2001:db8:1:2::1 Ethernet2.ceos
+172.31.1.1 Ethernet3.ceos
+2001:db8:2:1::1 Ethernet3.ceos
+10.255.0.2 cjunosevolved
+2001:db8:ff:2::1 cjunosevolved
+10.0.0.2 et-0-0-0.0.cjunosevolved
+2001:db8:1::2 et-0-0-0.0.cjunosevolved
+10.0.0.5 et-0-0-1.0.cjunosevolved
+2001:db8:1:1::1 et-0-0-1.0.cjunosevolved
+172.31.0.5 host1 eth1.host1
+2001:db8:2::5 host1 eth1.host1
+172.31.1.5 host1 eth2.host1
+2001:db8:2:1::5 host1 eth2.host1
+10.255.0.4 vjunos-switch
+2001:db8:ff:4::1 vjunos-switch
+10.0.0.6 ge-0-0-0.0.vjunos-switch
+2001:db8:1:1::2 ge-0-0-0.0.vjunos-switch
+10.0.0.13 ge-0-0-1.0.vjunos-switch
+2001:db8:1:3::1 ge-0-0-1.0.vjunos-switch
+172.31.0.4 ge-0-0-2.0.vjunos-switch
+2001:db8:2::4 ge-0-0-2.0.vjunos-switch
+10.255.0.3 xrv9k
+2001:db8:ff:3::1 xrv9k
+10.0.0.10 GigabitEthernet0-0-0-1.xrv9k
+2001:db8:1:2::2 GigabitEthernet0-0-0-1.xrv9k
+10.0.0.14 GigabitEthernet0-0-0-0.xrv9k
+2001:db8:1:3::2 GigabitEthernet0-0-0-0.xrv9k
+SCRIPT
+grep "Created by netlab" /etc/hosts || uniq /tmp/hosts >>/etc/hosts
+
+### One-Shot configuration (non-Ubuntu VM or container)
+#
+# Send ARP requests from a sane source IP address
+sysctl -w net.ipv4.conf.all.arp_announce=2
+
+#
+# Enable or disable IPv4 and IPv6 forwarding
+#
+sysctl -w net.ipv4.ip_forward=0
+sysctl -w net.ipv6.conf.all.forwarding=0
+sysctl -w net.ipv4.fib_multipath_hash_policy=1
+#
+# Disable RA-derived IPv6 default route on management interface. We need it for intra-lab connectivity
+#
+if ip -6 addr show dev eth0 | grep inet6; then
+  echo "Disabling IPv6 RA listener on management interface"
+  sysctl -w net/ipv6/conf/eth0/accept_ra=0
+  sysctl -w net/ipv6/conf/eth0/accept_ra_defrtr=0 || echo "Cannot disable RA-based default route"
+  ip -6 route flush default
+fi
+#
+# Interface addressing, create any bond devices
+#
+ip link set dev eth1 up
+set +e
+ip addr del 172.31.0.5/24 dev eth1 2>/dev/null
+set -e
+ip addr add 172.31.0.5/24 dev eth1
+sysctl -w net.ipv6.conf.eth1.disable_ipv6=0
+set +e
+ip -6 addr del 2001:db8:2::5/64 dev eth1 2>/dev/null
+set -e
+ip -6 addr add 2001:db8:2::5/64 dev eth1
+
+ip link set dev eth2 up
+set +e
+ip addr del 172.31.1.5/24 dev eth2 2>/dev/null
+set -e
+ip addr add 172.31.1.5/24 dev eth2
+sysctl -w net.ipv6.conf.eth2.disable_ipv6=0
+set +e
+ip -6 addr del 2001:db8:2:1::5/64 dev eth2 2>/dev/null
+set -e
+ip -6 addr add 2001:db8:2:1::5/64 dev eth2
+
+

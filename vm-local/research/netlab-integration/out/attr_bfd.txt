@@ -1,0 +1,48 @@
+
+You can use the following bfd attributes:
+==============================================================================
+
+global:
+  min_echo_rx:
+    min_value: 0
+    type: int
+  min_rx:
+    min_value: 1
+    type: int
+  min_tx:
+    min_value: 1
+    type: int
+  multiplier:
+    min_value: 0
+    type: int
+link:
+  min_echo_rx:
+    min_value: 0
+    type: int
+  min_rx:
+    min_value: 1
+    type: int
+  min_tx:
+    min_value: 1
+    type: int
+  multiplier:
+    min_value: 0
+    type: int
+node:
+  min_echo_rx:
+    min_value: 0
+    type: int
+  min_rx:
+    min_value: 1
+    type: int
+  min_tx:
+    min_value: 1
+    type: int
+  multiplier:
+    min_value: 0
+    type: int
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

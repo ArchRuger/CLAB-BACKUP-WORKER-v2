@@ -1,0 +1,147 @@
+
+You can use the following routing attributes:
+==============================================================================
+
+global:
+  acl:
+    _keytype: id
+    _subtype:
+      _subtype: acl_entry
+      type: list
+    type: dict
+  aspath:
+    _keytype: id
+    _subtype:
+      _subtype: aspath_entry
+      make_list: true
+      type: list
+    type: dict
+  community:
+    _keytype: id
+    _subtype:
+      _keys:
+        type:
+          _default: standard
+          _required: true
+          type: str
+          valid_values:
+          - standard
+          - extended
+          - large
+        value:
+          _subtype: community_entry
+          make_list: true
+          type: list
+      type: dict
+    type: dict
+  policy:
+    _keytype: id
+    _subtype:
+      _subtype: rp_entry
+      make_list: true
+      type: list
+    type: dict
+  prefix:
+    _keytype: id
+    _subtype:
+      _subtype: pfx_entry
+      make_list: true
+      type: list
+    type: dict
+  static:
+    _keytype: id
+    _subtype:
+      _subtype: static_entry
+      make_list: true
+      type: list
+    type: dict
+link:
+  acl:
+    in:
+      _alt_types:
+      - id
+      _keys:
+        ipv4: id
+        ipv6: id
+      type: dict
+    out:
+      _alt_types:
+      - id
+      _keys:
+        ipv4: id
+        ipv6: id
+      type: dict
+node:
+  acl:
+    _keytype: id
+    _subtype:
+      _alt_types:
+      - NoneType
+      _subtype: acl_entry
+      type: list
+    type: dict
+  aspath:
+    _keytype: id
+    _subtype:
+      _alt_types:
+      - NoneType
+      _subtype: aspath_entry
+      make_list: true
+      type: list
+    type: dict
+  community:
+    _keytype: id
+    _subtype:
+      _alt_types:
+      - NoneType
+      _keys:
+        type:
+          _default: standard
+          _required: true
+          type: str
+          valid_values:
+          - standard
+          - extended
+          - large
+        value:
+          _subtype: community_entry
+          make_list: true
+          type: list
+      type: dict
+    type: dict
+  policy:
+    _keytype: id
+    _subtype:
+      _alt_types:
+      - NoneType
+      _subtype: rp_entry
+      make_list: true
+      type: list
+    type: dict
+  prefix:
+    _keytype: id
+    _subtype:
+      _alt_types:
+      - NoneType
+      _subtype: pfx_entry
+      make_list: true
+      type: list
+    type: dict
+  static:
+    _subtype: static_entry
+    type: list
+route_map:
+  match:
+  - prefix
+  - nexthop
+  - aspath
+  set:
+  - locpref
+  - med
+  - weight
+  - prepend
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

@@ -1,0 +1,18 @@
+usage: netlab show attributes [-h] [--system] [--format {table,text,yaml}]
+                              [-m MODULE] [--plugin PLUGIN [PLUGIN ...]]
+                              [match]
+
+Display supported global- or module-specific attributes
+
+positional arguments:
+  match                 Display a subset of attributes
+
+options:
+  -h, --help            show this help message and exit
+  --system              Display system information (without user defaults)
+  --format {table,text,yaml}
+                        Output format (table, text, yaml)
+  -m MODULE, --module MODULE
+                        Display information for a single module
+  --plugin PLUGIN [PLUGIN ...]
+                        Add plugin attributes to the system defaults

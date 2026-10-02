@@ -1,0 +1,885 @@
+
+You can use the following global lab topology attributes:
+==============================================================================
+
+_prefix:
+  allocation:
+    type: str
+    valid_values:
+    - p2p
+    - sequential
+    - id_based
+  ipv4:
+    type: ipv4
+    use: prefix
+  ipv6:
+    type: ipv6
+    use: prefix
+  pool:
+    _valid_with:
+    - allocation
+    type: str
+_r_import:
+  _description: 'Routing protocol import specification. Each entry specifies a protocol to
+
+    import. Values might contain routing policies
+
+    '
+  _keytype: r_proto
+  _list_to_dict: true
+  _subtype:
+    _alt_types:
+    - NoneType
+    - bool
+    policy:
+      _requires:
+      - routing
+      type: id
+  type: dict
+_v_entry:
+  _description: Single network validation test (an entry in the validate dictionary)
+  ansible: _v_option
+  config:
+    _alt_types:
+    - str
+    inline:
+      _err_msg: Enable "files" plugin to use the "inline" configuration template
+      type: error
+    template: str
+    variable: dict
+  description: str
+  devices:
+    _subtype: device
+    type: list
+  exec: _v_option
+  fail: str
+  level:
+    type: str
+    valid_values:
+    - warning
+  nodes:
+    _subtype: node_id
+    type: list
+  pass: str
+  plugin: str
+  show: _v_option
+  stop_on_error: bool
+  suzieq:
+    _alt_types:
+    - str
+    expect:
+      type: str
+      valid_values:
+      - empty
+    show: str
+    valid:
+      type: str
+      valid_values:
+      - all
+      - any
+  valid: _v_option
+  wait:
+    _alt_types:
+    - id
+    type: int
+  wait_msg: str
+_v_option:
+  _alt_types:
+  - str
+  _description: 'A "show", "exec" or "valid" parameter in a network validation test. It''s a
+
+    dictionary of device types with each value being a command to execute or
+
+    expression to evaluate.
+
+    '
+  _keytype:
+    include_templates: true
+    type: device
+  type: dict
+acl_address:
+  interface:
+    _invalid_with:
+    - role
+    _subtype: str
+    _valid_with:
+    - node
+    type: list
+  ipv4:
+    _subtype:
+      type: ipv4
+      use: prefix_or_host
+    type: list
+  ipv6:
+    _subtype:
+      type: ipv6
+      use: prefix_or_host
+    type: list
+  node:
+    _subtype: node_id
+    type: list
+  pool:
+    _subtype: addr_pool
+    type: list
+  port:
+    eq:
+      _subtype: acl_port
+      type: list
+    gt:
+      _invalid_with:
+      - neq
+      - in
+      - not_in
+      type: acl_port
+    in:
+      _invalid_with:
+      - neq
+      - not_in
+      _subtype: acl_port
+      max_length: 2
+      min_length: 2
+      type: list
+    lt:
+      _invalid_with:
+      - neq
+      - in
+      - not_in
+      type: acl_port
+    neq: acl_port
+    not_in:
+      _invalid_with:
+      - neq
+      _subtype: acl_port
+      max_length: 2
+      min_length: 2
+      type: list
+  prefix:
+    _subtype: prefixset
+    type: list
+  role:
+    _invalid_with:
+    - interface
+    _subtype: str
+    _valid_with:
+    - node
+    type: list
+acl_entry:
+  action:
+    _default: permit
+    type: str
+    valid_values:
+    - permit
+    - deny
+  description:
+    type: str
+  dst:
+    _default:
+      prefix:
+      - any
+    _required: true
+    type: acl_address
+  established:
+    type: bool
+    valid_values:
+    - true
+  log:
+    type: bool
+    valid_values:
+    - true
+  protocol:
+    _alt_types:
+    - int
+    _required: true
+    type: str
+    valid_values:
+    - ahp
+    - esp
+    - icmp
+    - ip
+    - ipv6
+    - tcp
+    - udp
+  sequence:
+    _default: 0
+    max_value: 2147483647
+    min_value: 1
+    type: int
+  src:
+    _default:
+      prefix:
+      - any
+    _required: true
+    type: acl_address
+acl_port:
+  max_value: 65535
+  min_value: 1
+  type: int
+aspath_entry:
+  action:
+    type: str
+    valid_values:
+    - permit
+    - deny
+  path:
+    _alt_types:
+    - str
+    - asn
+    _subtype: asn
+    type: list
+  sequence:
+    max_value: 32767
+    min_value: 1
+    type: int
+bgp_community_type:
+  _description: BGP community types
+  type: str
+  valid_values:
+    2octet: null
+    extended: null
+    large: null
+    standard: null
+bgp_prefix_list:
+  _description: BGP prefix list
+  _subtype:
+    _alt_types:
+    - prefix_str
+    ipv4:
+      type: ipv4
+      use: subnet_prefix
+    ipv6:
+      type: ipv6
+      use: subnet_prefix
+  type: list
+bgp_session_type:
+  _description: BGP session types
+  type: str
+  valid_values:
+    ebgp: null
+    ibgp: null
+    localas_ibgp: null
+can_be_false:
+- link
+- interface
+- loopback
+community_entry:
+  action:
+    type: str
+    valid_values:
+    - permit
+    - deny
+  list:
+    _valid_with:
+    - action
+    - sequence
+    type: list
+  path:
+    _valid_with:
+    - action
+    - sequence
+    type: list
+  regexp:
+    _valid_with:
+    - action
+    - sequence
+    type: str
+  sequence:
+    max_value: 32767
+    min_value: 1
+    type: int
+global:
+  addressing:
+    _keytype: id
+    type: dict
+  defaults: null
+  frr:
+    daemons:
+      _subtype: str
+      type: list
+    debug:
+      split_lines: true
+      type: list
+    logfile: str
+  groups: null
+  ios:
+    debug:
+      split_lines: true
+      type: list
+  links: null
+  module: null
+  name:
+    _help: 'Topology name should be no longer than 16 characters. It should start with a letter
+
+      and contain letters, underscores or numbers. netlab derives it from the directory name
+
+      when it''s not specified in the lab topology file.
+
+      '
+    type: id
+  nodes: null
+  plugin:
+    _subtype: str
+    type: list
+  prefix:
+    _keytype: id
+    _subtype: _prefix
+    type: dict
+  provider: id
+  tools:
+    _subtype:
+      create_empty: true
+      type: dict
+    type: dict
+  validate:
+    _keytype: id
+    _subtype: _v_entry
+    type: dict
+  version: null
+  vlans:
+    _keytype: id
+    _requires:
+    - vlan
+    _subtype: vlan
+    type: dict
+  vrfs:
+    _keytype: id
+    _requires:
+    - vrf
+    _subtype: vrf
+    type: dict
+global_extra_ns:
+- providers
+- outputs
+interface:
+  ifindex: int
+  ifname: str
+  ipv4:
+    type: ipv4
+    use: interface
+  ipv6:
+    type: ipv6
+    use: interface
+  linkid: id
+  node: node_id
+internal:
+  Plugin: null
+  Provider: null
+  input: null
+  message: str
+  pools: dict
+link:
+  bandwidth: int
+  bridge: id
+  disable: bool
+  interfaces: null
+  linkid: id
+  mtu:
+    max_value: 9216
+    min_value: 64
+    type: int
+  name: str
+  pool: id
+  prefix:
+    _alt_types:
+    - bool_false
+    - prefix_str
+    - named_pfx
+    _keys:
+      _name: str
+      allocation:
+        type: str
+        valid_values:
+        - p2p
+        - sequential
+        - id_based
+      ipv4:
+        type: ipv4
+        use: subnet_prefix
+      ipv6:
+        type: ipv6
+        use: subnet_prefix
+    type: dict
+  ra:
+    dhcp:
+      type: str
+      valid_values:
+      - all
+      - other
+    disable: bool
+    onlink: bool
+    slaac: bool
+  role: id
+  shutdown: bool
+  tc:
+    corrupt:
+      max_value: 100
+      min_value: 0
+      type: float
+    delay: time
+    duplicate:
+      max_value: 100
+      min_value: 0
+      type: float
+    jitter: time
+    loss:
+      max_value: 100
+      min_value: 0
+      type: float
+    rate:
+      min_value: 1
+      type: int
+    reorder:
+      max_value: 100
+      min_value: 0
+      type: float
+  type:
+    type: str
+    valid_values:
+    - lan
+    - p2p
+    - stub
+    - loopback
+    - tunnel
+    - vlan_member
+  unnumbered: bool
+  vlan_name: id
+link_internal:
+  linkindex: int
+  parentindex: int
+link_module_no_propagate:
+- vlan
+- dhcp
+link_no_propagate:
+- prefix
+- interfaces
+- gateway
+loopback:
+  ipv4:
+    _alt_types:
+    - bool
+    type: ipv4
+    use: host_prefix
+  ipv6:
+    _alt_types:
+    - bool
+    type: ipv6
+    use: host_prefix
+  pool: addr_pool
+node:
+  box: str
+  cat8000v:
+    license:
+      type: str
+      valid_values:
+      - none
+      - essential
+      - advantage
+      - premier
+  config:
+    _alt_types:
+    - list
+    _subtype:
+      _err_msg: Enable "files" plugin to use the inline node/group configuration template(s)
+      type: error
+    type: dict
+  control_plane:
+    type: str
+    valid_values:
+    - bird
+    - frr
+  cpu: null
+  device: device
+  eos:
+    serialnumber: str
+    systemmacaddr: mac
+  frr:
+    daemons:
+      _subtype: str
+      type: list
+    debug:
+      split_lines: true
+      type: list
+    logfile: str
+  group: list
+  id:
+    max_value: MAX_NODE_ID
+    min_value: 1
+    type: int
+  interfaces: list
+  ios:
+    debug:
+      split_lines: true
+      type: list
+  kind:
+    workers: int
+  loopback:
+    _alt_types:
+    - bool
+    type: dict
+  memory: int
+  mgmt:
+    ifname: str
+    ipv4:
+      type: ipv4
+      use: interface
+    ipv6:
+      type: ipv6
+      use: interface
+    mac: str
+  module:
+    _subtype: id
+    type: list
+  mtu:
+    max_value: 9216
+    min_value: 64
+    type: int
+  name: str
+  provider: id
+  role:
+    type: str
+    valid_values:
+    - router
+    - host
+    - bridge
+    - gateway
+  router_id:
+    type: ipv4
+    use: id
+  skip_config: list
+  unmanaged: bool
+  vlans:
+    _keytype: id
+    _requires:
+    - vlan
+    _subtype: node_vlan
+    type: dict
+  vrfs:
+    _keytype: id
+    _requires:
+    - vrf
+    _subtype: vrf
+    type: dict
+node_extra_ns:
+- providers
+- tools
+- outputs
+node_group:
+  _description: Node groups
+  _namespace:
+  - node
+  config: list
+  device: device
+  members:
+    _subtype:
+      max_length: MAX_NODE_ID_LENGTH
+      type: id
+    type: list
+  module: list
+  node_data:
+    true_value: {}
+    type: dict
+  vars: dict
+node_vlan:
+  _description: Node VLAN definition
+  _namespace:
+  - link
+  - interface
+  id:
+    max_value: 4095
+    min_value: 1
+    type: int
+  links: list
+  mode:
+    type: str
+    valid_values:
+    - bridge
+    - irb
+    - route
+  prefix: null
+  stp:
+    enable: bool
+    priority:
+      max_value: 61440
+      min_value: 0
+      type: int
+  vni:
+    max_value: 16777215
+    min_value: 1
+    type: int
+pfx_entry:
+  action:
+    type: str
+    valid_values:
+    - permit
+    - deny
+  ipv4:
+    _subtype:
+      type: ipv4
+      use: prefix
+    type: list
+  ipv6:
+    _subtype:
+      type: ipv6
+      use: prefix
+    type: list
+  max:
+    _alt_types:
+    - int
+    ipv4:
+      max_value: 32
+      min_value: 0
+      type: int
+    ipv6:
+      max_value: 128
+      min_value: 0
+      type: int
+  min:
+    _alt_types:
+    - int
+    ipv4:
+      max_value: 32
+      min_value: 0
+      type: int
+    ipv6:
+      max_value: 128
+      min_value: 0
+      type: int
+  pool:
+    _subtype: addr_pool
+    type: list
+  prefix:
+    _subtype: prefixset
+    type: list
+  sequence:
+    max_value: 32767
+    min_value: 1
+    type: int
+pool:
+  allocation:
+    type: str
+    valid_values:
+    - p2p
+    - sequential
+    - id_based
+  ipv4:
+    type: ipv4
+    use: subnet_prefix
+  ipv6:
+    type: ipv6
+    use: subnet_prefix
+  mac: mac
+  prefix:
+    max_value: 32
+    min_value: 1
+    type: int
+  prefix6:
+    max_value: 128
+    min_value: 1
+    type: int
+  start:
+    min_value: 0
+    type: int
+  unnumbered: bool
+pool_no_copy:
+- start
+- prefix
+- prefix6
+- mac
+prefix:
+  allocation:
+    type: str
+    valid_values:
+    - p2p
+    - sequential
+    - id_based
+  ipv4:
+    type: ipv4
+    use: subnet_prefix
+  ipv6:
+    type: ipv6
+    use: subnet_prefix
+rp_entry:
+  _description: Routing policy entry
+  action:
+    type: str
+    valid_values:
+    - permit
+    - deny
+  delete:
+    _invalid_with:
+      action: deny
+    community:
+      extended: list
+      large: list
+      list:
+        _valid_with: []
+        extended: str
+        large: str
+        standard: str
+      standard: list
+  match:
+    aspath: str
+    community:
+      extended: str
+      large: str
+      standard: str
+    nexthop: str
+    prefix: str
+  sequence:
+    max_value: 32767
+    min_value: 1
+    type: int
+  set:
+    _invalid_with:
+      action: deny
+    community:
+      append:
+        _valid_with:
+        - standard
+        - extended
+        - large
+        type: bool
+      delete:
+        _valid_with:
+        - standard
+        - extended
+        - large
+        type: bool
+      delete_list:
+        _valid_with: []
+        type: str
+      extended: list
+      large: list
+      standard: list
+    locpref:
+      max_value: 4294967295
+      min_value: 0
+      type: int
+    med:
+      max_value: 32767
+      min_value: 0
+      type: int
+    prepend:
+      count:
+        max_value: 32
+        min_value: 1
+        type: int
+      path: str
+    weight:
+      max_value: 65535
+      min_value: 0
+      type: int
+static_entry:
+  include:
+    _valid_with:
+    - nexthop
+    - vrf
+    type: id
+  ipv4:
+    type: ipv4
+    use: prefix
+  ipv6:
+    type: ipv6
+    use: prefix
+  nexthop:
+    discard:
+      _valid_with:
+      - none
+      type: bool
+      valid_values:
+      - true
+    gateway:
+      _valid_with:
+      - vrf
+      - link
+      type: bool
+    ipv4:
+      type: ipv4
+      use: address
+    ipv6:
+      type: ipv6
+      use: address
+    link: str
+    node:
+      _valid_with:
+      - vrf
+      - link
+      type: node_id
+    vrf:
+      _alt_types: NoneType
+      type: id
+  node:
+    _valid_with:
+    - nexthop
+    - vrf
+    type: node_id
+  pool:
+    _valid_with:
+    - nexthop
+    - vrf
+    type: addr_pool
+  prefix:
+    _valid_with:
+    - nexthop
+    - vrf
+    type: named_pfx
+  vrf:
+    type: id
+vlan:
+  _description: Global VLAN definition
+  _namespace:
+  - link
+  id:
+    max_value: 4095
+    min_value: 1
+    type: int
+  links: list
+  mode:
+    type: str
+    valid_values:
+    - bridge
+    - irb
+    - route
+  prefix: null
+  vni:
+    max_value: 16777215
+    min_value: 1
+    type: int
+vlan_group:
+  _description: VLAN groups
+  _namespace:
+  - vlan
+  - link
+  members:
+    _subtype: id
+    type: list
+  type: str
+vrf:
+  _description: Global or node-level VRF definition
+  _namespace:
+  - link
+  export: list
+  id:
+    min_value: 1
+    type: int
+  import: list
+  links: list
+  loopback:
+    _alt_types:
+    - bool
+    - prefix_str
+    - NoneType
+    type: dict
+  rd: rd
+vrf_group:
+  _description: VRF groups
+  _namespace:
+  - vrf
+  members:
+    _subtype: id
+    type: list
+  type: str
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

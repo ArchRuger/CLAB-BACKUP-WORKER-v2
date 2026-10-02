@@ -1,0 +1,34 @@
+{
+ "reopened_nodes": 3,
+ "reopened_edges": 2,
+ "reopened_positions": [
+  {
+   "x": 260,
+   "y": 260
+  },
+  {
+   "x": 340,
+   "y": 200
+  },
+  {
+   "x": 260,
+   "y": 320
+  }
+ ],
+ "buttons_in_editor": [
+  "EDIT",
+  "NODES",
+  "ANNOTATIONS",
+  "YAML",
+  "JSON",
+  "BASIC",
+  "CONFIGURATION",
+  "RUNTIME",
+  "NETWORK",
+  "ADVANCED",
+  "EDIT",
+  "APPLY"
+ ],
+ "applied_with": "Apply",
+ "yaml_after_node_edit": "name: walk1\ntopology:\n  nodes:\n    ptx1:\n      kind: juniper_cjunosevolved\n      image: cjunosevolved:26.2R1.7-EVO\n    host1:\n      kind: linux\n      image: ghcr.io/srl-labs/network-multitool:latest\n    leaf1:\n      kind: arista_ceos\n      image: ceos:4.36.0F\n  links:\n    - endpoints: [ \"leaf1:eth1\", \"ptx1:et-0/0/0\" ]\n    - endpoints: [ \"ptx1:et-0/0/1\", \"host1:eth1\" ]\n"
+}

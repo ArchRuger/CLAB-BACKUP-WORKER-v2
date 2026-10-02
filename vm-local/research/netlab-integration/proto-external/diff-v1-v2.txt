@@ -1,0 +1,442 @@
+diff -ru run1/node_files/ceos/bgp run2/node_files/ceos/bgp
+--- run1/node_files/ceos/bgp	2026-09-26 21:51:28.675566562 +0000
++++ run2/node_files/ceos/bgp	2026-09-26 21:54:06.367505385 +0000
+@@ -30,22 +30,22 @@
+   neighbor 2001:db8:ff:2::1 send-community standard extended large 
+ !
+   neighbor 10.255.0.3 remote-as 65000
+-  neighbor 10.255.0.3 description vjunos-switch
++  neighbor 10.255.0.3 description xrv9k
+   neighbor 10.255.0.3 update-source Loopback0
+   neighbor 10.255.0.3 send-community standard extended large 
+ !
+   neighbor 2001:db8:ff:3::1 remote-as 65000
+-  neighbor 2001:db8:ff:3::1 description vjunos-switch
++  neighbor 2001:db8:ff:3::1 description xrv9k
+   neighbor 2001:db8:ff:3::1 update-source Loopback0
+   neighbor 2001:db8:ff:3::1 send-community standard extended large 
+ !
+   neighbor 10.255.0.4 remote-as 65000
+-  neighbor 10.255.0.4 description xrv9k
++  neighbor 10.255.0.4 description vjunos-switch
+   neighbor 10.255.0.4 update-source Loopback0
+   neighbor 10.255.0.4 send-community standard extended large 
+ !
+   neighbor 2001:db8:ff:4::1 remote-as 65000
+-  neighbor 2001:db8:ff:4::1 description xrv9k
++  neighbor 2001:db8:ff:4::1 description vjunos-switch
+   neighbor 2001:db8:ff:4::1 update-source Loopback0
+   neighbor 2001:db8:ff:4::1 send-community standard extended large 
+ !
+diff -ru run1/node_files/ceos/initial run2/node_files/ceos/initial
+--- run1/node_files/ceos/initial	2026-09-26 21:51:28.640566337 +0000
++++ run2/node_files/ceos/initial	2026-09-26 21:54:06.321505131 +0000
+@@ -10,12 +10,12 @@
+ !
+ ip host cjunosevolved 10.255.0.2 10.0.0.2 10.0.0.5
+ ip host host1 172.31.0.5 172.31.1.5
+-ip host vjunos-switch 10.255.0.3 10.0.0.6 10.0.0.9 172.31.0.3
+-ip host xrv9k 10.255.0.4 10.0.0.10 10.0.0.14
++ip host vjunos-switch 10.255.0.4 10.0.0.6 10.0.0.13 172.31.0.4
++ip host xrv9k 10.255.0.3 10.0.0.10 10.0.0.14
+ ipv6 host cjunosevolved 2001:db8:ff:2::1
+ ipv6 host host1 2001:db8:2::5
+-ipv6 host vjunos-switch 2001:db8:ff:3::1
+-ipv6 host xrv9k 2001:db8:ff:4::1
++ipv6 host vjunos-switch 2001:db8:ff:4::1
++ipv6 host xrv9k 2001:db8:ff:3::1
+ !
+ interface Management1
+  no lldp transmit
+@@ -39,9 +39,9 @@
+ interface Ethernet2
+  no switchport
+  description ceos -> xrv9k
+- ip address 10.0.0.13/30
++ ip address 10.0.0.9/30
+  ipv6 nd ra interval 5
+- ipv6 address 2001:db8:1:3::1/64
++ ipv6 address 2001:db8:1:2::1/64
+  mac-address caf0.0001.0002
+ !
+  no shutdown
+diff -ru run1/node_files/cjunosevolved/bgp run2/node_files/cjunosevolved/bgp
+--- run1/node_files/cjunosevolved/bgp	2026-09-26 21:51:28.714566814 +0000
++++ run2/node_files/cjunosevolved/bgp	2026-09-26 21:54:06.425505704 +0000
+@@ -135,7 +135,7 @@
+       neighbor 10.255.0.3 {
+ 
+         local-address 10.255.0.2;
+-        description vjunos-switch;
++        description xrv9k;
+         family inet {
+           unicast;
+         }
+@@ -143,7 +143,7 @@
+       neighbor 10.255.0.4 {
+ 
+         local-address 10.255.0.2;
+-        description xrv9k;
++        description vjunos-switch;
+         family inet {
+           unicast;
+         }
+@@ -166,7 +166,7 @@
+       neighbor 2001:db8:ff:3::1 {
+ 
+         local-address 2001:db8:ff:2::1;
+-        description vjunos-switch;
++        description xrv9k;
+         family inet6 {
+           unicast;
+         }
+@@ -174,7 +174,7 @@
+       neighbor 2001:db8:ff:4::1 {
+ 
+         local-address 2001:db8:ff:2::1;
+-        description xrv9k;
++        description vjunos-switch;
+         family inet6 {
+           unicast;
+         }
+diff -ru run1/node_files/cjunosevolved/initial run2/node_files/cjunosevolved/initial
+--- run1/node_files/cjunosevolved/initial	2026-09-26 21:51:28.691566666 +0000
++++ run2/node_files/cjunosevolved/initial	2026-09-26 21:54:06.382505467 +0000
+@@ -2,8 +2,8 @@
+   host-name cjunosevolved;
+   static-host-mapping {
+     ceos inet 10.255.0.1;
+-    vjunos-switch inet 10.255.0.3;
+-    xrv9k inet 10.255.0.4;
++    xrv9k inet 10.255.0.3;
++    vjunos-switch inet 10.255.0.4;
+     host1 inet 172.31.0.5;
+   }
+ }
+diff -ru run1/node_files/host1/initial run2/node_files/host1/initial
+--- run1/node_files/host1/initial	2026-09-26 21:51:28.797567348 +0000
++++ run2/node_files/host1/initial	2026-09-26 21:54:06.560506449 +0000
+@@ -22,8 +22,8 @@
+ 2001:db8:ff:1::1 ceos
+ 10.0.0.1 Ethernet1.ceos
+ 2001:db8:1::1 Ethernet1.ceos
+-10.0.0.13 Ethernet2.ceos
+-2001:db8:1:3::1 Ethernet2.ceos
++10.0.0.9 Ethernet2.ceos
++2001:db8:1:2::1 Ethernet2.ceos
+ 172.31.1.1 Ethernet3.ceos
+ 2001:db8:2:1::1 Ethernet3.ceos
+ 10.255.0.2 cjunosevolved
+@@ -36,20 +36,20 @@
+ 2001:db8:2::5 host1 eth1.host1
+ 172.31.1.5 host1 eth2.host1
+ 2001:db8:2:1::5 host1 eth2.host1
+-10.255.0.3 vjunos-switch
+-2001:db8:ff:3::1 vjunos-switch
++10.255.0.4 vjunos-switch
++2001:db8:ff:4::1 vjunos-switch
+ 10.0.0.6 ge-0-0-0.0.vjunos-switch
+ 2001:db8:1:1::2 ge-0-0-0.0.vjunos-switch
+-10.0.0.9 ge-0-0-1.0.vjunos-switch
+-2001:db8:1:2::1 ge-0-0-1.0.vjunos-switch
+-172.31.0.3 ge-0-0-2.0.vjunos-switch
+-2001:db8:2::3 ge-0-0-2.0.vjunos-switch
+-10.255.0.4 xrv9k
+-2001:db8:ff:4::1 xrv9k
+-10.0.0.10 GigabitEthernet0-0-0-0.xrv9k
+-2001:db8:1:2::2 GigabitEthernet0-0-0-0.xrv9k
+-10.0.0.14 GigabitEthernet0-0-0-1.xrv9k
+-2001:db8:1:3::2 GigabitEthernet0-0-0-1.xrv9k
++10.0.0.13 ge-0-0-1.0.vjunos-switch
++2001:db8:1:3::1 ge-0-0-1.0.vjunos-switch
++172.31.0.4 ge-0-0-2.0.vjunos-switch
++2001:db8:2::4 ge-0-0-2.0.vjunos-switch
++10.255.0.3 xrv9k
++2001:db8:ff:3::1 xrv9k
++10.0.0.10 GigabitEthernet0-0-0-1.xrv9k
++2001:db8:1:2::2 GigabitEthernet0-0-0-1.xrv9k
++10.0.0.14 GigabitEthernet0-0-0-0.xrv9k
++2001:db8:1:3::2 GigabitEthernet0-0-0-0.xrv9k
+ SCRIPT
+ grep "Created by netlab" /etc/hosts || uniq /tmp/hosts >>/etc/hosts
+ 
+diff -ru run1/node_files/host1/routing run2/node_files/host1/routing
+--- run1/node_files/host1/routing	2026-09-26 21:51:28.801567374 +0000
++++ run2/node_files/host1/routing	2026-09-26 21:54:06.568506493 +0000
+@@ -16,7 +16,7 @@
+ #
+ #
+ echo Adding direct static routes
+-ip route add 172.31.0.0/16 via 172.31.0.3 dev eth1 protocol static
+-ip route add 10.255.0.0/24 via 172.31.0.3 dev eth1 protocol static
+-ip route add 10.0.0.0/16 via 172.31.0.3 dev eth1 protocol static
+-ip route add 10.2.0.0/24 via 172.31.0.3 dev eth1 protocol static
++ip route add 172.31.0.0/16 via 172.31.0.4 dev eth1 protocol static
++ip route add 10.255.0.0/24 via 172.31.0.4 dev eth1 protocol static
++ip route add 10.0.0.0/16 via 172.31.0.4 dev eth1 protocol static
++ip route add 10.2.0.0/24 via 172.31.0.4 dev eth1 protocol static
+diff -ru run1/node_files/vjunos-switch/bgp run2/node_files/vjunos-switch/bgp
+--- run1/node_files/vjunos-switch/bgp	2026-09-26 21:51:28.750567046 +0000
++++ run2/node_files/vjunos-switch/bgp	2026-09-26 21:54:06.531506289 +0000
+@@ -1,7 +1,7 @@
+ 
+ routing-options {
+   autonomous-system 65000;
+-  router-id 10.255.0.3
++  router-id 10.255.0.4
+ }
+ 
+ 
+@@ -24,11 +24,11 @@
+   }
+ 
+   route-filter-list bgp-default-announce-ipv4 {
+-    10.255.0.3/32 exact;
++    10.255.0.4/32 exact;
+     172.31.0.0/24 exact;
+   }
+   route-filter-list bgp-default-announce-ipv6 {
+-    2001:db8:ff:3::/64 exact;
++    2001:db8:ff:4::/64 exact;
+     2001:db8:2::/64 exact;
+   }
+ 
+@@ -128,7 +128,7 @@
+       advertise-inactive;
+       neighbor 10.255.0.1 {
+ 
+-        local-address 10.255.0.3;
++        local-address 10.255.0.4;
+         description ceos;
+         family inet {
+           unicast;
+@@ -136,15 +136,15 @@
+       }
+       neighbor 10.255.0.2 {
+ 
+-        local-address 10.255.0.3;
++        local-address 10.255.0.4;
+         description cjunosevolved;
+         family inet {
+           unicast;
+         }
+       }
+-      neighbor 10.255.0.4 {
++      neighbor 10.255.0.3 {
+ 
+-        local-address 10.255.0.3;
++        local-address 10.255.0.4;
+         description xrv9k;
+         family inet {
+           unicast;
+@@ -159,7 +159,7 @@
+       advertise-inactive;
+       neighbor 2001:db8:ff:1::1 {
+ 
+-        local-address 2001:db8:ff:3::1;
++        local-address 2001:db8:ff:4::1;
+         description ceos;
+         family inet6 {
+           unicast;
+@@ -167,15 +167,15 @@
+       }
+       neighbor 2001:db8:ff:2::1 {
+ 
+-        local-address 2001:db8:ff:3::1;
++        local-address 2001:db8:ff:4::1;
+         description cjunosevolved;
+         family inet6 {
+           unicast;
+         }
+       }
+-      neighbor 2001:db8:ff:4::1 {
++      neighbor 2001:db8:ff:3::1 {
+ 
+-        local-address 2001:db8:ff:3::1;
++        local-address 2001:db8:ff:4::1;
+         description xrv9k;
+         family inet6 {
+           unicast;
+diff -ru run1/node_files/vjunos-switch/initial run2/node_files/vjunos-switch/initial
+--- run1/node_files/vjunos-switch/initial	2026-09-26 21:51:28.724566878 +0000
++++ run2/node_files/vjunos-switch/initial	2026-09-26 21:54:06.493506079 +0000
+@@ -3,7 +3,7 @@
+   static-host-mapping {
+     ceos inet 10.255.0.1;
+     cjunosevolved inet 10.255.0.2;
+-    xrv9k inet 10.255.0.4;
++    xrv9k inet 10.255.0.3;
+     host1 inet 172.31.0.5;
+   }
+ }
+@@ -13,10 +13,10 @@
+   lo0.0 {
+ 
+       family inet {
+-        address 10.255.0.3/32;
++        address 10.255.0.4/32;
+       }
+       family inet6 {
+-        address 2001:db8:ff:3::1/64;
++        address 2001:db8:ff:4::1/64;
+       }
+   }
+   ge-0/0/0.0 {
+@@ -33,20 +33,20 @@
+     description "vjunos-switch -> xrv9k";
+ 
+       family inet {
+-        address 10.0.0.9/30;
++        address 10.0.0.13/30;
+       }
+       family inet6 {
+-        address 2001:db8:1:2::1/64;
++        address 2001:db8:1:3::1/64;
+       }
+   }
+   ge-0/0/2.0 {
+     description "vjunos-switch -> host1 [stub]";
+ 
+       family inet {
+-        address 172.31.0.3/24;
++        address 172.31.0.4/24;
+       }
+       family inet6 {
+-        address 2001:db8:2::3/64;
++        address 2001:db8:2::4/64;
+       }
+   }
+ }
+diff -ru run1/node_files/vjunos-switch/ospf run2/node_files/vjunos-switch/ospf
+--- run1/node_files/vjunos-switch/ospf	2026-09-26 21:51:28.734566942 +0000
++++ run2/node_files/vjunos-switch/ospf	2026-09-26 21:54:06.510506173 +0000
+@@ -1,5 +1,5 @@
+ routing-options {
+-  router-id 10.255.0.3
++  router-id 10.255.0.4
+ }
+ protocols {
+   delete: ospf;
+diff -ru run1/node_files/xrv9k/bgp run2/node_files/xrv9k/bgp
+--- run1/node_files/xrv9k/bgp	2026-09-26 21:51:28.780567239 +0000
++++ run2/node_files/xrv9k/bgp	2026-09-26 21:54:06.475505980 +0000
+@@ -3,20 +3,20 @@
+  bgp unsafe-ebgp-policy
+  bgp scan-time 5
+  bgp update-delay 5
+- bgp router-id 10.255.0.4
++ bgp router-id 10.255.0.3
+ 
+ !
+  address-family ipv4 unicast
+   bgp scan-time 5
+ !
+ !
+-  network 10.255.0.4/32
++  network 10.255.0.3/32
+ !
+  address-family ipv6 unicast
+   bgp scan-time 5
+ !
+ !
+-  network 2001:db8:ff:4::/64
++  network 2001:db8:ff:3::/64
+ !
+  neighbor 10.255.0.1
+   remote-as 65000
+@@ -34,7 +34,7 @@
+    next-hop-self
+ 
+ !
+- neighbor 10.255.0.3
++ neighbor 10.255.0.4
+   remote-as 65000
+   description vjunos-switch
+   update-source Loopback0
+@@ -58,7 +58,7 @@
+    next-hop-self
+ 
+ !
+- neighbor 2001:db8:ff:3::1
++ neighbor 2001:db8:ff:4::1
+   remote-as 65000
+   description vjunos-switch
+   update-source Loopback0
+diff -ru run1/node_files/xrv9k/initial run2/node_files/xrv9k/initial
+--- run1/node_files/xrv9k/initial	2026-09-26 21:51:28.758567097 +0000
++++ run2/node_files/xrv9k/initial	2026-09-26 21:54:06.439505782 +0000
+@@ -7,28 +7,28 @@
+ !
+ domain ipv4 host ceos 10.255.0.1
+ domain ipv4 host cjunosevolved 10.255.0.2
+-domain ipv4 host vjunos-switch 10.255.0.3
++domain ipv4 host vjunos-switch 10.255.0.4
+ domain ipv4 host host1 172.31.0.5
+ domain ipv6 host ceos 2001:db8:ff:1::1
+ domain ipv6 host cjunosevolved 2001:db8:ff:2::1
+-domain ipv6 host vjunos-switch 2001:db8:ff:3::1
++domain ipv6 host vjunos-switch 2001:db8:ff:4::1
+ domain ipv6 host host1 2001:db8:2::5
+ !
+ interface Loopback0
+  no shutdown
+- ipv4 address 10.255.0.4 255.255.255.255
+- ipv6 address 2001:db8:ff:4::1/64
++ ipv4 address 10.255.0.3 255.255.255.255
++ ipv6 address 2001:db8:ff:3::1/64
+ !
+-interface GigabitEthernet0/0/0/0
++interface GigabitEthernet0/0/0/1
+  no shutdown
+- description xrv9k -> vjunos-switch
++ description xrv9k -> ceos
+  ipv4 address 10.0.0.10 255.255.255.252
+  ipv6 address 2001:db8:1:2::2/64
+  ipv6 nd ra-interval 5
+ !
+-interface GigabitEthernet0/0/0/1
++interface GigabitEthernet0/0/0/0
+  no shutdown
+- description xrv9k -> ceos
++ description xrv9k -> vjunos-switch
+  ipv4 address 10.0.0.14 255.255.255.252
+  ipv6 address 2001:db8:1:3::2/64
+  ipv6 nd ra-interval 5
+diff -ru run1/node_files/xrv9k/ospf run2/node_files/xrv9k/ospf
+--- run1/node_files/xrv9k/ospf	2026-09-26 21:51:28.770567174 +0000
++++ run2/node_files/xrv9k/ospf	2026-09-26 21:54:06.460505897 +0000
+@@ -7,15 +7,15 @@
+  log adjacency changes
+  timers throttle spf 10 20 100
+  timers throttle lsa all 10 20 100
+- router-id 10.255.0.4
++ router-id 10.255.0.3
+ 
+  loopback stub-network enable
+  area 0.0.0.0
+   interface Loopback0
+-  interface GigabitEthernet0/0/0/0
+-   network point-to-point
+   interface GigabitEthernet0/0/0/1
+    network point-to-point
++  interface GigabitEthernet0/0/0/0
++   network point-to-point
+ 
+ router ospfv3 1
+ !
+@@ -25,12 +25,12 @@
+  log adjacency changes
+  timers throttle spf 10 20 100
+  timers throttle lsa all 10 20 100
+- router-id 10.255.0.4
++ router-id 10.255.0.3
+ 
+  area 0.0.0.0
+   interface Loopback0
+-  interface GigabitEthernet0/0/0/0
+-   network point-to-point
+   interface GigabitEthernet0/0/0/1
+    network point-to-point
++  interface GigabitEthernet0/0/0/0
++   network point-to-point
+ 

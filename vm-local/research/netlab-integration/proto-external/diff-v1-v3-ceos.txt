@@ -1,0 +1,12 @@
+diff -ru run1/node_files/ceos/initial run3/node_files/ceos/initial
+--- run1/node_files/ceos/initial	2026-09-26 21:51:28.640566337 +0000
++++ run3/node_files/ceos/initial	2026-09-26 21:55:26.408931464 +0000
+@@ -8,7 +8,7 @@
+ ipv6 unicast-routing
+ !
+ !
+-ip host cjunosevolved 10.255.0.2 10.0.0.2 10.0.0.5
++ip host cjunosevolved 10.255.0.2 10.0.0.2 10.0.0.5 172.31.2.2
+ ip host host1 172.31.0.5 172.31.1.5
+ ip host vjunos-switch 10.255.0.3 10.0.0.6 10.0.0.9 172.31.0.3
+ ip host xrv9k 10.255.0.4 10.0.0.10 10.0.0.14

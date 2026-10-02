@@ -1,0 +1,18 @@
+LAB TOPOLOGY SUMMARY
+
+LAB NAME: restore-square
+
+POINT-TO-POINT LINKS:
+
+|-----------------|---------------|-------------|--------------------|------------------|
+| Link Name       | Origin Device | Origin Port | Destination Device | Destination Port |
+|-----------------|---------------|-------------|--------------------|------------------|
+|                 | ceos          | Ethernet1   | cjunosevolved      | et-0/0/0         |
+|                 | cjunosevolved | et-0/0/1    | vjunos-switch      | ge-0/0/0         |
+|                 | vjunos-switch | ge-0/0/1    | xrv9k              | GigabitEthernet0/0/0/0 |
+|                 | xrv9k         | GigabitEthernet0/0/0/1 | ceos               | Ethernet2        |
+|                 | host1         | eth1        | vjunos-switch      | ge-0/0/2         |
+|                 | host1         | eth2        | ceos               | Ethernet3        |
+|-----------------|---------------|-------------|--------------------|------------------|
+
+

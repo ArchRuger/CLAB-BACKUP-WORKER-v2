@@ -1,0 +1,212 @@
+{
+  "mgmt": {
+    "ipv4": "172.20.20.102",
+    "ifname": "re0:mgmt-0"
+  },
+  "interfaces": [
+    {
+      "ifname": "et-0/0/0.0",
+      "ipv4": "10.0.0.2/30",
+      "ipv6": "2001:db8:1::2/64",
+      "linkindex": 1,
+      "type": "p2p",
+      "name": "cjunosevolved -> ceos",
+      "ifindex": 0,
+      "netlab_ifname": "et-0/0/0",
+      "neighbors": [
+        {
+          "ipv4": "10.0.0.1/30",
+          "ipv6": "2001:db8:1::1/64",
+          "ifname": "Ethernet1",
+          "node": "ceos"
+        }
+      ],
+      "ospf": {
+        "area": "0.0.0.0",
+        "passive": false,
+        "network_type": "point-to-point"
+      },
+      "junos_interface": "et-0/0/0",
+      "junos_unit": "0"
+    },
+    {
+      "ifname": "et-0/0/1.0",
+      "ipv4": "10.0.0.5/30",
+      "ipv6": "2001:db8:1:1::1/64",
+      "linkindex": 2,
+      "type": "p2p",
+      "name": "cjunosevolved -> vjunos-switch",
+      "ifindex": 1,
+      "netlab_ifname": "et-0/0/1",
+      "neighbors": [
+        {
+          "ipv4": "10.0.0.6/30",
+          "ipv6": "2001:db8:1:1::2/64",
+          "ifname": "ge-0/0/0",
+          "node": "vjunos-switch"
+        }
+      ],
+      "ospf": {
+        "area": "0.0.0.0",
+        "passive": false,
+        "network_type": "point-to-point"
+      },
+      "junos_interface": "et-0/0/1",
+      "junos_unit": "0"
+    }
+  ],
+  "box": "none",
+  "module": [
+    "ospf",
+    "bgp"
+  ],
+  "ospf": {
+    "area": "0.0.0.0",
+    "router_id": "10.255.0.2",
+    "af": {
+      "ipv4": true,
+      "ipv6": true
+    },
+    "areas": [
+      {
+        "area": "0.0.0.0",
+        "_area_int": 0,
+        "kind": "regular"
+      }
+    ]
+  },
+  "bgp": {
+    "advertise_loopback": true,
+    "community": {
+      "ibgp": [
+        "standard",
+        "extended"
+      ],
+      "ebgp": [
+        "standard"
+      ],
+      "localas_ibgp": [
+        "standard",
+        "extended"
+      ]
+    },
+    "next_hop_self": true,
+    "as": 65000,
+    "router_id": "10.255.0.2",
+    "neighbors": [
+      {
+        "name": "ceos",
+        "as": 65000,
+        "type": "ibgp",
+        "ipv4": "10.255.0.1",
+        "ipv6": "2001:db8:ff:1::1",
+        "_source_intf": {
+          "type": "loopback",
+          "neighbors": [],
+          "virtual_interface": true,
+          "ifindex": 0,
+          "ifname": "lo0.0",
+          "ipv4": "10.255.0.2/32",
+          "ipv6": "2001:db8:ff:2::1/64",
+          "ospf": {
+            "area": "0.0.0.0",
+            "passive": false
+          }
+        },
+        "next_hop_self": "ebgp",
+        "activate": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      {
+        "name": "vjunos-switch",
+        "as": 65000,
+        "type": "ibgp",
+        "ipv4": "10.255.0.3",
+        "ipv6": "2001:db8:ff:3::1",
+        "_source_intf": {
+          "type": "loopback",
+          "neighbors": [],
+          "virtual_interface": true,
+          "ifindex": 0,
+          "ifname": "lo0.0",
+          "ipv4": "10.255.0.2/32",
+          "ipv6": "2001:db8:ff:2::1/64",
+          "ospf": {
+            "area": "0.0.0.0",
+            "passive": false
+          }
+        },
+        "next_hop_self": "ebgp",
+        "activate": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      },
+      {
+        "name": "xrv9k",
+        "as": 65000,
+        "type": "ibgp",
+        "ipv4": "10.255.0.4",
+        "ipv6": "2001:db8:ff:4::1",
+        "_source_intf": {
+          "type": "loopback",
+          "neighbors": [],
+          "virtual_interface": true,
+          "ifindex": 0,
+          "ifname": "lo0.0",
+          "ipv4": "10.255.0.2/32",
+          "ipv6": "2001:db8:ff:2::1/64",
+          "ospf": {
+            "area": "0.0.0.0",
+            "passive": false
+          }
+        },
+        "next_hop_self": "ebgp",
+        "activate": {
+          "ipv4": true,
+          "ipv6": true
+        }
+      }
+    ],
+    "ipv4": true,
+    "ipv6": true,
+    "advertise": [
+      {
+        "ipv4": "10.255.0.2/32",
+        "ipv6": "2001:db8:ff:2::/64"
+      }
+    ],
+    "_junos_policy": {
+      "export": [
+        "bgp-default-redistribute",
+        "bgp-final"
+      ],
+      "ibgp": [
+        "next-hop-ebgp-ipv4",
+        "next-hop-ebgp-ipv6"
+      ]
+    }
+  },
+  "af": {
+    "ipv4": true,
+    "ipv6": true
+  },
+  "loopback": {
+    "type": "loopback",
+    "neighbors": [],
+    "virtual_interface": true,
+    "ifindex": 0,
+    "ifname": "lo0.0",
+    "ipv4": "10.255.0.2/32",
+    "ipv6": "2001:db8:ff:2::1/64",
+    "ospf": {
+      "area": "0.0.0.0",
+      "passive": false
+    },
+    "bgp": {
+      "advertise": true
+    }
+  }
+}

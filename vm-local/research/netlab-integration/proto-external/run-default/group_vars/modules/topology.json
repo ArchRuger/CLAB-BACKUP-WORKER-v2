@@ -1,0 +1,7 @@
+{
+  "netlab_module": [
+    "routing",
+    "ospf",
+    "bgp"
+  ]
+}
