@@ -36,7 +36,7 @@ What was actually run for this release (dev VM `clab-llm-dev2`, Docker 29.8.1, c
   the pipeline test caught an unsanitised name in the runner's embedding), helpers verified at 1.30.57 each time; the
   build cache pruned after each build.
 - `docs/ui-ux-changes-2/tools/check_backup_topology.py` through the product's own API, final run on the final build:
-  19 of 19 (`docs/ui-ux-changes-2/evidence/item10/live-run-1.30.57.txt`): a lab with one cEOS and one Linux host, a
+  18 of 18 (`docs/ui-ux-changes-2/evidence/item10/live-run-1.30.57.txt`): a lab with one cEOS and one Linux host, a
   link and a map saved to the VM through the reviewed publish, added to My labs, deployed, its cEOS ready in about a
   minute; a backup on demand whose record carries the topology and map read from the VM (`source: vm`, the file's path,
   the read time) and names the download files; the ZIP with the configuration, the manifest, `<lab>.clab.yml` and
