@@ -1,3 +1,56 @@
+# UI/UX changes 2, part 6: the topology travels with every backup — 1.30.57
+
+What was actually run for this release (dev VM `clab-llm-dev2`, Docker 29.8.1, containerlab 0.79.0, `n24l/ceos:4.35.0F`).
+
+## Review
+
+- `risk-reviewer` (Opus, read-only) reviewed the runner, Git-progress, Git-helper, downloads and main diff before the
+  release: the helper boundary does not widen; two must-fix findings (the read time in the manifest made every unchanged
+  save a new commit; a lab name starting with a dash gave a file name the helper refuses) and three should-fix ones (a
+  capture error could fail the backup; stale embedded files lingered in `latest/`; a restore from a capture could be
+  stopped by the embedded topology), all applied, with the optional ones that cost little (one lock for the bundle and
+  its time, the manager's map when the VM has none, the definition path first, the archive event's count, the log
+  wording). Its advice on secrets is a sentence in `docs/GIT-PROGRESS.md`.
+
+## Static and unit
+
+- `python3 deploy/verify-release.py` source and documentation at 1.30.57; `git diff --check` clean; `node --check` on
+  `app.js`; `check_links.py` clean.
+- Python: `python -m unittest discover -s tests -t tests` → 1721 tests, 1720 OK and 1 skipped, plus the documentation
+  error of the release-consistency test because this section did not exist when the run started (passes alone once it
+  exists). New or extended: `test_app.py` (the real Ansible pipeline: an inventory-only lab embeds nothing, a lab with a
+  topology text embeds it into history and `latest/` with a second local commit, the ZIP carries it under the lab's
+  name, a later capture without a topology clears `latest/`, an unreadable drawing costs only the map),
+  `test_downloads.py` (the download names, the public record, the ZIP's six entries, a missing embedded file fails the
+  archive clearly, devices stay downloadable one by one), `test_git_progress.py` (entries of a kind without `node`,
+  provenance `embedded`, the helper's `snapshot()` accepting the map, a tampered file refused, the save route, the
+  version view, the compare pairing by kind, the same content digest for two read times, restore reading without the
+  files, the dash-named lab), `test_host_git.py` (the real Git helper: the embedded files land in the folder, a later
+  save without them needs no removal review, dropping a device still does), `test_download_ui.js` (the backup row's
+  provenance line).
+- Browser: `node --test tests/*.js` → 387 pass, 0 fail.
+
+## Live (development VM, deployed product)
+
+- Deployed with `sudo bash deploy/start-manager.sh --manager-only` three times (before the review, after it, and after
+  the pipeline test caught an unsanitised name in the runner's embedding), helpers verified at 1.30.57 each time; the
+  build cache pruned after each build.
+- `docs/ui-ux-changes-2/tools/check_backup_topology.py` through the product's own API, final run on the final build:
+  19 of 19 (`docs/ui-ux-changes-2/evidence/item10/live-run-1.30.57.txt`): a lab with one cEOS and one Linux host, a
+  link and a map saved to the VM through the reviewed publish, added to My labs, deployed, its cEOS ready in about a
+  minute; a backup on demand whose record carries the topology and map read from the VM (`source: vm`, the file's path,
+  the read time) and names the download files; the ZIP with the configuration, the manifest, `<lab>.clab.yml` and
+  `<lab>.clab.yml.annotations.json`, the topology byte for byte the file on the VM, the map the file beside it; the
+  lab connected to the registered repository under `uiux2-tests/<lab>`, saved on the VM only (no upload); the saved
+  version listing both files beside `sw1.cfg`, the manifest marking them by kind without a device identity and
+  `topology_provenance: embedded`, the restore offering only the device, the embedded text the VM file; then destroyed
+  and removed. The local commit in the dev checkout (`evidence/item10/local-commit-in-the-dev-checkout.txt`) holds
+  `manifest.json`, `sw1.cfg`, `sw1.eoscfg` and the two files. An earlier run on the pre-review build passed the same
+  checks (its leftovers are in the pickup file).
+- Not exercised live: a scheduled backup (same path as on demand), a checkpoint or baseline save (same snapshot
+  builder), a restore from a save that carries the files (unit-tested through the real helper's reader and the
+  manager's resolver), a Junos or IOS XR device (cEOS only; the embedding is device-independent).
+
 # UI/UX changes 2, part 5: the topology preview — 1.30.56
 
 What was actually run for this release (dev VM `clab-llm-dev2`, Chromium 1243 through Playwright 1.63).

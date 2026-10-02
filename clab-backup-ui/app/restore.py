@@ -434,7 +434,7 @@ class RestoreService:
             if not backup:
                 raise HTTPException(404, 'Saved capture not found in this lab.')
             try:
-                snap = captured_snapshot(self.store, backup)
+                snap = captured_snapshot(self.store, backup, embedded_files=False)
             except ValueError as exc:
                 raise HTTPException(400, str(exc))
             manifest = snap['manifest']

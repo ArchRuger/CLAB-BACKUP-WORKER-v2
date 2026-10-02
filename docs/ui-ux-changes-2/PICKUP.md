@@ -47,7 +47,7 @@ a first-time student is never confused, blocked or surprised by the UI.
 | 3 | 2 (image usable on this VM: read-only helper mode, builder status) | 1.30.54 | done: helper modes risk-reviewed (findings applied), verified live |
 | 4 | 5, 6, 7 (labels: no Apply step, four corners everywhere, Edit map uses the builder's own node editor) | 1.30.55 | done: six more editor patches, verified live |
 | 5 | 8 (topology preview investigation and fix) | 1.30.56 | done: four causes, fixed, verified live |
-| 6 | 10 (topology and annotations travel with every backup, Git save and download) | 1.30.57 | |
+| 6 | 10 (topology and annotations travel with every backup, Git save and download) | 1.30.57 | done: risk-reviewed (findings applied), verified live with the real helpers |
 
 The order puts shared groundwork first: 3 and 4 touch the same template fields; 5, 6 and 7 share the label and
 appearance code; 8 depends on how 6 is drawn.
@@ -87,7 +87,18 @@ appearance code; 8 depends on how 6 is drawn.
   arrows for Linux hosts), then `after-01-preview-from-vm.png` and `after-02-preview-from-upload.png`.
   `tools/check_preview.py`: 10 of 10 on the deployed manager.
 
+- Item 10: `evidence/item10/live-run-1.30.57.txt` (the product's own API on the dev VM: publish, deploy a cEOS lab,
+  backup, ZIP, connect to the registered repository under `uiux2-tests/<lab>`, save on the VM only, version view,
+  destroy) and `local-commit-in-the-dev-checkout.txt`; `tools/check_backup_topology.py` (reuses a deployed lab of the
+  same name when `CLAB_LAB` names one; waits for the job queue, which the readiness monitor's own login test fills
+  right after a device becomes ready).
+
 ## Exact next action
+
+The stream is complete: every item is done and verified live (see `FINAL-REPORT.md`, which also lists what the
+developer still decides: the sudo-less Docker request outside the ten items, and whether *Link labels…* should follow
+item 7). A next session continues from the open points there; the VM leftovers are listed at its end. (Superseded:
+chunk 6 notes below.)
 
 Chunk 6 (item 10): the topology and annotations travel with every backup. Established by reading the code: a backup
 job writes `backups/<lab>/history/<job>/<file>` and `latest/` (`runner._execute`), its job record holds per-node

@@ -4,6 +4,46 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.57
+
+*UI/UX changes 2*, item 10: the topology and map travel with every backup, so a configuration is never divorced
+from the topology it was taken under.
+
+- **Every backup embeds the topology and the map.** A backup that saved at least one configuration (on demand,
+  scheduled, or the capture behind a Save progress) also writes the lab's containerlab file and its
+  `.annotations.json` beside the configurations, in the job's history folder and in the lab's `latest/` (whose
+  local Git history now records them with the configurations). The text is the file beside the deployed topology
+  on the VM as of the last discovery pass (within the thirty-second interval), else the manager's own copy from the
+  last sync; the backup record says which (*the files beside the deployed topology on the VM* or *the manager's
+  copy*), the path, when it was read, and the digests of both files. A lab without a topology text in the manager
+  (an inventory-only lab) embeds nothing and the backup is not failed by that.
+- **Downloads.** *Download all (ZIP)* carries them as `<lab>.clab.yml` and `<lab>.clab.yml.annotations.json` next
+  to the configurations and the manifest, which names them; a missing embedded file fails the archive clearly like
+  a missing configuration (`NODE-FEATURES.md`, *Backup download names* and *The topology travels with every backup*).
+- **Git saves (latest, checkpoint, baseline).** The same two files enter the snapshot folder as manifest entries
+  of their kind (`kind: topology` / `annotations`, with `source`, `vm_path` and `read_at`) and never as devices;
+  the manifest's `topology_digest` is the embedded file's own and its provenance reads `embedded`. The Git helper
+  (`host_git.py`) now counts only entries without a `kind` as devices, so a later save without them needs no
+  removal review; everything else it checks (the exact file map, sizes, digests, plain unique names, foreign files)
+  applies to them as before. *Apply to running lab…* never offers them, *Compare with my latest save* pairs them by
+  kind and shows their changes, and the saved-version view lists them. Snapshots and backups made before this
+  release carry none and read, compare and restore exactly as before; the schema stays 2.
+- When the VM has no map file beside the topology, the manager's own map (the one the Topology tab shows) travels
+  instead, and the record says so (`annotations_source`). A backup after which the manager holds no topology text
+  clears the two files from the lab's `latest/`, so its local Git history never pairs new configurations with an old
+  topology; every earlier backup keeps its own copy. A topology that cannot be read (an odd stored drawing, a write
+  error) costs only the embedding, never the backup.
+- The independent risk review of the helper and manager diff found two must-fix problems and three should-fix ones,
+  all applied before this release: the read time stays on the backup record and out of the manifest (it moves with
+  every discovery pass and would have made every unchanged save a new commit); a lab whose file-safe name begins with
+  a dash gets an underscore in front (the helper takes plain names that start with a letter, digit or underscore); a
+  capture error is caught where it happens; stale embedded files are cleared from `latest/`; a restore reads a capture
+  for its device files and is never stopped by the embedded topology.
+- Limit: the manager cannot see a topology file edited on the VM after the lab was deployed without a redeploy;
+  what travels is the file as it was at capture time.
+- `docs/ui-ux-changes-2/tools/check_backup_topology.py` proves the chain on the dev VM through the product's own
+  API (publish, deploy, backup, ZIP, connect, save on the VM only, version view).
+
 ## Changes in 1.30.56
 
 *UI/UX changes 2*, item 8: the Topology preview "looks nothing like the actual annotations.json". Investigated on

@@ -131,16 +131,19 @@ class AppTests(unittest.TestCase):
             args=list(args);args[3]=str(play);args+=['-e','ansible_connection=local']
             return original_popen(args,**kwargs)
         with patch('app.runner.subprocess.Popen',side_effect=local_popen):
-            # Call execute synchronously to make assertions deterministic.
+            # Call execute synchronously to make assertions deterministic. The first capture runs for the
+            # inventory-only lab (no topology text in the manager: nothing to embed); the second after the lab
+            # gained a topology text, as a lab from the VM has.
             for i in range(2):
                 job_id='fixture'+str(i)
+                if i==1: raw['definition_yaml']='name: example\ntopology:\n  nodes:\n    PE1:\n      kind: cisco_xrv9k\n'
                 self.app.state.store.state['jobs'].insert(0,{'id':job_id,'lab_id':lab['id'],'lab_name':lab['name'],'status':'queued','operation':'backup','nodes':[]})
                 self.app.state.runner.execute(job_id,copy.deepcopy(raw),[n for n in raw['nodes'] if n['enabled']],'backup')
         state=self.app.state.store.snapshot()
         self.assertTrue(all(j['status']=='succeeded' for j in state['jobs']),state['jobs'])
         folder=Path(self.tmp.name)/'backups'/lab['id']/'latest'
         count=subprocess.check_output(['git','-C',str(folder),'rev-list','--count','HEAD'],text=True).strip()
-        self.assertEqual(count,'1')
+        self.assertEqual(count,'2','one commit per capture that changed latest/: the first wrote the configuration, the second added the topology')
         # IOS XR's running-config is its own restore candidate: one capture, the artifact is the backup text
         # under its own name, and it stays out of the download ZIP (two entries, asserted below).
         outcome=next(n for n in state['jobs'][0]['nodes'] if n['name'].endswith('PE1'))
@@ -151,12 +154,50 @@ class AppTests(unittest.TestCase):
         import hashlib
         self.assertEqual(outcome['sha256'],hashlib.sha256((folder/outcome['file']).read_bytes()).hexdigest())
         self.assertEqual(outcome['restore_sha256'],hashlib.sha256((folder/outcome['restore_file']).read_bytes()).hexdigest())
+        # The topology travels with every backup (UI/UX changes 2, item 10): written beside the configurations
+        # under a stable internal name, recorded on the job with its digest and provenance (the manager's copy
+        # here: no VM discovery in this test; no map, this lab has no drawing), committed into latest/ with the
+        # configurations, and in the ZIP under the lab's own name beside the configuration and the manifest. The
+        # first capture, taken while the manager held no topology text, carries none and downloads as before.
+        first=next(j for j in state['jobs'] if j['id']=='fixture0'); job=next(j for j in state['jobs'] if j['id']=='fixture1')
+        self.assertNotIn('topology',first); self.assertFalse((Path(self.tmp.name)/'backups'/lab['id']/'history'/'fixture0'/'topology.clab.yml').exists())
+        self.assertEqual(job['topology']['file'],'topology.clab.yml'); self.assertEqual(job['topology']['source'],'manager')
+        self.assertNotIn('annotations_file',job['topology'])
+        self.assertEqual((folder/'topology.clab.yml').read_text(),raw['definition_yaml'])
+        self.assertEqual(job['topology']['sha256'],hashlib.sha256(raw['definition_yaml'].encode()).hexdigest())
+        history=Path(self.tmp.name)/'backups'/lab['id']/'history'/'fixture1'
+        self.assertEqual((history/'topology.clab.yml').read_text(),raw['definition_yaml'])
+        self.assertIn('topology.clab.yml',subprocess.check_output(['git','-C',str(folder),'ls-files'],text=True))
+        self.assertEqual(subprocess.check_output(['git','-C',str(folder),'rev-list','--count','HEAD'],text=True).strip(),'2','the second capture changed latest/ (the topology arrived), so it committed')
+        with zipfile.ZipFile(io.BytesIO(self.client.get('/api/jobs/fixture0/download',headers=self.auth).content)) as z:
+            self.assertEqual(len(z.namelist()),2,z.namelist())
         response=self.client.get('/api/jobs/fixture1/download',headers=self.auth)
         self.assertEqual(response.status_code,200,response.text if response.status_code!=200 else '')
         with zipfile.ZipFile(io.BytesIO(response.content)) as z:
             self.assertIn('manifest.json',z.namelist())
-            self.assertEqual(len(z.namelist()),2)
+            self.assertEqual(len(z.namelist()),3,z.namelist())
+            self.assertEqual(z.read(lab['name'].replace(' ','_')+'.clab.yml').decode(),raw['definition_yaml'])
+            manifest=json.loads(z.read('manifest.json'))
+            self.assertEqual(manifest['topology']['file'],lab['name'].replace(' ','_')+'.clab.yml','the manifest names the file as it is in the archive')
             self.assertNotIn(b'test-secret',b''.join(z.read(n) for n in z.namelist()))
+        # A third capture with the topology text gone again clears latest/ of the embedded files, so the local Git
+        # history never pairs new configurations with an old topology; a drawing the map writer cannot read is no
+        # failure of the backup either.
+        raw.pop('definition_yaml'); raw['drawing']={'broken':True}
+        self.app.state.store.state['jobs'].insert(0,{'id':'fixture2','lab_id':lab['id'],'lab_name':lab['name'],'status':'queued','operation':'backup','nodes':[]})
+        with patch('app.runner.subprocess.Popen',side_effect=local_popen):
+            self.app.state.runner.execute('fixture2',copy.deepcopy(raw),[n for n in raw['nodes'] if n['enabled']],'backup')
+        third=next(j for j in self.app.state.store.snapshot()['jobs'] if j['id']=='fixture2')
+        self.assertEqual(third['status'],'succeeded',third); self.assertNotIn('topology',third)
+        self.assertFalse((folder/'topology.clab.yml').exists(),'latest/ no longer holds the earlier topology')
+        self.assertTrue((Path(self.tmp.name)/'backups'/lab['id']/'history'/'fixture1'/'topology.clab.yml').exists(),'the earlier backup keeps its own copy')
+        raw['definition_yaml']='name: example\ntopology:\n  nodes:\n    PE1:\n      kind: cisco_xrv9k\n'
+        self.app.state.store.state['jobs'].insert(0,{'id':'fixture3','lab_id':lab['id'],'lab_name':lab['name'],'status':'queued','operation':'backup','nodes':[]})
+        with patch('app.runner.subprocess.Popen',side_effect=local_popen):
+            self.app.state.runner.execute('fixture3',copy.deepcopy(raw),[n for n in raw['nodes'] if n['enabled']],'backup')
+        fourth=next(j for j in self.app.state.store.snapshot()['jobs'] if j['id']=='fixture3')
+        self.assertEqual(fourth['status'],'succeeded',fourth); self.assertEqual(fourth['topology']['source'],'manager')
+        self.assertNotIn('annotations_file',fourth['topology'],'a drawing the map writer cannot read embeds no map, and the backup still succeeds with the topology')
     @unittest.skipIf(os.name=='nt', 'Ansible control-node tests require Linux')
     def test_restore_artifacts_one_capture_when_the_backup_is_the_candidate(self):
         lab=self.upload(); raw=self.app.state.store.lab(lab['id'])

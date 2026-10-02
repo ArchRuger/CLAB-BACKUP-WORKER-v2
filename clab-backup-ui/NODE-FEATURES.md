@@ -75,14 +75,38 @@ the platform (`cjunosevo`, `vJunos-switch` and `vQFX` → `.cfg`, `IOS-XR` → `
 `CEOS` → `.conf`; an unknown platform reads `Device` and keeps the stored extension), the
 device is the short name frozen with that backup, and the time is when the device was
 captured, in UTC, never the download time. **Download all (ZIP)** is
-`<lab>_<YYYY-MM-DD>_<HH-mm>.zip` (the job's start, UTC) and holds the same file names and a
-manifest. Characters Windows cannot store are replaced, and two names that differ only by
+`<lab>_<YYYY-MM-DD>_<HH-mm>.zip` (the job's start, UTC) and holds the same file names, a
+manifest, and the topology and map the backup embedded as `<lab>.clab.yml` and
+`<lab>.clab.yml.annotations.json` (see *The topology travels with every backup* below).
+Characters Windows cannot store are replaced, and two names that differ only by
 case get a number. The files kept on the VM use different, stable internal names. The manager
 keeps only the newest 300 backup and login-test job records per lab (a busy one, or one a
 pending Git save or restore still needs, survives longer); once a record is dropped it can no
 longer be downloaded, chosen as a Git save's capture or a restore source, used as a Save-progress
 baseline, or shown as a node's last backup. Its configuration files are not deleted: they stay
 under the manager's own data directory (`backups/<lab>/latest` and `backups/<lab>/history/<job>`).
+
+## The topology travels with every backup
+
+Every backup that saved at least one configuration (on demand, scheduled, or the capture behind a
+Save progress) also stores the lab's topology and map beside the configurations, so a configuration
+is never divorced from the topology it was taken under: the containerlab file and its
+`.annotations.json` as they were on the VM beside the deployed topology at the last discovery pass
+(within the thirty-second discovery interval), or, when the VM's copy is not known, the manager's own
+copy from the last sync; when the VM has no map file, the manager's own map (the one the Topology tab
+shows) travels instead, and the record says so. The backup record says which (*the files beside the
+deployed topology on the VM* or *the manager's copy*), the file's path and when it was read, with the
+digests of both files. A backup after which the manager holds no topology text clears the two files
+from the lab's `latest/` folder, so its local Git history never pairs new configurations with an old
+topology; every earlier backup keeps its own copy.
+They are kept under stable internal names in the backup folder and in its local Git history, download
+in the ZIP under the lab's own names, and travel into every Git save (latest, checkpoint, baseline) as
+`<lab>.clab.yml` and `<lab>.clab.yml.annotations.json` next to the device files, listed in the save's
+manifest as files of their kind rather than as devices: *Apply to running lab…* ignores them, *Compare
+with my latest save* shows their changes, and a save without them never counts as a removed device.
+Backups and saves made before this feature carry none and keep working as before. The manager cannot
+see a topology file edited on the VM after the lab was deployed without a redeploy; what travels is
+the file as it was at capture time.
 
 ## Browser terminal behaviour
 

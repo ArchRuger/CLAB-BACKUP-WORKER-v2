@@ -1,3 +1,22 @@
+# UI/UX changes 2, part 6: the topology travels with every backup — 1.30.57
+
+Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) `runner.embed_topology` runs after
+the node loop of a backup that saved something and before the local Git commit; it writes `topology.clab.yml` and
+`topology.clab.yml.annotations.json` (stable internal names, `TOPOLOGY_FILE` / `ANNOTATIONS_FILE`) into
+`history/<job>/` and `latest/`, records `job['topology']` (names, sizes, digests, `source` vm|manager, `path`,
+`read_at`) and never fails the backup. `runner.topology_source` is set by `main.py` to discovery's VM bundle of the
+deployment; `topology_capture` falls back to `definition_yaml` and `layout.map_document`. (2) `downloads.topology_names`
+is the one source of the download names (`<lab>.clab.yml`, `<lab>.clab.yml.annotations.json`), used by the ZIP and
+by `git_progress.captured_snapshot`. (3) In a save the files are manifest entries **with `kind` and without `node`**;
+`host_git.publish` counts only entries without `kind` as devices (removal review) but owns them like any file;
+`_node_slots` pairs them as `file:<kind>`; restore skips them because they have no `node` and no `restore_artifact`.
+Never give them a `node`, never bump the schema for them, never let a missing embedded file pass silently into a
+save (`captured_snapshot` refuses). (4) `jobMarkup` (app.js) shows the provenance line when `job.topology` exists.
+Tests: `test_app.py` pipeline (the inventory lab embeds nothing, a lab with a topology does; the ZIP), `test_downloads.py`,
+`test_git_progress.py` "the topology and map embedded…", `test_host_git.py` "owned files but not devices". Live tool:
+`docs/ui-ux-changes-2/tools/check_backup_topology.py` (deploys and destroys a cEOS lab; leaves a registration and a
+local commit under `uiux2-tests/` in the dev checkout).
+
 # UI/UX changes 2, part 5: the topology preview — 1.30.56
 
 Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) the renderer's **preview mode**

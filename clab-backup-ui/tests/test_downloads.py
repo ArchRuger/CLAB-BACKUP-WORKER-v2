@@ -7,7 +7,7 @@ import unittest
 from fastapi.testclient import TestClient
 import zipfile
 from app.main import create_app
-from app.downloads import component, config_names, archive_name, short_name
+from app.downloads import topology_names, component, config_names, archive_name, short_name
 
 class DownloadTests(unittest.TestCase):
     def setUp(self):
@@ -52,6 +52,29 @@ class DownloadTests(unittest.TestCase):
                 self.assertEqual(z.read(name),self.get(f'/api/jobs/job1/nodes/{index}/download').content)
                 self.assertEqual(manifest['nodes'][index]['file'],name)
         self.assertEqual(self.job['nodes'][0]['file'],'old-hash-0.set')
+    def test_an_embedded_topology_downloads_under_the_lab_s_names_and_an_older_backup_without_one_is_unchanged(self):
+        self.assertEqual(topology_names(self.job),{},'a capture taken before topologies were embedded carries none')
+        self.assertNotIn('topology',self.get('/api/state').json()['jobs'][0])
+        (self.folder/'topology.clab.yml').write_text('name: BGP_TheoryToPractice\ntopology:\n  nodes: {}\n')
+        (self.folder/'topology.clab.yml.annotations.json').write_text('{"nodeAnnotations":[]}')
+        self.job['topology']={'file':'topology.clab.yml','size':44,'sha256':'x','source':'vm','path':'/labs/bgp.clab.yml','read_at':'2026-09-10T01:02:00+00:00','annotations_file':'topology.clab.yml.annotations.json','annotations_size':22,'annotations_sha256':'y'}
+        self.store.save()
+        self.assertEqual(topology_names(self.job),{'topology':'BGP_TheoryToPractice.clab.yml','annotations':'BGP_TheoryToPractice.clab.yml.annotations.json'})
+        public=self.get('/api/state').json()['jobs'][0]['topology']
+        self.assertEqual((public['download_name'],public['annotations_download_name'],public['source']),('BGP_TheoryToPractice.clab.yml','BGP_TheoryToPractice.clab.yml.annotations.json','vm'))
+        response=self.get('/api/jobs/job1/download')
+        self.assertEqual(response.status_code,200)
+        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+            self.assertEqual(len(z.namelist()),6,z.namelist())
+            self.assertEqual(z.read('BGP_TheoryToPractice.clab.yml').decode(),'name: BGP_TheoryToPractice\ntopology:\n  nodes: {}\n')
+            self.assertEqual(z.read('BGP_TheoryToPractice.clab.yml.annotations.json').decode(),'{"nodeAnnotations":[]}')
+            manifest=json.loads(z.read('manifest.json'))
+            self.assertEqual(manifest['topology']['file'],'BGP_TheoryToPractice.clab.yml');self.assertEqual(manifest['topology']['annotations_file'],'BGP_TheoryToPractice.clab.yml.annotations.json')
+        self.assertEqual(self.job['topology']['file'],'topology.clab.yml','the stored record keeps its internal names')
+        (self.folder/'topology.clab.yml').unlink()
+        self.assertEqual(self.get('/api/jobs/job1/download').status_code,404,'a missing embedded file fails the archive clearly, like a missing configuration')
+        self.assertEqual(self.get('/api/jobs/job1/nodes/0/download').status_code,200,'the devices stay downloadable one by one')
+
     def test_legacy_backfill_preserves_stored_configs_and_snapshot_metadata(self):
         for n in self.job['nodes']:
             for k in ('platform','short_name','captured_at','download_metadata_version'): n.pop(k)
