@@ -1393,7 +1393,8 @@ class ParallelRestoreTests(unittest.TestCase):
         self.assertEqual(result['progress'], {'settled': 3, 'total': 3})
 
     def test_outcomes_arrive_out_of_order_and_the_follow_up_backup_keeps_target_order(self):
-        delays = {'A': 0.3, 'B': 0.1, 'C': 0.2, 'D': 0.0}
+        # 200 ms between neighbours: a shared CI runner once swapped two outcomes that were 100 ms apart.
+        delays = {'A': 0.6, 'B': 0.2, 'C': 0.4, 'D': 0.0}
         for name, delay in delays.items():
             self.plain.hooks[name] = lambda token, delay=delay: time.sleep(delay)
         job = self.run_job(self.service(4))

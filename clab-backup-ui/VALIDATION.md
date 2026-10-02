@@ -29,6 +29,10 @@ What was actually run for this release (dev VM `clab-llm-dev2`, Docker 29.8.1, c
   save without them needs no removal review, dropping a device still does), `test_download_ui.js` (the backup row's
   provenance line).
 - Browser: `node --test tests/*.js` → 387 pass, 0 fail.
+- CI on the branch: green for 1.30.52 to 1.30.56 and for the release commit of 1.30.57; the run on the follow-up
+  commit that corrected a count in this file failed in `test_restore.py`'s out-of-order outcomes test (two outcomes
+  100 ms apart swapped on the shared runner; the test passed 12 of 12 times here, idle and under CPU load). Its delays
+  were widened to 200 ms with the claim unchanged; the run after that is the one to read.
 
 ## Live (development VM, deployed product)
 

@@ -41,6 +41,9 @@ from the topology it was taken under.
   for its device files and is never stopped by the embedded topology.
 - Limit: the manager cannot see a topology file edited on the VM after the lab was deployed without a redeploy;
   what travels is the file as it was at capture time.
+- Test only: the parallel-restore test that lets four outcomes arrive out of order now keeps 200 ms between
+  neighbours instead of 100 ms (a shared CI runner swapped two of them once, on a documentation-only commit); its
+  claim, the settle order and the follow-up backup's target order, is unchanged.
 - `docs/ui-ux-changes-2/tools/check_backup_topology.py` proves the chain on the dev VM through the product's own
   API (publish, deploy, backup, ZIP, connect, save on the VM only, version view).
 
