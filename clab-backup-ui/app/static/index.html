@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.50"><script src="/static/status.js?v=1.30.50" defer></script><script src="/static/shell.js?v=1.30.50" defer></script><script src="/static/app.js?v=1.30.50" defer></script><script src="/static/topology-render.js?v=1.30.50" defer></script><script src="/static/topology.js?v=1.30.50" defer></script><script src="/static/home.js?v=1.30.50" defer></script><script src="/static/management.js?v=1.30.50" defer></script><script src="/static/operations.js?v=1.30.50" defer></script><script src="/static/diagram-editor.js?v=1.30.50" defer></script><script src="/static/diff-view.js?v=1.30.50" defer></script><script src="/static/git-progress.js?v=1.30.50" defer></script><script src="/static/git-places.js?v=1.30.50" defer></script><script src="/static/restore.js?v=1.30.50" defer></script><script src="/static/network-design.js?v=1.30.50" defer></script><script src="/static/capture.js?v=1.30.50" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Containerlab Node Manager</title><link rel="icon" type="image/svg+xml" href="/static/fabric-mark.svg"><link rel="stylesheet" href="/static/style.css?v=1.30.51"><script src="/static/status.js?v=1.30.51" defer></script><script src="/static/shell.js?v=1.30.51" defer></script><script src="/static/app.js?v=1.30.51" defer></script><script src="/static/topology-render.js?v=1.30.51" defer></script><script src="/static/topology.js?v=1.30.51" defer></script><script src="/static/home.js?v=1.30.51" defer></script><script src="/static/management.js?v=1.30.51" defer></script><script src="/static/operations.js?v=1.30.51" defer></script><script src="/static/diagram-editor.js?v=1.30.51" defer></script><script src="/static/diff-view.js?v=1.30.51" defer></script><script src="/static/git-progress.js?v=1.30.51" defer></script><script src="/static/git-places.js?v=1.30.51" defer></script><script src="/static/restore.js?v=1.30.51" defer></script><script src="/static/network-design.js?v=1.30.51" defer></script><script src="/static/capture.js?v=1.30.51" defer></script></head>
 <body>
 
 <svg hidden aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
@@ -241,7 +241,7 @@
       <div class="actions"><a class="button secondary" id="design-download" download hidden>Download all files (ZIP)</a></div>
     </section>
     <details id="design-history" class="card"><summary>History</summary><div id="design-history-body"></div></details>
-    <dialog id="design-apply-dialog" aria-labelledby="design-apply-title">
+    <dialog id="design-apply-dialog" data-lab-dialog aria-labelledby="design-apply-title">
       <div class="dialog-head"><h2 id="design-apply-title">Apply to devices</h2><button type="button" class="icon-button" data-design-apply-close aria-label="Close">×</button></div>
       <div id="design-apply-choose-step">
         <p>Choose which devices to review the generated plan against. A support host or a device the plan could not map is listed but cannot be applied to.</p>
@@ -264,7 +264,7 @@
         <div class="dialog-actions"><button type="button" class="button secondary" data-design-apply-close>Close</button></div>
       </div>
     </dialog>
-    <dialog id="design-export-git-dialog" aria-labelledby="design-export-git-title">
+    <dialog id="design-export-git-dialog" data-lab-dialog aria-labelledby="design-export-git-title">
       <div class="dialog-head"><h2 id="design-export-git-title">Export plan to Git</h2><button type="button" class="icon-button" data-design-export-git-close aria-label="Close">×</button></div>
       <div id="design-export-git-destination"></div>
       <label for="design-export-git-checkpoint">Checkpoint name</label>

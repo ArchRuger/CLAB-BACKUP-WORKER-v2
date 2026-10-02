@@ -30,7 +30,7 @@ function logsVisible(){if(tab!=='advanced')return false;const view=$('logs-view'
 async function refresh(){const response=await api('/state');state=await response.json();state.loaded=true;if(activeId&&!current())activeId='';if(!routeApplied){routeApplied=true;if(typeof applyRoute==='function')applyRoute();}render();if(logsVisible())await refreshLogs();}
 function setTab(value){const legacy=TAB_ALIAS[value];if(legacy){if(value==='inventory')devicesTechnical=true;else scrollTarget=SUBVIEW[value]||'';subview=value;value=legacy;}else subview='';tab=PANELS.includes(value)?value:'topology';}
 function syncRoute(push=false){if(!routeApplied||typeof writeRoute!=='function'||typeof currentRoute!=='function')return;writeRoute(currentRoute(),{push});}
-function selectLab(id,view='topology'){if($('details-dialog').open)$('details-dialog').close();activeId=id;setTab(view);sessionStorage.setItem('activeLab',id);$('search').value='';$('log-job').value='';if(typeof rememberOpened==='function')rememberOpened(id);if(typeof closeMenus==='function')closeMenus();if(typeof writeRoute==='function')writeRoute({lab:id,view:tab},{push:true});render();}
+function selectLab(id,view='topology'){if(typeof closeLabDialogs==='function')closeLabDialogs();else if($('details-dialog').open)$('details-dialog').close();activeId=id;setTab(view);sessionStorage.setItem('activeLab',id);$('search').value='';$('log-job').value='';if(typeof rememberOpened==='function')rememberOpened(id);if(typeof closeMenus==='function')closeMenus();if(typeof writeRoute==='function')writeRoute({lab:id,view:tab},{push:true});render();}
 function platformLabel(kind){return state.platforms[kind]?.label||(kind==='ssh'?'Generic SSH / Linux':'Unmapped');}
 function badge(status){const type=['Ready','succeeded','reachable'].includes(status)?'good':['failed','unreachable','interrupted'].includes(status)?'bad':['queued','running'].includes(status)?'running':'warn';const label=typeof badgeLabel==='function'?badgeLabel(status):status;return `<span class="badge ${type}" title="${esc(status)}">${esc(label)}</span>`;}
 function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platform||'ssh'];return lab.profiles.find(p=>p.id===id)?.label||(node.inventory_credentials?'From inventory':node.credential_source==='default'?'Containerlab default login':'Not configured');}
@@ -75,7 +75,7 @@ function renderTechnical(lab){const set=(id,value)=>{if($(id))$(id).textContent=
 function render(){
  const lab=current(),home=!lab,loaded=!!state.loaded;
  setMarkup($('labs'),labsMarkup());
- const version=state.version||'1.30.50';$('app-version').textContent='v'+version;
+ const version=state.version||'1.30.51';$('app-version').textContent='v'+version;
  if($('supported-release'))$('supported-release').textContent='Works with Junos, IOS-XR and Arista EOS';
  renderWorkerState();
  $('empty').hidden=!home||!loaded||state.labs.length>0;$('lab-content').hidden=!lab;

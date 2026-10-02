@@ -913,6 +913,39 @@ test('U-01: when another lab\'s design arrives, the form is redrawn even while a
  assert.equal(stateOf(c).formLab,'lab-b','the change redrew the form for the lab that is open');
 });
 
+test('QA-021: Remove design and Renumber act only for the lab they were opened from, with that lab\'s revision at open time, and are marked to close on a lab change',async()=>{
+ const els={};const el=id=>{if(!els[id])els[id]={id,onclick:null,disabled:false,innerHTML:'',textContent:''};return els[id];};
+ const calls=[],notices=[];let dialog=null,shown={id:'lab-a',name:'A'};
+ const opDialog=(id)=>{dialog={id,attrs:{},closed:0,setAttribute(k,v){this.attrs[k]=v;},querySelectorAll:()=>[],querySelector:()=>null,close(){this.closed++;}};return dialog;};
+ const c=ctx({$:el,opDialog,opTask:async(d,fn)=>fn(),json:async(url,method,body)=>{calls.push([url,method,body]);return {intent:null,generations:[],problems:[],nodes:{}};},
+  notify:m=>notices.push(m),current:()=>shown,clearDesignDraft:()=>{}});
+ c.activeId='lab-a';
+ stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r-a'},generations:[],problems:[],nodes:{}};
+ // 1. Opened in lab A; the page moves to lab B, whose design happens to share the revision. Confirming does nothing to A.
+ c.designClearDesign();
+ assert.equal(dialog.id,'design-clear-dialog');assert.equal('data-lab-dialog' in dialog.attrs,true,'the dialog is marked so a lab change closes it');
+ c.activeId='lab-b';shown={id:'lab-b',name:'B'};stateOf(c).labId='lab-b';stateOf(c).view={intent:{schema:1,revision:'r-a'},generations:[],problems:[],nodes:{}};
+ await el('design-clear-run').onclick();
+ assert.deepEqual(calls,[],'no request was sent for either lab');assert.equal(dialog.closed,1,'the stale dialog closed');
+ assert.match(notices[notices.length-1],/moved to another lab/);
+ // 2. Opened and confirmed in lab A: the request names A and carries the revision the dialog was opened with, even if
+ // the design was saved again meanwhile (the server then refuses the stale revision itself).
+ c.activeId='lab-a';shown={id:'lab-a',name:'A'};stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r-a'},generations:[],problems:[],nodes:{}};
+ c.designClearDesign();stateOf(c).view.intent.revision='r-a2';
+ await el('design-clear-run').onclick();
+ assert.equal(calls.length,1);assert.match(calls[0][0],/\/labs\/lab-a\/design\/clear$/);same(calls[0][2],{revision:'r-a'});
+ assert.equal(notices[notices.length-1],'Design removed.');
+ // 3. Renumber follows the same rule.
+ stateOf(c).view={intent:{schema:1,revision:'r-a'},generations:[],problems:[],nodes:{}};
+ c.designRenumber();assert.equal(dialog.id,'design-renumber-dialog');assert.equal('data-lab-dialog' in dialog.attrs,true);
+ c.activeId='lab-b';shown={id:'lab-b',name:'B'};stateOf(c).labId='lab-b';
+ await el('design-renumber-run').onclick();
+ assert.equal(calls.length,1,'the stale Renumber sent nothing');assert.equal(dialog.closed,1);assert.match(notices[notices.length-1],/moved to another lab/);
+ // A page that never defined activeId still refuses on designState.labId alone.
+ c.activeId=undefined;stateOf(c).labId='lab-b';assert.equal(c.designDialogStillForLab('lab-a'),false,'the design state says another lab');
+ shown={id:'lab-a',name:'A'};stateOf(c).labId='lab-a';assert.equal(c.designDialogStillForLab('lab-a'),true);shown={id:'lab-b',name:'B'};assert.equal(c.designDialogStillForLab('lab-a'),false,'the lab on screen says another lab');
+});
+
 test('U-10/U-15/U-16: Generate on nothing says why, the warnings fold carries its count, and a shared reason is said once',()=>{
  const els={};const el=id=>{if(!els[id])els[id]={id,value:'',disabled:false,title:'',textContent:'',className:'',hidden:false,innerHTML:'',attrs:{},setAttribute(k,v){this.attrs[k]=v;},querySelector:()=>null,querySelectorAll:()=>[]};return els[id];};
  const c=ctx({$:el,setMarkup:(e,html)=>{if(e)e.innerHTML=html;},current:()=>({id:'lab-a',name:'A'})});

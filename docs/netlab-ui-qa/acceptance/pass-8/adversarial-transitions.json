@@ -1,0 +1,163 @@
+{
+ "started": "2026-09-28T01:48:07+00:00",
+ "labs": {
+  "A": [
+   "227650926a3445898f5df5391c2e3266",
+   "ospf-basics"
+  ],
+  "B": [
+   "89fa781dd34549c78d3d71adae926cf2",
+   "BGP_TheoryToPractice"
+  ]
+ },
+ "t1_setup": {
+  "put_a": 200,
+  "put_b": 200,
+  "rev_a": "48ad14b7b28b4110a7e6b893",
+  "rev_b": "48ad14b7b28b4110a7e6b893"
+ },
+ "t1_before_back": {
+  "active": "227650926a3445898f5df5391c2e3266",
+  "designLab": "227650926a3445898f5df5391c2e3266",
+  "hash": "#lab=227650926a3445898f5df5391c2e3266&view=design"
+ },
+ "t1_after_back": {
+  "shown": {
+   "active": "89fa781dd34549c78d3d71adae926cf2",
+   "designLab": "89fa781dd34549c78d3d71adae926cf2",
+   "hash": "#lab=89fa781dd34549c78d3d71adae926cf2&view=design"
+  },
+  "dialog_open": true,
+  "heading": "BGP_TheoryToPractice"
+ },
+ "t1_after_confirm": {
+  "a_present": false,
+  "b_present": true,
+  "dialog_open": false,
+  "page_lab": {
+   "active": "89fa781dd34549c78d3d71adae926cf2",
+   "designLab": "89fa781dd34549c78d3d71adae926cf2",
+   "hash": "#lab=89fa781dd34549c78d3d71adae926cf2&view=design"
+  },
+  "b_state_text": "Design saved, no plan yet Design saved, no plan yet",
+  "message": " | toast: "
+ },
+ "t1b_revisions": {
+  "a": "48ad14b7b28b4110a7e6b893",
+  "b": "31b8a4eb4070e0a870b39f02"
+ },
+ "t1b_after_back": {
+  "shown": {
+   "active": "89fa781dd34549c78d3d71adae926cf2",
+   "designLab": "89fa781dd34549c78d3d71adae926cf2",
+   "hash": "#lab=89fa781dd34549c78d3d71adae926cf2&view=design"
+  },
+  "dialog_open": true
+ },
+ "t1b_after_confirm": {
+  "error": "The design changed since this page loaded. Reload it first.",
+  "a_unchanged": true,
+  "b_unchanged": true
+ },
+ "t2_before_reload": "Generating the plan\u2026 Generating the plan\u2026",
+ "t2_after_reload": "Generating the plan\u2026 Generating the plan\u2026",
+ "t2_final": {
+  "state": "Plan ready to review Plan ready to review",
+  "generations_before": 0,
+  "generations_after": 1,
+  "newest": "succeeded"
+ },
+ "t3_in_a": {
+  "state": "Design saved, no plan yet Design saved, no plan yet",
+  "a_generations": 0
+ },
+ "t3_back_in_b": {
+  "state": "Plan ready to review Plan ready to review",
+  "generations": 2,
+  "before": 1
+ },
+ "checks": [
+  {
+   "name": "T1 setup: both labs saved the same design (same revision)",
+   "ok": true,
+   "detail": "{'put_a': 200, 'put_b': 200, 'rev_a': '48ad14b7b28b4110a7e6b893', 'rev_b': '48ad14b7b28b4110a7e6b893'}",
+   "at": "2026-09-28T01:48:08+00:00"
+  },
+  {
+   "name": "T1 Back from A reached lab B",
+   "ok": true,
+   "detail": "{'active': '89fa781dd34549c78d3d71adae926cf2', 'designLab': '89fa781dd34549c78d3d71adae926cf2', 'hash': '#lab=89fa781dd34549c78d3d71adae926cf2&view=design'}",
+   "at": "2026-09-28T01:48:12+00:00"
+  },
+  {
+   "name": "T1 the Remove design dialog opened for A does not stay open over lab B",
+   "ok": false,
+   "detail": "{'shown': {'active': '89fa781dd34549c78d3d71adae926cf2', 'designLab': '89fa781dd34549c78d3d71adae926cf2', 'hash': '#lab=89fa781dd34549c78d3d71adae926cf2&view=design'}, 'dialog_open': True, 'heading': 'BGP_TheoryToPractice'}",
+   "at": "2026-09-28T01:48:12+00:00"
+  },
+  {
+   "name": "T1 confirming the dialog shown over B does not remove a design the page does not show without saying so",
+   "ok": false,
+   "detail": "{'a_present': False, 'b_present': True, 'dialog_open': False, 'page_lab': {'active': '89fa781dd34549c78d3d71adae926cf2', 'designLab': '89fa781dd34549c78d3d71adae926cf2', 'hash': '#lab=89fa781dd34549c78d3d71adae926cf2&view=design'}, 'b_state_text': 'Design saved, no plan yet Design saved, no plan yet', 'message': ' | toast: '}",
+   "at": "2026-09-28T01:48:15+00:00"
+  },
+  {
+   "name": "T1b Renumber confirmed over B after Back (revisions differ) is refused with a reason and changes neither lab",
+   "ok": true,
+   "detail": "{'error': 'The design changed since this page loaded. Reload it first.', 'a_unchanged': True, 'b_unchanged': True}",
+   "at": "2026-09-28T01:48:21+00:00"
+  },
+  {
+   "name": "T2 after a reload mid-generation the page shows the running generation (not \"No plan\"/idle)",
+   "ok": true,
+   "detail": "Generating the plan\u2026 Generating the plan\u2026",
+   "at": "2026-09-28T01:48:24+00:00"
+  },
+  {
+   "name": "T2 the reloaded page reaches \"Plan ready to review\" by itself",
+   "ok": true,
+   "detail": "{'state': 'Plan ready to review Plan ready to review', 'generations_before': 0, 'generations_after': 1, 'newest': 'succeeded'}",
+   "at": "2026-09-28T01:48:24+00:00"
+  },
+  {
+   "name": "T2 exactly one new generation (the reload started none)",
+   "ok": true,
+   "detail": "{'state': 'Plan ready to review Plan ready to review', 'generations_before': 0, 'generations_after': 1, 'newest': 'succeeded'}",
+   "at": "2026-09-28T01:48:24+00:00"
+  },
+  {
+   "name": "T3 lab A shows nothing of B's running generation",
+   "ok": true,
+   "detail": "{'state': 'Design saved, no plan yet Design saved, no plan yet', 'a_generations': 0}",
+   "at": "2026-09-28T01:48:27+00:00"
+  },
+  {
+   "name": "T3 lab A still shows its own state after B's poll would have fired",
+   "ok": true,
+   "detail": "Design saved, no plan yet Design saved, no plan yet",
+   "at": "2026-09-28T01:48:31+00:00"
+  },
+  {
+   "name": "T3 Back to B shows its finished plan, one new generation",
+   "ok": true,
+   "detail": "{'state': 'Plan ready to review Plan ready to review', 'generations': 2, 'before': 1}",
+   "at": "2026-09-28T01:48:31+00:00"
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]",
+   "at": "2026-09-28T01:48:32+00:00"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]",
+   "at": "2026-09-28T01:48:32+00:00"
+  }
+ ],
+ "console": [
+  "Failed to load resource: the server responded with a status of 409 (Conflict)"
+ ],
+ "finished": "2026-09-28T01:48:32+00:00"
+}

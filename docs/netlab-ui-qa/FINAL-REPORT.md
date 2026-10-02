@@ -1,8 +1,7 @@
 # Relentless netlab UI/UX QA campaign and Restart device: final report
 
 Campaign of 2026-09-27 on `claude/netlab-integration`, from release 1.30.47 (`3194ec4`) through **release 1.30.48**
-(`b4329d3`, PR #56, merged 18:12 UTC), **1.30.49** (`14c2f05`, PR #57, merged 21:55 UTC) to **release 1.30.50** (this
-build, the fix of the last acceptance finding). The assignment was the owner's `CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md`
+(`b4329d3`, PR #56, merged 18:12 UTC), **1.30.49** (`14c2f05`, PR #57, merged 21:55 UTC) **1.30.50** (`1e12f37`, PR #58, merged 00:11 UTC on 2026-09-28) to **release 1.30.51** (this build, the fix of the last acceptance finding). The assignment was the owner's `CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md`
 with the folded-in `CLAB_Single_Device_Restart_Addendum.md`. Companion records in this folder: `PICKUP.md`
 (state), `DEFECTS.md` (ledger), `RESTART-PARITY.md` (parity record), `EVIDENCE.md` (index), `COVERAGE.md` /
 `coverage.json` (inventory and results), `probes-report.md`, `usability-report.md`, `evidence/stress/REPORT.md`,
@@ -182,6 +181,25 @@ spot-checks):
    destroyed and deleted on the live manager during the pass (its observation O-1), which the charter had said would not
    happen. Eight observations, none contradicting a product record (OBS-006 and OBS-007 recorded from them).
 8. The tool was revised (one guard around every step, an idle wait before the first; retest 13/13,
-   `evidence/restart/two-tabs-host1-2026-09-28T010451+0000.json`), committed with passes 5 and 6, and the gate restarted
-   on that test-suite revision of the same build: **pass 7 (Sonnet)** and **pass 8 (Opus)**, recorded in
-   `acceptance/PASS-7-*.md` and `PASS-8-*.md` with the evidence commit that follows.
+   `evidence/restart/two-tabs-host1-2026-09-28T010451+0000.json`), committed with passes 5 and 6 as `02fd181` (PR #59, CI
+   green; PR #58 with the release itself was merged at 00:11 UTC), and the gate restarted on that test-suite revision of the
+   same build.
+9. **Pass 7, Sonnet** (`acceptance/PASS-7-sonnet.md`, evidence `acceptance/pass-7/`, 01:09–01:33 UTC, on `02fd181`):
+   **CLEAN**, no finding. Static clean; Python 1704 OK, browser 379; the five fixture tools at their reference figures row
+   for row; its own browser check of the More menu's disabled reasons 17/17; live cEOS 81/81, two-tabs 13/13, neighbour
+   20/20, previews and refusals, XRv9k 28/28 straight `booting → ready` with configuration A unchanged; the traffic probe's
+   four loss windows on the four cEOS restarts only; ten regression tests rerun singly. No other lab's operation was seen
+   during the pass.
+10. **Pass 8, Opus** (`acceptance/PASS-8-opus.md`, evidence `acceptance/pass-8/`, 01:36–01:52 UTC, on `02fd181`, the
+    adversarial pass: warm and returned sessions, its own transition checks, ten fixes undone in a scratch copy with their
+    tests seen failing): **NOT CLEAN** on one product finding, **QA-021** (P0 by the ledger's scale): a *Remove design…*
+    dialog opened in one lab stayed open when the browser went Back to another lab, and confirming it silently deleted the
+    first lab's design while the second was shown, when both labs held the same design (the revision hashes the content).
+    Every other check passed (static, Python 1704, browser 379, the five fixture tools row for row, cEOS 81/81, two-tabs
+    13/13, neighbour 20/20, previews and refusals 18/18, XRv9k 28/28 straight `booting → ready` with configuration A
+    unchanged). Its observations: the Restart review stays open across Back too but is bound to its device by its token
+    (not a defect), one cEOS restart job of 23 s, XRv9k `(unhealthy)` in Docker while *Ready*, tool output hygiene.
+11. **1.30.51** fixes QA-021: a lab change closes every dialog that speaks for a lab, and *Remove design* and *Renumber*
+    act only for the lab they were opened from, with its revision at open time (two unit tests; the reviewer's own
+    reproduction rerun on a fixture of the fix, `evidence/design-dialogs/`). The gate restarted on it: **pass 9 (Sonnet)**
+    and **pass 10 (Opus)**, recorded in `acceptance/PASS-9-*.md` and `PASS-10-*.md` with the evidence commit that follows.

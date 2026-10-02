@@ -4,6 +4,21 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.51
+
+The adversarial acceptance pass on 1.30.50 (`docs/netlab-ui-qa/acceptance/PASS-8-opus.md`) found one product defect
+of the wrong-lab class; this release fixes it and the campaign's two clean acceptance passes are taken again on it.
+
+- The Design tab's *Remove design* and *Renumber* dialogs belong to the lab they were opened from (QA-021). Until
+  now a dialog opened in one lab stayed open when the browser went Back to another lab, and confirming it acted on
+  the first lab while the second was shown: when both labs held the same design (the revision hashes the content),
+  *Remove design* silently deleted the first lab's design. Now moving to another lab or Home closes the device
+  drawer and every dialog that speaks for a lab (the two design dialogs, the Apply and Export reviews), the two
+  dialogs send the lab id and design revision captured when they opened, and a confirmation that still arrives after
+  a lab change is refused with "The page moved to another lab while this dialog was open. Nothing was changed; open
+  it again from that lab."
+- Records: acceptance passes 7 (Sonnet, clean) and 8 (Opus, the finding above) on 1.30.50; the final report.
+
 ## Changes in 1.30.50
 
 The first acceptance pass on 1.30.49 (`docs/netlab-ui-qa/acceptance/PASS-4-sonnet.md`) found one small product

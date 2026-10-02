@@ -100,6 +100,17 @@ test('writeRoute no-ops when the hash already matches; polls replace, navigation
  assert.ok(applying.history.every(([kind])=>kind==='replace'),'applying a route never adds a history entry');
 });
 
+test('QA-021: a lab change closes every open dialog that speaks for a lab, and only those',()=>{
+ const h=harness();
+ const bound=h.el('dialog',{id:'design-clear-dialog','data-lab-dialog':''}),plain=h.el('dialog',{id:'import-dialog'}),shut=h.el('dialog',{id:'design-apply-dialog','data-lab-dialog':''});
+ for(const d of [bound,plain,shut])d.close=function(){this.open=false;this.closes=(this.closes||0)+1;};
+ bound.open=true;plain.open=true;shut.open=false;h.doc.body.append(bound,plain,shut);
+ h.context.activeId='a';h.dialog.open=true;
+ h.context.closeLabDialogs();
+ assert.equal(bound.open,false,'the marked open dialog closed');assert.equal(h.dialog.open,false,'the device drawer closed');
+ assert.equal(plain.open,true,'an unmarked dialog is left alone');assert.equal(shut.closes||0,0,'a closed dialog is not closed again');
+ bound.open=true;h.context.goHome();assert.equal(bound.open,false,'Home closes them too');
+});
 test('goHome clears the lab, the hash and sessionStorage, closes the drawer and re-renders',()=>{
  const h=harness({hash:'#lab=a&view=devices&device=R1',session:{activeLab:'a'}});
  h.context.activeId='a';h.context.detailName='R1';h.dialog.open=true;h.managerButton.dispatch('click');

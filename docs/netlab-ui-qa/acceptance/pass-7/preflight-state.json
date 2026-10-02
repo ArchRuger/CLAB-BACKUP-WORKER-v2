@@ -1,0 +1,263 @@
+{
+  "id": "174386ec12ee496190c585c5796b2662",
+  "name": "restore-square",
+  "defaults": {},
+  "interval": 0,
+  "next_run": null,
+  "created": "2026-09-23T01:24:17.525180+00:00",
+  "deployment_name": "restore-square",
+  "container_prefix": "clab",
+  "updated": "2026-09-27T02:53:26.675085+00:00",
+  "source": "restore-square.clab.yml",
+  "vm_source": {
+    "digest": "dd386c13d68abb851c70e597899d43a484daee51f7b141865038b46662b9f88a",
+    "files": {
+      "definition": {
+        "path": "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+        "sha256": "3ea429270ab8b19e0540a6aab892a224b27efafac0a41d5bae5f118de62783e5"
+      },
+      "inventory": {
+        "path": "/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/ansible-inventory.yml",
+        "sha256": "c81deb50c712c78654cf3ff5863911aefe5a16bbd007af52a8d39defb00239ce"
+      },
+      "topology": {
+        "path": "/srv/containerlab-node-manager/projects/restore-square/clab-restore-square/topology-data.json",
+        "sha256": "ea322777db744b9e64f6064d0ba26d1e5baa9bb7db8a2fea045d2158b962fa7c"
+      }
+    },
+    "missing": [
+      "annotations"
+    ],
+    "message": "Unavailable VM files: annotations. Saved settings are retained.",
+    "synced_digest": "55724fc2d4c5fa3ce151900496499dadd36f059be86c6c075ff380d0413b3737",
+    "synced_at": "2026-09-23T01:40:52.796240+00:00",
+    "status": "Updates available",
+    "can_sync": true,
+    "warnings": []
+  },
+  "vm_project_path": "/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml",
+  "git_binding": {
+    "binding_id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+    "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2",
+    "repository": {
+      "id": "ea54cc8842384a72b4d1c72ac8ad7cda",
+      "label": "CLAB-MNGR-DEV-LLM / restore-square/qa-1-30-37",
+      "owner": "clabllm",
+      "path": "/home/clabllm/labs/CLAB-MNGR-DEV-LLM",
+      "remote": "origin",
+      "push_url": "https://github.com/pruger-dev/CLAB-MNGR-DEV-LLM.git",
+      "branch": "main",
+      "prefix": "restore-square/qa-1-30-37",
+      "revision": "a4e2e6a58294c35834e560db42e1e1b3ae033296050413381945f79ef35c2aa2"
+    },
+    "host_identity": "e73154b2b4a9d783232f59c3f7bca8ac3210db31adffcdde7eca4a99cf4fbf1b",
+    "node_names": [
+      "clab-restore-square-ceos",
+      "clab-restore-square-cjunosevolved",
+      "clab-restore-square-vjunos-switch",
+      "clab-restore-square-xrv9k"
+    ],
+    "review_before_push": true
+  },
+  "favorite": false,
+  "profiles": [],
+  "nodes": [
+    {
+      "name": "clab-restore-square-ceos",
+      "short_name": "ceos",
+      "definition_node": "ceos",
+      "address": "172.20.20.101",
+      "port": 22,
+      "platform": "arista_ceos",
+      "kind": "arista_ceos",
+      "image": "n24l/ceos:4.35.0F",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+        "all",
+        "arista_ceos"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.101",
+      "runtime_status": "Up 40 minutes",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+        "status": "ready",
+        "message": "NOS accepted SSH login and answered show version (automatic check)",
+        "at": "2026-09-28T00:28:57.472121+00:00"
+      },
+      "ssh_ready": true
+    },
+    {
+      "name": "clab-restore-square-cjunosevolved",
+      "short_name": "cjunosevolved",
+      "definition_node": "cjunosevolved",
+      "address": "172.20.20.102",
+      "port": 22,
+      "platform": "juniper_cjunosevolved",
+      "kind": "juniper_cjunosevolved",
+      "image": "n24l/cjunosevolved:26.2R1.7-EVO",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+        "all",
+        "juniper_cjunosevolved"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.102",
+      "runtime_status": "Up 3 hours",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+        "status": "ready",
+        "message": "NOS accepted SSH login and answered show version (automatic check)",
+        "at": "2026-09-27T23:18:18.533465+00:00"
+      },
+      "ssh_ready": true
+    },
+    {
+      "name": "clab-restore-square-vjunos-switch",
+      "short_name": "vjunos-switch",
+      "definition_node": "vjunos-switch",
+      "address": "172.20.20.103",
+      "port": 22,
+      "platform": "juniper_vjunosswitch",
+      "kind": "juniper_vjunosswitch",
+      "image": "n24l/vjunos-switch:23.2R1.14",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+        "all",
+        "juniper_vjunosswitch"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.103",
+      "runtime_status": "healthy",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+        "status": "ready",
+        "message": "NOS accepted SSH login and answered show version (automatic check)",
+        "at": "2026-09-27T23:18:27.105826+00:00"
+      },
+      "ssh_ready": true
+    },
+    {
+      "name": "clab-restore-square-xrv9k",
+      "short_name": "xrv9k",
+      "definition_node": "xrv9k",
+      "address": "172.20.20.104",
+      "port": 22,
+      "platform": "cisco_xrv9k",
+      "kind": "cisco_xrv9k",
+      "image": "n24l/cisco_xrv9k:24.3.1",
+      "enabled": true,
+      "profile_id": "",
+      "groups": [
+        "all",
+        "cisco_xrv9k"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.104",
+      "runtime_status": "unhealthy",
+      "available": true,
+      "readiness": "Ready",
+      "inventory_credentials": true,
+      "credential_source": "inventory",
+      "login_configured": true,
+      "nos_login": {
+        "status": "ready",
+        "message": "NOS accepted SSH login and answered show version (automatic check)",
+        "at": "2026-09-28T00:35:10.987632+00:00"
+      },
+      "ssh_ready": true
+    },
+    {
+      "name": "clab-restore-square-host1",
+      "short_name": "host1",
+      "definition_node": "host1",
+      "address": "172.20.20.105",
+      "port": 22,
+      "platform": "",
+      "kind": "linux",
+      "image": "ghcr.io/srl-labs/network-multitool:latest",
+      "enabled": false,
+      "profile_id": "",
+      "groups": [
+        "all",
+        "linux"
+      ],
+      "endpoint_mode": "auto",
+      "discovered": true,
+      "runtime_state": "running",
+      "discovered_address": "172.20.20.105",
+      "runtime_status": "Up 3 minutes",
+      "available": true,
+      "readiness": "Choose NOS",
+      "inventory_credentials": false,
+      "credential_source": "default",
+      "login_configured": true,
+      "nos_login": {
+        "status": "ready",
+        "message": "NOS accepted SSH login and answered show version (automatic check)",
+        "at": "2026-09-28T01:05:08.476287+00:00"
+      },
+      "ssh_ready": true
+    }
+  ],
+  "deployment": {
+    "last_success": "2026-09-28T01:08:45.259136+00:00",
+    "checked_at": "2026-09-28T01:08:45.259136+00:00",
+    "status": "Running",
+    "message": "5/5 discovered containers running; 5 saved nodes. Container state does not verify NOS readiness."
+  },
+  "last_deployed": "",
+  "map_editor": true,
+  "nos_readiness": {
+    "status": "ready",
+    "total": 5,
+    "ready": 5,
+    "booting": 0,
+    "failed": 0
+  },
+  "design": {
+    "present": true,
+    "revision": "c80a6c7278ecb6083bc9e883",
+    "updated": "2026-09-27T02:53:26.674998+00:00",
+    "label": "E6 back to the two VLANs: VXLAN and EVPN dropped",
+    "modules": [
+      "isis",
+      "bgp",
+      "vlan",
+      "routing"
+    ],
+    "generating": false,
+    "generation": {
+      "id": "57371369e14e483bb7e25ee6f64c6f3f",
+      "status": "succeeded",
+      "message": "Plan generated",
+      "created": "2026-09-27T02:53:26.715511+00:00",
+      "finished": "2026-09-27T02:53:28.443253+00:00",
+      "intent_revision": "c80a6c7278ecb6083bc9e883"
+    },
+    "stale": false
+  }
+}

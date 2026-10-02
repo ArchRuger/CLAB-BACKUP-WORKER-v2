@@ -48,8 +48,16 @@ function applyRoute(){
  }finally{shellApplying=false;}
  return true;
 }
-function goHome(options={}){
+// Dialogs that speak for one lab (the device drawer and every dialog marked data-lab-dialog: the design's
+// Remove and Renumber, its Apply and Export reviews) close when the page moves to another lab or Home. A
+// dialog left open over the next lab must never act on the lab it was opened for (QA-021).
+function closeLabDialogs(){
  const dialog=shellEl('details-dialog');if(dialog&&dialog.open&&typeof dialog.close==='function')dialog.close();
+ if(typeof document==='undefined'||!document||typeof document.querySelectorAll!=='function')return;
+ for(const d of document.querySelectorAll('dialog[data-lab-dialog][open]'))if(typeof d.close==='function')d.close();
+}
+function goHome(options={}){
+ closeLabDialogs();
  if(typeof activeId!=='undefined')activeId='';
  shellRemove('sessionStorage','activeLab');closeMenus();shellActionError=null;
  writeRoute({},options);

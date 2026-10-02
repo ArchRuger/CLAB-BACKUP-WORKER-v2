@@ -1,0 +1,793 @@
+START 2026-09-28T01:09:35Z
+/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+.................................................................Discovery could not persist its result; check manager storage. Retrying on the next poll.
+...Action log write failed; check manager storage permissions and free space. Some audit events were not recorded.
+..Scheduler could not persist its work; check manager storage. Retrying on the next tick.
+......................./usr/lib/python3.12/functools.py:76: ResourceWarning: unclosed <socket.socket fd=10, family=2, type=1, proto=6, laddr=('127.0.0.1', 45964), raddr=('127.0.0.1', 57871)>
+  return partial(update_wrapper, wrapped=wrapped,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.12/asyncio/selector_events.py:879: ResourceWarning: unclosed transport <_SelectorSocketTransport fd=10>
+  _warn(f"unclosed transport {self!r}", ResourceWarning, source=self)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py", line 409, in run_asgi
+    result = await self.app(self.scope, self.receive, self.send)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/routing.py", line 676, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 2734, in app
+    await route.handle(scope, receive, send)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/routing.py", line 356, in handle
+    await self.app(scope, receive, send)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 184, in app
+    await wrap_app_handling_exceptions(app, session)(scope, receive, send)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 181, in app
+    await func(session)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 796, in app
+    await dependant.call(**solved_result.values)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/tests/test_capture_proxy.py", line 47, in desktop
+    await ws.send_bytes(await ws.receive_bytes());await ws.close()
+                        ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 133, in receive_bytes
+    self._raise_on_disconnect(message)
+  File "/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/starlette/websockets.py", line 120, in _raise_on_disconnect
+    raise WebSocketDisconnect(message["code"], message.get("reason"))
+starlette.websockets.WebSocketDisconnect: (1000, '')
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+......Capture creation cleanup failed; automatic cleanup will retry.
+.........................................................................................................................................................................................................................................................................................................................Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.....................................................................................................................................................................................................................................................................Action log write failed; check manager storage permissions and free space. Some audit events were not recorded.
+...................................................s...................................................One repository can hold many labs, each in its own subfolder.
+Enter this lab's subfolder, for example bgp, eth or ip. Leave blank to use the
+repository root when this repository holds only a single lab.
+
+GitHub login belongs to this Linux account. Use your GitHub account with write access.
+Copy the device code below, then open the displayed URL in your workstation browser.
+If your browser is signed in to several GitHub accounts, open https://github.com/login/device/select_account and choose the account with write access.
+A missing VM browser is normal. Keep this terminal running; do not press Ctrl+C.
+! First copy your one-time code: ABCD-1234
+Open this URL to continue in your web browser: https://github.com/login/device
+If your browser is signed in to several GitHub accounts, open https://github.com/login/device/select_account and choose the account with write access.
+GitHub account: github-engineer
+
+[4/6] Checkout
+
+Access failure
+Completed files and login are retained. Fix the issue in another terminal, then retry here.
+Checkout directory = your local lab-config repository, usually under ~/labs/.
+It is separate from the manager source folder: /home/clabllm/projects/clab-manager-1.30.42
+First create the repository on GitHub with a README (initial commit). A private repository is suitable for lab configs.
+Enter a nonempty value without control characters, or press Ctrl+C to cancel.
+Enter a nonempty value without control characters, or press Ctrl+C to cancel.
+Checkout directory = your local lab-config repository, usually under ~/labs/.
+It is separate from the manager source folder: /home/clabllm/projects/clab-manager-1.30.42
+Keeping existing registration: My BGP lab
+Remote: lab-origin; destination: labs/bgp; branch: lab-progress
+Commit name/email label your commits; GitHub login does not set them. Settings apply only to this checkout.
+Commit identity verified for this checkout.
+Installing GitHub CLI (gh) with sudo apt-get.
+
+GitHub login belongs to this Linux account. Use your GitHub account with write access.
+Copy the device code below, then open the displayed URL in your workstation browser.
+If your browser is signed in to several GitHub accounts, open https://github.com/login/device/select_account and choose the account with write access.
+A missing VM browser is normal. Keep this terminal running; do not press Ctrl+C.
+GitHub account: engineer
+This is a GitHub branch/file page. Its repository clone URL is:
+  https://github.com/N24L/patricks-bgp-lab_2.git
+This is a GitHub branch/file page. Its repository clone URL is:
+  https://github.com/N24L/patricks-bgp-lab_2.git
+
+Git setup for Linux account: owner
+Persistent home: /tmp/tmp1n1aynru
+This is the repository owner. It does not need to match your GitHub username.
+No additional Linux user is required. Sudo is used for packages and reading/updating manager registrations.
+
+Manager source: /home/clabllm/projects/clab-manager-1.30.42
+The lab-config checkout is a separate folder. A clean git status does not verify commit identity or push access.
+Use numbered menus and Enter. Press Ctrl+C at any prompt, or q in a menu, to stop safely.
+
+[1/6] Check Git, Linux account and existing registrations
+  OK: Check Git, Linux account and existing registrations
+
+[2/6] Choose the local lab-config repository
+Checkout directory = your local lab-config repository, usually under ~/labs/.
+It is separate from the manager source folder: /home/clabllm/projects/clab-manager-1.30.42
+  OK: Choose the local lab-config repository
+
+[3/6] Connect your GitHub / HTTPS account
+  OK: Connect your GitHub / HTTPS account
+
+[4/6] Clone or validate the existing checkout
+  OK: Clone or validate the existing checkout
+
+[5/6] Verify commit identity and write permission
+  OK: Verify commit identity and write permission
+
+Review registration
+Linux owner: owner
+Checkout: /tmp/tmp1n1aynru
+Remote: https://github.com/owner/lab.git
+Remote name: origin; configs: repository root
+Existing registration settings are retained. New checkouts use the current branch.
+Registration checks clean managed files, identity, remote sync and a push dry run.
+Setup does not create or push commits. Server branch rules may still reject future saves.
+
+[6/6] Register the checkout with the manager
+  OK: Register the checkout with the manager
+
++--------------------------------------------------+
+| SUCCESS                                          |
+| Lab-config checkout registered with the manager. |
+| Destination: repository root                     |
++--------------------------------------------------+
+
+Ready. In the manager: open your lab > Progress > Save location.
+Select this checkout and devices, review the destination, then Save progress.
+Save progress commits, then shows what changed: choose Upload these changes to push. No separate Commit button is needed.
+If a push fails, reopen that save and Retry; do not create a new capture or manually commit its staged files.
+Commit name/email label your commits; GitHub login does not set them. Settings apply only to this checkout.
+Git rejected the commit identity. Enter a replacement name and email for this checkout.
+Commit identity verified for this checkout.
+
+Choose
+  1. Clone
+  2. Existing
+  q. Cancel and keep completed work
+Choose one of the listed numbers, or q to cancel.
+
+Choose
+  1. Clone
+  2. Existing
+  q. Cancel and keep completed work
+
+Choose
+  1. Clone
+  2. Existing
+  q. Cancel and keep completed work
+Commit name/email label your commits; GitHub login does not set them. Settings apply only to this checkout.
+Commit identity verified for this checkout.
+Keeping existing registration: Lab B
+Remote: origin; destination: b; branch: main
+
+[1/6] Git
+
+APT update failed
+Completed files and login are retained. Fix the issue in another terminal, then retry here.
+This repairs only obsolete CD-ROM installation sources and backs up edited files.
+Network mirrors and repository signature checks remain enabled.
+  OK: Git
+
+[1/6] Git
+
+APT update failed
+Completed files and login are retained. Fix the issue in another terminal, then retry here.
+This repairs only obsolete CD-ROM installation sources and backs up edited files.
+Network mirrors and repository signature checks remain enabled.
+  OK: Git
+Checking existing manager registrations with sudo so their settings can be preserved.
+Checking existing manager registrations with sudo so their settings can be preserved.
+Checking existing manager registrations with sudo so their settings can be preserved.
+Checking existing manager registrations with sudo so their settings can be preserved.
+Checking existing manager registrations with sudo so their settings can be preserved.
+Checkout directory = your local lab-config repository, usually under ~/labs/.
+It is separate from the manager source folder: /home/clabllm/projects/clab-manager-1.30.42
+Keeping existing registration: My lab
+Remote: origin; destination: repository root; branch: main
+
+Git setup for Linux account: owner
+Persistent home: /tmp/tmp81xjphy3
+This is the repository owner. It does not need to match your GitHub username.
+No additional Linux user is required. Sudo is used for packages and reading/updating manager registrations.
+
+Manager source: /home/clabllm/projects/clab-manager-1.30.42
+The lab-config checkout is a separate folder. A clean git status does not verify commit identity or push access.
+Use numbered menus and Enter. Press Ctrl+C at any prompt, or q in a menu, to stop safely.
+
+[1/6] Check Git, Linux account and existing registrations
+  OK: Check Git, Linux account and existing registrations
+
+[2/6] Choose the local lab-config repository
+  OK: Choose the local lab-config repository
+
+[3/6] Connect your GitHub / HTTPS account
+  OK: Connect your GitHub / HTTPS account
+
+[4/6] Clone or validate the existing checkout
+  OK: Clone or validate the existing checkout
+
+[5/6] Verify commit identity and write permission
+  OK: Verify commit identity and write permission
+
+Review registration
+Linux owner: owner
+Checkout: /tmp/tmp81xjphy3
+Remote: https://github.com/a/b.git
+Remote name: origin; configs: repository root
+Existing registration settings are retained. New checkouts use the current branch.
+Registration checks clean managed files, identity, remote sync and a push dry run.............................................................................................................................................................................................................................
+Setup does not create or push commits. Server branch rules may still reject future saves.
+
+[6/6] Register the checkout with the manager
+
+Network down
+Completed files and login are retained. Fix the issue in another terminal, then retry here.
+  OK: Register the checkout with the manager
+
++--------------------------------------------------+
+| SUCCESS                                          |
+| Lab-config checkout registered with the manager. |
+| Destination: repository root                     |
++--------------------------------------------------+
+
+Ready. In the manager: open your lab > Progress > Save location.
+Select this checkout and devices, review the destination, then Save progress.
+Save progress commits, then shows what changed: choose Upload these changes to push. No separate Commit button is needed.
+If a push fails, reopen that save and Retry; do not create a new capture or manually commit its staged files.
+
+[5/6] Permission
+
+No write permission
+Completed files and login are retained. Fix the issue in another terminal, then retry here.
+  OK: Permission
+
+[4/6] Checkout
+
+Temporary network failure
+Completed files and login are retained. Fix the issue in another terminal, then retry here.
+  OK: Checkout
+Checkout directory = your local lab-config repository, usually under ~/labs/.
+It is separate from the manager source folder: /home/clabllm/projects/clab-manager-1.30.42
+Checking existing manager registrations with sudo so their settings can be preserved.
+
+Installation plan
+  Source: /home/clabllm/projects/clab-manager-1.30.42 (1.19.4)
+  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.
+  Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.
+  Retain compatible installed tools; start Docker and SSH services.
+  Prepare persistent storage and restricted clab-discovery password/helpers.
+  Existing password/data retained; first setup asks you to create the password.
+  Rebuild/recreate only the manager; existing lab containers remain in place.
+  Lab operations: enabled with default trusted roots
+  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).
+  Engineer access: set up for owner (VS Code, Containerlab extension)
+  Settings: retain current .env or use defaults
+  Installation-media APT repair: not selected
+  lazydocker: install or update for owner (never fails the installation).
+  Check running version/HTTP, then set up Git under owner.
+
+1/6 Administrator access and settings
+Completed: 1/6 Administrator access and settings
+
+2/6 VM prerequisites
+Completed: 2/6 VM prerequisites
+
+3/6 Password, helpers, image and manager
+Completed: 3/6 Password, helpers, image and manager
+
+4/6 Browser Wireshark capture stack
+Completed: 4/6 Browser Wireshark capture stack
+
+5/6 Running manager verification
+Completed: 5/6 Running manager verification
+
+6/6 Engineer access for VS Code
+New groups apply to new logins: reconnect SSH, and in VS Code run "Remote-SSH: Kill VS Code Server on Host..." then reconnect before using the Containerlab extension.
+Completed: 6/6 Engineer access for VS Code
+
+Manager installation is ready. Git is a separate setup step under your ordinary account.
+Wireshark opens from the map (Capture packets).
+In VM connection use clab-discovery and the password you created. Verify the host fingerprint.
+After browser setup, run the full installation health report (without sudo):
+  bash /home/clabllm/projects/clab-manager-1.30.42/deploy/check-install.sh
+
+Installation plan
+  Source: /home/clabllm/projects/clab-manager-1.30.42 (1.19.4)
+  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.
+  Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.
+  Retain compatible installed tools; start Docker and SSH services.
+  Prepare persistent storage and restricted clab-discovery password/helpers.
+  Existing password/data retained; first setup asks you to create the password.
+  Rebuild/recreate only the manager; existing lab containers remain in place.
+  Lab operations: enabled with default trusted roots
+  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).
+  Engineer access: not selected
+  Settings: retain current .env or use defaults
+  Installation-media APT repair: not selected
+  lazydocker: install or update for owner (never fails the installation).
+  Check running version/HTTP, then set up Git under owner.
+
+1/5 Administrator access and settings
+Completed: 1/5 Administrator access and settings
+
+2/5 VM prerequisites
+Completed: 2/5 VM prerequisites
+
+3/5 Password, helpers, image and manager
+Completed: 3/5 Password, helpers, image and manager
+
+4/5 Browser Wireshark capture stack
+Completed: 4/5 Browser Wireshark capture stack
+
+5/5 Running manager verification
+Completed: 5/5 Running manager verification
+
+Manager installation is ready. Git is a separate setup step under your ordinary account.
+Wireshark opens from the map (Capture packets).
+In VM connection use clab-discovery and the password you created. Verify the host fingerprint.
+After browser setup, run the full installation health report (without sudo):
+  bash /home/clabllm/projects/clab-manager-1.30.42/deploy/check-install.sh
+
+Installation plan
+  Source: /home/clabllm/projects/clab-manager-1.30.42 (1.19.4)
+  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.
+  Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.
+  Retain compatible installed tools; start Docker and SSH services.
+  Prepare persistent storage and restricted clab-discovery password/helpers.
+  Existing password/data retained; first setup asks you to create the password.
+  Rebuild/recreate only the manager; existing lab containers remain in place.
+  Lab operations: enabled with default trusted roots
+  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).
+  Engineer access: not selected
+  Settings: retain current .env or use defaults
+  Installation-media APT repair: not selected
+  lazydocker: install or update for owner (never fails the installation).
+  Check running version/HTTP, then set up Git under owner.
+
+1/5 Administrator access and settings
+Completed: 1/5 Administrator access and settings
+
+2/5 VM prerequisites
+Completed: 2/5 VM prerequisites
+
+3/5 Password, helpers, image and manager
+Completed: 3/5 Password, helpers, image and manager
+
+4/5 Browser Wireshark capture stack
+Completed: 4/5 Browser Wireshark capture stack
+
+5/5 Running manager verification
+Completed: 5/5 Running manager verification
+
+Manager installation is ready. Git is a separate setup step under your ordinary account.
+Wireshark opens from the map (Capture packets).
+In VM connection use clab-discovery and the password you created. Verify the host fingerprint.
+After browser setup, run the full installation health report (without sudo):
+  bash /home/clabllm/projects/clab-manager-1.30.42/deploy/check-install.sh
+
+Fail
+Needs attention: failure
+
+Installation plan
+  Source: /home/clabllm/projects/clab-manager-1.30.42 (1.16.0)
+  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.
+  Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.
+  Retain compatible installed tools; start Docker and SSH services.
+  Prepare persistent storage and restricted clab-discovery password/helpers.
+  Existing password/data retained; first setup asks you to create the password.
+  Rebuild/recreate only the manager; existing lab containers remain in place.
+  Lab operations: enabled with default trusted roots
+  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).
+  Engineer access: set up for owner (VS Code, Containerlab extension)
+  Settings: retain current .env or use defaults
+  Installation-media APT repair: enabled with backup
+  lazydocker: install or update for owner (never fails the installation).
+  Check running version/HTTP, then set up Git under owner.
+Previous .env copied with private permissions; its contents were retained............................................................................................................................................................................
+Review the health report above, complete the indicated steps, then run the check again.
+
+Git setup runs as owner, with home /home/owner.
+Git setup is incomplete. The manager and existing checkout remain available.
+Choose Git setup from this menu to resume without rebuilding the manager.
+
+Browser Wireshark capture stack
+Completed: Browser Wireshark capture stack
+Wireshark opens from the map (Capture packets).
+
+Installation plan
+  Source: /home/clabllm/projects/clab-manager-1.30.42 (1.30.35)
+  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.
+  Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.
+  Retain compatible installed tools; start Docker and SSH services.
+  Prepare persistent storage and restricted clab-discovery password/helpers.
+  Existing password/data retained; first setup asks you to create the password.
+  Rebuild/recreate only the manager; existing lab containers remain in place.
+  Lab operations: enabled with default trusted roots
+  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).
+  Engineer access: set up for owner (VS Code, Containerlab extension)
+  Settings: retain current .env or use defaults
+  Installation-media APT repair: enabled with backup
+  lazydocker: install or update for owner (never fails the installation).
+  Check running version/HTTP, then set up Git under owner.
+Starting now; the standard path runs these steps without further confirmation.
+
+1/6 Administrator access and settings
+Completed: 1/6 Administrator access and settings
+
+2/6 VM prerequisites
+Completed: 2/6 VM prerequisites
+
+3/6 Password, helpers, image and manager
+Completed: 3/6 Password, helpers, image and manager
+
+4/6 Browser Wireshark capture stack
+Completed: 4/6 Browser Wireshark capture stack
+
+5/6 Running manager verification
+Completed: 5/6 Running manager verification
+
+6/6 Engineer access for VS Code
+New groups apply to new logins: reconnect SSH, and in VS Code run "Remote-SSH: Kill VS Code Server on Host..." then reconnect before using the Containerlab extension.
+Completed: 6/6 Engineer access for VS Code
+
+Manager installation is ready. Git is a separate setup step under your ordinary account.
+Wireshark opens from the map (Capture packets).
+In VM connection use clab-discovery and the password you created. Verify the host fingerprint.
+After browser setup, run the full installation health report (without sudo):
+  bash /home/clabllm/projects/clab-manager-1.30.42/deploy/check-install.sh
+
+Installation plan
+  Source: /home/clabllm/projects/clab-manager-1.30.42 (1.16.0)
+  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.
+  Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.
+  Retain compatible installed tools; start Docker and SSH services.
+  Prepare persistent storage and restricted clab-discovery password/helpers.
+  Existing password/data retained; first setup asks you to create the password.
+  Rebuild/recreate only the manager; existing lab containers remain in place.
+  Lab operations: enabled with default trusted roots
+  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).
+  Engineer access: set up for owner (VS Code, Containerlab extension)
+  Settings: retain current .env or use defaults
+  Installation-media APT repair: enabled with backup
+  lazydocker: install or update for owner (never fails the installation).
+  Check running version/HTTP, then set up Git under owner.
+Starting now; the standard path runs these steps without further confirmation.
+
+1/6 Administrator access and settings
+Completed: 1/6 Administrator access and settings
+
+2/6 VM prerequisites
+Completed: 2/6 VM prerequisites
+
+3/6 Password, helpers, image and manager
+Completed: 3/6 Password, helpers, image and manager
+
+4/6 Browser Wireshark capture stack
+Completed: 4/6 Browser Wireshark capture stack
+
+5/6 Running manager verification
+Completed: 5/6 Running manager verification
+
+6/6 Engineer access for VS Code
+New groups apply to new logins: reconnect SSH, and in VS Code run "Remote-SSH: Kill VS Code Server on Host..." then reconnect before using the Containerlab extension.
+Completed: 6/6 Engineer access for VS Code
+
+Manager installation is ready. Git is a separate setup step under your ordinary account.
+Wireshark opens from the map (Capture packets).
+In VM connection use clab-discovery and the password you created. Verify the host fingerprint.
+After browser setup, run the full installation health report (without sudo):
+  bash /home/clabllm/projects/clab-manager-1.30.42/deploy/check-install.sh
+
+Current step
+Needs attention: temporary failure
+
+Current step
+Completed: Current step
+
+Installation plan
+  Source: /home/clabllm/projects/clab-manager-1.30.42 (1.25.0)
+  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.
+  Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.
+  Retain compatible installed tools; start Docker and SSH services.
+  Prepare persistent storage and restricted clab-discovery password/helpers.
+  Existing password/data retained; first setup asks you to create the password.
+  Rebuild/recreate only the manager; existing lab containers remain in place.
+  Lab operations: enabled with default trusted roots
+  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).
+  Engineer access: set up for owner (VS Code, Containerlab extension)
+  Settings: retain current .env or use defaults
+  Installation-media APT repair: enabled with backup
+  lazydocker: install or update for owner (never fails the installation).
+  Check running version/HTTP, then set up Git under owner.
+Starting now; the standard path runs these steps without further confirmation.
+
+1/6 Administrator access and settings
+Completed: 1/6 Administrator access and settings
+
+2/6 VM prerequisites
+Completed: 2/6 VM prerequisites
+
+3/6 Password, helpers, image and manager
+Completed: 3/6 Password, helpers, image and manager
+
+4/6 Browser Wireshark capture stack
+Completed: 4/6 Browser Wireshark capture stack
+
+5/6 Running manager verification
+Completed: 5/6 Running manager verification
+
+6/6 Engineer access for VS Code
+New groups apply to new logins: reconnect SSH, and in VS Code run "Remote-SSH: Kill VS Code Server on Host..." then reconnect before using the Containerlab extension.
+Completed: 6/6 Engineer access for VS Code
+
+Manager installation is ready. Git is a separate setup step under your ordinary account.
+Wireshark opens from the map (Capture packets).
+In VM connection use clab-discovery and the password you created. Verify the host fingerprint.
+After browser setup, run the full installation health report (without sudo):
+  bash /home/clabllm/projects/clab-manager-1.30.42/deploy/check-install.sh
+The package lock is now released.
+Copyable command, in another terminal: sudo python3 /home/clabllm/projects/clab-manager-1.30.42/deploy/apt_lock.py --wait --pause-timers
+Copyable command, in another terminal: sudo python3 /home/clabllm/projects/clab-manager-1.30.42/deploy/apt_lock.py --wait --pause-timers
+
+Prereqs
+Needs attention: boom
+
+Prereqs
+Needs attention: boom
+
+Prereqs
+Completed: Prereqs
+
+Prereqs
+Needs attention: boom
+Containerlab Node Manager ready; UI login is disabled for this lab VM.
+...Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.......Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.............Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+..Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.......Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+.Containerlab Node Manager ready; UI login is disabled for this lab VM.
+................../usr/lib/python3.12/unittest/case.py:690: DeprecationWarning: It is deprecated to return a value that is not None from a test case (<bound method ReadinessTests.test_jobs of <test_node_readiness.ReadinessTests testMethod=test_jobs>>)
+  return self.run(*args, **kwds)
+......................................................................................................................................................................................................................................................................................................................Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpdhjxtcld/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpdhjxtcld/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpdhjxtcld/source/clab-backup-ui/.env: removing 2 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+Container clab-manager-grafana (grafana): removing
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpb16lmcn5/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpb16lmcn5/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpb16lmcn5/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+Container clab-manager-telemetry-prometheus-1 (prometheus): would remove
+Volume clab-manager-telemetry_prometheus-data: would remove
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: would remove if present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: would remove if present.
+/tmp/tmp03dflwco/srv/containerlab-node-manager/telemetry: would move to /tmp/tmp03dflwco/srv/containerlab-node-manager/telemetry-retired-TESTSTAMP/config
+/tmp/tmp03dflwco/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmp03dflwco/source/clab-backup-ui/.env: would remove 2 TELEMETRY_* line(s)
+Dry run only: nothing on disk or in .env was changed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpaa599giv/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpaa599giv/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpaa599giv/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpdjrvbvym/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpdjrvbvym/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpdjrvbvym/source/clab-backup-ui/.env: removing 2 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+TELEMETRY_CONFIG_DIR in .env names /tmp/tmpkgrd658v/srv/containerlab-node-manager/data.pre-restore-20260101T000000Z; the installed stack always used /tmp/tmpkgrd658v/srv/containerlab-node-manager/telemetry, so this run leaves that path alone.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpkgrd658v/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpkgrd658v/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpkgrd658v/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+TELEMETRY_CONFIG_DIR in .env names /tmp/tmp5ql0d8vn/srv/containerlab-node-manager/projects; the installed stack always used /tmp/tmp5ql0d8vn/srv/containerlab-node-manager/telemetry, so this run leaves that path alone.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmp5ql0d8vn/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmp5ql0d8vn/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmp5ql0d8vn/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+TELEMETRY_MAPS_DIR in .env names /tmp/tmpf0m4rexq/srv/containerlab-node-manager/data/backups/x; the installed stack always used /tmp/tmpf0m4rexq/srv/containerlab-node-manager/data/telemetry/dashboards, so this run leaves that path alone.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpf0m4rexq/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpf0m4rexq/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpf0m4rexq/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmp_x_7_bwv/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmp_x_7_bwv/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmp_x_7_bwv/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpde41xb0a/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpde41xb0a/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpde41xb0a/source/clab-backup-ui/.env: no TELEMETRY_* keys found.
+Nothing to retire: no telemetry containers, volumes, networks, images, files or .env keys were found.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+Container clab-manager-telemetry-prometheus-1 (prometheus): removing
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmp19h49wnv/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmp19h49wnv/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmp19h49wnv/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+Container clab-manager-telemetry-prometheus-1 (prometheus): removing
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: still used by another container; leaving it................................................
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpamh9jbha/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpamh9jbha/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpamh9jbha/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmp310w7bl8/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmp310w7bl8/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmp310w7bl8/source/clab-backup-ui/.env: not present; nothing to update.
+Nothing to retire: no telemetry containers, volumes, networks, images, files or .env keys were found.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpzb011k_g/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpzb011k_g/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpzb011k_g/source/clab-backup-ui/.env: no TELEMETRY_* keys found.
+Nothing to retire: no telemetry containers, volumes, networks, images, files or .env keys were found.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmp7shvzh_6/srv/containerlab-node-manager/telemetry: deleting
+/tmp/tmp7shvzh_6/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmp7shvzh_6/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+Container clab-manager-telemetry-prometheus-1 (prometheus): removing
+Container clab-manager-grafana (grafana): removing
+Volume clab-manager-telemetry_prometheus-data: removing
+Volume clab-manager-telemetry_grafana-data: removing
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: removed.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: removed.
+/tmp/tmpm51f2976/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpm51f2976/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpm51f2976/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpm51f2976/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpm51f2976/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpm51f2976/source/clab-backup-ui/.env: no TELEMETRY_* keys found.
+Nothing to retire: no telemetry containers, volumes, networks, images, files or .env keys were found.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+Container clab-manager-telemetry-prometheus-1 (prometheus): removing
+Container clab-manager-grafana (grafana): removing
+Volume clab-manager-telemetry_prometheus-data: removing
+Volume clab-manager-telemetry_grafana-data: removing
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: removed.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: removed.
+/tmp/tmp28d11h0i/srv/containerlab-node-manager/telemetry: moving to /tmp/tmp28d11h0i/srv/containerlab-node-manager/telemetry-retired-TESTSTAMP/config
+/tmp/tmp28d11h0i/srv/containerlab-node-manager/data/telemetry: moving to /tmp/tmp28d11h0i/srv/containerlab-node-manager/telemetry-retired-TESTSTAMP/dashboards
+/tmp/tmp28d11h0i/source/clab-backup-ui/.env: removing 4 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+Container clab-manager-grafana (grafana): removing
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpgmswz0_g/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpgmswz0_g/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpgmswz0_g/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpsdtdldc9/srv/containerlab-node-manager/telemetry: resolves elsewhere or contains a symlink; left alone. Inspect it by hand.
+/tmp/tmpsdtdldc9/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpsdtdldc9/source/clab-backup-ui/.env: no TELEMETRY_* keys found.
+Nothing to retire: no telemetry containers, volumes, networks, images, files or .env keys were found.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmpvf1r5tvn/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmpvf1r5tvn/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmpvf1r5tvn/source/clab-backup-ui/.env: no TELEMETRY_* keys found.
+Nothing to retire: no telemetry containers, volumes, networks, images, files or .env keys were found.
+Looking for the retired telemetry Compose project (clab-manager-telemetry)...
+No labelled telemetry containers, volumes or networks found.
+Image prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0: not present.
+Image grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2: not present.
+/tmp/tmp2l7yd6zx/srv/containerlab-node-manager/telemetry: not present.
+/tmp/tmp2l7yd6zx/srv/containerlab-node-manager/data/telemetry: not present.
+/tmp/tmp2l7yd6zx/source/clab-backup-ui/.env: removing 1 TELEMETRY_* line(s)
+Retired telemetry stack removed.
+Created bgp-core/reference/{start,solution,broken-01} and bgp-core/work.
+Lab "bgp-core" now saves to bgp-core/work.
+Next: configure the device to a state, then:
+  python3 deploy/scaffold-lab.py snapshot bgp-core start
+Created bgp-core/reference/{start} and bgp-core/work.
+Lab "bgp-core" now saves to bgp-core/work.
+Next: configure the device to a state, then:
+  python3 deploy/scaffold-lab.py snapshot bgp-core start
+Created bgp-core/reference/{start} and bgp-core/work.
+Lab "bgp-core" now saves to bgp-core/work.
+Next: configure the device to a state, then:
+  python3 deploy/scaffold-lab.py snapshot bgp-core start
+Saved into bgp-core/reference/broken-01 on the lab VM (aaaaaaaaaaaa).
+  bgp-core/reference/broken-01/latest/r1.cfg
+Configuration files may contain passwords or keys.
+Captured the running configuration into bgp-core/reference/broken-01 and uploaded. Lab rebound to bgp-core/work.....................................................................................................................
+----------------------------------------------------------------------
+Ran 1704 tests in 209.857s
+
+OK (skipped=1)
+
+Saved into bgp-core/reference/broken-01 on the lab VM (aaaaaaaaaaaa).
+  bgp-core/reference/broken-01/latest/r1.cfg
+Configuration files may contain passwords or keys.
+Captured the running configuration into bgp-core/reference/broken-01 and uploaded. Lab rebound to bgp-core/work.
+Saved into bgp-core/reference/broken-01 on the lab VM (aaaaaaaaaaaa).
+  bgp-core/reference/broken-01/latest/r1.cfg
+Configuration files may contain passwords or keys.
+EXIT=0
+END 2026-09-28T01:13:06Z

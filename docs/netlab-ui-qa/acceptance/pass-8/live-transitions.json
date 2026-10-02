@@ -1,0 +1,107 @@
+{
+ "started": "2026-09-28T01:44:14+00:00",
+ "l1_review": "Restart host1?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly host1 in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configuration changes you have not saved on the device may not survive. Nothing is saved, backed up, reset or reapplied for you.\n\nLast saved 22 hours ago to Git.\n\n1 device affected: host1 (clab-restore-square-host1, running). The other devices of restore-square are not restarted.\n\nTechnical details\n\nRuns on th",
+ "l1_after_back": {
+  "active": "a578d029106d4c208881edfad2586879",
+  "is_quick_test": true,
+  "review_open": true,
+  "text": "Restart host1?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly host1 in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Configurati"
+ },
+ "l1_job": {
+  "id": "c08674084a95448e84a59a58eeb5da41",
+  "lab_id": "174386ec12ee496190c585c5796b2662",
+  "node": "clab-restore-square-host1",
+  "status": "succeeded",
+  "message": "Operation completed \u00b7 2 links restored",
+  "created": "2026-09-28T01:44:21.882826+00:00",
+  "finished": "2026-09-28T01:44:24.966805+00:00"
+ },
+ "l2_host1_job": {
+  "id": "c6c9be78a0b8489baaaed822de55ce5e",
+  "status": "succeeded",
+  "message": "Operation completed \u00b7 2 links restored",
+  "created": "2026-09-28T01:44:31.219559+00:00",
+  "finished": "2026-09-28T01:44:34.301024+00:00"
+ },
+ "l2_ceos_confirm": {
+  "status": 409,
+  "detail": "Another lab operation ran after this review. Review the restart again.",
+  "ceos_started_before": "2026-09-28T01:41:56.099924183Z",
+  "ceos_started_after": "2026-09-28T01:41:56.099924183Z"
+ },
+ "l3_reuse": {
+  "status": 409,
+  "detail": "Review expired; preview the operation again.",
+  "jobs_new": 1
+ },
+ "finished": "2026-09-28T01:44:38+00:00",
+ "checks": [
+  {
+   "name": "L1 Back reached Quick-Test",
+   "ok": true,
+   "detail": "{'active': 'a578d029106d4c208881edfad2586879', 'is_quick_test': True, 'review_open': True, 'text': 'Restart host1?\\n\u00d7\\n\\nrestore-square\\n\\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\\n\\nOnly host1 in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic through it stops, and neighbouring devices lose their adjacencies to it until it is back. Conf",
+   "at": "2026-09-28T01:44:21+00:00"
+  },
+  {
+   "name": "L1 the review left open over another lab names its own lab (restore-square) and device",
+   "ok": true,
+   "detail": "Restart host1?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nOnly host1 in restore-square restarts: containerlab stops it and starts it again with its links kept (containerlab restart --node). While it restarts, its CLI sessions drop and traffic t",
+   "at": "2026-09-28T01:44:21+00:00"
+  },
+  {
+   "name": "L1 confirming it restarts exactly restore-square host1 (one job, that lab and node, succeeded)",
+   "ok": true,
+   "detail": "{'id': 'c08674084a95448e84a59a58eeb5da41', 'lab_id': '174386ec12ee496190c585c5796b2662', 'node': 'clab-restore-square-host1', 'status': 'succeeded', 'message': 'Operation completed \u00b7 2 links restored', 'created': '2026-09-28T01:44:21.882826+00:00', 'finished': '2026-09-28T01:44:24.966805+00:00'}",
+   "at": "2026-09-28T01:44:26+00:00"
+  },
+  {
+   "name": "L1 only host1 got a new start time",
+   "ok": true,
+   "detail": "{\"clab-restore-square-ceos\": [\"2026-09-28T01:41:56.099924183Z\", \"2026-09-28T01:41:56.099924183Z\"], \"clab-restore-square-cjunosevolved\": [\"2026-09-27T22:00:07.556829394Z\", \"2026-09-27T22:00:07.556829394Z\"], \"clab-restore-square-vjunos-switch\": [\"2026-09-27T22:00:07.556166017Z\", \"2026-09-27T22:00:07.556166017Z\"], \"clab-restore-square-xrv9k\": [\"2026-09-28T01:28:00.339458248Z\", \"2026-09-28T01:28:00.339458248Z\"], \"clab-restore-square-host1\": [\"2026-09-28T01:43:57.465491099Z\", \"2026-09-28T01:44:22.404",
+   "at": "2026-09-28T01:44:26+00:00"
+  },
+  {
+   "name": "L4 a review closed with its tab starts nothing",
+   "ok": true,
+   "detail": "set()",
+   "at": "2026-09-28T01:44:30+00:00"
+  },
+  {
+   "name": "L2 setup: the host1 restart through the API succeeded",
+   "ok": true,
+   "detail": "(200, {'id': 'c6c9be78a0b8489baaaed822de55ce5e', 'status': 'succeeded', 'message': 'Operation completed \u00b7 2 links restored', 'created': '2026-09-28T01:44:31.219559+00:00', 'finished': '2026-09-28T01:44:34.301024+00:00'})",
+   "at": "2026-09-28T01:44:35+00:00"
+  },
+  {
+   "name": "L2 the older ceos review is refused as stale after a host1 restart of the same lab",
+   "ok": true,
+   "detail": "{'status': 409, 'detail': 'Another lab operation ran after this review. Review the restart again.', 'ceos_started_before': '2026-09-28T01:41:56.099924183Z', 'ceos_started_after': '2026-09-28T01:41:56.099924183Z'}",
+   "at": "2026-09-28T01:44:38+00:00"
+  },
+  {
+   "name": "L2 ceos did not restart",
+   "ok": true,
+   "detail": "{'status': 409, 'detail': 'Another lab operation ran after this review. Review the restart again.', 'ceos_started_before': '2026-09-28T01:41:56.099924183Z', 'ceos_started_after': '2026-09-28T01:41:56.099924183Z'}",
+   "at": "2026-09-28T01:44:38+00:00"
+  },
+  {
+   "name": "L3 a used token confirmed again is refused (4xx) and no second job exists",
+   "ok": true,
+   "detail": "{'status': 409, 'detail': 'Review expired; preview the operation again.', 'jobs_new': 1}",
+   "at": "2026-09-28T01:44:38+00:00"
+  },
+  {
+   "name": "no unexpected console errors",
+   "ok": true,
+   "detail": "[]",
+   "at": "2026-09-28T01:44:38+00:00"
+  },
+  {
+   "name": "no page errors",
+   "ok": true,
+   "detail": "[]",
+   "at": "2026-09-28T01:44:38+00:00"
+  }
+ ],
+ "console": []
+}

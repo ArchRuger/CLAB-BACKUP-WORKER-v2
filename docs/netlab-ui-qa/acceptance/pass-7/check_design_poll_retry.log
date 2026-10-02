@@ -1,0 +1,13 @@
+START 2026-09-28T01:10:30Z
+  ok   A: the state line names the failed check and the retry
+  ok   A: the header still reads Generating (the plan may well be generating)
+  ok   A: the plan reaches Plan ready to review without a reload
+  ok   A: the retry notice is gone once a poll succeeded
+  ok   B: after the retries the state reads Plan progress unknown with the way out
+  ok   B: six failed polls (the first, then five retries) were made before giving up
+  ok   B: no further design polls for 15 s (the watch stayed stopped)
+  ok   B: Generate plan again loads the design afresh (progress is watched again or the plan is ready)
+  ok   no page errors
+9 checks, 0 failed
+EXIT=0
+END 2026-09-28T01:11:24Z

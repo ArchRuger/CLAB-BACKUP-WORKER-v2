@@ -1,0 +1,20 @@
+2026-09-28T01:37:28Z
+CONTAINER ID   IMAGE                                       CREATED AT                      STATUS                     NAMES
+ea4604b1f576   clab-backup:1.30.50                         2026-09-27 23:18:08 +0000 UTC   Up 2 hours                 containerlab-node-manager-backup-ui-1
+e37858c11696   clab-capture-service:1.30.49                2026-09-27 22:02:11 +0000 UTC   Up 4 hours                 clab-manager-capture-sessions-1
+1e91f195d46d   78bddc205684                                2026-09-27 22:02:11 +0000 UTC   Up 4 hours                 clab-manager-capture-packetflix-1
+6fbcc14bf90f   a01295061e2d                                2026-09-27 22:02:11 +0000 UTC   Up 4 hours                 clab-manager-capture-gostwire-1
+8f8dbe30cad0   ghcr.io/srl-labs/network-multitool:latest   2026-09-27 22:00:07 +0000 UTC   Up 11 minutes              clab-restore-square-host1
+0e70068d3675   n24l/ceos:4.35.0F                           2026-09-27 22:00:07 +0000 UTC   Up 11 minutes              clab-restore-square-ceos
+5706950aa8de   n24l/cisco_xrv9k:24.3.1                     2026-09-27 22:00:07 +0000 UTC   Up 9 minutes (unhealthy)   clab-restore-square-xrv9k
+34d3c29ba796   n24l/cjunosevolved:26.2R1.7-EVO             2026-09-27 22:00:07 +0000 UTC   Up 4 hours                 clab-restore-square-cjunosevolved
+9ba40459fc49   n24l/vjunos-switch:23.2R1.14                2026-09-27 22:00:07 +0000 UTC   Up 4 hours (healthy)       clab-restore-square-vjunos-switch
+
+    version: 0.79.0
+restore-square clab-restore-square-ceos running Up 11 minutes
+restore-square clab-restore-square-cjunosevolved running Up 4 hours
+restore-square clab-restore-square-host1 running Up 11 minutes
+restore-square clab-restore-square-vjunos-switch running healthy
+restore-square clab-restore-square-xrv9k running unhealthy
+v18.19.1
+28

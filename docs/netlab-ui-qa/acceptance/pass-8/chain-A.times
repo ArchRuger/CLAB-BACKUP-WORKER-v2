@@ -1,0 +1,8 @@
+check_design_ui start 2026-09-28T01:37:15Z shots=/tmp/tmp.mZrgnkhJkG
+check_design_ui exit 0 end 2026-09-28T01:37:23Z
+poll_retry start 2026-09-28T01:37:23Z
+poll_retry exit 0 end 2026-09-28T01:38:20Z
+stress race start 2026-09-28T01:38:20Z
+stress race exit 0 end 2026-09-28T01:44:25Z
+stress bulk start 2026-09-28T01:44:25Z
+stress bulk exit 0 end 2026-09-28T01:45:23Z

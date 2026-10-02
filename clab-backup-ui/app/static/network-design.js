@@ -1290,16 +1290,27 @@ async function designCancel(){
   if(typeof notify==='function')notify('Cancelling…');
  }catch(error){if(typeof notify==='function')notify(error.message);}
 }
+// A Remove design or Renumber dialog speaks for the lab it was opened from, with that lab's design revision
+// at that moment. When the page has moved to another lab meanwhile (browser Back, a link) it must do nothing:
+// two labs can share a design revision (it hashes the content), so the revision alone would not protect the
+// other lab (QA-021). The dialog is also marked so a lab change closes it (closeLabDialogs in shell.js).
+function designDialogStillForLab(labId){
+ const shown=typeof activeId==='string'?activeId:(typeof current==='function'&&current()?current().id:'');
+ return !!labId&&designState.labId===labId&&(!shown||shown===labId);
+}
+function designMarkLabDialog(dialog){if(dialog&&typeof dialog.setAttribute==='function')dialog.setAttribute('data-lab-dialog','');return dialog;}
+const DESIGN_DIALOG_MOVED='The page moved to another lab while this dialog was open. Nothing was changed; open it again from that lab.';
 function designRenumber(){
  const lab=current();if(!lab||typeof opDialog!=='function')return;
- const dialog=opDialog('design-renumber-dialog','Renumber this design',
+ const labId=lab.id,revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
+ const dialog=designMarkLabDialog(opDialog('design-renumber-dialog','Renumber this design',
   '<p>The manager forgets every device id, loopback and link address this design has pinned. The next generated plan allocates them again from the pools, and devices may get different addresses.</p>'+
   '<p class="form-help">This cannot be undone here: download the design file first if you want to keep the current addresses. Devices already configured keep what they have until you apply a new plan.</p>'+
-  '<div class="dialog-actions"><button type="button" class="button secondary" data-op-close>Cancel</button><button type="button" class="button danger" id="design-renumber-run">Forget allocations</button></div>');
+  '<div class="dialog-actions"><button type="button" class="button secondary" data-op-close>Cancel</button><button type="button" class="button danger" id="design-renumber-run">Forget allocations</button></div>'));
  const closeButtons=dialog.querySelectorAll?dialog.querySelectorAll('[data-op-close]'):[];
  for(const b of closeButtons)b.onclick=()=>dialog.close();
  if($('design-renumber-run'))$('design-renumber-run').onclick=()=>opTask(dialog,async()=>{
-  const labId=lab.id,revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
+  if(!designDialogStillForLab(labId)){dialog.close();if(typeof notify==='function')notify(DESIGN_DIALOG_MOVED);return;}
   const view=await json('/labs/'+encodeURIComponent(labId)+'/design/renumber','POST',{revision});
   dialog.close();if(!designViewWritten(labId))return;
   designState.view=view;designRenderAll();if(typeof notify==='function')notify('Allocation ledger cleared.');
@@ -1307,14 +1318,15 @@ function designRenumber(){
 }
 function designClearDesign(){
  const lab=current();if(!lab||typeof opDialog!=='function')return;
- const dialog=opDialog('design-clear-dialog','Remove this design',
+ const labId=lab.id,revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
+ const dialog=designMarkLabDialog(opDialog('design-clear-dialog','Remove this design',
   "<p>The saved network design for this lab is removed. Generated plans and their files are kept and still listed under History.</p>"+
   '<p class="form-help">This cannot be undone here: download the design file first if you may want it back. Devices already configured keep their configuration; nothing is changed on them.</p>'+
-  '<div class="dialog-actions"><button type="button" class="button secondary" data-op-close>Cancel</button><button type="button" class="button danger" id="design-clear-run">Remove design</button></div>');
+  '<div class="dialog-actions"><button type="button" class="button secondary" data-op-close>Cancel</button><button type="button" class="button danger" id="design-clear-run">Remove design</button></div>'));
  const closeButtons=dialog.querySelectorAll?dialog.querySelectorAll('[data-op-close]'):[];
  for(const b of closeButtons)b.onclick=()=>dialog.close();
  if($('design-clear-run'))$('design-clear-run').onclick=()=>opTask(dialog,async()=>{
-  const labId=lab.id,revision=(designState.view&&designState.view.intent&&designState.view.intent.revision)||'';
+  if(!designDialogStillForLab(labId)){dialog.close();if(typeof notify==='function')notify(DESIGN_DIALOG_MOVED);return;}
   const view=await json('/labs/'+encodeURIComponent(labId)+'/design/clear','POST',{revision});
   dialog.close();if(!designViewWritten(labId))return;
   designState.view=view;designState.draft=null;designState.draftUnsaved=false;designState.advancedInvalid=false;designState.viewing=null;

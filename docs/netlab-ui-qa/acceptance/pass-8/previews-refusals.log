@@ -1,0 +1,19 @@
+  ok   vjunos-switch preview 200 with a token
+  ok   vjunos-switch preview carries RESTART_KNOWN_LIMITS[juniper_vjunosswitch] verbatim
+  ok   xrv9k preview 200 with a token
+  ok   xrv9k preview carries RESTART_KNOWN_LIMITS[cisco_xrv9k] verbatim
+  ok   ceos preview carries no known-limit text
+  ok   host1 preview carries no known-limit text
+  ok   node of another lab is a 4xx without a token
+  ok   restore-square node under another lab id is a 4xx without a token
+  ok   unknown node is a 4xx without a token
+  ok   foreign Origin is a 4xx without a token
+  ok   cross-site fetch is a 4xx without a token
+  ok   node with trailing space is a 4xx without a token
+  ok   node with a path prefix is a 4xx without a token
+  ok   options smuggling another node is a 4xx without a token
+  ok   path given is a 4xx without a token
+  ok   no node is a 4xx without a token
+  ok   forged confirm token refused 4xx
+  ok   no operation job was created (count before == after)
+18 checks, 0 failed

@@ -1,0 +1,22 @@
+START 2026-09-28T01:22:25Z
+  ok   empty lab: Download design file is disabled with "Save a design first."
+  ok   empty lab: Import design file… is enabled (nothing saved yet, nothing unsaved either)
+  ok   empty lab: Renumber is disabled with "Save a design first."
+  ok   empty lab: Remove design is disabled with "There is no design to remove."
+  ok   clicking the disabled Renumber item opens no dialog
+  ok   unsaved draft: Download design file still disabled with "Save a design first." (nothing saved yet)
+  ok   unsaved draft: Import design file… is disabled with the unsaved-changes reason
+  ok   saved design: Download design file is enabled with no reason
+  ok   saved design: Import design file… is enabled with no reason
+  ok   saved design: Renumber is enabled with no reason
+  ok   saved design: Remove design is enabled with no reason
+  ok   generating: Download design file stays enabled (it downloads the saved design, not the plan)
+  ok   generating: Import design file… is disabled with the "wait for the plan" reason
+  ok   generating: Renumber is disabled with the "wait for the plan" reason
+  ok   generating: Remove design is disabled with the "wait for the plan" reason
+  ok   no unexpected console errors
+  ok   no page errors
+17 of 17 checks passed; 0 console errors; 0 page errors
+started 2026-09-28T01:22:25+00:00, chromium 153.0.8010.12
+EXIT=0
+END 2026-09-28T01:22:29Z

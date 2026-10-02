@@ -1,3 +1,16 @@
+# Netlab UI/UX campaign, part 4: lab-bound design dialogs — 1.30.51
+
+Read `docs/netlab-ui-qa/PICKUP.md` first, then `FINAL-REPORT.md`. What the next agent must preserve beyond the sections
+below: (1) `closeLabDialogs()` in `shell.js` closes the device drawer and every open `dialog[data-lab-dialog]` and is
+called by `selectLab()` (`app.js`) and `goHome()`; a new dialog that speaks for one lab (its text names or acts on that
+lab) carries `data-lab-dialog` (static ones in `index.html`, dynamic ones through `designMarkLabDialog`). (2) The Design
+tab's *Remove design* and *Renumber* capture the lab id and design revision when they open and refuse to act once
+`designDialogStillForLab(labId)` is false (QA-021: two labs can share a revision, it hashes the content, so the revision
+alone never protects the other lab); keep the message `DESIGN_DIALOG_MOVED`, and never read the revision from the view
+at confirm time again. The operation review (`operation-review`) is bound to its lab by its token and names its lab and
+device; it was left as it is on purpose (pass 8's observation). Tests: `test_network_design_ui.js` "QA-021" and
+`test_shell_ui.js` "QA-021".
+
 # Netlab UI/UX campaign, part 3: the stale-review reason before the busy guard — 1.30.50
 
 Read `docs/netlab-ui-qa/PICKUP.md` first, then `FINAL-REPORT.md`. What the next agent must preserve beyond the 1.30.49

@@ -1,0 +1,135 @@
+  ok   ND-NAV-003       Tools tab #tools-design shortcut opened #design-view
+  ok   ND-NAV-002       a fresh load and a reload of #lab=<id>&view=design both land on #design-view (tab selected) and fetch GET .../design
+  ok   ND-NAV-001       aria-selected/tabindex flip correctly and #design-view/#topology-view toggle hidden with #tab-design
+  ok   ND-NAV-004       ArrowRight x3 from #tab-topology moved focus to #tab-design (topology->devices->progress->design) and tabKeydown's showTab ran (panel visible)
+  ok   ND-A11Y-001      role=tab, aria-selected, aria-controls=design-view and roving tabindex all present on #tab-design (checked above)
+  ok   ND-A11Y-002      #design-view has role=tabpanel aria-labelledby=tab-design
+  ok   ND-A11Y-003      #design-state has role=status
+  ok   ND-GUIDED-001    both families default checked (empty_intent dual stack) and unchecking IPv6 is reflected at once
+  ok   ND-GUIDED-002    a design with nothing saved yet shows the schema default pool value (designEmptyIntent(), matching the input's own placeholder '10.255.0.0/24'); a fil
+  ok   ND-STATE-002     ticking OSPF marks the state "Unsaved changes"
+  ok   ND-GUIDED-003    17 module checkboxes rendered (DESIGN_MODULE_LABELS)
+  ok   ND-GUIDED-004    OSPF settings become visible with area defaulted to 0.0.0.0 once the module is ticked
+  ok   ND-ERROR-001     PUT/validate refused the overlap with the exact path addressing.lan.ipv4 and "management" in the message: addressing.lan.ipv4: Overlaps the lab manage
+  ok   ND-GUIDED-016    the same #design-problems (role=alert) rendered the {path,message} entry above Advanced
+  ok   ND-STATE-003     "The design has problems" is designStateOf's pure branch (unit-tested); reproduced live here via the same #design-problems path (state text: Unsaved c
+  ok   ND-GUIDED-005    BGP settings visible, AS field editable, reflector checklist lists every router (3)
+  ok   ND-SAVE-001      Save validated then PUT the design; state left "Unsaved" for "Design saved, no plan yet Design saved, no plan yet"
+  ok   ND-SAVE-004      the header moved to "Design saved, no plan yet" on a successful Save (QA-001 fix)
+  ok   ND-GUIDED-006    IS-IS settings appear with area 49.0001 and level level-2 defaults
+  ok   ND-GUIDED-007    Gateway settings appear with protocol defaulted to anycast
+  ok   ND-GUIDED-020    devices table lists r1/r2/r3 with a resolved Kind/Profile each: [{"name": "r1", "kind": "arista_ceos", "profile": "eos", "roleDisabled": false, "notes
+  ok   ND-GUIDED-008    per-device role select accepts host/exclude/router; r1 switched to host
+  ok   ND-GUIDED-019    the Notes column and disabled-role-with-reason path are designDeviceRow's no-profile branch (network-design.js:273); not reproduced live -- every fixt
+  ok   ND-GUIDED-010    "No VRFs yet." shown before Add VRF; Add VRF inserted an editable row
+  ok   ND-GUIDED-009    a VRF row (name input + loopback checkbox + Remove) is keyed by name, editable and checkable
+  ok   ND-GUIDED-012    "No VLANs yet." shown before Add VLAN; Add VLAN inserted an editable row
+  ok   ND-GUIDED-011    a VLAN row (name + numeric id via designNextVlanId + Remove) rendered, id auto-filled (1)
+  ok   ND-GUIDED-013    the links table lists this lab's links with a VRF/access/trunk row each; attached "red" to the first link
+  ok   ND-GUIDED-015    Add static route inserted one row with a device select, prefix input and next-hop type
+  ok   ND-GUIDED-014    "No static routes yet." shown before adding; the row supports a discard route with a prefix
+  ok   ND-ADVANCED-002  Advanced JSON textarea reflects every guided edit (VRF red+loopback, static route, bgp AS) and no longer carries the VLAN that was added then removed
+  ok   ND-GUIDED-018    guided-to-Advanced sync confirmed by the same textarea content (add-then-remove of the VLAN row round-tripped too)
+  ok   ND-ADVANCED-006  the vrf/routing modules were turned on automatically because the guided tables defined a VRF and a static route (the vlan module was turned on the sam
+  ok   ND-ADVANCED-001  the <details> opened via its <summary> (screenshot shows the expanded Advanced section, JSON, ledger and owned settings)
+  ok   ND-ADVANCED-005  opening Advanced fired GET .../design/ownership once, showing "No settings are owned by the design on any device yet."
+  ok   ND-ADVANCED-003  Check called POST .../design/validate and re-rendered #design-problems
+  ok   ND-ADVANCED-004  the ledger shows its empty caption before any plan has been generated
+  ok   ND-ERROR-002     POST .../design/validate reports the unknown key as a structured problem at 200 ({"problems": [{"path": "not_a_real_key", "message": "Unknown design f
+  ok   ND-GENERATE-001  Generate plan called POST .../design/generate; enabled state confirmed (this click succeeded)
+  ok   ND-GENERATE-003  "Generating the plan…" busy state observed while the 2 s poll ran
+  ok   ND-GENERATE-004  a succeeded generation reached "Plan ready to review" via the real netlab engine (state now: 'Plan ready to review Plan ready to review')
+  ok   ND-STATE-008     designStateOf's "ready" branch: state reads "Plan ready to review Plan ready to review" after a succeeded generation
+  ok   ND-PLAN-006      the plan body lists every device with loopbacks/interfaces (Ethernet1 for cEOS present)
+  ok   ND-PLAN-005      compatibility table says "generated, not yet tested live" per device/feature
+  ok   ND-PLAN-001      plan status line reads "Plan generated just now."
+  ok   ND-PLAN-002      no errors: #design-plan-errors-wrap stays hidden on a succeeded generation
+  ok   ND-PLAN-003      warnings <details> renders its hidden/visible state correctly (hidden=False)
+  ok   ND-FILES-001     files card lists initial/ospf/bgp module fragments per device
+  ok   ND-FILES-002     View opened a dialog with the file content (60 chars)
+  ok   ND-FILES-003     Download all files (ZIP) is visible with href /api/labs/d4b505a6de8e48088ac65470b5b3ef1f/design/generations/72517807085c45d693dcb3efc125fe09/download
+  ok   ND-HISTORY-001   History <details> opened via its summary
+  ok   ND-HISTORY-002   history lists the newest generation pilled as succeeded: Succeeded just now Plan generated Shown above
+  ok   ND-ERROR-004     the failed generation names eigrp and arista_ceos in its error: r1: eigrp is not supported on kind arista_ceos (netlab 26.09 module 'eigrp' does not s
+  ok   ND-STATE-006     state reads "The last plan failed The last plan failed" after a failed generation
+  ok   ND-STATE-007     state reads "Plan is older than the design Plan is older than the design" once the design changed after the last succeeded plan
+  ok   ND-GENERATE-002  Cancel button appeared during a busy generation and called POST .../cancel (True)
+  skip ND-PLAN-004      not reproduced live: changing the loopback pool and regenerating kept the same allocations for this 3-device lab (netlab's own deterministic ordering)
+  skip ND-GENERATE-005  not reproduced live in this recon: no allocation collision was triggered by the edits made (hidden state confirmed instead: #design-plan-collisions st
+  ok   ND-PLAN-007      Apply to devices… button and its disabled-reason caption: see ND-APPLY-002 (part 2)
+  ok   ND-PLAN-008      Export plan to Git… button and its disabled-reason caption: see ND-EXPORT-002 (part 2, this lab has no git binding)
+  blk  ND-PLAN-009      Last apply line + Show button needs a real apply job, which needs a real device: see ND-APPLY area (BLOCKED, part 2)
+  ok   ND-EXPORT-001    Download design file called window.open on the export URL (no fetch, no dialog): ['/api/labs/d4b505a6de8e48088ac65470b5b3ef1f/design/export']
+  ok   ND-RENUMBER-001  More menu item "Renumber (forget allocations)…" opened its confirm dialog
+  ok   ND-RENUMBER-002  Cancel closed the dialog without any POST .../design/renumber
+  ok   ND-RENUMBER-003  confirming Renumber POSTed .../design/renumber and the ledger emptied to its caption
+  ok   ND-RENUMBER-004  the renumbering report comparing old vs new ledger is network_design.py:299-302 (server-internal correctness); exercised indirectly by ND-PLAN-004 abo
+  ok   ND-CLEAR-001     More menu (danger group) "Remove design…" opened its confirm dialog
+  ok   ND-CLEAR-002     Cancel sent no request; the danger button confirmed via POST .../design/clear
+  ok   ND-CLEAR-003     History (generations) is unchanged by Remove design: before='Succeeded just now Plan generated Shown aboveSucceeded just ' after='Succeeded just now P
+  ok   ND-STATE-001     after Remove design the state reads "No design saved (earlier plans kept) No design saved (earlier plans kept)" (not conflated with a true empty lab,
+  ok   ND-ERROR-003     set up a real revision drift: a second, independent PUT with the still-current revision succeeded and moved the revision
+  ok   ND-CLEAR-004     POST .../design/clear with the same stale (superseded) revision was refused: status=409 body={"detail": "The design changed since this page loaded. Re
+  ok   ND-SAVE-002      Save behind a real stale revision was refused (409) and handled: banner='That did not work. The details below say why.\n\nDetails\nDismiss\n×' detail=
+  ! overwriting existing result for ND-ERROR-003
+  ok   ND-ERROR-003     Save is refused on a stale revision with a reload-first message (this session's own edit was not silently accepted or silently dropped)
+  ok   ND-SAVE-005      a client-supplied allocations block is discarded server-side (network_design.py:549); validated by test_network_design.py:266 test_client_supplied_all
+  ok   ND-ERROR-009     an unparseable Advanced edit is named as invalid JSON: state="Advanced JSON is not valid Advanced JSON is not valid" detail="Fix the JSON under Advanc
+  ok   ND-IMPORT-001    Import design file… (hidden <input type=file>) accepted a real uploaded file and called POST .../design/import (status 200)
+  ok   ND-IMPORT-002    the hidden #design-import-file accepts .yml/.yaml/.json and was driven directly with a real file (set_input_files)
+  ok   ND-IMPORT-003    a successful import replaced the view: POST returned imported:true and BGP AS 65099 from the uploaded file is now in Advanced
+  ok   ND-IMPORT-004    a design with a pool overlapping the management network was refused (imported:false) and its problems shown: addressing.loopback.ipv4: Overlaps the la
+  ok   ND-IMPORT-005    the previous (good) design is untouched after the failed import (BGP AS 65099 still present)
+  ok   ND-ERROR-010     import failure keeps the previous design untouched and shows problems only in the response
+  ok   ND-SAVE-003      an unsaved draft (VLAN module ticked, not saved) survived a reload and is restored (matching revision)
+  ok   ND-NAV-007       draft persistence across reload confirmed above (ND-SAVE-003); the same writeDesignDraft/clearDesignDraft mechanism
+  ok   ND-STATE-009     [fault injection: GET .../design response body patched with engine.available=false, labelled] state="Design engine unavailable Design engine unavailab
+  ! overwriting existing result for ND-GENERATE-001
+  ok   ND-GENERATE-001  [fault injection, as above] Generate plan is disabled with the engine diagnostic as its title when the engine is unavailable (this completes the row a
+  ok   ND-GUIDED-017    a focused field's in-progress edit ("0.0.0.5") survived the 4 s heartbeat re-render (designFormFocused suppressed it)
+  ok   ND-STATE-004     "Generating the plan…" (busy) observed above on ND-GENERATE-003's attempt / BGP_TheoryToPractice generation (part 2)
+  ok   ND-NAV-005       switching to Topology and back while a 13-device generation was running: state now "Plan ready to review Plan ready to review" (the watch is lab-scope
+  ok   ND-NAV-006       clicking another lab in the sidebar switcher while Design was active reset the view to Topology (selectLab's own default)
+  ok   ND-EXPORT-002    Export plan to Git… is enabled on a Running, git-bound lab with a succeeded plan (reason was '' when disabled elsewhere)
+  ok   ND-EXPORT-003    destination line updates from the lab's git binding: Saving toCourse-Labs›main›labs/BGP/work/checkpoints/design-3769ece10868
+  ok   ND-EXPORT-004    checkpoint name prefilled with the default "design-<12 chars>": design-3769ece10868
+  ok   ND-ERROR-008     an invalid checkpoint name is refused client-side before any request: 'Use a checkpoint name containing letters, numbers, hyphens or underscores.'
+  ok   ND-EXPORT-007    the error line (role=alert) is populated on refusal: 'Use a checkpoint name containing letters, numbers, hyphens or underscores.'
+  ok   ND-EXPORT-008    the title-bar × control closed the dialog without submitting
+  ok   ND-EXPORT-006    Save to VM and review called POST .../design/generations/{gid}/git and handed the job straight to the mandatory review dialog (gitStartWatch -> gitRev
+  ok   ND-EXPORT-005    the note field reached the job/history as the commit message (checkpoint coverage-run-1790559473 pushed: Design export saved
+×
+Checkpoint 'coverage-ru
+  ok   ND-APPLY-001     Apply to devices… is enabled on a Running lab with a succeeded plan (reason elsewhere: '')
+  ok   ND-APPLY-002     designApplyDisabledReason covers no-plan/stale/already-running (live in the actual page, real function): 'Generate a plan first.' | 'Generate the plan
+  ok   ND-APPLY-003     Apply dialog opened on its "choose" step (three-step shell #design-apply-dialog)
+  ok   ND-APPLY-004     choose-step lists every included device; Backup-Worker (host role) is unchecked+disabled with "A support host is generated only, never applied.": ['Ba
+  ok   ND-ERROR-005     reviewing with nothing chosen shows "Choose at least one device." and sends no request: 'Choose at least one device.'
+  ok   ND-APPLY-005     the choose-error line is populated: 'Choose at least one device.'
+  ok   ND-APPLY-006     Review button called POST .../generations/{gid}/review for the 2 chosen devices
+  ok   ND-ERROR-006     "Connectivity: <ExceptionType>" shown per unreachable device: ['NoValidConnectionsError', 'NoValidConnectionsError']
+  ok   ND-APPLY-007     [BLOCKED for the eligible/no-op/conflict/protected/expected/removal branches -- see note] the unreachable branch is reached and reads plain words: nee
+  ok   ND-APPLY-008     no device in this review reported a conflict (none is reachable), so the take-over checkbox path is BLOCKED: needs real devices behind the review: the
+  ok   ND-APPLY-009     default 5, an in-range edit (2) is kept, and designApplyClampMinutes (the real loaded function) clamps 999->30 and -5->2
+  ok   ND-APPLY-010     Apply disabled before ack; still disabled after ack because review.applicable is empty (no reachable device), with the reason shown: 'Nothing can be a
+  ok   ND-APPLY-011     Back returned to the choose step with no new request
+  blk  ND-APPLY-012     Apply submit needs at least one reachable, eligible device to become enabled: needs real devices behind the review: the fixture has no SSH endpoint, s
+  blk  ND-ERROR-007     "Changed since the review" per device at Apply time needs a real device that answers at Review time and then drifts before the Apply POST -- both step
+  blk  ND-APPLY-013     the progress table's per-device stage/outcome words need a real applying job: needs real devices behind the review: the fixture has no SSH endpoint, s
+  blk  ND-APPLY-014     the plan card's "Last apply" line needs a completed real apply job: needs real devices behind the review: the fixture has no SSH endpoint, so every de
+  skip ND-APPLY-016     not attempted live in this recon: reproducing operation_busy exclusion needs winning a race against a second, genuinely concurrent manager job (a back
+  blk  ND-APPLY-017     the ownership ledger only grows once a real apply has run against a real device: needs real devices behind the review: the fixture has no SSH endpoint
+  ok   ND-APPLY-015     the title-bar × / Cancel controls closed the dialog from the review step
+  ok   ND-APPLY-018     designApplyRequestId() (the real loaded function) returns a fresh 32-hex-char id each call; designApplyOpen() calls it once per dialog open and design
+  ok   ND-A11Y-004      role=alert present on #design-problems/#design-plan-errors/#design-apply-choose-error/#design-export-git-error (checked structurally throughout this r
+  ok   ND-A11Y-005      native <dialog> elements carry aria-labelledby and a labelled close icon-button (checked on the export/apply/renumber/clear dialogs above)
+  ok   ND-A11Y-006      th[scope=row] pattern is source-confirmed (network-design.js:429); this lab's compatibility table currently has 3 such headers
+  ok   ND-A11Y-007      .checkbox-label wraps every checkbox throughout the Design tab (56 found)
+  ok   ND-A11Y-008      at 390x844, the Design tab (scrollWidth=428) adds no horizontal overflow beyond the shell chrome (scrollWidth=428)
+  ok   ND-STATE-005     [a real kill -9 of the fixture manager process 1s into a real generation, then a real restart on the same --keep data dir] generation status='interrup
+  ! overwriting existing result for ND-GENERATE-004
+  ok   ND-GENERATE-004  a succeeded generation reached "Plan ready to review" via the real netlab engine (state now: 'Plan ready to review Plan ready to review') | a failed g
+
+wrote /home/clabllm/projects/clab-manager-1.30.42/docs/netlab-ui-qa/evidence/coverage/results.json
+chromium 153.0.8010.12
+counts: {'PASS': 112, 'NOT RUN': 3, 'BLOCKED': 8} total rows recorded: 123

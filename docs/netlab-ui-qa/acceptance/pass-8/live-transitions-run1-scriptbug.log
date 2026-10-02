@@ -1,0 +1,12 @@
+  ok   L1 Back reached Quick-Test
+  ok   L1 the review left open over another lab names its own lab (restore-square) and device
+  FAIL L1 confirming it restarts exactly restore-square host1 (one job, that lab and node, succeeded): {'id': '5b771e2a91bc4a16a4755b61bc3692d3', 'lab_id': '7c099ca1d3c94235acb8469f9544743c', 'node': None, 'status': 'succeeded', 'message': 'Operation completed', 'created': '2026-09-22T16:42:26.748343+00:00', 'finished': '2026-09-22T16:42:42.381561+00:00'}
+  ok   L1 only host1 got a new start time
+  ok   L4 a review closed with its tab starts nothing
+  ok   L2 setup: the host1 restart through the API succeeded
+  ok   L2 the older ceos review is refused as stale after a host1 restart of the same lab
+  ok   L2 ceos did not restart
+  ok   L3 a used token confirmed again is refused (4xx) and no second job exists
+  ok   no unexpected console errors
+  ok   no page errors
+11 checks, 1 failed

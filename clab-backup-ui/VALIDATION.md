@@ -1,3 +1,27 @@
+# Netlab UI/UX campaign, part 4: lab-bound design dialogs — 1.30.51
+
+What was actually run for this release. Same environment as 1.30.50 (dev VM `clab-llm-dev2`, containerlab 0.79.0, lab
+`restore-square` with configuration A, Chromium 153.0.8010.12 through Playwright 1.63).
+
+## Static and unit
+
+- `python3 deploy/verify-release.py`: source and documentation at 1.30.51; `git diff --check` clean; `node --check` on
+  every `app/static/*.js`; `check_links.py` clean.
+- Browser: `node --test tests/*.js` → 381 pass, 0 fail. New tests: `test_network_design_ui.js` "QA-021: Remove design and
+  Renumber act only for the lab they were opened from, with that lab's revision at open time, and are marked to close
+  on a lab change" and `test_shell_ui.js` "QA-021: a lab change closes every open dialog that speaks for a lab, and only
+  those".
+- Python: `python -m unittest discover -s tests -t tests` → 1704 tests OK (1 skipped), 209 s (no Python change in this
+  release; run with the history sections in place, so the release-consistency tests saw 1.30.51).
+
+## Fixture and live (development VM)
+
+- The reviewer's reproduction of QA-021 (`docs/netlab-ui-qa/acceptance/pass-8/tools/adversarial_transitions.py`, two labs
+  with the same design, *Remove design…* open, browser Back) rerun unchanged against a fixture of this tree (port 8198,
+  fresh data, real engine, 02:03 UTC on 2026-09-28): 12 of 12, the dialog no longer stays open over the other lab and
+  Renumber's closes on Back (`docs/netlab-ui-qa/evidence/design-dialogs/`).
+- Deployed at 1.30.51 with `sudo bash deploy/start-manager.sh --manager-only`; acceptance passes 9 and 10 follow.
+
 # Netlab UI/UX campaign, part 3: the stale-review reason before the busy guard — 1.30.50
 
 What was actually run for this release. Same environment as 1.30.49 (dev VM `clab-llm-dev2`, containerlab 0.79.0, lab

@@ -1,0 +1,14 @@
+start 2026-09-28T01:36:53Z
+$ PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m unittest discover -s tests -t tests   (from clab-backup-ui/)
+----------------------------------------------------------------------
+Ran 1704 tests in 214.880s
+OK (skipped=1)
+Saved into bgp-core/reference/broken-01 on the lab VM (aaaaaaaaaaaa).
+  bgp-core/reference/broken-01/latest/r1.cfg
+Configuration files may contain passwords or keys.
+Captured the running configuration into bgp-core/reference/broken-01 and uploaded. Lab rebound to bgp-core/work.
+Saved into bgp-core/reference/broken-01 on the lab VM (aaaaaaaaaaaa).
+  bgp-core/reference/broken-01/latest/r1.cfg
+Configuration files may contain passwords or keys.
+exit 0
+2026-09-28T01:40:29Z

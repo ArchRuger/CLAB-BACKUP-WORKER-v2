@@ -1,0 +1,10 @@
+pre-flight 2026-09-28T01:37:24Z GET /api/state (fetched 01:37:18)
+version 1.30.50
+lab 174386ec12ee496190c585c5796b2662 restore-square
+  clab-restore-square-ceos nos_login.status= ready | label= None | readiness= Ready
+  clab-restore-square-cjunosevolved nos_login.status= ready | label= None | readiness= Ready
+  clab-restore-square-vjunos-switch nos_login.status= ready | label= None | readiness= Ready
+  clab-restore-square-xrv9k nos_login.status= ready | label= None | readiness= Ready
+  clab-restore-square-host1 nos_login.status= ready | label= None | readiness= Choose NOS
+operations entries 171
+queued/running 0

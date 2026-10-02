@@ -1,0 +1,10 @@
+record docs/netlab-ui-qa/acceptance/pass-8/xrv9k-2026-09-28T014545+0000.json device clab-restore-square-xrv9k kind cisco_xrv9k started 2026-09-28T01:45:45+00:00 finished 2026-09-28T01:50:48+00:00
+run map-running entry map
+  job f6bb4236 succeeded 2026-09-28T01:45:51.029711+00:00 2026-09-28T01:46:01.870509+00:00 | Operation completed · 2 links restored
+  container 5706950aa8de -> 5706950aa8de start 2026-09-28T01:28:00.339458248Z -> 2026-09-28T01:45:59.299886628Z
+  others unchanged True
+  links after ['eth1@if13', 'eth2@if21']
+  readiness {"states": [["2026-09-28T01:46:02+00:00", "booting"], ["2026-09-28T01:50:43+00:00", "ready"]], "ready_at": "2026-09-28T01:50:42.843498+00:00", "budget_s": 1200}
+  other keys ['confirmed_at', 'job_output', 'readiness']
+checks 28 failed 0
+review ["map-running", "Restart xrv9k?\n\u00d7\n\nrestore-square\n\n/srv/containerlab-node-manager/projects/restore-square/restore-square.clab.yml\n\nKnown limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (proven on cisco_xrv9k 24.3.1 with containerlab 0.79.0). Back up the configuration first and use Replace running con

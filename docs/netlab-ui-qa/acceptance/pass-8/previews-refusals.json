@@ -1,0 +1,220 @@
+{
+ "at": "2026-09-28T01:42:55+00:00",
+ "jobs_before": 178,
+ "jobs_after": 178,
+ "rows": [
+  {
+   "request": "preview vjunos-switch",
+   "at": "2026-09-28T01:42:52+00:00",
+   "status": 200,
+   "token": true,
+   "detail": null,
+   "warnings": [
+    "Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0.79.0."
+   ]
+  },
+  {
+   "request": "preview xrv9k",
+   "at": "2026-09-28T01:42:53+00:00",
+   "status": 200,
+   "token": true,
+   "detail": null,
+   "warnings": [
+    "Known limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (proven on cisco_xrv9k 24.3.1 with containerlab 0.79.0). Back up the configuration first and use Replace running configuration afterwards."
+   ]
+  },
+  {
+   "request": "preview ceos",
+   "at": "2026-09-28T01:42:53+00:00",
+   "status": 200,
+   "token": true,
+   "detail": null,
+   "warnings": []
+  },
+  {
+   "request": "preview host1 (cJunosEvolved not requested at all)",
+   "at": "2026-09-28T01:42:54+00:00",
+   "status": 200,
+   "token": true,
+   "detail": null,
+   "warnings": []
+  },
+  {
+   "request": "node of another lab (netlab-test host1) under restore-square",
+   "at": "2026-09-28T01:42:54+00:00",
+   "status": 404,
+   "token": false,
+   "detail": "This device is not in the lab.",
+   "warnings": null
+  },
+  {
+   "request": "restore-square host1 under netlab-test id",
+   "at": "2026-09-28T01:42:54+00:00",
+   "status": 404,
+   "token": false,
+   "detail": "This device is not in the lab.",
+   "warnings": null
+  },
+  {
+   "request": "unknown node",
+   "at": "2026-09-28T01:42:54+00:00",
+   "status": 404,
+   "token": false,
+   "detail": "This device is not in the lab.",
+   "warnings": null
+  },
+  {
+   "request": "foreign Origin",
+   "at": "2026-09-28T01:42:54+00:00",
+   "status": 403,
+   "token": false,
+   "detail": "Use this manager from its own browser page.",
+   "warnings": null
+  },
+  {
+   "request": "Sec-Fetch-Site cross-site",
+   "at": "2026-09-28T01:42:54+00:00",
+   "status": 403,
+   "token": false,
+   "detail": "Use this manager from its own browser page.",
+   "warnings": null
+  },
+  {
+   "request": "node with trailing space",
+   "at": "2026-09-28T01:42:54+00:00",
+   "status": 404,
+   "token": false,
+   "detail": "This device is not in the lab.",
+   "warnings": null
+  },
+  {
+   "request": "node with a path prefix",
+   "at": "2026-09-28T01:42:55+00:00",
+   "status": 404,
+   "token": false,
+   "detail": "This device is not in the lab.",
+   "warnings": null
+  },
+  {
+   "request": "options smuggling another node",
+   "at": "2026-09-28T01:42:55+00:00",
+   "status": 400,
+   "token": false,
+   "detail": "The device selector is resolved by the manager, not sent by the page.",
+   "warnings": null
+  },
+  {
+   "request": "path given",
+   "at": "2026-09-28T01:42:55+00:00",
+   "status": 400,
+   "token": false,
+   "detail": "Restart device uses the lab's own topology file.",
+   "warnings": null
+  },
+  {
+   "request": "no node",
+   "at": "2026-09-28T01:42:55+00:00",
+   "status": 400,
+   "token": false,
+   "detail": "Choose the device to restart.",
+   "warnings": null
+  },
+  {
+   "request": "confirm forged token",
+   "status": 409,
+   "detail": "Review expired; preview the operation again."
+  }
+ ],
+ "checks": [
+  {
+   "name": "vjunos-switch preview 200 with a token",
+   "ok": true,
+   "detail": "{'request': 'preview vjunos-switch', 'at': '2026-09-28T01:42:52+00:00', 'status': 200, 'token': True, 'detail': None, 'warnings': ['Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 "
+  },
+  {
+   "name": "vjunos-switch preview carries RESTART_KNOWN_LIMITS[juniper_vjunosswitch] verbatim",
+   "ok": true,
+   "detail": "['Known limit of the vJunos-switch image: its container cannot be started a second time (the launcher renames its init.conf on the first start and fails without it), so this restart leaves the device stopped until you redeploy the lab. Proven on vjunos-switch 23.2R1.14 with containerlab 0.79.0.']"
+  },
+  {
+   "name": "xrv9k preview 200 with a token",
+   "ok": true,
+   "detail": "{'request': 'preview xrv9k', 'at': '2026-09-28T01:42:53+00:00', 'status': 200, 'token': True, 'detail': None, 'warnings': ['Known limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory "
+  },
+  {
+   "name": "xrv9k preview carries RESTART_KNOWN_LIMITS[cisco_xrv9k] verbatim",
+   "ok": true,
+   "detail": "['Known limit of the XRv9k image: its launcher picks the VM disk by file name at every start, and after the first start a second copy of the pristine image sorts first, so the first restart after a deploy boots the device from a fresh disk: it comes back Ready with its factory configuration and everything configured since the deploy is gone (proven on cisco_xrv9k 24.3.1 with containerlab 0.79.0). "
+  },
+  {
+   "name": "ceos preview carries no known-limit text",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "host1 preview carries no known-limit text",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "name": "node of another lab is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'node of another lab (netlab-test host1) under restore-square', 'at': '2026-09-28T01:42:54+00:00', 'status': 404, 'token': False, 'detail': 'This device is not in the lab.', 'warnings': None}"
+  },
+  {
+   "name": "restore-square node under another lab id is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'restore-square host1 under netlab-test id', 'at': '2026-09-28T01:42:54+00:00', 'status': 404, 'token': False, 'detail': 'This device is not in the lab.', 'warnings': None}"
+  },
+  {
+   "name": "unknown node is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'unknown node', 'at': '2026-09-28T01:42:54+00:00', 'status': 404, 'token': False, 'detail': 'This device is not in the lab.', 'warnings': None}"
+  },
+  {
+   "name": "foreign Origin is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'foreign Origin', 'at': '2026-09-28T01:42:54+00:00', 'status': 403, 'token': False, 'detail': 'Use this manager from its own browser page.', 'warnings': None}"
+  },
+  {
+   "name": "cross-site fetch is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'Sec-Fetch-Site cross-site', 'at': '2026-09-28T01:42:54+00:00', 'status': 403, 'token': False, 'detail': 'Use this manager from its own browser page.', 'warnings': None}"
+  },
+  {
+   "name": "node with trailing space is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'node with trailing space', 'at': '2026-09-28T01:42:54+00:00', 'status': 404, 'token': False, 'detail': 'This device is not in the lab.', 'warnings': None}"
+  },
+  {
+   "name": "node with a path prefix is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'node with a path prefix', 'at': '2026-09-28T01:42:55+00:00', 'status': 404, 'token': False, 'detail': 'This device is not in the lab.', 'warnings': None}"
+  },
+  {
+   "name": "options smuggling another node is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'options smuggling another node', 'at': '2026-09-28T01:42:55+00:00', 'status': 400, 'token': False, 'detail': 'The device selector is resolved by the manager, not sent by the page.', 'warnings': None}"
+  },
+  {
+   "name": "path given is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'path given', 'at': '2026-09-28T01:42:55+00:00', 'status': 400, 'token': False, 'detail': \"Restart device uses the lab's own topology file.\", 'warnings': None}"
+  },
+  {
+   "name": "no node is a 4xx without a token",
+   "ok": true,
+   "detail": "{'request': 'no node', 'at': '2026-09-28T01:42:55+00:00', 'status': 400, 'token': False, 'detail': 'Choose the device to restart.', 'warnings': None}"
+  },
+  {
+   "name": "forged confirm token refused 4xx",
+   "ok": true,
+   "detail": "(409, {'detail': 'Review expired; preview the operation again.'})"
+  },
+  {
+   "name": "no operation job was created (count before == after)",
+   "ok": true,
+   "detail": "(178, 178)"
+  }
+ ]
+}
