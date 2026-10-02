@@ -103,6 +103,11 @@ def make_inventory(lab, nodes, work, operation):
         hosts[f'node_{index}'] = variables
     return {'all':{'children':{'targets':{'hosts':hosts}}}}
 
+# The topology and map captured beside a backup's configurations (stable internal names like the device
+# files; the download names are the lab's, see downloads.topology_names). Every backup that saved at least one
+# configuration carries them, so a configuration is never divorced from the topology it was taken under.
+TOPOLOGY_FILE='topology.clab.yml'
+ANNOTATIONS_FILE=TOPOLOGY_FILE+'.annotations.json'
 def filename(node):
     base=re.sub(r'[^A-Za-z0-9_.-]','_',node['name'])[:100].strip('.') or 'node'
     digest=hashlib.sha256(node['name'].encode()).hexdigest()[:8]
@@ -200,6 +205,76 @@ class Runner:
         self.pool=ThreadPoolExecutor(max_workers=1)
         self.stopping=threading.Event()
         self.scheduler=None
+        # lab -> the VM's file bundle of the deployed topology as of the last discovery pass (vm_files.decode_bundle),
+        # or None; set by main.py once discovery exists. The runner never reaches the VM itself.
+        self.topology_source=None
+    def topology_capture(self, lab):
+        """The topology and map the lab runs, as the manager can best know them now: the files beside the deployed
+        topology on the VM as of the last discovery pass (within the discovery interval), else the manager's own
+        copies (the last sync). None when the manager holds no topology text for this lab."""
+        from .layout import map_document
+        def manager_map():
+            # A drawing the map writer cannot read costs the map only, never the topology or the backup.
+            try: document=map_document(lab)
+            except Exception: return None
+            return document.encode() if document else None
+        # The bundle and the time of the pass that read it are taken together under the store lock, which is
+        # where discovery replaces its sources, so the time never belongs to a later pass than the file.
+        with self.store.lock:
+            try: bundle=self.topology_source(lab) if self.topology_source else None
+            except Exception: bundle=None
+            read_at=self.store.state.get('discovery',{}).get('last_success') or now()
+        files=bundle.get('files') if isinstance(bundle,dict) else None
+        if isinstance(files,dict) and files.get('definition'):
+            paths=bundle.get('manifest') or {}
+            # The map beside the deployed topology; when the VM has none, the manager's own (the one the student sees).
+            annotations=bytes(files['annotations']) if files.get('annotations') else None; annotations_source='vm'
+            if not annotations:
+                annotations=manager_map(); annotations_source='manager' if annotations else ''
+            return dict(source='vm',path=(paths.get('definition') or {}).get('path',''),read_at=read_at,
+                        definition=bytes(files['definition']),annotations=annotations,annotations_source=annotations_source)
+        text=lab.get('definition_yaml')
+        if not text: return None
+        annotations=manager_map()
+        return dict(source='manager',path=lab.get('vm_source',{}).get('files',{}).get('definition',{}).get('path','') or lab.get('vm_project_path',''),
+                    read_at=lab.get('vm_source',{}).get('synced_at') or lab.get('updated') or now(),
+                    definition=text.encode(),annotations=annotations,annotations_source='manager' if annotations else '')
+    def embed_topology(self, lab, root, job_id, log, safe_error=lambda message: str(message)):
+        """Write the topology (and map) beside the job's configurations, in history/<job> and latest/, and return
+        the record the job carries (names, sizes, digests, where the text came from and when). None when there is
+        nothing to embed or it could not be written: the backup itself is not failed by that."""
+        history=root/'history'/job_id; latest=root/'latest'
+        # latest/ mirrors this backup: a topology or map that is not written now must not linger there from an
+        # earlier backup, or the local Git history would pair new configurations with an old topology.
+        def clear(*names):
+            for name in names:
+                try: (latest/name).unlink()
+                except FileNotFoundError: pass
+                except OSError as exc: log('topology.skip','A stale '+name+' could not be cleared from latest ('+type(exc).__name__+')','warning')
+        try:
+            capture=self.topology_capture(lab)
+            if not capture:
+                clear(TOPOLOGY_FILE,ANNOTATIONS_FILE)
+                log('topology.skip','No topology text in the manager for this lab, so none travels with this backup','warning'); return None
+            history.mkdir(parents=True,exist_ok=True,mode=0o700); latest.mkdir(parents=True,exist_ok=True,mode=0o700)
+            definition=capture['definition']
+            if not definition or len(definition)>2*1024*1024: raise ValueError('topology text missing or over 2 MiB')
+            self.store.atomic(history/TOPOLOGY_FILE,definition); self.store.atomic(latest/TOPOLOGY_FILE,definition)
+            record={'file':TOPOLOGY_FILE,'size':len(definition),'sha256':hashlib.sha256(definition).hexdigest(),
+                    'source':capture['source'],'path':capture['path'],'read_at':capture['read_at']}
+            annotations=capture.get('annotations')
+            if annotations and len(annotations)<=2*1024*1024:
+                self.store.atomic(history/ANNOTATIONS_FILE,annotations); self.store.atomic(latest/ANNOTATIONS_FILE,annotations)
+                record.update(annotations_file=ANNOTATIONS_FILE,annotations_size=len(annotations),annotations_sha256=hashlib.sha256(annotations).hexdigest(),
+                              annotations_source=capture.get('annotations_source') or record['source'])
+            else: clear(ANNOTATIONS_FILE)
+            log('topology.embed',f"Embedded the topology{' and map' if record.get('annotations_file') else ''} with this backup ({'the VM file ' if record['source']=='vm' else 'the manager copy of '}{record['path'] or 'the topology'}, read {record['read_at']})")
+            return record
+        except Exception as exc:
+            # Never the backup's failure: the configurations are saved, the topology just did not travel this time.
+            clear(TOPOLOGY_FILE,ANNOTATIONS_FILE)
+            # Controlled text only: the exception's type, never its message (it could carry file contents).
+            log('topology.skip','The topology could not be embedded with this backup ('+type(exc).__name__+'); the configurations are saved','warning'); return None
     def start(self):
         self.scheduler=threading.Thread(target=self.tick,daemon=True)
         self.scheduler.start()
@@ -428,6 +503,7 @@ class Runner:
                         outcome['message']=safe_error(result.get('message','SSH command failed'))
                     outcomes.append(outcome)
                     log('node.'+outcome['status'],outcome['message'],'info' if outcome['status']=='succeeded' else 'error',node['name'])
+                topology=self.embed_topology(lab,root,job_id,log,safe_error) if operation=='backup' and success else None
                 git_error=None
                 if operation=='backup' and success:
                     try:
@@ -461,7 +537,7 @@ class Runner:
                         log('git.failed',git_error,'error')
                 status='succeeded' if success==len(nodes) and not git_error and proc.returncode==0 else ('partial' if success else 'failed')
                 log('job.finish',f'{status}: {success}/{len(nodes)} NOS sessions succeeded','info' if status=='succeeded' else 'error')
-                self.update(job_id,status=status,finished=now(),nodes=outcomes,
+                self.update(job_id,status=status,finished=now(),nodes=outcomes,**({'topology':topology} if topology else {}),
                             message=git_error or (f'Ansible exited with code {proc.returncode}; {success}/{len(nodes)} sessions succeeded' if proc.returncode else f'{success}/{len(nodes)} NOS sessions completed successfully'))
         except Exception as exc:
             # Detailed exception strings may contain secrets; expose controlled errors only.

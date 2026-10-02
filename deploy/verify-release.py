@@ -46,7 +46,8 @@ DOC_ROOTS = ('README.md', 'docs', 'deploy', 'clab-backup-ui/README.md', 'clab-ba
 # Release history: may name any release.
 HISTORY_FILES = ('docs/CHANGELOG.md', 'clab-backup-ui/VALIDATION.md', 'agent instructions.md')
 HISTORY_DIRS = ('docs/archive/', 'docs/redesign/', 'docs/ui-review-001/', 'docs/multi-platform-restore/', 'docs/save-location-fix/', 'docs/ui-ux-cleanup/',
-                'docs/student-quick-start/', 'docs/technical-audit/', 'docs/netlab-integration/', 'docs/netlab-ui-qa/')
+                'docs/student-quick-start/', 'docs/technical-audit/', 'docs/netlab-integration/', 'docs/netlab-ui-qa/',
+                'docs/ui-ux-changes-2/')
 # Where the current release must be named first, and how.
 LEADS = {
     'README.md': r'Current release: \*\*(\d+\.\d+\.\d+)\*\*',

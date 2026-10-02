@@ -1,0 +1,20 @@
+ok   the lab is saved to the VM through the reviewed publish
+ok   the lab deploys
+ok   the cEOS device becomes ready
+ok   the backup succeeds
+ok   the backup record carries the topology and map read from the VM
+ok   the public record names the download files
+ok   the ZIP holds the configuration, the manifest, the topology and the map under the lab's names
+ok   the embedded topology is the file on the VM, byte for byte
+ok   the embedded map is the file beside it
+ok   the manifest records the provenance
+ok   the lab is connected to its own test folder of the registered repository
+ok   the save on this VM only completes without an upload
+ok   the saved version lists the topology and map beside the device file
+ok   the manifest marks them by kind, not as devices, with the VM provenance
+ok   the restore never offers them
+ok   the embedded topology in the save is the VM file
+leftovers on the VM: lab folder /srv/containerlab-node-manager/projects/uiux2-bk-203408, backup files of lab 5cfa5a16a8174d9089e78bdd05718073 under the manager data, registration uiux2-tests/uiux2-bk-203408 in /home/clabllm/labs/CLAB-MNGR-DEV-LLM with one local commit 386ba9c539115707366cc3853d77a374f7e45642
+ok   the lab is destroyed afterwards
+ok   the lab is removed from the manager afterwards
+ALL CHECKS PASSED

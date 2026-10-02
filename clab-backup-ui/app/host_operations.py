@@ -20,8 +20,21 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 PROTOCOL = 'clab-manager-operations-v1'
-VERSION = '1.30.51'
+VERSION = '1.30.57'
 LIMIT = 1024 * 1024
+# Read-only image questions for the lab builder and the deploy review: which images this VM already
+# has, and whether a named image is on the VM or can be pulled from its registry. Both run the Docker
+# client with fixed argv; the only client input is an image reference checked against Docker's own
+# reference grammar and passed as one argv element. No image is pulled, run or removed here.
+DOCKER = '/usr/bin/docker'
+IMAGE_CHECK_LIMIT = 16
+IMAGE_PROBE_TIMEOUT = 12
+# github.com/distribution/reference: optional registry host (with port), lower-case path components
+# joined by separators, an optional tag, an optional digest. Nothing else reaches argv.
+IMAGE_REFERENCE = re.compile(
+    r'^(?:(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?))*(?::[0-9]{1,5})?/)?'
+    r'[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*'
+    r'(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?$')
 LIFECYCLE = ('deploy', 'redeploy', 'destroy', 'apply', 'start', 'stop', 'restart', 'save', 'inspect')
 # The lab builder publishes a new lab folder (publish) and saves again over a lab that is not
 # deployed (revise). Both texts travel in one request line, so each stays well inside it.
@@ -59,6 +72,36 @@ def node_selector(options, lab):
     if container != node and container != lab + '-' + node and not container.endswith('-' + lab + '-' + node):
         raise ValueError('The container name does not belong to this topology node.')
     return node, container
+
+
+def image_reference(value):
+    """A Docker image reference as the helper will pass it (one argv element), or ValueError."""
+    if not isinstance(value, str) or not 1 <= len(value) <= 255 or value[0] == '-' or not IMAGE_REFERENCE.fullmatch(value):
+        raise ValueError('Not a usable image reference.')
+    return value
+
+
+def probe(argv, timeout=IMAGE_PROBE_TIMEOUT):
+    """Run a bounded read-only command and keep its stderr: a registry answer is told apart from an
+    unreachable registry by the Docker client's own message. (code, stdout, stderr), killed on timeout."""
+    try:
+        done = subprocess.run(argv, cwd='/', env=ENV, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        return 124, '', 'timed out after %ds' % timeout
+    return done.returncode, done.stdout[:LIMIT].decode('utf8', errors='replace'), done.stderr[:4096].decode('utf8', errors='replace')
+
+
+def registry_answer(code, stderr):
+    """What `docker manifest inspect` said about a reference that is not on the VM."""
+    if code == 0: return 'found'
+    text = (stderr or '').lower()
+    # The Docker client could not even ask (its credential helper is broken): no verdict about the image.
+    if 'error getting credentials' in text or 'credential' in text and 'executable file not found' in text: return 'unknown'
+    if any(w in text for w in ('manifest unknown', 'no such manifest', 'not found', 'requested access to the resource is denied',
+                               'authentication required', 'name unknown', 'repository does not exist')): return 'not-found'
+    if any(w in text for w in ('no such host', 'timed out', 'timeout', 'connection refused', 'error pinging', 'network is unreachable',
+                               'tls handshake', 'certificate', 'eof', 'dial tcp', 'temporary failure')): return 'unreachable'
+    return 'unknown'
 
 
 def capture(argv, cwd='/', timeout=15):
@@ -115,8 +158,8 @@ def stream(argv, cwd, emit, timeout=1200):
 
 
 class HostOperations:
-    def __init__(self, config, run=capture):
-        self.config = config; self.run = run
+    def __init__(self, config, run=capture, probe=probe):
+        self.config = config; self.run = run; self.probe = probe
         # Older operations.json files still carry a 'docker' path (the retired Grafana mode used it); it is ignored.
         self.clab = config['clab']
         self.roots = [Path(p) for p in config['roots']]
@@ -157,6 +200,41 @@ class HostOperations:
         code, out = self.run([self.clab, *parts, '--help'])
         return out if code == 0 and 'unknown command' not in out.lower() else ''
 
+    def docker_available(self):
+        return os.access(DOCKER, os.X_OK)
+
+    def images(self):
+        """The image references this VM already has (`repository:tag`, dangling images left out)."""
+        if not self.docker_available(): return {'available': False, 'images': []}
+        code, out = self.run([DOCKER, 'image', 'ls', '--format', '{{.Repository}}:{{.Tag}}'])
+        if code: raise ValueError('Docker on the VM did not list its images.')
+        found = sorted({line.strip() for line in out.splitlines() if line.strip() and '<none>' not in line and IMAGE_REFERENCE.match(line.strip())})
+        return {'available': True, 'images': found[:1000]}
+
+    def image_check(self, options):
+        """For each reference (at most IMAGE_CHECK_LIMIT, each validated): is it on the VM (`docker image
+        inspect`), and if not, does its registry know it (`docker manifest inspect`, bounded, read-only)?
+        Answers are `local` (bool) and `registry`: found, not-found, unreachable, unknown, or skipped (local
+        images are not asked for; without a Docker client nothing is)."""
+        if not isinstance(options, dict) or set(options) - {'references'}: raise ValueError('Unsupported image check options.')
+        refs = options.get('references')
+        if not isinstance(refs, list) or not 1 <= len(refs) <= IMAGE_CHECK_LIMIT: raise ValueError('Name 1 to %d images per check.' % IMAGE_CHECK_LIMIT)
+        refs = [image_reference(r) for r in refs]
+        if len(set(refs)) != len(refs): raise ValueError('Name each image once.')
+        if not self.docker_available(): return {'available': False, 'images': [{'reference': r, 'local': None, 'registry': 'skipped', 'detail': 'No Docker client on the VM.'} for r in refs]}
+        def one(ref):
+            code, out, err = self.probe([DOCKER, 'image', 'inspect', '--format', '{{.Id}}', ref], IMAGE_PROBE_TIMEOUT)
+            if code == 0 and out.strip(): return {'reference': ref, 'local': True, 'registry': 'skipped', 'detail': ''}
+            code, out, err = self.probe([DOCKER, 'manifest', 'inspect', ref], IMAGE_PROBE_TIMEOUT)
+            answer = registry_answer(code, err); detail = (err or '').strip().splitlines()
+            # The Docker client's last line travels only when the answer itself says nothing (unknown).
+            return {'reference': ref, 'local': False, 'registry': answer, 'detail': (detail[-1] if detail and answer == 'unknown' else '')[:200]}
+        from concurrent.futures import ThreadPoolExecutor
+        pool = ThreadPoolExecutor(max_workers=4)
+        try: results = list(pool.map(one, refs))
+        finally: pool.shutdown(wait=False, cancel_futures=True)  # a signal stops the queue, not only the main thread
+        return {'available': True, 'images': results}
+
     def capabilities(self):
         actions = {}
         for action in LIFECYCLE:
@@ -170,7 +248,7 @@ class HostOperations:
         actions['clone'] = {'available': bool(self.config.get('network')) and os.access(self.config.get('git', '/usr/bin/git'), os.X_OK)}
         actions['publish'] = {'available': True}; actions['revise'] = {'available': True}
         return {'protocol': PROTOCOL, 'version': VERSION, 'actions': actions, 'roots': [str(p) for p in self.roots],
-                'network': bool(self.config.get('network'))}
+                'network': bool(self.config.get('network')), 'images': self.docker_available()}
 
     def popular(self):
         if not self.config.get('network'): raise ValueError('Enable --allow-downloads on the VM to browse the online popular-lab catalog.')
@@ -613,6 +691,8 @@ def main():
         elif mode == 'read': result = host.read(req.get('path'))
         elif mode == 'browse': result = host.browse(req.get('path', ''))
         elif mode == 'popular': result = host.popular()
+        elif mode == 'images': result = host.images()
+        elif mode == 'image-check': result = host.image_check(req.get('options') or {})
         elif mode in ('preview', 'run'):
             import fcntl
             with open('/run/clab-manager-operations.lock', 'a') as lock:

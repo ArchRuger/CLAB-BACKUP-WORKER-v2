@@ -20,7 +20,7 @@ import uuid
 from urllib.parse import urlsplit
 
 PROTOCOL = 'clab-manager-git-v1'
-VERSION = '1.30.51'
+VERSION = '1.30.57'
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 MAX_JSON = 24 * 1024 * 1024
@@ -596,13 +596,16 @@ class GitRepository:
                 old = self.read_manifest(folder)
                 if old and (old.get('kind') == 'network-design') != design: raise ValueError('This folder holds a different kind of snapshot; choose another name.')
                 # Every file the existing manifest owns: each device file and, for a schema-2 snapshot,
-                # the restore-grade artifact it references. Only the device files count as devices.
+                # the restore-grade artifact it references. Only the device files count as devices: an entry
+                # of a `kind` (the topology and map a capture embeds, a design export's files) is owned but is
+                # no device, so a later save without it needs no removal review.
                 old_names = set(); old_devices = set()
                 if old:
                     for item in old['files']:
                         name = relpath(item.get('path'))
                         if '/' in name or name == 'manifest.json': raise ValueError('Existing manifest contains an invalid file path.')
-                        old_names.add(name); old_devices.add(name)
+                        old_names.add(name)
+                        if not item.get('kind'): old_devices.add(name)
                         if item.get('restore_artifact'):
                             artifact = relpath(item['restore_artifact'])
                             if '/' in artifact or artifact == 'manifest.json': raise ValueError('Existing manifest contains an invalid file path.')

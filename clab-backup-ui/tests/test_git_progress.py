@@ -340,6 +340,13 @@ class GitProgressTests(unittest.TestCase):
             nodes.append(dict(name=node['name'], status='succeeded', file=name, platform=node['platform'], short_name='r'+str(index+1)))
         job = dict(id=job_id, lab_id=lab_id, lab_name=lab['name'], operation='backup', status='succeeded',
                    created='2026-09-11T10:00:00+00:00', finished='2026-09-11T10:01:00+00:00', nodes=nodes)
+        if kwargs.get('topology'):
+            # A capture that embedded the topology and map (UI/UX changes 2, item 10), as runner.embed_topology writes them.
+            definition = kwargs['topology'].encode(); annotations = kwargs.get('annotations', '{"nodeAnnotations": []}').encode()
+            (folder/'topology.clab.yml').write_bytes(definition); (folder/'topology.clab.yml.annotations.json').write_bytes(annotations)
+            job['topology'] = dict(file='topology.clab.yml', size=len(definition), sha256=hashlib.sha256(definition).hexdigest(), source='vm',
+                                   path='/srv/labs/t.clab.yml', read_at='2026-09-11T10:00:30+00:00', annotations_file='topology.clab.yml.annotations.json',
+                                   annotations_size=len(annotations), annotations_sha256=hashlib.sha256(annotations).hexdigest())
         if kwargs.get('progress_context'): job['progress_context'] = copy.deepcopy(kwargs['progress_context'])
         if kwargs.get('progress_id'): job['progress_id'] = kwargs['progress_id']
         self.store.state['jobs'].insert(0, job); self.store.save()
@@ -513,6 +520,60 @@ class GitProgressTests(unittest.TestCase):
         outcome = self.client.get('/api/git/jobs/'+job['id']).json()
         self.assertEqual(outcome['status'], 'capture_incomplete')
         self.assertFalse(any(r['mode'] == 'publish' for r in self.sent))
+
+    def test_the_topology_and_map_embedded_with_a_capture_travel_with_the_save(self):
+        text = 'name: training\ntopology:\n  nodes:\n    r1: {kind: cisco_xrv9k}\n'
+        backup = self.capture(topology=text, annotations='{"nodeAnnotations": [{"id": "r1", "position": {"x": 1, "y": 2}}]}')
+        result = captured_snapshot(self.store, backup)
+        kinds = {f['path']: f for f in result['manifest']['files'] if f.get('kind')}
+        self.assertEqual(sorted(kinds), ['training.clab.yml', 'training.clab.yml.annotations.json'], 'the lab\'s own names, beside the device files')
+        self.assertEqual((kinds['training.clab.yml']['kind'], kinds['training.clab.yml']['source'], kinds['training.clab.yml']['vm_path']), ('topology', 'vm', '/srv/labs/t.clab.yml'))
+        self.assertNotIn('read_at', kinds['training.clab.yml'], 'the read time stays on the backup record: it moves with every discovery pass and would make every save a new commit')
+        # Two captures of the same files read at different times are one and the same snapshot to the helper.
+        from app.host_git import content_digest
+        later = self.capture(topology=text, annotations='{"nodeAnnotations": [{"id": "r1", "position": {"x": 1, "y": 2}}]}')
+        self.store.state['jobs'][0]['topology']['read_at'] = '2026-09-11T10:30:00+00:00'; self.store.save()
+        self.assertEqual(content_digest(captured_snapshot(self.store, later)['manifest']), content_digest(result['manifest']))
+        # A restore reads a capture for its device files and is never stopped by the embedded topology.
+        broken = self.capture(topology=text); (self.store.root/'backups'/broken['lab_id']/'history'/broken['id']/'topology.clab.yml').unlink()
+        with self.assertRaisesRegex(ValueError, 'missing or unsafe'): captured_snapshot(self.store, broken)
+        self.assertNotIn('training.clab.yml', captured_snapshot(self.store, broken, embedded_files=False)['files'])
+        # A lab whose file-safe name begins with a dash still gets a name the helper takes.
+        from app.downloads import topology_names
+        self.assertEqual(topology_names({'lab_name': '-lab', 'topology': {'file': 'topology.clab.yml', 'annotations_file': 'x'}}), {'topology': '_-lab.clab.yml', 'annotations': '_-lab.clab.yml.annotations.json'})
+        self.assertEqual(topology_names({'lab_name': 'Lab 1', 'topology': {'file': 'topology.clab.yml'}}), {'topology': 'Lab_1.clab.yml'})
+        self.assertEqual(kinds['training.clab.yml.annotations.json']['kind'], 'annotations')
+        self.assertTrue(all('node' not in f for f in kinds.values()), 'no device identity: restore and the device pairing leave them alone')
+        self.assertEqual(base64.b64decode(result['files']['training.clab.yml']).decode(), text)
+        self.assertEqual(result['manifest']['topology_provenance'], 'embedded')
+        self.assertEqual(result['manifest']['topology_digest'], hashlib.sha256(text.encode()).hexdigest(), 'the digest is the embedded file\'s own')
+        self.assertEqual(result['manifest']['node_names'], sorted(n['name'] for n in backup['nodes']), 'the device scope is unchanged')
+        self.assertEqual(len(result['files']), len(backup['nodes']) + 2)
+        # The helper's whole-snapshot rules still hold for the file map (every file listed, each once).
+        from app.host_git import snapshot
+        manifest, decoded = snapshot(result)
+        self.assertEqual(set(decoded), set(result['files']))
+        # A tampered embedded file is refused like a tampered configuration.
+        (self.store.root/'backups'/backup['lab_id']/'history'/backup['id']/'topology.clab.yml').write_text('name: other\n')
+        with self.assertRaisesRegex(ValueError, 'no longer matches'): captured_snapshot(self.store, backup)
+        # Through the save route the embedded files reach the helper, the version view lists them without
+        # offering them for a restore, and a compare pairs the topology of two saves by kind.
+        backup = self.capture(topology=text)
+        job, _ = self.save(backup_job_id=backup['id'])
+        outcome, submit = self.run_save(job); submit.assert_not_called()
+        self.review_and_upload(job)
+        request = next(r for r in self.sent if r['mode'] == 'publish')
+        self.assertIn('training.clab.yml', request['snapshot']['files'])
+        self.assertEqual(request['snapshot']['manifest']['topology_provenance'], 'embedded')
+        version = self.client.post(self.url + '/version', json={'commit': 'b'*40, 'path': 'latest'}).json()
+        self.assertIn('training.clab.yml', [f['name'] for f in version['files']])
+        self.assertNotIn('training.clab.yml', version['restore_nodes'])
+        before = captured_snapshot(self.store, self.capture(topology='name: a\n'))
+        after = captured_snapshot(self.store, self.capture(topology='name: b\n'))
+        from app.git_progress import snapshot_diff
+        decoded_before = {k: base64.b64decode(v) for k, v in before['files'].items()}; decoded_after = {k: base64.b64decode(v) for k, v in after['files'].items()}
+        changes = [c for c in snapshot_diff(before['manifest'], decoded_before, after['manifest'], decoded_after) if c['name'] == 'training.clab.yml']
+        self.assertEqual([(c['status'], c['before'], c['after']) for c in changes], [('changed', 'name: a\n', 'name: b\n')])
 
     def test_internal_git_failure_does_not_invalidate_good_artifacts(self):
         backup = self.capture(); self.store.state['jobs'][0]['status'] = 'partial'

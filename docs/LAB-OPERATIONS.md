@@ -48,6 +48,7 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Save device configurations | containerlab's kind-dependent save command. The manager's own backups (Tools › Configuration backups) and *Save progress* are separate. |
 | Open all CLIs ↗ | A launcher page with one row per device (state pill, Open CLI ↗) and *Open all ready CLIs*. Allow pop-ups; at most 32 CLIs at once. |
 | Add to / Remove from favourites | Sorts the lab first under *All labs* on Home; *Recent labs* is ordered by the last successful deploy or redeploy this manager ran, and nothing else (visits, saves and favourites do not reorder it). |
+| Hide from Home / Show on Home | Takes the lab's card off Home (both tabs) and nothing else: the lab stays in My labs with its devices, backups, backup history, saved progress and Git binding; nothing on the VM changes, a running lab keeps running, and the background discovery never puts the card back by itself. Home says how many labs are hidden. Two ways back: **Choose a file on the lab VM…** › the lab's topology › *Add to My labs without starting* or *Deploy lab* (the same lab, not a second workspace), or **Manager ▾ › Labs found on the VM…** › *Hidden from Home* › **Show on Home**. This is not *Remove from this manager* (Advanced › Danger zone), which forgets the workspace. |
 | Edit map | Move devices and notes, add text, boxes, circles, lines and groups, style, undo and redo, save and export the map as JSON or draw.io; never changes devices, links or the topology file (see *The map and its editor*). |
 | Delete the topology file from the VM… | Deletes an undeployed topology file after keeping a recovery copy; refused while the lab is running. |
 | Deploy a new lab… / Lab topologies on the VM | The topology browser: expand the trusted lab folders and pick a `.clab.yaml`/`.clab.yml`. Existing files are read-only; the same browser opens in place from Home. |
@@ -55,6 +56,7 @@ the top bar holds the actions that are not about one lab: **Deploy a new lab…*
 | Build a lab visually… / Open in Lab Builder… | Opens the [lab builder](LAB-BUILDER.md): draw devices and links, then save the lab folder to the VM through a review. *Open in Lab Builder…* opens an existing topology file; saving again is only possible while the lab is not deployed and keeps a copy of the previous version. Opened from the topology file dialog, the builder's **← My labs** link and the browser Back button return to that same dialog (read fresh from the VM); opening it directly from the Build card returns to My labs as usual. |
 | Write a new topology… | Creates a new topology file on the VM after a structure preview and confirmation; never replaces an existing file. |
 | Add to My labs without starting / Deploy lab | Read an existing file and add the lab to My labs without deploying, or deploy it: *Deploy lab* saves the workspace (devices, map, VM source path) first and then reviews the containerlab command, so the lab is in My labs at once and nothing needs importing afterwards. |
+| Preview topology (in the topology file dialog) | Draws the file as the Topology tab will: devices where the map file beside it (or the map file uploaded with it) puts them, with their icons and label positions, links with their interface names kept clear of the device labels. A preview is a file, not a lab: no device is a button and none is called *Not in this lab*; a device the map file names but the topology does not is captioned *Not in the topology file*. |
 | Download a lab from GitHub… / Browse popular labs… | Optional HTTPS download into the VM's lab folder, followed by a review of the files and a separate deployment. |
 
 Removed in earlier releases: editing existing VM YAML as text (the lab builder's reviewed *Save changes to the VM…* is the only way the manager replaces a topology file, and only for a lab that is not deployed), copy topology path, manual
@@ -65,6 +67,15 @@ host helper as well as the image. Previously created sharing containers are not
 automatically stopped or deleted by an upgrade; manage those on the VM if present.
 
 ## Every operation is reviewed first
+
+A review that deploys or writes a topology (*Start lab*, *Redeploy lab*, the lab builder's *Save to the
+VM…* and *Save changes to the VM…*, *Create file on the VM…*) also lists the topology's **images** and
+asks the VM about each while the review is on the screen: *on the VM*, *not on the VM yet, the deploy
+pulls it from its registry*, *not on the VM and not found in a registry* (called out above the list:
+the devices using it stay down after the deploy; choose an image the VM has, or load it on the VM
+first), or that the registry did not answer. The question is read-only on the VM (the operations
+helper runs `docker image inspect` and `docker manifest inspect`, never a pull) and never delays the
+review; the manager keeps each answer for a few minutes.
 
 A lab operation never runs from a single click. The review names the action in plain
 words (*Destroy BGP_TheoryToPractice?*, *Stop devices?*), says what happens to the
@@ -109,11 +120,19 @@ Choose **Edit map** (Topology tab, Tools tab or Lab actions ▾ › Advanced opt
 topology file the manager has, it opens the same editor as the [lab builder](LAB-BUILDER.md), on the
 lab's own map and for the drawing only: drag devices, use a generated layout, add and style text,
 rectangles, circles, lines and groups (drag devices into a group), copy and paste annotations, set link
-label offsets, the link label mode and the grid. The bar above the editor adds **Undo** / **Redo**
-(Ctrl+Z, Ctrl+Shift+Z; map changes only), **Device look…** (a device's icon, colours and label) and
-**Link labels…** (how far a link's interface names sit from its devices). Devices and links cannot be added, changed or removed
-there, nothing is deployed and the running lab is not touched; the editor cannot send anything but the
-map to the manager. **Save map** stores it and the Topology tab follows; **Back to the lab** asks when
+label offsets, the link label mode and the grid. A device's look (its icon and corner radius, the icon
+colour, the label's position, text direction and background) is edited as in the builder: right-click the
+device and choose **Device look**, which opens the editor's own node editor with just those sections; a
+label position, text direction, icon or the Transparent box applies the moment it is chosen (one Undo step
+each), the colour pickers and the corner radius with the panel's *Apply*. The label positions include the
+four corners (top left, top right, bottom left, bottom right), where a name sits diagonally off the icon
+so no link covers it; the Topology tab, the preview and the draw.io export draw them the same way, and
+the VS Code extension opens a map that uses a corner and draws that label below the icon. The bar
+above the editor adds **Undo** / **Redo** (Ctrl+Z, Ctrl+Shift+Z; map changes only) and **Link labels…**
+(how far a link's interface names sit from its devices). Devices and links cannot be added, changed or
+removed there, nothing is deployed and the running lab is not touched; the editor cannot send anything
+but the map to the manager (the node editor's change is turned into a change of the map document before
+the editing engine sees it). **Save map** stores it and the Topology tab follows; **Back to the lab** asks when
 something is unsaved. *Download map file* gives the full annotations document, *Export to draw.io* uses
 the saved map, and *Import map file…* replaces the map with a file from your computer. A map that was
 changed elsewhere since it was opened is not overwritten: reopen it. A lab without a topology file in the
@@ -157,7 +176,9 @@ found on the VM…** (Home itself carries no such list, except the short *Alread
 VM* list of the first-run page while My labs is empty). **Add to My labs** reads the lab's
 files, shows them for review and imports only when you confirm with **Add lab**; discovery
 never imports a lab by itself. A lab removed with the hide option stays listed there as
-hidden until **Import again** or **Stop hiding**.
+hidden until **Import again** or **Stop hiding**; a lab hidden from Home (*Hide from Home* in
+the lab's ⋯ dialog, which keeps everything) is listed under *Hidden from Home* with **Show on
+Home**, and adding its topology again from the topology browser shows it too.
 
 Discovery matches imported lab names to the original VM topology path. Open
 **Manager ▾ › Deploy a new lab…** to add an undeployed topology. **Sync topology from VM**

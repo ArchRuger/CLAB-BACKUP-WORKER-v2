@@ -39,6 +39,17 @@ function opCommand(action,label=opLabels[action],options={}){
 // The helper refuses the flag on a containerlab without it, so the flag is only sent when the
 // installed command is known to have it or the capabilities could not be read at all.
 function opDestroyOptions(caps=opCaps){return caps?.actions?.destroy?.cleanup===false?{}:{cleanup:true};}
+// Hide from Home takes the lab off the Home list and nothing else: the words say what stays (the lab, its
+// devices, backups, saved progress and settings; the VM untouched) and the two ways back. Pure.
+function opHideHelp(lab){
+ if(lab&&lab.hidden)return 'This lab is hidden from Home. Show on Home puts its card back; nothing else changed while it was hidden.';
+ const running=lab?.deployment?.status==='Running';
+ return 'Hide from Home takes the card off Home only'+(running?' (the lab keeps running on the VM)':'')+': its devices, backups, saved progress and settings are kept and nothing on the VM changes. Add it again from Choose a file on the lab VM…, or show it under Manager ▾ › Labs found on the VM….';
+}
+function opHideNotice(lab){
+ if(lab&&lab.hidden)return lab.name+' is back on Home.';
+ return lab.name+' is hidden from Home'+(lab?.deployment?.status==='Running'?' and keeps running on the VM':'')+'. Add it again from Choose a file on the lab VM…, or Manager ▾ › Labs found on the VM….';
+}
 async function openLabOperations(id=activeId){
  opMenuLab=id;const lab=state.labs.find(l=>l.id===id);if(!lab)return;
  const dialog=opDialog('lab-operations-dialog',lab.name,'<p>Checking what this VM can do…</p>');
@@ -48,7 +59,7 @@ async function openLabOperations(id=activeId){
  const cleanup=['deploy','redeploy'].filter(a=>opCaps?.actions[a]?.cleanup).map(a=>opCommand(a,(a==='deploy'?'Deploy lab':'Redeploy lab')+' and clear the lab folder…',{cleanup:true})).join('');
  opDialog(dialog.id,lab.name,`<p class="op-path">${path?'Topology file on the VM: '+esc(path):"This lab has no topology file on the VM yet. Import the lab's files (Advanced › Deployment details) to enable these actions."}</p>${problem?`<p class="op-notice">Couldn't check the VM's commands, so every action is shown; some may fail. Details: ${esc(problem)}</p>`:''}
  <div class="op-sections"><section><h3>Deployment</h3><div class="op-grid">${opCommand('deploy','Deploy lab')}${['redeploy','start','stop','restart','apply','inspect','save'].map(a=>opCommand(a)).join('')}</div><p class="form-help">Deploy creates and starts the devices; Start, Stop and Restart act on the running devices. "Save device configurations" uses containerlab's own save (supported device types only); your Save progress snapshots are separate.</p></section>
- <section><h3>Lab tools</h3><div class="op-grid"><button class="button secondary" data-local="ssh"><span>Open all CLIs <span aria-hidden="true">↗</span></span></button><button class="button secondary" data-local="interactive">Edit map</button><button class="button secondary" data-local="history">Operation history…</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove from favourites':'Add to favourites'}</button></div></section>
+ <section><h3>Lab tools</h3><div class="op-grid"><button class="button secondary" data-local="ssh"><span>Open all CLIs <span aria-hidden="true">↗</span></span></button><button class="button secondary" data-local="interactive">Edit map</button><button class="button secondary" data-local="history">Operation history…</button><button class="button secondary" data-local="favorite">${lab.favorite?'Remove from favourites':'Add to favourites'}</button><button class="button secondary" data-local="hide">${lab.hidden?'Show on Home':'Hide from Home'}</button></div><p class="form-help">${opHideHelp(lab)}</p></section>
  <section class="op-danger"><h3>Danger</h3><div class="op-grid">${opCommand('destroy','Destroy lab…',opDestroyOptions())}${cleanup}${opCommand('delete','Delete the topology file from the VM…')}</div><p class="form-help">Destroy removes the running devices and, when the installed containerlab supports cleanup, the lab's generated folder on the VM. Redeploy keeps that folder unless you choose the "clear the lab folder" variant.</p></section></div>`);
  dialog.querySelectorAll('[data-op-action]').forEach(b=>b.onclick=()=>{
   const action=b.dataset.opAction,options=JSON.parse(b.dataset.opOptions);
@@ -58,6 +69,7 @@ async function openLabOperations(id=activeId){
   const action=b.dataset.local;
   if(action==='ssh')opNewTab({mode:'ssh',lab:id});
   if(action==='favorite'){await json('/labs/'+id+'/operations-settings','PUT',{favorite:!lab.favorite});await refresh();dialog.close();}
+  if(action==='hide'){await json('/labs/'+id+'/operations-settings','PUT',{hidden:!lab.hidden});await refresh();dialog.close();notify(opHideNotice(lab));}
   if(action==='interactive')await opLayout(id);
   if(action==='history')await opHistory(id);
  }));
@@ -139,6 +151,30 @@ function opSaveLine(lab,value){
  const text=never?(lab.git_binding?'Never saved.':'Never saved — this lab has no save location yet.'):`Last saved ${opWhen(ps.at)} to Git.`;
  return `<p class="op-save-line${never||stale?' danger':''}">${esc(text)}</p>`;
 }
+// One sentence per image of a reviewed topology, from the manager's answer (POST /api/operations/image-check):
+// on the VM, pullable, not found anywhere (a deploy fails for its devices), or unanswered. Pure.
+function opImageLine(item){
+ const who=(item.nodes||[]).length?' ('+item.nodes.join(', ')+')':'';
+ if(item.available===false)return item.reference+who+': this VM has no Docker client the manager can ask; checked at deploy time.';
+ if(item.local)return item.reference+who+': on the VM.';
+ if(item.registry==='found')return item.reference+who+': not on the VM yet; the deploy pulls it from its registry.';
+ if(item.registry==='not-found')return item.reference+who+': not on the VM and no registry offers it (not there, or it needs a login on the VM). The deploy fails for '+((item.nodes||[]).length?(item.nodes||[]).join(', '):'its devices')+'.';
+ if(item.registry==='invalid')return item.reference+who+': not a usable image name. The deploy fails for '+((item.nodes||[]).length?(item.nodes||[]).join(', '):'its devices')+'.';
+ if(item.registry==='unreachable')return item.reference+who+': not on the VM; its registry did not answer, so the deploy would try to pull it.';
+ return item.reference+who+': not on the VM; whether it can be pulled could not be checked.';
+}
+function opImageMissing(items){return (items||[]).filter(i=>i&&i.available!==false&&!i.local&&(i.registry==='not-found'||i.registry==='invalid'));}
+// Fills the review's image list once the manager has asked the VM; the review itself never waits for this.
+async function opReviewImages(dialog,images){
+ const list=dialog.querySelector('#op-review-images');if(!list||!images.length)return;
+ try{
+  const value=await json('/operations/image-check','POST',{references:images.slice(0,16).map(i=>i.reference)});if(!dialog.open||!list.isConnected)return;
+  const byRef=new Map((value.images||[]).map(i=>[i.reference,i])),rows=images.map(i=>({...i,...(byRef.get(i.reference)||{registry:'unknown',local:false})}));
+  list.innerHTML=rows.map(r=>`<li class="${opImageMissing([r]).length?'op-image-missing':''}">${esc(opImageLine(r))}</li>`).join('');
+  const missing=opImageMissing(rows),notice=dialog.querySelector('#op-review-images-notice');
+  if(notice){notice.hidden=!missing.length;notice.textContent=missing.length?(missing.length===1?'One image':missing.length+' images')+' cannot be pulled on this VM: '+missing.map(m=>m.reference).join(', ')+'. The devices using it stay down after the deploy. Choose an image the VM has, or load it on the VM first.':'';}
+ }catch{if(dialog.open&&list.isConnected)list.innerHTML=images.map(i=>`<li>${esc(i.reference)}: could not be checked right now.</li>`).join('');}
+}
 async function opReview(request,opener){
  const value=await json('/operations/preview','POST',request);
  // The helper's plan carries no lab id; the request does.
@@ -157,9 +193,12 @@ async function opReview(request,opener){
  // so the student sees exactly what lands on the VM, whether or not it replaces one already there.
  const mapLine=value.action==='create'&&typeof request.options?.annotations==='string'?`<p>Saved map: <code>${esc((value.path||'').split('/').pop()+'.annotations.json')}</code>${warnings.some(w=>/Replaces the existing map file/.test(w))?' — replaces the existing map file (a recovery copy is kept)':' will be written next to the topology'}</p>`:'';
  const commandBlock=`${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}<h4>Command run on the VM</h4><pre class="op-output">${esc((value.steps?.length?value.steps:[value.argv]).filter(a=>a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n')||label)}</pre>${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}`;
+ const images=Array.isArray(value.images)?value.images.filter(i=>i&&typeof i.reference==='string'):[];
+ const imageBlock=images.length?`<p class="op-notice" id="op-review-images-notice" hidden></p><details open class="op-images"><summary>Images (${images.length})</summary><ul id="op-review-images">${images.map(i=>`<li>${esc(i.reference)}${(i.nodes||[]).length?' ('+esc(i.nodes.join(', '))+')':''}: checking whether this VM has it…</li>`).join('')}</ul></details>`:'';
  const dialog=opDialog('operation-review',title,`${copy.hideName?'':`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All labs on the VM')}</p>`}
  ${warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
  <p>${esc(body)}</p>
+ ${imageBlock}
  ${mapLine}
  ${disruptive&&!['destroy','restart-node'].includes(value.action)?'<p>Configuration changes you have not saved are lost.</p>':''}
  ${opSaveLine(lab,value)}
@@ -171,6 +210,7 @@ async function opReview(request,opener){
  ${plain?'':'<p class="form-help">Runs on the lab VM. If the lab changes before you confirm, this check is repeated.</p>'}
  <div class="dialog-actions"><button class="button secondary" id="op-cancel">Cancel</button>${lab&&lab.git_binding&&disruptive&&typeof gitSaveProgress==='function'?'<button class="button secondary" id="op-save-first">Save progress first</button>':''}<button class="button ${copy.danger?'danger':'primary'}" id="op-confirm">${esc(copy.confirm||label)}</button></div>`,opener);
  $('op-cancel').onclick=()=>dialog.close();
+ opReviewImages(dialog,images);
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
  $('op-confirm').onclick=()=>opTask(dialog,async()=>{
   const job=await json('/operations/confirm','POST',{token:value.token});dialog.close();
@@ -282,8 +322,9 @@ async function opReadAnnotations(path){
  if(!path)return '';
  try{return (await json('/operations/read','POST',{path:path+'.annotations.json'})).text||'';}catch{return '';}
 }
-async function opParse(path,text){
- const annotations=await opReadAnnotations(path);
+// annotations: the map text to use (an upload's chosen map file); otherwise the VM file beside the topology.
+async function opParse(path,text,annotations){
+ if(annotations===undefined)annotations=await opReadAnnotations(path);
  const parsed=await json('/operations/parse-yaml','POST',{options:{text,annotations}});
  return {...parsed,annotations:parsed.annotations_used?annotations:''};
 }
@@ -382,7 +423,7 @@ async function opEdit(path,labId='',newPath='',upload=null){
  // Leaving for the builder from a known VM file: remembered so the way back (its "← My labs" link,
  // or the browser Back button) reopens this same dialog with a fresh read, showing any saved edit.
  $('op-build-edit')?.addEventListener('click',()=>{opRemember('vm',{path,name:value.path.split('/').pop()});opBuilderOpen({path});});
- $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
+ $('op-validate')?.addEventListener('click',()=>opTask(dialog,async()=>{const parsed=await opParse(path,$('op-edit-text').value,upload?upload.annotations||'':undefined);opMapPreview(parsed.drawing,parsed.name,parsed.annotations_used);}));
  $('op-save-yaml')?.addEventListener('click',()=>opTask(dialog,()=>opReview({action:'create',lab_id:labId,path:$('op-edit-path').value,options:{text:$('op-edit-text').value,...(upload&&upload.annotations?{annotations:upload.annotations}:{})}})));
  $('op-add-project')?.addEventListener('click',()=>opTask(dialog,async()=>{
   // Always read the actual VM file; unsaved editor contents are not linked/imported.
@@ -478,7 +519,9 @@ function opFitPreview(svg){
 function opMapPreview(drawing,name,positioned=false){
  const dialog=opDialog('op-map-preview','Topology preview · '+name,'<svg id="op-preview-map" class="topology-map op-layout-map" role="img" aria-label="Proposed topology"></svg>');
  dialog.classList.add('dialog-viewport');
- const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing);
+ // A file being looked at, not a lab's map: no device is a button, none is "Not in this lab" (there is no
+ // lab yet); a device the map file names but the topology file does not is captioned so.
+ const svg=$('op-preview-map');svg.innerHTML=topologyMarkup(drawing,{},{preview:true});
  if(dialog._previewResize&&typeof window!=='undefined')window.removeEventListener('resize',dialog._previewResize);
  const fit=()=>opFitPreview(svg);
  dialog._previewResize=fit;

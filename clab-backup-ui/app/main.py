@@ -22,7 +22,7 @@ from .node_services import NodeServices
 from .node_readiness import ReadinessMonitor, login_state, summarize
 from . import topology
 from .discovery import Discovery, lab_status, node_available, reconcile
-from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path
+from .downloads import migrate_download_metadata, decorate_job, config_names, archive_name, stored_path, stored_file, topology_names
 from .lab_operations import LabOperations, last_deployed, operation_busy, restarting_nodes
 from .git_progress import GitProgress, public_job as public_git_job
 from .restore import RestoreService, public_job as public_restore_job
@@ -43,6 +43,9 @@ def create_app(data_dir=None):
     services=NodeServices(store)
     readiness_monitor=ReadinessMonitor(store,services,runner)
     discovery=Discovery(store)
+    # The topology and map the VM holds beside the deployed topology, as of the last discovery pass: what a backup
+    # embeds beside its configurations (runner.topology_capture; the manager's own copy when the VM's is not known).
+    runner.topology_source=lambda lab: discovery.sources.get(lab.get('deployment_name') or '')
     operations=LabOperations(store,discovery,readiness_monitor)
     git_progress=GitProgress(store,runner)
     restore=RestoreService(store,runner,git_progress)
@@ -421,12 +424,20 @@ def create_app(data_dir=None):
             files.append((path,name))
             # The manifest describes the names actually present in this archive.
             job['nodes'][index]['file']=name
+        # The topology and map embedded with the backup, under the lab's own names (topology_names).
+        record=job.get('topology') or {}
+        for key,field in (('topology','file'),('annotations','annotations_file')):
+            name=topology_names(job).get(key)
+            if not name: continue
+            path=stored_file(store,job,record.get(field,''))
+            if not path: raise HTTPException(404,'The topology embedded with this backup is unavailable; download the devices individually')
+            files.append((path,name)); record[field]=name
         fd,path=tempfile.mkstemp(suffix='.zip'); os.close(fd)
         try:
             with zipfile.ZipFile(path,'w',zipfile.ZIP_DEFLATED) as archive:
                 for source,name in files: archive.write(source,name)
                 archive.writestr('manifest.json',json.dumps(job,indent=2))
-            store.event('download.archive',f"Archive download requested: {archive_name(job)}; {len(files)} configurations",
+            store.event('download.archive',f"Archive download requested: {archive_name(job)}; {len(names)} configurations and {len(files)-len(names)} topology files",
                         lab_id=job['lab_id'],job_id=job_id)
         except Exception:
             os.unlink(path); raise

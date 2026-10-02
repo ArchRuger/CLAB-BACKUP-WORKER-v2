@@ -25,6 +25,12 @@ TIMERS = ('apt-daily.timer', 'apt-daily-upgrade.timer')
 
 WARNING = ('Never stop unattended-upgrades.service, kill this process, or delete the lock '
            'file: let the current run finish, or wait it out here.')
+# Advice only: nothing here restarts anything. Right after a VM snapshot rollback (or a reboot) the
+# restored system's own unattended upgrade is usually the holder, and a normal restart of the VM is
+# the other way out of it; the installer keeps every completed step and can simply be run again.
+RESTART_HINT = ('If this appears right after a VM snapshot rollback or a reboot, a normal restart of the VM '
+                'also clears it (Ubuntu lets the running upgrade finish before it shuts down); every completed '
+                'setup step is kept, so run the installer again afterwards.')
 
 
 def _read_text(path):
@@ -170,6 +176,7 @@ def _describe(found):
     for holder in found:
         lines.append(f"Package lock held by pid {holder['pid']} ({holder['comm'] or 'unknown'}) on {holder['path']}.")
     lines.append(WARNING)
+    lines.append(RESTART_HINT)
     return lines
 
 

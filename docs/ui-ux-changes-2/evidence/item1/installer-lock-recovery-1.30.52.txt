@@ -1,0 +1,33 @@
+Network time active: yes; clock synchronized: yes
+Clock synchronization reported; VM clock: 2026-10-02 19:16:56 UTC
+Hit:1 http://us.archive.ubuntu.com/ubuntu noble InRelease
+Hit:2 http://us.archive.ubuntu.com/ubuntu noble-updates InRelease
+Hit:3 http://us.archive.ubuntu.com/ubuntu noble-backports InRelease
+Hit:4 https://download.docker.com/linux/ubuntu noble InRelease
+Hit:5 http://security.ubuntu.com/ubuntu noble-security InRelease
+Reading package lists...
+E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 58768 (python3)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), is another process using it?
+Package installation failed. Resolve the APT error above, then rerun the installer. Existing configuration files are retained.
+Needs attention: The command above failed. Completed setup and existing data are retained.
+Package lock held by pid 58768 (python3) on /var/lib/dpkg/lock-frontend.
+Never stop unattended-upgrades.service, kill this process, or delete the lock file: let the current run finish, or wait it out here.
+If this appears right after a VM snapshot rollback or a reboot, a normal restart of the VM also clears it (Ubuntu lets the running upgrade finish before it shuts down); every completed setup step is kept, so run the installer again afterwards.
+
+Copyable command, in another terminal: sudo python3 /home/clabllm/projects/clab-manager-1.30.42/deploy/apt_lock.py --wait --pause-timers
+
+Package lock recovery
+  1. Wait for the package lock here, then retry this step (recommended)
+  2. Retry this step now
+  3. Return to menu; keep completed work
+Choose [1]: 3
+Returned to menu. Existing data and completed steps are retained.
+
+Setup menu
+  1. Install or update manager, then set up Git
+  2. Git setup / repair only (no rebuild)
+  3. VS Code / Containerlab extension access for clabllm (no rebuild)
+  4. Browser Wireshark stack only (reinstall or upgrade, no rebuild)
+  5. Check running installation
+  6. Exit
+Choose [1]: 6

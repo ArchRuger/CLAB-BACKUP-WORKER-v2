@@ -630,6 +630,17 @@ def build(data_dir, port):
             return ops_read(str(request.get('path', '')))
         if mode == 'popular':
             raise ValueError('Enable --allow-downloads on the VM to browse the online popular-lab catalog.')
+        # The VM's images (read-only): a fixed list, and an answer per reference (ghcr.io images are "in a
+        # registry", anything else unknown to the list is "not found"), like the helper's two image modes.
+        FIXTURE_IMAGES = ['ceos:4.35.0F', 'ghcr.io/srl-labs/network-multitool:latest', 'n24l/cisco_xrv9k:24.3.1', 'ghcr.io/nokia/srlinux:24.10.1']
+        if mode == 'images':
+            return {'available': True, 'images': list(FIXTURE_IMAGES)}
+        if mode == 'image-check':
+            refs = (request.get('options') or {}).get('references') or []
+            return {'available': True, 'images': [
+                {'reference': r, 'local': True, 'registry': 'skipped', 'detail': ''} if r in FIXTURE_IMAGES else
+                {'reference': r, 'local': False, 'registry': 'found' if r.startswith('ghcr.io/') else 'unreachable' if r.startswith('unreachable.example/') else 'not-found',
+                 'detail': '' if r.startswith('ghcr.io/') else 'denied: requested access to the resource is denied'} for r in refs]}
         if mode == 'preview':
             return ops_preview(request)
         if mode == 'run':

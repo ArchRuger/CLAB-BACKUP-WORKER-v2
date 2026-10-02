@@ -15,9 +15,9 @@ document.body.insertAdjacentHTML('beforeend', `
 </form></dialog>
 <dialog id="vm-labs-dialog" aria-labelledby="vm-labs-title"><div class="vm-labs">
  <div class="dialog-head"><h2 id="vm-labs-title">Labs found on the VM</h2><button type="button" class="icon-button" data-dismiss aria-label="Close">×</button></div>
- <p>Labs the VM reports that are not in My labs. Add one to open its devices here; nothing on the VM changes.</p>
+ <p>Labs the VM reports that are not in My labs, and labs hidden from Home. Add one to open its devices here; nothing on the VM changes.</p>
  <p id="vm-labs-empty" class="caption" role="status" hidden></p>
- <div id="discovered-labs"></div><div id="excluded-labs"></div>
+ <div id="discovered-labs"></div><div id="hidden-labs"></div><div id="excluded-labs"></div>
  <details id="discovery-files"><summary>File check details</summary><div id="discovery-file-list"></div></details>
  <div class="dialog-actions"><button type="button" class="button secondary" data-dismiss>Close</button></div>
 </div></dialog>
@@ -99,7 +99,10 @@ function renderManagement(){
  // The same reports (every lab on the VM, imported ones included) stay reachable under Advanced › Deployment details.
  mgmtMarkup($('advanced-file-list'),fileMarkup);
  mgmtMarkup($('excluded-labs'),(discovery.ignored_labs||[]).length?'<p class="side-hint">Removed from this manager earlier</p>'+(discovery.ignored_labs||[]).map(name=>`<div class="empty-lab"><button class="side-button" data-allow-import="${esc(name)}">${esc(name)}<small>Import again · or stop hiding it so it appears automatically</small></button><button type="button" class="button secondary small" data-clear-exclusion="${esc(name)}">Stop hiding</button></div>`).join(''):'');
- const found=typeof homeVmLabs==='function'?homeVmLabs(discovery):{waiting:0,hidden:0,note:''};
+ // Labs hidden from Home are still in My labs with everything they have; Show on Home only puts the card back.
+ const hiddenLabs=(state.labs||[]).filter(l=>!!l.hidden);
+ mgmtMarkup($('hidden-labs'),hiddenLabs.length?'<p class="side-hint">Hidden from Home</p>'+hiddenLabs.map(l=>`<div class="empty-lab"><button class="side-button" data-open-hidden="${esc(l.id)}">${esc(l.name)}<small>Still in My labs with its devices, backups and saved progress · open it, or put its card back</small></button><button type="button" class="button secondary small" data-show-lab="${esc(l.id)}">Show on Home</button></div>`).join(''):'');
+ const found=typeof homeVmLabs==='function'?homeVmLabs(discovery,state.labs):{waiting:0,hidden:0,note:''};
  if($('manager-vm-labs-note')){$('manager-vm-labs-note').textContent=found.note;$('manager-vm-labs-note').hidden=!found.note;}
  if($('vm-labs-empty')){$('vm-labs-empty').hidden=!!(found.waiting||found.hidden);$('vm-labs-empty').textContent=!discovery.configured?'Connect the VM first (Manager ▾ › VM connection…).':discovery.connected?'Every lab the VM reports is already in My labs.':'The VM does not answer, so its labs cannot be listed right now.';}
  maybePromptVmConnection();
@@ -242,6 +245,12 @@ $('remove-lab-form').onsubmit=e=>{e.preventDefault();withForm(e.currentTarget,as
 $('excluded-labs').onclick=e=>{
  const clear=e.target.closest('[data-clear-exclusion]');if(clear){openExclusionMenu(clear.dataset.clearExclusion);return;}
  const button=e.target.closest('[data-allow-import]');if(button)importDiscovered(button.dataset.allowImport);
+};
+if($('hidden-labs'))$('hidden-labs').onclick=async e=>{
+ const show=e.target.closest('[data-show-lab]');
+ if(show){show.disabled=true;try{await json('/labs/'+encodeURIComponent(show.dataset.showLab)+'/operations-settings','PUT',{hidden:false});await refresh();notify('The lab is back on Home.');}catch(error){notify(error.message);}finally{show.disabled=false;}return;}
+ const open=e.target.closest('[data-open-hidden]');
+ if(open){document.querySelectorAll('dialog[open]').forEach(d=>d.close());if(typeof selectLab==='function')selectLab(open.dataset.openHidden);}
 };
 
 let autoImportBusy=false, importPreview=null;

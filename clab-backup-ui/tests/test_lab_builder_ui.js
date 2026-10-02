@@ -27,6 +27,28 @@ test('templates take the image this site already uses for their kind',()=>{
  assert.equal(list.find(t=>t.kind==='arista_ceos').image,'n24l/ceos:4.35.0F');assert.equal(list.find(t=>t.kind==='linux').image,c.BUILDER_TEMPLATES.find(t=>t.kind==='linux').image);
  assert.ok(c.builderImages(list,{nokia_srlinux:['ghcr.io/nokia/srlinux']}).includes('ghcr.io/nokia/srlinux'));
 });
+test('templates prefer an image the VM has over the placeholder, the Image list offers the VM images, and the draft\'s images are read and summarised',()=>{
+ const c=load(),vm=['n24l/ceos:4.34.2F','n24l/ceos:4.35.0F','n24l/vjunos-switch:23.2R1.14','ghcr.io/srl-labs/network-multitool:latest','other/thing:1'];
+ const list=c.builderTemplateList({},vm);
+ assert.equal(list.find(t=>t.kind==='arista_ceos').image,'n24l/ceos:4.35.0F','the highest tag of a matching VM image');
+ assert.equal(list.find(t=>t.kind==='juniper_vjunosswitch').image,'n24l/vjunos-switch:23.2R1.14','matched by its repository name, not the placeholder\'s');
+ assert.equal(list.find(t=>t.kind==='cisco_xrv9k').image,'vrnetlab/cisco_xrv9k:24.3.1','no VM image for the kind: the placeholder stays');
+ assert.equal(c.builderTemplateList({arista_ceos:['site/ceos:9']},vm).find(t=>t.kind==='arista_ceos').image,'site/ceos:9','an image the labs in My labs use comes first');
+ assert.equal(c.builderTemplateList({},[]).find(t=>t.kind==='arista_ceos').image,'ceos:4.35.0F');
+ const plain=v=>JSON.parse(JSON.stringify(v));
+ assert.ok(c.builderImages(list,{},vm).includes('other/thing:1'),'every VM image is offered in the Image list');
+ assert.deepEqual(plain(c.builderYamlImages('name: x\ntopology:\n  kinds:\n    linux:\n      image: "alpine:3"\n  nodes:\n    a:\n      image: n24l/ceos:4.35.0F\n    b:\n      image: n24l/ceos:4.35.0F # same\n    c:\n      image: "{{ templated }}"\n')),['alpine:3','n24l/ceos:4.35.0F']);
+ assert.deepEqual(plain(c.builderYamlImages('')),[]);
+ const summary=c.builderImageSummary([{reference:'n24l/ceos:4.35.0F',local:true,registry:'skipped'},{reference:'vrnetlab/cisco_xrv9k:24.3.1',local:false,registry:'not-found'},{reference:'ghcr.io/x/y:1',local:false,registry:'found'},{reference:'r.example/z:1',local:false,registry:'unreachable'}]);
+ assert.equal(summary.warn,true);
+ assert.match(summary.text,/^Images: n24l\/ceos:4\.35\.0F · on the VM · vrnetlab\/cisco_xrv9k:24\.3\.1 · not on the VM and no registry offers it \(not there, or it needs a login on the VM\): a deploy fails · ghcr\.io\/x\/y:1 · not on the VM yet, a deploy pulls it from its registry · r\.example\/z:1 · not on the VM; its registry did not answer/);
+ assert.equal(c.builderImageSummary([{reference:'bad name',local:false,registry:'invalid'}]).warn,true,'a name that is no reference warns too');
+ assert.match(summary.text,/Pick an image this VM has \(the Image field lists them\) or load vrnetlab\/cisco_xrv9k:24\.3\.1 on the VM first\.$/);
+ assert.deepEqual(plain(c.builderImageSummary([{reference:'a:1',local:true,registry:'skipped'}])),{text:'Images: a:1 · on the VM',warn:false});
+ assert.deepEqual(plain(c.builderImageSummary([])),{text:'',warn:false});
+ assert.equal(c.builderImageSummary([{reference:'a:1',available:false,local:null,registry:'skipped'}]).text,'Images: this VM has no Docker client the manager can ask, so they are checked at deploy time.');
+ const html=read('lab-builder.html');assert.match(html,/id="builder-images"[^>]*hidden/,'the line is on the page, empty until the manager answers');
+});
 test('a draft edited in another tab is never overwritten silently',()=>{
  const c=load(),s=storage();
  const first=c.draftWrite(s,{id:'new:lab',name:'lab',yaml:'name: lab\n',annotations:''},undefined);assert.ok(first.revision);
@@ -320,6 +342,30 @@ test('every editor control the page hides still exists in the bundled editor',()
  // `panel-tab-${id}`): the bundle then holds the template and the id, not the joined string.
  for(const id of ids){const item=/^(context-menu-item|panel-tab)-(.+)$/.exec(id);assert.ok(item&&!code.includes(id)?code.includes(item[1]+'-${')&&code.includes('"'+item[2]+'"'):code.includes(id),'the bundled editor no longer has '+id);}
  assert.doesNotMatch(code,/new Function\(|\beval\(/,'the bundle must run under script-src self');
+});
+// The tracked build-time patches (lab-builder/patches.mjs): the committed bundle carries their outcome, and the
+// pristine package (when node_modules is present) still carries every anchor exactly once. An editor upgrade
+// that moves an anchor fails the build itself; this test fails when a bundle was committed without them.
+test('the image is written as typed and the version is never filled in: the tracked editor patches are in the bundle',async()=>{
+ const dir=path.join(__dirname,'../app/static/lab-builder/assets'),code=fs.readdirSync(dir).filter(f=>f.endsWith('.js')).map(f=>fs.readFileSync(path.join(dir,f),'utf8')).join('\n');
+ assert.doesNotMatch(code,/\|\|"latest"\}/,'an empty version must not become :latest');
+ assert.doesNotMatch(code,/\?\?\["latest"\]/,'an unknown image must offer no version');
+ assert.doesNotMatch(code,/version:"latest"/,'an untagged or empty image must read as an empty version');
+ assert.doesNotMatch(code,/\["latest"\]\)/,'a known untagged image must offer no version either');
+ assert.match(code,/return ([A-Za-z_$]+)\?([A-Za-z_$]+)\?`\$\{\1\}:\$\{\2\}`:\1:""/,'the join writes image:version, or the image alone');
+ // Items 5, 6 and 7: the corner options, the corner styles, the immediate apply and the map editor's device look.
+ for(const label of ['"Top left"','"Top right"','"Bottom left"','"Bottom right"'])assert.ok(code.includes(label),'the Label Position select offers '+label);
+ assert.match(code,/case"top-left":case"top-right":case"bottom-left":case"bottom-right":return/,'a corner is a known label position');
+ assert.ok(code.includes('"Device look"')&&code.includes('__CLAB_MAP_LOOK__'),'the map editor opens the node editor for the look');
+ assert.ok(code.includes('"labelPosition","direction","icon","labelBackgroundColor"'),'the choices one clicks apply at once');
+ const {PATCHES,applyPatches}=await import('../lab-builder/patches.mjs');
+ assert.ok(PATCHES.length>=6);for(const p of PATCHES){assert.ok(p.file instanceof RegExp&&p.find&&p.replace&&p.why,'a patch names its file, anchor, replacement and reason');assert.notEqual(p.find,p.replace);}
+ assert.throws(()=>applyPatches('chunk-TEX73Q7H.js','no anchors here'),/found 0 times/);
+ const chunks=path.join(__dirname,'../lab-builder/node_modules/@containerlab/clab-ui/dist/chunks');
+ if(fs.existsSync(chunks)){
+  const files=fs.readdirSync(chunks);
+  for(const p of PATCHES){const file=files.find(f=>p.file.test(f));assert.ok(file,'a chunk for '+p.why);const text=fs.readFileSync(path.join(chunks,file),'utf8');assert.equal(text.split(p.find).length-1,1,'anchor once in the pristine package: '+p.why);assert.ok(!text.includes(p.replace)||p.find.includes(p.replace),'the package on disk is never patched: '+p.why);}
+ }else console.log('# lab-builder/node_modules absent: the anchors are checked by the build itself (npm ci && node build.mjs --check)');
 });
 test('the committed assets are the ones the manifest names, and the page loads only versioned entry files',()=>{
  const dir=path.join(__dirname,'../app/static/lab-builder'),manifest=JSON.parse(fs.readFileSync(path.join(dir,'manifest.json'),'utf8')),crypto=require('node:crypto');

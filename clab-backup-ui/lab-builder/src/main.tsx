@@ -36,6 +36,9 @@ interface BuilderPage {
   attach?(editor: MapEditorHandle | YamlEditorHandle): void;
 }
 interface MapEditorHandle { applyAnnotations(text: string): Promise<void> }
+// Map editor: the look the editor's node editor applied to one device (its editNode command, translated here):
+// the page returns the annotations document with that device's look keys replaced, or throws its reason.
+interface MapLookPage { applyLook?(id: string, look: Record<string, unknown>): string }
 // A refusal found before the engine is asked: `line` is 1-based when the text points at one.
 interface YamlFlaw { message: string; line?: number; severity: "error" | "warning" }
 interface YamlEditorHandle {
@@ -49,7 +52,7 @@ interface YamlEditorHandle {
   // Hears every stored state, after the page stored it. Returns the unsubscribe function.
   subscribe(listener: (yaml: string, annotations: string) => void): () => void;
 }
-declare global { interface Window { labBuilderPage: BuilderPage; __DOCKER_IMAGES__?: string[] } }
+declare global { interface Window { labBuilderPage: BuilderPage & MapLookPage; __DOCKER_IMAGES__?: string[]; __CLAB_MAP_LOOK__?: boolean } }
 
 // Everything the map editor may ask the engine to do: each of these writes the annotations document only.
 // The editor's view mode already hides adding, editing and deleting devices and links, but it enforces that
@@ -62,6 +65,19 @@ const mapCommandAllowed = (command: unknown): boolean => {
   return typeof c?.command === "string" && MAP_COMMANDS.has(c.command);
 };
 const refused = (message: string) => Object.assign(new Error(message), { code: "topology" });
+// The look of a device as the editor's node editor sends it in an editNode command (annotation keys only; a
+// null means "the default", which the page writes as an absent key). Anything that would change the topology
+// (a rename) is refused: in the map editor the node editor shows the icon and label sections only.
+const LOOK_FROM_EXTRA: Array<[string, string]> = [["topoViewerRole", "icon"], ["iconColor", "iconColor"], ["iconCornerRadius", "iconCornerRadius"], ["labelPosition", "labelPosition"], ["direction", "direction"], ["labelBackgroundColor", "labelBackgroundColor"]];
+function lookFromEditNode(command: unknown): { id: string; look: Record<string, unknown> } {
+  const payload = (command as { payload?: { id?: unknown; name?: unknown; oldName?: unknown; extraData?: Record<string, unknown> } })?.payload ?? {};
+  const id = typeof payload.id === "string" ? payload.id : "";
+  if (!id) throw refused("The map editor could not tell which device the look is for.");
+  if ((typeof payload.oldName === "string" && payload.oldName) || (typeof payload.name === "string" && payload.name && payload.name !== id)) throw refused("The map editor does not rename devices: that belongs to the topology.");
+  const extra = payload.extraData ?? {}, look: Record<string, unknown> = {};
+  for (const [from, to] of LOOK_FROM_EXTRA) { const v = extra[from]; look[to] = v === null || v === undefined ? "" : v; }
+  return { id, look };
+}
 
 // The engine refuses only text the parser cannot read. A readable text of the wrong shape (an empty file, a
 // list, `topology: 5`, nodes written as a list) it accepts, and the canvas then shows nothing: such a text is
@@ -221,9 +237,24 @@ async function mount(draft: BuilderDraft): Promise<void> {
     topoViewer: topoViewer as never,
     topology: {
       requestSnapshot: () => settled(() => core.getSnapshot()),
-      dispatchCommand: (_context, revision, command) => mapOnly && !mapCommandAllowed(command)
-        ? Promise.reject(refused("The map editor changes the drawing only: positions, text, shapes, groups and label settings."))
-        : settled(() => core.applyCommand(command as never, revision))
+      dispatchCommand: (_context, revision, command) => {
+        // Map editor, the device look: the node editor's editNode (a topology command) becomes a change of the
+        // annotations document that the page makes (applyLook) and the engine takes as one annotation-only step.
+        if (mapOnly && (command as { command?: string })?.command === "editNode") return settled(async () => {
+          let next: string;
+          try { const { id, look } = lookFromEditNode(command); if (!page.applyLook) throw refused("This page cannot change a device's look."); next = page.applyLook(id, look); }
+          catch (e) { page.notify(e instanceof Error ? e.message : String(e)); throw e; }
+          const before = await core.getSnapshot() as { revision: number };
+          const answer = await core.applyCommand({ command: "setAnnotationsContent", payload: { content: next } } as never, before.revision) as { type?: string; error?: string };
+          if (answer?.type === "topology-host:error" || answer?.type === "topology-host:reject") throw new Error(answer.error || "The editor did not accept that look.");
+          const snapshot = await core.getSnapshot();
+          window.postMessage({ type: "topology-host:snapshot", protocolVersion: 1, snapshot, reason: "external-change" }, window.location.origin);
+          return answer;
+        });
+        return mapOnly && !mapCommandAllowed(command)
+          ? Promise.reject(refused("The map editor changes the drawing only: positions, text, shapes, groups and label settings."))
+          : settled(() => core.applyCommand(command as never, revision));
+      }
     }
   });
   const runtime = createClabUiRuntime({
@@ -232,6 +263,9 @@ async function mount(draft: BuilderDraft): Promise<void> {
     disabledTabIds: ["yaml", "json"]
   });
   window.__DOCKER_IMAGES__ = page.images();
+  // Read by the patched editor (lab-builder/patches.mjs): the device menu's "Device look" entry in view mode and
+  // the node editor's Basic tab reduced to the icon and label sections.
+  window.__CLAB_MAP_LOOK__ = mapOnly;
   applyThemeVars("light");
   const t = page.templates();
   const initialData = { dockerImages: page.images(), customNodes: t.list, defaultNode: t.defaultName, customIcons: [] };

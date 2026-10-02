@@ -195,6 +195,24 @@ class CliTests(unittest.TestCase):
         self.assertIn('kill', out.getvalue().lower())
         self.assertIn('delete', out.getvalue().lower())
 
+    def test_show_recommends_a_vm_restart_after_a_snapshot_rollback_as_advice_only(self):
+        holder = [{'pid': 2230, 'comm': 'unattended-upgr', 'cmdline': '', 'path': '/var/lib/dpkg/lock-frontend'}]
+        with patch.object(apt_lock, 'holders', return_value=holder), patch('sys.stdout', new=io.StringIO()) as out, \
+                patch.object(apt_lock.subprocess, 'run') as run:
+            apt_lock.main(['--show'])
+        text = out.getvalue()
+        self.assertIn('snapshot rollback', text)
+        self.assertIn('restart of the VM', text)
+        self.assertIn('every completed setup step is kept', text)
+        self.assertLess(text.index('Never stop unattended-upgrades.service'), text.index('snapshot rollback'), 'the rule comes first, the advice after it')
+        run.assert_not_called()  # advice only: --show never runs anything, let alone a reboot
+        with open(apt_lock.__file__) as stream: source = stream.read()
+        for forbidden in ("'reboot'", "'shutdown'", "'poweroff'", 'os.kill(', 'os.remove(', 'os.unlink('):
+            self.assertNotIn(forbidden, source, forbidden)  # no command token or call that restarts, kills or deletes
+        with patch.object(apt_lock, 'holders', return_value=[]), patch('sys.stdout', new=io.StringIO()) as quiet:
+            apt_lock.main(['--show'])
+        self.assertNotIn('snapshot rollback', quiet.getvalue(), 'no holder, no advice')
+
     def test_wait_already_released_exits_zero_without_waiting(self):
         with patch.object(apt_lock, 'holders', return_value=[]), \
                 patch.object(apt_lock, 'wait_for_release') as wait, patch('sys.stdout', new=io.StringIO()):

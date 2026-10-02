@@ -69,9 +69,14 @@ def drawio(lab, layout='interactive'):
         ident = f'node-{i}'; node_ids[n['id']] = ident
         parent, x, y = parent_for(n)
         position = n.get('labelPosition', 'bottom')
+        # The editor's label positions, including the four corners (the label diagonally off the icon's corner).
         label_style = {'top': 'verticalLabelPosition=top;verticalAlign=bottom;',
                        'left': 'labelPosition=left;align=right;verticalAlign=middle;',
-                       'right': 'labelPosition=right;align=left;verticalAlign=middle;'}.get(position, 'verticalLabelPosition=bottom;verticalAlign=top;')
+                       'right': 'labelPosition=right;align=left;verticalAlign=middle;',
+                       'top-left': 'labelPosition=left;verticalLabelPosition=top;align=right;verticalAlign=bottom;',
+                       'top-right': 'labelPosition=right;verticalLabelPosition=top;align=left;verticalAlign=bottom;',
+                       'bottom-left': 'labelPosition=left;verticalLabelPosition=bottom;align=right;verticalAlign=top;',
+                       'bottom-right': 'labelPosition=right;verticalLabelPosition=bottom;align=left;verticalAlign=top;'}.get(position, 'verticalLabelPosition=bottom;verticalAlign=top;')
         c = cell(ident, n.get('label') or n.get('alias') or n['id'],
                  f"rounded=1;absoluteArcSize=1;arcSize={n.get('iconCornerRadius', 4)*2};fillColor={safe(n.get('iconColor') or '#0066ff')};strokeColor=none;fontColor=#ffffff;fontSize=11;labelBackgroundColor={safe(n.get('labelBackgroundColor') or '#454545')};spacing=4;html=0;"+label_style,
                  parent=parent, vertex='1')

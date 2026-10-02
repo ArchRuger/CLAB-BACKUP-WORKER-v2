@@ -1,6 +1,17 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const context=vm.createContext({$:()=>null,esc:value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))});
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),context);
+test('a review names each image of the topology with what the VM said: on the VM, pullable, not found anywhere, unanswered',()=>{
+ const line=item=>context.opImageLine(item);
+ assert.equal(line({reference:'n24l/ceos:4.35.0F',nodes:['ceos1','ceos2'],local:true,registry:'skipped'}),'n24l/ceos:4.35.0F (ceos1, ceos2): on the VM.');
+ assert.equal(line({reference:'ghcr.io/srl-labs/network-multitool:latest',nodes:['host1'],local:false,registry:'found'}),'ghcr.io/srl-labs/network-multitool:latest (host1): not on the VM yet; the deploy pulls it from its registry.');
+ assert.equal(line({reference:'vrnetlab/cisco_xrv9k:24.3.1',nodes:['xr1'],local:false,registry:'not-found'}),'vrnetlab/cisco_xrv9k:24.3.1 (xr1): not on the VM and no registry offers it (not there, or it needs a login on the VM). The deploy fails for xr1.');
+ assert.equal(line({reference:'bad name',nodes:['h1'],local:false,registry:'invalid'}),'bad name (h1): not a usable image name. The deploy fails for h1.');
+ assert.equal(line({reference:'r.example/z:1',nodes:[],local:false,registry:'unreachable'}),'r.example/z:1: not on the VM; its registry did not answer, so the deploy would try to pull it.');
+ assert.equal(line({reference:'a:1',local:false,registry:'unknown'}),'a:1: not on the VM; whether it can be pulled could not be checked.');
+ assert.equal(line({reference:'a:1',available:false}),'a:1: this VM has no Docker client the manager can ask; checked at deploy time.');
+ assert.deepEqual(context.opImageMissing([{reference:'a',local:true,registry:'skipped'},{reference:'b',local:false,registry:'not-found'},{reference:'c',local:false,registry:'not-found',available:false},{reference:'d',local:false,registry:'invalid'}]).map(i=>i.reference),['b','d']);
+});
 test('inspection table handles grouped JSON surrounded by CLI log lines',()=>{
  const raw='INFO inspecting\n'+JSON.stringify({training:[{name:'clab-training-r1',absLabPath:'/etc/lab.clab.yaml',kind:'cisco_xrv9k',image:'router:1',state:'running',health_status:'healthy',ipv4_address:'172.20.20.2/24',ipv6_address:'2001:db8::2/64'}]},null,2)+'\nFinished\n';
  const rows=context.opInspectionRows(raw);assert.equal(rows.length,1);
@@ -315,12 +326,12 @@ test('the topology preview drops the caption in both branches, sizes the dialog 
  const elements=new Map();
  const makeSvg=()=>{const attrs={};return {setAttribute(name,value){attrs[name]=value;},getAttribute:name=>attrs[name]};};
  elements.set('op-preview-map',makeSvg());
- const fitCalls=[],resizeListeners=[];
+ const fitCalls=[],resizeListeners=[],renderOptions=[];
  const dialogClasses=[];
  const dialogListeners={};
  const dialog={classList:{add(cls){dialogClasses.push(cls);}},addEventListener(type,fn){(dialogListeners[type]=dialogListeners[type]||[]).push(fn);},close(){(dialogListeners.close||[]).forEach(fn=>fn());}};
  const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),
-  topologyMarkup:drawing=>'<g id="topology-scene" data-nodes="'+drawing.nodes.length+'"></g>',
+  topologyMarkup:(drawing,states,options)=>{renderOptions.push(options);return '<g id="topology-scene" data-nodes="'+drawing.nodes.length+'"></g>';},
   measureTopology:svg=>{fitCalls.push(svg);return [10,20,30,40];},
   window:{addEventListener(type,fn){if(type==='resize')resizeListeners.push(fn);},removeEventListener(type,fn){const i=resizeListeners.indexOf(fn);if(i>=0)resizeListeners.splice(i,1);}},
   requestAnimationFrame:fn=>fn()});
@@ -329,6 +340,7 @@ test('the topology preview drops the caption in both branches, sizes the dialog 
  c.opDialog=(id,title,body)=>{capturedBody=body;capturedTitle=title;return dialog;};
  const returned=c.opMapPreview({nodes:[],links:[],decorations:[]},'demo',true);
  assert.equal(returned,dialog,'the dialog opDialog built is returned unchanged');
+ assert.deepEqual(JSON.parse(JSON.stringify(renderOptions)),[{preview:true}],'the preview renders a file, not a lab map (no "Not in this lab", no buttons)');
  assert.equal(capturedTitle,'Topology preview · demo','the title stays, only the caption goes');
  assert.doesNotMatch(capturedBody,/<p>/,'no caption paragraph — the positioned branch');
  assert.doesNotMatch(capturedBody,/Wiring from the topology file/);

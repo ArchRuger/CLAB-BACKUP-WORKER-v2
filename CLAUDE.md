@@ -120,8 +120,9 @@ never reach `/api/state`.
 
 1. *The VM*: one SSH account (`clab-discovery`, password only) whose forced command is
    `deploy/clab-manager-gateway`. It maps exactly three request names to `sudo -n` helpers that are
-   copies of `app/host_files.py` (inspect, read-only), `app/host_operations.py` (containerlab lifecycle
-   and the reviewed `create` / `publish` / `revise` file actions inside trusted roots) and
+   copies of `app/host_files.py` (inspect, read-only), `app/host_operations.py` (containerlab lifecycle,
+   the reviewed `create` / `publish` / `revise` file actions inside trusted roots, and the read-only image
+   questions `images` / `image-check`: fixed Docker client argv, a validated reference as the only input) and
    `app/host_git.py` (owner-scoped Git). The manager-side clients are `discovery.py`,
    `lab_operations.py` and `git_progress.py`; they send structured stdin and read NDJSON, and all three
    readers wait for stream EOF rather than exit status (keep new readers identical in shape). Helper
