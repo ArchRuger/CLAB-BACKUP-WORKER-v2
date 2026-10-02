@@ -1,0 +1,12 @@
+diff -ru run1/node_files/host1/initial run3/node_files/host1/initial
+--- run1/node_files/host1/initial	2026-09-26 21:51:28.797567348 +0000
++++ run3/node_files/host1/initial	2026-09-26 21:55:26.748933212 +0000
+@@ -32,6 +32,8 @@
+ 2001:db8:1::2 et-0-0-0.0.cjunosevolved
+ 10.0.0.5 et-0-0-1.0.cjunosevolved
+ 2001:db8:1:1::1 et-0-0-1.0.cjunosevolved
++172.31.2.2 et-0-0-2.0.cjunosevolved
++2001:db8:2:2::2 et-0-0-2.0.cjunosevolved
+ 172.31.0.5 host1 eth1.host1
+ 2001:db8:2::5 host1 eth1.host1
+ 172.31.1.5 host1 eth2.host1

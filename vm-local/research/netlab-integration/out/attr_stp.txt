@@ -1,0 +1,75 @@
+
+You can use the following stp attributes:
+==============================================================================
+
+global:
+  enable: bool
+  port_type:
+    type: str
+    valid_values:
+    - normal
+    - edge
+    - network
+    - auto
+  protocol:
+    type: str
+    valid_values:
+    - stp
+    - rstp
+    - mstp
+    - pvrst
+  stub_port_type:
+    type: str
+    valid_values:
+    - normal
+    - edge
+    - network
+    - auto
+    - none
+interface:
+  enable: bool
+  port_priority:
+    max_value: 15
+    min_value: 0
+    type: int
+  port_type:
+    type: str
+    valid_values:
+    - normal
+    - edge
+    - network
+    - auto
+link:
+  enable: bool
+  port_type:
+    type: str
+    valid_values:
+    - normal
+    - edge
+    - network
+    - auto
+node:
+  enable: bool
+  port_type:
+    type: str
+    valid_values:
+    - normal
+    - edge
+    - network
+    - auto
+  priority:
+    max_value: 61440
+    min_value: 0
+    type: int
+  protocol:
+    type: str
+    valid_values:
+    - stp
+    - rstp
+    - mstp
+    - pvrst
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

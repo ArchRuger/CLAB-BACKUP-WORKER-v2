@@ -1,0 +1,36 @@
+!
+router ospf 1
+!
+! These throttle timers are probably too aggressive for a production network but
+! make labs run better ;)
+!
+ log adjacency changes
+ timers throttle spf 10 20 100
+ timers throttle lsa all 10 20 100
+ router-id 10.255.0.4
+
+ loopback stub-network enable
+ area 0.0.0.0
+  interface Loopback0
+  interface GigabitEthernet0/0/0/0
+   network point-to-point
+  interface GigabitEthernet0/0/0/1
+   network point-to-point
+
+router ospfv3 1
+!
+! These throttle timers are probably too aggressive for a production network but
+! make labs run better ;)
+!
+ log adjacency changes
+ timers throttle spf 10 20 100
+ timers throttle lsa all 10 20 100
+ router-id 10.255.0.4
+
+ area 0.0.0.0
+  interface Loopback0
+  interface GigabitEthernet0/0/0/0
+   network point-to-point
+  interface GigabitEthernet0/0/0/1
+   network point-to-point
+

@@ -1,0 +1,31 @@
+system {
+  host-name r2;
+  static-host-mapping {
+    r1 inet 10.255.0.7;
+  }
+}
+
+interfaces {
+
+  lo0.0 {
+
+      family inet {
+        address 10.0.0.9/32;
+      }
+  }
+  ge-0/0/0.0 {
+    description "r2 -> r1";
+
+      family inet {
+        address 10.9.9.1/31;
+      }
+  }
+}
+protocols {
+  lldp {
+    interface fxp0 {
+      disable;
+    }
+    interface all;
+  }
+}

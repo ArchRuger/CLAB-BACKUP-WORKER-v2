@@ -1,0 +1,56 @@
+
+You can use the following evpn attributes:
+==============================================================================
+
+global:
+  as: asn
+  session:
+  - ibgp
+  - ebgp
+  start_transit_vni:
+    max_value: 16777215
+    min_value: 1
+    type: int
+  transport:
+    type: str
+    valid_values:
+    - vxlan
+    - mpls
+    - sr
+  vlans: list
+  vrfs: list
+node:
+  domain: str
+  session:
+  - ibgp
+  - ebgp
+  vlans: list
+  vrfs: list
+node_vlan:
+  export: list
+  import: list
+vlan:
+  evi: rd
+  export: list
+  import: list
+  rd: rd
+vrf:
+  bundle:
+    type: str
+    valid_values:
+    - vlan_aware
+    - vlan
+    - port
+    - port_vlan
+  transit_vni:
+    _alt_types:
+    - str
+    - bool
+    max_value: 16777215
+    min_value: 1
+    type: int
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

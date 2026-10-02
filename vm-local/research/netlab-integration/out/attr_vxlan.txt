@@ -1,0 +1,28 @@
+
+You can use the following vxlan attributes:
+==============================================================================
+
+global:
+  domain: id
+  flooding:
+    type: str
+    valid_values:
+    - static
+    - evpn
+  use_v6_vtep: bool
+  vlans: list
+link:
+  vtep: bool
+node:
+  domain: id
+  flooding:
+    type: str
+    valid_values:
+    - static
+    - evpn
+  vlans: list
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

@@ -1,0 +1,86 @@
+
+You can use the following ripv2 attributes:
+==============================================================================
+
+global:
+  af:
+    _alt_types:
+    - NoneType
+    _list_to_dict: true
+    ipv4: bool
+    ipv6: bool
+  bfd:
+    _alt_types:
+    - bool
+    ipv4: bool
+    ipv6: bool
+  timers:
+    garbage:
+      max_value: 600
+      min_value: 5
+      type: int
+    timeout:
+      max_value: 3600
+      min_value: 5
+      type: int
+    update:
+      max_value: 60
+      min_value: 5
+      type: int
+  version:
+    max_value: 2
+    min_value: 2
+    type: int
+link:
+  passive: bool
+node:
+  af:
+    _alt_types:
+    - NoneType
+    _list_to_dict: true
+    ipv4: bool
+    ipv6: bool
+  import: _r_import
+  timers:
+    garbage:
+      max_value: 600
+      min_value: 5
+      type: int
+    timeout:
+      max_value: 3600
+      min_value: 5
+      type: int
+    update:
+      max_value: 60
+      min_value: 5
+      type: int
+  version:
+    max_value: 2
+    min_value: 2
+    type: int
+vrf:
+  active: bool
+  af:
+    _alt_types:
+    - NoneType
+    _list_to_dict: true
+    ipv4: bool
+    ipv6: bool
+  timers:
+    garbage:
+      max_value: 600
+      min_value: 5
+      type: int
+    timeout:
+      max_value: 3600
+      min_value: 5
+      type: int
+    update:
+      max_value: 60
+      min_value: 5
+      type: int
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

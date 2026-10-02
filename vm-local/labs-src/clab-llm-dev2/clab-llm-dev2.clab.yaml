@@ -1,0 +1,16 @@
+# Two-node Junos development lab for the Containerlab Node Manager.
+# PTX1: cJunosEvolved (needs /dev/kvm). SW1: vJunos-switch.
+name: clab-llm-dev2
+topology:
+  nodes:
+    PTX1:
+      kind: juniper_cjunosevolved
+      image: n24l/cjunosevolved:26.2R1.7-EVO
+      mgmt-ipv4: 172.20.20.2
+    SW1:
+      kind: juniper_vjunosswitch
+      image: n24l/vjunos-switch:23.2R1.14
+      mgmt-ipv4: 172.20.20.3
+  links:
+    - endpoints: ["PTX1:et-0/0/0", "SW1:eth1"]
+    - endpoints: ["PTX1:et-0/0/1", "SW1:eth2"]

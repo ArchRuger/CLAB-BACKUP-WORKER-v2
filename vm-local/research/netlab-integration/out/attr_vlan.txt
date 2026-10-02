@@ -1,0 +1,59 @@
+
+You can use the following vlan attributes:
+==============================================================================
+
+copy_vlan_to_intf:
+  gateway: null
+  ipv4: null
+  ipv6: null
+global:
+  mode:
+    type: str
+    valid_values:
+    - bridge
+    - irb
+    - route
+keep_subif:
+  ifindex: null
+  ifname: null
+  type: null
+  virtual_interface: null
+  vlan: null
+link:
+  access: id
+  mode:
+    type: str
+    valid_values:
+    - route
+  native: id
+  trunk: null
+node:
+  mode: null
+phy_ifattr:
+  _selfloop_ifindex: null
+  bandwidth: null
+  bridge: null
+  evpn: null
+  ifindex: null
+  ifname: null
+  lag: null
+  linkindex: null
+  mtu: null
+  parentindex: null
+  stp: null
+  type: null
+  virtual_interface: null
+  vlan: null
+vlan_no_propagate:
+  evpn: null
+  id: null
+  lag: null
+  mode: null
+  prefix: null
+  stp: null
+  vni: null
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

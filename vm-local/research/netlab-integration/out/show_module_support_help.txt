@@ -1,0 +1,14 @@
+usage: netlab show module-support [-h] [--system] [--format {table,text,yaml}]
+                                  [-d DEVICE] [-m MODULE]
+
+Display configuration modules supported by individual devices
+
+options:
+  -h, --help            show this help message and exit
+  --system              Display system information (without user defaults)
+  --format {table,text,yaml}
+                        Output format (table, text, yaml)
+  -d DEVICE, --device DEVICE
+                        Display information for a single device
+  -m MODULE, --module MODULE
+                        Display information for a single module

@@ -1,0 +1,80 @@
+netlab Configuration modules and supported devices
+===========================================================================
+bfd:
+  arcos, arubacx, bird, cat8000v, crpd, csr, cumulus, dellos10, eos,
+  frr, iol, ioll2, iosv, iosvl2, nxos, routeros7, sonic, srlinux,
+  sros, srsim, vjunos-router, vjunos-switch, vmx, vptx, vsrx, vyos
+bgp:
+  arcos, arubacx, asav, bird, cat8000v, cisco8000v, crpd, csr,
+  cumulus, cumulus_nvue, dellos10, eos, fortios, frr, iol, ioll2,
+  iosv, iosvl2, iosxr, nxos, openbsd, routeros, routeros7, sonic,
+  srlinux, sros, srsim, vjunos-router, vjunos-switch, vmx, vptx, vsrx,
+  vyos
+dhcp:
+  arcos, bird, cat8000v, csr, cumulus, dnsmasq, eos, iol, ioll2, iosv,
+  iosvl2, kind, linux
+eigrp:
+  cat8000v, csr, iol, ioll2, iosv, iosvl2, nxos
+evpn:
+  arcos, arubacx, bird, cat8000v, cisco8000v, crpd, csr, cumulus,
+  cumulus_nvue, dellos10, eos, frr, iol, ioll2, iosxr, nxos, sonic,
+  srlinux, sros, srsim, vjunos-router, vjunos-switch, vptx, vyos
+gateway:
+  arcos, arubacx, bird, cat8000v, cisco8000v, crpd, csr, cumulus,
+  cumulus_nvue, dellos10, eos, exos, frr, iol, ioll2, iosv, iosvl2,
+  iosxr, nxos, sonic, srlinux, sros, srsim, vjunos-router, vjunos-
+  switch, vmx, vptx, vsrx, vyos
+isis:
+  arcos, asav, cat8000v, cisco8000v, crpd, csr, eos, frr, iol, ioll2,
+  iosv, iosvl2, iosxr, nxos, sonic, srlinux, sros, srsim, vjunos-
+  router, vjunos-switch, vmx, vptx, vsrx, vyos
+lag:
+  arcos, arubacx, bird, cumulus, cumulus_nvue, dellos10, dnsmasq, eos,
+  frr, ioll2, iosvl2, kind, linux, routeros7, vjunos-switch, vptx,
+  vsrx, vyos
+mpls:
+  arcos, arubacx, cat8000v, cisco8000v, crpd, csr, eos, frr, iol,
+  ioll2, iosv, iosvl2, iosxr, routeros, routeros7, srlinux, sros,
+  srsim, vjunos-router, vjunos-switch, vmx, vptx, vsrx, vyos
+ospf:
+  arcos, arubacx, asav, bird, cat8000v, cisco8000v, crpd, csr,
+  cumulus, cumulus_nvue, dellos10, eos, exos, fortios, frr, iol,
+  ioll2, iosv, iosvl2, iosxr, nxos, openbsd, routeros, routeros7,
+  sonic, srlinux, sros, srsim, vjunos-router, vjunos-switch, vmx, vpp,
+  vptx, vsrx, vyos
+ripv2:
+  cat8000v, csr, cumulus, eos, frr, iol, ioll2, iosv, iosvl2, openbsd,
+  sros, srsim, vyos
+routing:
+  arcos, arubacx, bird, cat8000v, cisco8000v, crpd, csr, csrx,
+  cumulus, cumulus_nvue, dellos10, dnsmasq, eos, fortios, frr, iol,
+  ioll2, iosv, iosvl2, iosxr, kind, linux, nxos, openbsd, routeros7,
+  sonic, srlinux, sros, srsim, vjunos-router, vjunos-switch, vmx,
+  vptx, vsrx, vyos
+services:
+  arubacx, bird, cat8000v, cisco8000v, crpd, csr, dnsmasq, eos, frr,
+  iol, ioll2, iosv, iosvl2, iosxr, kind, linux, nxos, openbsd,
+  routeros7, srlinux, sros, srsim, vjunos-router, vjunos-switch, vmx,
+  vptx, vsrx, vyos
+sr:
+  arcos, cat8000v, cisco8000v, crpd, csr, eos, frr, iol, ioll2, iosxr,
+  srlinux, sros, srsim, vjunos-router, vjunos-switch, vmx, vptx, vsrx
+srv6:
+  arcos, cat8000v, frr, iol, ioll2, iosxr
+stp:
+  arcos, arubacx, cumulus, cumulus_nvue, dellos10, eos, frr, ioll2,
+  iosvl2
+vlan:
+  arcos, arubacx, bird, cat8000v, cisco8000v, csr, cumulus,
+  cumulus_nvue, dellos10, dnsmasq, eos, exos, frr, iol, ioll2, iosv,
+  iosvl2, linux, nxos, openbsd, routeros, routeros7, srlinux, sros,
+  srsim, vjunos-router, vjunos-switch, vmx, vpp, vptx, vsrx, vyos
+vrf:
+  arcos, arubacx, bird, cat8000v, cisco8000v, crpd, csr, cumulus,
+  cumulus_nvue, dellos10, eos, frr, iol, ioll2, iosv, iosvl2, iosxr,
+  nxos, routeros, routeros7, srlinux, sros, srsim, vjunos-router,
+  vjunos-switch, vmx, vptx, vsrx, vyos
+vxlan:
+  arcos, arubacx, bird, cat8000v, csr, cumulus, cumulus_nvue,
+  dellos10, eos, frr, iol, ioll2, nxos, openbsd, routeros7, srlinux,
+  sros, srsim, vjunos-router, vjunos-switch, vptx, vyos

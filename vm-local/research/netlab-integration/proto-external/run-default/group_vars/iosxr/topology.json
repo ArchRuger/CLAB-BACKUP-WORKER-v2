@@ -1,0 +1,192 @@
+{
+  "ansible_become_method": "enable",
+  "ansible_network_os": "iosxr",
+  "ansible_connection": "network_cli",
+  "ansible_user": "vagrant",
+  "ansible_ssh_pass": "vagrant",
+  "ansible_become_password": "vagrant",
+  "features": {
+    "initial": {
+      "ipv4": {
+        "unnumbered": true
+      },
+      "ipv6": {
+        "lla": true
+      },
+      "min_mtu": 68,
+      "min_phy_mtu": 1500,
+      "max_mtu": 9216,
+      "collect": true,
+      "reload": true
+    },
+    "bgp": {
+      "activate_af": true,
+      "advertise": true,
+      "aggregate": true,
+      "allowas_in": true,
+      "as_override": true,
+      "confederation": true,
+      "default_originate": true,
+      "gtsm": true,
+      "import": [
+        "ospf",
+        "isis",
+        "connected",
+        "static",
+        "vrf"
+      ],
+      "local_as": true,
+      "local_as_ibgp": true,
+      "multihop": {
+        "vrf": true
+      },
+      "passive": true,
+      "password": true,
+      "remove_private_as": {
+        "valid": [
+          "on",
+          "all",
+          "replace",
+          "ingress",
+          "ingress-all"
+        ],
+        "caveats": {
+          "all": "caveats-iosxr",
+          "replace": "caveats-iosxr"
+        }
+      },
+      "rs_client": true,
+      "tcp_ao": true,
+      "timers": true,
+      "vrf_local_as": true
+    },
+    "gateway": {
+      "protocol": [
+        "vrrp"
+      ]
+    },
+    "isis": {
+      "circuit_type": true,
+      "unnumbered": {
+        "ipv4": true,
+        "ipv6": true,
+        "network": true
+      },
+      "import": [
+        "ospf",
+        "bgp",
+        "connected",
+        "static",
+        "vrf"
+      ]
+    },
+    "mpls": {
+      "ldp": true,
+      "vpn": true,
+      "6pe": true
+    },
+    "ospf": {
+      "unnumbered": true,
+      "password": true,
+      "priority": true,
+      "timers": true,
+      "default": true,
+      "import": [
+        "bgp",
+        "isis",
+        "connected",
+        "static",
+        "vrf"
+      ]
+    },
+    "routing": {
+      "aspath": {
+        "caveats": "caveats-iosxr"
+      },
+      "community": {
+        "standard": true,
+        "large": true,
+        "caveats": "caveats-iosxr"
+      },
+      "policy": {
+        "set": {
+          "community": {
+            "standard": true,
+            "large": true,
+            "append": true
+          },
+          "locpref": true,
+          "med": true,
+          "prepend": true,
+          "weight": true
+        },
+        "delete": {
+          "community": {
+            "standard": true,
+            "large": true,
+            "list": true
+          }
+        },
+        "match": {
+          "prefix": true,
+          "aspath": true,
+          "community": {
+            "standard": true,
+            "large": true
+          }
+        }
+      },
+      "prefix": {
+        "caveats": "caveats-iosxr"
+      },
+      "static": {
+        "vrf": true,
+        "inter_vrf": true,
+        "discard": true
+      }
+    },
+    "services": {
+      "dns": {
+        "ipv4": true,
+        "ipv6": true,
+        "transport_vrf": false
+      },
+      "syslog": true
+    },
+    "sr": {
+      "af": [
+        "ipv4",
+        "ipv6"
+      ],
+      "protocol": [
+        "isis",
+        "ospfv2"
+      ]
+    },
+    "evpn": {
+      "transport": {
+        "mpls": [
+          "ibgp"
+        ],
+        "sr": [
+          "ibgp"
+        ],
+        "cp_vxlan": [
+          "ibgp"
+        ]
+      },
+      "asymmetrical_irb": false
+    },
+    "vrf": {
+      "bgp": true,
+      "isis": true,
+      "ospfv2": true,
+      "ospfv3": true
+    },
+    "srv6": {
+      "bgp": true,
+      "isis": true,
+      "vpn": true
+    }
+  }
+}

@@ -1,0 +1,376 @@
+{
+ "navbar_controls": [
+  "navbar-lab-name",
+  "navbar-deploy",
+  "navbar-apply-dirty-badge",
+  "navbar-deploy-menu",
+  "navbar-lock",
+  "navbar-lab-settings",
+  "navbar-undo",
+  "navbar-redo",
+  "navbar-bulk-link",
+  "navbar-fit-viewport",
+  "navbar-split-view",
+  "navbar-layout",
+  "navbar-find-node",
+  "navbar-link-labels",
+  "navbar-capture",
+  "navbar-shortcuts",
+  "navbar-shortcut-display",
+  "navbar-about"
+ ],
+ "navbar-deploy": {
+  "menu_items": [],
+  "dialog": true,
+  "host_messages": [
+   "{\"command\":\"applyLab\"}"
+  ],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-apply-dirty-badge": {
+  "menu_items": [],
+  "dialog": true,
+  "host_messages": [
+   "{\"command\":\"applyLab\"}"
+  ],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-menu": {
+  "menu_items": [
+   "Apply",
+   "Deploy (cleanup)",
+   "Redeploy",
+   "Redeploy (cleanup)",
+   "Destroy",
+   "Destroy (cleanup)",
+   "Start Nodes",
+   "Stop Nodes",
+   "Restart Nodes"
+  ],
+  "dialog": false,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-lab-settings": {
+  "menu_items": [],
+  "dialog": true,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-undo": {
+  "click_error": "Page.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-testid=\\\"navbar-undo\\\"]\")\n    - locator re",
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-redo": {
+  "click_error": "Page.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-testid=\\\"navbar-redo\\\"]\")\n    - locator re",
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-bulk-link": {
+  "menu_items": [],
+  "dialog": true,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-fit-viewport": {
+  "menu_items": [],
+  "dialog": false,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-split-view": {
+  "menu_items": [],
+  "dialog": false,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-layout": {
+  "menu_items": [
+   "Preset",
+   "Force",
+   "Auto",
+   "Radial",
+   "Geo"
+  ],
+  "dialog": false,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-find-node": {
+  "menu_items": [],
+  "dialog": false,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-link-labels": {
+  "menu_items": [
+   "Show All",
+   "On Select",
+   "Hide"
+  ],
+  "dialog": false,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-capture": {
+  "menu_items": [],
+  "dialog": true,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-shortcuts": {
+  "menu_items": [],
+  "dialog": true,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-shortcut-display": {
+  "menu_items": [],
+  "dialog": false,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-about": {
+  "menu_items": [],
+  "dialog": true,
+  "host_messages": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-item-apply": {
+  "dialog_text": "Applying lab\nIn Progress\n\nwalk1\n\nElapsed: 0:01\nLive command output\n\nWaiting for command output...\n\nCANCEL",
+  "host_messages": [
+   "{\"command\":\"applyLab\"}"
+  ],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-item-deploy-cleanup": {
+  "dialog_text": "Deploying lab\nIn Progress\n\nwalk1\n\nElapsed: 0:01\nLive command output\n\nWaiting for command output...\n\nCANCEL",
+  "host_messages": [
+   "{\"command\":\"deployLabCleanup\"}"
+  ],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-item-redeploy": {
+  "click_error": "Page.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-testid=\\\"navbar-deploy-item-redeploy\\\"]\")\n",
+  "host_messages": [],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-item-redeploy-cleanup": {
+  "click_error": "Page.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-testid=\\\"navbar-deploy-item-redeploy-clean",
+  "host_messages": [],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-item-destroy": {
+  "click_error": "Page.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-testid=\\\"navbar-deploy-item-destroy\\\"]\")\n ",
+  "host_messages": [],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-item-destroy-cleanup": {
+  "click_error": "Page.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-testid=\\\"navbar-deploy-item-destroy-cleanu",
+  "host_messages": [],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-item-start-lab": {
+  "click_error": "Page.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-testid=\\\"navbar-deploy-item-start-lab\\\"]\")",
+  "host_messages": [],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-item-stop-lab": {
+  "click_error": "Page.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-testid=\\\"navbar-deploy-item-stop-lab\\\"]\")\n",
+  "host_messages": [],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-deploy-item-restart-lab": {
+  "click_error": "Page.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator(\"[data-testid=\\\"navbar-deploy-item-restart-lab\\\"]",
+  "host_messages": [],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-layout-preset": {
+  "dialog_text": "",
+  "host_messages": [],
+  "commands": [],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-layout-force": {
+  "dialog_text": "",
+  "host_messages": [],
+  "commands": [
+   "savePositions"
+  ],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-layout-auto": {
+  "dialog_text": "",
+  "host_messages": [],
+  "commands": [
+   "savePositions"
+  ],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-layout-radial": {
+  "dialog_text": "",
+  "host_messages": [],
+  "commands": [
+   "savePositions"
+  ],
+  "errors": [],
+  "csp": [],
+  "external": []
+ },
+ "navbar-layout-geo": {
+  "dialog_text": "",
+  "host_messages": [],
+  "commands": [
+   "savePositions"
+  ],
+  "errors": [
+   "Creating a worker from 'blob:http://127.0.0.1:8766/396a490f-42f6-4bed-8420-24747f0954ae' violates the following Content Security Policy directive: \"script-src 'self'\". Note that 'worker-src' was not e",
+   "Connecting to 'https://tile.openstreetmap.org/5/16/11.png' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+   "Fetch API cannot load https://tile.openstreetmap.org/5/16/11.png. Refused to connect because it violates the document's Content Security Policy.",
+   "Connecting to 'https://tile.openstreetmap.org/5/16/10.png' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked."
+  ],
+  "csp": [
+   "connect-src | https://tile.openstreetmap.org/3/4/2.png",
+   "connect-src | https://tile.openstreetmap.org/4/8/5.png",
+   "connect-src | https://tile.openstreetmap.org/5/14/10.png",
+   "connect-src | https://tile.openstreetmap.org/5/14/11.png",
+   "connect-src | https://tile.openstreetmap.org/5/14/12.png",
+   "connect-src | https://tile.openstreetmap.org/5/14/9.png",
+   "connect-src | https://tile.openstreetmap.org/5/15/10.png",
+   "connect-src | https://tile.openstreetmap.org/5/15/11.png",
+   "connect-src | https://tile.openstreetmap.org/5/15/12.png",
+   "connect-src | https://tile.openstreetmap.org/5/15/9.png",
+   "connect-src | https://tile.openstreetmap.org/5/16/10.png",
+   "connect-src | https://tile.openstreetmap.org/5/16/11.png",
+   "connect-src | https://tile.openstreetmap.org/5/16/12.png",
+   "connect-src | https://tile.openstreetmap.org/5/16/9.png",
+   "connect-src | https://tile.openstreetmap.org/5/17/10.png",
+   "connect-src | https://tile.openstreetmap.org/5/17/11.png",
+   "connect-src | https://tile.openstreetmap.org/5/17/12.png",
+   "connect-src | https://tile.openstreetmap.org/5/17/9.png",
+   "connect-src | https://tile.openstreetmap.org/5/18/10.png",
+   "connect-src | https://tile.openstreetmap.org/5/18/11.png",
+   "connect-src | https://tile.openstreetmap.org/5/18/12.png",
+   "connect-src | https://tile.openstreetmap.org/5/18/9.png",
+   "connect-src | https://tile.openstreetmap.org/5/19/10.png",
+   "connect-src | https://tile.openstreetmap.org/5/19/11.png",
+   "connect-src | https://tile.openstreetmap.org/5/19/12.png",
+   "connect-src | https://tile.openstreetmap.org/5/19/9.png",
+   "connect-src | https://tile.openstreetmap.org/7/64/42.png",
+   "connect-src | https://tile.openstreetmap.org/7/64/43.png",
+   "connect-src | https://tile.openstreetmap.org/7/64/44.png",
+   "connect-src | https://tile.openstreetmap.org/7/65/42.png",
+   "connect-src | https://tile.openstreetmap.org/7/65/43.png",
+   "connect-src | https://tile.openstreetmap.org/7/65/44.png",
+   "connect-src | https://tile.openstreetmap.org/7/66/42.png",
+   "connect-src | https://tile.openstreetmap.org/7/66/43.png",
+   "connect-src | https://tile.openstreetmap.org/7/66/44.png",
+   "connect-src | https://tile.openstreetmap.org/7/67/42.png",
+   "connect-src | https://tile.openstreetmap.org/7/67/43.png",
+   "connect-src | https://tile.openstreetmap.org/7/67/44.png",
+   "connect-src | https://tile.openstreetmap.org/8/129/85.png",
+   "connect-src | https://tile.openstreetmap.org/8/129/86.png",
+   "connect-src | https://tile.openstreetmap.org/8/129/87.png",
+   "connect-src | https://tile.openstreetmap.org/8/129/88.png",
+   "connect-src | https://tile.openstreetmap.org/8/129/89.png",
+   "connect-src | https://tile.openstreetmap.org/8/130/85.png",
+   "connect-src | https://tile.openstreetmap.org/8/130/86.png",
+   "connect-src | https://tile.openstreetmap.org/8/130/87.png",
+   "connect-src | https://tile.openstreetmap.org/8/130/88.png",
+   "connect-src | https://tile.openstreetmap.org/8/130/89.png",
+   "connect-src | https://tile.openstreetmap.org/8/131/85.png",
+   "connect-src | https://tile.openstreetmap.org/8/131/86.png",
+   "connect-src | https://tile.openstreetmap.org/8/131/87.png",
+   "connect-src | https://tile.openstreetmap.org/8/131/88.png",
+   "connect-src | https://tile.openstreetmap.org/8/131/89.png",
+   "connect-src | https://tile.openstreetmap.org/8/132/85.png",
+   "connect-src | https://tile.openstreetmap.org/8/132/86.png",
+   "connect-src | https://tile.openstreetmap.org/8/132/87.png",
+   "connect-src | https://tile.openstreetmap.org/8/132/88.png",
+   "connect-src | https://tile.openstreetmap.org/8/132/89.png",
+   "connect-src | https://tile.openstreetmap.org/8/133/85.png",
+   "connect-src | https://tile.openstreetmap.org/8/133/86.png",
+   "connect-src | https://tile.openstreetmap.org/8/133/87.png",
+   "connect-src | https://tile.openstreetmap.org/8/133/88.png",
+   "connect-src | https://tile.openstreetmap.org/8/133/89.png",
+   "connect-src | https://tile.openstreetmap.org/8/134/85.png",
+   "connect-src | https://tile.openstreetmap.org/8/134/86.png",
+   "connect-src | https://tile.openstreetmap.org/8/134/87.png",
+   "connect-src | https://tile.openstreetmap.org/8/134/88.png",
+   "connect-src | https://tile.openstreetmap.org/8/134/89.png",
+   "connect-src | https://tile.openstreetmap.org/8/135/85.png",
+   "connect-src | https://tile.openstreetmap.org/8/135/86.png",
+   "connect-src | https://tile.openstreetmap.org/8/135/87.png",
+   "connect-src | https://tile.openstreetmap.org/8/135/88.png",
+   "connect-src | https://tile.openstreetmap.org/8/135/89.png",
+   "worker-src | blob"
+  ],
+  "external": []
+ }
+}

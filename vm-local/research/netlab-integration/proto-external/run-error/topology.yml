@@ -1,0 +1,7 @@
+provider: external
+module: [ eigrp ]
+nodes:
+  ceos:
+    device: eos
+links:
+- ceos

@@ -1,0 +1,15 @@
+usage: netlab show modules [-h] [--system] [--format {table,text,yaml}]
+                           [-m MODULE] [--feature FEATURE] [--columns COLUMNS]
+
+Display supported configuration modules
+
+options:
+  -h, --help            show this help message and exit
+  --system              Display system information (without user defaults)
+  --format {table,text,yaml}
+                        Output format (table, text, yaml)
+  -m MODULE, --module MODULE
+                        Display information for a single module
+  --feature FEATURE     Display information for a single feature of the
+                        selected module
+  --columns COLUMNS     Maximum number of columns in the feature table(s)

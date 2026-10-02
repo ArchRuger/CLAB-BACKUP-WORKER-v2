@@ -1,0 +1,22 @@
+provider: external
+name: mgmttest
+nodes:
+  r1:
+    device: eos
+    id: 7
+    mgmt:
+      ipv4: 172.20.20.101
+      ifname: Management0
+    loopback:
+      ipv4: 10.255.0.7/32
+  r2:
+    device: vjunos-switch
+    id: 9
+    mgmt.ipv4: 172.20.20.103
+links:
+  - r1:
+      ifname: Ethernet1
+    r2:
+      ifname: ge-0/0/0
+    prefix:
+      ipv4: 10.9.9.0/31

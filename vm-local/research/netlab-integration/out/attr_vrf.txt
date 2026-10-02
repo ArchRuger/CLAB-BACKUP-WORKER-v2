@@ -1,0 +1,15 @@
+
+You can use the following vrf attributes:
+==============================================================================
+
+global:
+  as: asn
+  loopback: bool
+node:
+  as: asn
+  loopback: bool
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

@@ -1,0 +1,7 @@
+provider: external
+nodes:
+  ceos:
+    device: eos
+    bgp.nonexistent_attribute: true
+links:
+- ceos

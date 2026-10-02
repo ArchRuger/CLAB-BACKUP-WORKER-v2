@@ -1,0 +1,60 @@
+{
+ "lab-builder.html tabs=on": {
+  "palette_tabs": [
+   "NODES",
+   "ANNOTATIONS",
+   "YAML",
+   "JSON"
+  ],
+  "monaco_rendered": true,
+  "monaco_text_lines": 17,
+  "markers_visible": 0,
+  "loaded_after_click": [
+   "c-NYZ27TVX.js",
+   "c-NCXRRKYW.js",
+   "editor-worker.js"
+  ],
+  "monaco_chunk_loaded": true,
+  "errors": [
+   "Error compiling schema, function code: const schema2 = scope.schema[2];const schema1 = scope.schema[1];return function validate1(data, {instancePath=\"\", parentData, parentDataProperty, rootData=data}={}){let vErrors = null;let errors = 0;if(!((typeof data == \"",
+   "PAGEERROR Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n",
+   "Error compiling schema, function code: const schema16 = scope.schema[13];const schema17 = scope.schema[14];const func5 = scope.func[2];return function validate5(data, {instancePath=\"\", parentData, parentDataProperty, rootData=data}={}){let vErrors = null;let e",
+   "PAGEERROR Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n"
+  ],
+  "error_count": 4,
+  "csp": [
+   "script-src | eval | c-6VJFPT63.js:5"
+  ]
+ },
+ "lab-builder-eval.html tabs=on": {
+  "palette_tabs": [
+   "NODES",
+   "ANNOTATIONS",
+   "YAML",
+   "JSON"
+  ],
+  "monaco_rendered": true,
+  "monaco_text_lines": 17,
+  "markers_visible": 18,
+  "loaded_after_click": [
+   "c-NYZ27TVX.js",
+   "c-NCXRRKYW.js",
+   "editor-worker.js"
+  ],
+  "monaco_chunk_loaded": true,
+  "errors": [],
+  "error_count": 0,
+  "csp": []
+ },
+ "lab-builder.html tabs=off": {
+  "palette_tabs": [
+   "NODES",
+   "ANNOTATIONS"
+  ],
+  "loaded_after_click": [],
+  "monaco_chunk_loaded": false,
+  "errors": [],
+  "error_count": 0,
+  "csp": []
+ }
+}

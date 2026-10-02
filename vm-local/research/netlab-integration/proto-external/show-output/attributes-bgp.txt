@@ -1,0 +1,126 @@
+
+You can use the following bgp attributes:
+==============================================================================
+
+_inherit_community:
+  localas_ibgp: ibgp
+as_list:
+  _keytype: int
+  _subtype:
+    members:
+      _required: true
+      _subtype: str
+      type: list
+    name: str
+    rr:
+      _subtype: str
+      type: list
+  type: dict
+global:
+  activate:
+    ipv4:
+      _subtype: bgp_session_type
+      type: list
+    ipv6:
+      _subtype: bgp_session_type
+      type: list
+  advertise_loopback: bool
+  advertise_roles: list
+  as: asn
+  as_list: dict
+  community:
+    _value_to_dict:
+      ebgp: '{value}'
+      ibgp: '{value}'
+    ebgp:
+      _subtype: bgp_community_type
+      type: list
+    ibgp:
+      _subtype: bgp_community_type
+      type: list
+  confederation:
+    _keytype: asn
+    _subtype:
+      members:
+        _subtype: asn
+        type: list
+    type: dict
+  ebgp_role: str
+  next_hop_self: bool
+  replace_global_as: bool
+  rr_cluster_id:
+    type: ipv4
+    use: id
+  rr_list: list
+  rr_mesh: bool
+  sessions:
+    ipv4:
+      _subtype: bgp_session_type
+      type: list
+    ipv6:
+      _subtype: bgp_session_type
+      type: list
+interface:
+  local_as: asn
+  replace_global_as: bool
+link:
+  advertise:
+    _intra_as: true
+    type: bool
+loopback:
+  advertise: bool
+node:
+  activate:
+    ipv4:
+      _subtype: bgp_session_type
+      type: list
+    ipv6:
+      _subtype: bgp_session_type
+      type: list
+  advertise: bgp_prefix_list
+  advertise_loopback: bool
+  as:
+    _required: true
+    type: asn
+  community:
+    _value_to_dict:
+      ebgp: '{value}'
+      ibgp: '{value}'
+    ebgp:
+      _subtype: bgp_community_type
+      type: list
+    ibgp:
+      _subtype: bgp_community_type
+      type: list
+  import: _r_import
+  local_as: asn
+  next_hop_self: bool
+  originate: bgp_prefix_list
+  replace_global_as: bool
+  router_id:
+    type: ipv4
+    use: id
+  rr: bool
+  rr_cluster_id:
+    type: ipv4
+    use: id
+  rr_mesh: bool
+  sessions:
+    ipv4:
+      _subtype: bgp_session_type
+      type: list
+    ipv6:
+      _subtype: bgp_session_type
+      type: list
+vrf:
+  advertise: bgp_prefix_list
+  import: _r_import
+  originate: bgp_prefix_list
+  router_id:
+    type: ipv4
+    use: id
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

@@ -1,0 +1,3 @@
+- [clab-llm-dev2 is not the dev VM](clab-llm-dev2-is-not-the-dev-vm.md) — OUTDATED since 2026-09-17: the host was installed as the dev VM; see the remote agent guide
+- [Node boot status from the manager, not docker logs](node-boot-status-from-manager-not-docker-logs.md) — user feedback: judge Junos readiness via /api/state or SSH; don't switch models
+- [Remote agent guide for clab-llm-dev2](remote-agent-guide-for-clab-llm-dev2.md) — ~/AGENT-CONNECT.md + Claude doc; validation tools in ~/validation-tools; gh has two accounts

@@ -1,0 +1,25 @@
+{
+ "layout_menu_visible": [
+  "Preset",
+  "Force",
+  "Auto",
+  "Radial",
+  "Geo"
+ ],
+ "geo_visible": false,
+ "deploy_menu_visible": [
+  "Apply"
+ ],
+ "split_view_visible": false,
+ "after_deploy_click_dialog": "Applying lab\nCompleted\n\nwalk1\n\nDuration: 0:00\nLive command output\nPrototype host: \"applyLab\" would open the manager's reviewed operation.\nCommand completed successfully.\nOK",
+ "editor_usable_after_deploy": true,
+ "host_calls": [
+  "host.runLifecycle \"applyLab\""
+ ],
+ "capture_modal": true,
+ "grafana_controls_visible": false,
+ "svg_export_download": "walk1.svg",
+ "errors": [],
+ "csp": [],
+ "external_requests": []
+}

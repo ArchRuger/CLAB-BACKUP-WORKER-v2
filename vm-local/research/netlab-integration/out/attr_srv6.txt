@@ -1,0 +1,96 @@
+
+You can use the following srv6 attributes:
+==============================================================================
+
+global:
+  _obsolete:
+    allocate_loopback: This attribute is obsolete and does nothing
+  bgp:
+    _alt_types:
+    - bool
+    - BoxList
+    ipv4:
+      true_value:
+      - ibgp
+      type: list
+      valid_values:
+      - ibgp
+    ipv6:
+      true_value:
+      - ibgp
+      type: list
+      valid_values:
+      - ibgp
+  igp:
+    type: list
+    valid_values:
+    - isis
+    - ospf
+  locator_pool:
+    type: ipv6
+    use: subnet_prefix
+  vpn:
+    _alt_types:
+    - bool
+    - BoxList
+    ipv4:
+      true_value:
+      - ibgp
+      type: list
+      valid_values:
+      - ibgp
+    ipv6:
+      true_value:
+      - ibgp
+      type: list
+      valid_values:
+      - ibgp
+node:
+  _obsolete:
+    allocate_loopback: This attribute is obsolete and does nothing
+  bgp:
+    _alt_types:
+    - bool
+    - BoxList
+    ipv4:
+      true_value:
+      - ibgp
+      type: list
+      valid_values:
+      - ibgp
+    ipv6:
+      true_value:
+      - ibgp
+      type: list
+      valid_values:
+      - ibgp
+  igp:
+    type: list
+    valid_values:
+    - isis
+    - ospf
+  locator:
+    type: ipv6
+    use: subnet_prefix
+  transit_only: bool
+  vpn:
+    _alt_types:
+    - bool
+    - BoxList
+    ipv4:
+      true_value:
+      - ibgp
+      type: list
+      valid_values:
+      - ibgp
+    ipv6:
+      true_value:
+      - ibgp
+      type: list
+      valid_values:
+      - ibgp
+
+==============================================================================
+See https://netlab.tools/dev/validation/ for more data type- and
+attribute validation details.
+

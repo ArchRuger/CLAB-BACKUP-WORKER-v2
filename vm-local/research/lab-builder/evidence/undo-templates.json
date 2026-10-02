@@ -1,0 +1,13 @@
+{
+ "after_add": 2,
+ "after_undo": 1,
+ "after_redo": 2,
+ "yaml_nodes_after_redo": 2,
+ "after_keyboard_delete": 1,
+ "template_row_buttons": 3,
+ "host_calls": [
+  "host.setDefaultCustomNode \"Cisco XRv9k\""
+ ],
+ "bulk_link_dialog": true,
+ "errors": []
+}

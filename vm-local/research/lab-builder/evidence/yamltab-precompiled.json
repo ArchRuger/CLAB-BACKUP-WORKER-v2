@@ -1,0 +1,22 @@
+{
+ "lab-builder.html tabs=on": {
+  "palette_tabs": [
+   "NODES",
+   "ANNOTATIONS",
+   "YAML",
+   "JSON"
+  ],
+  "monaco_rendered": true,
+  "monaco_text_lines": 17,
+  "markers_visible": 18,
+  "loaded_after_click": [
+   "c-NYZ27TVX.js",
+   "c-NCXRRKYW.js",
+   "editor-worker.js"
+  ],
+  "monaco_chunk_loaded": true,
+  "errors": [],
+  "error_count": 0,
+  "csp": []
+ }
+}

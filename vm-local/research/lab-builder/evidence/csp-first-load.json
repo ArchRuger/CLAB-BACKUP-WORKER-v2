@@ -1,0 +1,51 @@
+{
+ "lab-builder-manager.html": {
+  "console_errors": 3,
+  "page_errors": 0,
+  "csp_violations": 3,
+  "csp_kinds": [
+   "style-src-elem"
+  ],
+  "csp_sample": [
+   "style-src-elem | inline | c-IECTFRFS.js:1",
+   "style-src-elem | inline | c-IECTFRFS.js:1",
+   "style-src-elem | inline | c-IECTFRFS.js:1"
+  ],
+  "console_sample": [
+   "Applying inline style violates the following Content Security Policy directive 'style-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
+   "Applying inline style violates the following Content Security Policy directive 'style-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
+   "Applying inline style violates the following Content Security Policy directive 'style-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked."
+  ],
+  "page_error_sample": [],
+  "external_requests": [],
+  "requests_failed": [],
+  "root_children": 1,
+  "style_tags": 3
+ },
+ "lab-builder.html": {
+  "console_errors": 0,
+  "page_errors": 0,
+  "csp_violations": 0,
+  "csp_kinds": [],
+  "csp_sample": [],
+  "console_sample": [],
+  "page_error_sample": [],
+  "external_requests": [],
+  "requests_failed": [],
+  "root_children": 1,
+  "style_tags": 3
+ },
+ "lab-builder-eval.html": {
+  "console_errors": 0,
+  "page_errors": 0,
+  "csp_violations": 0,
+  "csp_kinds": [],
+  "csp_sample": [],
+  "console_sample": [],
+  "page_error_sample": [],
+  "external_requests": [],
+  "requests_failed": [],
+  "root_children": 1,
+  "style_tags": 3
+ }
+}

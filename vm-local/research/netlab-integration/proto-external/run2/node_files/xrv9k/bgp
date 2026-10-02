@@ -1,0 +1,67 @@
+!
+router bgp 65000
+ bgp unsafe-ebgp-policy
+ bgp scan-time 5
+ bgp update-delay 5
+ bgp router-id 10.255.0.3
+
+!
+ address-family ipv4 unicast
+  bgp scan-time 5
+!
+!
+  network 10.255.0.3/32
+!
+ address-family ipv6 unicast
+  bgp scan-time 5
+!
+!
+  network 2001:db8:ff:3::/64
+!
+ neighbor 10.255.0.1
+  remote-as 65000
+  description ceos
+  update-source Loopback0
+  address-family ipv4 unicast
+   next-hop-self
+
+!
+ neighbor 10.255.0.2
+  remote-as 65000
+  description cjunosevolved
+  update-source Loopback0
+  address-family ipv4 unicast
+   next-hop-self
+
+!
+ neighbor 10.255.0.4
+  remote-as 65000
+  description vjunos-switch
+  update-source Loopback0
+  address-family ipv4 unicast
+   next-hop-self
+
+!
+ neighbor 2001:db8:ff:1::1
+  remote-as 65000
+  description ceos
+  update-source Loopback0
+  address-family ipv6 unicast
+   next-hop-self
+
+!
+ neighbor 2001:db8:ff:2::1
+  remote-as 65000
+  description cjunosevolved
+  update-source Loopback0
+  address-family ipv6 unicast
+   next-hop-self
+
+!
+ neighbor 2001:db8:ff:4::1
+  remote-as 65000
+  description vjunos-switch
+  update-source Loopback0
+  address-family ipv6 unicast
+   next-hop-self
+
