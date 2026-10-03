@@ -17,8 +17,11 @@ Per-request evidence: `docs/uiux-email-2026-10-03/MATRIX.md`; live record: `evid
   check. On the merged tree: Python 2016 tests OK (2 skipped), Node 427 pass, `python3 -m unittest discover -s tests -p
   'test_install_*.py'` (system Python) 307 OK (1 skipped), `verify-release.py` OK, link check 0 problems, editor
   `--check` OK. B's CI proposals (`docs/installer-tui/HANDOFF.md`) are not applied here; they stay a separate change.
-- dev1 refreshed to 1.30.59 with the documented upgrade (`deploy/install.sh`, menu 1): `Manager 1.30.59: running;
-  HTTP and version checks passed.`
+- dev1 refreshed to 1.30.59 with the documented upgrade (`deploy/install.sh`, menu 1) from the merged checkout
+  `64ad1bb`: `Manager 1.30.59: running; HTTP and version checks passed.`; manager and capture session images
+  1.30.59; `check-install.sh` 55 PASS, 3 WARN (Git helper, folder coverage, repository registry: Git setup was
+  deliberately skipped on dev1); the acceptance lab kept running through the upgrade.
+- CI: `release-check` passed on PR #67 for `64ad1bb` (push and pull_request runs, ≈7.5 min each).
 
 ## Fixture browser (Playwright, `docs/redesign/tools/fixture_manager.py`, fresh data)
 
@@ -48,7 +51,7 @@ Per-request evidence: `docs/uiux-email-2026-10-03/MATRIX.md`; live record: `evid
 
 ## Not covered
 
-- No CI run yet on this branch at the time of writing; no desktop client; no production device; Network design apply
+- No desktop client; no production device; Network design apply
   was deliberately not run (reviews only).
 
 # Netlab UI/UX campaign, part 4: lab-bound design dialogs — 1.30.58
