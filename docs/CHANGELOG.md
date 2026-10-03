@@ -4,6 +4,38 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.59
+
+The "Ui/Ux Changes" email of 2026-10-03 (tasks 1–8 and two closing requests), implemented on dev1. Task records:
+[`docs/uiux-email-2026-10-03/`](uiux-email-2026-10-03/MATRIX.md).
+
+- **Lab builder templates** (task 1): the built-in cJunosEvolved, vJunos-switch, XRv9k and cEOS templates default to
+  `n24l/cjunosevolved:26.2R1.7-EVO`, `n24l/vjunos-switch:23.2R1.14`, `n24l/cisco_xrv9k:24.3.1` and `n24l/ceos:4.35.0F`
+  (the email's `N24l/ceos` is not a valid Docker reference: the namespace is lowercased, the tag kept). They win over
+  the site-image preference, which stays for the Linux host. Templates already stored in a browser move once, and only
+  where they still hold a previous built-in default.
+- **cJunosEvolved host name** (task 7): containerlab passes no host name to this kind and Juniper's entrypoint replaces
+  its `host-name HOSTNAME` placeholder only under `CPTX_AUTO_CONFIG`; new cJunosEvolved nodes from the template carry
+  `env: CPTX_AUTO_CONFIG: "1"` (visible in the YAML; never added to existing nodes, imported YAML or a node with a
+  startup-config). Save/Start reviews warn when a cJunosEvolved node has both. Root cause:
+  [`T7-ROOT-CAUSE.md`](uiux-email-2026-10-03/T7-ROOT-CAUSE.md).
+- **Image check in the builder** (task 2): one notice, replaced by the next result, dismissible by keyboard, info styled
+  like the app's banners and errors on a solid red background with "Error:"; stale answers are dropped.
+- **Center label position** (task 3) in the builder and Edit map, opaque by default, honoured by the manager map and
+  the draw.io export.
+- **Reviews** (task 4): Save and Start reviews list only images that need attention (none when all is well); the
+  placeholder "Command run on the VM: Save lab to the VM" is gone; real commands stay.
+- **After saving** (task 5): "Add to My labs without starting" leads to two buttons, Deploy now (the reviewed deploy)
+  and Go to My labs. A closed topology preview no longer stays painted over the editor (`.dialog-viewport` overrode
+  the closed dialog's `display:none`; fixed for every page).
+- **Lab page** (task 6): the header actions and the lab banner's actions share one column. **Devices** (closing
+  request 1): Technical view replaces the device cards. **Capture traffic** (closing request 2): the Search field is gone.
+- **Network design** (task 8) moves to Advanced → Experimental, marked "Under construction / Under review"; old
+  `view=design` links land there. EIGRP, RIP and VXLAN are no longer offered and EVPN is unavailable under review
+  (no end-to-end EVPN-over-MPLS path here); stored designs keep them read-only and Generate/Apply refuse them. Route
+  reflectors are a compact grid; Save/Generate failures show a focused summary under the buttons; Apply to devices
+  shows a live per-device review log backed by a review job.
+
 ## Changes in 1.30.58
 
 The fix the netlab campaign built on 2026-09-28 as its unpublished 1.30.51 (set aside while the UI/UX changes 2

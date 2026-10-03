@@ -1,3 +1,20 @@
+# Ui/Ux Changes email (UIUX-EMAIL-2026-10-03) — 1.30.59
+
+Read `docs/uiux-email-2026-10-03/PICKUP.md` and `MATRIX.md` first. What the next agent must preserve:
+(1) `BUILDER_TEMPLATES` pins the four n24l images (`pinned`, winning over the site-image preference that stays for
+Linux); `builderMigrateTemplates` moves only an untouched previous default, once, under `clab-builder:templates-version`,
+and the marker is written whenever nothing is stored and on every save (a list edited on this page is never migrated).
+(2) The cJunosEvolved template's `env: CPTX_AUTO_CONFIG: "1"` is the host-name fix (`T7-ROOT-CAUSE.md`); never add it to
+existing nodes, imported YAML or a node with a startup-config; `lab_operations.cptx_startup_warnings` warns on both.
+(3) Reviews show only `opImageAttention` rows; "Command run on the VM" only for a real argv. (4) The builder's save
+result (`opOnBuilder`, `opRenderPublished`) offers Deploy now / Go to My labs; `.dialog-viewport:not([open])` must stay
+`display:none`. (5) `#lab-banner` and `.lab-header` share `--lab-action-col`; Technical view and the card list are
+exclusive (`hidden`). (6) Network design lives in `#experimental-design` under Advanced (`TAB_ALIAS.design`,
+`SUBVIEW.design`); `design_intent.RETIRED` is the single source for eigrp, ripv2, vxlan (netlab module only) and evpn —
+they stay in `MODULES` so stored designs open and export; Save refuses newly added ones, Import may keep them, Generate,
+apply review and apply submit refuse them. (7) The device review is an in-memory job (`/design/review-jobs`), real
+stages only, token only when done, one running review per lab, no cancel; contract `DESIGN-CONTRACT.md`.
+
 # Netlab UI/UX campaign, part 4: lab-bound design dialogs — 1.30.58
 
 Read `docs/netlab-ui-qa/PICKUP.md` first, then `FINAL-REPORT.md`. This is the campaign's 1.30.51 of 2026-09-28,

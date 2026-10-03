@@ -18,7 +18,22 @@
 - Disposable T7 labs (deployed directly with containerlab, outside the manager): `~/dev1-labs/t7repro`
   (ptx1, unmodified) and `~/dev1-labs/t7fix` (ptx2 with `CPTX_AUTO_CONFIG`, ptx3 also with `hostname: core-ptx`).
 
-## Ownership while agents run
+## Status (release 1.30.59)
+
+All 18 matrix rows are `done` with unit, fixture and live dev1 evidence ([MATRIX.md](MATRIX.md),
+[evidence/LIVE-ACCEPTANCE.md](evidence/LIVE-ACCEPTANCE.md)). Records: [T7-ROOT-CAUSE.md](T7-ROOT-CAUSE.md),
+[DESIGN-CONTRACT.md](DESIGN-CONTRACT.md); EVPN/retirement decisions in `docs/netlab-integration/DECISIONS.md` §10 and
+`docs/NETWORK-DESIGN.md`.
+
+- Live lab `UX-ACCEPT-01` is left running on dev1 (5 nodes, a saved IPv4 IS-IS+BGP design and plan; nothing applied).
+  The dev1 manager runs the branch build; helpers are the installed 1.30.58 ones until the 1.30.59 refresh below.
+- Open, by choice and recorded: Network design apply was not run live (reviews only); the 390 px page overflow
+  (≈428 px) predates this branch; the "newer than this workspace" note after deploy predates it.
+- Next: CI on the pull request; refresh dev1 to 1.30.59 with the launcher
+  (`bash "$HOME/projects/clab-manager/deploy/start-manager.sh"` and the helper `--refresh` scripts) and rerun the
+  health check; then merge through the protected workflow when the maintainer approves.
+
+## Ownership during the campaign (historical)
 
 | Scope | Files |
 |---|---|
