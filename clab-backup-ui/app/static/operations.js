@@ -180,8 +180,9 @@ async function opReviewImages(dialog,images){
   list.innerHTML=attention.map(r=>`<li class="${opImageMissing([r]).length?'op-image-missing':''}">${esc(opImageLine(r))}</li>`).join('');
   if(section){section.hidden=!attention.length;const summary=section.querySelector('summary');if(summary)summary.textContent=`Images needing attention (${attention.length})`;}
   if(status)status.remove();
-  const missing=opImageMissing(rows),notice=dialog.querySelector('#op-review-images-notice');
-  if(notice){notice.hidden=!missing.length;notice.textContent=missing.length?(missing.length===1?'One image':missing.length+' images')+' cannot be pulled on this VM: '+missing.map(m=>m.reference).join(', ')+'. The devices using it stay down after the deploy. Choose an image the VM has, or load it on the VM first.':'';}
+  // The image is named once, in the list above with its reason; the one fix sentence sits directly under the heading.
+  const missing=opImageMissing(rows),fix=dialog.querySelector('#op-review-images-fix');
+  if(fix){fix.hidden=!missing.length;fix.textContent=missing.length?(missing.length===1?'The devices using it stay down after the deploy.':'The devices using them stay down after the deploy.')+' Choose an image the VM has, or load it on the VM first.':'';}
  }catch{if(dialog.open&&list.isConnected&&status){status.className='op-notice';status.textContent='Images could not be checked right now; the deploy reports any image it cannot pull.';}}
 }
 async function opReview(request,opener){
@@ -206,7 +207,7 @@ async function opReview(request,opener){
  const command=(value.steps?.length?value.steps:[value.argv]).filter(a=>Array.isArray(a)&&a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n');
  const commandBlock=`${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}${command?`<h4>Command run on the VM</h4><pre class="op-output">${esc(command)}</pre>`:''}${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}`;
  const images=Array.isArray(value.images)?value.images.filter(i=>i&&typeof i.reference==='string'):[];
- const imageBlock=images.length?`<p class="form-help" id="op-review-images-status" role="status" aria-live="polite">Checking images…</p><p class="op-notice" id="op-review-images-notice" hidden></p><details open class="op-images" id="op-review-images-section" hidden><summary>Images needing attention</summary><ul id="op-review-images"></ul></details>`:'';
+ const imageBlock=images.length?`<p class="form-help" id="op-review-images-status" role="status" aria-live="polite">Checking images…</p><details open class="op-images" id="op-review-images-section" hidden><summary>Images needing attention</summary><p class="form-help" id="op-review-images-fix" hidden></p><ul id="op-review-images"></ul></details>`:'';
  const dialog=opDialog('operation-review',title,`${copy.hideName?'':`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All labs on the VM')}</p>`}
  ${warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
  <p>${esc(body)}</p>
@@ -327,7 +328,7 @@ function opLabAtPath(path){return (state.labs||[]).find(l=>opPath(l)===path)||nu
 function opPublishedMarkup(path,lab){
  const name=lab?(lab.name||opName(lab)):'';
  return lab
-  ?`<p class="op-notice ok" id="op-published-status" role="status" tabindex="-1">✓ ${esc(name)} is in My labs. It is not running: adding a lab never starts its devices.</p><div class="actions"><button class="button primary" id="op-published-deploy">Deploy now</button><button class="button secondary" id="op-published-go" data-lab="${esc(lab.id)}">Go to My labs</button></div>`
+  ?`<p class="op-notice ok" id="op-published-status" tabindex="-1">✓ ${esc(name)} is in My labs. It is not running: adding a lab never starts its devices.</p><div class="actions"><button class="button primary" id="op-published-deploy">Deploy now</button><button class="button secondary" id="op-published-go" data-lab="${esc(lab.id)}">Go to My labs</button></div>`
   :`<p class="form-help">Add it to My labs to keep it with your other labs, or deploy it now (the deploy shows what it will do and asks you to confirm first).</p><div class="actions"><button class="button primary" id="op-published-add">Add to My labs without starting</button><button class="button secondary" id="op-published-deploy">Deploy now</button></div>`;
 }
 // One request at a time per file: a double click, or a second click while the first still runs, adds nothing twice.

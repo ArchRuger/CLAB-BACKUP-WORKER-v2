@@ -168,9 +168,10 @@ def topology(r):
     r.check('devices: no address in the simple rows', r.js('() => !document.querySelector("#device-list .device-meta")'))
     r.shot('20-devices')
     p.click('#devices-technical')
-    r.check('devices: technical view shows the table', r.js('() => !document.getElementById("inventory-view").hidden && document.getElementById("devices-technical").getAttribute("aria-pressed") === "true"'))
+    r.check('devices: technical view shows the table alone and the button now reads Standard view (no aria-pressed)', r.js('() => !document.getElementById("inventory-view").hidden && document.getElementById("device-list").hidden && document.getElementById("devices-technical").textContent.trim() === "Standard view" && !document.getElementById("devices-technical").hasAttribute("aria-pressed")'))
     r.shot('21-devices-technical')
     p.click('#devices-technical')
+    r.check('devices: the label swaps back to Technical view and the cards return', r.js('() => document.getElementById("devices-technical").textContent.trim() === "Technical view" && document.getElementById("inventory-view").hidden && !document.getElementById("device-list").hidden'))
     # Map editor and export-sessions dialogs
     r.tab('topology')
     # Edit map opens the full map editor (the lab builder's editor in map mode) for a lab whose topology

@@ -24,19 +24,19 @@ test('opImageAttention keeps only images a student must act on: not local and no
 });
 test('the review image check lists only attention rows, removes its status line, hides the section when all is clear and says once that a failed check failed',async()=>{
  const mk=()=>{
-  const node={list:{innerHTML:'',isConnected:true},status:{removed:false,className:'',textContent:'',remove(){this.removed=true;}},summary:{textContent:''},notice:{hidden:true,textContent:''}};
+  const node={list:{innerHTML:'',isConnected:true},status:{removed:false,className:'',textContent:'',remove(){this.removed=true;}},summary:{textContent:''},fix:{hidden:true,textContent:''}};
   node.section={hidden:true,querySelector:()=>node.summary};
-  node.dialog={open:true,querySelector:sel=>({'#op-review-images':node.list,'#op-review-images-status':node.status,'#op-review-images-section':node.section,'#op-review-images-notice':node.notice})[sel]||null};
+  node.dialog={open:true,querySelector:sel=>({'#op-review-images':node.list,'#op-review-images-status':node.status,'#op-review-images-section':node.section,'#op-review-images-fix':node.fix})[sel]||null};
   return node;
  };
  const run=async(answer)=>{const n=mk();context.json=async()=>{if(answer instanceof Error)throw answer;return answer;};
   await context.opReviewImages(n.dialog,[{reference:'a:1',nodes:['r1']},{reference:'b:2',nodes:['r2']},{reference:'c:3',nodes:[]}]);return n;};
  const clear=await run({images:[{reference:'a:1',local:true,registry:'skipped'},{reference:'b:2',local:false,registry:'found'},{reference:'c:3',local:true,registry:'skipped'}]});
- assert.equal(clear.status.removed,true);assert.equal(clear.section.hidden,true,'no empty Images heading');assert.equal(clear.list.innerHTML,'');assert.equal(clear.notice.hidden,true);
+ assert.equal(clear.status.removed,true);assert.equal(clear.section.hidden,true,'no empty Images heading');assert.equal(clear.list.innerHTML,'');assert.equal(clear.fix.hidden,true);
  const some=await run({images:[{reference:'a:1',local:true},{reference:'b:2',local:false,registry:'not-found'},{reference:'c:3',local:false,registry:'unreachable'}]});
  assert.equal(some.section.hidden,false);assert.equal(some.summary.textContent,'Images needing attention (2)');
  assert.match(some.list.innerHTML,/class="op-image-missing">b:2 \(r2\): not on the VM and no registry offers it/);assert.match(some.list.innerHTML,/c:3: not on the VM; its registry did not answer/);assert.doesNotMatch(some.list.innerHTML,/a:1/);
- assert.match(some.notice.textContent,/One image cannot be pulled on this VM: b:2/);
+ assert.equal(some.fix.hidden,false);assert.equal(some.fix.textContent,'The devices using it stay down after the deploy. Choose an image the VM has, or load it on the VM first.','the single fix sentence sits under the list heading');assert.doesNotMatch(some.fix.textContent,/b:2/,'the image is named once, in the list');
  const failed=await run(new Error('boom'));
  assert.equal(failed.status.removed,false);assert.match(failed.status.textContent,/Images could not be checked right now; the deploy reports any image it cannot pull\./);assert.equal(failed.section.hidden,true);
  const stale=mk();stale.dialog.open=false;context.json=async()=>({images:[]});await context.opReviewImages(stale.dialog,[{reference:'a:1'}]);assert.equal(stale.status.removed,false,'a closed dialog is left alone');

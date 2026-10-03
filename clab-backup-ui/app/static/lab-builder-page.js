@@ -288,6 +288,7 @@ function builderImageRender(result){
  if(result.key===builderImageDismissed){builderImageShown='';slot.hidden=true;return;}
  builderImageShown=result.key;slot.className='builder-images'+(result.summary.tone==='error'?' error':result.summary.tone==='warn'?' warn':'');
  slot.setAttribute('role',result.summary.tone==='error'?'alert':'status');
+ if($('builder-images-lead'))$('builder-images-lead').hidden=result.summary.tone!=='info';   // warning and error say Warning:/Error: in their own text
  $('builder-images-text').textContent=result.summary.text;slot.hidden=false;
 }
 function builderImageDismiss(){

@@ -274,7 +274,7 @@ function showTab(value){
  if($('inventory-view'))$('inventory-view').hidden=!devicesTechnical;
  if($('device-list'))$('device-list').hidden=devicesTechnical;
  if(devicesPainted!==devicesTechnical&&current()){renderNodes();renderDeviceList();}
- if($('devices-technical')&&typeof $('devices-technical').setAttribute==='function'){$('devices-technical').setAttribute('aria-pressed',String(devicesTechnical));$('devices-technical').textContent=devicesTechnical?'Standard view':'Technical view';}
+ if($('devices-technical'))$('devices-technical').textContent=devicesTechnical?'Standard view':'Technical view';   // the swapping label is the toggle's state and the way back; no aria-pressed on top of it
  document.querySelectorAll('[data-tab]').forEach(b=>{const active=b.dataset.tab===tab;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;if(active&&typeof b.scrollIntoView==='function'&&($('lab-tabs')?.scrollWidth||0)>($('lab-tabs')?.clientWidth||0))b.scrollIntoView({block:'nearest',inline:'nearest'});});
  if(tab==='topology'&&typeof refreshMap==='function')refreshMap();
  if(tab==='progress'&&typeof gitShowRepository==='function')gitShowRepository();

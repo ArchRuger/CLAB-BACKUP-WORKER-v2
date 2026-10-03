@@ -1074,7 +1074,7 @@ test('8c: failures parse to problems: structured list, the "Fix the design first
  const err=c.designSummaryMarkup({action:'generate',kind:'error',problems:[{path:'',message:'Down'}]});
  assert.match(err,/Try again/);assert.doesNotMatch(err,/data-design-goto/);
 });
-test('8c: a failed save shows one summary with focus, aria-invalid and one announcement; a poll render never announces; a good save clears it',async()=>{
+test('8c: a failed save shows one summary with focus and aria-invalid (read once, from the focused summary); a poll render never announces; a good save clears it',async()=>{
  const {els,el}=summaryEls();let validations=0;
  const c=ctx({$:el,setMarkup:(e,html)=>{if(e)e.innerHTML=html;},current:()=>({id:'lab-a',name:'A'}),
   json:async(path,method)=>{if(path.endsWith('/validate')){validations++;return validations===1?{problems:[{path:'bgp.as',message:'Give BGP an AS number.'},{path:'addressing.p2p.ipv6',message:'ipv6 is switched off in this design; remove the prefix or enable the family'}]}:{problems:[]};}
@@ -1086,16 +1086,16 @@ test('8c: a failed save shows one summary with focus, aria-invalid and one annou
  assert.equal(box.hidden,false);assert.match(box.innerHTML,/Save design failed: 2 problems to fix/);assert.equal(box.focused,1,'focus moves to the summary');assert.equal(box.scrolled,1);
  assert.equal(el('design-bgp-as').attrs['aria-invalid'],'true');assert.equal(el('design-bgp-as').attrs['aria-describedby'],'design-bgp-as-help design-error-item-0');
  assert.equal(el('design-pool-p2p-ipv6').attrs['aria-invalid'],'true','the pool the path names carries the switched-off problem');
- assert.match(el('design-announce').textContent,/^Save design failed: 2 problems to fix\. Give BGP an AS number\./);
- const announced=el('design-announce').textContent;
+ assert.match(box.innerHTML,/Give BGP an AS number\./,'the first problem is read from the focused summary itself, so there is no second (hidden alert) announcement');
+ const announced=box.innerHTML;
  assert.doesNotMatch(el('design-state-text').textContent+el('design-detail').textContent,/Give BGP an AS number/,'the header line does not repeat problems[0]');
  assert.match(el('design-problems').innerHTML,/addressing\.p2p\.ipv6/,'the full list stays as the secondary list');
  const live=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
- assert.doesNotMatch(live,/id="design-problems"[^>]*role="alert"/);assert.match(live,/<p id="design-announce" class="sr-only" role="alert"><\/p>/);
+ assert.doesNotMatch(live,/id="design-problems"[^>]*role="alert"/);assert.doesNotMatch(live,/id="design-announce"/,'no hidden duplicate alert next to the focused summary');assert.match(live,/id="design-error-summary"[^>]*role="group"[^>]*aria-labelledby="design-error-title"[^>]*tabindex="-1"/,'the focused summary has an accessible name');
  c.designRenderAll();c.designRenderAll();
- assert.equal(el('design-announce').textContent,announced);assert.equal(box.focused,1,'re-renders and polls never move focus');
+ assert.equal(box.innerHTML,announced);assert.equal(box.focused,1,'re-renders and polls never move focus');
  assert.equal(await c.designSave(),true);
- assert.equal(box.hidden,true);assert.equal(box.innerHTML,'');assert.equal(el('design-announce').textContent,'');
+ assert.equal(box.hidden,true);assert.equal(box.innerHTML,'');
  assert.equal(el('design-bgp-as').attrs['aria-invalid'],undefined);assert.equal(el('design-bgp-as').attrs['aria-describedby'],'design-bgp-as-help','the original description is restored');
  assert.equal(el('design-pool-p2p-ipv6').attrs['aria-describedby'],undefined);
 });
@@ -1115,7 +1115,7 @@ test('8c: Generate without a draft shows the backend 400 problems (structured or
  stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r1',modules:[]},generations:[],problems:[],nodes:{}};
  await c.designGenerate();
  assert.match(el('design-error-summary').innerHTML,/Generate plan failed<\/h3><ul><li id="design-error-item-0">Failed to fetch/);assert.match(el('design-error-summary').innerHTML,/Try again/);
- assert.equal(el('design-announce').textContent.startsWith('Generate plan failed'),true);
+ assert.equal(el('design-error-summary').focused,1,'the failed Generate moves focus to its summary, which carries the title');
 });
 test('8f: the design loads only while Advanced is shown with Experimental open, stops its pollers otherwise, and never reads as cancelled',()=>{
  const {els,el}=summaryEls();let loads=0;
@@ -1333,6 +1333,58 @@ test('8e: after a reload a running review is found on the plan card, and reopeni
  assert.ok(h.timers.length>=1,'a quiet watch follows it with the dialog closed');
  await h.c.designReviewReattach('lab-a','j1');
  assert.equal(vm.runInContext('designApplyState.reviewJobId',h.c),'j1');assert.equal(h.el('design-apply-reviewing-step').hidden,false);
+});
+const doneReview=()=>({token:'tok',expires_in:600,generation_id:'g1',applicable:['ceos'],takeover:[],targets:[{name:'ceos',kind:'arista_ceos',eligible:true,reachable:true,ready:true,no_op:true,counts:{},compatibility:[]}]});
+const doneJob=(over)=>reviewJob({status:'done',finished:new Date().toISOString(),targets:[{name:'ceos',kind:'arista_ceos',stage:'done',timeline:{queued:1,settled:2}}],review:doneReview(),...over});
+test('8e: a review that finishes while the dialog is closed is kept: the card says "Review finished — Show" while its token is valid, Show re-attaches and hands over the review; after expiry it disappears and reopening starts fresh',async()=>{
+ const h=reviewHarness({post:async()=>({review_job:reviewJob()}),get:async()=>reviewJob()});
+ await h.c.designApplyRunReview();
+ h.c.designApplyClose();                                   // closed while it runs: a quiet watch follows it
+ h.get=null;
+ // the quiet poll now sees it done (another answer for the same job)
+ const h2=reviewHarness({get:async path=>/review-jobs$/.test(path)?[{...doneJob(),review:undefined}]:doneJob()});
+ vm.runInContext("designState.labId='lab-a'",h2.c);
+ await h2.c.designReviewDiscover('lab-a');
+ assert.equal(h2.el('design-review-running').hidden,false);assert.match(h2.el('design-review-running').innerHTML,/^Review finished — <button[^>]*data-design-review-show="j1"/);
+ assert.equal(h2.timers.length>=1,true,'an expiry timer removes the line when the token runs out');
+ assert.equal(h2.timers.some(f=>f)&&vm.runInContext("designReviewKnown.status",h2.c),'done');
+ // reopening Apply attaches to the done job: GET returns the review, the review step shows
+ vm.runInContext("designApplyState.reviewJobId=''",h2.c);
+ await h2.c.designReviewReattach('lab-a','j1');
+ assert.equal(h2.el('design-apply-review-step').hidden,false,'the review (with its token) is handed to the review step');
+ assert.equal(vm.runInContext('designApplyState.review.token',h2.c),'tok');
+ // after expiry the line is gone and nothing is attached
+ vm.runInContext("designReviewKnown.until=Date.now()-1",h2.c);h2.c.designReviewRenderRunning('lab-a');
+ assert.equal(h2.el('design-review-running').hidden,true);assert.equal(vm.runInContext("designReviewKnown.status",h2.c),'');
+ // a list without a done job (expired on the server) forgets nothing it never knew, and a failed job offers no token
+ const h3=reviewHarness({get:async path=>/review-jobs$/.test(path)?[reviewJob({status:'failed'})]:reviewJob({status:'failed'})});
+ vm.runInContext("designState.labId='lab-a'",h3.c);await h3.c.designReviewDiscover('lab-a');
+ assert.equal(vm.runInContext('designReviewKnown.status',h3.c),'','failed and interrupted jobs have no token and are not offered');
+});
+test('8e: a quiet poll that sees the job finish turns the running line into the finished line; submitting an apply consumes the review and clears the line',async()=>{
+ let call=0;
+ const h=reviewHarness({post:async()=>({review_job:reviewJob()}),get:async()=>{call++;return call<1?reviewJob():doneJob();}});
+ await h.c.designApplyRunReview();
+ h.c.designApplyClose();
+ assert.match(h.el('design-review-running').innerHTML,/^Review running… /);
+ await h.tick();await h.tick();
+ assert.match(h.el('design-review-running').innerHTML,/^Review finished — <button/);
+ vm.runInContext("designReviewForget()",h.c);h.c.designReviewRenderRunning('lab-a');
+ assert.equal(h.el('design-review-running').hidden,true);
+});
+test('8e: aria-busy sits on the Review button only (never on the dialog, which would hold back its live log), and Review again returns focus to Review',async()=>{
+ const h=reviewHarness({post:async()=>({review_job:reviewJob()}),get:async()=>reviewJob({status:'interrupted'})});
+ for(const id of ['design-apply-last','design-apply-dialog','design-apply-review-body','design-apply-ack','design-advanced-details','design-review-running'])h.el(id).addEventListener=()=>{};
+ h.c.initDesignApply();
+ await h.c.designApplyRunReview();
+ assert.equal(h.el('design-apply-review-run').attrs['aria-busy'],'true');assert.equal(h.el('design-apply-dialog').attrs['aria-busy'],undefined);
+ await h.tick();
+ assert.equal(h.el('design-apply-review-run').attrs['aria-busy'],undefined,'idle again: no aria-busy anywhere');
+ h.el('design-apply-review-run').focused=0;
+ h.el('design-review-again').onclick();
+ assert.equal(h.el('design-apply-choose-step').hidden,false);assert.equal(h.el('design-apply-review-run').focused,1,'focus lands on Review after Review again');
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ assert.match(html,/id="design-review-close-note">[^<]*finished review stays available for 10 minutes/,'the note says how long a finished review is kept');
 });
 test('8e/8a: api() keeps problems, retired and review_job_id from an object detail and shows its message',async()=>{
  const context=vm.createContext({document:{getElementById:()=>({dataset:{},listeners:{},classList:{toggle(){}},addEventListener(){},setAttribute(){},scrollIntoView(){}}),querySelectorAll:()=>[],createElement:()=>({dataset:{},addEventListener(){},setAttribute(){}}),body:{}},fetch:async()=>({ok:false,status:409,json:async()=>({detail:{message:'A review is running.',review_job_id:'abc',problems:[{path:'p',message:'m'}],retired:['vxlan']}})}),URLSearchParams,URL,sessionStorage:{getItem(){return null;},setItem(){}},setTimeout:()=>0,clearTimeout(){},setInterval(){}});
