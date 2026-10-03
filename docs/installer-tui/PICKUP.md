@@ -4,6 +4,7 @@
 |---|---|
 | Task | INSTALLER-TUI-B1 — Slate Ops installer TUI (Worker B, dev2) |
 | Coordination | https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2/issues/64 |
+| Pull request | https://github.com/ArchRuger/CLAB-BACKUP-WORKER-v2/pull/65 (draft; Worker A integrates) |
 | Branch | `worker-b/installer-tui-slate-ops` |
 | Base | `e7ffbc108d7c995f3487902acdbb4448c87bc674` (`main`) |
 | HEAD | see `git log -1` on the branch (updated at every checkpoint below) |
@@ -19,7 +20,7 @@ recovery), result and help screens; terminal handoff for sudo, the first-setup l
 
 1. `5ec3207` — baseline, shared plan in `install-manager.py`, stdlib core, painted shell, 273 stdlib tests.
 2. `66d2d64` — live dev2 install/update/health, process-safety review fixes, 70 headless tests, 36 PTY checks.
-3. checkpoint 3 — real dpkg-lock and sudo-expiry validation, usability review fixes, gap tests (core 165, app 110), scrubbed snapshots, parity refresh, handoff.
+3. `f337fa6` — real dpkg-lock and sudo-expiry validation, usability review fixes, gap tests (core 165, app 110), scrubbed snapshots, parity refresh, handoff.
 
 ## Evidence
 
