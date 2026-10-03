@@ -540,14 +540,16 @@ function gitReusableRequest(previous,request){
  return known&&!gitActiveStates.has(known.status)?null:previous.request;
 }
 // options.quiet: no job dialog — the header, the status card and a toast carry the phases; the dialog
-// opens on its own only when the save ends needing attention.
+// opens on its own only when the save ends needing attention. Every step after gitSubmitting is set runs
+// inside the try, so nothing (blocked site data included: every storage call may throw) leaves it stuck.
 async function gitSubmitSave(id,values,requestId,options={}){
  if(gitSubmitting)return;
- gitSubmitting=true;renderGitProgress();
- const storageKey='git-save-request:'+id;
- let request=gitSavePayload(values,requestId||gitRequestId());
- if(!requestId){try{request=gitReusableRequest(JSON.parse(sessionStorage.getItem(storageKey)||'null'),request)||request;sessionStorage.setItem(storageKey,JSON.stringify({request,sent:gitNow()}));}catch{}}
+ gitSubmitting=true;
  try{
+  renderGitProgress();
+  const storageKey='git-save-request:'+id;
+  let request=gitSavePayload(values,requestId||gitRequestId());
+  if(!requestId){try{request=gitReusableRequest(JSON.parse(sessionStorage.getItem(storageKey)||'null'),request)||request;sessionStorage.setItem(storageKey,JSON.stringify({request,sent:gitNow()}));}catch{}}
   const job=await json('/labs/'+encodeURIComponent(id)+'/git/save','POST',request);
   if(!requestId){try{sessionStorage.removeItem(storageKey);}catch{}}
   gitRememberJob(job);
@@ -653,9 +655,12 @@ async function gitReviewJob(job){
  // lab's and other labs' (also_sends); the page's own count of this lab is the floor, so it never under-reports.
  const local=decide?gitLabJobs(job.lab_id,context).filter(item=>item.id!==job.id&&item.commit&&!item.pushed&&gitPendingStates.has(item.status)).length:0;
  const others=decide?Math.max(local,Number(result.also_sends)||0):0,otherLabs=decide?Math.min(others,Number(result.also_sends_other_labs)||0):0,blocked=decide&&result.upload_blocked?String(result.upload_blocked):'';
+ // Saves kept with Keep snapshot only are no longer pending, but a commit of theirs stays on the VM and goes along. They
+ // are part of also_sends and named here as such; "not seen uploaded yet" because an earlier upload may have carried one.
+ const kept=decide&&Array.isArray(result.also_sends_kept)?result.also_sends_kept.map(item=>String(item?.lab||'')+(item?.note?' ('+String(item.note)+')':'')).filter(Boolean):[];
  closeDialogsExcept();
  const design=job.kind==='design',title=design?(decide?'Review design export before uploading':'Review this design export'):(decide?'Review before uploading':'Review this save');
- const dialog=opDialog('git-diff-dialog',title,`<p>What this ${design?'export':'save'} changed compared with the previous one. Configuration files may contain passwords or keys.</p>${gitDestinationMarkup(job.destination,job)}${decide?`<p class="op-notice" id="git-review-decision">This ${design?'export':'save'} is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${others?` Uploading also sends ${others} earlier ${others===1?'save':'saves'} that ${others===1?'is':'are'} still waiting on the VM${otherLabs?`, ${otherLabs} of them from ${otherLabs===1?'another lab':'other labs'} in this repository`:''}.`:''}</p>${blocked?`<p class="op-notice" id="git-review-blocked">${esc(blocked)}</p>`:''}`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${gitFilesDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?'<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button><button class="button primary" id="git-review-push">Upload these changes</button>':waiting?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
+ const dialog=opDialog('git-diff-dialog',title,`<p>What this ${design?'export':'save'} changed compared with the previous one. Configuration files may contain passwords or keys.</p>${gitDestinationMarkup(job.destination,job)}${decide?`<p class="op-notice" id="git-review-decision">This ${design?'export':'save'} is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${others?` Uploading also sends ${others} earlier ${others===1?'save':'saves'} that ${others===1?'is':'are'} still waiting on the VM${otherLabs?`, ${otherLabs} of them from ${otherLabs===1?'another lab':'other labs'} in this repository`:''}.`:''}${kept.length?` Among them, kept with Keep snapshot only and not seen uploaded yet: ${esc(kept.join(', '))}.`:''}</p>${blocked?`<p class="op-notice" id="git-review-blocked">${esc(blocked)}</p>`:''}`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${gitFilesDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?'<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button><button class="button primary" id="git-review-push">Upload these changes</button>':waiting?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
  gitFocusDialog(dialog);
  $('git-review-files').onclick=()=>opTask(dialog,()=>gitViewVersion(job.lab_id,{commit:job.commit,path:job.snapshot_path?'/'+job.snapshot_path:gitSnapshotPath(context?.binding,gitTargetPath(job))}));
  if($('git-review-cancel'))$('git-review-cancel').onclick=()=>{dialog.close();notify('Not uploaded. The save stays on the lab VM; upload it from Progress › Recent saves when you are ready.');};

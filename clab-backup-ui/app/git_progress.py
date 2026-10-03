@@ -1,5 +1,6 @@
 """Capture immutable lab snapshots and publish them through an owner-scoped VM helper."""
 import base64
+import contextlib
 import copy
 import functools
 import hashlib
@@ -28,6 +29,7 @@ from .runner import now, trim_jobs
 from .textdiff import unified
 
 PROTOCOL = 'clab-manager-git-v1'
+UNREGISTERED = 'Select a registered Git repository.'   # host_git.main() for a binding_id git.json no longer holds
 MAX_PLANNED_FOLDERS = 200
 MAX_FILE = 2 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
@@ -258,13 +260,27 @@ def awaits_review(job):
     return job_pending(job) and not job.get('reviewed') and job.get('target') not in ('move', 'update')
 
 
+def kept_on_vm(job):
+    """A save dismissed with Keep snapshot only that may still have a commit in its VM checkout which no upload was seen
+    carrying: one with a known commit, or one whose publication was sent and whose answer may have been lost (the VM may
+    have committed it, exactly as in its pending form). It is no longer pending, but the next upload from that checkout
+    sends such a commit along: the helper approves the journaled commits of every current registration of the checkout,
+    whichever lab made them and whether that lab is still connected. Which checkout it belongs to is `made_in`'s
+    question; the review counts it until an upload is verified to have carried it (`finish`)."""
+    return (job.get('status') == 'dismissed' and not job.get('pushed') and job.get('target') != 'update'
+            and bool(job.get('commit') or job.get('published_attempt') or 'expected_head' in job))
+
+
 def sibling_refusal(name, job, upload=False, reviewed=False):
-    """Why a save, move or upload waits for another lab of the same checkout, and what the student does next."""
+    """Why a save, move or upload waits for another lab of the same checkout, and what the student does next. Keep
+    snapshot only there also lets this go ahead, but it is no equivalent: the commit stays in the checkout and the next
+    upload from it carries it (the review then counts and names it, see `kept_on_vm`)."""
     label = " ('" + str(job['note']) + "')" if job.get('note') else ''
     why = (('This upload could send it along. ' + ('Your review of this save is kept. ' if reviewed else '')) if upload else
            'Saving here now would put a new commit on top of it, and a later upload would send it unreviewed. ')
     return ('Another lab in this repository, ' + name + ', has a save waiting on the VM without a review' + label + '. ' + why +
-            'Open ' + name + ' › Progress, review and upload that save or choose Keep snapshot only, then ' + ('upload this one.' if upload else 'try again.'))
+            'Open ' + name + ' › Progress, review and upload that save, then ' + ('upload this one.' if upload else 'try again.') +
+            ' Choosing Keep snapshot only there instead keeps its commit on the VM: it goes along with the next upload from this repository.')
 
 
 GIT_JOB_CAP = 200
@@ -284,10 +300,10 @@ def _newest_pushed_ids(jobs):
 def _append_git_job(state, job):
     """Append one entry to 'git_jobs' and cap it at the newest 200, never dropping one
     ``job_pending`` still calls true, nor the newest pushed save of any binding (see
-    ``_newest_pushed_ids``, ``trim_jobs``)."""
+    ``_newest_pushed_ids``, ``trim_jobs``), nor a kept save the review must still count (``kept_on_vm``)."""
     state['git_jobs'].append(job)
     keep = _newest_pushed_ids(state['git_jobs'])
-    state['git_jobs'] = trim_jobs(state['git_jobs'], GIT_JOB_CAP, lambda j: job_pending(j) or j.get('id') in keep, False)
+    state['git_jobs'] = trim_jobs(state['git_jobs'], GIT_JOB_CAP, lambda j: job_pending(j) or j.get('id') in keep or kept_on_vm(j), False)
 
 
 def remote_git(host, request, stopping=None):
@@ -523,6 +539,7 @@ class GitProgress:
         # One change of a lab's repository connection at a time: a folder change checks everything before the VM
         # retires the old registration, and no other connection may take the new folder in between.
         self.binding_lock = threading.Lock()
+        self.rebinding = None   # the lab whose connection is being changed while `binding_lock` is held (`changing`)
         self.pool = ThreadPoolExecutor(max_workers=1)
         with store.lock:
             for job in store.state.setdefault('git_jobs', []):
@@ -587,19 +604,44 @@ class GitProgress:
                 and lab['git_binding'].get('repository', {}).get('path') == path
                 and lab['git_binding'].get('host_identity') == binding.get('host_identity')}
 
-    def unreviewed_sibling(self, lab_id):
+    def unreviewed_sibling(self, lab_id, commitless=False):
         """(lab, save) of another lab of this checkout whose save still awaits its review, else (None, None).
         The review before every upload holds per checkout: a commit made on top of such a save, and any push
         from this checkout, would carry it. Refusing new commits while one exists stops the stacking at its
         source; refusing uploads covers saves stacked before that rule. Neither can deadlock: an upload that
-        is refused keeps its review, so it no longer holds the other lab, and Keep snapshot only always works."""
+        is refused keeps its review, so it no longer holds the other lab; and a retry without a commit of its
+        own (`commitless`, it only saves on the VM) is held only by a save that has a commit, so two labs whose
+        saves both lack one (an older release could leave that) never refuse each other: the first retry reaches
+        its review, and the uploads then wait for each other's review as above."""
         labs = self.checkout_labs(lab_id)
-        held = next((j for j in self.store.state['git_jobs'] if j.get('lab_id') in labs and awaits_review(j)), None)
+        held = next((j for j in self.store.state['git_jobs'] if j.get('lab_id') in labs and awaits_review(j)
+                     and (j.get('commit') or not commitless)), None)
         return (labs[held['lab_id']], held) if held else (None, None)
 
     def guard_siblings(self, lab_id):
         lab, held = self.unreviewed_sibling(lab_id)
         if held: raise HTTPException(409, sibling_refusal(lab['name'], held))
+
+    @contextlib.contextmanager
+    def changing(self, lab_id):
+        """One change of a repository connection at a time (`binding_lock`), recorded with the lab it changes: a folder
+        change checks everything before the VM retires the old registration, and nothing may take the new one meanwhile.
+        Saves and design exports of that lab wait for it (`refuse_while_rebinding`); other labs' work goes on."""
+        if not self.binding_lock.acquire(blocking=False):
+            raise HTTPException(409, 'Another repository connection is being changed. Try again in a moment.')
+        self.rebinding = lab_id
+        try: yield
+        finally:
+            self.rebinding = None; self.binding_lock.release()
+
+    def made_in(self, job, binding):
+        """Whether a save was made in the VM checkout `binding` points into: the same checkout folder on the same VM, as
+        the save froze them when it was made. A save of an older release froze no VM (it is taken to be on its lab's
+        VM, else this one), and the oldest froze no folder either (then only its lab's current binding can tell)."""
+        bound = (self.store.lab(job.get('lab_id')) or {}).get('git_binding') or {}
+        host = job.get('host_identity') or bound.get('host_identity') or binding['host_identity']
+        where = (job.get('destination') or {}).get('checkout') or bound.get('repository', {}).get('path')
+        return host == binding['host_identity'] and bool(where) and where == binding['repository'].get('path')
 
     def get_job(self, job_id):
         job = next((j for j in self.store.state['git_jobs'] if j['id'] == job_id), None)
@@ -787,12 +829,18 @@ class GitProgress:
                 # labs of this checkout below it too (reviewed ones only: see unreviewed_sibling); each is matched by
                 # its own lab's current binding.
                 peers = {lab_id: digest(lab['git_binding']) for lab_id, lab in self.checkout_labs(job['lab_id']).items()}
+                where = (self.store.lab(job['lab_id']) or {}).get('git_binding')
                 for previous in self.store.state['git_jobs']:
+                    if previous['id'] not in result.get('synced_operations', []): continue
+                    if previous.get('status') == 'dismissed':
+                        # A dismissed save stays dismissed; it is only known as uploaded now, so later reviews stop counting
+                        # it. It is matched like the review counts it, by its checkout (`made_in`), not by a binding digest.
+                        if where and self.made_in(previous, where):
+                            previous.update(pushed=True, message='Snapshot kept; its commit is included in the verified remote history.')
+                        continue
                     same = (previous.get('binding_digest') == job.get('binding_digest') or
                             peers.get(previous.get('lab_id'), '') == previous.get('binding_digest'))
-                    if (previous['id'] in result.get('synced_operations', []) and same
-                            and previous.get('status') != 'dismissed'):
-                        previous.update(status='synced', pushed=True, message='Saved commit is included in the verified remote history.', finished=now())
+                    if same: previous.update(status='synced', pushed=True, message='Saved commit is included in the verified remote history.', finished=now())
                 self.store.save()
 
     def install(self, app):
@@ -932,19 +980,25 @@ class GitProgress:
             self.store.event(event, message, lab_id=lab_id)
             return binding
 
-        def retired_already(binding, prefix, exc):
-            """The answer to a folder change was lost or refused. The VM may still have made it: when the lab's
-            registration is gone and the new folder is registered, adopt that; otherwise nothing changed."""
-            try: catalog = self.repositories()['repositories']
-            except ValueError: raise HTTPException(409, str(exc))
-            if any(r.get('id') == binding['binding_id'] for r in catalog): raise HTTPException(409, str(exc))
-            made = next((r for r in catalog if r.get('path') == binding['repository'].get('path') and r.get('prefix') == prefix), None)
-            if not made: raise HTTPException(409, str(exc))
-            return made
+        def retired_already(binding, prefix, catalog=None):
+            """The VM may have made a folder change whose answer was lost or refused, now or in an earlier request:
+            when the lab's registration is gone and `prefix` is registered in the same checkout, that is the
+            registration to follow; else None. Only from the VM connection the binding was made on: the connection
+            can be switched during the long call, and another VM's catalog proves nothing about this one."""
+            def same_vm():
+                with self.store.lock: return host_identity(self.store.state.get('host', {})) == binding['host_identity']
+            if not same_vm(): return None
+            if catalog is None:
+                try: catalog = self.repositories()['repositories']
+                except ValueError: return None
+                if not same_vm(): return None
+            if any(r.get('id') == binding['binding_id'] for r in catalog): return None
+            return next((r for r in catalog if r.get('path') == binding['repository'].get('path') and r.get('prefix') == prefix), None)
 
         def rebind(lab_id, repo, node_names, before, message):
             """Point the lab at the registration that replaced its retired one. Nothing refuses here: every check
-            ran before the retire, and `binding_lock` keeps other connection changes out meanwhile."""
+            ran before the retire, `binding_lock` keeps every other connection change (link, connect, unlink) out
+            meanwhile, and this lab's saves and design exports refuse while it changes (`refuse_while_rebinding`)."""
             binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
                            host_identity=before, node_names=node_names, review_before_push=True)
             with self.store.lock:
@@ -961,15 +1015,20 @@ class GitProgress:
             except ValueError as exc: raise HTTPException(409, str(exc))
 
         def one_binding_change(route):
-            """A route that points a lab at a registration runs alone (`binding_lock`): a folder change checks
-            everything before the VM retires the old registration, and nothing may take the new one meanwhile."""
+            """A route that changes which registration a lab points at (or disconnects it) runs alone (`binding_lock`):
+            a folder change checks everything before the VM retires the old registration, nothing may take the new one
+            meanwhile, and a Disconnect from another tab cannot be undone by the rebind that follows."""
             @functools.wraps(route)
             def alone(*args, **kwargs):
-                if not self.binding_lock.acquire(blocking=False):
-                    raise HTTPException(409, 'Another repository connection is being changed. Try again in a moment.')
-                try: return route(*args, **kwargs)
-                finally: self.binding_lock.release()
+                with self.changing(kwargs.get('lab_id')): return route(*args, **kwargs)
             return alone
+
+        def refuse_while_rebinding(lab_id):
+            """A save or design export freezes the binding digest it is retried with. Created while a connection change
+            rewrites its lab's binding, it could never be retried (export_pending for good), so it waits for the change.
+            Only that lab's: another lab's binding is not touched, and connecting by URL can clone for minutes."""
+            if self.rebinding == lab_id:
+                raise HTTPException(409, "This lab's repository connection is being changed. Try again in a moment.")
 
         @app.get('/api/git/repositories')
         def repositories():
@@ -1096,17 +1155,34 @@ class GitProgress:
             binding, name = refusals()
             before = binding['host_identity']; node_names = list(binding['node_names'])
             source = binding['repository'].get('prefix', '')
-            if prefix == source: raise HTTPException(409, 'This lab already saves to that folder.')
-            refuse_snapshot_conflict(binding, prefix)
-            catalog = repositories()
+            catalog = repositories()['repositories']
+            # The lab's registration can be gone already: an earlier change of this folder went through on the VM but
+            # its answer, and the check after it, were lost. Every call with it only answers UNREGISTERED, so the change
+            # asked for now is checked against the VM's catalog and followed, never browsed with the retired binding.
+            registered = any(r['id'] == binding['binding_id'] for r in catalog)
+            if registered:
+                if prefix == source: raise HTTPException(409, 'This lab already saves to that folder.')
+                try: refuse_snapshot_conflict(binding, prefix)
+                except HTTPException as exc:
+                    if exc.detail != UNREGISTERED: raise
+                    registered = False; catalog = repositories()['repositories']
             with self.store.lock: labs = bound_labs()
-            for repo in catalog['repositories']:
+            for repo in catalog:
                 if repo['path'] == binding['repository'].get('path') and repo['prefix'] == prefix and labs.get(repo['id'], {}).get('id') not in (None, lab_id):
                     raise HTTPException(409, 'This folder is already connected to another lab (' + labs[repo['id']]['name'] + '). Choose a different folder.')
             # Once more right before the irreversible step: the helper round trips above take time.
             if digest(refusals()[0]) != digest(binding): raise HTTPException(409, 'The repository connection changed meanwhile. Open Change folder again.')
-            try: created = self.invoke({'mode': 'register-prefix', 'prefix': prefix, 'retire': True}, binding)
-            except ValueError as exc: created = retired_already(binding, prefix, exc)
+            if not registered:
+                created = retired_already(binding, prefix, catalog)
+                if not created:
+                    raise HTTPException(409, "This lab's folder registration is no longer on the VM: an earlier folder change probably went "
+                                        'through there without reporting back. If so, choose that folder again; if not, connect the lab again '
+                                        '(Use a different repository… on the Save location card).')
+            else:
+                try: created = self.invoke({'mode': 'register-prefix', 'prefix': prefix, 'retire': True}, binding)
+                except ValueError as exc:
+                    created = retired_already(binding, prefix)
+                    if not created: raise HTTPException(409, str(exc))
             if not isinstance(created, dict) or not created.get('id'): raise HTTPException(409, 'The VM did not return the new folder registration.')
             # The folder the lab leaves is retired on the VM; keep it (and the new one) reachable while empty.
             remember_folders(binding['repository'].get('path', ''), source, prefix)
@@ -1120,7 +1196,7 @@ class GitProgress:
                     job = dict(id=uuid.uuid4().hex, lab_id=lab_id, lab_name=name, created=now(), status='queued', message='Folder move queued.',
                                backup_job_id='', target='move', checkpoint='', note='', pushed=False, review_before_push=False,
                                binding_digest=digest(new_binding), request=request, want_push=True, node_names=node_names, capture_context={},
-                               destination=move_destination(new_binding))
+                               destination=move_destination(new_binding), host_identity=new_binding['host_identity'])
                     _append_git_job(self.store.state, job)
                     try: self.store.save()
                     except OSError:
@@ -1148,6 +1224,7 @@ class GitProgress:
             return {'saved': True, 'binding': binding}
 
         @app.post('/api/labs/{lab_id}/git/unlink')
+        @one_binding_change
         def unlink(lab_id: str):
             with self.store.lock:
                 self.idle(); self.guard_pending(lab_id)
@@ -1177,7 +1254,7 @@ class GitProgress:
                 if previous:
                     if previous.get('request_digest') != request_digest: raise HTTPException(409, 'Request ID already belongs to a different save.')
                     return public_job(previous)
-                self.idle(); binding = self.binding(lab_id); self.guard_siblings(lab_id)
+                self.idle(); refuse_while_rebinding(lab_id); binding = self.binding(lab_id); self.guard_siblings(lab_id)
                 lab = self.store.lab(lab_id)
                 if binding['host_identity'] != host_identity(self.store.state.get('host', {})):
                     raise HTTPException(409, 'Reconnect the original VM before saving progress.')
@@ -1205,6 +1282,8 @@ class GitProgress:
                            # Frozen at capture time from the binding as it is now: never re-derived from a
                            # binding that may have moved by the time the save is reviewed or shown later.
                            destination=job_destination(binding, data.target, data.checkpoint),
+                           # Private: the VM of that checkout, so a kept save is counted in its reviews only (made_in).
+                           host_identity=binding['host_identity'],
                            node_names=copy.deepcopy(names), capture_context=context)
                 _append_git_job(self.store.state, job)
                 try: self.store.save()
@@ -1233,7 +1312,7 @@ class GitProgress:
                 if previous:
                     if previous.get('request_digest') != request_digest: raise HTTPException(409, 'Request ID already belongs to a different save.')
                     return public_job(previous)
-                self.idle(); binding = self.binding(lab_id); self.guard_siblings(lab_id)
+                self.idle(); refuse_while_rebinding(lab_id); binding = self.binding(lab_id); self.guard_siblings(lab_id)
                 lab = self.store.lab(lab_id)
                 if binding['host_identity'] != host_identity(self.store.state.get('host', {})):
                     raise HTTPException(409, 'Reconnect the original VM before exporting.')
@@ -1249,7 +1328,8 @@ class GitProgress:
                            generation_id=generation_id, created=now(), status='queued', message='Design export queued.', backup_job_id='',
                            target='checkpoint', checkpoint=data.checkpoint, note=note, pushed=False, review_before_push=data.push,
                            binding_digest=digest(binding), request=request, want_push=False, snapshot_digest=digest(snapshot),
-                           destination=job_destination(binding, 'checkpoint', data.checkpoint), node_names=[], capture_context={})
+                           destination=job_destination(binding, 'checkpoint', data.checkpoint), host_identity=binding['host_identity'],
+                           node_names=[], capture_context={})
                 _append_git_job(self.store.state, job)
                 try: self.store.save()
                 except OSError:
@@ -1282,9 +1362,10 @@ class GitProgress:
                     elif not job.get('reviewed'): changes = dict(reviewed=now())
                 # The same review holds across the labs of one checkout: an upload, or a retry that commits, waits
                 # while another lab's save there is unreviewed. A refused upload keeps its review, so this save no
-                # longer holds the other lab back and the two can never wait on each other.
+                # longer holds the other lab back; a retry that only commits waits only for a save that has a commit,
+                # so two saves without one never hold each other back (see unreviewed_sibling).
                 if push or not job.get('commit'):
-                    other, held = self.unreviewed_sibling(job['lab_id'])
+                    other, held = self.unreviewed_sibling(job['lab_id'], commitless=not push)
                     if held:
                         if changes.get('reviewed'): self.update(job_id, reviewed=changes['reviewed'])
                         raise HTTPException(409, sibling_refusal(other['name'], held, upload=push, reviewed=push and not move))
@@ -1365,17 +1446,25 @@ class GitProgress:
                     binding = self.binding(lab_id)
                     if digest(binding) != job.get('binding_digest'): raise HTTPException(409, 'Reconnect the original repository to review this save.')
                     # What an upload of this save may carry along: every other save of this checkout still waiting on
-                    # the VM, this lab's and the other labs' (a save without a known commit may hold one too), so the
-                    # count in the review never under-reports. While another lab's save is unreviewed the upload waits.
+                    # the VM, this lab's and the other labs' (a save without a known commit may hold one too), and every
+                    # save of this checkout kept with Keep snapshot only that was not seen uploaded (`kept_on_vm`,
+                    # `made_in`: whichever lab made it, connected or not, under whatever binding), named. It can
+                    # over-report (a kept save that never committed, or whose registration was retired since); it misses
+                    # only a save the manager no longer holds (a removed lab's) or one so old it froze no checkout while
+                    # its lab is connected elsewhere now. While another lab's save is unreviewed the upload waits.
                     labs = self.checkout_labs(lab_id)
                     waiting = [j for j in self.store.state['git_jobs'] if j['id'] != job['id'] and (j.get('lab_id') == lab_id or j.get('lab_id') in labs)
                                and job_pending(j) and not j.get('pushed') and j.get('target') != 'update']
+                    kept = [j for j in self.store.state['git_jobs'] if j['id'] != job['id'] and j.get('commit') != job.get('commit')
+                            and kept_on_vm(j) and self.made_in(j, binding)]
+                    names = {j['lab_id']: (self.store.lab(j['lab_id']) or {}).get('name') or j.get('lab_name') or '' for j in kept}
                     other, held = self.unreviewed_sibling(lab_id)
                 result = call({'mode': 'compare', 'operation_id': data.job_id}, binding)
                 # The helper pairs files by name; fold a suffix-renamed file (Junos `.set` to `.cfg`)
                 # back into one changed entry before it ever reaches a person.
-                answer = {'files': annotated_compare(result.get('files', [])), 'also_sends': len(waiting),
-                          'also_sends_other_labs': sum(1 for j in waiting if j.get('lab_id') != lab_id)}
+                answer = {'files': annotated_compare(result.get('files', [])), 'also_sends': len(waiting) + len(kept),
+                          'also_sends_other_labs': sum(1 for j in waiting + kept if j.get('lab_id') != lab_id),
+                          'also_sends_kept': [dict(lab=names.get(j['lab_id'], ''), note=str(j.get('note') or '')) for j in kept]}
                 if held: answer['upload_blocked'] = sibling_refusal(other['name'], held, upload=True)
                 return answer
             if not re.fullmatch(r'[0-9a-f]{40,64}', data.commit): raise HTTPException(400, 'Choose a saved commit.')

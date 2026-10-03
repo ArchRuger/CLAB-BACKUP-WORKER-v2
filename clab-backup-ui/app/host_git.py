@@ -1066,7 +1066,8 @@ def save_registration(binding, retire=None, add=True):
     process may save meanwhile: the copy loaded at startup is never written back.
 
     retire is (binding_id, revision) of the folder the lab leaves; add=False only retires next to an existing
-    registration. A conflicting change saved meanwhile refuses with nothing written."""
+    registration, which must still carry the revision the caller planned with. A conflicting change saved meanwhile
+    refuses with nothing written."""
     binding = {k: v for k, v in binding.items() if not k.startswith('_')}
     with registry_lock():
         config = load_registry() if REGISTRY.exists() else {'repositories': []}
@@ -1081,7 +1082,12 @@ def save_registration(binding, retire=None, add=True):
                    for b in repositories):
                 raise ValueError('Another Git registration for this checkout folder was saved meanwhile. Nothing was registered; choose the folder again.')
             repositories = [b for b in repositories if b['id'] != binding['id']] + [binding]
-        elif not any(b['id'] == binding['id'] for b in repositories): raise ValueError('The repository binding changed. Select it again.')
+        else:
+            # The answer is the registration as git.json holds it now, never the startup copy: setup-git.sh may have
+            # re-registered that folder meanwhile, and a stale revision would make every later call refuse.
+            current = next((b for b in repositories if b['id'] == binding['id']), None)
+            if not current or current['revision'] != binding['revision']: raise ValueError('The repository binding changed. Select it again.')
+            binding = current
         config['repositories'] = repositories
         atomic_json(REGISTRY, config)
     return descriptor(binding)

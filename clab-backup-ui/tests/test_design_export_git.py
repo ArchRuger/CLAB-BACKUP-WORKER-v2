@@ -397,6 +397,18 @@ class ExportRouteTests(DesignExportGitTestCase):
         response, _ = self.export(gen_id)
         self.assertEqual(response.status_code, 409, response.text)
 
+    def test_route_409_while_a_repository_connection_is_being_changed(self):
+        # Review follow-up G4 (audit M-3): an export made while a folder change rewrites the binding could never be retried.
+        gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)
+        with self.progress.changing(self.lab_id):
+            response, _ = self.export(gen_id)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn('Try again in a moment', response.json()['detail'])
+        self.assertEqual(self.store.state['git_jobs'], [])
+        # Only a change of this lab's connection holds its exports (review issue G4-a).
+        with self.progress.changing('another-lab'):
+            self.assertEqual(self.export(gen_id)[0].status_code, 200)
+
     def test_route_409_no_binding(self):
         other = add_lab(self.app, name='unbound-lab')
         gen_id = write_generation(self.app, other, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)

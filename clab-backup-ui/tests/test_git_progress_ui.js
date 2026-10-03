@@ -590,3 +590,40 @@ test('the review counts the saves an upload carries from every lab of the checko
  await context.gitReviewJob(save);html=dialogs.get('git-diff-dialog').html;
  assert.match(html,/Uploading also sends 1 earlier save that is still waiting on the VM\./);assert.doesNotMatch(html,/git-review-blocked/);
 });
+test('the review names the saves kept with Keep snapshot only that the upload may send along, as part of its count (review follow-up G1)',async()=>{
+ const context=makeContext(),elements=new Map(),dialogs=new Map();
+ const element=()=>({onclick:null,innerHTML:'',listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},querySelectorAll:()=>[]});
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;context.opTask=async(dialog,fn)=>fn();
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
+ let answer={files:[],also_sends:1,also_sends_other_labs:1,also_sends_kept:[{lab:'<b>-lab',note:'OSPF done'}]};
+ context.json=async endpoint=>endpoint.endsWith('/compare')?answer:{};
+ const save={id:'s',lab_id:'lab',status:'review_pending',target:'latest',commit:'c'.repeat(40),created:'2026-10-03T12:00:00Z'};
+ await context.gitReviewJob(save);let html=dialogs.get('git-diff-dialog').html;
+ assert.match(html,/Uploading also sends 1 earlier save that is still waiting on the VM, 1 of them from another lab in this repository\./);
+ // One save, counted once: the kept save is named as part of the count, never as one more (review issues G1-b, G1-c).
+ assert.match(html,/still waiting on the VM, 1 of them from another lab in this repository\. Among them, kept with Keep snapshot only and not seen uploaded yet: &lt;b&gt;-lab \(OSPF done\)\./);
+ assert.doesNotMatch(html,/<b>-lab/);assert.doesNotMatch(html,/as well/);
+ answer={files:[],also_sends:1,also_sends_other_labs:1};
+ await context.gitReviewJob(save);html=dialogs.get('git-diff-dialog').html;
+ assert.doesNotMatch(html,/Keep snapshot only/,'nothing kept, nothing named');
+});
+test('blocked site data never stops a save or leaves Save progress stuck: every storage call may throw (audit L-32, review follow-up G7)',async()=>{
+ const context=makeContext(),calls=[],submitting=()=>vm.runInContext('gitSubmitting',context);
+ const blocked=()=>{throw new Error('SecurityError: The operation is insecure.');};
+ context.sessionStorage={getItem:blocked,setItem:blocked,removeItem:blocked};
+ context.gitShowJob=async()=>{};context.gitStartWatch=()=>{};let fail=true;
+ context.json=async(endpoint,method,payload)=>{calls.push(payload);if(fail)throw Error('Network interrupted');return {id:payload.request_id,lab_id:'lab',created:'2026-10-03T12:00:00Z',status:'queued'};};
+ const values={target:'latest',push:true,note:'OSPF up'};
+ await assert.rejects(context.gitSubmitSave('lab',values,undefined,{quiet:true}),/Network interrupted/);assert.equal(submitting(),false);
+ fail=false;const job=await context.gitSubmitSave('lab',values,undefined,{quiet:true});
+ assert.equal(job.id,calls[1].request_id);assert.match(job.id,/^[a-f0-9]{32}$/);assert.equal(submitting(),false);
+ await context.gitSubmitSave('lab',{...values,target:'checkpoint',checkpoint:'ospf'},'f'.repeat(32),{quiet:true});assert.equal(calls[2].request_id,'f'.repeat(32));assert.equal(submitting(),false);
+ assert.equal(context.gitLabelDraft('lab'),'');assert.doesNotThrow(()=>context.gitSaveLabelDraft('lab','x'));assert.doesNotThrow(()=>context.gitSaveLabelDraft('lab',''));assert.doesNotThrow(()=>context.gitClearLabelDraft('lab'));
+ // Storage that cannot even be reached (the property itself throws) is the same.
+ Object.defineProperty(context,'sessionStorage',{get:blocked,configurable:true});
+ await context.gitSubmitSave('lab',values,undefined,{quiet:true});assert.equal(calls.length,4);assert.equal(submitting(),false);assert.equal(context.gitLabelDraft('lab'),'');
+ // Whatever else fails on the way (here drawing the Saving… state), the next click still saves.
+ let draws=0;context.renderGitProgress=()=>{if(++draws===1)throw Error('draw failed');};
+ await assert.rejects(context.gitSubmitSave('lab',values,undefined,{quiet:true}),/draw failed/);assert.equal(submitting(),false);
+ await context.gitSubmitSave('lab',values,undefined,{quiet:true});assert.equal(calls.length,5);assert.equal(submitting(),false);
+});

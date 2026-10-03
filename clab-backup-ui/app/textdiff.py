@@ -32,7 +32,11 @@ def unified(before, after, context=3, max_lines=20000):
 
     `identical` is True only when the two whole texts are equal. When the line cap cut the comparison
     short, `truncated` is True and `note` says so in plain words, even when the shown lines match (the
-    difference then lies past the cap and no hunk can show it). A row whose line was cut to
+    difference then lies past the cap and no hunk can show it); `counts_partial: True` (additive) then
+    says that `added`/`removed` cover only the part compared. A caller that cuts only the list it sends
+    after counting (restore.review_diff below this function's own cap) sets `truncated` without it, and
+    diff-view.js words the two apart. restore.review_diff does not pass the flag on yet, so a text past
+    this cap reads there with the neutral wording although its counts cover the cut text. A row whose line was cut to
     MAX_LINE_LEN for display carries `shortened: True` (lines are always compared in full, so a change
     may lie in the part not shown; diff-view.js says so)."""
     before = before or ''
@@ -51,7 +55,7 @@ def unified(before, after, context=3, max_lines=20000):
         after_lines = after_lines[:max_lines]
     if before_lines == after_lines:
         # The texts differ (checked above), so the difference lies past the cap: never call this identical.
-        return {'hunks': [], 'added': 0, 'removed': 0, 'truncated': True, 'identical': False,
+        return {'hunks': [], 'added': 0, 'removed': 0, 'truncated': True, 'identical': False, 'counts_partial': True,
                 'note': f'This file is too long to compare in full: its first {max_lines} lines are the same, and it changes after that point. Those changes are not shown here.'}
     matcher = difflib.SequenceMatcher(a=before_lines, b=after_lines, autojunk=False)
     hunks = []
@@ -82,5 +86,7 @@ def unified(before, after, context=3, max_lines=20000):
         hunks.append({'old_start': old_start, 'old_count': old_count, 'new_start': new_start,
                       'new_count': new_count, 'lines': rows})
     result = {'hunks': hunks, 'added': added, 'removed': removed, 'truncated': truncated, 'identical': False}
-    if truncated: result['note'] = f'Only the first {max_lines} lines of each version were compared; changes after that point are not shown.'
+    if truncated:
+        result['counts_partial'] = True
+        result['note'] = f'Only the first {max_lines} lines of each version were compared; changes after that point are not shown.'
     return result

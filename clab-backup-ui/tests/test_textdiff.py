@@ -86,6 +86,19 @@ class UnifiedDiffTests(unittest.TestCase):
         result = unified(before, before + 'extra\n', max_lines=10)
         self.assertFalse(result['identical']); self.assertTrue(result['truncated'])
 
+    def test_counts_over_text_cut_at_the_line_cap_say_so_and_a_complete_comparison_does_not(self):
+        # Review follow-up G6 (audit L-7): `counts_partial` (additive) is set only when added/removed were counted over
+        # cut text, so a caller that shortens only the list (restore's review) is never worded "in the part shown".
+        before = '\n'.join(f'line {i}' for i in range(30)); after = before.replace('line 2\n', 'line two\n').replace('line 25', 'line 25 changed')
+        cut = unified(before, after, max_lines=10)
+        self.assertTrue(cut['truncated']); self.assertTrue(cut['counts_partial']); self.assertEqual((cut['added'], cut['removed']), (1, 1))
+        past = unified(before, before + '\nmore', max_lines=10)
+        self.assertTrue(past['counts_partial'])
+        whole = unified(before, after)
+        self.assertNotIn('counts_partial', whole); self.assertFalse(whole['truncated'])
+        self.assertNotIn('counts_partial', unified('a\x00', 'b'))
+        self.assertNotIn('counts_partial', unified('same', 'same'))
+
     def test_large_identical_texts_are_identical_and_complete(self):
         text = '\n'.join(f'line{n}' for n in range(50)) + '\n'
         result = unified(text, text, max_lines=10)

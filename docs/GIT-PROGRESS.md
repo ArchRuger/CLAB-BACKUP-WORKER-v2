@@ -209,14 +209,28 @@ below it. So the review before every upload holds across them:
 - While another lab of the repository has a save waiting on the VM without a review (or a save
   whose answer was lost, which may hold a commit), this lab's **Save progress**, design exports,
   a retry that commits and a folder move with its files are refused. The message names that lab
-  and its save: open it under *Progress*, review and upload it (or choose **Keep snapshot only**),
-  then try again. Saves of the waiting lab itself are not held up.
+  and its save: open it under *Progress*, review and upload it, then try again. Saves of the
+  waiting lab itself are not held up.
+- **Keep snapshot only** on that save also lets this lab go ahead, but it is not the same as a
+  review: its commit stays in the checkout on the VM and goes along with the next upload from the
+  repository. The refusal says so.
 - An upload waits the same way. Saves that an older release already stacked on top of each other
   stay recoverable: a refused upload keeps your review, so after each lab's waiting save was
   reviewed once, either upload goes through and settles both (the other lab's save then reads
-  *Saved to Git* as well).
+  *Saved to Git* as well). A retry of a save that has no commit yet only saves on the VM, so it
+  waits only for another lab's save that has a commit: two labs whose saves both lack one (an
+  older release could leave that) do not hold each other back; the first retry reaches its review
+  and the uploads then follow the rule above.
 - **Review before uploading** counts every other save of the repository that the upload may carry
-  along, this lab's and other labs', and says how many belong to other labs.
+  along, this lab's and other labs', and says how many belong to other labs. A save kept with
+  **Keep snapshot only** that may have a commit on the VM (one with a commit, or one whose answer
+  was lost after it was sent) is counted and named there too, as *not seen uploaded yet*, until an
+  upload is verified to have carried it: also when its lab was disconnected since or changed its
+  device selection, because the save remembers the checkout and VM it was made in (an older save
+  that does not is matched through its lab's current connection). The count can
+  be too high (a kept save that never reached a commit, or one an earlier upload carried before
+  the manager tracked that), never too low, for every save the manager still lists; removing a lab
+  from the manager forgets its saves, kept ones included.
 - A folder move that meets such a save is kept on the VM and uploaded later from *Recent saves*.
 
 ## Everyday buttons
@@ -303,7 +317,12 @@ registration IDs and folder names.
   save, a running job, a device selection that no longer matches the lab, another lab using
   that folder) is checked before the VM retires the old registration, so a refused change
   leaves the lab saving where it did; once the VM made the change the lab follows it, also
-  when the answer was lost. A move that stops before its commit (for example on staged
+  when the answer was lost (if the check after it was lost too, choosing the same folder again
+  completes the change; the VM connection must still be the one the lab was connected through).
+  While a lab's repository connection is being changed (this folder change, *Save settings* or a
+  connection by URL), that lab's **Save progress** and design exports wait, and so does every other
+  connection change (*Disconnect* included): they answer *Try again in a moment*. Other labs keep
+  saving. A move that stops before its commit (for example on staged
   changes) or loses its answer reads *Moving the saved files did not finish — retry it* and
   is retried from its save window (**Retry the move**); it is only worded as moved once it
   committed.
@@ -419,7 +438,8 @@ Password rotation for the same VM/account is allowed so that access can be repai
 To stop pursuing a pending export, choose **Keep snapshot only** and confirm the
 explicit dismissal. It retains the captured backup and any existing Git commit,
 then permits disconnect/removal. This does not unpublish a remote commit or undo
-files already saved to the checkout. A later **Start fresh** still deletes manager
+files already saved to the checkout; a kept commit that was not uploaded goes along
+with the next upload from that checkout, and the review before it names the save. A later **Start fresh** still deletes manager
 backup files after its normal confirmation; Ben's checkout and Git remote remain
 outside manager storage.
 

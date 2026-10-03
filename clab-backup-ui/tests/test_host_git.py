@@ -856,6 +856,21 @@ class RegistryRaceTests(unittest.TestCase):
                                  self.owner_git(lambda: None), lookup=self.account)
         self.assertEqual(sorted(self.saved()), ['bgp'])
 
+    def test_a_move_into_an_existing_folder_never_answers_with_a_copy_that_changed_meanwhile(self):
+        # Review follow-up G5: setup-git.sh re-registered the target folder after this helper loaded git.json. Answering
+        # with the startup copy would bind the lab to a revision every later call refuses ("binding changed").
+        ospf = self.binding('ospf', revision='r-ospf'); bgp = self.binding('bgp', revision='r-bgp'); self.write(ospf, bgp)
+        startup = host_git.load_registry()
+        readmin = dict(bgp, revision='r-admin', label='Course / bgp (again)'); self.write(ospf, readmin)
+        request = {'binding_id': ospf['id'], 'revision': 'r-ospf', 'prefix': 'bgp', 'retire': True}
+        with self.assertRaisesRegex(ValueError, 'binding changed'):
+            host_git.register_prefix(startup, request, self.owner_git(lambda: None), lookup=self.account)
+        self.assertEqual(self.saved(), {'ospf': ospf, 'bgp': readmin}, 'nothing was retired')
+        # Asked again, the helper starts from git.json as it is now and the move goes through.
+        result = host_git.register_prefix(host_git.load_registry(), request, self.owner_git(lambda: None), lookup=self.account)
+        self.assertEqual((result['id'], result['revision'], result['label']), (bgp['id'], 'r-admin', readmin['label']))
+        self.assertEqual(sorted(self.saved()), ['bgp'])
+
     def test_an_overlapping_folder_saved_meanwhile_refuses_the_registration_and_writes_nothing(self):
         bgp = self.binding('bgp'); nested = self.binding('eth/core'); self.write(bgp)
         with self.assertRaisesRegex(ValueError, 'saved meanwhile'):

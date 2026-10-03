@@ -84,6 +84,22 @@ test('a line shown shortened says so in its row and in a note, so a change past 
  assert.match(html,/longer than 4000 characters/);
  assert.doesNotMatch(context.diffMarkup({...diff,hunks:[{...diff.hunks[0],lines:[{type:'del',old:1,new:null,text:'a'},{type:'add',old:null,new:1,text:'b'}]}]}),/diff-cut|longer than/);
 });
+test('"in the part shown" qualifies counts only when they were counted over cut text; a list shortened after counting is worded neutrally (review follow-up G6)',()=>{
+ const context=makeContext();
+ const row=n=>({type:'del',old:n,new:null,text:'set interfaces ge-0/0/'+n});
+ // restore.review_diff: the counts of the whole comparison, the list cut to its first lines, no counts_partial.
+ const restore={identical:false,added:0,removed:900,truncated:true,labels:{old:'Saved (r1)',new:'Running now'},
+  hunks:[{old_start:1,old_count:3,new_start:0,new_count:0,lines:[row(1),row(2),row(3)]}]};
+ const html=context.diffMarkup(restore);
+ assert.doesNotMatch(html,/in the part shown/);
+ assert.match(html,/0 added · 900 removed/);
+ assert.match(html,/not every line is listed/);
+ // textdiff.unified() past its line cap: the counts cover only the part compared, and it says so.
+ const capped={...restore,added:1,removed:1,counts_partial:true,note:'Only the first 20000 lines of each version were compared; changes after that point are not shown.'};
+ const cut=context.diffMarkup(capped);
+ assert.match(cut,/1 added · 1 removed in the part shown/);assert.doesNotMatch(cut,/not every line is listed/);
+ assert.doesNotMatch(context.diffMarkup({...restore,truncated:false}),/in the part shown|not every line is listed/);
+});
 test('style.css shrinks the diff gutters at narrow widths without dropping the wide-layout rule',()=>{
  const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
  assert.match(css,/\.diff-col-gutter \{ width: 44px; \}/);
