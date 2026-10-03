@@ -224,13 +224,20 @@ below it. So the review before every upload holds across them:
 - **Review before uploading** counts every other save of the repository that the upload may carry
   along, this lab's and other labs', and says how many belong to other labs. A save kept with
   **Keep snapshot only** that may have a commit on the VM (one with a commit, or one whose answer
-  was lost after it was sent) is counted and named there too, as *not seen uploaded yet*, until an
-  upload is verified to have carried it: also when its lab was disconnected since or changed its
-  device selection, because the save remembers the checkout and VM it was made in (an older save
-  that does not is matched through its lab's current connection). The count can
-  be too high (a kept save that never reached a commit, or one an earlier upload carried before
-  the manager tracked that), never too low, for every save the manager still lists; removing a lab
-  from the manager forgets its saves, kept ones included.
+  was lost or refused after it was sent) is counted and named there too, as *not seen uploaded
+  yet*: also when its lab was disconnected since or changed its device selection, because the save
+  remembers the checkout and VM it was made in. It stops being counted once an upload is verified to
+  have carried it, or once an upload from the same checkout, remote and branch is verified to have
+  put the checkout's newest commit on the remote: everything on that branch is then on the remote,
+  so nothing of the kept save is left to go along (a save whose publication the VM refused never
+  made a commit, and the VM names only commits it verified, so this is how such a save stops
+  counting). The save itself stays kept; it is not shown as uploaded. The count can be too high (a
+  kept save that never reached a commit, while no such upload happened yet, or one an earlier upload
+  carried before the manager tracked that). It is never too low for a save that remembers its
+  checkout. A save made before 1.30.37 remembers none, so only its lab's current connection says
+  where it belongs: while that lab is disconnected the save is not counted anywhere, and if the lab
+  is connected to another repository since, it is counted there instead. Removing a lab from the
+  manager forgets its saves, kept ones included.
 - A folder move that meets such a save is kept on the VM and uploaded later from *Recent saves*.
 
 ## Everyday buttons

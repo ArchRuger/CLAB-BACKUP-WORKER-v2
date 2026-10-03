@@ -266,8 +266,10 @@ def kept_on_vm(job):
     have committed it, exactly as in its pending form). It is no longer pending, but the next upload from that checkout
     sends such a commit along: the helper approves the journaled commits of every current registration of the checkout,
     whichever lab made them and whether that lab is still connected. Which checkout it belongs to is `made_in`'s
-    question; the review counts it until an upload is verified to have carried it (`finish`)."""
+    question; the review counts it until an upload is verified to have carried it (`finish`), or to have put the
+    checkout's HEAD on the remote (`settle_kept`: then nothing of it is left to go along)."""
     return (job.get('status') == 'dismissed' and not job.get('pushed') and job.get('target') != 'update'
+            and not job.get('head_uploaded')
             and bool(job.get('commit') or job.get('published_attempt') or 'expected_head' in job))
 
 
@@ -300,7 +302,8 @@ def _newest_pushed_ids(jobs):
 def _append_git_job(state, job):
     """Append one entry to 'git_jobs' and cap it at the newest 200, never dropping one
     ``job_pending`` still calls true, nor the newest pushed save of any binding (see
-    ``_newest_pushed_ids``, ``trim_jobs``), nor a kept save the review must still count (``kept_on_vm``)."""
+    ``_newest_pushed_ids``, ``trim_jobs``), nor a kept save the review must still count (``kept_on_vm``; one an upload
+    settled, ``finish`` and ``settle_kept``, may go like any finished save)."""
     state['git_jobs'].append(job)
     keep = _newest_pushed_ids(state['git_jobs'])
     state['git_jobs'] = trim_jobs(state['git_jobs'], GIT_JOB_CAP, lambda j: job_pending(j) or j.get('id') in keep or kept_on_vm(j), False)
@@ -643,6 +646,43 @@ class GitProgress:
         where = (job.get('destination') or {}).get('checkout') or bound.get('repository', {}).get('path')
         return host == binding['host_identity'] and bool(where) and where == binding['repository'].get('path')
 
+    def same_branch(self, job, binding):
+        """Whether a save of this checkout (`made_in`) was made for the push URL and branch `binding` pushes, as the save
+        froze them (an older save that froze nothing: as its lab's current binding says). The helper approves a journaled
+        commit for a push only from a registration of the same checkout, push URL and branch."""
+        frozen = job.get('destination') or {}
+        if not frozen:
+            bound = ((self.store.lab(job.get('lab_id')) or {}).get('git_binding') or {}).get('repository') or {}
+            frozen = dict(remote=strip_credentials(bound.get('push_url', '')), branch=bound.get('branch', ''))
+        repo = binding['repository']
+        return frozen.get('branch') == repo.get('branch', '') and frozen.get('remote') == strip_credentials(repo.get('push_url', ''))
+
+    def settle_kept(self, job, commit):
+        """Give the kept saves of this checkout that a verified upload did not name an end. The helper names
+        (`synced_operations`) only saves it journaled with a verified commit, so one whose publication the VM refused, or
+        whose commit it never verified, was counted in every later review and kept beyond the jobs cap, for good. Once the
+        checkout's HEAD is this uploaded commit, its whole branch is on the remote: a commit such a save made there (the
+        helper commits only on the registered branch and only ever moves it forward) is on the remote already, or there is
+        none, so nothing of it is left to go along (a commit the owner moved off the branch by hand, outside the manager,
+        goes along again only if the owner puts it back). Recorded privately (`head_uploaded`), never as `pushed`: the
+        manager did not see an upload carry it. Only saves of the same checkout, push URL and branch, chosen before the
+        check (their publications ended before this upload: one worker, one helper call at a time, and the VM's lock per
+        checkout refuses the check while an interrupted one still runs there). A HEAD that is not this commit (newer
+        commits on top of an older save's upload) or a check that fails settles nothing; the upload stands."""
+        with self.store.lock:
+            where = copy.deepcopy((self.store.lab(job['lab_id']) or {}).get('git_binding'))
+            open_ = {j['id'] for j in self.store.state['git_jobs'] if where and kept_on_vm(j) and self.made_in(j, where) and self.same_branch(j, where)}
+        if not open_ or not commit: return
+        try: head = self.invoke({'mode': 'status'}, where).get('head')
+        except ValueError: return
+        if head != commit: return
+        with self.store.lock:
+            settled = [j for j in self.store.state['git_jobs'] if j['id'] in open_ and kept_on_vm(j)]
+            for previous in settled: previous['head_uploaded'] = True
+            try: self.store.save()
+            except OSError:
+                for previous in settled: previous.pop('head_uploaded', None)
+
     def get_job(self, job_id):
         job = next((j for j in self.store.state['git_jobs'] if j['id'] == job_id), None)
         if not job: raise HTTPException(404, 'Git save not found.')
@@ -842,6 +882,7 @@ class GitProgress:
                             peers.get(previous.get('lab_id'), '') == previous.get('binding_digest'))
                     if same: previous.update(status='synced', pushed=True, message='Saved commit is included in the verified remote history.', finished=now())
                 self.store.save()
+            self.settle_kept(job, commit)
 
     def install(self, app):
         # The review before an upload is mandatory (UI review 001, UI-007 C). `review_before_push` is still
@@ -1448,10 +1489,13 @@ class GitProgress:
                     # What an upload of this save may carry along: every other save of this checkout still waiting on
                     # the VM, this lab's and the other labs' (a save without a known commit may hold one too), and every
                     # save of this checkout kept with Keep snapshot only that was not seen uploaded (`kept_on_vm`,
-                    # `made_in`: whichever lab made it, connected or not, under whatever binding), named. It can
-                    # over-report (a kept save that never committed, or whose registration was retired since); it misses
-                    # only a save the manager no longer holds (a removed lab's) or one so old it froze no checkout while
-                    # its lab is connected elsewhere now. While another lab's save is unreviewed the upload waits.
+                    # `made_in`: whichever lab made it, connected or not, under whatever binding), named, until an upload
+                    # settled it (`finish`, `settle_kept`). It can over-report (a kept save that never committed, or whose
+                    # registration was retired since); it misses a save the manager no longer holds (a removed lab's) and
+                    # one so old it froze no destination at all (saves froze none before 1.30.37), whose checkout only its
+                    # lab's current binding can tell: while that lab is disconnected the save is in no checkout's count,
+                    # and once it is connected to another checkout it is counted there instead. Nothing the manager still
+                    # holds names that save's checkout. While another lab's save is unreviewed the upload waits.
                     labs = self.checkout_labs(lab_id)
                     waiting = [j for j in self.store.state['git_jobs'] if j['id'] != job['id'] and (j.get('lab_id') == lab_id or j.get('lab_id') in labs)
                                and job_pending(j) and not j.get('pushed') and j.get('target') != 'update']

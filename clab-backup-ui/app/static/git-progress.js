@@ -207,11 +207,13 @@ function renderGitProgress(){
  if(gitWatch&&gitWatch.lab_id!==lab.id&&!$('git-job-dialog')?.open){clearTimeout(gitWatchTimer);gitWatch=null;}
  if(active&&!gitWatch)gitStartWatch(active);
 }
-// The newest finished "Apply to running lab" of this lab stays one click away on the status card.
+// The newest finished "Apply to running lab" of this lab stays one click away on the status card. A restore the manager
+// still reads back after a restart (`rechecking`, restore.js `restoreJobActive`) is not finished: the lab header shows it
+// as devices being checked, so it is skipped here like a running one. Guarded: this file also loads without restore.js.
 function gitRenderLastRestore(lab){
  const line=$('git-last-restore');if(!line)return;
- const busyStates=typeof restoreActiveJob!=='undefined'?restoreActiveJob:new Set();
- const last=(state.restore_jobs||[]).filter(j=>j.lab_id===lab.id&&!busyStates.has(j.status)).sort((a,b)=>String(b.finished||b.created||'').localeCompare(String(a.finished||a.created||'')))[0];
+ const busy=typeof restoreJobActive==='function'?restoreJobActive:typeof restoreActiveJob!=='undefined'?j=>restoreActiveJob.has(j.status):()=>false;
+ const last=(state.restore_jobs||[]).filter(j=>j.lab_id===lab.id&&!busy(j)).sort((a,b)=>String(b.finished||b.created||'').localeCompare(String(a.finished||a.created||'')))[0];
  line.hidden=!last;if(!last)return;
  const labels=typeof restoreJobLabels!=='undefined'?restoreJobLabels:{};
  if($('git-last-restore-text'))$('git-last-restore-text').textContent='Last configuration change: '+(labels[last.status]||last.status)+(last.finished||last.created?' · '+gitWhen(last.finished||last.created):'');

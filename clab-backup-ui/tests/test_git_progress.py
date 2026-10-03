@@ -1332,6 +1332,82 @@ class GitPlacesTests(GitProgressTests):
         self.assertEqual((answer['also_sends'], answer['also_sends_other_labs']), (2, 2))
         self.assertEqual([k['note'] for k in answer['also_sends_kept']], ['Design lost', 'Capture lost'])
 
+    def refused_then_kept(self, head_after_push):
+        """Review follow-up H1 (audit M-2): another lab's save whose publication the VM refused (no commit, an expected
+        HEAD) is kept with Keep snapshot only, then this lab saves and uploads. `head_after_push` is the checkout's HEAD
+        the status check reports after that upload (the VM's real answer, `host_git.status`), or an exception."""
+        other = self.sibling_lab()
+        theirs = self.save_in(other['id'], note='Refused').json()
+        original = self.remote; vm = dict(head='a'*40, mine=None)
+
+        def helper(host, request, stopping=None):
+            if request['mode'] == 'publish' and request['operation_id'] == theirs['id']:
+                self.sent.append(copy.deepcopy(request))   # host_git.publish: expected_head no longer HEAD, nothing written
+                return dict(status='needs_attention', commit=None, changed_files=[], pushed=False, snapshot_path='latest', synced_operations=None,
+                            message='The repository changed since it was selected. Refresh status and retry the preserved snapshot.')
+            if request['mode'] == 'status' and vm['mine'] and any(r['mode'] == 'push' for r in self.sent):
+                self.sent.append(copy.deepcopy(request))
+                if isinstance(head_after_push, Exception): raise head_after_push
+                return dict(repository=self.repo, ready=True, problem='', head=head_after_push, baseline_revision='', latest_manifest=None)
+            result = original(host, request, stopping)
+            if request['mode'] == 'push': result['synced_operations'] = [vm['mine']]   # the helper names only verified journals
+            return result
+
+        self.helper.side_effect = helper
+        outcome, _ = self.run_save(theirs)
+        self.assertEqual((outcome['status'], outcome['commit']), ('export_pending', None), outcome)
+        self.assertTrue(kept_on_vm(dict(self.progress.get_job(theirs['id']), status='dismissed')), 'it sent a publication')
+        self.assertEqual(self.client.post('/api/git/jobs/' + theirs['id'] + '/dismiss', json={'acknowledge': True}).status_code, 200)
+        mine = self.save_in(self.lab['id'], note='Mine').json(); vm['mine'] = mine['id']
+        outcome, _ = self.run_save(mine); self.assertEqual(outcome['status'], 'review_pending')
+        answer = self.client.post(self.url + '/compare', json={'job_id': mine['id']}).json()
+        self.assertEqual(answer['also_sends_kept'], [dict(lab='other-lab', note='Refused')], 'counted while the VM may hold a commit of it')
+        outcome, _ = self.review_and_upload(mine); self.assertEqual(outcome['status'], 'synced', outcome)
+        return theirs
+
+    def test_a_kept_save_the_vm_refused_stops_counting_once_an_upload_of_the_checkouts_head_was_verified(self):
+        # The helper names only saves it journaled with a verified commit, so this one was never named and was counted in
+        # every later review forever, beyond the jobs cap too. An upload verified to have put the checkout's HEAD on the
+        # remote proves nothing of it is left to go along: it ends there, privately, never as uploaded.
+        theirs = self.refused_then_kept('b'*40)
+        answer = self.review_of(self.lab['id'], 'f'*40)
+        self.assertEqual((answer['also_sends'], answer['also_sends_kept']), (0, []))
+        stored = self.progress.get_job(theirs['id'])
+        self.assertEqual((stored['status'], stored['pushed']), ('dismissed', False), 'still kept, never claimed as uploaded')
+        self.assertTrue(stored['head_uploaded']); self.assertFalse(kept_on_vm(stored))
+        self.assertNotIn('head_uploaded', self.client.get('/api/git/jobs/' + theirs['id']).json())
+        self.assertEqual([j for j in self.client.get('/api/state').json()['git_jobs'] if 'head_uploaded' in j], [])
+        self.assertTrue(next(j for j in Store(self.tmp.name).state['git_jobs'] if j['id'] == theirs['id'])['head_uploaded'], 'stored')
+        with self.store.lock:
+            for n in range(GIT_JOB_CAP): _append_git_job(self.store.state, dict(id='later' + str(n), status='synced'))
+            self.assertNotIn(theirs['id'], [j['id'] for j in self.store.state['git_jobs']], 'the cap lets it go')
+
+    def still_counted(self, theirs):
+        self.assertNotIn('head_uploaded', self.progress.get_job(theirs['id']))
+        self.assertEqual(self.review_of(self.lab['id'], 'f'*40)['also_sends_kept'], [dict(lab='other-lab', note='Refused')])
+
+    def test_a_kept_save_stays_counted_while_the_checkouts_head_is_past_the_uploaded_commit(self):
+        # A HEAD that is not the uploaded commit (an older save uploaded while newer commits sit on top) may still hold a
+        # commit of the kept save that a later upload carries: it stays counted.
+        self.still_counted(self.refused_then_kept('c'*40))
+
+    def test_a_kept_save_stays_counted_when_the_check_after_the_upload_fails(self):
+        # A status check that fails proves nothing; the upload itself stays verified (synced, checked above).
+        self.still_counted(self.refused_then_kept(ValueError('Git connection interrupted.')))
+
+    def test_a_kept_save_of_another_branch_or_remote_of_the_checkout_is_not_settled_by_this_upload(self):
+        # The helper approves a journal for a push only from the same checkout, push URL and branch: an upload on another
+        # branch of the folder proves nothing about a save made on this one.
+        theirs = self.refused_then_kept('b'*40)
+        stored = self.progress.get_job(theirs['id'])
+        self.assertTrue(stored['head_uploaded'])
+        for change in (dict(branch='dev'), dict(remote='https://example.test/other.git')):
+            self.progress.update(theirs['id'], head_uploaded=False, destination=dict(stored['destination'], **change))
+            mine = self.stored_save(self.lab['id'], 'b'*40, reviewed='2026-10-03T10:00:00+00:00')
+            self.assertEqual(self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True}).status_code, 200)
+            self.progress.execute(mine['id'])
+            self.assertFalse(self.progress.get_job(theirs['id'])['head_uploaded'], change)
+
     def test_a_save_has_its_vm_host_identity_frozen_privately_with_its_checkout(self):
         saved = self.save_in(self.lab['id']).json()
         stored = self.progress.get_job(saved['id'])

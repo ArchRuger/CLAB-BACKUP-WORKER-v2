@@ -627,3 +627,22 @@ test('blocked site data never stops a save or leaves Save progress stuck: every 
  await assert.rejects(context.gitSubmitSave('lab',values,undefined,{quiet:true}),/draw failed/);assert.equal(submitting(),false);
  await context.gitSubmitSave('lab',values,undefined,{quiet:true});assert.equal(calls.length,5);assert.equal(submitting(),false);
 });
+test('the last configuration change skips a restore still read back after a restart, like the lab header (review follow-up H3)',()=>{
+ // An interrupted restore the manager still reads back (`rechecking: true`) holds the lab and is shown as devices being
+ // checked; the Progress tab must not call it the last change "Interrupted" meanwhile. Loaded with restore.js as on the page.
+ const context=makeContext();vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/restore.js'),'utf8'),context);
+ const el={'git-last-restore':{hidden:false},'git-last-restore-text':{textContent:''},'git-last-restore-open':{onclick:null}};context.$=id=>el[id]||null;
+ const older={id:'old',lab_id:'lab',status:'succeeded',created:'2026-10-01T09:00:00Z',finished:'2026-10-01T09:05:00Z'};
+ const recheck={id:'new',lab_id:'lab',status:'interrupted',rechecking:true,created:'2026-10-02T09:00:00Z',finished:'2026-10-02T09:01:00Z'};
+ const line=(target,jobs)=>{target.state.restore_jobs=jobs;el['git-last-restore'].hidden=false;el['git-last-restore-text'].textContent='';target.gitRenderLastRestore({id:'lab'});return el['git-last-restore'].hidden?null:el['git-last-restore-text'].textContent;};
+ assert.match(line(context,[recheck,older]),/^Last configuration change: Configuration replaced/,'the older finished change stays named');
+ assert.equal(line(context,[recheck]),null,'the line is hidden while the only change is still being read back');
+ const interrupted='Last configuration change: '+vm.runInContext('restoreJobLabels.interrupted',context);
+ for(const flag of [false,undefined]){
+  const plain={...recheck,rechecking:flag};if(flag===undefined)delete plain.rechecking;
+  assert.ok(line(context,[plain,older]).startsWith(interrupted),'a restore no longer read back is shown as before');
+ }
+ // Without restore.js (this file alone, as the other tests here load it) it still loads and keeps the status-only rule.
+ const alone=makeContext();alone.$=id=>el[id]||null;
+ assert.ok(line(alone,[recheck,older]).startsWith('Last configuration change: interrupted'));
+});
