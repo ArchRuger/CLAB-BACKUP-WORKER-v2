@@ -1,4 +1,5 @@
 """Real loopback HTTP/WebSocket transport through the manager (synthetic VM service)."""
+import hashlib
 import socket
 import tempfile
 import threading
@@ -13,6 +14,7 @@ from starlette.websockets import WebSocketDisconnect
 import uvicorn
 
 from app.main import create_app
+from app import capture_sessions
 from app.capture import EdgesharkProvider
 from app.capture_sessions import BrowserSessions
 from test_capture import fixture
@@ -20,7 +22,7 @@ from test_capture import fixture
 
 class CaptureProxyTests(unittest.TestCase):
     def setUp(self):
-        broker=FastAPI();self.who='';self.seen=[];self.offered=[];self.empty=False
+        broker=FastAPI();self.who='';self.seen=[];self.offered=[];self.empty=False;self.refusal=None
         def auth(request):
             self.seen.append(dict(request.headers))
             if request.headers.get('authorization')!='Bearer '+'a'*64:
@@ -33,7 +35,10 @@ class CaptureProxyTests(unittest.TestCase):
             return {'id':'c'*64}
         @broker.get('/sessions/{sid}/assets/{path:path}')
         async def asset(sid:str,path:str,request:Request):
-            auth(request);return Response('export default class RFB {}',media_type='text/javascript')
+            auth(request)
+            # Stand-in for capture_service.py's own answers: the (status, detail) it raises instead of serving.
+            if self.refusal:raise HTTPException(*self.refusal)
+            return Response('export default class RFB {}',media_type='text/javascript')
         @broker.get('/sessions/{sid}/download')
         async def download(sid:str,request:Request):
             auth(request)
@@ -75,9 +80,48 @@ class CaptureProxyTests(unittest.TestCase):
         self.assertIn('SameSite=strict',result.headers['set-cookie'])
         return '/api/capture/sessions/'+result.json()['id']
 
+    def test_viewer_modules_that_differ_from_the_pinned_image_never_run_as_manager_javascript(self):
+        # A compromised desktop could serve any rfb.js; the manager origin must not execute it.
+        base=self.launch()
+        response=self.client.get(base+'/assets/core/rfb.js')
+        self.assertEqual(response.status_code,502);self.assertNotIn('javascript',response.headers['content-type'])
+        self.assertNotIn('class RFB',response.text)
+        # A module the pinned client does not have is refused before the service is asked.
+        before=len(self.seen)
+        self.assertEqual(self.client.get(base+'/assets/core/evil.js').status_code,404);self.assertEqual(len(self.seen),before)
+
+    def test_the_services_refusal_reaches_the_browser_as_final_and_starting_stays_retryable(self):
+        # AUDIT-2026-10-03 L-28 review: the service refuses an unpinned or oversized viewer module itself
+        # with 502; the viewer must not read that as "still starting" and poll for half a minute.
+        base=self.launch()
+        for refusal in ((502,'Viewer asset is not the pinned one.'),(502,)):
+            self.refusal=refusal;response=self.client.get(base+'/assets/core/rfb.js')
+            self.assertEqual(response.status_code,502,refusal)
+            self.assertNotIn('javascript',response.headers['content-type'])
+            detail=response.json()['detail']
+            self.assertIn('not the pinned one',detail);self.assertIn('start a new capture',detail)
+        # A desktop that is still starting (the service's 503) or a session the service no longer
+        # knows (404) stays the retryable 404 the viewer waits on.
+        for refusal in ((503,'Viewer starting; retry shortly.'),(404,)):
+            self.refusal=refusal;response=self.client.get(base+'/assets/core/rfb.js')
+            self.assertEqual(response.status_code,404,refusal)
+            self.assertEqual(response.json()['detail'],'Viewer asset unavailable. Reopen the capture session.')
+
+    def test_an_unreachable_capture_service_is_retryable_and_names_the_next_step(self):
+        # AUDIT-2026-10-03 L-28 review: a transport failure may clear by itself, so it is not the refusal's
+        # final 502; its own text still tells the student what to do if it persists.
+        base=self.launch()
+        dead=socket.socket();dead.bind(('127.0.0.1',0));port=dead.getsockname()[1];dead.close()
+        self.app.state.captures.sessions=BrowserSessions(f'http://127.0.0.1:{port}','a'*64)
+        response=self.client.get(base+'/assets/core/rfb.js')
+        self.assertEqual(response.status_code,503)
+        self.assertIn('Reconnect viewer',response.json()['detail'])
+
     def test_http_assets_download_cookie_isolation_and_no_credential_forwarding(self):
         base=self.launch()
-        response=self.client.get(base+'/assets/core/rfb.js',headers={'Authorization':'unrelated browser credential'})
+        # The synthetic service serves a stand-in module; list its bytes as the pinned image's own.
+        with patch.dict(capture_sessions.VIEWER_ASSETS,{'core/rfb.js':hashlib.sha256(b'export default class RFB {}').hexdigest()}):
+            response=self.client.get(base+'/assets/core/rfb.js',headers={'Authorization':'unrelated browser credential'})
         self.assertEqual(response.status_code,200)
         self.assertEqual(response.headers['content-type'],'text/javascript; charset=utf-8')
         self.assertEqual(self.seen[-1]['authorization'],'Bearer '+'a'*64)

@@ -231,6 +231,79 @@ class DiscoveryParserTests(unittest.TestCase):
         for value in (b'not json',b'null',b'{"error":"denied"}'):
             with self.assertRaises(ValueError):parse_inspect(value)
 
+    def test_ipv4_not_available_does_not_hide_an_ipv6_address(self):
+        # AUDIT-2026-10-03 L-5: the sentinel check ran after the fallback choice, so a truthy 'N/A' won.
+        for v4 in ('N/A','-','',None):
+            data=json.loads(response());data['training'][0].update(ipv4_address=v4,ipv6_address='2001:db8::1/64')
+            self.assertEqual(parse_inspect(json.dumps(data).encode())['training'][0]['address'],'2001:db8::1',repr(v4))
+        data=json.loads(response());data['training'][0].update(ipv4_address='172.20.20.2/24',ipv6_address='2001:db8::1/64')
+        self.assertEqual(parse_inspect(json.dumps(data).encode())['training'][0]['address'],'172.20.20.2','IPv4 still wins when both exist')
+        data=json.loads(response());data['training'][0].update(ipv4_address='172.20.20.2/24',ipv6_address='N/A')
+        self.assertEqual(parse_inspect(json.dumps(data).encode())['training'][0]['address'],'172.20.20.2')
+        data=json.loads(response());data['training'][0].update(ipv4_address='N/A',ipv6_address='N/A')
+        self.assertEqual(parse_inspect(json.dumps(data).encode())['training'][0]['address'],'')
+
+    def test_lab_name_prefix_gives_lab_dash_node_container_names(self):
+        # AUDIT-2026-10-03 M-1: containerlab names containers <lab>-<node> for `prefix: __lab-name`.
+        from app.discovery import expected_container, reconcile
+        parsed=parse_definition(b'prefix: __lab-name\n'+YAML)
+        self.assertEqual(parsed['prefix'],'__lab-name','the stored prefix value stays exactly as written')
+        self.assertEqual([n['name'] for n in parsed['nodes']],['training-r1','training-r2'])
+        lab=dict(deployment_name='training',container_prefix='__lab-name')
+        self.assertEqual(expected_container(lab,dict(name='x',definition_node='r1')),'training-r1')
+        rows=[dict(lab_name='training',name='training-r1',state='running',kind='cisco_xrv9k',ipv4_address='172.20.20.2/24'),
+              dict(lab_name='training',name='training-r2',state='running',kind='juniper_cjunosevolved',ipv4_address='172.20.20.3/24')]
+        nodes=[dict(name='__lab-name-training-r1',definition_node='r1',endpoint_mode='auto'),dict(name='__lab-name-training-r2',definition_node='r2',endpoint_mode='auto')]
+        state={'labs':[dict(id='l',deployment_name='training',container_prefix='__lab-name',nodes=nodes)],
+               'discovery':{'labs':parse_inspect(json.dumps({'training':rows}).encode())}}
+        reconcile(state)
+        self.assertEqual([n['runtime_state'] for n in nodes],['running','running'])
+        self.assertEqual([n['discovered_address'] for n in nodes],['172.20.20.2','172.20.20.3'])
+        # A lab saved before the fix keeps loading: its nodes carry the old composed name, matched through definition_node.
+        self.assertTrue(all(n['discovered'] for n in nodes))
+        # other prefixes are unchanged
+        self.assertEqual(parse_definition(b'prefix: custom\n'+YAML)['nodes'][0]['name'],'custom-training-r1')
+        self.assertEqual(parse_definition(YAML)['nodes'][0]['name'],'clab-training-r1')
+
+    def test_setup_seed_with_an_unhashable_command_mode_is_ignored_not_fatal(self):
+        # AUDIT-2026-10-03 L-4: a list or dict raised TypeError out of Discovery.start().
+        from app.discovery import validate_host_bootstrap, consume_host_bootstrap, BOOTSTRAP_FILE
+        def seed(mode):
+            return {'schema':1,'created':'2026-09-23T10:00:00+00:00','password':'pw-from-setup',
+                    'fingerprint':'','host':{'address':'127.0.0.1','port':22,'username':'clab-discovery','auth':'password','command_mode':mode,'enabled':True}}
+        for mode in (['shell'],{'a':1},None,7,3.5,True):
+            with self.assertRaises(ValueError,msg=repr(mode)):validate_host_bootstrap(seed(mode))
+        self.assertEqual(validate_host_bootstrap(seed('helper'))['host']['command_mode'],'helper')
+        with tempfile.TemporaryDirectory() as tmp:
+            store=Store(tmp)
+            for mode in (['shell'],{'a':1}):
+                path=Path(tmp)/BOOTSTRAP_FILE;path.write_text(json.dumps(seed(mode)));path.chmod(0o600)
+                consume_host_bootstrap(store)
+                self.assertFalse(path.exists(),'a hostile seed is removed, not retried on every start')
+                self.assertNotIn('host',store.state)
+
+    def test_setup_seed_with_an_out_of_range_date_or_deep_nesting_is_ignored_not_fatal(self):
+        # AUDIT-2026-10-03 L-4 review: OverflowError from astimezone() and RecursionError from json.loads
+        # escaped the ValueError handlers and crash-looped startup just like the unhashable command_mode.
+        from app.discovery import validate_host_bootstrap, consume_host_bootstrap, read_host_bootstrap, BOOTSTRAP_FILE, BOOTSTRAP_MAX
+        good={'schema':1,'created':'2026-09-23T10:00:00+00:00','password':'pw-from-setup',
+              'fingerprint':'','host':{'address':'127.0.0.1','port':22,'username':'clab-discovery','auth':'password','command_mode':'helper','enabled':True}}
+        for created in ('0001-01-01T00:00:00+14:00','9999-12-31T23:59:59-14:00'):
+            with self.assertRaises(ValueError,msg=created) as caught:validate_host_bootstrap({**good,'created':created})
+            self.assertIn('unsupported shape',str(caught.exception))
+        deep=b'['*30000
+        self.assertLess(len(deep),BOOTSTRAP_MAX)
+        with tempfile.TemporaryDirectory() as tmp:
+            store=Store(tmp);path=Path(tmp)/BOOTSTRAP_FILE
+            path.write_bytes(deep);path.chmod(0o600)
+            with self.assertRaises(ValueError) as caught:read_host_bootstrap(str(path))
+            self.assertIn('not valid JSON',str(caught.exception))
+            for raw in (deep,json.dumps({**good,'created':'0001-01-01T00:00:00+14:00'}).encode()):
+                path.write_bytes(raw);path.chmod(0o600)
+                self.assertIsNone(consume_host_bootstrap(store))
+                self.assertFalse(path.exists(),'a malformed seed is removed, not retried on every start')
+                self.assertNotIn('host',store.state)
+
     def test_container_status_uptime_and_expected_container_names(self):
         from app.discovery import uptime_seconds, expected_container
         data=json.loads(response());data['training'][0]['status']='Up 12 minutes (healthy)'

@@ -24,6 +24,8 @@ COMMANDS = {'helper': 'sudo -n /usr/local/sbin/clab-manager-inspect',
             'direct': 'containerlab inspect --all --format json'}
 INTERVAL = 30
 MAX_AGE = 90
+# containerlab's `prefix: __lab-name`: containers are named <lab>-<node>.
+LAB_NAME_PREFIX = '__lab-name'
 MAX_OUTPUT = 16 * 1024 * 1024
 # The installed helper allows 25 s for containerlab inspect plus 18 s of file
 # reads; leave headroom for SSH connection setup and a loaded VM.
@@ -78,8 +80,8 @@ def parse_definition(raw, deployed_name=''):
         kind_settings = kinds.get(kind) or {}
         if not isinstance(kind_settings, dict): raise ValueError('Kind settings must be mappings')
         effective = {**defaults, **kind_settings, **group_settings, **settings}
-        # Containerlab's empty prefix uses the bare node name.
-        full = f'{prefix}-{deployed_name}-{short}' if prefix else short
+        # Containerlab's empty prefix uses the bare node name, `__lab-name` drops the prefix.
+        full = container_name(prefix, deployed_name, short)
         fixed = effective.get('mgmt-ipv4') or effective.get('mgmt-ipv6')
         endpoint = str(ipaddress.ip_interface(fixed).ip) if fixed else full
         platform = ALIASES.get(kind, '')
@@ -96,6 +98,16 @@ def parse_definition(raw, deployed_name=''):
                           enable_password='', groups=[], endpoint_mode='auto',
                           discovered=False, runtime_state='unknown'))
     return dict(name=name, deployed_name=deployed_name, prefix=prefix, nodes=nodes)
+
+
+def container_name(prefix, deployed_name, short):
+    """The container containerlab gives a node: <prefix>-<lab>-<node>, <lab>-<node> for the `__lab-name`
+    prefix, the bare node name for an empty prefix, '' without a node name. The one formula of
+    parse_definition, expected_container, reconcile and the capture module; the stored prefix stays as written."""
+    if not short: return ''
+    if not prefix: return short
+    if prefix == LAB_NAME_PREFIX: return f'{deployed_name}-{short}'
+    return f'{prefix}-{deployed_name}-{short}'
 
 
 def parse_inspect(raw):
@@ -117,8 +129,10 @@ def parse_inspect(raw):
             if group and name != group: raise ValueError('Conflicting lab identity in inspection')
             container = literal(row.get('name', ''), 'Container name', 253)
             if not container: raise ValueError('Missing container name')
-            ip = row.get('ipv4_address') or row.get('ipv6_address') or ''
-            if ip in ('N/A', '-'): ip = ''
+            # containerlab prints 'N/A' for a family the container has none of: pick the first usable one.
+            usable = [v.strip() if isinstance(v, str) else v for v in (row.get('ipv4_address'), row.get('ipv6_address'))]
+            usable = [v for v in usable if v and v not in ('N/A', '-')]
+            ip = usable[0] if usable else ''
             ip = str(ipaddress.ip_interface(ip).ip) if ip else ''
             entry = dict(name=container, address=ip,
                          state=literal(row.get('state', 'unknown'), 'Container state', 40),
@@ -205,8 +219,7 @@ def expected_container(lab, node):
     from an inventory file, or a lab without a deployment name) — then nothing can be matched exactly."""
     short = node.get('definition_node') or node.get('short_name') or ''
     if not short or not lab.get('deployment_name'): return ''
-    prefix = lab.get('container_prefix', 'clab')
-    return f'{prefix}-{lab["deployment_name"]}-{short}' if prefix else short
+    return container_name(lab.get('container_prefix', 'clab'), lab['deployment_name'], short)
 
 
 UPTIME = re.compile(r'^Up (?:Less than a second|(\d+) seconds?|About a minute|(\d+) minutes?)(?:\s|$|\()')
@@ -232,7 +245,7 @@ def reconcile(state):
         for node in lab['nodes']:
             short = node.get('definition_node') or node.get('short_name')
             prefix = lab.get('container_prefix', 'clab')
-            expected = f'{prefix}-{lab["deployment_name"]}-{short}' if prefix and short else short
+            expected = container_name(prefix, lab['deployment_name'], short)
             found = rows.get(expected) if expected else rows.get(node['name'])
             node.update(discovered=bool(found), runtime_state=found['state'] if found else 'absent',
                         discovered_address=found['address'] if found else '',
@@ -288,8 +301,9 @@ def read_host_bootstrap(path):
     finally:
         os.close(fd)
     if len(raw) > BOOTSTRAP_MAX: raise ValueError('The VM setup seed is not a small regular file.')
+    # Deep nesting inside the size limit raises RecursionError, not ValueError.
     try: data = json.loads(bytes(raw).decode('utf-8'))
-    except (UnicodeDecodeError, ValueError): raise ValueError('The VM setup seed is not valid JSON.')
+    except (UnicodeDecodeError, ValueError, RecursionError): raise ValueError('The VM setup seed is not valid JSON.')
     return validate_host_bootstrap(data)
 
 
@@ -301,7 +315,8 @@ def validate_host_bootstrap(data):
     host = data['host']
     if not isinstance(host, dict) or set(host) != {'address', 'port', 'username', 'auth', 'command_mode', 'enabled'}: raise invalid
     if type(host['port']) is not int or not 1 <= host['port'] <= 65535: raise invalid
-    if type(host['enabled']) is not bool or host['auth'] != 'password' or host['command_mode'] not in COMMANDS: raise invalid
+    if type(host['enabled']) is not bool or host['auth'] != 'password': raise invalid
+    if not isinstance(host['command_mode'], str) or host['command_mode'] not in COMMANDS: raise invalid
     if not isinstance(host['address'], str) or not isinstance(host['username'], str): raise invalid
     try:
         endpoint = address(host['address'].strip())
@@ -314,8 +329,9 @@ def validate_host_bootstrap(data):
     if not isinstance(fingerprint, str) or (fingerprint and not FINGERPRINT.fullmatch(fingerprint)): raise invalid
     created = data['created']
     if not isinstance(created, str) or len(created) > 64: raise invalid
+    # A date at the edge of the calendar overflows when moved to UTC.
     try: created = datetime.fromisoformat(created.replace('Z', '+00:00')).astimezone(timezone.utc).isoformat()
-    except ValueError: raise invalid
+    except (ValueError, OverflowError): raise invalid
     return dict(host=dict(address=endpoint, port=host['port'], username=username, auth='password',
                           command_mode=host['command_mode'], enabled=host['enabled']),
                 password=password, fingerprint=fingerprint, created=created)

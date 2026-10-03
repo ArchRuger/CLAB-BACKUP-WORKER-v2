@@ -179,7 +179,7 @@ class CaptureAPITests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/capture/targets?node=r1').status_code,400)
 
     def test_custom_and_empty_container_prefix(self):
-        for prefix,expected in [('custom','custom-demo-r1'),('','r1')]:
+        for prefix,expected in [('custom','custom-demo-r1'),('','r1'),('__lab-name','demo-r1')]:
             self.lab['container_prefix']=prefix;self.payload['containers'][0]['name']=expected
             self.selection()
 

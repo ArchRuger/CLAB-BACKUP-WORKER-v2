@@ -11,6 +11,8 @@ import ipaddress
 import json
 import os
 import re
+import secrets
+import string
 import time
 
 import httpx
@@ -21,7 +23,7 @@ from websockets.asyncio.client import connect
 from websockets.exceptions import WebSocketException
 
 from .capture import CaptureError, EdgesharkProvider, IDENTITY_FIELDS, normalize_target
-from .capture_sessions import ASSET, TOKEN, relay
+from .capture_sessions import ASSET, TOKEN, VIEWER_ASSETS, relay, viewer_asset
 
 IMAGE = 'ghcr.io/srl-labs/wireshark-vnc-docker@sha256:682c8bd42282c44f991e0d6015ce3303e5a3aa08a1e2c2b6937fd554ddb31186'
 LABEL = 'org.clab-manager.capture-owner'
@@ -35,6 +37,11 @@ PCAPS_VOLUME_OPTIONS = 'size=256m,uid=1000,gid=1000,mode=0700,nosuid,nodev,noexe
 # The pinned image's websockify only completes the handshake for this subprotocol.
 VNC_SUBPROTOCOL = 'binary'
 VOLUME_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,254}$')
+# A stopped desktop is expected to have lost /pcaps: moby's local volume driver unmounts a
+# tmpfs volume with its last container and mounts a fresh, empty one for a later archive read
+# (by its source; not verified live here). Said only when the archive really holds no file.
+STOPPED = ('The Wireshark desktop stopped and its saved files were lost with it. '
+           'End this session and start a new capture.')
 
 
 def _chain(first, rest):
@@ -131,13 +138,23 @@ class Sessions:
                     print('Capture volume cleanup failed; automatic cleanup will retry.', flush=True)
 
     def reap(self):
+        # One removal Docker keeps refusing must not stop the others, nor fail a start or
+        # listing that reaps first: the name or row stays and the next sweep retries it.
         for name in list(self.pending):
-            self.remove(name)
+            try:
+                self.remove(name)
+            except HTTPException:
+                print('Capture container cleanup failed; automatic cleanup will retry.', flush=True)
+                continue
             self.pending.discard(name)
         now = time.monotonic()
         for sid, row in list(self.rows.items()):
             if now - row['seen'] >= IDLE_SECONDS or now - row['created'] >= LIFETIME_SECONDS:
-                self.remove(row['container'])
+                try:
+                    self.remove(row['container'])
+                except HTTPException:
+                    print('Expired capture session cleanup failed; automatic cleanup will retry.', flush=True)
+                    continue
                 del self.rows[sid]
 
     def get(self, sid, who, touch=True):
@@ -150,6 +167,18 @@ class Sessions:
         if touch:
             row['seen'] = now
         return row
+
+    def running(self, row):
+        """Whether the session's desktop container runs; a missing one means the session is gone."""
+        try:
+            response = self.docker.get('/containers/' + row['container'] + '/json')
+            if response.status_code == 404:
+                raise HTTPException(404, 'Session ended.')
+            if response.status_code >= 400:
+                raise ValueError('Docker inspect failed')
+            return bool(response.json()['State']['Running'])
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            raise HTTPException(503, 'Docker unavailable.') from None
 
     def public(self, sid, row):
         remaining = max(0, int(LIFETIME_SECONDS - (time.monotonic() - row['created'])))
@@ -173,12 +202,20 @@ class Sessions:
                 or any(n not in current['network-interfaces'] for n in data.interfaces)):
             raise HTTPException(409, 'Capture target changed.')
         name = 'clab-capture-' + self.label + '-' + sid
+        # Every desktop shares the capture network, so its VNC server demands a password
+        # that only this service and the owning browser get, and opens no raw VNC port:
+        # a process in one desktop cannot drive another. VNC uses the first 8 characters;
+        # letters and digits only, as the image passes the value through a shell echo.
+        password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
         spec = {
             'Image': IMAGE,
             'Labels': {LABEL: self.label},
             'Env': ['PACKETFLIX_LINK=' + self.provider.stream_uri(current, data.interfaces),
                     'WEB_TERMINAL=0', 'WEB_FILE_MANAGER=0', 'WEB_AUDIO=0', 'WEB_NOTIFICATION=0',
-                    'KEEP_APP_RUNNING=0', 'USER_ID=1000', 'GROUP_ID=1000'],
+                    # The image stops its container when Wireshark exits unless this is 1, and a
+                    # stopped container loses /pcaps; Wireshark restarts in the same desktop instead.
+                    'KEEP_APP_RUNNING=1', 'USER_ID=1000', 'GROUP_ID=1000',
+                    'VNC_PASSWORD=' + password, 'VNC_LISTENING_PORT=-1'],
             'HostConfig': {'NetworkMode': self.network, 'Memory': 1024 * 1024 * 1024,
                            'NanoCpus': 1500000000, 'PidsLimit': 256, 'ShmSize': 64 * 1024 * 1024,
                            'CapDrop': ['NET_RAW'], 'SecurityOpt': ['no-new-privileges:true'],
@@ -208,7 +245,8 @@ class Sessions:
         now = time.monotonic()
         self.pending.discard(name)
         self.rows[sid] = {'owner': who, 'container': name, 'address': address, 'created': now,
-                          'seen': now, 'name': current['name'], 'interfaces': data.interfaces}
+                          'seen': now, 'name': current['name'], 'interfaces': data.interfaces,
+                          'password': password}
         return self.public(sid, self.rows[sid])
 
 
@@ -260,9 +298,14 @@ def create_app(sessions=None):
 
     @app.get('/sessions/{sid}')
     def status(sid: str, request: Request):
-        row = sessions.get(sid, sessions.owner(request))
-        info = sessions.docker_request('GET', '/containers/' + row['container'] + '/json')
-        return {**sessions.public(sid, row), 'running': bool(info['State']['Running'])}
+        # The viewer polls this as its heartbeat; a stopped desktop must still go idle and
+        # free its slot, so only a running one counts as activity.
+        row = sessions.get(sid, sessions.owner(request), touch=False)
+        running = sessions.running(row)
+        if running:
+            row['seen'] = time.monotonic()
+        # The viewer answers its own desktop's password challenge; listings never carry it.
+        return {**sessions.public(sid, row), 'running': running, 'viewer_password': row['password']}
 
     @app.post('/sessions/{sid}/end')
     async def end(sid: str, request: Request):
@@ -276,7 +319,7 @@ def create_app(sessions=None):
     @app.get('/sessions/{sid}/assets/{path:path}')
     async def asset(sid: str, path: str, request: Request):
         row = sessions.get(sid, sessions.owner(request))
-        if not ASSET.fullmatch(path) or '..' in path:
+        if not ASSET.fullmatch(path) or '..' in path or path not in VIEWER_ASSETS:
             raise HTTPException(404)
         try:
             async with httpx.AsyncClient(trust_env=False, timeout=10) as client:
@@ -288,27 +331,39 @@ def create_app(sessions=None):
                         body.extend(chunk)
                         if len(body) > 2 * 1024 * 1024:
                             raise HTTPException(502)
+            if not viewer_asset(path, bytes(body)):
+                print('A Wireshark desktop served a viewer module that is not the pinned one; refused.', flush=True)
+                raise HTTPException(502, 'Viewer asset is not the pinned one.')
             return Response(bytes(body), media_type='text/javascript')
         except httpx.HTTPError:
             raise HTTPException(503, 'Viewer starting; retry shortly.') from None
 
     @app.get('/sessions/{sid}/download')
     def download(sid: str, request: Request):
-        row = sessions.get(sid, sessions.owner(request))
-        upstream = sessions.docker.send(sessions.docker.build_request('GET',
-            '/containers/' + row['container'] + '/archive', params={'path': '/pcaps'}), stream=True)
-        if upstream.status_code != 200:
-            upstream.close()
-            raise HTTPException(409, 'Save captures in /pcaps first.')
-        chunks = upstream.iter_bytes(65536)
-        first = next(chunks, b'')
+        row = sessions.get(sid, sessions.owner(request), touch=False)
+        upstream = None
+        try:
+            upstream = sessions.docker.send(sessions.docker.build_request('GET',
+                '/containers/' + row['container'] + '/archive', params={'path': '/pcaps'}), stream=True)
+            chunks = upstream.iter_bytes(65536)
+            first = next(chunks, b'') if upstream.status_code == 200 else b''
+        except httpx.HTTPError:
+            if upstream is not None:
+                upstream.close()
+            raise HTTPException(503, 'Docker unavailable; retry the download shortly.') from None
         # An archive of an empty folder is only the directory entry plus padding, so a
-        # short first chunk without any file means nothing was saved yet.
-        if len(first) < 65536 and not tar_has_regular_file(first):
+        # short first chunk without any file means nothing was saved yet, unless the
+        # desktop stopped (its files are gone) or its container was removed (404).
+        if upstream.status_code != 200 or (len(first) < 65536 and not tar_has_regular_file(first)):
             upstream.close()
+            if not sessions.running(row):
+                raise HTTPException(409, STOPPED)
+            if upstream.status_code != 200:
+                raise HTTPException(503, 'Docker could not read the saved captures; retry the download shortly.')
             raise HTTPException(409, 'No saved captures yet. In Wireshark stop the capture, use File > Save As '
                                      'under /pcaps and type the full file name ending in .pcapng (Wireshark '
                                      'on the VM does not add the extension), then download again.')
+        row['seen'] = time.monotonic()
 
         def content():
             total = 0
