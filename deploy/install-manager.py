@@ -90,8 +90,10 @@ def source_version():
     return release.verify(SOURCE)
 
 
-def compose(*args):
-    return ['sudo', 'docker', '--host', 'unix:///var/run/docker.sock', 'compose',
+def compose(*args, sudo=('sudo',)):
+    # `sudo` is ('sudo', '-n') for the full-screen installer, which must never let sudo
+    # prompt over its screen; the command itself is the same.
+    return [*sudo, 'docker', '--host', 'unix:///var/run/docker.sock', 'compose',
             '-f', str(SOURCE / 'clab-backup-ui/compose.yml'), *args]
 
 
@@ -114,15 +116,17 @@ def health_url(command):
     return f'http://{hostname}:{port}/api/state'
 
 
-def check_manager(env, version, wait_seconds=45):
-    ident = output(compose('ps', '--status', 'running', '--quiet', 'backup-ui'), env)
+def check_manager(env, version, wait_seconds=45, say=print, sudo=('sudo',)):
+    """Running container, matching version, then HTTP /api/state with that version.
+    Returns the VM-local manager address; raises ValueError with the next step otherwise."""
+    ident = output(compose('ps', '--status', 'running', '--quiet', 'backup-ui', sudo=sudo), env)
     if not re.fullmatch(r'[0-9a-f]{12,64}', ident):
         raise ValueError('The Compose manager is not running. Choose Install/update, or inspect the launcher error.')
     running_version = output(compose('exec', '-T', 'backup-ui', 'python', '-c',
-                                    'from app import __version__; print(__version__)'), env)
+                                    'from app import __version__; print(__version__)', sudo=sudo), env)
     if running_version != version:
         raise ValueError(f'Running manager version does not match source {version}. Choose Install/update to rebuild it.')
-    command = json.loads(output(['sudo', 'docker', '--host', 'unix:///var/run/docker.sock',
+    command = json.loads(output([*sudo, 'docker', '--host', 'unix:///var/run/docker.sock',
                                  'inspect', '--format', '{{json .Config.Cmd}}', ident], env))
     url = health_url(command)
     # Ignore workstation/terminal proxy settings for this VM-local readiness test.
@@ -135,10 +139,11 @@ def check_manager(env, version, wait_seconds=45):
                 if response.status == 200 and len(data) <= 8 * 1024 * 1024:
                     body = json.loads(data)
                     if isinstance(body, dict) and body.get('version') == version:
-                        print(f'Manager {version}: running; HTTP and version checks passed.')
-                        print('VM-local address: ' + url.removesuffix('/api/state') + '/')
-                        print('From your workstation use the VM address and this port, not workstation 127.0.0.1.')
-                        return
+                        address = url.removesuffix('/api/state') + '/'
+                        say(f'Manager {version}: running; HTTP and version checks passed.')
+                        say('VM-local address: ' + address)
+                        say('From your workstation use the VM address and this port, not workstation 127.0.0.1.')
+                        return address
         except (OSError, ValueError):
             pass
         if time.monotonic() >= deadline:
@@ -200,11 +205,17 @@ RESTART_HINT = ('If this appears right after a VM snapshot rollback or a reboot,
                 'setup step is kept, so run the installer again afterwards.')
 
 
+def lock_wait_command():
+    # Interactive sudo: expired credentials may be typed again. The wait pauses the APT timers
+    # and restores them when the lock is released, on its timeout, or on Ctrl+C (SIGINT).
+    return ['sudo', 'python3', str(APT_LOCK_SCRIPT), '--wait', '--pause-timers']
+
+
 def lock_recovery(env):
     """A package step failed with the dpkg/apt lock signature. Show the live holder and let the
     operator wait here, retry immediately, or return to the menu. True retries the failed step.
     The restart advice is shown every time; the installer itself never restarts anything."""
-    manual_command = ['sudo', 'python3', str(APT_LOCK_SCRIPT), '--wait', '--pause-timers']
+    manual_command = lock_wait_command()
     while True:
         if lock_free(env):
             print('The package lock is now released.')
@@ -223,7 +234,7 @@ def lock_recovery(env):
             return False
         if choice == '2':
             return True
-        result = run(['sudo', 'python3', str(APT_LOCK_SCRIPT), '--wait', '--pause-timers'], env)
+        result = run(lock_wait_command(), env)
         if result.returncode == 0:
             print('The package lock is released.')
             return True
@@ -283,7 +294,7 @@ def copy_env(path):
 
 def git_setup(env):
     print('\nGit setup runs as ' + env['USER'] + ', with home ' + env['HOME'] + '.')
-    result = run(['bash', str(SOURCE / 'deploy/setup-git.sh')], env)
+    result = run(git_command(), env)
     if result.returncode == 0:
         print('Git setup completed. In the manager, connect the registered checkout to your lab.')
     else:
@@ -409,22 +420,24 @@ def ensure_local_bin_on_path(home):
     return True
 
 
-def setup_lazydocker(env):
+def setup_lazydocker(env, say=print):
     # Ordinary-user convenience tool; never installed as root, and a failure here
-    # never fails the installation, only prints a warning.
-    print('\nlazydocker (optional; browse/manage Docker from the terminal)')
+    # never fails the installation, only prints a warning. Returns (outcome, text) with
+    # outcome 'installed', 'current' or 'skipped', for a front end's summary.
+    say('\nlazydocker (optional; browse/manage Docker from the terminal)')
     machine = platform.machine()
     arch = lazydocker_arch(machine)
     if arch is None:
-        print(f'lazydocker: unsupported architecture ({machine}); skipping.')
-        return
+        say(f'lazydocker: unsupported architecture ({machine}); skipping.')
+        return 'skipped', f'unsupported architecture ({machine})'
     home = Path(env['HOME'])
     destination = home / '.local' / 'bin' / 'lazydocker'
     try:
         tag = lazydocker_latest_tag()
         version = tag[1:] if tag.startswith('v') else tag
         if lazydocker_up_to_date(destination, version, env):
-            print(f'lazydocker {version} is already current.')
+            outcome = 'current', f'lazydocker {version} is already current.'
+            say(outcome[1])
         else:
             tarball = download_lazydocker_tarball(tag, arch)
             filename = lazydocker_tarball_filename(tag, arch)
@@ -433,22 +446,28 @@ def setup_lazydocker(env):
                 raise ValueError(f'lazydocker checksum verification failed for {filename}; '
                                  'the release asset may be incomplete or compromised.')
             install_lazydocker_binary(tarball, destination)
-            print(f'lazydocker {version} installed to {destination}.')
+            outcome = 'installed', f'lazydocker {version} installed to {destination}.'
+            say(outcome[1])
         if ensure_local_bin_on_path(home):
-            print('Added ~/.local/bin to PATH in ~/.bashrc (new shells only).')
+            say('Added ~/.local/bin to PATH in ~/.bashrc (new shells only).')
         if str(destination.parent) not in os.environ.get('PATH', '').split(os.pathsep):
-            print('This shell does not have that directory on PATH yet; to use it now, run:')
-            print('  export PATH="$PATH:$HOME/.local/bin"')
+            say('This shell does not have that directory on PATH yet; to use it now, run:')
+            say('  export PATH="$PATH:$HOME/.local/bin"')
+        return outcome
     except Exception as error:  # optional tool: any failure is a warning, never the installation's
-        print(f'lazydocker setup skipped: {error}')
+        say(f'lazydocker setup skipped: {error}')
+        return 'skipped', str(error)
+
+
+ENGINEER_RECONNECT = ('New groups apply to new logins: reconnect SSH, and in VS Code run '
+                      '"Remote-SSH: Kill VS Code Server on Host..." then reconnect before using the Containerlab extension.')
 
 
 def engineer_access(env):
     # Groups, group-writable trusted lab folders and containerlab SUID for the
     # installing account. Privileged work stays in the dedicated helper script.
-    command_step(['sudo', 'bash', str(SOURCE / 'deploy/setup-engineer-access.sh'), '--owner', env['USER']], env)
-    print('New groups apply to new logins: reconnect SSH, and in VS Code run '
-          '"Remote-SSH: Kill VS Code Server on Host..." then reconnect before using the Containerlab extension.')
+    command_step(engineer_command(env), env)
+    print(ENGINEER_RECONNECT)
 
 
 def stack_command(name):
@@ -474,72 +493,180 @@ def verify_manager(env, version):
     check_manager(env, version)
 
 
+def health_command():
+    return ['bash', str(SOURCE / 'deploy/check-install.sh')]
+
+
 def health_report(env):
-    result = run(['bash', str(SOURCE / 'deploy/check-install.sh')], env)
+    result = run(health_command(), env)
     if result.returncode:
         print('Review the health report above, complete the indicated steps, then run the check again.')
     return result.returncode
 
 
-def install(env, version, advanced=False):
+class Options:
+    """The install choices, decided before anything runs. The standard path fixes them
+    (A2); --advanced asks for each in the plain menu, and the full-screen installer shows
+    the same choices on its settings screen. `git_now` is the advanced "Next step"
+    choice, which the plain menu asks after the manager is ready."""
+
+    def __init__(self, env_source=None, operations='1', engineer='1', repair=True, git_now=True):
+        self.env_source = env_source
+        self.operations = operations
+        self.engineer = engineer if operations == '1' else '2'
+        self.repair = repair
+        self.git_now = git_now
+
+
+class Step:
+    """One installer phase, shared by the plain menu and the full-screen installer.
+
+    `action` is exactly what the plain menu runs inside phase(). `argv`/`tee` describe the
+    same command for a front end that runs it itself; `interactive` says whether the step
+    needs the real terminal: 'never', 'always', 'auth' (only to renew sudo) or 'password'
+    (only while the clab-discovery password has not been created yet). `bare` steps run
+    outside phase(), as copy_env and lazydocker always have; `post` steps (lazydocker,
+    Git) follow the manager installation and never change its outcome."""
+
+    def __init__(self, key, title, action, argv=None, tee=False, interactive='never',
+                 bare=False, post=False, visible=True):
+        self.key = key
+        self.title = title
+        self.action = action
+        self.argv = argv
+        self.tee = tee
+        self.interactive = interactive
+        self.bare = bare
+        self.post = post
+        self.visible = visible
+
+
+def ask_install_options(env, advanced=False):
     # Standard path: the routine choices are automatic (A2). --advanced restores every
     # question, including copying .env from a previous source folder.
-    if advanced:
-        env_source = choose_env_copy()
-        operations = menu('Lab operation access', [('1', 'Enable reviewed lab operations (standard standalone setup)'),
-                         ('2', 'Discovery/import only; retain any previously enabled operations'), ('3', 'Back')])
-        if operations == '3':
-            raise Cancelled()
-        engineer = '2'
-        if operations == '1':
-            # The manager works without this; VS Code Remote - SSH with the Containerlab
-            # extension does not (groups, writable lab folders, containerlab SUID).
-            engineer = menu('VS Code / Containerlab extension access for ' + env['USER'],
-                            [('1', 'Set up now: docker and clab_admins groups, group-writable lab folders, containerlab SUID (standard)'),
-                             ('2', 'Skip; the manager does not need it')])
-        repair = confirm('Back up and disable obsolete installation-media APT entries if present?')
-    else:
-        env_source = default_env_choice()
-        operations, engineer, repair = '1', '1', True
+    if not advanced:
+        return Options(env_source=default_env_choice())
+    env_source = choose_env_copy()
+    operations = menu('Lab operation access', [('1', 'Enable reviewed lab operations (standard standalone setup)'),
+                     ('2', 'Discovery/import only; retain any previously enabled operations'), ('3', 'Back')])
+    if operations == '3':
+        raise Cancelled()
+    engineer = '2'
+    if operations == '1':
+        # The manager works without this; VS Code Remote - SSH with the Containerlab
+        # extension does not (groups, writable lab folders, containerlab SUID).
+        engineer = menu('VS Code / Containerlab extension access for ' + env['USER'],
+                        [('1', 'Set up now: docker and clab_admins groups, group-writable lab folders, containerlab SUID (standard)'),
+                         ('2', 'Skip; the manager does not need it')])
+    repair = confirm('Back up and disable obsolete installation-media APT entries if present?')
+    return Options(env_source, operations, engineer, repair)
+
+
+def plan_lines(env, version, options):
+    """The installation plan as the plain menu prints it; the full-screen review shows the same lines."""
+    operations, engineer, env_source = options.operations, options.engineer, options.env_source
+    return [
+        'Source: ' + str(SOURCE) + ' (' + version + ')',
+        'Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.',
+        'Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.',
+        'Retain compatible installed tools; start Docker and SSH services.',
+        'Prepare persistent storage and restricted clab-discovery password/helpers.',
+        'Existing password/data retained; first setup asks you to create the password.',
+        'Rebuild/recreate only the manager; existing lab containers remain in place.',
+        'Lab operations: ' + ('enabled with default trusted roots' if operations == '1' else 'existing permissions retained'),
+        'Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).',
+        'Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'),
+        'Settings: ' + ('copy ' + str(env_source) if env_source else 'retain current .env or use defaults'),
+        'Installation-media APT repair: ' + ('enabled with backup' if options.repair else 'not selected'),
+        'lazydocker: install or update for ' + env['USER'] + ' (never fails the installation).',
+        'Check running version/HTTP, then set up Git under ' + env['USER'] + '.',
+    ]
+
+
+def prerequisites_command(repair):
+    command = ['sudo', 'bash', str(SOURCE / 'deploy/install-prerequisites.sh'), '--docker', '--containerlab']
+    if repair:
+        command.append('--repair-install-media')
+    return command
+
+
+def launch_command(operations):
+    command = ['sudo', 'env', 'DOCKER_HOST=unix:///var/run/docker.sock',
+               'bash', str(SOURCE / 'deploy/start-manager.sh'), '--manager-only']
+    if operations == '1':
+        command.append('--enable-operations')
+    return command
+
+
+def engineer_command(env):
+    return ['sudo', 'bash', str(SOURCE / 'deploy/setup-engineer-access.sh'), '--owner', env['USER']]
+
+
+def install_steps(env, version, options):
+    """Every phase of Install/update, in order, with the plain menu's titles and actions."""
+    total = '6' if options.engineer == '1' else '5'
+    prereqs = prerequisites_command(options.repair)
+    # A separate phase so a failed image pull is retried on its own instead of repeating the
+    # password, helper and image-build step.
+    launch = launch_command(options.operations)
+    steps = [
+        Step('admin', '1/' + total + ' Administrator access and settings',
+             lambda: command_step(['sudo', '-v'], env), argv=['sudo', '-v'], interactive='auth'),
+        Step('settings', 'Copy previous settings', lambda: copy_env(options.env_source),
+             bare=True, visible=options.env_source is not None),
+        Step('prereqs', '2/' + total + ' VM prerequisites', lambda: command_step(prereqs, env, tee=True),
+             argv=prereqs, tee=True),
+        Step('launch', '3/' + total + ' Password, helpers, image and manager',
+             lambda: command_step(launch, env), argv=launch, interactive='password'),
+        Step('capture', '4/' + total + ' Browser Wireshark capture stack', lambda: capture_stack(env),
+             argv=stack_command('setup-capture.sh')),
+        Step('verify', '5/' + total + ' Running manager verification', lambda: verify_manager(env, version)),
+    ]
+    if options.engineer == '1':
+        steps.append(Step('engineer', '6/6 Engineer access for VS Code', lambda: engineer_access(env),
+                          argv=engineer_command(env)))
+    steps.append(Step('lazydocker', 'lazydocker (optional)', lambda: setup_lazydocker(env), bare=True, post=True))
+    steps.append(Step('git', 'Git setup under ' + env['USER'], lambda: git_setup(env), argv=git_command(),
+                      interactive='always', bare=True, post=True, visible=options.git_now))
+    return steps
+
+
+def git_command():
+    return ['bash', str(SOURCE / 'deploy/setup-git.sh')]
+
+
+def action_steps(action, env, version, options=None):
+    """The phases behind each Setup menu action, as the plain menu runs them."""
+    if action == 'install':
+        return install_steps(env, version, options or Options())
+    if action == 'git':
+        return [Step('git', 'Git setup under ' + env['USER'], lambda: git_setup(env), argv=git_command(),
+                     interactive='always', bare=True)]
+    if action == 'engineer':
+        return [Step('engineer', 'Engineer access for VS Code', lambda: engineer_access(env), argv=engineer_command(env))]
+    if action == 'capture':
+        return [Step('capture', 'Browser Wireshark capture stack', lambda: capture_stack(env),
+                     argv=stack_command('setup-capture.sh'))]
+    raise ValueError('Unknown setup action: ' + str(action))
+
+
+def install(env, version, advanced=False):
+    options = ask_install_options(env, advanced)
     print('\nInstallation plan')
-    print('  Source: ' + str(SOURCE) + ' (' + version + ')')
-    print('  Install missing prerequisites: Git, SSH, Docker/Compose and containerlab.')
-    print('  Check UTC/NTP before APT; wait briefly for active time sync without changing time settings.')
-    print('  Retain compatible installed tools; start Docker and SSH services.')
-    print('  Prepare persistent storage and restricted clab-discovery password/helpers.')
-    print('  Existing password/data retained; first setup asks you to create the password.')
-    print('  Rebuild/recreate only the manager; existing lab containers remain in place.')
-    print('  Lab operations: ' + ('enabled with default trusted roots' if operations == '1' else 'existing permissions retained'))
-    print('  Browser Wireshark: pull the pinned Wireshark image, build the session service, start Edgeshark (localhost 5001/5801).')
-    print('  Engineer access: ' + ('set up for ' + env['USER'] + ' (VS Code, Containerlab extension)' if engineer == '1' else 'not selected'))
-    print('  Settings: ' + ('copy ' + str(env_source) if env_source else 'retain current .env or use defaults'))
-    print('  Installation-media APT repair: ' + ('enabled with backup' if repair else 'not selected'))
-    print('  lazydocker: install or update for ' + env['USER'] + ' (never fails the installation).')
-    print('  Check running version/HTTP, then set up Git under ' + env['USER'] + '.')
+    for line in plan_lines(env, version, options):
+        print('  ' + line)
     if advanced:
         if not confirm('Proceed with this plan?'):
             raise Cancelled()
     else:
         print('Starting now; the standard path runs these steps without further confirmation.')
-    total = '6' if engineer == '1' else '5'
-    phase('1/' + total + ' Administrator access and settings', lambda: command_step(['sudo', '-v'], env), env)
-    copy_env(env_source)
-    prereqs = ['sudo', 'bash', str(SOURCE / 'deploy/install-prerequisites.sh'), '--docker', '--containerlab']
-    if repair:
-        prereqs.append('--repair-install-media')
-    phase('2/' + total + ' VM prerequisites', lambda: command_step(prereqs, env, tee=True), env)
-    # A separate phase so a failed image pull is retried on its own instead of repeating the
-    # password, helper and image-build step.
-    launch = ['sudo', 'env', 'DOCKER_HOST=unix:///var/run/docker.sock',
-              'bash', str(SOURCE / 'deploy/start-manager.sh'), '--manager-only']
-    if operations == '1':
-        launch.append('--enable-operations')
-    phase('3/' + total + ' Password, helpers, image and manager', lambda: command_step(launch, env), env)
-    phase('4/' + total + ' Browser Wireshark capture stack', lambda: capture_stack(env), env)
-    phase('5/' + total + ' Running manager verification', lambda: verify_manager(env, version), env)
-    if engineer == '1':
-        phase('6/6 Engineer access for VS Code', lambda: engineer_access(env), env)
-    setup_lazydocker(env)
+    for step in install_steps(env, version, options):
+        if step.key == 'git':
+            continue  # the plain menu decides Git after the summary below, as it always has
+        if step.bare:
+            step.action()
+        else:
+            phase(step.title, step.action, env)
     print('\nManager installation is ready. Git is a separate setup step under your ordinary account.')
     print('Wireshark opens from the map (Capture packets).')
     if advanced:
@@ -554,13 +681,64 @@ def install(env, version, advanced=False):
           + shlex.join(['bash', str(SOURCE / 'deploy/check-install.sh')]))
 
 
+TUI_UNAVAILABLE = 75  # the full-screen installer exits with this only before it has changed anything
+
+
+def tui_package():
+    """deploy/installer_tui: the bootstrap and lock code is standard library only; Textual itself
+    is imported only by the full-screen process, from its own virtual environment."""
+    deploy = str(SOURCE / 'deploy')
+    if deploy not in sys.path:
+        sys.path.insert(0, deploy)
+    import installer_tui.bootstrap
+    import installer_tui.core
+    return installer_tui
+
+
+def installer_lock():
+    # One mutating installer run per VM (plain or full-screen, any account); not APT's lock.
+    return tui_package().core.InstallerLock()
+
+
+def tui_available(env):
+    """(ready, reason): the pinned packages are provisioned and the terminal can show a full screen."""
+    term = os.environ.get('TERM', '')
+    if term in ('', 'dumb', 'unknown'):
+        return False, f'this terminal (TERM={term or "unset"}) cannot show the full-screen installer'
+    try:
+        bootstrap = tui_package().bootstrap
+    except (ImportError, OSError) as error:
+        return False, f'the full-screen installer files are missing ({error})'
+    if not bootstrap.ready(env):
+        return False, ('the full-screen installer is not set up on this account; '
+                       'run  bash ' + shlex.quote(str(SOURCE / 'deploy/install.sh')) + ' --setup-tui  to enable it')
+    return True, ''
+
+
+def run_tui(env, args):
+    """Start the full-screen installer in its own process; returns its exit status."""
+    bootstrap = tui_package().bootstrap
+    extra = [flag for flag, wanted in (('--git', args.git), ('--advanced', args.advanced)) if wanted]
+    return bootstrap.launch(env, extra)
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Guided manager install/update and Git setup for Ubuntu 24.04.')
+    parser = argparse.ArgumentParser(
+        description='Guided manager install/update and Git setup for Ubuntu 24.04. An interactive terminal opens '
+                    'the full-screen installer when it is set up (--setup-tui), otherwise the plain menu.')
     parser.add_argument('--git', action='store_true', help='Open Git setup directly (manager already installed)')
     parser.add_argument('--advanced', action='store_true',
                         help='Ask every setup question again (bind/port, lab operations, VS Code access, '
                              'APT installation-media repair, plan confirmation, Git now/later) instead of '
                              'the standard defaults.')
+    front = parser.add_mutually_exclusive_group()
+    front.add_argument('--tui', action='store_true',
+                       help='Use the full-screen installer; sets up its pinned packages first if needed, '
+                            'and stops with an explanation if it cannot start.')
+    front.add_argument('--plain', action='store_true', help='Use the plain numbered menu (no extra packages).')
+    front.add_argument('--setup-tui', action='store_true',
+                       help='Download and verify the full-screen installer\'s pinned packages into a private '
+                            'virtual environment for this account, then exit. Nothing on the VM is changed.')
     args = parser.parse_args(argv)
     if sys.platform != 'linux' or os.geteuid() == 0:
         raise ValueError('Run on the Ubuntu VM as its ordinary account, without sudo.')
@@ -568,14 +746,38 @@ def main(argv=None):
     account = pwd.getpwuid(os.geteuid())
     if account.pw_name == 'clab-discovery':
         raise ValueError('Use your ordinary VM account, not clab-discovery.')
+    env = environment(account)
+    if args.setup_tui:
+        return tui_package().bootstrap.provision(env)
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         raise ValueError('Open an interactive SSH/VM terminal; do not pipe the installer.')
     version = source_version()
-    env = environment(account)
+    if args.tui or not (args.plain or args.git):
+        if args.tui:
+            bootstrap = tui_package().bootstrap
+            if not bootstrap.ready(env) and bootstrap.provision(env) != 0:
+                raise ValueError('The full-screen installer could not be set up (see above). '
+                                 'Nothing was changed; use --plain for the plain menu.')
+            ready, reason = tui_available(env)
+            if not ready:
+                raise ValueError('The full-screen installer cannot start: ' + reason + '. Nothing was changed; '
+                                 'use --plain for the plain menu.')
+        else:
+            ready, reason = tui_available(env)
+        if ready:
+            code = run_tui(env, args)
+            if code != TUI_UNAVAILABLE:
+                return code
+            # It stopped before changing anything (it says why); only then is the plain menu offered.
+            if args.tui:
+                raise ValueError('The full-screen installer could not start. Nothing was changed; use --plain.')
+            reason = 'it could not start in this terminal'
+        print('Plain menu: ' + reason + '.')
     print(f'\nContainerlab Node Manager {version} — guided setup')
     print(f'Linux account: {account.pw_name}\nPersistent home: {account.pw_dir}\nSource: {SOURCE}')
     if args.git:
-        return git_setup(env)
+        with installer_lock():
+            return git_setup(env)
     while True:
         choice = menu('Setup menu', [('1', 'Install or update manager, then set up Git'),
                       ('2', 'Git setup / repair only (no rebuild)'),
@@ -584,7 +786,10 @@ def main(argv=None):
                       ('5', 'Check running installation'), ('6', 'Exit')])
         if choice == '6':
             return 0
+        lock = None
         try:
+            if choice in ('1', '2', '3', '4'):
+                lock = installer_lock().acquire()
             # A5: a successful path prints its completion information (already done by
             # each step above) and exits to the shell rather than looping back here. A
             # failure or cancellation keeps today's behaviour: retained work, the
@@ -606,6 +811,11 @@ def main(argv=None):
                     return 0
         except Cancelled:
             print('Returned to menu. Existing data and completed steps are retained.')
+        except tui_package().core.Busy as error:
+            print(str(error))
+        finally:
+            if lock is not None:
+                lock.release()
 
 
 if __name__ == '__main__':
