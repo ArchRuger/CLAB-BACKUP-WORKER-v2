@@ -1,0 +1,39 @@
+fixture: /home/archtop/scratch/clab-pty-fixture (fake helpers; real installer code from /home/archtop/projects/clab-manager)
+PASS hangup: dashboard starts
+PASS hangup: launch phase running
+PASS hangup: active phase finished after the terminal was lost
+PASS hangup: no later phase started
+PASS hangup: run record says interrupted
+PASS hangup: record names the reason
+PASS hangup: launch recorded completed, capture not started
+PASS hangup: installer lock released
+PASS hangup: no installer process left behind
+PASS stop: dashboard starts
+PASS stop: prereqs running
+PASS stop: stopping is shown
+PASS stop: result shown after the phase
+PASS stop: outcome STOPPED
+PASS stop: prereqs ran to completion once
+PASS stop: nothing after prereqs ran
+PASS stop: finish restores the shell with a summary
+PASS flood: dashboard starts
+PASS flood: 200000 lines streamed and the run moved on
+PASS flood: output panel marks hidden earlier lines
+PASS flood: OSC title sequences from the helper never reached the terminal
+PASS flood: markup shown literally
+PASS interrupt: dashboard starts
+PASS interrupt: prereqs running
+PASS interrupt: confirmation dialog with Keep running first
+PASS interrupt: phase failed with explicit interruption
+PASS interrupt: later phases did not start
+PASS interrupt: retry runs only that phase, then continues
+PASS interrupt: prereqs ran twice, launch once
+PASS lock: dashboard starts
+PASS lock: package-lock recovery shown
+PASS lock: copyable wait command shown without -n
+PASS lock: offers wait, retry, check, return
+PASS lock: one-line copyable command in the output pane
+PASS lock: retry after the check completes the phase
+PASS lock: prereqs attempted twice
+
+36 passed, 0 failed
