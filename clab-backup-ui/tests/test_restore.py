@@ -1293,6 +1293,27 @@ class RestoreServiceTests(unittest.TestCase):
             {'name': 'SW1', 'status': 'pending'}]))
         self.assertFalse(operation_busy(self.store.state, 'lab1'))
 
+    def test_the_public_job_says_while_the_restart_recheck_holds_the_lab(self):
+        # Review follow-up of L-10: the page must see the hold, or it shows a finished "Interrupted" job and an idle lab
+        # while every action answers 409. One public boolean, computed the way operation_busy decides; no private key.
+        from app.restore import public_job
+        job_id, again = self._restarted_mid_change()
+        public = public_job(again.get_job(job_id))
+        self.assertEqual((public['status'], public['rechecking']), ('interrupted', True))
+        self.assertFalse(any(key.startswith('_') for target in public['targets'] for key in target))
+        self.assertNotIn('clabmgr-', str(public))
+        with patch('app.restore.junos.pending', return_value=False), patch('app.restore.junos.capture', return_value=DESIRED_SET):
+            again._recheck_interrupted(job_id, 'PTX1')
+        self.assertIs(public_job(again.get_job(job_id))['rechecking'], False, 'read back: the job no longer holds the lab')
+        # Interrupted with nothing left to read back, a job that runs (it says so by its status) and a job an older
+        # manager stored: none of them is rechecking.
+        settled = dict(id='old', lab_id='lab1', status='interrupted', targets=[
+            {'name': 'PTX1', 'status': 'interrupted', 'stage': 'failed', 'timeline': {'settled': 1}}])
+        legacy = dict(id='legacy', lab_id='lab1', status='interrupted', targets=[{'name': 'PTX1', 'status': 'interrupted'}])
+        running = dict(id='run', lab_id='lab1', status='applying', targets=[{'name': 'PTX1', 'status': 'applying', '_token': 't'}])
+        for job in (settled, legacy, running):
+            self.assertIs(public_job(job)['rechecking'], False, job['id'])
+
     def test_remove_lab_is_refused_while_the_restart_recheck_is_pending(self):
         from app.main import create_app
         import tempfile

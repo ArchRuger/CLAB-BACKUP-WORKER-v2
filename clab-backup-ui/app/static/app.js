@@ -9,6 +9,12 @@ const PANELS=['topology','devices','progress','tools','advanced'];
 const TAB_ALIAS={inventory:'devices',git:'progress',backups:'tools',credentials:'advanced',logs:'advanced',design:'advanced'};
 const SUBVIEW={inventory:'technical',backups:'backups-view',credentials:'credentials-view',logs:'logs-view',design:'experimental-design'};
 const APP_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
+// A restore runs (APP_RESTORE_BUSY), or after a manager restart its job reads 'interrupted' while the devices it was changing are
+// still read back (`rechecking`, see status.js): either way it holds the lab and is shown as work in progress.
+function restoreRunning(j){return typeof statusRestoreActive==='function'?statusRestoreActive(j):APP_RESTORE_BUSY.includes(j?.status)||(j?.status==='interrupted'&&j.rechecking===true);}
+function restoreRechecking(j){return !APP_RESTORE_BUSY.includes(j?.status)&&restoreRunning(j);}
+function designRechecking(j){return typeof statusDesignRechecking==='function'?statusDesignRechecking(j):j?.status==='interrupted'&&Array.isArray(j.rechecking)&&j.rechecking.length>0;}
+const RECHECK_BANNER='Checking the devices after a manager restart…';
 const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-retry-save','banner-save-details','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
 const current=()=>state.labs.find(l=>l.id===activeId);
 const busy=()=>state.jobs.some(j=>['queued','running'].includes(j.status))||(state.operations||[]).some(j=>['queued','running'].includes(j.status))||(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status));
@@ -87,7 +93,7 @@ function labsMarkup(){
 }
 function renderWorkerState(){
  const el=$('worker-state');if(!el)return;const running=state.jobs.filter(j=>['queued','running'].includes(j.status));
- const text=(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status))?'Saving progress…':(state.restore_jobs||[]).some(j=>APP_RESTORE_BUSY.includes(j.status))?'Replacing configuration…':running.some(j=>j.operation==='backup')?'Backing up…':running.length?'Checking device logins…':(state.operations||[]).some(j=>['queued','running'].includes(j.status))?'Lab operation running…':'';
+ const text=(state.git_jobs||[]).some(j=>['queued','capturing','exporting','pushing'].includes(j.status))?'Saving progress…':(state.restore_jobs||[]).some(j=>APP_RESTORE_BUSY.includes(j.status))?'Replacing configuration…':(state.restore_jobs||[]).some(restoreRechecking)||(state.design_jobs||[]).some(designRechecking)?'Checking devices after a restart…':running.some(j=>j.operation==='backup')?'Backing up…':running.length?'Checking device logins…':(state.operations||[]).some(j=>['queued','running'].includes(j.status))?'Lab operation running…':'';
  el.textContent=text;el.hidden=!text;
 }
 function renderLabHeader(lab){
@@ -203,7 +209,8 @@ function renderLabBanner(){
  setBanner('home-banner',{});
  const ls=labStateOf(lab),err=typeof actionError==='function'?actionError():null;
  const ops=(state.operations||[]).filter(j=>j.lab_id===lab.id),restores=(state.restore_jobs||[]).filter(j=>j.lab_id===lab.id);
- const runningOp=ops.find(j=>['queued','running'].includes(j.status)),runningRestore=restores.find(j=>APP_RESTORE_BUSY.includes(j.status));
+ const runningOp=ops.find(j=>['queued','running'].includes(j.status)),runningRestore=restores.find(j=>APP_RESTORE_BUSY.includes(j.status))||restores.find(restoreRunning);
+ const recheckDesign=(state.design_jobs||[]).find(j=>j.lab_id===lab.id&&designRechecking(j));
  const ps=typeof progressState==='function'?progressState(lab,state.git_jobs,undefined,gitProblem(lab)):null;
  const credentials=typeof credentialsNeeded==='function'?credentialsNeeded(lab):0;
  // The menu item carries its label in a <span> and its disabled reason in a <small>; the banner button takes the label only.
@@ -212,7 +219,8 @@ function renderLabBanner(){
  let spec={};
  if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,identity:'error.'+(err.seq||err.at),onClose:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();},actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
  else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action,runningOp):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
- else if(runningRestore)spec={tone:'info',icon:'clock',running:true,text:'Replacing configuration…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
+ else if(runningRestore)spec={tone:'info',icon:'clock',running:true,text:restoreRechecking(runningRestore)?RECHECK_BANNER:'Replacing configuration…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
+ else if(recheckDesign)spec={tone:'info',icon:'clock',running:true,text:RECHECK_BANNER,detail:recheckDesign.message||'',actions:{'banner-output':{label:'View progress',run:()=>{if(typeof designApplyShowJob==='function')designApplyShowJob(recheckDesign.id);}}}};
  else if(ls.key==='attention'&&ls.job){
   const job=ls.job,isRestore=restores.includes(job),actions={'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissJob==='function')dismissJob(job.id);render();}}};
   if(isRestore)actions['banner-restore']={label:'Details',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(job.id);}};

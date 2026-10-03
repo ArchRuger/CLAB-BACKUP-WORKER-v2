@@ -201,3 +201,23 @@ test('L-34: a list rebuilt while a download runs gives the same download a disab
  release();await running;
  assert.equal(replacement.disabled,false,'the live button is enabled again once the download ends');
 });
+test('L-34 follow-up: the device drawer rebuilt while its download runs gives that download a disabled button',async()=>{
+ const h=harness();h.context.disposition='attachment; filename="CEOS_SW1.conf"';
+ let release;const gate=new Promise(r=>release=r);const base=h.context.fetch;
+ h.context.fetch=async url=>{await gate;return base(url);};
+ const history=h.document.getElementById('node-history');let writes=0,html='';
+ Object.defineProperty(history,'innerHTML',{get:()=>html,set:v=>{html=v;writes++;}});
+ vm.runInContext(`state={labs:[{id:'lab',nodes:[{name:'SW1',address:'a',port:22,platform:'arista_ceos',enabled:true}],profiles:[],defaults:{}}],jobs:[${JSON.stringify(backupJob('j1'))}],platforms:{}};activeId='lab';detailName='SW1';renderDetails();`,h.context);
+ const first={disabled:false,dataset:{download:'j1',nodeIndex:'0',filename:'CEOS_SW1.conf'},hasAttribute:()=>true};
+ const running=history.listeners.click({target:{closest:s=>s==='[data-download]'?first:null}});
+ assert.equal(first.disabled,true);
+ // The poll brings a newer backup of the device: the drawer's list is rebuilt, and its buttons are new elements.
+ const rebuilt={disabled:false,dataset:{download:'j1',nodeIndex:'0'}},newer={disabled:false,dataset:{download:'j2',nodeIndex:'0'}};
+ h.document.querySelectorAll=selector=>selector==='[data-download]'?[newer,rebuilt]:[];
+ vm.runInContext(`state.jobs.unshift(${JSON.stringify(backupJob('j2'))});renderDetails();`,h.context);
+ assert.equal(writes,2,'the changed history was rebuilt');assert.match(html,/data-download="j2"/);
+ assert.equal(rebuilt.disabled,true,'the rebuilt button of the running download is disabled, so it cannot start it twice');
+ assert.equal(newer.disabled,false,'the other backup stays available');
+ release();await running;
+ assert.equal(rebuilt.disabled,false,'enabled again once the download ends');
+});

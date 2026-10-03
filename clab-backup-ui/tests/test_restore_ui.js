@@ -263,6 +263,85 @@ test('elapsed times are measured on the manager\'s clock, never the browser\'s',
  assert.match(c.restoreTargetRow(job.targets[0],c.restoreJobNow(job)),/50 s/);
  assert.match(c.restoreTargetRow(job.targets[0]),/restore-stage--current/,'a row rendered on its own still renders');
 });
+// L-10 follow-up: after a manager restart the job reads 'interrupted' while the manager still reads back the devices it was
+// changing, and holds the lab until it has (restore.public_job `rechecking`). The dialog follows it as running work.
+function recheckingDialog(){
+ const c=ctx(),timers=[],detail={innerHTML:'',querySelectorAll:()=>[]},dialog={open:true,querySelector:()=>({textContent:''})};
+ c.$=id=>id==='restore-job-dialog'?dialog:id==='restore-job-detail'?detail:null;
+ c.setTimeout=fn=>{timers.push(fn);return timers.length;};
+ c.opDialog=()=>({querySelector:()=>({onclick:null})});
+ return {c,timers,detail};
+}
+const recheckingJob=extra=>({id:'j',status:'interrupted',rechecking:true,message:'Manager restarted during a restore.',targets:[
+ {name:'a',status:'interrupted',stage:'verifying',timeline:{queued:1,armed:3,verifying:4}},
+ {name:'b',status:'interrupted',stage:'failed',timeline:{queued:1,settled:2}}],...extra});
+test('L-10 follow-up: a job still reading devices back after a manager restart is active, in its own words',()=>{
+ const c=ctx(),job=recheckingJob();
+ assert.ok(c.restoreJobActive(job));assert.ok(c.restoreJobActive({status:'applying'}));
+ assert.ok(!c.restoreJobActive(recheckingJob({rechecking:false})),'read back: finished');
+ assert.ok(!c.restoreJobActive({status:'interrupted',targets:[]}),'an older manager sends no field: not rechecking');
+ assert.equal(c.restoreJobTitle(job),'Checking the devices after a manager restart');
+ assert.equal(c.restoreJobTitle(recheckingJob({rechecking:false})),'Configuration change interrupted');
+ assert.equal(c.restoreResultSentence(job),'','no result is counted while devices are still read back');
+ assert.match(c.restoreResultSentence(recheckingJob({rechecking:false})),/2 devices need attention/);
+});
+test('L-10 follow-up: the dialog of a job reading devices back shows it running, says which device is read back, and keeps following it',async()=>{
+ const {c,timers,detail}=recheckingDialog();
+ let answers=[recheckingJob(),recheckingJob({rechecking:false,status:'succeeded',targets:[{name:'a',status:'verified',stage:'replaced',timeline:{queued:1,settled:6}}]})];
+ c.api=async()=>({json:async()=>answers.shift()});let refreshed=0;c.refresh=async()=>{refreshed++;};
+ await c.restoreShowJob('j',recheckingJob());
+ const html=detail.innerHTML;
+ assert.match(html,/<span class="badge running">Checking the devices after a manager restart…<\/span>/);
+ assert.doesNotMatch(html,/Interrupted — the manager restarted; check the devices/,'not shown as a finished job');
+ assert.match(html,/<span class="badge running">Reading back after the restart…<\/span>\s*<strong>a<\/strong>/,'the device being read back says so');
+ assert.match(html,/<span class="badge warn">Interrupted — check this device<\/span>\s*<strong>b<\/strong>/,'a device never changed keeps its settled words');
+ // Review I2: the stage list under the row being read back agrees with its badge: in progress, no final outcome.
+ const rowA=html.slice(html.indexOf('<strong>a</strong>'),html.indexOf('<div class="restore-target-row">',html.indexOf('<strong>a</strong>')));
+ assert.match(rowA,/restore-stage--current"><span class="restore-stage-glyph" aria-hidden="true"><\/span><span class="restore-stage-name">Fresh connection &amp; read-back<\/span> <span class="restore-stage-text">Reading back after the restart<\/span>/);
+ assert.doesNotMatch(rowA,/Interrupted — check this device|Stopped here|Not reached|restore-stage--outcome-/,'nothing tells the student to check a device the manager is still reading back');
+ assert.match(html.slice(html.indexOf('<strong>b</strong>')),/restore-stage--outcome-warn/,'the device that settled keeps its outcome');
+ assert.match(html,/You can close this window\. The manager keeps reading the devices back/);
+ assert.match(html,/cannot be started until it has finished/,'the held actions are refused, not queued: the note does not say they wait');
+ assert.doesNotMatch(html,/, wait\./);
+ assert.equal(vm.runInContext('restoreWatch',c),'j','an active job is followed');
+ await timers.shift()();
+ assert.equal(timers.length,1,'still reading back: the next poll is scheduled');
+ await timers.shift()();
+ assert.equal(vm.runInContext('restoreWatch',c),null,'finished: following stops');assert.equal(refreshed,1);
+ assert.match(detail.innerHTML,/badge good/);
+});
+test('L-10 review I2: a device read back after a restart shows its read-back as the current step and no final outcome',()=>{
+ const c=ctx(),job=recheckingJob(),[a,b]=job.targets;
+ const steps=JSON.parse(JSON.stringify(c.restoreStageSteps(a,10,true)));
+ assert.deepEqual(steps.map(s=>s.state),['done','done','done','done','current','waiting','waiting']);
+ assert.equal(steps[4].text,'Reading back after the restart');assert.equal(steps[4].elapsed,'6 s','measured from its read-back step');
+ assert.equal(steps[6].text,'Waiting','no final outcome while it is read back');
+ // Caught right after it was armed: the read-back that runs now is the next step, not a finished one.
+ const armed=JSON.parse(JSON.stringify(c.restoreStageSteps({name:'c',status:'interrupted',stage:'armed',timeline:{queued:1,armed:3}},10,true)));
+ assert.deepEqual(armed.map(s=>s.state),['done','done','done','done','current','waiting','waiting']);
+ assert.equal(armed[3].text,'Armed');assert.equal(armed[4].text,'Reading back after the restart');
+ // Caught while the device was loading it: that step says the restart stopped it, nothing claims it was armed.
+ const loading=JSON.parse(JSON.stringify(c.restoreStageSteps({name:'c',status:'interrupted',stage:'applying',timeline:{queued:1,backing_up:1,backed_up:2,connecting:2,applying:3}},10,true)));
+ assert.deepEqual(loading.map(s=>s.state),['done','done','stopped','unreached','current','waiting','waiting']);
+ assert.equal(loading[2].text,'Interrupted by the restart');assert.equal(loading[3].text,'Not reached');assert.equal(loading[4].text,'Reading back after the restart');
+ // The recheck moves on to confirming its own change: that step is the current one, in its own words.
+ const confirming=JSON.parse(JSON.stringify(c.restoreStageSteps({name:'c',status:'interrupted',stage:'confirming',timeline:{queued:1,armed:3,verifying:4,confirming:5}},10,true)));
+ assert.deepEqual(confirming.map(s=>s.state),['done','done','done','done','done','current','waiting']);assert.equal(confirming[5].text,'Confirming');
+ // Without the flag (read back, or an older manager) the same device is the finished, interrupted one it always was.
+ assert.equal(JSON.parse(JSON.stringify(c.restoreStageSteps(a,10)))[6].text,'Interrupted — check this device');
+ assert.equal(JSON.parse(JSON.stringify(c.restoreStageSteps(b,10,true)))[6].state,'outcome-warn','a settled device keeps its outcome even if asked');
+ assert.match(c.restoreTargetRow(a,10,true),/restore-stage--current">.*Reading back after the restart<\/span> <span class="restore-stage-time">6 s<\/span><\/li>/);
+ assert.match(c.restoreTargetRow(a,10),/Interrupted — check this device<\/span>/);
+});
+test('L-10 follow-up: a job read back, or stored by an older manager, opens as the finished job it is and is not followed',async()=>{
+ for(const job of [recheckingJob({rechecking:false}),recheckingJob({rechecking:undefined})]){
+  const {c,detail}=recheckingDialog();
+  await c.restoreShowJob('j',JSON.parse(JSON.stringify(job)));
+  assert.match(detail.innerHTML,/<span class="badge warn">Interrupted — the manager restarted; check the devices<\/span>/);
+  assert.doesNotMatch(detail.innerHTML,/Reading back after the restart/);
+  assert.equal(vm.runInContext('restoreWatch',c),null);
+ }
+});
 test('a device that differs is never shown as identical: with no lines to show it says why',()=>{
  const c=ctx();
  const html=c.restoreDiffDetails({name:'r1',eligible:true,diff:{identical:false,hunks:[],reason:'The comparison found differences in spacing or layout that this line view cannot show.'}});

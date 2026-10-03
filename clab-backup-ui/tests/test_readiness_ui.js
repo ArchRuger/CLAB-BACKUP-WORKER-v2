@@ -145,3 +145,34 @@ test('adding a lab by files survives blocked sessionStorage in the fallback bran
  setup.onsubmit({preventDefault(){},currentTarget:{},target:{}});await running;
  assert.equal(h.context.activeId,'made','the new lab is open although the id could not be stored');
 });
+
+// L-10 follow-up: after a restart an interrupted job that still reads devices back holds the lab (409); the page says so.
+test('L-10 follow-up: a restore reading devices back after a restart is shown as running work in the banner and the worker line',()=>{
+ const h=appHarness(),get=id=>h.document.getElementById(id);
+ const lab={id:'lab',name:'L',nodes:[],profiles:[],defaults:{},deployment:{status:'Running'},nos_readiness:{status:'idle'}};
+ const job=extra=>({id:'rs-r',lab_id:'lab',status:'interrupted',created:'2026-09-16T11:30:00Z',finished:'2026-09-16T11:31:00Z',message:'Manager restarted during a restore. It is checking the devices that were being changed.',...extra});
+ const paint=s=>vm.runInContext(`state=${JSON.stringify({labs:[lab],jobs:[],platforms:{},...s})};activeId='lab';renderLabBanner();renderWorkerState();`,h.context);
+ paint({restore_jobs:[job({rechecking:true})]});
+ assert.equal(get('lab-banner').hidden,false);assert.equal(get('lab-banner-text').textContent,'Checking the devices after a manager restart…');
+ assert.equal(get('lab-banner').className,'banner info','work in progress, not an error');
+ assert.equal(get('lab-banner-detail-text').textContent,job({}).message);
+ assert.equal(get('banner-restore').hidden,false);assert.equal(get('banner-restore').textContent,'View progress');
+ assert.equal(get('banner-dismiss').hidden,true,'running work is never dismissed');
+ assert.equal(get('worker-state').textContent,'Checking devices after a restart…');assert.equal(get('worker-state').hidden,false);
+ // Read back, or stored by an older manager without the field: the finished job it was, with Dismiss and Details.
+ for(const done of [job({rechecking:false}),job({})]){
+  paint({restore_jobs:[done]});
+  assert.equal(get('lab-banner-text').textContent,'Replacing configuration did not finish.');assert.equal(get('banner-dismiss').hidden,false);
+  assert.equal(get('worker-state').hidden,true);
+ }
+ paint({restore_jobs:[{id:'r1',lab_id:'lab',status:'applying',message:'Applying.'}]});
+ assert.equal(get('lab-banner-text').textContent,'Replacing configuration…','a running restore keeps its words');assert.equal(get('worker-state').textContent,'Replacing configuration…');
+ // A design apply's read-back (its `rechecking` lists the devices) holds its lab the same way. The page's half: the field
+ // reaches /api/state only once design_apply.public_job copies it (its PUBLIC_JOB has no `rechecking` yet, review I1).
+ paint({design_jobs:[{id:'d1',lab_id:'lab',status:'interrupted',rechecking:['r1'],message:'Manager restarted while the design was being applied.'}]});
+ assert.equal(get('lab-banner-text').textContent,'Checking the devices after a manager restart…');
+ assert.equal(get('banner-output').hidden,false);assert.equal(get('banner-output').textContent,'View progress');assert.equal(get('banner-restore').hidden,true);
+ assert.equal(get('worker-state').textContent,'Checking devices after a restart…');
+ paint({design_jobs:[{id:'d1',lab_id:'lab',status:'interrupted',message:'Read back afterwards.'}]});
+ assert.equal(get('lab-banner').hidden,true,'read back: nothing is held');assert.equal(get('worker-state').hidden,true);
+});

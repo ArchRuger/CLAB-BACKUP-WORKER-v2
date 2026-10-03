@@ -213,3 +213,49 @@ test('M-15: a restore that ends needs_attention or partial reaches the lab level
  assert.equal(afterDismiss.label,'Running','a dismissed newest job stays dismissed (the older failure is not resurrected)');
  assert.equal(c.labState(running,{restore_jobs:[job('rs-4','dismissed','2026-09-16T11:30:00Z')]}).label,'Running');
 });
+
+test('L-10 follow-up: a restore still reading devices back after a manager restart is work in progress, not a finished job',()=>{
+ const c=makeContext();
+ const job=extra=>({id:'rs-r',lab_id:'lab',status:'interrupted',created:'2026-09-16T11:30:00Z',finished:'2026-09-16T11:31:00Z',message:'Manager restarted during a restore.',...extra});
+ const checking=c.labState(running,{restore_jobs:[job({rechecking:true})]});
+ assert.equal(checking.key,'working');assert.equal(checking.label,'Checking devices');assert.equal(checking.pill,'busy');assert.equal(checking.job.id,'rs-r');
+ assert.match(checking.detail,/manager restarted/i);assert.match(checking.detail,/reading back the devices/);
+ assert.match(checking.detail,/Backups and configuration changes on this lab, and Git saves and lab operations on every lab, cannot be started until it has finished/,'the hold is named: every refused action is on this list, and refused, not queued');
+ assert.doesNotMatch(checking.detail,/\bwait\b/,'review I5: the manager refuses these actions; nothing waits for the read-back');
+ assert.doesNotMatch(checking.detail,/did not finish/);
+ assert.ok(c.statusRestoreActive(job({rechecking:true})));assert.ok(!c.statusRestoreActive(job({rechecking:false})));
+ // Read back (false) or stored by an older manager (no field): the finished "did not finish" job it always was.
+ for(const done of [job({rechecking:false}),job({})]){const ls=c.labState(running,{restore_jobs:[done]});assert.equal(ls.key,'attention');assert.equal(ls.detail,'Replacing configuration did not finish.');}
+ assert.equal(c.labState(running,{restore_jobs:[job({rechecking:'yes'})]}).key,'attention','only a real boolean true holds');
+ assert.equal(c.labState(running,{restore_jobs:[job({rechecking:true,lab_id:'other'})]}).label,'Running','another lab\'s read-back does not change this lab');
+ assert.equal(c.labState(running,{restore_jobs:[job({rechecking:true})],dismissed:new Set(['rs-r'])}).key,'working','work in progress cannot be dismissed away');
+ assert.equal(c.labFailure(running,{restore_jobs:[job({rechecking:true})]}),null,'it is not a finished job, so it is not a failure either');
+ const older={id:'op-1',lab_id:'lab',action:'deploy',status:'failed',created:'2026-09-16T11:00:00Z',finished:'2026-09-16T11:01:00Z'};
+ assert.equal(c.labFailure(running,{operations:[older],restore_jobs:[job({rechecking:true})]}).job.id,'op-1','an older failure is not hidden by a job that has not finished');
+ const busyRestore=c.labState(running,{restore_jobs:[{id:'r1',lab_id:'lab',status:'applying',message:'Applying.'}]});
+ assert.equal(busyRestore.label,'Replacing configuration','a running restore keeps its own words');
+});
+
+// The page's half only: the stored design job's `rechecking` list reaches /api/state once design_apply.public_job copies it
+// (its PUBLIC_JOB has no such key yet, review I1); an older manager's job without it reads as not rechecking.
+test('L-10 follow-up: a network-design apply still reading devices back after a restart holds the lab and says so',()=>{
+ const c=makeContext();
+ const design=extra=>({id:'d1',lab_id:'lab',status:'interrupted',created:'2026-09-16T11:30:00Z',...extra});
+ const checking=c.labState(running,{design_jobs:[design({rechecking:['r1']})]});
+ assert.equal(checking.key,'working');assert.equal(checking.label,'Checking devices');assert.equal(checking.pill,'busy');assert.equal(checking.job.id,'d1');
+ assert.match(checking.detail,/network design/);assert.match(checking.detail,/Backups and configuration changes on this lab cannot be started until it has finished/);assert.doesNotMatch(checking.detail,/\bwait\b/);
+ assert.doesNotMatch(checking.detail,/every lab/,'the design read-back holds its own lab only');
+ for(const idle of [design({}),design({rechecking:[]}),design({rechecking:['r1'],lab_id:'other'}),design({rechecking:['r1'],status:'succeeded'})])
+  assert.equal(c.labState(running,{design_jobs:[idle]}).label,'Running',JSON.stringify(idle));
+ const restore=c.labState(running,{restore_jobs:[{id:'r1',lab_id:'lab',status:'applying'}],design_jobs:[design({rechecking:['r1']})]});
+ assert.equal(restore.job.id,'r1','a running restore is named first');
+});
+
+test('M-11 follow-up: a login test whose CLI did not answer yet reads Starting in the table, as in the device panel',()=>{
+ const c=makeContext();
+ assert.equal(c.badgeLabel('booting'),'Starting');
+ assert.equal(c.badgeLabel('booting'),c.deviceState({name:'R2',ssh_ready:false,login_configured:true,nos_login:{status:'booting'}}).label,'both places use one word');
+ // Review I6: while a Test login runs the stored check reads `checking`: the table says what the device panel says.
+ assert.equal(c.badgeLabel('checking'),'Testing login…');
+ assert.equal(c.badgeLabel('checking'),c.deviceState({name:'R2',ssh_ready:false,login_configured:true,nos_login:{status:'checking'}}).label,'both places use one word');
+});

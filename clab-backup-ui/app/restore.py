@@ -85,6 +85,9 @@ def public_job(job):
     # Keys starting with "_" (driver token, recovery deadline) are the service's own.
     value['targets'] = [{k: v for k, v in target.items() if not k.startswith('_')}
                         for target in value.get('targets', [])]
+    # After a restart an 'interrupted' job still holds its lab (operation_busy) until each node it was changing is read
+    # back: the page shows that as work in progress, not as a finished job. Computed, never stored; from the private keys.
+    value['rechecking'] = job.get('status') == 'interrupted' and restore_holds_lab(job)
     value['server_time'] = time.time()   # the clock the timeline was written with; the page measures against it
     return value
 

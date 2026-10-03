@@ -166,10 +166,10 @@ Only `Ready` nodes can be backed up/tested/scheduled.
 | `unmonitored` | "SSH readiness is only monitored for labs linked to a VM deployment." | lab unlinked |
 | `unavailable` | "Node is not running or discovery is stale." | `available == false` |
 | `needs_credentials` | "Assign NOS credentials to this node first." | no effective username |
-| `ready` | check message (automatic: "NOS accepted SSH login and answered show version (automatic check)"; manual: "SSH authentication succeeded") | latest SSH check `status == 'reachable'` |
+| `ready` | check message (automatic: "NOS accepted SSH login and answered show version (automatic check)"; manual Test login / Test logins: "SSH login accepted and the CLI answered", `REACHABLE_MESSAGE` in `node_services.py`) | latest SSH check `status == 'reachable'`; a manual check stores it only when the CLI answered `show version` (`echo readiness-check` for a node without a NOS platform) after the login (`NodeServices.login_result`), the same proof as the automatic probe |
 | `failed` | check message (automatic: "SSH login refused with the saved credentials. Assign a credential profile, then Test login."; manual: "SSH login failed. Check credentials, address, port, and NOS readiness.") | check `status == 'failed'` |
-| `booting` | "Container is running; the NOS has not answered an SSH login and show version yet" | no check yet / probe pending |
-`at` is present for ready/failed/booting (may be `null`). Underlying `services.checks` entry: `{status: 'reachable'|'failed', at, message, source?: 'automatic'}`; the automatic monitor only records `failed` after `REFUSALS_BEFORE_FAILED = 3` consecutive refusals, retries booting nodes every `BOOT_RETRY = 20 s` and failed ones every `AUTH_RETRY = 60 s`, and scans every `SCAN_INTERVAL = 5 s`.
+| `booting` | "Container is running; the NOS has not answered an SSH login and show version yet" (inside the login grace window after the manager started or restarted the device: "Container is running; SSH answers but the saved login is not accepted yet (a NOS accepts logins only late in its boot)") | no check yet / probe pending, or a check with `status == 'booting'`: automatic (no SSH answer, a silent CLI, or a refused login before the third refusal) or manual (Test login / Test logins: the login was accepted but the CLI did not answer; the check entry keeps `BOOTING_MESSAGE` "SSH login accepted, but the CLI has not answered yet. The device is still starting; the manager keeps checking.", and the monitor replaces it with a real answer) |
+`at` is present for ready/failed/booting (may be `null`). Underlying `services.checks` entry: `{status: 'reachable'|'booting'|'failed'|'checking', at, message, source?: 'automatic'}` (`checking` only while a manual check runs); its status is badged by `badgeLabel` in the Devices technical table and the device panel's raw login result (`reachable` "Login OK", `booting` "Starting" and `checking` "Testing login…" as in the device panel, `failed` "Failed"); the automatic monitor only records `failed` after `REFUSALS_BEFORE_FAILED = 3` consecutive refusals, retries booting nodes every `BOOT_RETRY = 20 s` and failed ones every `AUTH_RETRY = 60 s`, and scans every `SCAN_INTERVAL = 5 s`.
 
 ### 2.8 `labs[].nos_readiness.status` (`node_readiness.summarize`)
 `idle` (no monitored node), `ready` (all monitored ready), `booting` (any booting), `failed` (otherwise, i.e. only ready/failed with ≥1 failed).
@@ -270,9 +270,9 @@ Only one job may be `queued`/`running` at a time across all labs.
 | `needs_attention` | applied but verification needs review, or unexpected exception ("Restore interrupted: …") |
 | `failed` | no node restored, or pre-restore backup failure |
 | `preflight_failed` | lab removed / VM changed / discovery stale / no live node |
-| `interrupted` | manager restart or pool shutdown |
+| `interrupted` | manager restart or pool shutdown; while a node it was changing is still read back after the restart the public job carries `rechecking: true` (`restore.public_job`, from `restore_holds_lab`) and the page shows it as in progress ("Checking devices") |
 | `dismissed` | in `DONE` but never assigned in the code read |
-`RESTORE_BUSY = queued, preflight, backing_up, applying, confirming, verifying` — any restore in these states blocks **every** backup on every lab (`runner.submit`) and counts as `operation_busy` for its lab.
+`RESTORE_BUSY = queued, preflight, backing_up, applying, confirming, verifying` — any restore in these states blocks **every** backup on every lab (`runner.submit`) and counts as `operation_busy` for its lab. An `interrupted` job with `rechecking` also counts as `operation_busy` for its lab (and for every check that names no lab), but not for other labs' backups.
 
 ### 2.24 `restore_jobs[].targets[].status`
 `pending` → `ineligible` (not running at execute time) | `backing_up` → `applying` → `confirming` → `applied` → `verified` | `applied_unverified` | `verify_mismatch`; failures: `failed` (nothing changed), `rollback_expected` (commit armed but not confirmed; auto-rollback), `interrupted` (restart). `ready` and `preflight` are named in the restart handler but never assigned.
@@ -372,7 +372,7 @@ Notation: `→` response; **G:** guards/conflicts; errors quoted verbatim.
 | method path | request | response | guards |
 |---|---|---|---|
 | `GET /api/labs/{lab_id}/health` | — | `{nodes: [{name, ssh: check or null, backup: {job_id, status, at} or null}]}` (latest backup job outcome per node) | 404 |
-| `POST /api/labs/{lab_id}/ssh-check` | `{name (1-200)}` | `{status: 'reachable'|'failed', at, message}` | `node()` (404/409); 400 "Assign SSH credentials to this node first."; 409 "A login check is already running for this node."; 429 session limit |
+| `POST /api/labs/{lab_id}/ssh-check` | `{name (1-200)}` | `{status: 'reachable'|'booting'|'failed', at, message}` (`booting`: login accepted, CLI not answering yet) | `node()` (404/409); 400 "Assign SSH credentials to this node first."; 409 "A login check is already running for this node."; 429 session limit |
 | `POST /api/labs/{lab_id}/terminal-ticket` | `{name}` | `{ticket, expires_in: 30, endpoint: "addr:port"}` | as above; 429 "Too many pending terminal sessions" (>32) |
 | `WS /api/terminal` | first text frame within 5 s: `{"ticket": ...}` (≤512 B); then `{"type":"input","data":str≤16 KiB}` or `{"type":"resize","cols":20-400,"rows":5-150}` | server sends `{type:'status', message:'Connected'}`, raw bytes, `{type:'status', message:'Session timeout. Reconnect to continue.'}`, `{type:'error', message:'Session ended. Check credentials, endpoint, and session limits.'}` | origin must match (close 1008); bad/expired ticket → close 1008; idle 900 s, max 14 400 s |
 

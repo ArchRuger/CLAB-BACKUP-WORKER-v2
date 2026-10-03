@@ -259,8 +259,14 @@ so the manager keeps that session open and confirms on it once the reconnect has
 management survived. EOS also saves the confirmed change to startup, since it does not do
 that on commit; IOS XR persists a confirmed change immediately. The manager then captures
 the node again and compares it to the saved state. If the manager restarts during a restore,
-it reads every device that was being changed back before anything else may use the lab, and
-it never applies the change again. Live restore is supported for Junos
+it reads back every device that was being changed and never applies the change again. Until it
+has, the lab reads *Checking devices* and the manager refuses (409, or 400 for backups and login
+checks; nothing is queued, so start it again afterwards) backups, restores, design applies, device,
+credential and topology-file edits and *Remove lab* on that lab, and lab operations, map and
+lab-setting saves, Git saves and adding a lab on every lab. A restore of another lab is accepted but
+starts only once the read-back has finished (the exact list is in
+[the restore notes](multi-platform-restore/README.md#outcomes-the-manager-reports-per-node)).
+Live restore is supported for Junos
 (`juniper_cjunosevolved`, `juniper_vjunosswitch`), Arista EOS (`arista_ceos`) and Cisco
 IOS XR (`cisco_xrv9k`). This uses the manager's direct SSH path to the node and is
 separate from Containerlab's Save configurations command. See

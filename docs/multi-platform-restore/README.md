@@ -79,8 +79,34 @@ Junos was seen rolling back 35 s late). It confirms a pending change only when t
 under this job's token; "something is pending" proves nothing about whose it is. After a manager
 restart the same read-back runs for every node that was mid-change; nothing is re-applied, and the
 job then states what was found. Until every such node has been read back the job stays `interrupted`
-and still holds its lab: backups, Git saves, lab operations, another restore and *Remove lab* wait,
-because the node may still run a change the device is about to undo. If the manager is stopped or
+but keeps the guard of a running restore (`restore_holds_lab` inside `operation_busy`), because the
+node may still run a change the device is about to undo. What the guard covers is refused, not
+queued: with 409, or with 400 for backups and backup login checks (`runner.submit` raises and the jobs
+route answers 400), and it has to be started again afterwards.
+
+- **On that lab** (the checks that name the lab): backups and backup login checks, another restore and
+  its review, a network-design apply, *Remove lab*, replacing the device list, editing a device, adding
+  credentials, the backup schedule, importing a drawing, registering the lab's topology files again
+  (`POST /api/lab-definitions` with its lab id), and *Sync from VM* or matching the lab to a deployment.
+- **On every lab** (the checks that name no lab): lab operations (`LabOperations.guard`: previewing and
+  confirming deploy, destroy, restart, file actions and the rest, and saving the map, the layout or the
+  lab's settings such as favourite or hidden), every Git action that changes something (`GitProgress.idle`:
+  save progress, retry, dismiss, connecting, moving or unlinking a save location, exporting a design
+  plan), adding a new lab by its topology files (`POST /api/lab-definitions` without a lab id), importing
+  a lab found on the VM, changing the VM connection and *Start fresh*. A VM setup seed waits for a later
+  discovery cycle.
+- **Not held**: backups and design applies of other labs (their own checks look at running restores
+  only), and anything that only reads.
+- **Accepted, but started later**: a restore of another lab. The restore service runs one job at a time
+  and schedules the read-back first, so the new job waits as `queued` until every node has been read
+  back. While it waits it is a queued restore like any other: it holds every backup and every
+  design apply on every lab.
+
+The readiness monitor leaves the lab's devices alone meanwhile. The page shows the job as work in
+progress, not as a finished *Interrupted* job: its public view carries `rechecking: true` (computed
+from the stored job, never stored itself; a job of an older manager has no such field and reads as not
+rechecking), so the lab header says *Checking devices*, the banner *Checking the devices after a manager
+restart…* and the job dialog keeps following it. If the manager is stopped or
 restarted again before a node was read back, that node is not counted as checked: the next start
 reads it back, and only then is the job finished.
 
