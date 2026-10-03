@@ -9,6 +9,9 @@ and every mention of the current release in the living documentation. History ph
 history itself is written by hand afterwards: a "## Changes in NEW" section at the top of
 docs/CHANGELOG.md and a "# <title> — NEW" section at the top of clab-backup-ui/VALIDATION.md
 and of "agent instructions.md". Finish with python3 deploy/verify-release.py.
+
+All or nothing: every marker is looked for before the first file is written; a missing one is
+reported (all of them, by file) and nothing is changed.
 """
 import importlib.util
 from pathlib import Path
@@ -34,7 +37,9 @@ def set_release(root, new):
     old = release.read_version(root)
     if new == old:
         raise ValueError('clab-backup-ui/VERSION already contains ' + new + '.')
-    changed = []
+    # Compute every new text first and write only when all markers were found (all or nothing).
+    planned = {}
+    missing = []
     for name, pattern in release.FIELDS.items():
         path = root / name
         text = path.read_bytes().decode('utf-8')
@@ -45,20 +50,27 @@ def set_release(root, new):
 
         updated, count = re.subn(pattern, swap, text, flags=re.MULTILINE)
         if not count:
-            raise ValueError(name + ': release metadata not found; verify-release.py would fail as well.')
-        if rewrite(path, text, updated):
-            changed.append(name)
-    (root / 'clab-backup-ui/VERSION').write_bytes((new + '\n').encode('utf-8'))
-    changed.append('clab-backup-ui/VERSION')
+            missing.append(name)
+        planned[name] = (path, text, updated)
+    if missing:
+        raise ValueError('Release metadata not found in ' + ', '.join(missing) + '; nothing was changed. '
+                         'verify-release.py would fail on these files as well.')
+    version_path = root / 'clab-backup-ui/VERSION'
+    planned['clab-backup-ui/VERSION'] = (version_path, version_path.read_bytes().decode('utf-8'), new + '\n')
     for rel, path in release.living_docs(root):
-        text = path.read_bytes().decode('utf-8')
+        # A page can be both a lockstep file and a living guide: continue from the text already planned for it.
+        original, text = planned[rel][1:] if rel in planned else (None, path.read_bytes().decode('utf-8'))
+        original = text if original is None else original
         lines = text.split('\n')
         edits = [(number, start, end) for number, start, end, _token, kind in release.release_tokens(text, old) if kind == 'current']
         for number, start, end in sorted(edits, reverse=True):
             line = lines[number - 1]
             lines[number - 1] = line[:start] + new + line[end:]
-        if rewrite(path, text, '\n'.join(lines)):
-            changed.append(rel)
+        planned[rel] = (path, original, '\n'.join(lines))
+    changed = []
+    for name, (path, text, updated) in planned.items():
+        if rewrite(path, text, updated):
+            changed.append(name)
     return old, changed
 
 

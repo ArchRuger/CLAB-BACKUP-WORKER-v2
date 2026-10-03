@@ -107,12 +107,19 @@ and its licences, test fixtures and the archived guides are intentional content.
 
 `.github/workflows/release-check.yml` runs on every push and pull request:
 
-1. `python3 deploy/verify-release.py` (runtime and documentation).
-2. The release, installer, Git onboarding, APT and health-check regression tests.
-3. `bash -n` on every deploy shell script.
-4. The application test suites in a virtual environment, the browser test files
+1. `python3 deploy/verify-release.py` (runtime and documentation), then
+   `python3 docs/maintenance-audit/tools/check_links.py` (relative Markdown links and anchors).
+2. The release, installer (including the stdlib `test_install_tui_core.py`), Git onboarding, APT,
+   health-check and SSH gateway whitelist (`test_gateway_whitelist.py`) regression tests, all with the
+   system `python3`.
+3. `bash -n` on every deploy shell script, `sh -n deploy/clab-manager-gateway` (no extension,
+   `#!/bin/sh`) and `node --check` on every `clab-backup-ui/app/static/*.js`.
+4. The full-screen installer's Textual tests (`test_install_tui_app.py`) in their own virtual
+   environment built from the hashed `deploy/installer_tui/requirements.lock`, with
+   `INSTALLER_TUI_REQUIRED=1` so a missing Textual fails instead of skipping.
+5. The application test suites in a virtual environment, the browser test files
    under `node --test`, and the capture suites.
-5. `docker compose config` for the capture stack, then real browser Wireshark with
+6. `docker compose config` for the capture stack, then real browser Wireshark with
    loopback packets (`deploy/capture/smoke.py`).
 
 Branch protection must require the workflow if merges are to be blocked on a red
