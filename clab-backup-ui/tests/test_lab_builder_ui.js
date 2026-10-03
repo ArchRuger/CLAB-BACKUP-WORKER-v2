@@ -62,6 +62,15 @@ test('templates(): the stored list is migrated once under a version marker, and 
  s.setItem('clab-builder:templates',JSON.stringify({list:[{name:'Arista cEOS',kind:'arista_ceos',image:'ceos:4.35.0F'}],defaultName:''}));
  assert.equal(win.labBuilderPage.templates().list[0].image,'ceos:4.35.0F','after the marker an old-looking template is the user\'s own');
 });
+test('a fresh browser\'s first template save is never migrated afterwards (the user\'s edit wins)',()=>{
+ const s=storage(),win={localStorage:s},c=load(win);
+ assert.equal(win.labBuilderPage.templates().list.find(t=>t.kind==='arista_ceos').image,'n24l/ceos:4.35.0F','defaults in use');
+ assert.equal(s.getItem('clab-builder:templates-version'),'2','nothing stored: marked current');
+ const s2=storage(),win2={localStorage:s2};load(win2);
+ win2.labBuilderPage.saveTemplates([{name:'Arista cEOS',kind:'arista_ceos',image:'ceos:4.35.0F',binds:['a:/b']}],'');
+ const t=win2.labBuilderPage.templates().list[0];
+ assert.equal(t.image,'ceos:4.35.0F','an edit saved from this page keeps its image');assert.deepEqual(JSON.parse(JSON.stringify(t.binds)),['a:/b']);
+});
 test('templates prefer an image the VM has over the placeholder (Linux), the Image list offers the VM images, and the draft\'s images are read',()=>{
  const c=load(),vm=['n24l/ceos:4.34.2F','n24l/ceos:4.35.0F','ghcr.io/srl-labs/network-multitool:latest','other/thing:1'];
  const list=c.builderTemplateList({},vm);

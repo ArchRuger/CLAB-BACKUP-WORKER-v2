@@ -52,3 +52,13 @@ over SSH with the containerlab default Junos login (`show configuration system h
 |---|---|---|
 | `t7repro` / `ptx1` | `kind` + `image` only (as saved before the fix) | `admin@HOSTNAME>` · `host-name HOSTNAME;` |
 | `t7fix` / `ptx2` | + `env: CPTX_AUTO_CONFIG: "1"` | `admin@ptx2>` · `host-name ptx2;` |
+| `t7host` / `ptx3` | + `hostname: core-ptx` + `env: CPTX_AUTO_CONFIG: "1"` | `admin@core-ptx>` · `host-name core-ptx;` (an explicit containerlab hostname is respected) |
+
+A first attempt to boot ptx3 alongside two other cJunosEvolved VMs on dev1 stalled with kernel soft
+lockups (CPU starvation on nested KVM), unrelated to the host name; it was redeployed alone. Live
+acceptance boots are therefore staggered.
+
+Independent review (Opus) found that the template migration could overwrite an edit saved from a
+fresh browser (no marker written when nothing was stored); fixed: the version marker is written
+whenever nothing is stored and on every template save, so only lists stored before this release are
+ever migrated (`tests/test_lab_builder_ui.js`).

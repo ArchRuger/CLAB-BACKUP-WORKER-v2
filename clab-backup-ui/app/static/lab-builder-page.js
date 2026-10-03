@@ -177,10 +177,13 @@ async function builderSaveRequest(draft,hash=builderHash){
 let builderStorageNote='';
 function builderMemoryStorage(){const m=new Map();return {get length(){return m.size;},key:i=>[...m.keys()][i]??null,getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>{m.set(k,String(v));},removeItem:k=>{m.delete(k);}};}
 const builderStore=(()=>{try{const s=window.localStorage;s.getItem(BUILDER_PREFIX+'probe');return s;}catch{builderStorageNote='This browser does not let the page store drafts (private window or blocked site data). Your work lives in this tab only: download the draft before you close or reload it.';return builderMemoryStorage();}})();
+// A list saved from this page was edited against the current defaults: never migrate it afterwards.
+function builderMarkTemplatesCurrent(){try{builderStore.setItem(BUILDER_PREFIX+'templates-version',BUILDER_TEMPLATES_VERSION);}catch{}}
 function builderTemplatesStored(){
  try{
   const v=JSON.parse(builderStore.getItem(BUILDER_PREFIX+'templates')||'null');
-  if(!(v&&Array.isArray(v.list)&&v.list.length))return null;
+  // Nothing stored: the current defaults are in use, so there is nothing to migrate later either.
+  if(!(v&&Array.isArray(v.list)&&v.list.length)){builderMarkTemplatesCurrent();return null;}
   // Once per browser (marker): move still-default built-in templates to the n24l images.
   if(builderStore.getItem(BUILDER_PREFIX+'templates-version')!==BUILDER_TEMPLATES_VERSION){
    const m=builderMigrateTemplates(v.list);
@@ -235,7 +238,7 @@ const builderPage={
   document.title=builderDraft.name+' · Lab builder · Containerlab Node Manager';builderRenderBar();builderImageStatus();
  },
  templates(){const stored=builderTemplatesStored();return stored?{list:stored.list,defaultName:stored.defaultName||''}:{list:builderTemplateList(builderKnown,builderVmImages),defaultName:BUILDER_TEMPLATES[0].name};},
- saveTemplates(list,defaultName){try{builderStore.setItem(BUILDER_PREFIX+'templates',JSON.stringify({list,defaultName}));}catch{notify('This browser could not keep the device template.');}},
+ saveTemplates(list,defaultName){try{builderStore.setItem(BUILDER_PREFIX+'templates',JSON.stringify({list,defaultName}));builderMarkTemplatesCurrent();}catch{notify('This browser could not keep the device template.');}},
  images(){return builderImages(this.templates().list,builderKnown,builderVmImages);},
  // The palette's Import templates: the editor leaves the file dialog to its host.
  chooseTemplates(){return new Promise((resolve,reject)=>{const input=$('builder-templates-file');input.value='';input.oncancel=()=>resolve(null);input.onchange=()=>{const file=input.files[0];if(!file)resolve(null);else if(file.size>1200*1024)reject(new Error('This file is too large to be a template file.'));else file.text().then(resolve,reject);};input.click();});},
