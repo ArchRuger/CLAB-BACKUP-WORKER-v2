@@ -1,0 +1,82 @@
+=== Pass 2: repaired-race replays x20 (fault injection) ===
+  ok   race-a save marker=80000: the request under test was actually held
+  ok   race-a save marker=80000 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a plan-load marker=80001: the request under test was actually held
+  ok   race-a plan-load marker=80001 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a save marker=80002: the request under test was actually held
+  ok   race-a save marker=80002 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-a plan-load marker=80003: the request under test was actually held
+  ok   race-a plan-load marker=80003 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-a save marker=80004: the request under test was actually held
+  ok   race-a save marker=80004 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a plan-load marker=80005: the request under test was actually held
+  ok   race-a plan-load marker=80005 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a save marker=80006: the request under test was actually held
+  ok   race-a save marker=80006 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-a plan-load marker=80007: the request under test was actually held
+  ok   race-a plan-load marker=80007 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-a save marker=80008: the request under test was actually held
+  ok   race-a save marker=80008 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a plan-load marker=80009: the request under test was actually held
+  ok   race-a plan-load marker=80009 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a save marker=80010: the request under test was actually held
+  ok   race-a save marker=80010 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-a plan-load marker=80011: the request under test was actually held
+  ok   race-a plan-load marker=80011 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-a save marker=80012: the request under test was actually held
+  ok   race-a save marker=80012 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a plan-load marker=80013: the request under test was actually held
+  ok   race-a plan-load marker=80013 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a save marker=80014: the request under test was actually held
+  ok   race-a save marker=80014 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-a plan-load marker=80015: the request under test was actually held
+  ok   race-a plan-load marker=80015 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-a save marker=80016: the request under test was actually held
+  ok   race-a save marker=80016 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a plan-load marker=80017: the request under test was actually held
+  ok   race-a plan-load marker=80017 (ospf-basics -> BGP_TheoryToPractice): nothing from ospf-basics lands in BGP_TheoryToPractice
+  ok   race-a save marker=80018: the request under test was actually held
+  ok   race-a save marker=80018 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-a plan-load marker=80019: the request under test was actually held
+  ok   race-a plan-load marker=80019 (BGP_TheoryToPractice -> ospf-basics): nothing from BGP_TheoryToPractice lands in ospf-basics
+  ok   race-b marker=10000: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10000 new=510000): newest generation wins
+  ok   race-b marker=10001: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10001 new=510001): newest generation wins
+  ok   race-b marker=10002: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10002 new=510002): newest generation wins
+  ok   race-b marker=10003: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10003 new=510003): newest generation wins
+  ok   race-b marker=10004: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10004 new=510004): newest generation wins
+  ok   race-b marker=10005: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10005 new=510005): newest generation wins
+  ok   race-b marker=10006: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10006 new=510006): newest generation wins
+  ok   race-b marker=10007: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10007 new=510007): newest generation wins
+  ok   race-b marker=10008: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10008 new=510008): newest generation wins
+  ok   race-b marker=10009: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10009 new=510009): newest generation wins
+  ok   race-b marker=10010: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10010 new=510010): newest generation wins
+  ok   race-b marker=10011: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10011 new=510011): newest generation wins
+  ok   race-b marker=10012: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10012 new=510012): newest generation wins
+  ok   race-b marker=10013: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10013 new=510013): newest generation wins
+  ok   race-b marker=10014: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10014 new=510014): newest generation wins
+  ok   race-b marker=10015: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10015 new=510015): newest generation wins
+  ok   race-b marker=10016: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10016 new=510016): newest generation wins
+  ok   race-b marker=10017: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10017 new=510017): newest generation wins
+  ok   race-b marker=10018: call 1 was actually captured
+  ok   race-b out-of-order polls on ospf-basics (old=10018 new=510018): newest generation wins
+  ok   race-b marker=10019: call 1 was actually captured
+  ok   race-b out-of-order polls on BGP_TheoryToPractice (old=10019 new=510019): newest generation wins
+Pass 2 done: race-a leaks 0/20, race-b stale-wins 0/20, 0 unhandled console errors

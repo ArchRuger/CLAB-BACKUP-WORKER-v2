@@ -1,0 +1,13 @@
+2026-09-28T01:36:48Z
+$ python3 deploy/verify-release.py
+Source release verified: 1.30.50
+Documentation names only release 1.30.50.
+exit 0
+$ git diff --check
+exit 0
+$ node --check clab-backup-ui/app/static/*.js
+22 files, 0 failures
+$ python3 docs/maintenance-audit/tools/check_links.py
+177 files, 0 problems
+exit 0
+2026-09-28T01:36:50Z

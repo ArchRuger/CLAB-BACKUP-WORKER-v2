@@ -1,0 +1,36 @@
+2026-09-28T01:51:40Z
+show running-config router ospf
+Mon Sep 28 01:51:39.880 UTC
+router ospf 1
+ router-id 10.255.0.4
+ area 0
+  interface Loopback0
+   passive enable
+  !
+  interface GigabitEthernet0/0/0/0
+   network point-to-point
+  !
+  interface GigabitEthernet0/0/0/1
+   network point-to-point
+  !
+ !
+!
+
+RP/0/RP0/CPU0:xrv9k#show ospf neighbor
+Mon Sep 28 01:51:40.150 UTC
+
+* Indicates MADJ interface
+# Indicates Neighbor awaiting BFD session up
+
+Neighbors for OSPF 1
+
+Neighbor ID     Pri   State           Dead Time   Address         Interface
+10.255.0.3      128   FULL/  -        00:00:32    10.0.34.0       GigabitEthernet0/0/0/0
+    Neighbor is up for 00:00:40
+10.255.0.1      0     FULL/  -        00:00:38    10.0.41.1       GigabitEthernet0/0/0/1
+    Neighbor is up for 00:00:32
+
+Total neighbor count: 2
+RP/0/RP0/CPU0:xrv9k#
+exit 0
+2026-09-28T01:51:41Z

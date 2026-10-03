@@ -12,6 +12,7 @@ a first-time student is never confused, blocked or surprised by the UI.
 - Releases of this stream start at **1.30.52**, not 1.30.51: the netlab stream's uncommitted 1.30.51 (QA-021, the
   lab-bound design dialogs) was sitting in this worktree and its image `clab-backup:1.30.51` is built and was the
   running manager when this stream started. Reusing the number would have produced two different 1.30.51 trees.
+  That work was cut on top of 1.30.57 as 1.30.58 on 2026-10-02 (PR #62, `docs/netlab-ui-qa/PICKUP.md`).
 - The netlab stream's uncommitted work was preserved as a local WIP commit on `claude/netlab-integration` (message
   "WIP (set aside by the ui-ux-changes-2 stream): …"); it is **not pushed**. To continue that stream:
   `git checkout claude/netlab-integration && git reset --soft HEAD~1` restores the uncommitted state exactly.

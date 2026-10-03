@@ -1,0 +1,1908 @@
+START 2026-09-28T01:09:40Z
+TAP version 13
+# Subtest: download explains an empty capture folder instead of navigating to JSON
+ok 1 - download explains an empty capture folder instead of navigating to JSON
+  ---
+  duration_ms: 7.925723
+  ...
+# Subtest: a saved capture is handed to the browser as a native download after the check passes
+ok 2 - a saved capture is handed to the browser as a native download after the check passes
+  ---
+  duration_ms: 5.046241
+  ...
+# Subtest: ending a session only disconnects a live viewer and clears the download link
+ok 3 - ending a session only disconnects a live viewer and clears the download link
+  ---
+  duration_ms: 5.113005
+  ...
+# Subtest: an invalid session link never contacts the manager
+ok 4 - an invalid session link never contacts the manager
+  ---
+  duration_ms: 3.153558
+  ...
+# Subtest: node scope uses captured lab identity and live interfaces
+ok 5 - node scope uses captured lab identity and live interfaces
+  ---
+  duration_ms: 14.046288
+  ...
+# Subtest: all host scope removes lab filtering and missing aliases are never guessed
+ok 6 - all host scope removes lab filtering and missing aliases are never guessed
+  ---
+  duration_ms: 2.385527
+  ...
+# Subtest: capture requires selection and creates a same-origin browser session
+ok 7 - capture requires selection and creates a same-origin browser session
+  ---
+  duration_ms: 4.37406
+  ...
+# Subtest: changing selection clears a prepared link and releases the prepare button
+ok 8 - changing selection clears a prepared link and releases the prepare button
+  ---
+  duration_ms: 2.951965
+  ...
+# Subtest: prepare stays disabled until an interface is ticked and a target-less dialog says so
+ok 9 - prepare stays disabled until an interface is ticked and a target-less dialog says so
+  ---
+  duration_ms: 3.57579
+  ...
+# Subtest: shared namespaces and loopback-only targets are labelled, the kind shows only for the whole VM, and aliases are searchable
+ok 10 - shared namespaces and loopback-only targets are labelled, the kind shows only for the whole VM, and aliases are searchable
+  ---
+  duration_ms: 3.596709
+  ...
+# Subtest: node and menu capture actions are disabled only once the manager reports capture disabled
+ok 11 - node and menu capture actions are disabled only once the manager reports capture disabled
+  ---
+  duration_ms: 18.519094
+  ...
+# Subtest: closing during an in-flight launch cannot restore a stale link
+ok 12 - closing during an in-flight launch cannot restore a stale link
+  ---
+  duration_ms: 3.984569
+  ...
+# Subtest: out of order discovery cannot replace newer results
+ok 13 - out of order discovery cannot replace newer results
+  ---
+  duration_ms: 1.283957
+  ...
+# Subtest: disabled providers and outages have an actionable local message
+ok 14 - disabled providers and outages have an actionable local message
+  ---
+  duration_ms: 2.485871
+  ...
+# Subtest: untrusted labels are escaped and unsupported launch schemes cannot navigate
+ok 15 - untrusted labels are escaped and unsupported launch schemes cannot navigate
+  ---
+  duration_ms: 3.746676
+  ...
+# Subtest: a node lists its wired ports first and keeps the rest behind a toggle
+ok 16 - a node lists its wired ports first and keeps the rest behind a toggle
+  ---
+  duration_ms: 4.55875
+  ...
+# Subtest: a node with a single wired port starts ticked and ready to capture
+ok 17 - a node with a single wired port starts ticked and ready to capture
+  ---
+  duration_ms: 2.51393
+  ...
+# Subtest: without a map the live list is shown and an unresolved target unfolds the advanced selector
+ok 18 - without a map the live list is shown and an unresolved target unfolds the advanced selector
+  ---
+  duration_ms: 3.223423
+  ...
+# Subtest: ticked interfaces from both lists are captured together
+ok 19 - ticked interfaces from both lists are captured together
+  ---
+  duration_ms: 4.321607
+  ...
+# Subtest: a link opens on its first endpoint with that port ticked
+ok 20 - a link opens on its first endpoint with that port ticked
+  ---
+  duration_ms: 15.960463
+  ...
+# Subtest: a mapped NOS port name preselects its container interface once confirmed live (Junos)
+ok 21 - a mapped NOS port name preselects its container interface once confirmed live (Junos)
+  ---
+  duration_ms: 6.871049
+  ...
+# Subtest: a mapped NOS port name preselects its container interface (XRv9k, first data port)
+ok 22 - a mapped NOS port name preselects its container interface (XRv9k, first data port)
+  ---
+  duration_ms: 2.919752
+  ...
+# Subtest: a mapped cJunosEvolved port missing from the live list keeps manual selection with a specific reason
+ok 23 - a mapped cJunosEvolved port missing from the live list keeps manual selection with a specific reason
+  ---
+  duration_ms: 2.542819
+  ...
+# Subtest: an EOS/linux identity mapping behaves exactly as an unmapped hint did before
+ok 24 - an EOS/linux identity mapping behaves exactly as an unmapped hint did before
+  ---
+  duration_ms: 2.746232
+  ...
+# Subtest: an unrecognised kind or port shape falls back to the prior "not found" guidance
+ok 25 - an unrecognised kind or port shape falls back to the prior "not found" guidance
+  ---
+  duration_ms: 2.640127
+  ...
+# Subtest: a mapped port is never preselected onto a vJunos tap device
+ok 26 - a mapped port is never preselected onto a vJunos tap device
+  ---
+  duration_ms: 2.802439
+  ...
+# Subtest: a link between two different kinds resolves the mapped interface on each end
+ok 27 - a link between two different kinds resolves the mapped interface on each end
+  ---
+  duration_ms: 10.268611
+  ...
+# Subtest: every rendered link including coincident nodes exposes both endpoint actions
+ok 28 - every rendered link including coincident nodes exposes both endpoint actions
+  ---
+  duration_ms: 2.328228
+  ...
+# Subtest: QA-013: a Junos or IOS XR device's diagram ports are matched through their container names, labelled with the port, and "not found" is said only of a port whose veth is absent
+ok 29 - QA-013: a Junos or IOS XR device's diagram ports are matched through their container names, labelled with the port, and "not found" is said only of a port whose veth is absent
+  ---
+  duration_ms: 3.872163
+  ...
+# Subtest: debug report renders metadata as text and failures filter works
+ok 30 - debug report renders metadata as text and failures filter works
+  ---
+  duration_ms: 6.579737
+  ...
+# Subtest: read-only check disables running button, exports results and omits input path
+ok 31 - read-only check disables running button, exports results and omits input path
+  ---
+  duration_ms: 3.954669
+  ...
+# Subtest: failed probe clears prior result and leaves retry available
+ok 32 - failed probe clears prior result and leaves retry available
+  ---
+  duration_ms: 3.395915
+  ...
+# Subtest: debug flags audit write failures without displaying exception details
+ok 33 - debug flags audit write failures without displaying exception details
+  ---
+  duration_ms: 2.168281
+  ...
+# Subtest: annotations start with editable defaults and payload retains revision and node identity
+ok 34 - annotations start with editable defaults and payload retains revision and node identity
+  ---
+  duration_ms: 2.167576
+  ...
+# Subtest: moving lines moves both endpoints and clamps out-of-range coordinates
+ok 35 - moving lines moves both endpoints and clamps out-of-range coordinates
+  ---
+  duration_ms: 0.284898
+  ...
+# Subtest: diffMarkup renders a hunk header, gutters and a marker per row, and escapes configuration text
+ok 36 - diffMarkup renders a hunk header, gutters and a marker per row, and escapes configuration text
+  ---
+  duration_ms: 4.526928
+  ...
+# Subtest: an identical diff and an empty diff both read as no differences, not as an empty table
+ok 37 - an identical diff and an empty diff both read as no differences, not as an empty table
+  ---
+  duration_ms: 1.346345
+  ...
+# Subtest: a truncated diff shows its note as visible text
+ok 38 - a truncated diff shows its note as visible text
+  ---
+  duration_ms: 1.670289
+  ...
+# Subtest: diffFileMarkup renders an added file as all additions and a removed file as all deletions, open by default
+ok 39 - diffFileMarkup renders an added file as all additions and a removed file as all deletions, open by default
+  ---
+  duration_ms: 1.326354
+  ...
+# Subtest: diffFileMarkup marks a suffix-renamed file as changed with its old name, and escapes an attack filename
+ok 40 - diffFileMarkup marks a suffix-renamed file as changed with its old name, and escapes an attack filename
+  ---
+  duration_ms: 1.577725
+  ...
+# Subtest: an identical file collapses (not open) even when it is passed to diffFileMarkup
+ok 41 - an identical file collapses (not open) even when it is passed to diffFileMarkup
+  ---
+  duration_ms: 1.334987
+  ...
+# Subtest: style.css shrinks the diff gutters at narrow widths without dropping the wide-layout rule
+ok 42 - style.css shrinks the diff gutters at narrow widths without dropping the wide-layout rule
+  ---
+  duration_ms: 1.336375
+  ...
+# Subtest: individual device zero uses its endpoint and server filename
+ok 43 - individual device zero uses its endpoint and server filename
+  ---
+  duration_ms: 5.994864
+  ...
+# Subtest: ZIP handler honors Content-Disposition instead of old generated name
+ok 44 - ZIP handler honors Content-Disposition instead of old generated name
+  ---
+  duration_ms: 3.309853
+  ...
+# Subtest: history renders a button only for successful configurations and labels UTC
+ok 45 - history renders a button only for successful configurations and labels UTC
+  ---
+  duration_ms: 4.017025
+  ...
+# Subtest: per-node backup sends an explicit target; lab backup preserves the existing request
+ok 46 - per-node backup sends an explicit target; lab backup preserves the existing request
+  ---
+  duration_ms: 3.31501
+  ...
+# Subtest: SSH action opens a separate tab with encoded node identity and no credentials
+ok 47 - SSH action opens a separate tab with encoded node identity and no credentials
+  ---
+  duration_ms: 3.55272
+  ...
+# Subtest: connection state stays scoped to its lab and node rows contain no resource controls
+ok 48 - connection state stays scoped to its lab and node rows contain no resource controls
+  ---
+  duration_ms: 4.603092
+  ...
+# Subtest: node history keeps saved job indexes when other devices precede the target
+ok 49 - node history keeps saved job indexes when other devices precede the target
+  ---
+  duration_ms: 4.036271
+  ...
+# Subtest: rejected backup-selection edit restores the checkbox
+ok 50 - rejected backup-selection edit restores the checkbox
+  ---
+  duration_ms: 5.433081
+  ...
+# Subtest: the tree model nests committed files, sorts them and marks lab and managed folders
+ok 51 - the tree model nests committed files, sorts them and marks lab and managed folders
+  ---
+  duration_ms: 12.39724
+  ...
+# Subtest: path chips start at the repository root
+ok 52 - path chips start at the repository root
+  ---
+  duration_ms: 3.317273
+  ...
+# Subtest: folder rules: own, other lab, inside, managed, unused, root versus subfolders
+ok 53 - folder rules: own, other lab, inside, managed, unused, root versus subfolders
+  ---
+  duration_ms: 4.093693
+  ...
+# Subtest: selecting a snapshot folder named latest resolves to its parent; any other snapshot folder is refused outright
+ok 54 - selecting a snapshot folder named latest resolves to its parent; any other snapshot folder is refused outright
+  ---
+  duration_ms: 3.502311
+  ...
+# Subtest: a folder below a saved configuration is refused too, walking every ancestor for manifest.json, with the manager's own sentence naming the ancestor
+ok 55 - a folder below a saved configuration is refused too, walking every ancestor for manifest.json, with the manager's own sentence naming the ancestor
+  ---
+  duration_ms: 3.077169
+  ...
+# Subtest: folder names are literal single segments
+ok 56 - folder names are literal single segments
+  ---
+  duration_ms: 2.774399
+  ...
+# Subtest: sizes read like a file browser
+ok 57 - sizes read like a file browser
+  ---
+  duration_ms: 2.572281
+  ...
+# Subtest: the browser markup escapes names and labels and explains each folder
+ok 58 - the browser markup escapes names and labels and explains each folder
+  ---
+  duration_ms: 8.733184
+  ...
+# Subtest: an empty folder made through the manager stays in the tree, is told apart from a saved one, and can be chosen
+ok 59 - an empty folder made through the manager stays in the tree, is told apart from a saved one, and can be chosen
+  ---
+  duration_ms: 5.450616
+  ...
+# Subtest: New folder: a connected lab plans the folder without moving, a duplicate is refused before any request, an unconnected lab still registers
+ok 60 - New folder: a connected lab plans the folder without moving, a duplicate is refused before any request, an unconnected lab still registers
+  ---
+  duration_ms: 6.194887
+  ...
+# Subtest: the outline opens and closes by the student's own state: ancestors of the save location collapse, other branches stay open, selection never closes anything
+ok 61 - the outline opens and closes by the student's own state: ancestors of the save location collapse, other branches stay open, selection never closes anything
+  ---
+  duration_ms: 6.617075
+  ...
+# Subtest: the folder panel keeps branches, selection and focus across a refresh of the same repository and resets for another one
+ok 62 - the folder panel keeps branches, selection and focus across a refresh of the same repository and resets for another one
+  ---
+  duration_ms: 7.850831
+  ...
+# Subtest: the connected card names the folder path and offers the switch and disconnect actions
+ok 63 - the connected card names the folder path and offers the switch and disconnect actions
+  ---
+  duration_ms: 4.335937
+  ...
+# Subtest: Save location opens with the folder browser unfolded, keeps a deliberate fold per lab, and names its Git details
+ok 64 - Save location opens with the folder browser unfolded, keeps a deliberate fold per lab, and names its Git details
+  ---
+  duration_ms: 5.336071
+  ...
+# Subtest: move jobs read as folder moves and open the latest folder
+ok 65 - move jobs read as folder moves and open the latest folder
+  ---
+  duration_ms: 3.106979
+  ...
+# Subtest: choosing a folder in a repository the lab is not connected to prepares the form instead of moving
+ok 66 - choosing a folder in a repository the lab is not connected to prepares the form instead of moving
+  ---
+  duration_ms: 4.677504
+  ...
+# Subtest: nested folder helpers validate each segment and preview the full destination
+ok 67 - nested folder helpers validate each segment and preview the full destination
+  ---
+  duration_ms: 3.178815
+  ...
+# Subtest: latest, baseline and checkpoints are reserved names inside a lab folder; a "latest" segment higher up is unrelated
+ok 68 - latest, baseline and checkpoints are reserved names inside a lab folder; a "latest" segment higher up is unrelated
+  ---
+  duration_ms: 3.124695
+  ...
+# Subtest: a folder is a saved configuration when it holds manifest.json, whatever its name or depth; a restore-shaped extension alone is not enough
+ok 69 - a folder is a saved configuration when it holds manifest.json, whatever its name or depth; a restore-shaped extension alone is not enough
+  ---
+  duration_ms: 4.932882
+  ...
+# Subtest: Apply to running lab sends the exact resolved snapshot path to onApply, never a substituted one
+ok 70 - Apply to running lab sends the exact resolved snapshot path to onApply, never a substituted one
+  ---
+  duration_ms: 5.477367
+  ...
+# Subtest: saved versions come from the repository tree: this lab first, every manifest.json elsewhere, apply only where one exists
+ok 71 - saved versions come from the repository tree: this lab first, every manifest.json elsewhere, apply only where one exists
+  ---
+  duration_ms: 5.160738
+  ...
+# Subtest: recent saves rows explain each save and offer upload or keep-snapshot-only while one is pending
+ok 72 - recent saves rows explain each save and offer upload or keep-snapshot-only while one is pending
+  ---
+  duration_ms: 3.293751
+  ...
+# Subtest: Git progress scope is exact, complete and independent of scheduled backup selection
+ok 73 - Git progress scope is exact, complete and independent of scheduled backup selection
+  ---
+  duration_ms: 7.908922
+  ...
+# Subtest: save commands are structured and baseline replacement is explicit
+ok 74 - save commands are structured and baseline replacement is explicit
+  ---
+  duration_ms: 3.376708
+  ...
+# Subtest: diffs and job output escape configuration, filenames, notes and labels
+ok 75 - diffs and job output escape configuration, filenames, notes and labels
+  ---
+  duration_ms: 4.339937
+  ...
+# Subtest: every Save progress option is explained from what it really does: a local save never uploads, history saves nothing
+ok 76 - every Save progress option is explained from what it really does: a local save never uploads, history saves nothing
+  ---
+  duration_ms: 5.183065
+  ...
+# Subtest: the help pane shows one explanation at a time and the default line when no option is active
+ok 77 - the help pane shows one explanation at a time and the default line when no option is active
+  ---
+  duration_ms: 3.490346
+  ...
+# Subtest: the Save progress menu is placed where it fits: right-aligned, from the left of a wrapped control, stacked when the window is too narrow
+ok 78 - the Save progress menu is placed where it fits: right-aligned, from the left of a wrapped control, stacked when the window is too narrow
+  ---
+  duration_ms: 3.917844
+  ...
+# Subtest: Git Unix commit timestamps are interpreted as seconds
+ok 79 - Git Unix commit timestamps are interpreted as seconds
+  ---
+  duration_ms: 3.118931
+  ...
+# Subtest: a changed registered destination requires export acknowledgement even with the same binding ID
+ok 80 - a changed registered destination requires export acknowledgement even with the same binding ID
+  ---
+  duration_ms: 2.194675
+  ...
+# Subtest: repository selection identifies the verified remote URL and branch
+ok 81 - repository selection identifies the verified remote URL and branch
+  ---
+  duration_ms: 2.00816
+  ...
+# Subtest: connected repository displays the push URL as escaped text
+ok 82 - connected repository displays the push URL as escaped text
+  ---
+  duration_ms: 5.038385
+  ...
+# Subtest: historical baseline and checkpoint commits open their recorded target instead of latest
+ok 83 - historical baseline and checkpoint commits open their recorded target instead of latest
+  ---
+  duration_ms: 7.948179
+  ...
+# Subtest: unchanged saves sharing HEAD do not replace the actual historical commit target
+ok 84 - unchanged saves sharing HEAD do not replace the actual historical commit target
+  ---
+  duration_ms: 2.722184
+  ...
+# Subtest: gitOpenCommit fast path sends the job's own snapshot_path with the wire's leading slash when present, else the binding prefix joined with its target
+ok 85 - gitOpenCommit fast path sends the job's own snapshot_path with the wire's leading slash when present, else the binding prefix joined with its target
+  ---
+  duration_ms: 2.518697
+  ...
+# Subtest: one-click save asks for a label first (E1), then captures fresh configurations and delegates review preference to server
+ok 86 - one-click save asks for a label first (E1), then captures fresh configurations and delegates review preference to server
+  ---
+  duration_ms: 2.884147
+  ...
+# Subtest: an empty or over-length label is refused before the save is sent, and the draft survives a cancel
+ok 87 - an empty or over-length label is refused before the save is sent, and the draft survives a cancel
+  ---
+  duration_ms: 2.338277
+  ...
+# Subtest: the review before an upload is mandatory: every upload of an unreviewed save goes through the review window, and only its button uploads
+ok 88 - the review before an upload is mandatory: every upload of an unreviewed save goes through the review window, and only its button uploads
+  ---
+  duration_ms: 3.981358
+  ...
+# Subtest: the save location form no longer offers to skip the review and never sends the old preference
+ok 89 - the save location form no longer offers to skip the review and never sends the old preference
+  ---
+  duration_ms: 0.330845
+  ...
+# Subtest: an uncertain save response retries with the same persistent request ID
+ok 90 - an uncertain save response retries with the same persistent request ID
+  ---
+  duration_ms: 3.114615
+  ...
+# Subtest: double-clicking Save progress dispatches one save while the first request is pending
+ok 91 - double-clicking Save progress dispatches one save while the first request is pending
+  ---
+  duration_ms: 2.227139
+  ...
+# Subtest: single-job review requests parent-versus-saved changes, not the latest snapshot
+ok 92 - single-job review requests parent-versus-saved changes, not the latest snapshot
+  ---
+  duration_ms: 1.933406
+  ...
+# Subtest: save options close their own modal and one job poll continues after the output closes
+ok 93 - save options close their own modal and one job poll continues after the output closes
+  ---
+  duration_ms: 3.548807
+  ...
+# Subtest: save rows read as student sentences and the job window keeps the raw status under Details
+ok 94 - save rows read as student sentences and the job window keeps the raw status under Details
+  ---
+  duration_ms: 1.720867
+  ...
+# Subtest: a save with nothing new that is already uploaded reads as saved: no review, no upload offered
+ok 95 - a save with nothing new that is already uploaded reads as saved: no review, no upload offered
+  ---
+  duration_ms: 3.837368
+  ...
+# Subtest: the disabled reason of Save progress is visible text and an unbound lab keeps the button enabled
+ok 96 - the disabled reason of Save progress is visible text and an unbound lab keeps the button enabled
+  ---
+  duration_ms: 1.536796
+  ...
+# Subtest: saved versions list every snapshot folder below the lab folder's parent, any depth, from its exact path; a folder without manifest.json is never listed
+ok 97 - saved versions list every snapshot folder below the lab folder's parent, any depth, from its exact path; a folder without manifest.json is never listed
+  ---
+  duration_ms: 3.400946
+  ...
+# Subtest: a top-level lab folder does not absorb the whole repository into "reference": only nearby top-level folders count, everything deeper is "elsewhere"
+ok 98 - a top-level lab folder does not absorb the whole repository into "reference": only nearby top-level folders count, everything deeper is "elsewhere"
+  ---
+  duration_ms: 2.983628
+  ...
+# Subtest: a lab registered at the repository root does not claim every snapshot elsewhere in the repository as its own
+ok 99 - a lab registered at the repository root does not claim every snapshot elsewhere in the repository as its own
+  ---
+  duration_ms: 3.367338
+  ...
+# Subtest: a snapshot at the repository root is viewed, compared and downloaded with "/" on the wire, never an empty path; the history fallback root does too
+ok 100 - a snapshot at the repository root is viewed, compared and downloaded with "/" on the wire, never an empty path; the history fallback root does too
+  ---
+  duration_ms: 3.405469
+  ...
+# Subtest: gitSnapshotPath is the exact repository-relative path, with the wire's one leading slash: a lab folder prefix joined with the name, or the bare name at the repository root
+ok 101 - gitSnapshotPath is the exact repository-relative path, with the wire's one leading slash: a lab folder prefix joined with the name, or the bare name at the repository root
+  ---
+  duration_ms: 8.557807
+  ...
+# Subtest: gitOpenCommit offers exact snapshot paths for the registered lab folder, never bare names, each with the wire's leading slash but shown to the student without it
+ok 102 - gitOpenCommit offers exact snapshot paths for the registered lab folder, never bare names, each with the wire's leading slash but shown to the student without it
+  ---
+  duration_ms: 2.720853
+  ...
+# Subtest: gitReviewJob's "Open the full saved version" opens the job's own snapshot path when known, else the binding prefix joined with the target
+ok 103 - gitReviewJob's "Open the full saved version" opens the job's own snapshot path when known, else the binding prefix joined with the target
+  ---
+  duration_ms: 2.450441
+  ...
+# Subtest: the Full history… dialog opens a saved version with the wire's leading slash added to the raw path; the repository root is opened as "/"
+ok 104 - the Full history… dialog opens a saved version with the wire's leading slash added to the raw path; the repository root is opened as "/"
+  ---
+  duration_ms: 2.014233
+  ...
+# Subtest: gitViewVersion falls back to a slash-free label when no friendly name is given, e.g. opened from the review dialog
+ok 105 - gitViewVersion falls back to a slash-free label when no friendly name is given, e.g. opened from the review dialog
+  ---
+  duration_ms: 1.924168
+  ...
+# Subtest: gitLegacyDestinationNotice warns when a lab folder is itself shaped like the snapshot it holds, and says nothing for an ordinary folder
+ok 106 - gitLegacyDestinationNotice warns when a lab folder is itself shaped like the snapshot it holds, and says nothing for an ordinary folder
+  ---
+  duration_ms: 2.066464
+  ...
+# Subtest: a legacy binding shows the notice on the Save location card right under the destination line; an ordinary binding shows nothing
+ok 107 - a legacy binding shows the notice on the Save location card right under the destination line; an ordinary binding shows nothing
+  ---
+  duration_ms: 2.270507
+  ...
+# Subtest: closeDialogsExcept closes every other open dialog layer, keeping only the named destination
+ok 108 - closeDialogsExcept closes every other open dialog layer, keeping only the named destination
+  ---
+  duration_ms: 1.878062
+  ...
+# Subtest: E2 repro: opening the pending dialog, then a save's job window, then "View configuration backup" leaves no stale dialog open
+ok 109 - E2 repro: opening the pending dialog, then a save's job window, then "View configuration backup" leaves no stale dialog open
+  ---
+  duration_ms: 4.569378
+  ...
+# Subtest: E3: a save's frozen destination is shown in the job window as repository · branch · path, with its state, and the checkout path under Details
+ok 110 - E3: a save's frozen destination is shown in the job window as repository · branch · path, with its state, and the checkout path under Details
+  ---
+  duration_ms: 3.111245
+  ...
+# Subtest: E1: pending list rows read as label · when, with the status as a secondary pill
+ok 111 - E1: pending list rows read as label · when, with the status as a secondary pill
+  ---
+  duration_ms: 2.63457
+  ...
+# Subtest: a design export job window is titled "Design export…"; an ordinary save keeps its own wording
+ok 112 - a design export job window is titled "Design export…"; an ordinary save keeps its own wording
+  ---
+  duration_ms: 2.176998
+  ...
+# Subtest: the review dialog for a design export says "Design export…", not "Save progress"; an ordinary save keeps its own title
+ok 113 - the review dialog for a design export says "Design export…", not "Save progress"; an ordinary save keeps its own title
+  ---
+  duration_ms: 3.630985
+  ...
+# Subtest: cards read the lab state, the ready count, the last save and the deployment in student words; All labs keeps favourites first
+ok 114 - cards read the lab state, the ready count, the last save and the deployment in student words; All labs keeps favourites first
+  ---
+  duration_ms: 9.568607
+  ...
+# Subtest: Recent labs orders by the most recent deployment, newest first; opening, saving and favourites do not reorder it; labs without a deployment come last by name
+ok 115 - Recent labs orders by the most recent deployment, newest first; opening, saving and favourites do not reorder it; labs without a deployment come last by name
+  ---
+  duration_ms: 13.440814
+  ...
+# Subtest: the tab is the student's choice: it survives polls and coming back to Home, and only real changes redraw the list
+ok 116 - the tab is the student's choice: it survives polls and coming back to Home, and only real changes redraw the list
+  ---
+  duration_ms: 15.697898
+  ...
+# Subtest: lab names and ids are escaped everywhere they are interpolated
+ok 117 - lab names and ids are escaped everywhere they are interpolated
+  ---
+  duration_ms: 4.520679
+  ...
+# Subtest: Start shows on labs that are not running, with the reason as visible text when it is unavailable
+ok 118 - Start shows on labs that are not running, with the reason as visible text when it is unavailable
+  ---
+  duration_ms: 9.80734
+  ...
+# Subtest: labs the VM has that are not in My labs, and hidden ones, are counted for Manager › Labs found on the VM and never drawn on Home
+ok 119 - labs the VM has that are not in My labs, and hidden ones, are counted for Manager › Labs found on the VM and never drawn on Home
+  ---
+  duration_ms: 8.962161
+  ...
+# Subtest: card actions are delegated: Open lab selects, Start selects then starts, the star toggles the favourite, ⋯ opens lab operations
+ok 120 - card actions are delegated: Open lab selects, Start selects then starts, the star toggles the favourite, ⋯ opens lab operations
+  ---
+  duration_ms: 3.391718
+  ...
+# Subtest: Home leads with two equal starting choices: Deploy (a file on the lab VM, or one from this computer) and Build
+ok 121 - Home leads with two equal starting choices: Deploy (a file on the lab VM, or one from this computer) and Build
+  ---
+  duration_ms: 4.931799
+  ...
+# Subtest: lab names follow the literal rule of the VM helper and stay short
+ok 122 - lab names follow the literal rule of the VM helper and stay short
+  ---
+  duration_ms: 14.428785
+  ...
+# Subtest: a new draft is a blank topology with the lab name, and the templates list still names every kind and image
+ok 123 - a new draft is a blank topology with the lab name, and the templates list still names every kind and image
+  ---
+  duration_ms: 4.918772
+  ...
+# Subtest: templates take the image this site already uses for their kind
+ok 124 - templates take the image this site already uses for their kind
+  ---
+  duration_ms: 6.034512
+  ...
+# Subtest: a draft edited in another tab is never overwritten silently
+ok 125 - a draft edited in another tab is never overwritten silently
+  ---
+  duration_ms: 4.536651
+  ...
+# Subtest: a downloaded draft comes back unchanged and other files are refused
+ok 126 - a downloaded draft comes back unchanged and other files are refused
+  ---
+  duration_ms: 9.707644
+  ...
+# Subtest: the status line tells a draft from a saved lab and from unsaved changes
+ok 127 - the status line tells a draft from a saved lab and from unsaved changes
+  ---
+  duration_ms: 5.575199
+  ...
+# Subtest: the status pill is hidden with no text while no draft is open, and shown with its state otherwise
+ok 128 - the status pill is hidden with no text while no draft is open, and shown with its state otherwise
+  ---
+  duration_ms: 48.460567
+  ...
+# Subtest: the first save publishes a new folder; later saves revise the versions that were opened
+ok 129 - the first save publishes a new folder; later saves revise the versions that were opened
+  ---
+  duration_ms: 19.74251
+  ...
+# Subtest: the lab name is what the topology says: a new draft follows a rename, a saved lab is told to set it back
+ok 130 - the lab name is what the topology says: a new draft follows a rename, a saved lab is told to set it back
+  ---
+  duration_ms: 12.385346
+  ...
+# Subtest: a change the browser could not store is never shown as kept, and Download draft still has it
+ok 131 - a change the browser could not store is never shown as kept, and Download draft still has it
+  ---
+  duration_ms: 5.079716
+  ...
+# Subtest: a save that already reached the VM marks the draft saved instead of leaving it a draft for ever
+ok 132 - a save that already reached the VM marks the draft saved instead of leaving it a draft for ever
+  ---
+  duration_ms: 4.293545
+  ...
+# Subtest: a page that never heard how its save ended asks the VM on the next visit
+ok 133 - a page that never heard how its save ended asks the VM on the next visit
+  ---
+  duration_ms: 13.905362
+  ...
+# Subtest: saving again works on a page opened as http://<VM address>, where the browser offers no crypto.subtle
+ok 134 - saving again works on a page opened as http://<VM address>, where the browser offers no crypto.subtle
+  ---
+  duration_ms: 31.337172
+  ...
+# Subtest: while the problem overlay is up nothing is stored, whatever the editor still does
+ok 135 - while the problem overlay is up nothing is stored, whatever the editor still does
+  ---
+  duration_ms: 2.47055
+  ...
+# Subtest: a refused save says what was kept, and offers the differences when the VM holds another version
+ok 136 - a refused save says what was kept, and offers the differences when the VM holds another version
+  ---
+  duration_ms: 12.748975
+  ...
+# Subtest: a revision sends the hashes the VM gave for the files it read (a byte-order mark is not in the text)
+ok 137 - a revision sends the hashes the VM gave for the files it read (a byte-order mark is not in the text)
+  ---
+  duration_ms: 2.134086
+  ...
+# Subtest: one draft per lab: opening the file a draft was saved to continues that draft
+ok 138 - one draft per lab: opening the file a draft was saved to continues that draft
+  ---
+  duration_ms: 12.534344
+  ...
+# Subtest: a downloaded draft is checked before it becomes a draft, and takes the name its topology carries
+ok 139 - a downloaded draft is checked before it becomes a draft, and takes the name its topology carries
+  ---
+  duration_ms: 5.24353
+  ...
+# Subtest: a dropped topology/map pair is paired order-independently, and bad pairs are refused with the reason
+ok 140 - a dropped topology/map pair is paired order-independently, and bad pairs are refused with the reason
+  ---
+  duration_ms: 2.86817
+  ...
+# Subtest: dropping a lab file replaces the open draft only after a confirm when it has unsaved work, and needs none on the welcome page
+ok 141 - dropping a lab file replaces the open draft only after a confirm when it has unsaved work, and needs none on the welcome page
+  ---
+  duration_ms: 7.016824
+  ...
+# Subtest: a dropped topology the manager cannot read is refused with the reason, and an unreachable manager does not stop it opening
+ok 142 - a dropped topology the manager cannot read is refused with the reason, and an unreachable manager does not stop it opening
+  ---
+  duration_ms: 5.172365
+  ...
+# Subtest: Save is never off without the reason being on the page
+ok 143 - Save is never off without the reason being on the page
+  ---
+  duration_ms: 2.508115
+  ...
+# Subtest: a browser that refuses storage still builds: the draft lives in the tab and the page says so
+ok 144 - a browser that refuses storage still builds: the draft lives in the tab and the page says so
+  ---
+  duration_ms: 5.655364
+  ...
+# Subtest: a renamed draft is known by its new name everywhere: its path, the duplicate check, a draft left by an older version
+ok 145 - a renamed draft is known by its new name everywhere: its path, the duplicate check, a draft left by an older version
+  ---
+  duration_ms: 2.651188
+  ...
+# Subtest: the outcome of a save reaches the draft when its dialog was closed, and a second save waits for the first
+ok 146 - the outcome of a save reaches the draft when its dialog was closed, and a second save waits for the first
+  ---
+  duration_ms: 3.679843
+  ...
+# Subtest: opening the VM version never discards a draft with unsaved changes unasked, whichever draft is newer
+ok 147 - opening the VM version never discards a draft with unsaved changes unasked, whichever draft is newer
+  ---
+  duration_ms: 5.095634
+  ...
+# Subtest: a save remembers where it went: a rename after a lost answer does not orphan the lab on the VM
+ok 148 - a save remembers where it went: a rename after a lost answer does not orphan the lab on the VM
+  ---
+  duration_ms: 8.316491
+  ...
+# Subtest: Try to store it again also works when it was the page, not the editor, that could not store
+ok 149 - Try to store it again also works when it was the page, not the editor, that could not store
+  ---
+  duration_ms: 2.633734
+  ...
+# Subtest: the builder opens in the folder being browsed, else in the project folder
+ok 150 - the builder opens in the folder being browsed, else in the project folder
+  ---
+  duration_ms: 2.235744
+  ...
+# Subtest: a student with no labs finds the builder from the first page, and the builder page can preview a saved map
+ok 151 - a student with no labs finds the builder from the first page, and the builder page can preview a saved map
+  ---
+  duration_ms: 0.292501
+  ...
+# Subtest: every editor control the page hides still exists in the bundled editor
+ok 152 - every editor control the page hides still exists in the bundled editor
+  ---
+  duration_ms: 62.988993
+  ...
+# Subtest: the committed assets are the ones the manifest names, and the page loads only versioned entry files
+ok 153 - the committed assets are the ones the manifest names, and the page loads only versioned entry files
+  ---
+  duration_ms: 7.602991
+  ...
+# Subtest: the YAML button opens the editable panel, and the panel shows the draft’s own topology text
+ok 154 - the YAML button opens the editable panel, and the panel shows the draft’s own topology text
+  ---
+  duration_ms: 2.943246
+  ...
+# Subtest: the file drop zone takes file drags only and leaves the palette’s drags to the editor
+ok 155 - the file drop zone takes file drags only and leaves the palette’s drags to the editor
+  ---
+  duration_ms: 2.216295
+  ...
+# Subtest: the panel markup has the ids the page and the adapter contract name
+ok 156 - the panel markup has the ids the page and the adapter contract name
+  ---
+  duration_ms: 3.166032
+  ...
+# Subtest: the file loads without a document and keeps its names off the page script
+ok 157 - the file loads without a document and keeps its names off the page script
+  ---
+  duration_ms: 2.038879
+  ...
+# Subtest: init shows the engine text, numbers its lines and subscribes
+ok 158 - init shows the engine text, numbers its lines and subscribes
+  ---
+  duration_ms: 1.504272
+  ...
+# Subtest: without an editor the panel shows the draft read-only
+ok 159 - without an editor the panel shows the draft read-only
+  ---
+  duration_ms: 1.227333
+  ...
+# Subtest: typing marks the panel dirty and Apply sends the whole text as one step
+ok 160 - typing marks the panel dirty and Apply sends the whole text as one step
+  ---
+  duration_ms: 2.747986
+  ...
+# Subtest: a refused text stays in the panel with the reason and the caret on its line
+ok 161 - a refused text stays in the panel with the reason and the caret on its line
+  ---
+  duration_ms: 2.002949
+  ...
+# Subtest: Revert loads the engine text and clears the edits
+ok 162 - Revert loads the engine text and clears the edits
+  ---
+  duration_ms: 1.290353
+  ...
+# Subtest: a canvas edit refreshes a clean panel and never overwrites the student’s text
+ok 163 - a canvas edit refreshes a clean panel and never overwrites the student’s text
+  ---
+  duration_ms: 1.995394
+  ...
+# Subtest: the engine echoing the applied text does not count as a canvas change
+ok 164 - the engine echoing the applied text does not count as a canvas change
+  ---
+  duration_ms: 1.90007
+  ...
+# Subtest: typing while an apply runs keeps the newer text dirty
+ok 165 - typing while an apply runs keeps the newer text dirty
+  ---
+  duration_ms: 3.205164
+  ...
+# Subtest: live validation waits 400 ms, asks the parser only and shows line and severity
+ok 166 - live validation waits 400 ms, asks the parser only and shows line and severity
+  ---
+  duration_ms: 1.496643
+  ...
+# Subtest: Ctrl+Enter applies; other keys do not
+ok 167 - Ctrl+Enter applies; other keys do not
+  ---
+  duration_ms: 17.750541
+  ...
+# Subtest: Escape closes a clean panel only; the close button hides and keeps the edits
+ok 168 - Escape closes a clean panel only; the close button hides and keeps the edits
+  ---
+  duration_ms: 3.405267
+  ...
+# Subtest: YAML text with markup goes into the text box as text, never as HTML
+ok 169 - YAML text with markup goes into the text box as text, never as HTML
+  ---
+  duration_ms: 2.344666
+  ...
+# Subtest: the committed editor bundle carries the YAML handle and the engine command
+ok 170 - the committed editor bundle carries the YAML handle and the engine command
+  ---
+  duration_ms: 3.489617
+  ...
+# Subtest: every open and close reaches the page, the panel’s own close button and Escape included
+ok 171 - every open and close reaches the page, the panel’s own close button and Escape included
+  ---
+  duration_ms: 3.033157
+  ...
+# Subtest: pure rules: the lab comes from the hash, the way back is the lab's Topology tab, and a map file is checked in plain words
+ok 172 - pure rules: the lab comes from the hash, the way back is the lab's Topology tab, and a map file is checked in plain words
+  ---
+  duration_ms: 8.773711
+  ...
+# Subtest: the page mounts the editor in map mode, saves only the annotations, and never accepts a changed topology
+ok 173 - the page mounts the editor in map mode, saves only the annotations, and never accepts a changed topology
+  ---
+  duration_ms: 10.971703
+  ...
+# Subtest: a refused save keeps the changes and says so; leaving with changes asks; without changes it just leaves
+ok 174 - a refused save keeps the changes and says so; leaving with changes asks; without changes it just leaves
+  ---
+  duration_ms: 3.540938
+  ...
+# Subtest: a lab without a topology text is told why, and Edit map only goes to the map editor when the manager says it can
+ok 175 - a lab without a topology text is told why, and Edit map only goes to the map editor when the manager says it can
+  ---
+  duration_ms: 7.944436
+  ...
+# Subtest: undo and redo are the page's own history of the map document: steps, merging of quick successions, a new edit drops the redo branch
+ok 176 - undo and redo are the page's own history of the map document: steps, merging of quick successions, a new edit drops the redo branch
+  ---
+  duration_ms: 8.145393
+  ...
+# Subtest: the device look changes six keys of one device's entry and nothing else, with the editor's own values only
+ok 177 - the device look changes six keys of one device's entry and nothing else, with the editor's own values only
+  ---
+  duration_ms: 37.981867
+  ...
+# Subtest: a link's own label distance is one edgeAnnotations entry found by the link's endpoints, 0 to 60, and removable
+ok 178 - a link's own label distance is one edgeAnnotations entry found by the link's endpoints, 0 to 60, and removable
+  ---
+  duration_ms: 4.167179
+  ...
+# Subtest: designStateOf: no design yet
+ok 179 - designStateOf: no design yet
+  ---
+  duration_ms: 8.101025
+  ...
+# Subtest: designStateOf: a saved design with no plan yet is not "No design yet"
+ok 180 - designStateOf: a saved design with no plan yet is not "No design yet"
+  ---
+  duration_ms: 2.921577
+  ...
+# Subtest: the More menu items carry the reason the route would refuse, and none otherwise
+ok 181 - the More menu items carry the reason the route would refuse, and none otherwise
+  ---
+  duration_ms: 7.022121
+  ...
+# Subtest: designStateOf: unsaved changes (draft)
+ok 182 - designStateOf: unsaved changes (draft)
+  ---
+  duration_ms: 2.80027
+  ...
+# Subtest: designStateOf: generating
+ok 183 - designStateOf: generating
+  ---
+  duration_ms: 4.143848
+  ...
+# Subtest: designStateOf: the design has problems
+ok 184 - designStateOf: the design has problems
+  ---
+  duration_ms: 4.322117
+  ...
+# Subtest: designStateOf: plan ready to review
+ok 185 - designStateOf: plan ready to review
+  ---
+  duration_ms: 4.143482
+  ...
+# Subtest: designStateOf: plan is older than the design (stale)
+ok 186 - designStateOf: plan is older than the design (stale)
+  ---
+  duration_ms: 4.40287
+  ...
+# Subtest: designStateOf: the last plan failed
+ok 187 - designStateOf: the last plan failed
+  ---
+  duration_ms: 4.215402
+  ...
+# Subtest: designStateOf: the last plan was interrupted
+ok 188 - designStateOf: the last plan was interrupted
+  ---
+  duration_ms: 4.689971
+  ...
+# Subtest: designStateOf: design engine unavailable, and it wins over every other state
+ok 189 - designStateOf: design engine unavailable, and it wins over every other state
+  ---
+  duration_ms: 3.479317
+  ...
+# Subtest: designIntentFromForm keeps every field the guided controls do not own
+ok 190 - designIntentFromForm keeps every field the guided controls do not own
+  ---
+  duration_ms: 4.569598
+  ...
+# Subtest: designIntentFromForm writes families, pools, modules, OSPF area, BGP AS and the rr flag
+ok 191 - designIntentFromForm writes families, pools, modules, OSPF area, BGP AS and the rr flag
+  ---
+  duration_ms: 5.194923
+  ...
+# Subtest: designIntentFromForm writes IS-IS area/type and the gateway protocol only while their module is ticked
+ok 192 - designIntentFromForm writes IS-IS area/type and the gateway protocol only while their module is ticked
+  ---
+  duration_ms: 3.058792
+  ...
+# Subtest: designIntentFromForm: an excluded device gets role "exclude"; a router gets no role key
+ok 193 - designIntentFromForm: an excluded device gets role "exclude"; a router gets no role key
+  ---
+  duration_ms: 9.193122
+  ...
+# Subtest: designIntentFromForm drops a module's settings when the module is unticked
+ok 194 - designIntentFromForm drops a module's settings when the module is unticked
+  ---
+  duration_ms: 3.951307
+  ...
+# Subtest: designFormFromIntent is the inverse of designIntentFromForm for the fields the guided controls own
+ok 195 - designFormFromIntent is the inverse of designIntentFromForm for the fields the guided controls own
+  ---
+  duration_ms: 3.378404
+  ...
+# Subtest: designFormFromIntent reads defaults from an empty intent
+ok 196 - designFormFromIntent reads defaults from an empty intent
+  ---
+  duration_ms: 2.63165
+  ...
+# Subtest: designPlanMarkup escapes a device name and renders interface, neighbour and BGP rows
+ok 197 - designPlanMarkup escapes a device name and renders interface, neighbour and BGP rows
+  ---
+  duration_ms: 2.86598
+  ...
+# Subtest: designPlanMarkup: no plan yet
+ok 198 - designPlanMarkup: no plan yet
+  ---
+  duration_ms: 2.712023
+  ...
+# Subtest: designCompatibilityMarkup renders the four levels in words with the reason in title
+ok 199 - designCompatibilityMarkup renders the four levels in words with the reason in title
+  ---
+  duration_ms: 3.261009
+  ...
+# Subtest: designCompatibilityMarkup: nothing to show yet
+ok 200 - designCompatibilityMarkup: nothing to show yet
+  ---
+  duration_ms: 3.324007
+  ...
+# Subtest: designGenerationLine words for succeeded, failed, interrupted and running
+ok 201 - designGenerationLine words for succeeded, failed, interrupted and running
+  ---
+  duration_ms: 6.624647
+  ...
+# Subtest: designProblemsMarkup escapes the path and the message
+ok 202 - designProblemsMarkup escapes the path and the message
+  ---
+  duration_ms: 3.981336
+  ...
+# Subtest: designModulesMarkup ticks the selected modules and uses student words
+ok 203 - designModulesMarkup ticks the selected modules and uses student words
+  ---
+  duration_ms: 3.546341
+  ...
+# Subtest: designDevicesMarkup shows the blocked reason and disables the role select without a profile
+ok 204 - designDevicesMarkup shows the blocked reason and disables the role select without a profile
+  ---
+  duration_ms: 2.914606
+  ...
+# Subtest: designVrfsMarkup renders each VRF with its loopback checkbox and escapes a hostile name
+ok 205 - designVrfsMarkup renders each VRF with its loopback checkbox and escapes a hostile name
+  ---
+  duration_ms: 1.622792
+  ...
+# Subtest: designVlansMarkup renders each VLAN's id and escapes a hostile name
+ok 206 - designVlansMarkup renders each VLAN's id and escapes a hostile name
+  ---
+  duration_ms: 1.653877
+  ...
+# Subtest: designLinksMarkup shows each link's ends, pre-selects its VRF/VLAN settings, and flags settings the table does not cover
+ok 207 - designLinksMarkup shows each link's ends, pre-selects its VRF/VLAN settings, and flags settings the table does not cover
+  ---
+  duration_ms: 1.959241
+  ...
+# Subtest: designStaticMarkup shows each device's static routes with a discard or address next hop
+ok 208 - designStaticMarkup shows each device's static routes with a discard or address next hop
+  ---
+  duration_ms: 1.755504
+  ...
+# Subtest: designIntentFromForm VRFs: builds intent.vrfs, keeps an uncovered key, omits loopback when false, and drops an empty-name row
+ok 209 - designIntentFromForm VRFs: builds intent.vrfs, keeps an uncovered key, omits loopback when false, and drops an empty-name row
+  ---
+  duration_ms: 1.888412
+  ...
+# Subtest: designIntentFromForm VRFs: renaming a VRF keeps its other settings under the new name
+ok 210 - designIntentFromForm VRFs: renaming a VRF keeps its other settings under the new name
+  ---
+  duration_ms: 1.909616
+  ...
+# Subtest: designIntentFromForm VLANs: builds intent.vlans, keeps an uncovered key, and drops an empty-name row
+ok 211 - designIntentFromForm VLANs: builds intent.vlans, keeps an uncovered key, and drops an empty-name row
+  ---
+  duration_ms: 1.870759
+  ...
+# Subtest: designIntentFromForm links: attaches a VRF, keeps the link's other settings, and drops the vrf key (not the link) when none is chosen
+ok 212 - designIntentFromForm links: attaches a VRF, keeps the link's other settings, and drops the vrf key (not the link) when none is chosen
+  ---
+  duration_ms: 1.82413
+  ...
+# Subtest: designIntentFromForm links: sets vlan access or trunk (trunk wins over access), and drops a link with nothing set at all
+ok 213 - designIntentFromForm links: sets vlan access or trunk (trunk wins over access), and drops a link with nothing set at all
+  ---
+  duration_ms: 1.811971
+  ...
+# Subtest: designIntentFromForm static routes: builds routing.static per device, keeps other node settings, and drops an empty-prefix row
+ok 214 - designIntentFromForm static routes: builds routing.static per device, keeps other node settings, and drops an empty-prefix row
+  ---
+  duration_ms: 1.874903
+  ...
+# Subtest: designIntentFromForm static routes: an address next hop with no address is dropped
+ok 215 - designIntentFromForm static routes: an address next hop with no address is dropped
+  ---
+  duration_ms: 1.909094
+  ...
+# Subtest: designIntentFromForm static routes: clearing every route drops routing.static but never removes the routing module automatically
+ok 216 - designIntentFromForm static routes: clearing every route drops routing.static but never removes the routing module automatically
+  ---
+  duration_ms: 1.928379
+  ...
+# Subtest: designIntentFromForm: defining a VRF or VLAN does not duplicate a module that is already selected
+ok 217 - designIntentFromForm: defining a VRF or VLAN does not duplicate a module that is already selected
+  ---
+  duration_ms: 1.828052
+  ...
+# Subtest: the design draft is written, read back by matching revision, and dropped when the revision moved on
+ok 218 - the design draft is written, read back by matching revision, and dropped when the revision moved on
+  ---
+  duration_ms: 0.848114
+  ...
+# Subtest: a stored draft with no intent, or malformed JSON, reads back as no draft
+ok 219 - a stored draft with no intent, or malformed JSON, reads back as no draft
+  ---
+  duration_ms: 0.733696
+  ...
+# Subtest: designApplyDeviceMarkup: a ready device shows its counts and diff
+ok 220 - designApplyDeviceMarkup: a ready device shows its counts and diff
+  ---
+  duration_ms: 1.701954
+  ...
+# Subtest: designApplyDeviceMarkup: a conflict shows the take-over checkbox, and its note once taken over
+ok 221 - designApplyDeviceMarkup: a conflict shows the take-over checkbox, and its note once taken over
+  ---
+  duration_ms: 1.73908
+  ...
+# Subtest: designApplyDeviceMarkup: an ineligible device shows its reason and nothing else
+ok 222 - designApplyDeviceMarkup: an ineligible device shows its reason and nothing else
+  ---
+  duration_ms: 1.742535
+  ...
+# Subtest: designApplyDeviceMarkup: an unreachable/not-ready device shows its reason
+ok 223 - designApplyDeviceMarkup: an unreachable/not-ready device shows its reason
+  ---
+  duration_ms: 1.846076
+  ...
+# Subtest: designApplyDeviceMarkup: a no-op device says it already matches the plan
+ok 224 - designApplyDeviceMarkup: a no-op device says it already matches the plan
+  ---
+  duration_ms: 1.762796
+  ...
+# Subtest: designApplyCanSubmit: needs acknowledgement, an applicable device, and every conflict resolved
+ok 225 - designApplyCanSubmit: needs acknowledgement, an applicable device, and every conflict resolved
+  ---
+  duration_ms: 1.771363
+  ...
+# Subtest: designApplyRequestId returns a 32-character lowercase hex string, different each time
+ok 226 - designApplyRequestId returns a 32-character lowercase hex string, different each time
+  ---
+  duration_ms: 2.4764
+  ...
+# Subtest: designApplyBody clamps confirm_minutes, sorts the take-over list, and reuses a supplied request id
+ok 227 - designApplyBody clamps confirm_minutes, sorts the take-over list, and reuses a supplied request id
+  ---
+  duration_ms: 1.775056
+  ...
+# Subtest: designApplyProgressMarkup: every outcome word appears for its status
+ok 228 - designApplyProgressMarkup: every outcome word appears for its status
+  ---
+  duration_ms: 2.103739
+  ...
+# Subtest: designApplyProgressMarkup: a verify mismatch shows the missing/remaining counts
+ok 229 - designApplyProgressMarkup: a verify mismatch shows the missing/remaining counts
+  ---
+  duration_ms: 1.751909
+  ...
+# Subtest: designApplyOwnershipMarkup: shows the statement count, plan id, applied time and a pending flag
+ok 230 - designApplyOwnershipMarkup: shows the statement count, plan id, applied time and a pending flag
+  ---
+  duration_ms: 1.766854
+  ...
+# Subtest: designApplyLastLineMarkup: a settled job shows its word, a relative time and a Show button
+ok 231 - designApplyLastLineMarkup: a settled job shows its word, a relative time and a Show button
+  ---
+  duration_ms: 1.903067
+  ...
+# Subtest: designApplyDisabledReason: no plan, not linked, a running job, and the ready case
+ok 232 - designApplyDisabledReason: no plan, not linked, a running job, and the ready case
+  ---
+  duration_ms: 1.849017
+  ...
+# Subtest: designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not
+ok 233 - designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not
+  ---
+  duration_ms: 1.802411
+  ...
+# Subtest: designApplyRenderReview unticks the acknowledgement and recomputes Apply on every new review result
+ok 234 - designApplyRenderReview unticks the acknowledgement and recomputes Apply on every new review result
+  ---
+  duration_ms: 2.364076
+  ...
+# Subtest: designApplyDeviceMarkup: a capped conflicts sample says how many more there are; an uncapped one does not
+ok 235 - designApplyDeviceMarkup: a capped conflicts sample says how many more there are; an uncapped one does not
+  ---
+  duration_ms: 1.897468
+  ...
+# Subtest: designApplyDeviceMarkup: capped expected/removal-command/kept-manual samples also say how many more there are
+ok 236 - designApplyDeviceMarkup: capped expected/removal-command/kept-manual samples also say how many more there are
+  ---
+  duration_ms: 1.909832
+  ...
+# Subtest: designApplyDeviceMarkup: a device whose takeover is true says how many manual settings are being taken over
+ok 237 - designApplyDeviceMarkup: a device whose takeover is true says how many manual settings are being taken over
+  ---
+  duration_ms: 3.046918
+  ...
+# Subtest: designExportGitReason: no succeeded plan, then a plan with no repository bound, then ready
+ok 238 - designExportGitReason: no succeeded plan, then a plan with no repository bound, then ready
+  ---
+  duration_ms: 1.671693
+  ...
+# Subtest: designExportGitDefaultCheckpoint takes the generation id's first 12 characters, prefixed
+ok 239 - designExportGitDefaultCheckpoint takes the generation id's first 12 characters, prefixed
+  ---
+  duration_ms: 1.857258
+  ...
+# Subtest: designExportGitValidCheckpoint matches the server's checkpoint pattern exactly
+ok 240 - designExportGitValidCheckpoint matches the server's checkpoint pattern exactly
+  ---
+  duration_ms: 1.839549
+  ...
+# Subtest: designExportGitRequestId returns a 32-character lowercase hex string, different each time
+ok 241 - designExportGitRequestId returns a 32-character lowercase hex string, different each time
+  ---
+  duration_ms: 1.76957
+  ...
+# Subtest: designExportGitBody folds a pasted note to one line, caps it at 200 characters, and always sends push:true
+ok 242 - designExportGitBody folds a pasted note to one line, caps it at 200 characters, and always sends push:true
+  ---
+  duration_ms: 1.928557
+  ...
+# Subtest: designExportGitDestinationMarkup names the repository, branch and the checkpoint folder, and escapes every value
+ok 243 - designExportGitDestinationMarkup names the repository, branch and the checkpoint folder, and escapes every value
+  ---
+  duration_ms: 1.817529
+  ...
+# Subtest: designRenderExportGitButton disables \#design-export-git with the reason as its title, mirroring \#design-apply
+ok 244 - designRenderExportGitButton disables \#design-export-git with the reason as its title, mirroring \#design-apply
+  ---
+  duration_ms: 1.79915
+  ...
+# Subtest: P1: an unrelated guided edit keeps the pools the form has no control for, and every extra pool key
+ok 245 - P1: an unrelated guided edit keeps the pools the form has no control for, and every extra pool key
+  ---
+  duration_ms: 2.121251
+  ...
+# Subtest: P2: several route reflectors survive an unrelated guided edit; the checklist is the truth only for the routers it shows
+ok 246 - P2: several route reflectors survive an unrelated guided edit; the checklist is the truth only for the routers it shows
+  ---
+  duration_ms: 2.266268
+  ...
+# Subtest: P10a: 0, a blank and a non-number are kept as typed for the server to name, never turned into 65000 or 31
+ok 247 - P10a: 0, a blank and a non-number are kept as typed for the server to name, never turned into 65000 or 31
+  ---
+  duration_ms: 2.437077
+  ...
+# Subtest: P10b: the module checkboxes are synced from the values on every render, even when the markup string did not change
+ok 248 - P10b: the module checkboxes are synced from the values on every render, even when the markup string did not change
+  ---
+  duration_ms: 1.897448
+  ...
+# Subtest: P3: text under Advanced that is not JSON blocks Save, Check and Generate, is named in the state line, and stays on screen
+ok 249 - P3: text under Advanced that is not JSON blocks Save, Check and Generate, is named in the state line, and stays on screen
+  ---
+  duration_ms: 3.802069
+  ...
+# Subtest: P4: Generate with unsaved changes saves them first and says so; the download and import wait for a save
+ok 250 - P4: Generate with unsaved changes saves them first and says so; the download and import wait for a save
+  ---
+  duration_ms: 5.836849
+  ...
+# Subtest: P5: a save answered after the student moved to another lab never lands on that lab
+ok 251 - P5: a save answered after the student moved to another lab never lands on that lab
+  ---
+  duration_ms: 3.987373
+  ...
+# Subtest: P6: a plan fetched for a generation that is no longer the one shown is discarded; History › View pins an earlier plan
+ok 252 - P6: a plan fetched for a generation that is no longer the one shown is discarded; History › View pins an earlier plan
+  ---
+  duration_ms: 5.006942
+  ...
+# Subtest: P7: a failed progress poll is retried a bounded number of times with the student told, then stops with a way out
+ok 253 - P7: a failed progress poll is retried a bounded number of times with the student told, then stops with a way out
+  ---
+  duration_ms: 4.232676
+  ...
+# Subtest: P8: a draft the browser could not keep is said so in red, instead of vanishing silently on reload
+ok 254 - P8: a draft the browser could not keep is said so in red, instead of vanishing silently on reload
+  ---
+  duration_ms: 3.624188
+  ...
+# Subtest: P9: after Remove design the state says so and the kept plans are not presented as current
+ok 255 - P9: after Remove design the state says so and the kept plans are not presented as current
+  ---
+  duration_ms: 3.899412
+  ...
+# Subtest: P10b (browser path): a focused checkbox does not block the re-render that redraws the module it changed; a text field does
+ok 256 - P10b (browser path): a focused checkbox does not block the re-render that redraws the module it changed; a text field does
+  ---
+  duration_ms: 5.395576
+  ...
+# Subtest: P8 (leave guard): the page asks before leaving only while an unsaved draft exists that the browser could not store
+ok 257 - P8 (leave guard): the page asks before leaving only while an unsaved draft exists that the browser could not store
+  ---
+  duration_ms: 4.31174
+  ...
+# Subtest: U-01: when another lab's design arrives, the form is redrawn even while a field has focus, and a stale form is never saved into the new lab
+ok 258 - U-01: when another lab's design arrives, the form is redrawn even while a field has focus, and a stale form is never saved into the new lab
+  ---
+  duration_ms: 3.770298
+  ...
+# Subtest: U-10/U-15/U-16: Generate on nothing says why, the warnings fold carries its count, and a shared reason is said once
+ok 259 - U-10/U-15/U-16: Generate on nothing says why, the warnings fold carries its count, and a shared reason is said once
+  ---
+  duration_ms: 3.453891
+  ...
+# Subtest: U-05/U-06: the apply review names itself, explains an empty review in words and says why Apply is off
+ok 260 - U-05/U-06: the apply review names itself, explains an empty review in words and says why Apply is off
+  ---
+  duration_ms: 3.035293
+  ...
+# Subtest: U-07: removing a row gives focus to the table's Add button
+ok 261 - U-07: removing a row gives focus to the table's Add button
+  ---
+  duration_ms: 3.990918
+  ...
+# Subtest: QA-015: two overlapping loads of one lab, the older answer arriving last, leave the newer generation shown
+ok 262 - QA-015: two overlapping loads of one lab, the older answer arriving last, leave the newer generation shown
+  ---
+  duration_ms: 24.909757
+  ...
+# Subtest: QA-015: the lab-switch guard still holds with the sequence guard in place
+ok 263 - QA-015: the lab-switch guard still holds with the sequence guard in place
+  ---
+  duration_ms: 5.052066
+  ...
+# Subtest: U-21: designKeptModulesNotice names the modules kept on and why, and stays silent otherwise
+ok 264 - U-21: designKeptModulesNotice names the modules kept on and why, and stays silent otherwise
+  ---
+  duration_ms: 1.682691
+  ...
+# Subtest: inspection table handles grouped JSON surrounded by CLI log lines
+ok 265 - inspection table handles grouped JSON surrounded by CLI log lines
+  ---
+  duration_ms: 2.222652
+  ...
+# Subtest: flat inspection rows use lab identity and escape untrusted output
+ok 266 - flat inspection rows use lab identity and escape untrusted output
+  ---
+  duration_ms: 0.340647
+  ...
+# Subtest: incomplete, empty and failed inspection output falls back to diagnostics
+ok 267 - incomplete, empty and failed inspection output falls back to diagnostics
+  ---
+  duration_ms: 0.206714
+  ...
+# Subtest: topology browser retains folders and supported topology suffixes only
+ok 268 - topology browser retains folders and supported topology suffixes only
+  ---
+  duration_ms: 0.931834
+  ...
+# Subtest: quick start deploys absent labs, starts stopped labs and guards unknown or busy state
+ok 269 - quick start deploys absent labs, starts stopped labs and guards unknown or busy state
+  ---
+  duration_ms: 0.20757
+  ...
+# Subtest: operation output leads with a green success banner and a red failure banner
+ok 270 - operation output leads with a green success banner and a red failure banner
+  ---
+  duration_ms: 0.445627
+  ...
+# Subtest: deploy lab saves the workspace first and reuses one that already tracks the deployment
+ok 271 - deploy lab saves the workspace first and reuses one that already tracks the deployment
+  ---
+  duration_ms: 3.001452
+  ...
+# Subtest: deployment landing page opens topology browser only on an explicit click
+ok 272 - deployment landing page opens topology browser only on an explicit click
+  ---
+  duration_ms: 1.837225
+  ...
+# Subtest: browse renders before capabilities settle, survives failure and retries folders
+ok 273 - browse renders before capabilities settle, survives failure and retries folders
+  ---
+  duration_ms: 19.540836
+  ...
+# Subtest: destroy asks for cleanup unless the installed containerlab is known to lack it
+ok 274 - destroy asks for cleanup unless the installed containerlab is known to lack it
+  ---
+  duration_ms: 0.825691
+  ...
+# Subtest: the annotations file beside a topology places the preview and the saved workspace
+ok 275 - the annotations file beside a topology places the preview and the saved workspace
+  ---
+  duration_ms: 3.394945
+  ...
+# Subtest: an uploaded lab file is checked in plain words, gets a location inside a trusted lab folder, and goes through the same reviewed create as a typed one
+ok 276 - an uploaded lab file is checked in plain words, gets a location inside a trusted lab folder, and goes through the same reviewed create as a typed one
+  ---
+  duration_ms: 4.95051
+  ...
+# Subtest: a finished create or builder save names the file to continue with; nothing else and no failure does
+ok 277 - a finished create or builder save names the file to continue with; nothing else and no failure does
+  ---
+  duration_ms: 3.330671
+  ...
+# Subtest: an optional saved map for an upload is checked the same plain way as the topology file itself
+ok 278 - an optional saved map for an upload is checked the same plain way as the topology file itself
+  ---
+  duration_ms: 0.752545
+  ...
+# Subtest: the dialog left for the lab builder is remembered and reopened once, on this page's own load; a plain visit leaves no marker
+ok 279 - the dialog left for the lab builder is remembered and reopened once, on this page's own load; a plain visit leaves no marker
+  ---
+  duration_ms: 4.080233
+  ...
+# Subtest: reopening a remembered dialog rereads a VM file fresh; an upload marker (never produced today) is ignored
+ok 280 - reopening a remembered dialog rereads a VM file fresh; an upload marker (never produced today) is ignored
+  ---
+  duration_ms: 2.322725
+  ...
+# Subtest: the deploy review shows the command directly and drops the trust warning and repeat-check caption that other reviews keep
+ok 281 - the deploy review shows the command directly and drops the trust warning and repeat-check caption that other reviews keep
+  ---
+  duration_ms: 3.292325
+  ...
+# Subtest: the create review names the map file it will write, and whether it replaces one already there
+ok 282 - the create review names the map file it will write, and whether it replaces one already there
+  ---
+  duration_ms: 3.397577
+  ...
+# Subtest: the operation output opens the moment Start lab is confirmed, does not pop back up once closed on purpose, and a fresh launch or View output still work
+ok 283 - the operation output opens the moment Start lab is confirmed, does not pop back up once closed on purpose, and a fresh launch or View output still work
+  ---
+  duration_ms: 5.602547
+  ...
+# Subtest: the topology preview drops the caption in both branches, sizes the dialog to the viewport, and fits the map on open
+ok 284 - the topology preview drops the caption in both branches, sizes the dialog to the viewport, and fits the map on open
+  ---
+  duration_ms: 2.038365
+  ...
+# Subtest: Restart device is offered for a deployed device of a running or partly running lab, and every refusal has a reason
+ok 285 - Restart device is offered for a deployed device of a running or partly running lab, and every refusal has a reason
+  ---
+  duration_ms: 0.417195
+  ...
+# Subtest: the Restart device review names the one device and the lab, what drops, and what is not done for the student
+ok 286 - the Restart device review names the one device and the lab, what drops, and what is not done for the student
+  ---
+  duration_ms: 0.407561
+  ...
+# Subtest: opRestartDevice re-checks eligibility, then reviews exactly one device of one lab with no options
+ok 287 - opRestartDevice re-checks eligibility, then reviews exactly one device of one lab with no options
+  ---
+  duration_ms: 2.969251
+  ...
+# Subtest: U-02/U-03: an operation dialog is named by its heading and gives focus back to the control that opened it
+ok 288 - U-02/U-03: an operation dialog is named by its heading and gives focus back to the control that opened it
+  ---
+  duration_ms: 2.501132
+  ...
+# Subtest: SSH actions wait for the NOS to answer and explain why they are disabled
+ok 289 - SSH actions wait for the NOS to answer and explain why they are disabled
+  ---
+  duration_ms: 5.444178
+  ...
+# Subtest: containerlab default logins are named in the credential column
+ok 290 - containerlab default logins are named in the credential column
+  ---
+  duration_ms: 3.54298
+  ...
+# Subtest: Manager › Labs found on the VM lists what Home used to: labs to add, hidden labs with Stop hiding, and the file checks
+ok 291 - Manager › Labs found on the VM lists what Home used to: labs to add, hidden labs with Stop hiding, and the file checks
+  ---
+  duration_ms: 6.684685
+  ...
+# Subtest: the landing page leads with deployment and lists labs already running on the VM
+ok 292 - the landing page leads with deployment and lists labs already running on the VM
+  ---
+  duration_ms: 7.639445
+  ...
+# Subtest: the deployment bar reports NOS readiness in plain words
+ok 293 - the deployment bar reports NOS readiness in plain words
+  ---
+  duration_ms: 2.021436
+  ...
+# Subtest: Restart device… sits with the per-device actions and reaches the shared operation with the lab and the device
+ok 294 - Restart device… sits with the per-device actions and reaches the shared operation with the lab and the device
+  ---
+  duration_ms: 5.232782
+  ...
+# Subtest: U-09: the device panel says in words why Restart device… or Back up configuration is unavailable
+ok 295 - U-09: the device panel says in words why Restart device… or Back up configuration is unavailable
+  ---
+  duration_ms: 4.898966
+  ...
+# Subtest: restore request id is 32 hex characters
+ok 296 - restore request id is 32 hex characters
+  ---
+  duration_ms: 5.020096
+  ...
+# Subtest: source labels describe git and backup origins
+ok 297 - source labels describe git and backup origins
+  ---
+  duration_ms: 2.144472
+  ...
+# Subtest: restoreFromFolder sends the exact snapshot path over the wire with one leading slash, never a substituted /latest, and "/" for the repository root; a path that already carries the slash is not doubled
+ok 298 - restoreFromFolder sends the exact snapshot path over the wire with one leading slash, never a substituted /latest, and "/" for the repository root; a path that already carries the slash is not doubled
+  ---
+  duration_ms: 2.928698
+  ...
+# Subtest: restoreReview submits exactly the reviewed folder source (type, path, commit) and shows the pinned commit beside the source line; git and backup sources are sent unchanged
+ok 299 - restoreReview submits exactly the reviewed folder source (type, path, commit) and shows the pinned commit beside the source line; git and backup sources are sent unchanged
+  ---
+  duration_ms: 5.450856
+  ...
+# Subtest: badge classes reflect status and escape the label text
+ok 300 - badge classes reflect status and escape the label text
+  ---
+  duration_ms: 2.119767
+  ...
+# Subtest: restorePlatformLabel shows a short device-type label for known containerlab kinds only
+ok 301 - restorePlatformLabel shows a short device-type label for known containerlab kinds only
+  ---
+  duration_ms: 2.144868
+  ...
+# Subtest: restore words: preflight reasons, result sentence and titles are the student's, the backend text stays available
+ok 302 - restore words: preflight reasons, result sentence and titles are the student's, the backend text stays available
+  ---
+  duration_ms: 2.705918
+  ...
+# Subtest: a job target row shows the device-type label, the new status help lines and the persistence warning
+ok 303 - a job target row shows the device-type label, the new status help lines and the persistence warning
+  ---
+  duration_ms: 3.749118
+  ...
+# Subtest: a queued device waits: nothing is highlighted and nothing claims a backup has started
+ok 304 - a queued device waits: nothing is highlighted and nothing claims a backup has started
+  ---
+  duration_ms: 3.245747
+  ...
+# Subtest: a running device shows finished steps done, its current step with words and elapsed time, and later steps waiting
+ok 305 - a running device shows finished steps done, its current step with words and elapsed time, and later steps waiting
+  ---
+  duration_ms: 3.282769
+  ...
+# Subtest: green only once the device is replaced: confirming and checking are not an outcome yet
+ok 306 - green only once the device is replaced: confirming and checking are not an outcome yet
+  ---
+  duration_ms: 3.566283
+  ...
+# Subtest: each final outcome is distinct in words and colour, and a stopped device shows where it stopped
+ok 307 - each final outcome is distinct in words and colour, and a stopped device shows where it stopped
+  ---
+  duration_ms: 2.731544
+  ...
+# Subtest: the device rows and the progress line are rebuilt from the job document alone (reopen, reload, any settle order)
+ok 308 - the device rows and the progress line are rebuilt from the job document alone (reopen, reload, any settle order)
+  ---
+  duration_ms: 12.554333
+  ...
+# Subtest: the review offers each differing device its saved → running now differences before anything is submitted
+ok 309 - the review offers each differing device its saved → running now differences before anything is submitted
+  ---
+  duration_ms: 1.446873
+  ...
+# Subtest: the review dialog places the differences beside each device, outside its checkbox label
+ok 310 - the review dialog places the differences beside each device, outside its checkbox label
+  ---
+  duration_ms: 2.142894
+  ...
+# Subtest: elapsed times are measured on the manager's clock, never the browser's
+ok 311 - elapsed times are measured on the manager's clock, never the browser's
+  ---
+  duration_ms: 1.585849
+  ...
+# Subtest: a device that differs is never shown as identical: with no lines to show it says why
+ok 312 - a device that differs is never shown as identical: with no lines to show it says why
+  ---
+  duration_ms: 0.981393
+  ...
+# Subtest: route precedence: the hash wins, sessionStorage is consumed once, unknown ids fall back to Home
+ok 313 - route precedence: the hash wins, sessionStorage is consumed once, unknown ids fall back to Home
+  ---
+  duration_ms: 16.121638
+  ...
+# Subtest: writeRoute no-ops when the hash already matches; polls replace, navigation pushes, routes never push while applying
+ok 314 - writeRoute no-ops when the hash already matches; polls replace, navigation pushes, routes never push while applying
+  ---
+  duration_ms: 5.881385
+  ...
+# Subtest: goHome clears the lab, the hash and sessionStorage, closes the drawer and re-renders
+ok 315 - goHome clears the lab, the hash and sessionStorage, closes the drawer and re-renders
+  ---
+  duration_ms: 2.697311
+  ...
+# Subtest: initMenu: open focuses the first enabled item, arrows rove, Escape closes and returns focus to the button
+ok 316 - initMenu: open focuses the first enabled item, arrows rove, Escape closes and returns focus to the button
+  ---
+  duration_ms: 4.728435
+  ...
+# Subtest: an expandable menu group: the toggle never closes the menu, collapsed items are skipped, arrows open and close it, reopening collapses it
+ok 317 - an expandable menu group: the toggle never closes the menu, collapsed items are skipped, arrows open and close it, reopening collapses it
+  ---
+  duration_ms: 3.718168
+  ...
+# Subtest: closeMenus returns true only when it closed something and keeps the excepted menu open
+ok 318 - closeMenus returns true only when it closed something and keeps the excepted menu open
+  ---
+  duration_ms: 7.80196
+  ...
+# Subtest: outside pointerdown closes menus; Escape at the document closes them and stops propagation unless the node menu is open
+ok 319 - outside pointerdown closes menus; Escape at the document closes them and stops propagation unless the node menu is open
+  ---
+  duration_ms: 4.359712
+  ...
+# Subtest: storage helpers remember when a lab was opened and dismissed jobs, and never throw when storage is blocked
+ok 320 - storage helpers remember when a lab was opened and dismissed jobs, and never throw when storage is blocked
+  ---
+  duration_ms: 8.223492
+  ...
+# Subtest: noticeDismissed/dismissNotice: a notice key is remembered for the session, a different key is unaffected, and neither throws when storage is blocked
+ok 321 - noticeDismissed/dismissNotice: a notice key is remembered for the session, a different key is unaffected, and neither throws when storage is blocked
+  ---
+  duration_ms: 4.509496
+  ...
+# Subtest: showActionError renders the lab banner on a lab page and falls back to a toast elsewhere
+ok 322 - showActionError renders the lab banner on a lab page and falls back to a toast elsewhere
+  ---
+  duration_ms: 3.170265
+  ...
+# Subtest: closing the drawer clears the device from the route; Home links go home; the skeleton waits 200 ms
+ok 323 - closing the drawer clears the device from the route; Home links go home; the skeleton waits 200 ms
+  ---
+  duration_ms: 8.196918
+  ...
+# Subtest: index.html: Lab actions ends with an Advanced options group holding the four reviewed items, one of them hidden until a lab has a retired-telemetry record; nothing else moved or vanished
+ok 324 - index.html: Lab actions ends with an Advanced options group holding the four reviewed items, one of them hidden until a lab has a retired-telemetry record; nothing else moved or vanished
+  ---
+  duration_ms: 0.946724
+  ...
+# Subtest: style.css: the device lists carry no list indent and the Devices tab is one grid whose rows are subgrids, single column on a narrow window
+ok 325 - style.css: the device lists carry no list indent and the Devices tab is one grid whose rows are subgrids, single column on a narrow window
+  ---
+  duration_ms: 0.650708
+  ...
+# Subtest: index.html: the Topology tab keeps the hint, the controls and the badge; the wiring caveat and its Details toggle are gone; the device rail is a focusable, labelled region
+ok 326 - index.html: the Topology tab keeps the hint, the controls and the badge; the wiring caveat and its Details toggle are gone; the device rail is a focusable, labelled region
+  ---
+  duration_ms: 0.498732
+  ...
+# Subtest: style.css: the topology layout is bounded to the same viewport math as the map stage (plus the hint), the rail stretches to it and scrolls on its own with a sticky heading, and both reset to the old stacked, page-scrolling layout at 1280px
+ok 327 - style.css: the topology layout is bounded to the same viewport math as the map stage (plus the hint), the rail stretches to it and scrolls on its own with a sticky heading, and both reset to the old stacked, page-scrolling layout at 1280px
+  ---
+  duration_ms: 1.209344
+  ...
+# Subtest: the topology rail renders one row per device however many there are, so a scrollable rail actually has something to scroll
+ok 328 - the topology rail renders one row per device however many there are, so a scrollable rail actually has something to scroll
+  ---
+  duration_ms: 6.366036
+  ...
+# Subtest: setBanner: a notice hides once closed and stays hidden across rerenders of the same headline; a materially different headline is shown again
+ok 329 - setBanner: a notice hides once closed and stays hidden across rerenders of the same headline; a materially different headline is shown again
+  ---
+  duration_ms: 5.783499
+  ...
+# Subtest: setBanner: a running-operation notice collapses to a one-line pill instead of disappearing, keeps collapsed through detail-only updates, and reappears in full once its headline changes
+ok 330 - setBanner: a running-operation notice collapses to a one-line pill instead of disappearing, keeps collapsed through detail-only updates, and reappears in full once its headline changes
+  ---
+  duration_ms: 11.835972
+  ...
+# Subtest: setBanner: the close control carries the documented accessible name and toggles it between collapse and expand for a running notice
+ok 331 - setBanner: the close control carries the documented accessible name and toggles it between collapse and expand for a running notice
+  ---
+  duration_ms: 2.848007
+  ...
+# Subtest: the Advanced options group's retired-telemetry item is hidden without a record and shown once the active lab has one
+ok 332 - the Advanced options group's retired-telemetry item is hidden without a record and shown once the active lab has one
+  ---
+  duration_ms: 4.532135
+  ...
+# Subtest: the Home list tab is kept for the browser session and never throws when storage is blocked
+ok 333 - the Home list tab is kept for the browser session and never throws when storage is blocked
+  ---
+  duration_ms: 2.868981
+  ...
+# Subtest: U-08: a menu that would open past the left edge anchors to its button instead, measured each time it opens
+ok 334 - U-08: a menu that would open past the left edge anchors to its button instead, measured each time it opens
+  ---
+  duration_ms: 2.369592
+  ...
+# Subtest: a lab reads Stopped, Starting, Running or Needs attention — never container words
+ok 335 - a lab reads Stopped, Starting, Running or Needs attention — never container words
+  ---
+  duration_ms: 6.703978
+  ...
+# Subtest: every device counts: ready, needing credentials and not running are all in the header line
+ok 336 - every device counts: ready, needing credentials and not running are all in the header line
+  ---
+  duration_ms: 2.500203
+  ...
+# Subtest: an operation or restore in progress takes priority and is named as a task
+ok 337 - an operation or restore in progress takes priority and is named as a task
+  ---
+  duration_ms: 2.805424
+  ...
+# Subtest: an operation or restore that did not finish needs attention until it is dismissed or redone
+ok 338 - an operation or restore that did not finish needs attention until it is dismissed or redone
+  ---
+  duration_ms: 3.377077
+  ...
+# Subtest: a device explains itself in one sentence and says whether the CLI can open
+ok 339 - a device explains itself in one sentence and says whether the CLI can open
+  ---
+  duration_ms: 2.020194
+  ...
+# Subtest: progress reads Not saved yet, Saving, Saved to Git, Saved on this VM or Needs attention
+ok 340 - progress reads Not saved yet, Saving, Saved to Git, Saved on this VM or Needs attention
+  ---
+  duration_ms: 18.371379
+  ...
+# Subtest: progress names the upload host, knows unchanged and kept-only saves, and flags a broken save location
+ok 341 - progress names the upload host, knows unchanged and kept-only saves, and flags a broken save location
+  ---
+  duration_ms: 5.002426
+  ...
+# Subtest: relative times stay human and never print NaN
+ok 342 - relative times stay human and never print NaN
+  ---
+  duration_ms: 2.654447
+  ...
+# Subtest: badges and saved-version names use student words
+ok 343 - badges and saved-version names use student words
+  ---
+  duration_ms: 1.809861
+  ...
+# Subtest: a device that Restart device is running for reads Restarting, and the lab names the device it restarts
+ok 344 - a device that Restart device is running for reads Restarting, and the lab names the device it restarts
+  ---
+  duration_ms: 1.867998
+  ...
+# Subtest: the retired-telemetry notice names the short-named devices, adds the malformed caveat, and a running operation keeps precedence
+ok 345 - the retired-telemetry notice names the short-named devices, adds the malformed caveat, and a running operation keeps precedence
+  ---
+  duration_ms: 10.729792
+  ...
+# Subtest: an empty, malformed-only record reads a plain sentence — no device list, no trailing colon
+ok 346 - an empty, malformed-only record reads a plain sentence — no device list, no trailing colon
+  ---
+  duration_ms: 4.873093
+  ...
+# Subtest: closing the retired-telemetry notice hides it for that exact set of devices; a different set reopens it
+ok 347 - closing the retired-telemetry notice hides it for that exact set of devices; a different set reopens it
+  ---
+  duration_ms: 4.965881
+  ...
+# Subtest: the retired-telemetry dialog reads the record, escapes every device field, shows the reason a device cannot be cleaned up, and offers Forget only for a permanent reason
+ok 348 - the retired-telemetry dialog reads the record, escapes every device field, shows the reason a device cannot be cleaned up, and offers Forget only for a permanent reason
+  ---
+  duration_ms: 6.060274
+  ...
+# Subtest: an empty, malformed-only record shows one sentence and a button to forget it — no device list, no Remove action
+ok 349 - an empty, malformed-only record shows one sentence and a button to forget it — no device list, no Remove action
+  ---
+  duration_ms: 2.632466
+  ...
+# Subtest: devices and a malformed record together keep the combined sentence and add the same forget button for the malformed part
+ok 350 - devices and a malformed record together keep the combined sentence and add the same forget button for the malformed part
+  ---
+  duration_ms: 2.530621
+  ...
+# Subtest: forgetting an unreadable record posts {malformed:true}, reports the outcome and refreshes
+ok 351 - forgetting an unreadable record posts {malformed:true}, reports the outcome and refreshes
+  ---
+  duration_ms: 6.497499
+  ...
+# Subtest: forgetting one permanently un-removable device posts {node:name}, reports it and refreshes; a transient reason gets no Forget button
+ok 352 - forgetting one permanently un-removable device posts {node:name}, reports it and refreshes; a transient reason gets no Forget button
+  ---
+  duration_ms: 4.443534
+  ...
+# Subtest: Remove from devices is disabled when no device can be cleaned up, and a transient reason gets no Forget button
+ok 353 - Remove from devices is disabled when no device can be cleaned up, and a transient reason gets no Forget button
+  ---
+  duration_ms: 2.58104
+  ...
+# Subtest: the remove flow posts an empty body, reports each device by its short name, notifies a one-line summary and refreshes
+ok 354 - the remove flow posts an empty body, reports each device by its short name, notifies a one-line summary and refreshes
+  ---
+  duration_ms: 2.927133
+  ...
+# Subtest: nothing to remove reports plainly and still refreshes
+ok 355 - nothing to remove reports plainly and still refreshes
+  ---
+  duration_ms: 2.643493
+  ...
+# Subtest: no static script or the shell page still calls a telemetry API route, mentions Grafana, or names the removed telemetry-settings dialog
+ok 356 - no static script or the shell page still calls a telemetry API route, mentions Grafana, or names the removed telemetry-settings dialog
+  ---
+  duration_ms: 5.490913
+  ...
+# Subtest: the context menu leads with Open CLI, shows the state instead of the address and explains every disabled item inline
+ok 357 - the context menu leads with Open CLI, shows the state instead of the address and explains every disabled item inline
+  ---
+  duration_ms: 8.032996
+  ...
+# Subtest: backup reasons follow readiness and the busy flag; unavailable and credential states read as sentences
+ok 358 - backup reasons follow readiness and the busy flag; unavailable and credential states read as sentences
+  ---
+  duration_ms: 7.046071
+  ...
+# Subtest: menu clicks are ignored after switching labs; arrow keys rove over enabled items; Escape restores focus
+ok 359 - menu clicks are ignored after switching labs; arrow keys rove over enabled items; Escape restores focus
+  ---
+  duration_ms: 3.695728
+  ...
+# Subtest: renderMapState swaps state classes and labels on the drawn devices without touching the SVG markup
+ok 360 - renderMapState swaps state classes and labels on the drawn devices without touching the SVG markup
+  ---
+  duration_ms: 5.020377
+  ...
+# Subtest: the map stage shows the loading skeleton, then the empty state or the map with a student caption
+ok 361 - the map stage shows the loading skeleton, then the empty state or the map with a student caption
+  ---
+  duration_ms: 17.444008
+  ...
+# Subtest: Expand toggles its label through data-label and Escape closes the expanded map only when no menu is open
+ok 362 - Expand toggles its label through data-label and Escape closes the expanded map only when no menu is open
+  ---
+  duration_ms: 3.170673
+  ...
+# Subtest: a successful map import re-renders the map and reports in map words
+ok 363 - a successful map import re-renders the map and reports in map words
+  ---
+  duration_ms: 4.308619
+  ...
+# Subtest: Test logins mirrors whichever check is really running and never marks a device ready by itself
+ok 364 - Test logins mirrors whichever check is really running and never marks a device ready by itself
+  ---
+  duration_ms: 3.226488
+  ...
+# Subtest: Test logins starts the lab-wide refresh, reports what was skipped, and settles once every device answers
+ok 365 - Test logins starts the lab-wide refresh, reports what was skipped, and settles once every device answers
+  ---
+  duration_ms: 5.739246
+  ...
+# Subtest: Restart device in the menu follows the shared eligibility and its reason; only the restarting device reads as working on the map
+ok 366 - Restart device in the menu follows the shared eligibility and its reason; only the restarting device reads as working on the map
+  ---
+  duration_ms: 6.733414
+  ...
+# Subtest: annotation dimensions, text size and group opacity are preserved
+ok 367 - annotation dimensions, text size and group opacity are preserved
+  ---
+  duration_ms: 1.775747
+  ...
+# Subtest: map nodes expose the exact inventory identity and imported label placement
+ok 368 - map nodes expose the exact inventory identity and imported label placement
+  ---
+  duration_ms: 0.350083
+  ...
+# Subtest: endpoint labels can be hidden without removing wiring
+ok 369 - endpoint labels can be hidden without removing wiring
+  ---
+  duration_ms: 0.456148
+  ...
+# Subtest: coincident node coordinates do not produce invalid SVG geometry
+ok 370 - coincident node coordinates do not produce invalid SVG geometry
+  ---
+  duration_ms: 0.163035
+  ...
+# Subtest: real lab icons use top-left annotations while links connect icon centers
+ok 371 - real lab icons use top-left annotations while links connect icon centers
+  ---
+  duration_ms: 0.171949
+  ...
+# Subtest: state classes and colours: neutral by default, from the states map when given, CSS defaults unless the drawing sets colours
+ok 372 - state classes and colours: neutral by default, from the states map when given, CSS defaults unless the drawing sets colours
+  ---
+  duration_ms: 0.657884
+  ...
+# Subtest: legacy un-sized notes retain paragraph spacing inside their imported group
+ok 373 - legacy un-sized notes retain paragraph spacing inside their imported group
+  ---
+  duration_ms: 0.191598
+  ...
+# Subtest: first setup requires a password; saved passwords stay blank; old keys show migration
+ok 374 - first setup requires a password; saved passwords stay blank; old keys show migration
+  ---
+  duration_ms: 8.44124
+  ...
+# Subtest: saving sends password only, clears it, and tests the connection
+ok 375 - saving sends password only, clears it, and tests the connection
+  ---
+  duration_ms: 2.992962
+  ...
+# Subtest: automatic discovery and trusting a replacement host key are on by default
+ok 376 - automatic discovery and trusting a replacement host key are on by default
+  ---
+  duration_ms: 3.68737
+  ...
+# Subtest: first load prompts for the VM connection once when none is configured
+ok 377 - first load prompts for the VM connection once when none is configured
+  ---
+  duration_ms: 1.525437
+  ...
+# Subtest: an already configured VM connection is never auto-prompted
+ok 378 - an already configured VM connection is never auto-prompted
+  ---
+  duration_ms: 1.63329
+  ...
+# Subtest: the prompt waits until discovery status has loaded
+ok 379 - the prompt waits until discovery status has loaded
+  ---
+  duration_ms: 1.714097
+  ...
+1..379
+# tests 379
+# suites 0
+# pass 379
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 520.056965
+EXIT=0
+END 2026-09-28T01:09:41Z

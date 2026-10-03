@@ -194,7 +194,9 @@ Every lab has a **Design** tab (beside Topology, Devices and Progress). Top to b
   (back to the saved design; shown while there are unsaved changes) and *More* (download the saved design
   file, import one, *Renumber* to forget the pinned allocations, *Remove design*; an item that cannot run now
   says why underneath: no saved design yet, a plan being generated, or unsaved changes for the download and
-  the import).
+  the import). The *Renumber* and *Remove design* dialogs belong to the lab they were opened from: moving to
+  another lab (the browser's Back, a link) closes them, and a confirmation that still arrives for another lab
+  is refused with a message and changes nothing.
 - **Design settings.** Address families; the loopback, point-to-point and shared-link pools with their allocation
   sizes; the protocols and services (OSPF, BGP, IS-IS, EIGRP, RIP, BFD, DHCP, VLANs, VRFs, link aggregation,
   spanning tree, first-hop gateway, VXLAN, EVPN, MPLS, segment routing, SRv6, routing policies and static routes)

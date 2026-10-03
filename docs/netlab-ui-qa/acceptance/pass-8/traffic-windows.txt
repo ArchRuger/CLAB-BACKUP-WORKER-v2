@@ -1,0 +1,15 @@
+traffic_probe.py --from cjunosevolved --crossing 10.255.0.1 --other 10.255.0.3 --minutes 8 (01:37:31-01:45:36 UTC)
+rounds 73 first 2026-09-28T01:37:31+00:00 last 2026-09-28T01:45:30+00:00
+ssh failures 0
+rounds with loss or no answer on the other path (10.255.0.3) 0
+outage windows on the crossing path (10.255.0.1, cEOS loopback): a round counts when loss > 0 or the ping output had no loss line (None: no route)
+   01:38:04 -> 01:38:19 per round [100, 100, 100]
+   01:38:39 -> 01:39:17 per round [50, 100, 100, 100, 100, 100]
+   01:39:31 -> 01:40:48 per round [100, 100, 100, 100, 100, 100, None, None, None, None, None, None, 100]
+   01:41:54 -> 01:42:09 per round [50, 100, 100]
+matched against this pass's cEOS events:
+  1 map restart, job 64a7b222 01:38:03-01:38:07, Ready 01:38:29
+  2 Devices-panel restart, job 99775c34 01:38:40-01:39:03, Ready 01:39:24
+  3 containerlab stop --node 01:39:29, restart of the stopped device job 4203d3d9 01:40:26-01:40:29, Ready 01:40:51
+  4 neighbour check restart, job f90b88a6 01:41:54-01:41:58 (host1 stopped 01:41:40; host1 job b0232da9 01:42:21-01:42:24)
+no outage outside these windows; host1 restarts at 01:41:21, 01:41:4x and 01:44 (two-tabs, own check) did not touch either path

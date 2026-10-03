@@ -1,0 +1,21 @@
+QA-020 KILLED | mutant: Ran 1 test in 2.098s FAILED (failures=1) | restored: Ran 1 test in 2.104s OK
+QA-019a KILLED | mutant: Ran 1 test in 0.078s FAILED (failures=1) | restored: Ran 1 test in 0.093s OK
+QA-019b SURVIVED | mutant: Ran 1 test in 0.096s FAILED (failures=1) | restored: Ran 1 test in 0.095s FAILED (failures=1)
+QA-017 KILLED | mutant: Ran 1 test in 0.085s FAILED (failures=1) | restored: Ran 1 test in 0.089s OK
+QA-018 KILLED | mutant: Ran 1 test in 0.091s FAILED (failures=1) | restored: Ran 1 test in 0.094s OK
+QA-014 KILLED | mutant: Ran 1 test in 0.090s FAILED (failures=1) | restored: Ran 1 test in 0.097s OK
+RD-001 KILLED | mutant: Ran 1 test in 0.086s FAILED (failures=1) | restored: Ran 1 test in 0.087s OK
+RD-003 KILLED | mutant: Ran 1 test in 0.001s FAILED (failures=1) | restored: Ran 1 test in 0.001s OK
+QA-016 SURVIVED | mutant: Ran 1 test in 0.001s FAILED (failures=1) | restored: Ran 1 test in 0.001s FAILED (failures=1)
+QA-015 KILLED | mutant: # pass 0 # fail 1 | restored: # pass 1 # fail 0
+TOOL-002 ok   booting→ready passes
+TOOL-002 ok   booting→failed→booting→ready fails (QA-019 timeline)
+TOOL-002 ok   restarting→booting→ready passes
+TOOL-002 ok   an unknown word (reachable) fails
+TOOL-002 ok   exact argv passes
+TOOL-002 ok   two --node fails
+TOOL-002 ok   --node followed by another device fails
+TOOL-002 ok   no --node (lab-wide restart) fails
+TOOL-002 ok   a deploy argv fails
+TOOL-002 ok   preview status 409 fails
+mutants killed 8 of 10; TOOL-002 cases 10 of 10 as expected

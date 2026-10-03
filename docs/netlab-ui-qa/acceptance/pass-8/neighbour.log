@@ -1,0 +1,22 @@
+manager 1.30.50, lab restore-square, device ceos, neighbour host1
+  ok   the neighbour was stopped with containerlab stop --node (links parked)
+  ok   the manager lists the neighbour as exited
+  ok   the review names the neighbour that is not running and the parked case
+  ok   the review names the destroyed case with the count
+  ok   the review says the device waits for its interfaces and how to proceed
+  ok   the API preview carries the same warning
+  ok   one Restart device job exists for the device
+  ok   the job succeeded (containerlab restored what it could)
+  ok   the job message counts every link (the parked link came back)
+  ok   the target kept its container id
+  ok   the device has all its dataplane links
+  ok   the device is Ready again
+  ok   Restart device… is offered for the exited neighbour
+  ok   the neighbour review takes the start/restore path
+  ok   the neighbour started again through the product
+  ok   the neighbour job counts its own links
+  ok   the neighbour has its dataplane links back
+  ok   the device has all its links once the neighbour runs
+  ok   no unexpected console errors
+  ok   no page errors
+20 checks, 0 failed; record docs/netlab-ui-qa/acceptance/pass-8/neighbour-ceos-containerlab-20260928T014138+0000.json

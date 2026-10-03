@@ -1,3 +1,30 @@
+# Netlab UI/UX campaign, part 4: lab-bound design dialogs — 1.30.58
+
+What was actually run for this release. The code is the campaign's unpublished 1.30.51 of 2026-09-28 (the QA-021
+fix), merged onto 1.30.57 on 2026-10-02 with the release markers taken from `main` and re-cut as 1.30.58; no line of
+the fix changed in the merge (`git diff origin/main` outside `docs/netlab-ui-qa/` is the seven files of the fix).
+
+## Static and unit (2026-10-02, on the 1.30.58 tree, dev VM `clab-llm-dev2`)
+
+- `python3 deploy/verify-release.py`: source and documentation at 1.30.58; `git diff --check` clean; `node --check` on
+  every `app/static/*.js`; `docs/maintenance-audit/tools/check_links.py` clean.
+- Browser: `node --test tests/*.js` → 389 pass, 0 fail (1.30.57 had 387). The two tests of the fix are among them: `test_network_design_ui.js`
+  "QA-021: Remove design and Renumber act only for the lab they were opened from, with that lab's revision at open
+  time, and are marked to close on a lab change" and `test_shell_ui.js` "QA-021: a lab change closes every open dialog
+  that speaks for a lab, and only those".
+- Python: `python -m unittest discover -s tests -t tests` → 1721 tests, 1720 OK and 1 skipped, 316 s (no Python change in this release; the
+  release-consistency tests saw 1.30.58).
+
+## Fixture and live
+
+- Taken on 2026-09-28 on the 1.30.51 build of the same fix, not repeated on 1.30.58: the reviewer's reproduction of
+  QA-021 (`docs/netlab-ui-qa/acceptance/pass-8/tools/adversarial_transitions.py`, two labs with the same design,
+  *Remove design…* open, browser Back) rerun unchanged against a fixture of that tree (port 8198, fresh data, real
+  engine, 02:03 UTC): 12 of 12, the dialog no longer stays open over the other lab and Renumber's closes on Back
+  (`docs/netlab-ui-qa/evidence/design-dialogs/`).
+- Not done for 1.30.58: no image build, no deployment on the dev VM (the VM was about to be rolled back to a
+  snapshot), no live-device check, no acceptance pass 9 or 10. No tag, no image published.
+
 # UI/UX changes 2, part 6: the topology travels with every backup — 1.30.57
 
 What was actually run for this release (dev VM `clab-llm-dev2`, Docker 29.8.1, containerlab 0.79.0, `n24l/ceos:4.35.0F`).

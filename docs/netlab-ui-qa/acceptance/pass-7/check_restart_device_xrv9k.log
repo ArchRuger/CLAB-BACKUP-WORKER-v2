@@ -1,0 +1,34 @@
+START 2026-09-28T01:27:23Z
+manager 1.30.50, containerlab 0.79.0, lab restore-square, device xrv9k (clab-restore-square-xrv9k)
+-- map-running: map --
+  ok   the map menu offers Restart device… for the device
+  ok   the review is titled for the one device
+  ok   the review names the device and the lab and the native operation
+  ok   the review says what drops and does not promise unrelated traffic is untouched
+  ok   the review says nothing is saved, backed up, reset or reapplied
+  ok   the affected list is the one device
+  ok   the confirm button is the destructive Restart device
+  ok   the review names the known limit of this image before the student confirms
+  ok   the helper runs containerlab restart with exactly one --node, followed by the device
+  ok   Cancel starts nothing
+  ok   Cancel leaves the container untouched
+  ok   the device reads Restarting while the job runs
+  ok   the lab banner names the device being restarted
+  ok   one Restart device job exists for the device
+  ok   the job succeeded
+  ok   the job output is containerlab's own restart log
+  ok   the job message counts the restored links
+  ok   every dataplane link of the device was restored
+  ok   the target kept its container id and has a new start time
+  ok   the other containers kept their ids, start times and processes
+  ok   the device has its dataplane interfaces back
+  ok   the device went back through Starting (its old proof was dropped)
+  ok   no false credentials failure between Starting and Ready
+  ok   the device is Ready again with a check made after the restart (within 1200 s)
+  ok   the rail reads Ready for the device again
+  ok   the design, its plans, the Git binding and the deployment time are untouched
+  ok   no unexpected console errors
+  ok   no page errors
+28 checks, 0 failed; record in docs/netlab-ui-qa/acceptance/pass-7
+EXIT=0
+END 2026-09-28T01:32:37Z

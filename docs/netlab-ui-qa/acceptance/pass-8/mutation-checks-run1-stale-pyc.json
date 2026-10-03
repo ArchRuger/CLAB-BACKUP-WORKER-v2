@@ -1,0 +1,185 @@
+{
+ "at": "2026-09-28T01:46:59+00:00",
+ "scratch": "/tmp/tmp.tD5guhQOJN/clab-backup-ui",
+ "mutations": [
+  {
+   "id": "QA-020",
+   "file": "app/lab_operations.py",
+   "test": "test_lab_operations.py :: test_a_stale_restart_review_hears_the_stale_reason_while_the_previous_job_still_refreshes",
+   "at": "2026-09-28T01:46:48+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "Ran 1 test in 2.098s FAILED (failures=1)",
+   "restored_exit": 0,
+   "restored_summary": "Ran 1 test in 2.104s OK",
+   "result": "KILLED"
+  },
+  {
+   "id": "QA-019a",
+   "file": "app/node_readiness.py",
+   "test": "test_node_readiness.py :: test_a_refused_login_right_after_a_manager_restart_reads_booting_until_the_grace_window_closes",
+   "at": "2026-09-28T01:46:53+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "Ran 1 test in 0.078s FAILED (failures=1)",
+   "restored_exit": 0,
+   "restored_summary": "Ran 1 test in 0.093s OK",
+   "result": "KILLED"
+  },
+  {
+   "id": "QA-019b",
+   "file": "app/lab_operations.py",
+   "test": "test_lab_operations.py :: test_a_lab_wide_lifecycle_job_drops_every_device_login_proof_for_the_grace_window",
+   "at": "2026-09-28T01:46:54+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "Ran 1 test in 0.096s FAILED (failures=1)",
+   "restored_exit": 1,
+   "restored_summary": "Ran 1 test in 0.095s FAILED (failures=1)",
+   "result": "SURVIVED"
+  },
+  {
+   "id": "QA-017",
+   "file": "app/lab_operations.py",
+   "test": "test_lab_operations.py :: test_the_xrv9k_review_names_the_fresh_disk_limit_and_other_kinds_get_no_note",
+   "at": "2026-09-28T01:46:54+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "Ran 1 test in 0.085s FAILED (failures=1)",
+   "restored_exit": 0,
+   "restored_summary": "Ran 1 test in 0.089s OK",
+   "result": "KILLED"
+  },
+  {
+   "id": "QA-018",
+   "file": "app/lab_operations.py",
+   "test": "test_lab_operations.py :: test_a_neighbour_that_is_not_running_is_named_in_the_review_and_the_job_counts_the_links",
+   "at": "2026-09-28T01:46:55+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "Ran 1 test in 0.091s FAILED (failures=1)",
+   "restored_exit": 0,
+   "restored_summary": "Ran 1 test in 0.094s OK",
+   "result": "KILLED"
+  },
+  {
+   "id": "QA-014",
+   "file": "app/lab_operations.py",
+   "test": "test_lab_operations.py :: test_a_restart_whose_container_exits_right_after_is_a_failed_job_with_the_reason",
+   "at": "2026-09-28T01:46:56+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "Ran 1 test in 0.090s FAILED (failures=1)",
+   "restored_exit": 0,
+   "restored_summary": "Ran 1 test in 0.097s OK",
+   "result": "KILLED"
+  },
+  {
+   "id": "RD-001",
+   "file": "app/lab_operations.py",
+   "test": "test_lab_operations.py :: test_a_restart_device_review_is_stale_when_a_lifecycle_job_lands_during_its_own_helper_calls",
+   "at": "2026-09-28T01:46:57+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "Ran 1 test in 0.086s FAILED (failures=1)",
+   "restored_exit": 0,
+   "restored_summary": "Ran 1 test in 0.087s OK",
+   "result": "KILLED"
+  },
+  {
+   "id": "RD-003",
+   "file": "app/host_operations.py",
+   "test": "test_lab_operations.py :: test_restart_device_binds_every_container_naming_shape_exactly",
+   "at": "2026-09-28T01:46:58+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "Ran 1 test in 0.001s FAILED (failures=1)",
+   "restored_exit": 0,
+   "restored_summary": "Ran 1 test in 0.001s OK",
+   "result": "KILLED"
+  },
+  {
+   "id": "QA-016",
+   "file": "app/design_intent.py",
+   "test": "test_design_intent.py :: test_engine_identifiers_follow_netlabs_16_character_rule",
+   "at": "2026-09-28T01:46:58+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "Ran 1 test in 0.001s FAILED (failures=1)",
+   "restored_exit": 1,
+   "restored_summary": "Ran 1 test in 0.001s FAILED (failures=1)",
+   "result": "SURVIVED"
+  },
+  {
+   "id": "QA-015",
+   "file": "app/static/network-design.js",
+   "test": "test_network_design_ui.js :: QA-015: two overlapping loads",
+   "at": "2026-09-28T01:46:58+00:00",
+   "mutant_exit": 1,
+   "mutant_summary": "# pass 0 # fail 1",
+   "restored_exit": 0,
+   "restored_summary": "# pass 1 # fail 0",
+   "result": "KILLED"
+  }
+ ],
+ "tool_002": {
+  "expressions": [
+   "'failed' not in words and all(w in ('booting', 'restarting', 'ready', 'unavailable', 'checking') for w in words)",
+   "status == 200 and argv.count('--node') == 1 and argv[argv.index('--node') + 1] == short if '--node' in argv else False",
+   "ok and len(argv) > 2 and argv[0].endswith('containerlab') and argv[1] == 'restart' and '-t' in argv"
+  ],
+  "cases": [
+   {
+    "case": "booting\u2192ready passes",
+    "got": true,
+    "expected": true,
+    "ok": true
+   },
+   {
+    "case": "booting\u2192failed\u2192booting\u2192ready fails (QA-019 timeline)",
+    "got": false,
+    "expected": false,
+    "ok": true
+   },
+   {
+    "case": "restarting\u2192booting\u2192ready passes",
+    "got": true,
+    "expected": true,
+    "ok": true
+   },
+   {
+    "case": "an unknown word (reachable) fails",
+    "got": false,
+    "expected": false,
+    "ok": true
+   },
+   {
+    "case": "exact argv passes",
+    "got": true,
+    "expected": true,
+    "ok": true
+   },
+   {
+    "case": "two --node fails",
+    "got": false,
+    "expected": false,
+    "ok": true
+   },
+   {
+    "case": "--node followed by another device fails",
+    "got": false,
+    "expected": false,
+    "ok": true
+   },
+   {
+    "case": "no --node (lab-wide restart) fails",
+    "got": false,
+    "expected": false,
+    "ok": true
+   },
+   {
+    "case": "a deploy argv fails",
+    "got": false,
+    "expected": false,
+    "ok": true
+   },
+   {
+    "case": "preview status 409 fails",
+    "got": false,
+    "expected": false,
+    "ok": true
+   }
+  ]
+ }
+}

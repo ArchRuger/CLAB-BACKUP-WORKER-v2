@@ -1,0 +1,14 @@
+  ok   T1 setup: both labs saved the same design (same revision)
+  ok   T1 Back from A reached lab B
+  FAIL T1 the Remove design dialog opened for A does not stay open over lab B: {'shown': {'active': '89fa781dd34549c78d3d71adae926cf2', 'designLab': '89fa781dd34549c78d3d71adae926cf2', 'hash': '#lab=89fa781dd34549c78d3d71adae926cf2&view=design'}, 'dialog_open': True, 'heading': 'BGP_TheoryToPractice'}
+  FAIL T1 confirming the dialog shown over B does not remove a design the page does not show without saying so: {'a_present': False, 'b_present': True, 'dialog_open': False, 'page_lab': {'active': '89fa781dd34549c78d3d71adae926cf2', 'designLab': '89fa781dd34549c78d3d71adae926cf2', 'hash': '#lab=89fa781dd34549c78d3d71adae926cf2&view=design'}, 'b_state_text': 'Design saved, no plan yet Design saved, no plan yet', 'message': ' | toast: '}
+  ok   T1b Renumber confirmed over B after Back (revisions differ) is refused with a reason and changes neither lab
+  ok   T2 after a reload mid-generation the page shows the running generation (not "No plan"/idle)
+  ok   T2 the reloaded page reaches "Plan ready to review" by itself
+  ok   T2 exactly one new generation (the reload started none)
+  ok   T3 lab A shows nothing of B's running generation
+  ok   T3 lab A still shows its own state after B's poll would have fired
+  ok   T3 Back to B shows its finished plan, one new generation
+  ok   no unexpected console errors
+  ok   no page errors
+13 checks, 2 failed

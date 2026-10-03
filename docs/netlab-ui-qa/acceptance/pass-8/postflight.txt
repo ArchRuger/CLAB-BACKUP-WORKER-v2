@@ -1,0 +1,20 @@
+post-flight 2026-09-28T01:51:53Z manager 1.30.50
+  clab-restore-square-ceos nos_login.status= ready | readiness= Ready | runtime= running
+  clab-restore-square-cjunosevolved nos_login.status= ready | readiness= Ready | runtime= running
+  clab-restore-square-vjunos-switch nos_login.status= ready | readiness= Ready | runtime= running
+  clab-restore-square-xrv9k nos_login.status= ready | readiness= Ready | runtime= running
+  clab-restore-square-host1 nos_login.status= ready | readiness= Choose NOS | runtime= running
+operation jobs created since 01:36:44 (this pass): 12
+   01:38:03 01:38:07 restore-square restart-node ceos succeeded | Operation completed · 3 links restored
+   01:38:40 01:39:03 restore-square restart-node ceos succeeded | Operation completed · 3 links restored
+   01:40:26 01:40:29 restore-square restart-node ceos succeeded | Operation completed · 3 links restored
+   01:41:21 01:41:24 restore-square restart-node host1 succeeded | Operation completed · 2 links restored
+   01:41:30 01:41:33 restore-square restart-node host1 succeeded | Operation completed · 2 links restored
+   01:41:54 01:41:58 restore-square restart-node ceos succeeded | Operation completed · 3 links restored
+   01:42:21 01:42:24 restore-square restart-node host1 succeeded | Operation completed · 2 links restored
+   01:43:48 01:43:51 restore-square restart-node host1 succeeded | Operation completed · 2 links restored
+   01:43:56 01:44:00 restore-square restart-node host1 succeeded | Operation completed · 2 links restored
+   01:44:21 01:44:24 restore-square restart-node host1 succeeded | Operation completed · 2 links restored
+   01:44:31 01:44:34 restore-square restart-node host1 succeeded | Operation completed · 2 links restored
+   01:45:51 01:46:01 restore-square restart-node xrv9k succeeded | Operation completed · 2 links restored
+operations on another lab during the pass: 0

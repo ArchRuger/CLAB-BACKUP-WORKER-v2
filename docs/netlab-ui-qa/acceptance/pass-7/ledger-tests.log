@@ -1,0 +1,205 @@
+START 2026-09-28T01:18:05Z
+=== test_a_restart_whose_container_exits_right_after_is_a_failed_job_with_the_reason (test_lab_operations.py) ===
+/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_a_restart_whose_container_exits_right_after_is_a_failed_job_with_the_reason (test_lab_operations.OperationAPITests.test_a_restart_whose_container_exits_right_after_is_a_failed_job_with_the_reason) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.098s
+
+OK
+=== test_restart_device_binds_every_container_naming_shape_exactly (test_lab_operations.py) ===
+/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_restart_device_binds_every_container_naming_shape_exactly (test_lab_operations.HostOperationTests.test_restart_device_binds_every_container_naming_shape_exactly) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+OK
+=== test_a_restart_device_review_is_stale_when_a_lifecycle_job_lands_during_its_own_helper_calls (test_lab_operations.py) ===
+/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_a_restart_device_review_is_stale_when_a_lifecycle_job_lands_during_its_own_helper_calls (test_lab_operations.OperationAPITests.test_a_restart_device_review_is_stale_when_a_lifecycle_job_lands_during_its_own_helper_calls) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.099s
+
+OK
+=== test_a_stale_restart_review_hears_the_stale_reason_while_the_previous_job_still_refreshes (test_lab_operations.py) ===
+/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_a_stale_restart_review_hears_the_stale_reason_while_the_previous_job_still_refreshes (test_lab_operations.OperationAPITests.test_a_stale_restart_review_hears_the_stale_reason_while_the_previous_job_still_refreshes) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 2.108s
+
+OK
+END 2026-09-28T01:18:09Z
+=== QA-016 test_design_intent.py ===
+test_engine_identifiers_follow_netlabs_16_character_rule (test_design_intent.VlanVrfTests.test_engine_identifiers_follow_netlabs_16_character_rule) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+OK
+=== QA-019 test_node_readiness.py + test_lab_operations.py ===
+tests/test_node_readiness.py:189:    def test_a_refused_login_right_after_a_manager_restart_reads_booting_until_the_grace_window_closes(self):
+tests/test_lab_operations.py:885:    def test_a_lab_wide_lifecycle_job_drops_every_device_login_proof_for_the_grace_window(self):
+=== QA-019a test_node_readiness.py ===
+/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_a_refused_login_right_after_a_manager_restart_reads_booting_until_the_grace_window_closes (test_node_readiness.ReadinessTests.test_a_refused_login_right_after_a_manager_restart_reads_booting_until_the_grace_window_closes) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.094s
+
+OK
+=== QA-019b test_lab_operations.py ===
+/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_a_lab_wide_lifecycle_job_drops_every_device_login_proof_for_the_grace_window (test_lab_operations.OperationAPITests.test_a_lab_wide_lifecycle_job_drops_every_device_login_proof_for_the_grace_window) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.103s
+
+OK
+=== U-08 test_shell_ui.js ===
+TAP version 13
+# Subtest: route precedence: the hash wins, sessionStorage is consumed once, unknown ids fall back to Home
+ok 1 - route precedence: the hash wins, sessionStorage is consumed once, unknown ids fall back to Home # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.682836
+  ...
+# Subtest: writeRoute no-ops when the hash already matches; polls replace, navigation pushes, routes never push while applying
+ok 2 - writeRoute no-ops when the hash already matches; polls replace, navigation pushes, routes never push while applying # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.058141
+  ...
+# Subtest: goHome clears the lab, the hash and sessionStorage, closes the drawer and re-renders
+ok 3 - goHome clears the lab, the hash and sessionStorage, closes the drawer and re-renders # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.03239
+  ...
+# Subtest: initMenu: open focuses the first enabled item, arrows rove, Escape closes and returns focus to the button
+ok 4 - initMenu: open focuses the first enabled item, arrows rove, Escape closes and returns focus to the button # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.124679
+  ...
+# Subtest: an expandable menu group: the toggle never closes the menu, collapsed items are skipped, arrows open and close it, reopening collapses it
+ok 5 - an expandable menu group: the toggle never closes the menu, collapsed items are skipped, arrows open and close it, reopening collapses it # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.0405
+  ...
+# Subtest: closeMenus returns true only when it closed something and keeps the excepted menu open
+ok 6 - closeMenus returns true only when it closed something and keeps the excepted menu open # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.031462
+  ...
+# Subtest: outside pointerdown closes menus; Escape at the document closes them and stops propagation unless the node menu is open
+ok 7 - outside pointerdown closes menus; Escape at the document closes them and stops propagation unless the node menu is open # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.031639
+  ...
+# Subtest: storage helpers remember when a lab was opened and dismissed jobs, and never throw when storage is blocked
+ok 8 - storage helpers remember when a lab was opened and dismissed jobs, and never throw when storage is blocked # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.096901
+  ...
+# Subtest: noticeDismissed/dismissNotice: a notice key is remembered for the session, a different key is unaffected, and neither throws when storage is blocked
+ok 9 - noticeDismissed/dismissNotice: a notice key is remembered for the session, a different key is unaffected, and neither throws when storage is blocked # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.07068
+  ...
+# Subtest: showActionError renders the lab banner on a lab page and falls back to a toast elsewhere
+ok 10 - showActionError renders the lab banner on a lab page and falls back to a toast elsewhere # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.232274
+  ...
+# Subtest: closing the drawer clears the device from the route; Home links go home; the skeleton waits 200 ms
+ok 11 - closing the drawer clears the device from the route; Home links go home; the skeleton waits 200 ms # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.050635
+  ...
+# Subtest: index.html: Lab actions ends with an Advanced options group holding the four reviewed items, one of them hidden until a lab has a retired-telemetry record; nothing else moved or vanished
+ok 12 - index.html: Lab actions ends with an Advanced options group holding the four reviewed items, one of them hidden until a lab has a retired-telemetry record; nothing else moved or vanished # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.035452
+  ...
+# Subtest: style.css: the device lists carry no list indent and the Devices tab is one grid whose rows are subgrids, single column on a narrow window
+ok 13 - style.css: the device lists carry no list indent and the Devices tab is one grid whose rows are subgrids, single column on a narrow window # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028587
+  ...
+# Subtest: index.html: the Topology tab keeps the hint, the controls and the badge; the wiring caveat and its Details toggle are gone; the device rail is a focusable, labelled region
+ok 14 - index.html: the Topology tab keeps the hint, the controls and the badge; the wiring caveat and its Details toggle are gone; the device rail is a focusable, labelled region # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.080131
+  ...
+# Subtest: style.css: the topology layout is bounded to the same viewport math as the map stage (plus the hint), the rail stretches to it and scrolls on its own with a sticky heading, and both reset to the old stacked, page-scrolling layout at 1280px
+ok 15 - style.css: the topology layout is bounded to the same viewport math as the map stage (plus the hint), the rail stretches to it and scrolls on its own with a sticky heading, and both reset to the old stacked, page-scrolling layout at 1280px # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.029192
+  ...
+# Subtest: the topology rail renders one row per device however many there are, so a scrollable rail actually has something to scroll
+ok 16 - the topology rail renders one row per device however many there are, so a scrollable rail actually has something to scroll # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028539
+  ...
+# Subtest: setBanner: a notice hides once closed and stays hidden across rerenders of the same headline; a materially different headline is shown again
+ok 17 - setBanner: a notice hides once closed and stays hidden across rerenders of the same headline; a materially different headline is shown again # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.062365
+  ...
+# Subtest: setBanner: a running-operation notice collapses to a one-line pill instead of disappearing, keeps collapsed through detail-only updates, and reappears in full once its headline changes
+ok 18 - setBanner: a running-operation notice collapses to a one-line pill instead of disappearing, keeps collapsed through detail-only updates, and reappears in full once its headline changes # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.113134
+  ...
+# Subtest: setBanner: the close control carries the documented accessible name and toggles it between collapse and expand for a running notice
+ok 19 - setBanner: the close control carries the documented accessible name and toggles it between collapse and expand for a running notice # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.041312
+  ...
+# Subtest: the Advanced options group's retired-telemetry item is hidden without a record and shown once the active lab has one
+ok 20 - the Advanced options group's retired-telemetry item is hidden without a record and shown once the active lab has one # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.028823
+  ...
+# Subtest: the Home list tab is kept for the browser session and never throws when storage is blocked
+ok 21 - the Home list tab is kept for the browser session and never throws when storage is blocked # SKIP test name does not match pattern
+  ---
+  duration_ms: 0.062298
+  ...
+# Subtest: U-08: a menu that would open past the left edge anchors to its button instead, measured each time it opens
+ok 22 - U-08: a menu that would open past the left edge anchors to its button instead, measured each time it opens
+  ---
+  duration_ms: 3.290755
+  ...
+1..22
+# tests 22
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 21
+# todo 0
+# duration_ms 93.509049
+=== QA-017 test_lab_operations.py ===
+/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_the_xrv9k_review_names_the_fresh_disk_limit_and_other_kinds_get_no_note (test_lab_operations.OperationAPITests.test_the_xrv9k_review_names_the_fresh_disk_limit_and_other_kinds_get_no_note) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.094s
+
+OK
+=== QA-018 test_lab_operations.py ===
+/home/clabllm/projects/clab-manager-1.30.42/clab-backup-ui/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_a_neighbour_that_is_not_running_is_named_in_the_review_and_the_job_counts_the_links (test_lab_operations.OperationAPITests.test_a_neighbour_that_is_not_running_is_named_in_the_review_and_the_job_counts_the_links) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.093s
+
+OK

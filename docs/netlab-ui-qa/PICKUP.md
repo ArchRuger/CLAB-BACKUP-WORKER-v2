@@ -86,13 +86,20 @@ checks before the guard, unit test `test_a_stale_restart_review_hears_the_stale_
 the two-tabs tool keeps its record on a stuck control and waits for the tab's idle before reopening a menu, TOOL-004,
 OBS-004): markers moved, the three history sections written, `verify-release.py` green, Python 1704 OK (1 skipped) on the
 rerun, browser 379, `check_links.py` clean, the manager rebuilt at 1.30.50 (23:17 UTC, helpers 1.30.50; capture stack left
-at its 1.30.49 build, unchanged code), the QA-020 live retest done (two-tabs 13/13 at 23:45). Committed as `1e12f37` + hygiene `9aa25c3`, pushed,
-**PR #58** open with CI green. **Pass 5 (Sonnet, 23:48–00:14): CLEAN.** **Pass 6 (Opus, 00:22–00:35): NOT CLEAN** on one
+at its 1.30.49 build, unchanged code), the QA-020 live retest done (two-tabs 13/13 at 23:45). Committed as `1e12f37` + hygiene `9aa25c3`; **PR #58 merged
+by the maintainer at 00:11 UTC**. **Pass 5 (Sonnet, 23:48–00:14): CLEAN.** **Pass 6 (Opus, 00:22–00:35): NOT CLEAN** on one
 tooling finding (TOOL-005: the two-tabs tool crashed without a record while the maintainer's own `Quick-Test` lab was being
-destroyed on the manager; every product check passed). The tool was revised (one guard around every step, idle wait first)
-and retested 13/13 at 01:04. Next: commit the tool revision with passes 5 and 6, push, then **pass 7 (Sonnet)** and **pass 8
-(Opus)** on 1.30.50 with that tool revision (the maintainer asked to leave the manager alone meanwhile), then the evidence
-commit with `FINAL-REPORT.md` completed.
+destroyed on the manager; every product check passed); tool revised (one guard around every step, idle wait first), retested
+13/13, committed with passes 5 and 6 as `02fd181` (**PR #59**, CI green). **Pass 7 (Sonnet, 01:09–01:33): CLEAN.** **Pass 8
+(Opus, 01:36–01:52): NOT CLEAN** on **QA-021** (P0: a *Remove design* dialog opened in one lab acted on it after the browser's
+Back to another lab with the same design revision). The fix (`closeLabDialogs()` on a lab change; the two dialogs act only
+for the lab they were opened from, with its revision at open time; two browser tests; the reviewer's script 12/12 on a
+fixture of the fix) was built on 2026-09-28 as 1.30.51 and deployed on the dev VM, but never committed: the UI/UX changes 2
+stream took over the worktree the same day and shipped 1.30.52–1.30.57 from it, leaving this work as a local WIP commit on
+this branch. On 2026-10-02 that commit was pushed, `main` (1.30.57) merged into the branch (markers from main, no code
+change) and the fix cut as **release 1.30.58** (**PR #62**); its validation record says what was run then (static, unit and
+browser suites only). **Next**: deploy 1.30.58 on the dev VM, then **pass 9 (Sonnet)** and **pass 10 (Opus)** on it
+(`acceptance/PASS-9-*.md`, `PASS-10-*.md`), then the evidence commit with `FINAL-REPORT.md` completed.
 
 Then: add the final3 neighbour rerun records to `DEFECTS.md` (QA-018, Live) and `EVIDENCE.md` in the evidence commit; `python3 deploy/verify-release.py`;
 commit the intended files only (never `git add -A`: `.claude/`, the three prompt files in the worktree root and any
