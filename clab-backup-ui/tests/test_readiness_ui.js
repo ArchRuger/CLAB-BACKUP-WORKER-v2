@@ -135,6 +135,32 @@ test('U-09: the device panel says in words why Restart device… or Back up conf
  assert.match(vm.runInContext('nodeActions({name:"clab-x-r1",short_name:"r1",ssh_ready:true})',h.context),/aria-label="Details for r1"/,'Details is named after the device, not its container (U-19)');
 });
 
+// Audit M-11 follow-up: the readiness monitor skips a lab with no deployment_name, so the drawer must not promise an automatic check there.
+test('M-11: the device drawer promises an automatic login check only for a lab the readiness monitor watches',()=>{
+ const h=appHarness(),auto=/checked automatically/,hand=/Test login \(under Advanced\) checks the saved credentials now\./;
+ const linked=vm.runInContext(`detailsLoginHelp({deployment_name:'clab-x'},{name:'r1',nos_login:{status:'booting'}})`,h.context);
+ assert.match(linked,auto);assert.match(linked,hand);
+ for(const [lab,node] of [[{deployment_name:''},{name:'r1',nos_login:{status:'unmonitored'}}],[{},{name:'r1'}],[{deployment_name:'clab-x'},{name:'r1',nos_login:{status:'unmonitored'}}]]){
+  const text=h.context.detailsLoginHelp(lab,node);
+  assert.doesNotMatch(text,auto,JSON.stringify([lab,node]));assert.equal(text,'Test login (under Advanced) checks the saved credentials now.');
+ }
+ assert.match(h.context.detailsLoginHelp({deployment_name:'clab-x'},{name:'r1'}),auto,'an older payload without nos_login keeps the sentence for a linked lab');
+});
+test('M-11: the open drawer of an inventory-import lab shows the stored message without the automatic-check sentence',()=>{
+ const h=appHarness();
+ const n={name:'r1',short_name:'R1',address:'10.0.0.1',port:22,platform:'arista_ceos',enabled:true,readiness:'Ready',nos_login:{status:'unmonitored',message:'SSH readiness is only monitored for labs linked to a VM deployment.'}};
+ const lab={id:'lab-a',name:'Imported',nodes:[n],profiles:[],defaults:{}};
+ vm.runInContext(`state.labs=[${JSON.stringify(lab)}];activeId='lab-a';detailName='r1';healthState={lab:'lab-a',nodes:[{name:'r1',ssh:${JSON.stringify(n.nos_login)}}]};`,h.context);
+ h.document.getElementById('details-dialog').open=true;
+ h.context.renderDetails();
+ const html=h.document.getElementById('details-status-raw-body').innerHTML;
+ assert.match(html,/<p>SSH readiness is only monitored for labs linked to a VM deployment\.<\/p>/,'the drawer still shows the message it stored');
+ assert.doesNotMatch(html,/checked automatically/);assert.match(html,/Test login \(under Advanced\) checks the saved credentials now\./);
+ lab.deployment_name='clab-x';n.nos_login={status:'booting',message:'Container is running.'};
+ vm.runInContext(`state.labs=[${JSON.stringify(lab)}];healthState={lab:'lab-a',nodes:[{name:'r1',ssh:${JSON.stringify(n.nos_login)}}]};`,h.context);h.context.renderDetails();
+ assert.match(h.document.getElementById('details-status-raw-body').innerHTML,/checked automatically until they accept a login/);
+});
+
 test('adding a lab by files survives blocked sessionStorage in the fallback branch without the router',async()=>{
  const blocked={getItem(){throw new Error('SecurityError');},setItem(){throw new Error('SecurityError');},removeItem(){throw new Error('SecurityError');}};
  const h=managementHarness({labs:[],discovery:{configured:true,connected:true,host:{enabled:true}}});
@@ -167,8 +193,7 @@ test('L-10 follow-up: a restore reading devices back after a restart is shown as
  }
  paint({restore_jobs:[{id:'r1',lab_id:'lab',status:'applying',message:'Applying.'}]});
  assert.equal(get('lab-banner-text').textContent,'Replacing configuration…','a running restore keeps its words');assert.equal(get('worker-state').textContent,'Replacing configuration…');
- // A design apply's read-back (its `rechecking` lists the devices) holds its lab the same way. The page's half: the field
- // reaches /api/state only once design_apply.public_job copies it (its PUBLIC_JOB has no `rechecking` yet, review I1).
+ // A design apply's read-back (its `rechecking` lists the devices) holds its lab the same way.
  paint({design_jobs:[{id:'d1',lab_id:'lab',status:'interrupted',rechecking:['r1'],message:'Manager restarted while the design was being applied.'}]});
  assert.equal(get('lab-banner-text').textContent,'Checking the devices after a manager restart…');
  assert.equal(get('banner-output').hidden,false);assert.equal(get('banner-output').textContent,'View progress');assert.equal(get('banner-restore').hidden,true);

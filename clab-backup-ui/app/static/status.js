@@ -20,8 +20,8 @@ const STATUS_RESTORE_ATTENTION_DETAIL={needs_attention:'Replacing configuration 
 // After a manager restart an interrupted job may still be reading back the devices it was changing (a device can run a change
 // it is about to undo by itself), and until then the manager refuses work on the lab (409; 400 for backups): it queues nothing,
 // so the student starts it again afterwards. A restore's public job says so with `rechecking: true` (restore.public_job). A
-// design apply's stored job keeps a list of devices under `rechecking`, which reaches the page only once
-// design_apply.public_job copies it (its PUBLIC_JOB has no such key yet); until then the design branch below never fires.
+// design apply's public job carries the list of devices still being read back under `rechecking` (design_apply.public_job) and no
+// such key otherwise.
 // Older managers send neither: not rechecking. A restore's read-back holds backups and configuration changes of its lab and
 // Git saves and lab operations of every lab; a design apply's holds its own lab only (lab_operations.operation_busy).
 const STATUS_RECHECK_LABEL='Checking devices';

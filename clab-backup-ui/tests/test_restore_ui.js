@@ -324,14 +324,52 @@ test('L-10 review I2: a device read back after a restart shows its read-back as 
  const loading=JSON.parse(JSON.stringify(c.restoreStageSteps({name:'c',status:'interrupted',stage:'applying',timeline:{queued:1,backing_up:1,backed_up:2,connecting:2,applying:3}},10,true)));
  assert.deepEqual(loading.map(s=>s.state),['done','done','stopped','unreached','current','waiting','waiting']);
  assert.equal(loading[2].text,'Interrupted by the restart');assert.equal(loading[3].text,'Not reached');assert.equal(loading[4].text,'Reading back after the restart');
- // The recheck moves on to confirming its own change: that step is the current one, in its own words.
- const confirming=JSON.parse(JSON.stringify(c.restoreStageSteps({name:'c',status:'interrupted',stage:'confirming',timeline:{queued:1,armed:3,verifying:4,confirming:5}},10,true)));
+ // The recheck moves on to confirming its own change: that step is the current one, in its own words. Its confirming stamp
+ // is newer than the restart (the job's `finished`, 4.5 s here), which is the only thing that tells it from the run's own.
+ const confirming=JSON.parse(JSON.stringify(c.restoreStageSteps({name:'c',status:'interrupted',stage:'confirming',timeline:{queued:1,armed:3,verifying:4,confirming:5}},10,true,4.5)));
  assert.deepEqual(confirming.map(s=>s.state),['done','done','done','done','done','current','waiting']);assert.equal(confirming[5].text,'Confirming');
  // Without the flag (read back, or an older manager) the same device is the finished, interrupted one it always was.
  assert.equal(JSON.parse(JSON.stringify(c.restoreStageSteps(a,10)))[6].text,'Interrupted — check this device');
  assert.equal(JSON.parse(JSON.stringify(c.restoreStageSteps(b,10,true)))[6].state,'outcome-warn','a settled device keeps its outcome even if asked');
  assert.match(c.restoreTargetRow(a,10,true),/restore-stage--current">.*Reading back after the restart<\/span> <span class="restore-stage-time">6 s<\/span><\/li>/);
  assert.match(c.restoreTargetRow(a,10),/Interrupted — check this device<\/span>/);
+});
+// Audit L-10 follow-up: the read-back writes the same stages (verifying, confirming) the run itself did and a stage is stamped once, so the
+// step list tells the run's stamps from the read-back's by the restart time (the job's `finished`).
+test('L-10 follow-up: a device the restart caught while applying never reads as armed once the read-back is under way',()=>{
+ const c=ctx(),plain=v=>JSON.parse(JSON.stringify(v));
+ const applying={name:'c',status:'interrupted',stage:'applying',timeline:{queued:1,backing_up:1,backed_up:2,connecting:2,applying:3}};
+ // The read-back has written its own `verifying` stage (stamped after the restart at 10); nothing was ever armed.
+ const readBack={...applying,stage:'verifying',attempts:1,timeline:{...applying.timeline,verifying:12}};
+ for(const restartedAt of [10,null]){
+  const steps=plain(c.restoreStageSteps(readBack,20,true,restartedAt));
+  assert.deepEqual(steps.map(s=>s.state),['done','done','stopped','unreached','current','waiting','waiting'],'restartedAt '+restartedAt);
+  assert.equal(steps[2].text,'Interrupted by the restart');assert.equal(steps[3].text,'Not reached','the Replace row is never "Armed" without an armed stamp');
+  assert.equal(steps[4].text,'Reading back after the restart');
+ }
+ assert.doesNotMatch(c.restoreTargetRow(readBack,20,true,10),/Armed/);
+});
+test('L-10 follow-up: a device the restart caught while confirming shows the read-back on its own row; the Confirm step stays interrupted',()=>{
+ const c=ctx(),plain=v=>JSON.parse(JSON.stringify(v));
+ const stamps={queued:1,armed:3,verifying:4,confirming:5};
+ // Restart at 6: the confirming stamp is older than it, so it is the run's own, whether the stage still reads confirming or the read-back moved to verifying.
+ for(const stage of ['confirming','verifying']){
+  const steps=plain(c.restoreStageSteps({name:'c',status:'interrupted',stage,timeline:stamps},20,true,6));
+  assert.deepEqual(steps.map(s=>s.state),['done','done','done','done','current','stopped','waiting'],'stage '+stage);
+  assert.equal(steps[3].text,'Armed');assert.equal(steps[4].text,'Reading back after the restart');
+  assert.equal(steps[5].text,'Interrupted by the restart','not "Confirming" before the read-back has started');
+ }
+ // Restart at 4.5: the same stamps, the confirming one is newer, so the read-back itself is confirming.
+ const mine=plain(c.restoreStageSteps({name:'c',status:'interrupted',stage:'confirming',timeline:stamps},20,true,4.5));
+ assert.deepEqual(mine.map(s=>s.state),['done','done','done','done','done','current','waiting']);assert.equal(mine[5].text,'Confirming');
+ // The job's `finished` (ISO) is the restart time in seconds; absent or unreadable means unknown.
+ assert.equal(c.restoreRestartedAt({finished:'1970-01-01T00:00:06+00:00'}),6);
+ assert.equal(c.restoreRestartedAt({}),null);assert.equal(c.restoreRestartedAt({finished:'soon'}),null);assert.equal(c.restoreRestartedAt(null),null);
+ const job=recheckingJob({finished:'1970-01-01T00:00:06+00:00',targets:[{name:'c',status:'interrupted',stage:'confirming',timeline:stamps}]});
+ const {c:dc,detail}=recheckingDialog();
+ return dc.restoreShowJob('j',JSON.parse(JSON.stringify(job))).then(()=>{
+  assert.match(detail.innerHTML,/restore-stage--stopped"><span class="restore-stage-glyph" aria-hidden="true"><\/span><span class="restore-stage-name">Confirm<\/span> <span class="restore-stage-text">Interrupted by the restart/);
+ });
 });
 test('L-10 follow-up: a job read back, or stored by an older manager, opens as the finished job it is and is not followed',async()=>{
  for(const job of [recheckingJob({rechecking:false}),recheckingJob({rechecking:undefined})]){

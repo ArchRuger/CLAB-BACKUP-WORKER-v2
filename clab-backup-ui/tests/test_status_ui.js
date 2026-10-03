@@ -236,8 +236,8 @@ test('L-10 follow-up: a restore still reading devices back after a manager resta
  assert.equal(busyRestore.label,'Replacing configuration','a running restore keeps its own words');
 });
 
-// The page's half only: the stored design job's `rechecking` list reaches /api/state once design_apply.public_job copies it
-// (its PUBLIC_JOB has no such key yet, review I1); an older manager's job without it reads as not rechecking.
+// The public design job carries a `rechecking` list of device names while it is read back, and no such key otherwise;
+// an older manager's job without it reads as not rechecking.
 test('L-10 follow-up: a network-design apply still reading devices back after a restart holds the lab and says so',()=>{
  const c=makeContext();
  const design=extra=>({id:'d1',lab_id:'lab',status:'interrupted',created:'2026-09-16T11:30:00Z',...extra});

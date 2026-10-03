@@ -551,6 +551,41 @@ test('designApplyDisabledReason: no plan, not linked, a running job, and the rea
  assert.match(c.designApplyDisabledReason(lab,view,[{lab_id:'lab1',status:'applying'}]),/already running/);
  assert.match(c.designApplyDisabledReason(lab,{...view,engine:{available:false,diagnostic:'netlab missing'}},[]),/netlab missing/);
 });
+// Audit L-15 follow-up: after a manager restart the server's public design job is `interrupted` with a non-empty
+// `rechecking` (the devices still being read back); the page treats it as active, words it like the restore's, and keeps polling.
+test('a design apply job read back after a restart is active: worded, refused for a new apply, no time on the last line',()=>{
+ const c=ctx();
+ const job={id:'d1',lab_id:'lab1',status:'interrupted',rechecking:['r1'],message:'Manager restarted while the design was being applied.',targets:[]};
+ assert.equal(c.designApplyJobActive(job),true);
+ for(const idle of [{status:'interrupted'},{status:'interrupted',rechecking:[]},{status:'interrupted',rechecking:true},{status:'failed',rechecking:['r1']},null])
+  assert.equal(c.designApplyJobActive(idle),false,JSON.stringify(idle));
+ assert.equal(c.designApplyJobActive({status:'applying'}),true);
+ assert.match(c.designApplyProgressMarkup(job),/Checking the devices after a manager restart…/);
+ assert.doesNotMatch(c.designApplyProgressMarkup(job),/>Interrupted/);
+ assert.match(c.designApplyProgressMarkup({...job,rechecking:undefined}),/Interrupted/,'once the read-back is done the job is plainly interrupted');
+ const now=Date.now();
+ const line=c.designApplyLastLineMarkup({...job,finished:new Date(now-120000).toISOString()},now);
+ assert.match(line,/Checking the devices after a manager restart…/);assert.doesNotMatch(line,/ago|·/);
+ const lab={id:'lab1',deployment:{status:'Running'}},view={generations:[{id:'g',status:'succeeded'}]};
+ assert.match(c.designApplyDisabledReason(lab,view,[job]),/still being read back/);
+ assert.equal(c.designApplyDisabledReason(lab,view,[{...job,lab_id:'other'}]),'','another lab\'s read-back does not hold this one');
+});
+test('designApplyShowJob follows a job that is being read back after a restart until it settles',async()=>{
+ const timers=[];let polls=0;
+ const job={id:'d1',lab_id:'lab1',status:'interrupted',rechecking:['r1'],targets:[]};
+ const dialog={showModal(){},close(){}};
+ const c=ctx({state:{labs:[{id:'lab1'}],design_jobs:[job]},current:()=>({id:'lab1'}),
+  $:id=>id==='design-apply-dialog'?dialog:null,
+  setTimeout:fn=>{timers.push(fn);return timers.length;},
+  api:async()=>{polls++;return {json:async()=>polls<2?{...job}:{...job,status:'failed',rechecking:undefined}};}});
+ c.designApplyShowJob('d1');
+ assert.equal(timers.length,1,'the watch starts for a rechecking job');
+ await timers.shift()();
+ assert.equal(timers.length,1,'still rechecking: polled again');
+ await timers.shift()();
+ assert.equal(timers.length,0,'settled: following stops');
+ assert.equal(polls,2);
+});
 // Risk-review finding: designApplyDisabledReason ignored view.summary.stale (the same flag designStateOf
 // already reads for "Plan is older than the design"), so a stale plan could be offered for applying.
 test('designApplyDisabledReason: a stale succeeded plan is disabled with a reason to regenerate it; a fresh one is not',()=>{

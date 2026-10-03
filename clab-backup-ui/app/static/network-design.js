@@ -630,7 +630,14 @@ const DESIGN_APPLY_DANGER=new Set(['failed','rolled_back','uncertain','needs_att
 const DESIGN_APPLY_BUSY_STATUS=new Set(['pending','backing_up','applying','confirming','verifying','queued','preflight']);
 function designApplyStageWord(stage){return DESIGN_APPLY_STAGE_WORDS[stage]||String(stage||'');}
 function designApplyOutcomeWord(status){return DESIGN_APPLY_OUTCOME_WORDS[status]||String(status||'');}
-function designApplyJobWord(status){return DESIGN_APPLY_JOB_BUSY.includes(status)?'Applying…':(DESIGN_APPLY_JOB_WORDS[status]||String(status||''));}
+// After a manager restart a job the restart caught is 'interrupted' while its devices are still being read back (its public
+// `rechecking` lists them, status.js statusDesignRechecking): the same work in progress as a busy job, worded like the restore's.
+const DESIGN_APPLY_RECHECK_WORD='Checking the devices after a manager restart…';
+function designApplyJobActive(job){return DESIGN_APPLY_JOB_BUSY.includes(job&&job.status)||statusDesignRechecking(job);}
+function designApplyJobWord(status,job){
+ if(statusDesignRechecking(job))return DESIGN_APPLY_RECHECK_WORD;
+ return DESIGN_APPLY_JOB_BUSY.includes(status)?'Applying…':(DESIGN_APPLY_JOB_WORDS[status]||String(status||''));
+}
 function designApplyPillClass(status){
  if(DESIGN_APPLY_OK.has(status))return 'ok';
  if(DESIGN_APPLY_WARN.has(status))return 'warn';
@@ -807,16 +814,16 @@ function designApplyProgressMarkup(job,follow){
  job=job||{};
  const rows=(job.targets||[]).map(designApplyTargetRow).join('')||'<tr><td colspan="5" class="table-empty">No devices.</td></tr>';
  const progress=job.progress&&job.progress.total?`<p class="caption">${esc(job.progress.settled||0)} of ${esc(job.progress.total)} settled</p>`:'';
- return designApplyFollowMarkup(follow)+`<p class="caption">${esc(designApplyJobWord(job.status))}${job.message?' — '+esc(job.message):''}</p>${progress}`+
+ return designApplyFollowMarkup(follow)+`<p class="caption">${esc(designApplyJobWord(job.status,job))}${job.message?' — '+esc(job.message):''}</p>${progress}`+
   `<div class="table-wrap"><table><thead><tr><th>Device</th><th>Kind</th><th>Stage</th><th>Outcome</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 // The plan card's "last apply" line: the newest apply job of this lab, in words, with a Show button
 // that reopens the dialog on that job's progress step.
 function designApplyLastLineMarkup(job,now){
  if(!job)return '';
- const busy=DESIGN_APPLY_JOB_BUSY.includes(job.status);
+ const busy=designApplyJobActive(job);
  const when=designSafeRelative(job.finished||job.created,now);
- return `Last apply: ${esc(designApplyJobWord(job.status))}${when&&!busy?' · '+esc(when):''} `+
+ return `Last apply: ${esc(designApplyJobWord(job.status,job))}${when&&!busy?' · '+esc(when):''} `+
   `<button type="button" class="button secondary small" data-design-apply-show="${esc(job.id)}">Show</button>`;
 }
 // Under Advanced: per device, how many statements the design owns, from which plan, and whether a
@@ -853,8 +860,9 @@ function designApplyDisabledReason(lab,view,jobs){
  if(status==='Unlinked')return 'This lab is not matched to a running lab.';
  if(status==='Unknown')return 'The lab VM cannot be reached right now.';
  if(status==='Not deployed'||status==='Stopped')return 'The lab is not running.';
- const running=(jobs||[]).some(j=>lab&&j.lab_id===lab.id&&DESIGN_APPLY_JOB_BUSY.includes(j.status));
- if(running)return 'An apply is already running for this lab.';
+ const mine=(jobs||[]).filter(j=>lab&&j.lab_id===lab.id);
+ if(mine.some(j=>statusDesignRechecking(j)))return 'After a manager restart the devices of this lab are still being read back. An apply can be started when that has finished.';
+ if(mine.some(j=>DESIGN_APPLY_JOB_BUSY.includes(j.status)))return 'An apply is already running for this lab.';
  return '';
 }
 
@@ -2009,7 +2017,7 @@ function designApplyStartWatch(jobId){
    failures=0;designApplyFollow={jobId,problem:'',gaveUp:false};
    designApplyState.job=job;
    if(designApplyState.jobId===jobId&&designApplyState.step==='progress')designApplyRenderProgress();
-   if(DESIGN_APPLY_JOB_BUSY.includes(job.status)){designApplyWatchTimer=setTimeout(poll,2000);}
+   if(designApplyJobActive(job)){designApplyWatchTimer=setTimeout(poll,2000);}
    else{
     designApplyStopWatch();
     if(typeof refresh==='function')await refresh();
@@ -2057,7 +2065,7 @@ function designApplyShowJob(jobId){
  designApplyState.labId=lab.id;designApplyState.jobId=jobId;designApplyState.job=job;designApplyFollow={jobId:'',problem:'',gaveUp:false};
  designApplyRenderProgress();designApplyShowStep('progress');
  $('design-apply-dialog').showModal();
- if(job&&DESIGN_APPLY_JOB_BUSY.includes(job.status))designApplyStartWatch(jobId);
+ if(job&&designApplyJobActive(job))designApplyStartWatch(jobId);
 }
 function designApplyClose(){designApplyStopWatch();designReviewDialogClosed();if($('design-apply-dialog')&&typeof $('design-apply-dialog').close==='function')$('design-apply-dialog').close();}
 async function designApplyLoadOwnership(){

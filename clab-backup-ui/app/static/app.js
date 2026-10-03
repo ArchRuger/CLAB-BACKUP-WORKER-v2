@@ -426,6 +426,10 @@ function readinessWord(value){return value==='Needs credentials'?'needs credenti
 let detailsRecheck={name:'',at:0},profileFromDrawer='';
 function noteRecheck(name){if(name)detailsRecheck={name,at:Date.now()};}
 function recheckPending(n){return !!n&&detailsRecheck.name===n.name&&Date.now()-detailsRecheck.at<60000&&!n.ssh_ready;}
+// The readiness monitor skips a lab that is not linked to a VM deployment (an inventory import; node_readiness.login_state says
+// 'unmonitored'), so only a monitored lab is "checked automatically"; every lab can be tested by hand.
+const DETAILS_LOGIN_TEST_HELP='Test login (under Advanced) checks the saved credentials now.';
+function detailsLoginHelp(lab,n){return (lab?.deployment_name&&n?.nos_login?.status!=='unmonitored'?'Running devices are checked automatically until they accept a login. ':'')+DETAILS_LOGIN_TEST_HELP;}
 function statusActions(n,ds){if(!ds)return '';if(recheckPending(n))return `<button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='attention')return `<button data-edit="${esc(n.name)}">Check credentials</button><button data-check="${esc(n.name)}">Test login now</button>`;if(ds.key==='credentials')return ds.next==='Edit connection'?`<button data-edit="${esc(n.name)}">Edit connection…</button>`:`<button data-profile="">Add credentials</button>`;return '';}
 function renderDetails(){
  const lab=current(),n=lab?.nodes.find(n=>n.name===detailName);if(!n){if($('details-dialog').open)$('details-dialog').close();return;}
@@ -440,7 +444,7 @@ function renderDetails(){
  setMarkup($('details-advanced-actions'),nodeDrawerActions(n));
  if($('details-status-text'))$('details-status-text').textContent=recheckPending(n)?`Checking ${n.short_name||n.name} again… (automatic within a minute — or Test login now)`:ds?ds.detail:(h?.ssh?.message||'');
  setMarkup($('details-status-actions'),statusActions(n,ds));
- setMarkup($('details-status-raw-body'),`<div class="connection-result">${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<p>${esc(h?.ssh?.message||'No login check yet.')}</p>${h?.ssh?.at?`<time>${esc(utcDisplay(h.ssh.at))}${h.ssh.source==='automatic'?' · automatic check':''}</time>`:''}</div><p class="form-help">Running devices are checked automatically until they accept a login. Test login (under Advanced) checks the saved credentials now.</p>`);
+ setMarkup($('details-status-raw-body'),`<div class="connection-result">${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<p>${esc(h?.ssh?.message||'No login check yet.')}</p>${h?.ssh?.at?`<time>${esc(utcDisplay(h.ssh.at))}${h.ssh.source==='automatic'?' · automatic check':''}</time>`:''}</div><p class="form-help">${detailsLoginHelp(lab,n)}</p>`);
  setMarkup($('details-info'),`<section class="drawer-section"><h3>Connection</h3><dl class="health-grid"><dt>Name in lab files</dt><dd class="mono">${esc(n.name)}</dd><dt>Network OS</dt><dd>${esc(platformLabel(n.platform))}</dd><dt>Login credentials</dt><dd>${esc(profileName(lab,n))}</dd><dt>Address</dt><dd class="mono">${esc(n.address)}:${esc(n.port)}</dd></dl></section>`);
  setMarkup($('details-advanced-body'),`<dl class="health-grid"><dt>Included in backups</dt><dd><label class="checkbox-label"><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''}> Include ${esc(n.short_name||n.name)} in backups</label></dd><dt>Can be backed up</dt><dd>${n.readiness==='Ready'?'Yes':'No'+(n.readiness?' — '+esc(readinessWord(n.readiness)):'')}</dd></dl>`);
  const backups=state.jobs.filter(j=>j.lab_id===activeId&&j.operation==='backup'&&!['queued','running'].includes(j.status));
