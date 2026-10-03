@@ -53,6 +53,24 @@ LIVE_APPLY_NOTE = ('needs real devices behind the review: the fixture has no SSH
                     'check_design_apply_ui.py, test_design_apply.py, test_design_ownership.py')
 
 
+def reload_design(page):
+    """Reload the page on the Network design view: the route is now #view=advanced and the Experimental
+    <details> starts closed on every load, so reopen it (that is also what loads the design)."""
+    page.reload()
+    page.wait_for_selector('#experimental-design', timeout=15000)
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+
+
+def open_design(page, timeout=15000):
+    """Advanced > Experimental > Network design: the Design tab is gone, so click #tab-advanced, open
+    #experimental-design (closed by default) and wait for the #design-view region to be visible."""
+    page.click('#tab-advanced')
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+    page.wait_for_selector('#design-view', state='visible', timeout=timeout)
+
+
 def now_iso():
     return datetime.now(timezone.utc).isoformat(timespec='seconds')
 
@@ -187,61 +205,60 @@ class Run:
 def part1(page, r, base, lab):
     run = Run(page, r)
 
-    # --- NAV-003: Tools tab shortcut ------------------------------------------------------------------
+    # --- NAV-003: the Tools tab has no Network design shortcut; Advanced > Experimental opens it ----------
     page.goto(base + '/#lab=' + lab['id'] + '&view=tools')
     page.wait_for_selector('#tools-view:not([hidden])', timeout=15000)
-    has_shortcut = page.locator('#tools-design').count() == 1
-    page.click('#tools-design')
-    page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
+    no_shortcut = page.locator('#tools-design').count() == 0 and page.locator('#tab-design').count() == 0
+    open_design(page)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
-    run.check('ND-NAV-003', has_shortcut and page.locator('#design-view').is_visible(),
-               'Tools tab #tools-design shortcut opened #design-view', 'the shortcut button or the resulting panel was not found')
+    run.check('ND-NAV-003', no_shortcut and page.locator('#design-view').is_visible(),
+               'no #tools-design card and no Design tab; Advanced > Experimental > Network design opens #design-view',
+               'a Design tab or Tools shortcut still exists, or the Experimental entry did not open #design-view')
 
-    # --- NAV-002: hash deep link (fresh load) ---------------------------------------------------------
+    # --- NAV-002: old hash deep link (fresh load) lands on Advanced with Experimental open ----------------
     page.goto(base + '/#lab=' + lab['id'] + '&view=design')
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
-    ok = page.locator('#design-view').is_visible() and page.locator('#tab-design[aria-selected="true"]').count() == 1
+    ok = (page.locator('#design-view').is_visible() and page.locator('#tab-advanced[aria-selected="true"]').count() == 1
+          and page.locator('#experimental-design[open]').count() == 1 and page.locator('#design-experimental-banner').is_visible())
     m2 = run.mark()
-    page.reload()
+    reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
     reload_hit = bool(run.hit(m2, r'/api/labs/[^/]+/design$'))
     run.check('ND-NAV-002', ok and reload_hit,
-               'a fresh load and a reload of #lab=<id>&view=design both land on #design-view (tab selected) and fetch GET .../design',
-               'the deep link did not land on the Design tab or did not fetch the design on reload')
+               'a fresh load and a reload of the old #lab=<id>&view=design link both land on #design-view inside Advanced (Experimental open, warning visible, route rewritten to view=advanced) and fetch GET .../design',
+               'the old deep link did not land in Advanced > Experimental or did not fetch the design on reload')
 
     # --- NAV-001: tab button state -------------------------------------------------------------------
-    design_tab_active = page.locator('#tab-design').get_attribute('aria-selected') == 'true' and page.locator('#tab-design').get_attribute('tabindex') == '0'
+    advanced_active = page.locator('#tab-advanced').get_attribute('aria-selected') == 'true' and page.locator('#tab-advanced').get_attribute('tabindex') == '0'
     page.click('#tab-topology')
     page.wait_for_selector('#topology-view:not([hidden])', timeout=5000)
     design_hidden_now = page.locator('#design-view').is_hidden()
-    design_tab_inactive = page.locator('#tab-design').get_attribute('aria-selected') == 'false' and page.locator('#tab-design').get_attribute('tabindex') == '-1'
-    page.click('#tab-design')
-    page.wait_for_selector('#design-view:not([hidden])', timeout=5000)
-    run.check('ND-NAV-001', design_tab_active and design_hidden_now and design_tab_inactive,
-               'aria-selected/tabindex flip correctly and #design-view/#topology-view toggle hidden with #tab-design',
-               'tab state or panel visibility did not match aria-selected/tabindex/hidden expectations')
+    advanced_inactive = page.locator('#tab-advanced').get_attribute('aria-selected') == 'false' and page.locator('#tab-advanced').get_attribute('tabindex') == '-1'
+    open_design(page)
+    run.check('ND-NAV-001', advanced_active and design_hidden_now and advanced_inactive and page.locator('#tab-design').count() == 0,
+               'there is no Design tab; aria-selected/tabindex flip on #tab-advanced and #design-view (a region inside Advanced) is hidden whenever another tab is shown',
+               'tab state or the region visibility did not match aria-selected/tabindex/hidden expectations')
 
-    # --- NAV-004: arrow-key tab roving reaches #tab-design ---------------------------------------------
+    # --- NAV-004: arrow-key tab roving reaches Advanced (the home of Network design) ---------------------
     page.click('#tab-topology')
     page.wait_for_selector('#topology-view:not([hidden])', timeout=5000)
     page.locator('#tab-topology').focus()
-    for _ in range(3):
+    for _ in range(4):
         page.keyboard.press('ArrowRight')
     page.wait_for_timeout(200)
     focused_id = page.evaluate('document.activeElement && document.activeElement.id')
-    landed_on_design = page.locator('#design-view').is_visible() and page.locator('#tab-design[aria-selected="true"]').count() == 1
-    run.check('ND-NAV-004', focused_id == 'tab-design' and landed_on_design,
-               'ArrowRight x3 from #tab-topology moved focus to #tab-design (topology->devices->progress->design) and tabKeydown\'s showTab ran (panel visible)',
-               'arrow-key roving did not land focus on #tab-design with the panel shown (focused=%s)' % focused_id)
-    page.click('#tab-design')
-    page.wait_for_selector('#design-view:not([hidden])', timeout=5000)
+    landed = page.locator('#advanced-view').is_visible() and page.locator('#tab-advanced[aria-selected="true"]').count() == 1
+    run.check('ND-NAV-004', focused_id == 'tab-advanced' and landed,
+               "ArrowRight x4 from #tab-topology moved focus to #tab-advanced (topology->devices->progress->tools->advanced) and tabKeydown's showTab ran (panel visible)",
+               'arrow-key roving did not land focus on #tab-advanced with the panel shown (focused=%s)' % focused_id)
+    open_design(page)
 
-    # --- A11Y-001/002/003: tab bar + panel + status line roles ----------------------------------------
-    run.pass_('ND-A11Y-001', 'role=tab, aria-selected, aria-controls=design-view and roving tabindex all present on #tab-design (checked above)')
-    run.check('ND-A11Y-002', page.locator('#design-view[role="tabpanel"][aria-labelledby="tab-design"]').count() == 1,
-               '#design-view has role=tabpanel aria-labelledby=tab-design', 'role/aria-labelledby missing on #design-view')
+    # --- A11Y-001/002/003: tab bar + region + status line roles ----------------------------------------
+    run.pass_('ND-A11Y-001', 'role=tab, aria-selected, aria-controls and roving tabindex are present on #tab-advanced (checked above); #tab-design no longer exists')
+    run.check('ND-A11Y-002', page.locator('#design-view[role="region"][aria-labelledby="design-head-title"]').count() == 1 and page.locator('#advanced-view #design-view').count() == 1 and page.locator('#design-view[role="tabpanel"]').count() == 0,
+               '#design-view is a role=region labelled by its heading, inside #advanced-view, and no longer a tabpanel', 'region semantics or placement missing on #design-view')
     run.check('ND-A11Y-003', page.locator('#design-state[role="status"]').count() == 1,
                '#design-state has role=status', 'role=status missing on #design-state')
 
@@ -575,8 +592,8 @@ def part1(page, r, base, lab):
                'history did not list a succeeded generation')
 
     # --- ERROR-004: generation errors name the device and reason (unsupported protocol) --------------------
-    page.locator('input[name="design-module"][value="eigrp"]').check()
-    page.locator('input[name="design-module"][value="eigrp"]').dispatch_event('change')
+    page.locator('input[name="design-module"][value="srv6"]').check()
+    page.locator('input[name="design-module"][value="srv6"]').dispatch_event('change')
     page.click('#design-save')
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Unsaved")', timeout=10000)
     before_id = run.newest_generation_id()
@@ -584,27 +601,27 @@ def part1(page, r, base, lab):
     run.wait_generation_settled(timeout=60000, before_id=before_id)
     errors_text = run.text('#design-plan-errors')
     failed_state_text = run.text('#design-state')
-    run.check('ND-ERROR-004', 'eigrp' in errors_text and 'arista_ceos' in errors_text,
-               'the failed generation names eigrp and arista_ceos in its error: ' + errors_text[:200],
+    run.check('ND-ERROR-004', 'srv6' in errors_text and 'arista_ceos' in errors_text,
+               'the failed generation names srv6 and arista_ceos in its error: ' + errors_text[:200],
                'the failure did not name the device kind and feature: ' + errors_text[:200])
     run.check('ND-STATE-006', 'last plan failed' in failed_state_text.lower(), 'state reads "%s" after a failed generation' % failed_state_text,
                'state did not read "The last plan failed"')
     if 'ND-GENERATE-004' in run.r.data:
-        run.r.data['ND-GENERATE-004']['detail'] += ' | a failed generation (unsupported eigrp on cEOS) was also observed live'
+        run.r.data['ND-GENERATE-004']['detail'] += ' | a failed generation (unsupported srv6 on cEOS) was also observed live'
     else:
-        run.pass_('ND-GENERATE-004', 'a failed generation (unsupported eigrp on cEOS) observed live', shoot=False)
-    page.locator('input[name="design-module"][value="eigrp"]').uncheck()
-    page.locator('input[name="design-module"][value="eigrp"]').dispatch_event('change')
+        run.pass_('ND-GENERATE-004', 'a failed generation (unsupported srv6 on cEOS) observed live', shoot=False)
+    page.locator('input[name="design-module"][value="srv6"]').uncheck()
+    page.locator('input[name="design-module"][value="srv6"]').dispatch_event('change')
     page.click('#design-save')
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Unsaved")', timeout=10000)
     # designStateOf's "stale" branch only applies when the *newest* generation is succeeded (it loses to
-    # "failed"/"interrupted" otherwise); the newest one right now is still the eigrp failure above, so a
+    # "failed"/"interrupted" otherwise); the newest one right now is still the srv6 failure above, so a
     # real regenerate-to-success is needed here before an edit-without-regenerating can show as stale.
     before_id = run.newest_generation_id()
     page.click('#design-generate')
     settled_again = run.wait_generation_settled(timeout=180000, before_id=before_id)
     if settled_again != 'Plan ready':
-        raise RuntimeError('ospf-basics did not return to "Plan ready" after reverting eigrp: settled on %r' % settled_again)
+        raise RuntimeError('ospf-basics did not return to "Plan ready" after reverting srv6: settled on %r' % settled_again)
 
     # --- STATE-007: stale (edit after a succeeded plan, without regenerating) -----------------------------
     page.locator('input[name="design-module"][value="isis"]').check()
@@ -753,7 +770,7 @@ def part1(page, r, base, lab):
                               'lan': {'ipv4': '172.16.0.0/16', 'ipv6': '2001:db8:2::/48', 'prefix': 24}},
               'modules': ['ospf'], 'nodes': {}, 'links': {}, 'vlans': {}, 'vrfs': {}, 'interfaces': {}, 'allocations': {}}
     status, view = api_call(base, '/api/labs/' + lab_id + '/design', 'PUT', {'intent': intent, 'revision': ''})
-    page.reload()
+    reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
     held_revision = page.evaluate('designState.view.intent.revision')
@@ -792,7 +809,7 @@ def part1(page, r, base, lab):
               'confirming the route accepts/normalises the request rather than trusting the client value: status=%s)' % status, [])
 
     # --- ERROR-009: invalid JSON in the Advanced editor (client-only) -------------------------------------------
-    page.reload()
+    reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
     page.click('#design-advanced-details summary') if not page.locator('#design-advanced-details').get_attribute('open') else None
@@ -862,7 +879,7 @@ def part1(page, r, base, lab):
     page.locator('input[name="design-module"][value="vlan"]').check()
     page.locator('input[name="design-module"][value="vlan"]').dispatch_event('change')
     page.wait_for_timeout(300)
-    page.reload()
+    reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
     draft_restored = page.locator('input[name="design-module"][value="vlan"]').is_checked()
@@ -887,7 +904,7 @@ def part1(page, r, base, lab):
         body['engine'] = {'available': False, 'version': '', 'path': '', 'diagnostic': 'netlab is not installed on this manager.'}
         route.fulfill(status=resp.status, content_type='application/json', body=json.dumps(body))
     page.route(re.compile(r'/api/labs/[^/]+/design$'), fake_engine_unavailable)
-    page.reload()
+    reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_timeout(800)
     engine_state_text = run.text('#design-state')
@@ -901,7 +918,7 @@ def part1(page, r, base, lab):
                '[fault injection, as above] Generate plan is disabled with the engine diagnostic as its title when the engine is unavailable (this completes the row alongside the earlier enabled-and-clicked state)',
                'Generate plan was not disabled when the engine reported unavailable', shoot=False)
     page.unroute(re.compile(r'/api/labs/[^/]+/design$'), fake_engine_unavailable)
-    page.reload()
+    reload_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
 
@@ -1036,8 +1053,7 @@ def part2(page, r, base, lab, ospf_lab):
         page.click('#tab-topology')
         page.wait_for_selector('#topology-view:not([hidden])', timeout=5000)
         page.wait_for_timeout(2000)
-        page.click('#tab-design')
-        page.wait_for_selector('#design-view:not([hidden])', timeout=5000)
+        open_design(page)
         after_switch_text = run.text('#design-state')
         still_tracking = ('Generating' in after_switch_text) or ('Plan ready' in after_switch_text)
         run.check('ND-NAV-005', still_tracking, 'switching to Topology and back while a 13-device generation was running: state now "%s" (the watch is lab-scoped, not tab-scoped)' % after_switch_text,
@@ -1056,12 +1072,12 @@ def part2(page, r, base, lab, ospf_lab):
     landed_on_topology = page.locator('#tab-topology[aria-selected="true"]').count() == 1 and page.locator('#topology-view').is_visible()
     run.check('ND-NAV-006', landed_on_topology, 'clicking another lab in the sidebar switcher while Design was active reset the view to Topology (selectLab\'s own default)',
                'switching labs from the sidebar did not reset the view to Topology as selectLab(id) (no view arg) specifies')
-    # back to BGP's design tab
+    # back to BGP's Network design (Advanced > Experimental)
     page.click('#lab-switcher summary')
     page.wait_for_selector('#labs [data-lab]', timeout=5000)
     page.click('#labs [data-lab="%s"]' % lab_id)
     page.wait_for_timeout(300)
-    page.click('#tab-design')
+    open_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
 
@@ -1290,7 +1306,7 @@ def part_a11y_narrow(page, r, base, ospf_lab):
     compat_headers = page.locator('#design-compatibility th[scope="row"]').count()
     run.check('ND-A11Y-006', True, 'th[scope=row] pattern is source-confirmed (network-design.js:429); this lab\'s compatibility table currently has %d such headers' % compat_headers, 'n/a', shoot=False)
     run.check('ND-A11Y-007', page.locator('.checkbox-label input').count() > 10,
-               '.checkbox-label wraps every checkbox throughout the Design tab (%d found)' % page.locator('.checkbox-label input').count(),
+               '.checkbox-label wraps every checkbox throughout the Network design view (%d found)' % page.locator('.checkbox-label input').count(),
                'the checkbox-label wrapping pattern was not found broadly enough', shoot=False)
 
     width_before = page.evaluate('() => document.documentElement.scrollWidth')
@@ -1300,9 +1316,9 @@ def part_a11y_narrow(page, r, base, ospf_lab):
     page.click('#tab-topology')
     page.wait_for_timeout(300)
     shell_width = page.evaluate('() => document.documentElement.scrollWidth')
-    page.click('#tab-design')
+    open_design(page)
     page.wait_for_timeout(300)
-    run.pass_('ND-A11Y-008', 'at 390x844, the Design tab (scrollWidth=%d) adds no horizontal overflow beyond the shell chrome (scrollWidth=%d)' % (design_width, shell_width))
+    run.pass_('ND-A11Y-008', 'at 390x844, the Network design view (scrollWidth=%d) adds no horizontal overflow beyond the shell chrome (scrollWidth=%d)' % (design_width, shell_width))
     if design_width > shell_width:
         run.r.data['ND-A11Y-008']['result'] = 'FAIL'
 

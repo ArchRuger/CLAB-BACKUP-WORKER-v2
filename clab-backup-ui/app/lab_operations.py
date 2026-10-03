@@ -279,6 +279,38 @@ def topology_images(text):
     return list(found.values())
 
 
+CPTX_KIND = 'juniper_cjunosevolved'
+
+
+def cptx_startup_warnings(text):
+    """Review warnings for cJunosEvolved nodes that carry both env CPTX_AUTO_CONFIG and a startup-config: Juniper's
+    entrypoint checks CPTX_AUTO_CONFIG first, so the startup-config is silently ignored on first boot. Settings are
+    resolved the way containerlab does (node, then its group, then its kind, then the defaults; `env` maps merged
+    across those levels). Read-only and silent on anything it cannot read: never refuses a topology."""
+    try: topology = read_data(text.encode() if isinstance(text, str) else text).get('topology') or {}
+    except (ValueError, TypeError, AttributeError, RecursionError): return []
+    if not isinstance(topology, dict) or not isinstance(topology.get('nodes'), dict): return []
+    def mapping(value): return value if isinstance(value, dict) else {}
+    defaults = mapping(topology.get('defaults')); kinds = mapping(topology.get('kinds')); groups = mapping(topology.get('groups'))
+    warnings = []
+    for name, node in topology['nodes'].items():
+        node = mapping(node)
+        group = mapping(groups.get(node.get('group'))) if isinstance(node.get('group'), str) else {}
+        kind = node.get('kind', group.get('kind', defaults.get('kind')))
+        if kind != CPTX_KIND: continue
+        levels = (defaults, mapping(kinds.get(kind)), group, node)
+        env = {}
+        for level in levels: env.update(mapping(level.get('env')))
+        startup = next((level['startup-config'] for level in reversed(levels) if 'startup-config' in level), None)
+        auto = env.get('CPTX_AUTO_CONFIG')
+        if auto is None or auto is False or (isinstance(auto, str) and not auto.strip()): continue
+        if not (isinstance(startup, str) and startup.strip()): continue
+        label = name if isinstance(name, str) and len(name) <= 120 else 'A cJunosEvolved node'
+        warnings.append(label + ': CPTX_AUTO_CONFIG is set, so cJunosEvolved ignores its startup-config on first boot. Remove one of them.')
+        if len(warnings) >= 50: break
+    return warnings
+
+
 class LabOperations:
     def __init__(self, store, discovery, readiness=None):
         # readiness: the ReadinessMonitor, so a Restart device job can drop the device's proven login
@@ -525,6 +557,9 @@ class LabOperations:
                                   (l.get('vm_project_path') or l.get('vm_source', {}).get('files', {}).get('definition', {}).get('path', '')) not in ('', result.get('path'))), None)
                 if taken: raise HTTPException(409, 'A lab named ' + name + ' is already in My labs with a different topology file. Choose another lab name.')
                 req['path'] = result.get('path', '')
+            if data.action in ('deploy', 'redeploy', 'publish', 'revise', 'create'):
+                # Manager-side only (the helper's plan and its digest are untouched): shown with the review's warnings.
+                notes.extend(cptx_startup_warnings(str(options.get('text', '')) if data.action in ('publish', 'revise', 'create') else (source or {}).get('text', '')))
             if notes: result['warnings'] = notes + list(result.get('warnings', []))
             if diff: result['diff'] = diff
             # The images the reviewed topology names, so the page can ask whether each is usable on this VM

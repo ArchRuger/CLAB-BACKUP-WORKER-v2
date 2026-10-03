@@ -103,8 +103,8 @@ test('the device look (applied through the editor\'s own node editor, translated
  for(const [bad,reason] of [[{icon:'<img>'},/listed icons/],[{iconColor:'red'},/not a colour/],[{iconCornerRadius:'33'},/0 to 32/],[{iconCornerRadius:'1.5'},/0 to 32/],[{labelPosition:'inside'},/label positions/],[{direction:'sideways'},/text directions/],[{labelBackgroundColor:'url(x)'},/not a colour/]])assert.throws(()=>c.mapApplyLook(text,'r1',bad),reason);
  assert.throws(()=>c.mapApplyLook(text,'ghost',{icon:'pe'}),/not on the map/);
  // The four corners are label positions of their own (item 6), and the page hands the adapter applyLook().
- for(const corner of ['top-left','top-right','bottom-left','bottom-right'])assert.equal(JSON.parse(c.mapApplyLook(text,'r1',{labelPosition:corner})).nodeAnnotations[0].labelPosition,corner);
- assert.deepEqual(plain(vm.runInContext('MAP_LABEL_POSITIONS.map(p=>p[0])',c)),['bottom','top','left','right','top-left','top-right','bottom-left','bottom-right']);
+ for(const corner of ['center','top-left','top-right','bottom-left','bottom-right'])assert.equal(JSON.parse(c.mapApplyLook(text,'r1',{labelPosition:corner})).nodeAnnotations[0].labelPosition,corner);
+ assert.deepEqual(plain(vm.runInContext('MAP_LABEL_POSITIONS.map(p=>p[0])',c)),['bottom','top','left','right','center','top-left','top-right','bottom-left','bottom-right']);
  assert.equal(typeof vm.runInContext('labBuilderPage.applyLook',c),'function');
  assert.doesNotMatch(read('map-editor.html'),/map-look/,'the page dialog is gone: the look is edited in the editor\'s node editor');
  const css=read('lab-builder.css');for(const tab of ['config','runtime','network','advanced'])assert.ok(css.includes('.map-editor [data-testid="panel-tab-'+tab+'"]'),'the map editor hides the node editor\'s '+tab+' tab');

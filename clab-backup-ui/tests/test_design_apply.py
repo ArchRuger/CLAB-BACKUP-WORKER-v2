@@ -13,6 +13,7 @@ no-op so `_open()` "connects" without a network, and `app.design_apply.DRIVERS` 
 """
 import copy
 import hashlib
+import json
 import tempfile
 import time
 import unittest
@@ -499,6 +500,29 @@ def poll_job(client, job_id, timeout=30):
     raise AssertionError('Design apply job did not finish in time: ' + str(last))
 
 
+def poll_review_job(client, lab_id, job_id, timeout=30):
+    """Follows GET .../design/review-jobs/{id} until the job leaves `running`; returns the last body."""
+    deadline = time.monotonic() + timeout
+    body = None
+    while time.monotonic() < deadline:
+        response = client.get(f'/api/labs/{lab_id}/design/review-jobs/{job_id}')
+        assert response.status_code == 200, response.text
+        body = response.json()
+        if body['status'] != 'running': return body
+        time.sleep(0.02)
+    raise AssertionError('Review job did not finish in time: ' + str(body))
+
+
+class ReviewedBody:
+    """A finished review job read the way the synchronous review response was: status code and JSON body."""
+    def __init__(self, status_code, body):
+        self.status_code = status_code; self.body = body
+        self.text = json.dumps(body)
+
+    def json(self):
+        return self.body
+
+
 class DesignApplyTestCase(unittest.TestCase):
     """Common fixture: a two-node cEOS lab, discovery marked fresh, both devices credentialed and
     registered with the fake driver, a default one-node generation from FRAGMENT."""
@@ -536,9 +560,15 @@ class DesignApplyTestCase(unittest.TestCase):
         return add_generation(self.app, self.lab_id, node_map('ceos'), {'ceos': [('initial', FRAGMENT)]})
 
     def review(self, generation_id, targets=('ceos',), takeover=()):
+        """The review as these tests knew it before it became a job: POST starts the job (its synchronous guards still
+        answer with their status at once), then the job is followed until it finishes and its review payload (with the
+        token) stands in for the old synchronous body; a job that finishes failed reads as the 409 it used to be."""
         response = self.client.post(f'/api/labs/{self.lab_id}/design/generations/{generation_id}/review',
-                                    json={'targets': list(targets), 'takeover': list(takeover)})
-        return response
+                                    json={'targets': list(targets), 'takeover': list(takeover), 'request_id': uuid.uuid4().hex})
+        if response.status_code != 200: return response
+        self.last_review_job = poll_review_job(self.client, self.lab_id, response.json()['review_job']['id'])
+        if self.last_review_job['status'] == 'done': return ReviewedBody(200, self.last_review_job['review'])
+        return ReviewedBody(409, {'detail': self.last_review_job['message']})
 
     def submit_http(self, token, confirm_minutes=5, takeover=(), request_id=None, acknowledged=True):
         body = {'token': token, 'confirm_minutes': confirm_minutes, 'takeover': list(takeover),

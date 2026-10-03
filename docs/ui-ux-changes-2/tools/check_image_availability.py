@@ -76,10 +76,10 @@ with sync_playwright() as pw:
     shot('03-image-line-missing')
     # The save review lists the images with the VM's answers; cancelled.
     page.click('#builder-save'); page.wait_for_selector('#operation-review[open]', timeout=30000)
-    page.wait_for_function('() => { const l = document.querySelector("#op-review-images"); return l && !l.textContent.includes("checking"); }', timeout=30000)
+    page.wait_for_function('() => !document.querySelector("#op-review-images-status")', timeout=30000)
     review = page.inner_text('#op-review-images')
     notice = page.locator('#op-review-images-notice')
-    check('the save review lists each image with the VM\'s answer', 'on the VM' in review and 'no registry offers it' in review, review)
+    check('the save review lists the image the VM cannot supply, with the VM\'s answer, and only images that need attention', 'no registry offers it' in review and 'on the VM.' not in review.replace('not on the VM', ''), review)
     check('the review calls out the image found nowhere', notice.is_visible() and MISSING in notice.inner_text() and 'cannot be pulled on this VM' in notice.inner_text(), notice.inner_text() if notice.count() else 'no notice')
     check('the review still lets the student decide (Save stays enabled)', page.locator('#op-confirm').is_enabled())
     shot('04-save-review-images')
@@ -91,9 +91,10 @@ with sync_playwright() as pw:
         page.click('[data-lab-more="%s"]' % lab['id']); page.wait_for_selector('#lab-operations-dialog [data-op-action="deploy"]', timeout=20000)
         page.click('#lab-operations-dialog [data-op-action="deploy"]'); page.wait_for_selector('#operation-review[open]', timeout=30000)
         if page.locator('#op-review-images').count():
-            page.wait_for_function('() => { const l = document.querySelector("#op-review-images"); return l && !l.textContent.includes("checking"); }', timeout=30000)
-            deploy_review = page.inner_text('#op-review-images')
-            check('the Start lab review of an existing lab lists its images with the VM\'s answers', len(deploy_review) > 0 and ('on the VM' in deploy_review or 'not on the VM' in deploy_review), deploy_review)
+            page.wait_for_function('() => !document.querySelector("#op-review-images-status")', timeout=30000)
+            shown = page.locator('#op-review-images-section').is_visible()
+            deploy_review = page.inner_text('#op-review-images') if shown else ''
+            check('the Start lab review lists only images that need attention, and no Images section when none does', (not shown) or ('not on the VM' in deploy_review and 'on the VM.' not in deploy_review.replace('not on the VM', '')), deploy_review)
         else:
             check('the Start lab review opened; this topology names no image, so there is no Images section', True)
         shot('05-deploy-review-images')

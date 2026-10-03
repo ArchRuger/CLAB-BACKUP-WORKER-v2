@@ -96,6 +96,16 @@ def add_lab(app, name='restore-square', definition_yaml=TOPOLOGY):
     return lab_id
 
 
+def plant_design(app, lab_id, intent):
+    """Stores `intent` on the lab as if it had been saved before a module it uses was retired (Save refuses to add a
+    retired module now); returns its revision."""
+    stored = intent_schema.normalize(intent)
+    with app.state.store.lock:
+        app.state.store.lab(lab_id)['network_design'] = stored
+        app.state.store.save()
+    return stored['revision']
+
+
 def poll_generation(client, lab_id, generation_id, timeout=90):
     """Polls GET .../design until `generation_id` leaves queued/running; returns its public record."""
     deadline = time.monotonic() + timeout
@@ -539,24 +549,29 @@ class GenerationFailureTests(unittest.TestCase):
         self.addCleanup(self.app.state.network_design.close)
 
     def test_an_unsupported_module_fails_the_generation_before_the_engine_runs(self):
+        """EIGRP never generates. Since its retirement (D10.1) a design cannot gain it, so the design is planted as one
+        saved before the retirement; Generate refuses it with 409 and queues nothing, and the capability check that
+        used to fail the generation still blocks every one of the four kinds before any engine run."""
         lab_id = add_lab(self.app)
         intent = intent_schema.empty_intent()
         intent['modules'] = ['eigrp']
         intent['eigrp'] = {'as': 1}
-        saved = self.client.put(f'/api/labs/{lab_id}/design', json={'intent': intent, 'revision': ''})
-        self.assertEqual(saved.status_code, 200, saved.text)
-        revision = saved.json()['intent']['revision']
+        revision = plant_design(self.app, lab_id, intent)
 
-        response = self.client.post(f'/api/labs/{lab_id}/design/generate', json={'revision': revision})
-        self.assertEqual(response.status_code, 200)
-        record = poll_generation(self.client, lab_id, response.json()['id'])
+        with patch('subprocess.Popen', side_effect=AssertionError('the engine must not run')):
+            response = self.client.post(f'/api/labs/{lab_id}/design/generate', json={'revision': revision})
+        self.assertEqual(response.status_code, 409, response.text)
+        detail = response.json()['detail']
+        self.assertIn('EIGRP', detail['message'])
+        self.assertEqual(detail['retired'], ['eigrp'])
+        self.assertEqual(self.client.get(f'/api/labs/{lab_id}/design').json()['generations'], [])
 
-        self.assertEqual(record['status'], 'failed')
-        self.assertIn('cannot do', record['message'])
-        self.assertTrue(record['errors'])
+        service = self.app.state.network_design
+        with self.app.state.store.lock: lab = copy.deepcopy(self.app.state.store.lab(lab_id))
+        built = nd.adapter.build(lab['definition_yaml'], lab['nodes'], intent, nd.capabilities.profile_for)
+        _, blocking = service.compatibility(intent, built['nodes'])
         for kind in ('arista_ceos', 'juniper_cjunosevolved', 'juniper_vjunosswitch', 'cisco_xrv9k'):
-            self.assertTrue(any('eigrp' in e and kind in e for e in record['errors']), record['errors'])
-        self.assertNotIn('artifacts', record)
+            self.assertTrue(any('eigrp' in e and kind in e for e in blocking), blocking)
 
     def test_excluding_every_router_leaves_only_the_host_device(self):
         """Observed behaviour: excluding every router node does not raise in the adapter (the lone
@@ -905,18 +920,29 @@ class ReviewRegressionGenerationTests(unittest.TestCase):
             self.assertEqual(len(used), len(set(used)))
 
     def test_a_device_level_module_the_kind_cannot_do_blocks_before_the_engine_runs(self):
+        """A device's own module list is checked too: EIGRP on one device of an old design (planted, since a design
+        cannot gain EIGRP any more) is refused at Generate, by path, before the engine; and the capability check
+        still names that device."""
         with TestClient(self.app) as client:
             intent = valid_intent()
             intent['nodes'] = {'ceos': {'modules': ['eigrp'], 'eigrp': {'as': 1}}}
+            revision = plant_design(self.app, self.lab_id, intent)
             with patch('subprocess.Popen', side_effect=AssertionError('the engine must not run')):
-                revision, record = save_and_generate(client, self.lab_id, intent)
-            self.assertEqual(record['status'], 'failed')
-            self.assertTrue(any('ceos: eigrp' in e for e in record['errors']), record['errors'])
+                response = client.post(f'/api/labs/{self.lab_id}/design/generate', json={'revision': revision})
+            self.assertEqual(response.status_code, 409, response.text)
+            self.assertIn('nodes.ceos.modules', [p['path'] for p in response.json()['detail']['problems']])
+            self.assertEqual(client.get(f'/api/labs/{self.lab_id}/design').json()['generations'], [])
+            with self.app.state.store.lock: lab = copy.deepcopy(self.app.state.store.lab(self.lab_id))
+            built = nd.adapter.build(lab['definition_yaml'], lab['nodes'], intent, nd.capabilities.profile_for)
+            _, blocking = self.app.state.network_design.compatibility(intent, built['nodes'])
+            self.assertTrue(any('ceos: eigrp' in e for e in blocking), blocking)
 
     def test_a_missing_prerequisite_blocks_before_the_engine_runs(self):
+        """Segment routing without an IGP (sr_mpls needs IS-IS or OSPF). This used EVPN without BGP before EVPN was
+        made unavailable (D10.3); the claim, a missing prerequisite fails the plan before the engine runs, is the same."""
         with TestClient(self.app) as client:
             intent = valid_intent()
-            intent['modules'] = ['evpn']
+            intent['modules'] = ['sr']
             intent.pop('ospf'); intent.pop('bgp')
             with patch('subprocess.Popen', side_effect=AssertionError('the engine must not run')):
                 revision, record = save_and_generate(client, self.lab_id, intent)

@@ -20,13 +20,14 @@ import hashlib
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait as wait_futures
 
 import paramiko
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import design_eos, design_iosxr, design_junos
+from . import design_intent as intent_schema
 from . import design_ownership as own
 from . import design_provision as provision
 from .discovery import discovery_fresh, node_available
@@ -48,6 +49,52 @@ SAMPLE = 40
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'generation_id', 'created', 'started', 'finished', 'status', 'message',
               'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets', 'progress', 'takeover')
 NOT_AVAILABLE = 'Applying to this kind of device is not available yet; its generated files are preview and download only.'
+
+# The device review runs as an in-memory job (docs/uiux-email-2026-10-03/DESIGN-CONTRACT.md): POST .../review checks
+# everything it checked before and answers at once; the per-device work runs in the background and records the
+# stage each device is really at. A finished job (and its token) lives REVIEW_TTL seconds; a manager restart forgets
+# every review job, so the page reviews again (the token was in memory too).
+REVIEW_JOB_CAP = 50
+REVIEW_TIMEOUT = 540   # per device, counted from its first real step (`connecting`): still working then is `timeout`
+REVIEW_LIMIT = 3600    # safety limit of a whole job from its start: a device still waiting for a slot then is `queue_limit`
+REVIEW_POLL = 0.5      # how often the orchestrator looks at its devices' deadlines
+REVIEW_STAGES = ('queued', 'connecting', 'checking_pending', 'rendering', 'reading_config', 'staging', 'restaging',
+                 'done', 'failed', 'unreachable', 'not_eligible')
+REVIEW_SETTLED = ('done', 'failed', 'unreachable', 'not_eligible')
+REVIEW_JOB_STATUS = ('running', 'done', 'failed', 'interrupted')
+# Fixed, safe words per failure category: a review job never carries device output, configuration text or a secret.
+REVIEW_REASONS = {
+    'unreachable': 'The device could not be reached over SSH.',
+    'auth': 'The device rejected the login credentials.',
+    'pending_change': 'Another change is waiting for confirmation on this device.',
+    'device_refused': 'The device refused the staged configuration during the review.',
+    'connection_lost': 'The connection to the device was lost during the review.',
+    'plan_files': 'A generated file of this plan is missing or changed; generate the plan again.',
+    'timeout': 'The device did not finish the review in time.',
+    'queue_limit': 'The device waited too long for a free connection slot (other reviews or applies were using them) and was not contacted.',
+    'interrupted': 'The manager stopped before the review of this device finished.',
+    'internal': 'The review failed inside the manager for this device.',
+}
+PUBLIC_REVIEW_JOB = ('id', 'request_id', 'lab_id', 'generation_id', 'status', 'message', 'started', 'finished', 'progress', 'takeover')
+PUBLIC_REVIEW_TARGET = ('name', 'kind', 'stage', 'timeline', 'reason_code', 'message')
+
+
+def public_review_job(job, with_review=False):
+    """A review job for the page: per device the stage, its timestamps (epoch seconds) and a fixed reason; the review
+    payload (with its token) only once the job is done and only when asked for (the single-job GET)."""
+    value = {k: copy.deepcopy(job[k]) for k in PUBLIC_REVIEW_JOB if k in job}
+    value['targets'] = [{k: copy.deepcopy(t[k]) for k in PUBLIC_REVIEW_TARGET if k in t} for t in job.get('targets', [])]
+    if with_review and job.get('status') == 'done' and job.get('review') is not None: value['review'] = copy.deepcopy(job['review'])
+    value['server_time'] = time.time()
+    return value
+
+
+def retired_plan_message(modules):
+    """Why a plan that carries a retired module is not applied (plans generated before the retirement included)."""
+    one = len(modules) == 1
+    return ('This plan uses ' + intent_schema.retired_sentence(modules) + ', which ' + intent_schema.retired_phrase(modules) + ', '
+            'so it cannot be applied to devices. The plan stays viewable and downloadable; remove ' + ('it' if one else 'them')
+            + ' from the design and generate a new plan to apply.')
 
 
 def public_job(job):
@@ -89,6 +136,11 @@ class DesignApply:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='design-apply')
         self.node_pool = ThreadPoolExecutor(max_workers=max(1, min(8, node_workers)), thread_name_prefix='design-node')
         self.reviews = {}
+        self.review_jobs = {}             # job id -> in-memory review job (never persisted)
+        self.review_lock = threading.Lock()   # guards review_jobs; taken after store.lock, never before it
+        self.review_timeout = REVIEW_TIMEOUT
+        self.review_limit = REVIEW_LIMIT
+        self.review_poll = REVIEW_POLL
         self.retry_interval = 10
         self.recovery_grace = 90
         self.connect_pause = 3
@@ -221,16 +273,57 @@ class DesignApply:
 
     # --- review -------------------------------------------------------------------------------------------
 
-    def review(self, lab_id, generation_id, targets, takeover):
+    def review(self, lab_id, generation_id, targets, takeover, request_id=''):
+        """Start a device review job. Everything that can be decided without a device is decided here, as before
+        (unknown lab 404, busy, plan not generated, retired module, stale plan, stale discovery, nothing eligible: 409);
+        then the job is registered and returned at once, and the per-device work runs in the background.
+        The same `request_id` returns the same job; another review of the lab while one runs is a 409 naming it."""
         with self.store.lock:
+            with self.review_lock:
+                self._prune_reviews()
+                if request_id:
+                    existing = next((j for j in self.review_jobs.values() if j.get('request_id') == request_id), None)
+                    if existing:
+                        if existing['lab_id'] != lab_id or existing['generation_id'] != generation_id:
+                            raise HTTPException(409, 'This request belongs to another review. Start the review again.')
+                        return {'review_job': public_review_job(existing)}
+                running = next((j for j in self.review_jobs.values() if j['lab_id'] == lab_id and j['status'] == 'running'), None)
+                if running:
+                    raise HTTPException(409, {'message': 'The devices of this lab are already being reviewed; showing that review.', 'review_job_id': running['id']})
             lab = self.store.lab(lab_id)
             if not lab: raise HTTPException(404, 'Lab not found.')
             self.guard_idle(lab_id)
             generation = copy.deepcopy(self.designs.generation(lab, generation_id))
             if generation.get('status') != 'succeeded': raise HTTPException(409, 'Only a generated plan can be applied.')
+            retired = intent_schema.retired_in_generation(generation)
+            if retired: raise HTTPException(409, retired_plan_message(retired))
             self._current_plan(lab, generation)
             if not discovery_fresh(self.store.state): raise HTTPException(409, 'Refresh the lab list before applying a design.')
             lab = copy.deepcopy(lab); before_identity = host_identity(self.store.state.get('host', {}))
+            rows = self._review_rows(lab, generation, targets)
+            if not any(r['eligible'] for r in rows): raise HTTPException(409, 'None of the selected devices can be applied to: ' + '; '.join(f"{r['name']}: {r['reason']}" for r in rows[:6]))
+            started = time.time()
+            job = {'id': uuid.uuid4().hex, 'request_id': request_id, 'lab_id': lab_id, 'generation_id': generation_id, 'status': 'running',
+                   'message': 'Reviewing the selected devices.', 'started': now(), 'finished': None, 'takeover': sorted(set(takeover)),
+                   'targets': [{'name': r['name'], 'kind': r['kind'], 'stage': 'queued', 'timeline': {'queued': started}} if r['eligible']
+                               else {'name': r['name'], 'kind': r['kind'], 'stage': 'not_eligible', 'timeline': {}, 'reason_code': 'not_eligible', 'message': r['reason']}
+                               for r in rows],
+                   'progress': {'settled': 0, 'total': sum(1 for r in rows if r['eligible'])}, '_expires': None}
+            with self.review_lock:
+                self.review_jobs[job['id']] = job
+            # One orchestrator thread per job (at most one running job per lab): it only waits, so it never queues behind
+            # another lab's review; the device work itself shares the node pool with the applies.
+            orchestrator = threading.Thread(target=self._run_review, args=(job['id'], lab, generation, rows, takeover, before_identity),
+                                            name='design-review-' + job['id'][:8], daemon=True)
+            try:
+                if self.stopping.is_set(): raise RuntimeError('stopping')
+                orchestrator.start()
+            except RuntimeError:
+                self._finish_review(job['id'], 'interrupted', 'The manager is stopping. Review again after the restart.', 'interrupted')
+            with self.review_lock: return {'review_job': public_review_job(job)}
+
+    def _review_rows(self, lab, generation, targets):
+        """Per selected device: eligible (with its node) or the reason it cannot be applied to."""
         nodes_by_short = {n.get('definition_node') or n.get('short_name') or n['name']: n for n in lab['nodes']}
         rows = []
         for short in targets:
@@ -248,15 +341,135 @@ class DesignApply:
                 row['reason'] = 'The plan asks for something this device cannot do.'
             else: row['eligible'] = True; row['node'] = node
             rows.append(row)
-        if not any(r['eligible'] for r in rows): raise HTTPException(409, 'None of the selected devices can be applied to: ' + '; '.join(f"{r['name']}: {r['reason']}" for r in rows[:6]))
-        ledger = lab.get('network_ownership') or {}
-        results = {}
-        def work(row):
-            try: results[row['name']] = self._review_one(lab, generation, row, ledger.get(row['name']) or {}, row['name'] in takeover)
-            except Exception as exc:
-                results[row['name']] = {'reachable': False, 'reason': self._scrubbed(exc if isinstance(exc, RestoreError) else 'Connectivity: ' + type(exc).__name__)}
-        eligible = [r for r in rows if r['eligible']]
-        list(self.node_pool.map(work, eligible))
+        return rows
+
+    def _prune_reviews(self):
+        """Under review_lock: forget finished review jobs older than the token's lifetime, and keep the table bounded
+        (a running job is never dropped)."""
+        clock = time.monotonic()
+        for job_id in [k for k, j in self.review_jobs.items() if j.get('_expires') is not None and j['_expires'] <= clock]:
+            self.review_jobs.pop(job_id, None)
+        while len(self.review_jobs) >= REVIEW_JOB_CAP:
+            victim = next((k for k, j in self.review_jobs.items() if j['status'] != 'running'), None)
+            if victim is None: break
+            self.review_jobs.pop(victim, None)
+
+    def review_job(self, lab_id, job_id, with_review=True):
+        with self.review_lock:
+            self._prune_reviews()
+            job = self.review_jobs.get(job_id)
+            if not job or job['lab_id'] != lab_id: raise HTTPException(404, 'This review is no longer available. Review the devices again.')
+            return public_review_job(job, with_review=with_review)
+
+    def _review_stage(self, job_id, name, stage, reason_code='', message=''):
+        """Record that device `name` reached `stage` now. A settled device never moves again (a late worker after a
+        timeout is ignored); a settling stage carries a reason category and its fixed words."""
+        with self.review_lock:
+            job = self.review_jobs.get(job_id)
+            target = next((t for t in (job or {}).get('targets', []) if t['name'] == name), None)
+            if target is None or target['stage'] in REVIEW_SETTLED: return
+            clock = time.time()
+            target['stage'] = stage; target['timeline'].setdefault(stage, clock)
+            if stage in REVIEW_SETTLED:
+                target['timeline'].setdefault('settled', clock)
+                if reason_code: target['reason_code'] = reason_code
+                if message: target['message'] = message
+                job['progress'] = dict(job['progress'], settled=sum(1 for t in job['targets'] if 'queued' in t['timeline'] and t['stage'] in REVIEW_SETTLED))
+
+    def _current_review_stage(self, job_id, name):
+        with self.review_lock:
+            job = self.review_jobs.get(job_id)
+            target = next((t for t in (job or {}).get('targets', []) if t['name'] == name), None)
+            return target['stage'] if target else ''
+
+    @staticmethod
+    def _review_failure(exc, stage):
+        """The safe category of an exception a device's review raised at `stage`."""
+        if isinstance(exc, paramiko.AuthenticationException): return 'auth'
+        if isinstance(exc, HTTPException): return 'plan_files'
+        if isinstance(exc, SessionLost): return 'connection_lost'
+        if isinstance(exc, RestoreError): return 'unreachable' if stage == 'connecting' else 'device_refused'
+        if isinstance(exc, (OSError, EOFError, paramiko.SSHException)): return 'unreachable' if stage == 'connecting' else 'connection_lost'
+        return 'internal'
+
+    def _review_device(self, job_id, lab, generation, row, entry, takeover):
+        """One device's review in a node worker: never raises; settles the device's stage with what really happened."""
+        name = row['name']
+        try:
+            result = self._review_one(lab, generation, row, entry, takeover, progress=lambda stage: self._review_stage(job_id, name, stage))
+        except Exception as exc:
+            code = self._review_failure(exc, self._current_review_stage(job_id, name))
+            self._review_stage(job_id, name, 'unreachable' if code == 'unreachable' else 'failed', code, REVIEW_REASONS[code])
+            return {'reachable': False, 'reason': self._scrubbed(exc if isinstance(exc, RestoreError) else 'Connectivity: ' + type(exc).__name__)}
+        if result.get('ready'): self._review_stage(job_id, name, 'done')
+        else: self._review_stage(job_id, name, 'failed', 'pending_change', REVIEW_REASONS['pending_change'])
+        return result
+
+    def _finish_review(self, job_id, status, message, code='internal', review=None):
+        """Close a review job: every device not settled yet is settled as failed with `code`; a finished job and its
+        token expire together after REVIEW_TTL."""
+        with self.review_lock:
+            job = self.review_jobs.get(job_id)
+            if job is None: return
+        for target in list(job['targets']):
+            self._review_stage(job_id, target['name'], 'failed', code, REVIEW_REASONS[code])
+        with self.review_lock:
+            job.update(status=status, message=message, finished=now(), _expires=time.monotonic() + REVIEW_TTL)
+            if review is not None: job['review'] = review
+
+    def _run_review(self, job_id, lab, generation, rows, takeover, before_identity):
+        """The background half of a review job: each eligible device on the node pool, then the token and the payload
+        exactly as the synchronous review produced them."""
+        try:
+            ledger = lab.get('network_ownership') or {}
+            results = {}; futures = {}
+            for row in rows:
+                if not row['eligible']: continue
+                try: futures[self.node_pool.submit(self._review_device, job_id, lab, generation, row, ledger.get(row['name']) or {}, row['name'] in takeover)] = row['name']
+                except RuntimeError: results[row['name']] = {'reachable': False, 'reason': REVIEW_REASONS['interrupted']}
+            self._await_devices(job_id, futures, results)
+            if self.stopping.is_set():
+                self._finish_review(job_id, 'interrupted', 'The manager is stopping; the review did not finish. Review again after the restart.', 'interrupted'); return
+            try: review = self._review_result(lab['id'], generation, rows, results, takeover, before_identity)
+            except HTTPException as exc:
+                self._finish_review(job_id, 'failed', str(exc.detail)); return
+            self._finish_review(job_id, 'done', 'Review finished.', review=review)
+        except Exception as exc:
+            self._finish_review(job_id, 'failed', self._scrubbed('The review failed inside the manager (' + type(exc).__name__ + '). Review again.'))
+
+    def _review_began(self, job_id, name):
+        """When device `name` took its first real step (epoch seconds), or None while it still waits for a slot."""
+        with self.review_lock:
+            job = self.review_jobs.get(job_id)
+            target = next((t for t in (job or {}).get('targets', []) if t['name'] == name), None)
+            return (target or {}).get('timeline', {}).get('connecting')
+
+    def _await_devices(self, job_id, futures, results):
+        """Wait for the devices' workers. A device's own deadline (`review_timeout`) starts at its first real step, so
+        time spent queued for a node-pool slot (shared with applies and other labs' reviews) never counts against it and
+        such a device keeps showing `queued`. Only the job's safety limit (`review_limit`, from the job's start) ends a
+        wait for a slot: that device is reported `queue_limit` (never contacted) and its queued work is cancelled."""
+        pending = dict(futures); started = time.monotonic()
+        while pending and not self.stopping.is_set():
+            done, _ = wait_futures(list(pending), timeout=self.review_poll)
+            for future in done:
+                name = pending.pop(future)
+                try: results[name] = future.result()
+                except Exception: results[name] = {'reachable': False, 'reason': REVIEW_REASONS['internal']}
+            over = time.monotonic() - started > self.review_limit; clock = time.time()
+            for future, name in list(pending.items()):
+                began = self._review_began(job_id, name)
+                if began is not None and clock - began > self.review_timeout: code = 'timeout'
+                elif over: code = 'timeout' if began is not None else 'queue_limit'
+                else: continue
+                if not future.cancel() and code == 'queue_limit': continue   # it just took a slot: its own deadline applies now
+                pending.pop(future)
+                self._review_stage(job_id, name, 'failed', code, REVIEW_REASONS[code])
+                results[name] = {'reachable': False, 'reason': REVIEW_REASONS[code]}
+
+    def _review_result(self, lab_id, generation, rows, results, takeover, before_identity):
+        """The token and the review payload (the shape the synchronous review returned)."""
+        generation_id = generation['id']
         with self.store.lock:
             if before_identity != host_identity(self.store.state.get('host', {})): raise HTTPException(409, 'VM connection changed. Review again.')
             self.reviews = {k: v for k, v in self.reviews.items() if v['expires'] > time.monotonic()}
@@ -278,25 +491,33 @@ class DesignApply:
         return {'token': token, 'expires_in': REVIEW_TTL, 'generation_id': generation_id, 'targets': public,
                 'applicable': [r['name'] for r in public if r.get('ready') and (not r.get('counts', {}).get('conflicts') or r.get('takeover'))]}
 
-    def _review_one(self, lab, generation, row, entry, takeover):
+    def _review_one(self, lab, generation, row, entry, takeover, progress=None):
+        """The review transaction on one device (staged, then aborted). `progress(stage)` is called right before each
+        real step, so a review job's stages are what the device is actually doing."""
+        mark = progress or (lambda stage: None)
         node, kind = row['node'], row['kind']
         driver = DRIVERS[kind]; creds = effective_credentials(lab, node); opts = driver.options(creds)
         fragments = self._fragments(lab['id'], generation, row['name'])
         candidate, protected = provision.prepare(kind, fragments)
         owned = set(entry.get('statements') or []); anc = set(entry.get('ancestors') or [])
+        mark('connecting')
         client = self._open(node, creds)
         try:
+            mark('checking_pending')
             if entry.get('pending'):
                 owned, anc = self._resolve_pending(lab['id'], kind, row['name'], entry, driver, client, opts)
             pending = driver.pending(client, **opts)
             if pending: return {'reachable': True, 'ready': False, 'reason': 'Another change is waiting for confirmation on this device.'}
+            mark('rendering')
             clean, rendered = driver.render_desired(client, candidate, **opts)
             desired = own.statements(kind, rendered) - own.statements(kind, clean)
+            mark('reading_config')
             before_text = driver.snapshot(client, **opts)
             before = own.statements(kind, before_text)
             plan = own.plan_removals(kind, before, owned, anc, desired)
             removals = own.render_removals(kind, plan)
             name = driver.session_name()
+            mark('staging')
             staged = driver.stage(client, candidate, removals, name, arm=False, **opts)
         finally:
             client.close()
@@ -310,6 +531,7 @@ class DesignApply:
             # Taking over an exclusive sibling means removing it: stage once more with those leaves among the removals,
             # so the reviewed bytes are the applied bytes.
             removals = removals + own.render_removals(kind, {'leaves': leftovers, 'remove': []})
+            mark('restaging')
             client = self._open(node, creds)
             try: staged = driver.stage(client, candidate, removals, name, arm=False, **opts)
             finally: client.close()
@@ -366,6 +588,11 @@ class DesignApply:
             if not lab: raise HTTPException(404, 'Lab not found.')
             self.guard_idle(lab_id)
             generation = self.designs.generation(lab, review['generation_id'])
+            retired = intent_schema.retired_in_generation(generation)
+            if retired: raise HTTPException(409, retired_plan_message(retired))
+            with self.review_lock:
+                if any(j['lab_id'] == lab_id and j['status'] == 'running' for j in self.review_jobs.values()):
+                    raise HTTPException(409, 'The devices of this lab are being reviewed; wait for the review to finish, then apply.')
             if generation.get('intent_revision') != review['intent_revision'] or generation.get('topology_digest') != review['topology_digest']: raise HTTPException(409, 'The plan changed; review again.')
             self._current_plan(lab, generation)
             blocked = [n for n, r in review['targets'].items() if r['_conflicts'] and n not in review['takeover']]
@@ -650,6 +877,7 @@ class DesignApply:
             model_config = ConfigDict(extra='forbid')
             targets: list[str] = Field(min_length=1, max_length=500)
             takeover: list[str] = Field(default_factory=list, max_length=500)
+            request_id: str = Field(default='', max_length=64, pattern=r'^([0-9a-f]{16,64})?$')
 
         class Apply(BaseModel):
             model_config = ConfigDict(extra='forbid')
@@ -662,7 +890,20 @@ class DesignApply:
         @app.post('/api/labs/{lab_id}/design/generations/{generation_id}/review')
         def review(lab_id: str, generation_id: str, data: Review):
             if len(set(data.targets)) != len(data.targets): raise HTTPException(400, 'Select each device once.')
-            return service.review(lab_id, generation_id, data.targets, data.takeover)
+            return service.review(lab_id, generation_id, data.targets, data.takeover, data.request_id)
+
+        @app.get('/api/labs/{lab_id}/design/review-jobs')
+        def review_jobs(lab_id: str):
+            """The lab's review jobs still kept (running, or finished within the token's lifetime), newest first, without
+            the review payload: how a reloaded page finds a review that is still running."""
+            with service.review_lock:
+                service._prune_reviews()
+                found = [public_review_job(j) for j in service.review_jobs.values() if j['lab_id'] == lab_id]
+            return sorted(found, key=lambda j: j.get('started') or '', reverse=True)
+
+        @app.get('/api/labs/{lab_id}/design/review-jobs/{job_id}')
+        def review_job(lab_id: str, job_id: str):
+            return service.review_job(lab_id, job_id)
 
         @app.post('/api/labs/{lab_id}/design/apply')
         def apply(lab_id: str, data: Apply):

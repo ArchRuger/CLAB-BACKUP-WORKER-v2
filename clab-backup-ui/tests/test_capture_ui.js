@@ -41,18 +41,18 @@ test('prepare stays disabled until an interface is ticked and a target-less dial
  $('capture-target').value='';c.renderCaptureInterfaces();
  assert.match($('capture-interfaces').innerHTML,/Choose a device above/);assert.equal($('capture-prepare').disabled,true);
 });
-test('shared namespaces and loopback-only targets are labelled, the kind shows only for the whole VM, and aliases are searchable',()=>{
+test('shared namespaces and loopback-only targets are labelled, the kind shows only for the whole VM, and aliases show in the option labels',()=>{
  const {c,$}=harness();
  vm.runInContext(`captureTargets=[{id:'h',name:'systemd(1)',kind:'proc',prefix:'',interfaces:['ens33','lo'],aliases:['containerlab-node-manager-backup-ui-1']},{id:'s',name:'sandbox',kind:'proc',prefix:'',interfaces:['lo'],aliases:[]}];`,c);
  c.filterCaptureTargets();
  assert.match($('capture-target').innerHTML,/also: containerlab-node-manager-backup-ui-1/);assert.match($('capture-target').innerHTML,/sandbox · 1 interfaces · loopback only/);assert.doesNotMatch($('capture-target').innerHTML,/\(proc\)/,'inside a lab every row is a device');
  $('capture-scope').value='host';c.filterCaptureTargets();assert.match($('capture-target').innerHTML,/sandbox \(proc\) · 1 interfaces · loopback only/);$('capture-scope').value='';
- $('capture-search').value='backup-ui';c.filterCaptureTargets();
- assert.equal($('capture-target').value,'h');assert.doesNotMatch($('capture-target').innerHTML,/sandbox/);
+ $('capture-scope').value='lab';c.filterCaptureTargets();
+ assert.match($('capture-target').innerHTML,/sandbox/,'every target stays listed: there is no search to hide one');assert.equal($('capture-target').value,'','several targets: nothing is chosen for the student');
+ $('capture-target').value='h';c.filterCaptureTargets();assert.equal($('capture-target').value,'h','the chosen device survives a rebuild');
  vm.runInContext(`captureTargets=[{id:'n',name:'clab-demo-r1',kind:'docker',prefix:'',interfaces:['eth0'],aliases:['CliShell(1)','CliShell(2)','CliShell(3)','CliShell(4)']}];`,c);
- $('capture-search').value='';c.filterCaptureTargets();
- assert.match($('capture-target').innerHTML,/also: CliShell\(1\), CliShell\(2\) \+2 more/);
- $('capture-search').value='clishell(4)';c.filterCaptureTargets();assert.equal($('capture-target').value,'n');
+ c.filterCaptureTargets();
+ assert.match($('capture-target').innerHTML,/also: CliShell\(1\), CliShell\(2\) \+2 more/);assert.equal($('capture-target').value,'n','a single target is chosen automatically');
 });
 test('node and menu capture actions are disabled only once the manager reports capture disabled',async()=>{
  const {c}=harness();await new Promise(r=>setImmediate(r));
@@ -72,7 +72,7 @@ test('out of order discovery cannot replace newer results',async()=>{
 });
 test('disabled providers and outages have an actionable local message',async()=>{
  const {c,$}=harness();c.api=async()=>({json:async()=>({enabled:false,message:'Configure Edgeshark'})});await c.refreshCaptureTargets();assert.equal($('capture-status').textContent,'Configure Edgeshark');assert.equal($('capture-prepare').disabled,true);
- c.api=async()=>{throw Error('Provider unreachable');};await c.refreshCaptureTargets();assert.equal($('capture-status').textContent,'Provider unreachable');assert.equal($('capture-search').disabled,false);
+ c.api=async()=>{throw Error('Provider unreachable');};await c.refreshCaptureTargets();assert.equal($('capture-status').textContent,'Provider unreachable');assert.equal($('capture-prepare').disabled,true);
 });
 test('untrusted labels are escaped and unsupported launch schemes cannot navigate',async()=>{
  const {c,$}=harness();vm.runInContext(`captureTargets=[{id:'a',name:'<img onerror=x>',prefix:'<script>',kind:'docker',interfaces:['eth2']}];`,c);c.filterCaptureTargets();assert.doesNotMatch($('capture-target').innerHTML,/<img|<script>/);assert.match($('capture-target').innerHTML,/&lt;img/);

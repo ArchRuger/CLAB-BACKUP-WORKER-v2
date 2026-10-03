@@ -38,19 +38,19 @@ export const PATCHES = [
   // drawio_export.py). An editor that does not know a corner (the VS Code extension's pinned 0.3.1) still
   // opens such a file and draws that label at the bottom.
   {
-    file: /chunk-WM5ZW3ZW\.js$/, why: "the Label Position select offers the four corners",
+    file: /chunk-WM5ZW3ZW\.js$/, why: "the Label Position select offers Center and the four corners",
     find: '  { value: "left", label: "Left" },\n  { value: "right", label: "Right" }\n];\nvar NODE_DIRECTION_OPTIONS = [',
-    replace: '  { value: "left", label: "Left" },\n  { value: "right", label: "Right" },\n  { value: "top-left", label: "Top left" },\n  { value: "top-right", label: "Top right" },\n  { value: "bottom-left", label: "Bottom left" },\n  { value: "bottom-right", label: "Bottom right" }\n];\nvar NODE_DIRECTION_OPTIONS = [',
+    replace: '  { value: "left", label: "Left" },\n  { value: "right", label: "Right" },\n  { value: "center", label: "Center" },\n  { value: "top-left", label: "Top left" },\n  { value: "top-right", label: "Top right" },\n  { value: "bottom-left", label: "Bottom left" },\n  { value: "bottom-right", label: "Bottom right" }\n];\nvar NODE_DIRECTION_OPTIONS = [',
   },
   {
-    file: /chunk-WM5ZW3ZW\.js$/, why: "a corner is a known label position, not drawn as bottom",
+    file: /chunk-WM5ZW3ZW\.js$/, why: "Center and the corners are known label positions, not drawn as bottom",
     find: 'function normalizeNodeLabelPosition(value) {\n  switch (value) {\n    case "top":\n    case "right":\n    case "left":\n      return value;',
-    replace: 'function normalizeNodeLabelPosition(value) {\n  switch (value) {\n    case "top":\n    case "right":\n    case "left":\n    case "top-left":\n    case "top-right":\n    case "bottom-left":\n    case "bottom-right":\n      return value;',
+    replace: 'function normalizeNodeLabelPosition(value) {\n  switch (value) {\n    case "top":\n    case "right":\n    case "left":\n    case "center":\n    case "top-left":\n    case "top-right":\n    case "bottom-left":\n    case "bottom-right":\n      return value;',
   },
   {
-    file: /chunk-WM5ZW3ZW\.js$/, why: "the canvas places a corner label diagonally off the icon's corner",
+    file: /chunk-WM5ZW3ZW\.js$/, why: "the canvas places a corner label diagonally off the icon's corner, and a Center label over the icon (near-opaque dark box when no colour is chosen, never in the way of a click)",
     find: '    case "left":\n      return {\n        ...baseStyle,\n        right: params.iconSize - sideOverlap,\n        top: "50%",\n        transform: `translateY(-50%)${rotateTransform}`\n      };\n    default:',
-    replace: '    case "left":\n      return {\n        ...baseStyle,\n        right: params.iconSize - sideOverlap,\n        top: "50%",\n        transform: `translateY(-50%)${rotateTransform}`\n      };\n    case "top-left":\n      return { ...baseStyle, bottom: params.iconSize + verticalGap, right: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    case "top-right":\n      return { ...baseStyle, bottom: params.iconSize + verticalGap, left: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    case "bottom-left":\n      return { ...baseStyle, top: params.iconSize + verticalGap, right: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    case "bottom-right":\n      return { ...baseStyle, top: params.iconSize + verticalGap, left: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    default:',
+    replace: '    case "left":\n      return {\n        ...baseStyle,\n        right: params.iconSize - sideOverlap,\n        top: "50%",\n        transform: `translateY(-50%)${rotateTransform}`\n      };\n    case "center":\n      return { ...baseStyle, top: "50%", left: "50%", maxWidth: "none", overflow: "visible", pointerEvents: "none", zIndex: 1, ...labelBgColor === void 0 ? { backgroundColor: "rgba(0, 0, 0, 0.94)" } : {}, transform: `translate(-50%, -50%)${rotateTransform}` };\n    case "top-left":\n      return { ...baseStyle, bottom: params.iconSize + verticalGap, right: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    case "top-right":\n      return { ...baseStyle, bottom: params.iconSize + verticalGap, left: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    case "bottom-left":\n      return { ...baseStyle, top: params.iconSize + verticalGap, right: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    case "bottom-right":\n      return { ...baseStyle, top: params.iconSize + verticalGap, left: params.iconSize - sideOverlap, transform: rotateTransform.trim() };\n    default:',
   },
   // Item 5: no Apply step for the look of a device. A change of the label position, the text direction, the
   // icon or the Transparent box (the appearance choices one clicks) is applied the moment it is chosen, as one

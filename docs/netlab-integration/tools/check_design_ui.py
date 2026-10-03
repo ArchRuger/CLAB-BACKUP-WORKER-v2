@@ -58,6 +58,15 @@ class Run:
         self.page.wait_for_function('(w) => (document.getElementById("design-state")?.textContent || "").includes(w)', arg=words, timeout=timeout)
 
 
+def reload_design(page):
+    """Reload the page on the Network design view: the route is now #view=advanced and the Experimental
+    <details> starts closed on every load, so reopen it (that is also what loads the design)."""
+    page.reload()
+    page.wait_for_selector('#experimental-design', timeout=15000)
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+
+
 def wait_http(url, seconds=60):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -94,7 +103,7 @@ def main():
             page.goto(base + '/#lab=' + lab['id'] + '&view=design')
             page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
             page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
-            r.check('Design tab opens from the route', page.locator('#tab-design[aria-selected="true"]').count() == 1)
+            r.check('the old design route opens Advanced with Experimental > Network design, and no Design tab exists', page.locator('#tab-advanced[aria-selected="true"]').count() == 1 and page.locator('#experimental-design[open]').count() == 1 and page.locator('#tab-design').count() == 0)
             r.check('a lab without a design says so', 'No design yet' in r.text('#design-state'), r.text('#design-state'))
             r.check('the devices table lists the three devices with their profiles',
                     all(name in r.text('#design-devices') for name in ('r1', 'r2', 'r3')) and 'eos' in r.text('#design-devices') and 'iosxr' in r.text('#design-devices'), r.text('#design-devices'))
@@ -171,19 +180,19 @@ def main():
             r.shot('05-file')
             page.keyboard.press('Escape')
             # An unsupported protocol is refused before the engine runs.
-            page.locator('input[name="design-module"][value="eigrp"]').check()
+            page.locator('input[name="design-module"][value="srv6"]').check()
             page.click('#design-save')
             page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Unsaved")', timeout=10000)
             page.click('#design-generate')
             r.wait_state('failed', timeout=60000)
             errors = r.text('#design-plan-errors')
-            r.check('EIGRP on cEOS fails the plan with the device and the reason named', 'eigrp' in errors and ('r1' in errors or 'r2' in errors) and 'arista_ceos' in errors, errors[:300])
+            r.check('SRv6 on cEOS fails the plan with the device and the reason named', 'srv6' in errors and ('r1' in errors or 'r2' in errors) and 'arista_ceos' in errors, errors[:300])
             r.shot('06-unsupported')
-            page.locator('input[name="design-module"][value="eigrp"]').uncheck()
+            page.locator('input[name="design-module"][value="srv6"]').uncheck()
             page.click('#design-save')
             page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Unsaved")', timeout=10000)
             # Reload keeps the design; the export link is there; the history lists both plans.
-            page.reload()
+            reload_design(page)
             page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
             page.wait_for_function('() => (document.getElementById("design-advanced")?.value || "").includes("65010")', timeout=15000)
             r.check('a reload keeps the saved design', '65010' in page.locator('#design-advanced').input_value())
@@ -201,8 +210,8 @@ def main():
             design_width = page.evaluate('() => document.documentElement.scrollWidth')
             page.click('#tab-topology'); page.wait_for_timeout(300)
             shell_width = page.evaluate('() => document.documentElement.scrollWidth')
-            page.click('#tab-design'); page.wait_for_timeout(300)
-            r.check('the Design tab adds no horizontal overflow at phone width beyond the shell', design_width <= shell_width, 'design=%s shell=%s' % (design_width, shell_width))
+            page.click('#tab-advanced'); page.wait_for_selector('#design-view', state='visible', timeout=5000); page.wait_for_timeout(300)
+            r.check('the Network design view adds no horizontal overflow at phone width beyond the shell', design_width <= shell_width, 'design=%s shell=%s' % (design_width, shell_width))
             r.shot('08-phone')
             browser.close()
         handled = [e for e in r.console if e['text'].startswith(HANDLED)]

@@ -81,6 +81,15 @@ DUMP_JS = """
 """
 
 
+def open_design(page, timeout=15000):
+    """Advanced > Experimental > Network design: the Design tab is gone, so click #tab-advanced, open
+    #experimental-design (closed by default) and wait for the #design-view region to be visible."""
+    page.click('#tab-advanced')
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+    page.wait_for_selector('#design-view', state='visible', timeout=timeout)
+
+
 def wait_http(url, seconds=30):
     import time
     deadline = time.monotonic() + seconds
@@ -96,17 +105,18 @@ def wait_http(url, seconds=30):
 
 def run_full(page, dump, lab, errors):
     """The whole guided/plan/history/renumber/clear tour on a lab with no git binding and no deployment."""
-    # --- Navigation: Tools tab shortcut into Design --------------------------------------------------
+    # --- Navigation: no Tools shortcut any more; Advanced > Experimental > Network design ---------------
     page.goto(BASE_URL[0] + '/#lab=' + lab['id'] + '&view=tools')
     page.wait_for_selector('#tools-view:not([hidden])', timeout=15000)
     dump('nav_tools_tab', '#tools-view')
     dump('nav_lab_tabs', '#lab-tabs')
-    page.click('#tools-design')
+    dump('nav_tools_has_no_design_card', '#tools-view')
+    open_design(page)
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
     dump('nav_after_tools_shortcut')
 
-    # --- Deep link directly to the tab (hash route) --------------------------------------------------
+    # --- Old deep link (#view=design lands on Advanced with Experimental open) --------------------------------------------------
     page.goto(BASE_URL[0] + '/#lab=' + lab['id'] + '&view=design')
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)

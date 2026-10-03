@@ -93,6 +93,34 @@ the intent asks for against every included device before the engine runs; an uns
 fails the generation with the device and the reason named, and nothing is dropped or downgraded
 silently. The ledger of what is verified where is [docs/netlab-integration/LEDGER.md](netlab-integration/LEDGER.md).
 
+A product policy sits over the engine's answer: the capabilities of a module retired from authoring (next section)
+read `retired` in the matrix the page shows (`with_policy`, `public_matrix`; the engine's answer stays in
+`engine_level`), never "not supported"; `resolve()` itself stays the engine truth.
+
+## Retired modules and the EVPN gate
+
+EIGRP (`eigrp`), RIP (`ripv2`, which covers RIPv2 and RIPng) and VXLAN (netlab's `vxlan` module; a containerlab
+link of type `vxlan` in a topology is a different thing and is unaffected) are retired from authoring, and EVPN
+(`evpn`) is unavailable while under review (D10.1–D10.3 in the decisions record, with the evidence:
+none of the four kinds runs EIGRP; RIP is cEOS-only and never tested here; VXLAN never worked end to end on the
+acceptance lab; EVPN's only tested transport is VXLAN, and EVPN over MPLS has no generated or tested path and is
+not offered by the Junos profiles). `design_intent.RETIRED` is the single source of truth (module → reason):
+
+- They stay in the schema (`MODULES`), so a stored design that uses one still parses, validates, renders, exports,
+  downloads and appears in its history and Git exports; `validate()` is unchanged, so its view shows no invented
+  problems, and the context lists where it uses them (`retired_in_design`).
+- The page offers only `AUTHORING_MODULES`. *Save* refuses (400, structured) a retired module that is new compared
+  with the saved design (by path); keeping or removing an old use is always allowed. *Import* stores retired uses
+  (a design's own export comes back after *Remove design* or on a fresh lab) and lists them (`imported_retired`). *Check*
+  (validate) lists retired uses apart from the problems, marking the new ones.
+- *Generate plan* refuses (409, nothing queued) a design that uses any of them; earlier plans, the design file
+  and its export are kept.
+- *Apply to devices…* (review and apply) refuses (409) a plan whose modules, per-device compatibility or generated files carry one,
+  including plans generated before the retirement. Ownership is untouched: a new plan without the module removes
+  the owned statements through the normal review and apply. Nothing changes a device by itself.
+
+The exact API shapes are in `docs/uiux-email-2026-10-03/DESIGN-CONTRACT.md`.
+
 ## The intent document
 
 `design_intent.py` defines schema 1: `families`, `addressing` (the pools `loopback`, `p2p`, `lan`,
@@ -138,10 +166,11 @@ was applied live, and what the limit is. As of this release, on the four accepta
   cEOS and vJunos-switch), and the removal of each of those again.
 - **Generated with the real engine, not applied live on this lab** (the lab has no parallel links, no shared
   segment with two routers and no second VTEP pair): link aggregation (`lag.members`), VRRP and anycast gateways,
-  VXLAN and EVPN, STP, BFD. They are offered with the capability level *generated, not yet tested live*.
-- **Refused by the capability model per image, before the engine runs**: EIGRP (none of the four), RIPv2 and DHCP
-  (cEOS only), VLANs, VXLAN, BFD, LAG, anycast (not on XRv9k), STP (cEOS only), SRv6 (XRv9k only); a plan that asks
-  one of those of a device that cannot do it names the device and generates nothing.
+  STP, BFD. They are offered with the capability level *generated, not yet tested live*.
+- **Retired from authoring** (see *Retired modules and the EVPN gate*): EIGRP, RIP, VXLAN; **unavailable (under review)**: EVPN.
+- **Refused by the capability model per image, before the engine runs**: DHCP (cEOS only), VLANs, BFD, LAG, anycast
+  (not on XRv9k), STP (cEOS only), SRv6 (XRv9k only); a plan that asks one of those of a device that cannot do it
+  names the device and generates nothing.
 - **Not yet in the schema**: the GRE and WireGuard plugins (`tunnel.*`), and protocol authentication (the
   secret-reference model): `password` and key attributes stay refused by name.
 
@@ -198,8 +227,9 @@ Every lab has a **Design** tab (beside Topology, Devices and Progress). Top to b
   another lab (the browser's Back, a link) closes them, and a confirmation that still arrives for another lab
   is refused with a message and changes nothing.
 - **Design settings.** Address families; the loopback, point-to-point and shared-link pools with their allocation
-  sizes; the protocols and services (OSPF, BGP, IS-IS, EIGRP, RIP, BFD, DHCP, VLANs, VRFs, link aggregation,
-  spanning tree, first-hop gateway, VXLAN, EVPN, MPLS, segment routing, SRv6, routing policies and static routes)
+  sizes; the protocols and services (OSPF, BGP, IS-IS, BFD, DHCP, VLANs, VRFs, link aggregation, spanning tree,
+  first-hop gateway, MPLS, segment routing, SRv6, routing policies and static routes; EIGRP, RIP and VXLAN are
+  retired and EVPN is unavailable, see *Retired modules and the EVPN gate*)
   with the common settings that appear when one is ticked (OSPF area, BGP AS number and the route reflectors as
   a checklist of the routers, IS-IS area and type, gateway protocol); a number typed as 0 or left blank is
   refused by name, never replaced by a default; a devices table with each device's kind, profile and role (router, host, excluded) and
@@ -234,7 +264,10 @@ is `docs/netlab-integration/PROVISIONING.md`; the live proofs on the four-node a
 1. **Choose devices.** Every device the plan includes is offered; a support host, a blocked device or a kind
    without a driver is listed with the reason. Applying is available for cEOS, vJunos-switch, cJunosEvolved
    and XRv9k, the kinds proven live.
-2. **Review.** The manager connects to each chosen device, runs the whole transaction and aborts it, then
+2. **Review.** The review runs as a job: the page starts it and follows each device's real stage (connecting,
+   checking for unconfirmed changes, preparing, reading, trying the change, done, failed with a reason, or
+   unreachable); closing the dialog does not cancel it, and a second review of the same lab attaches to the running
+   one. The manager connects to each chosen device, runs the whole transaction and aborts it, then
    shows per device: the settings of the fragment it leaves out (hostname, logins, the management interface,
    name mappings, netlab's `delete:` tags: identity and reachability stay the containerlab deployment's), the
    device's own diff, the counts of added, removed and stale statements, the *expected changes* (an IOS XR
@@ -289,19 +322,20 @@ All routes sit behind the same-origin guard; mutating requests carry a JSON body
 |---|---|
 | `GET /api/design/engine` | Engine status from the installed distribution's metadata and the binary on PATH (no process is started): available, version, path, or a precise diagnostic |
 | `GET /api/labs/{id}/design` | The intent, its problems, the summary, the generations, and the context: designable devices and links with their mapping, kinds, capability matrix, catalogue, engine status |
-| `POST /api/labs/{id}/design/validate` | Problems of a candidate intent, without saving |
-| `PUT /api/labs/{id}/design` | Save the intent (`{intent, revision}`); 400 with the problems, 409 on a stale revision; the ledger in the body is ignored |
+| `POST /api/labs/{id}/design/validate` | Problems of a candidate intent, without saving, and its retired uses apart (`retired`, each marked `new` when the saved design lacks it) |
+| `PUT /api/labs/{id}/design` | Save the intent (`{intent, revision}`); 400 with the problems, 400 (structured) when it adds a retired module, 409 on a stale revision; the ledger in the body is ignored |
 | `POST /api/labs/{id}/design/clear` | Remove the intent (`{revision}`); generations are kept |
 | `POST /api/labs/{id}/design/renumber` | Forget the allocation ledger (`{revision}`) |
-| `POST /api/labs/{id}/design/generate` | Queue a generation (`{revision}`); 409 while one runs, 400 when the intent has problems |
+| `POST /api/labs/{id}/design/generate` | Queue a generation (`{revision}`); 409 while one runs or when the design uses a retired module (structured), 400 (structured: `message`, `problems`) when the intent has problems |
 | `POST /api/labs/{id}/design/generations/{gid}/cancel` | Cancel a running generation |
 | `GET /api/labs/{id}/design/generations/{gid}` | The generation record and its plan |
 | `GET /api/labs/{id}/design/generations/{gid}/artifacts/{node}/{index}` | One generated file, verified against its recorded digest |
 | `GET /api/labs/{id}/design/generations/{gid}/download` | A ZIP: the files (`nodes/<device>/<nn>-<module>.cfg`), the plan, the intent, the netlab topology, the mapping and a manifest of type `network-design-generation` (never a backup, never a restore candidate) |
 | `GET /api/labs/{id}/design/export` | The intent as `<lab>.network-intent.yml` |
-| `POST /api/labs/{id}/design/import` | An intent file (YAML or JSON, up to 512 KiB, no anchors) with the current `revision`; validated before it replaces the stored intent; the ledger in the file is ignored |
-| `POST /api/labs/{id}/design/generations/{gid}/review` | `{targets, takeover}`: the review transaction on each target (aborted), per device the report of the section above, and the single-use `token` |
-| `POST /api/labs/{id}/design/apply` | `{token, confirm_minutes, request_id, takeover, acknowledged: true}`: the apply job; idempotent by `request_id`; 409 when the review expired, the plan changed, conflicts are not taken over or another operation is busy |
+| `POST /api/labs/{id}/design/import` | An intent file (YAML or JSON, up to 512 KiB, no anchors) with the current `revision`; validated before it replaces the stored intent; retired modules are stored and listed (`imported_retired`), Generate and Apply refuse them; the ledger in the file is ignored |
+| `POST /api/labs/{id}/design/generations/{gid}/review` | `{targets, takeover, request_id}`: starts a review job (the guards answer at once; 409 with `review_job_id` while one runs for the lab; 409 for a plan with a retired module) and returns `{review_job}` |
+| `GET /api/labs/{id}/design/review-jobs`, `GET /api/labs/{id}/design/review-jobs/{job_id}` | The lab's kept review jobs; one job: per device its stage, timeline and a fixed reason, and once done the review (per device the report of the section above and the single-use `token`). Jobs are in memory: a restart forgets them (404, review again) |
+| `POST /api/labs/{id}/design/apply` | `{token, confirm_minutes, request_id, takeover, acknowledged: true}`: the apply job; idempotent by `request_id`; 409 when the review expired, the plan changed or carries a retired module, conflicts are not taken over, a review of the lab is running or another operation is busy |
 | `GET /api/labs/{id}/design/apply/jobs`, `GET /api/design/apply/jobs/{job_id}` | The lab's apply jobs, one job (public shape: per device status, stage, message, timeline, diff sample, read-back result; never the staged configuration) |
 | `POST /api/labs/{id}/design/generations/{gid}/git` | `{request_id, checkpoint, note, push}`: a Git save of kind `design` for the plan (its own checkpoint folder; 409 while a save is pending, for a plan that is not generated, or without a repository binding); the job then follows `/api/git/jobs/{id}` and its reviewed retry |
 | `GET /api/labs/{id}/design/ownership` | Per device the number of owned statements, the plan, the time and whether a read-back is pending, plus the statements themselves (masked) |

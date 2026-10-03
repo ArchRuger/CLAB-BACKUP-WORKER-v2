@@ -98,17 +98,15 @@ function captureTargetLabel(t){
  return `${esc(t.name)}${t.prefix?' · '+esc(t.prefix):''}${kind} · ${t.interfaces.length} interfaces${shared}${loopback}`;
 }
 function filterCaptureTargets(){
- const previous=$('capture-target').value,query=$('capture-search').value.toLowerCase();
- const rows=captureTargets.filter(t=>[t.name,t.prefix,t.kind,...(t.aliases||[]),...t.interfaces].join(' ').toLowerCase().includes(query));
+ const previous=$('capture-target').value,rows=captureTargets;
  $('capture-target').innerHTML='<option value="">Choose a device…</option>'+rows.map(t=>`<option value="${esc(t.id)}">${captureTargetLabel(t)}</option>`).join('');
  if(rows.some(t=>t.id===previous))$('capture-target').value=previous;
  else if(rows.length===1)$('capture-target').value=rows[0].id;
  renderCaptureInterfaces();
 }
-$('capture-search').oninput=filterCaptureTargets;
 async function refreshCaptureTargets(){
  invalidateCapture();const request=captureRequest;
- captureTargets=[];$('capture-target').innerHTML='';$('capture-interfaces').innerHTML='';$('capture-interfaces-all').innerHTML='';$('capture-more').hidden=true;$('capture-prepare').disabled=true;$('capture-search').disabled=true;
+ captureTargets=[];$('capture-target').innerHTML='';$('capture-interfaces').innerHTML='';$('capture-interfaces-all').innerHTML='';$('capture-more').hidden=true;$('capture-prepare').disabled=true;
  $('capture-status').textContent='Looking up interfaces on the VM…';
  try{
   const status=await(await api('/capture/status')).json();
@@ -116,7 +114,7 @@ async function refreshCaptureTargets(){
   if(request!==captureRequest||!captureDialog.open)return;
   // The session list is asked for only once the service is known to exist; a disabled service is explained without a request.
   refreshCaptureSessions();
-  if(!status.enabled){$('capture-status').textContent=status.message;$('capture-search').disabled=false;$('capture-advanced').open=true;captureAdvancedLabel();renderCaptureCaption();return;}
+  if(!status.enabled){$('capture-status').textContent=status.message;$('capture-advanced').open=true;captureAdvancedLabel();renderCaptureCaption();return;}
   if(captureDrawing===undefined&&captureLab){try{captureDrawing=await(await api('/labs/'+captureLab+'/topology')).json();}catch{captureDrawing=null;}}
   captureMapInterfaces=mapInterfacesFor(captureDrawing,captureNode);
   captureMapCapture=mapCaptureInterfacesFor(captureDrawing,captureNode);
@@ -124,23 +122,23 @@ async function refreshCaptureTargets(){
   if($('capture-scope').value!=='host'&&captureLab){params.set('lab_id',captureLab);if(captureNode)params.set('node',captureNode);}
   const data=await(await api('/capture/targets?'+params)).json();
   if(request!==captureRequest||!captureDialog.open)return;
-  captureTargets=data.targets;$('capture-search').disabled=false;
+  captureTargets=data.targets;
   $('capture-status').textContent=data.targets.length?captureMessage(data.message):'No running device matched. If it is still starting, wait and click Refresh interfaces; otherwise open Advanced and choose "Everything on the VM".';
   filterCaptureTargets();
   // The node you clicked is the target; the selector only unfolds when that could not be resolved.
   $('capture-advanced').open=!captureSelected();captureAdvancedLabel();
- }catch(error){if(request===captureRequest&&captureDialog.open){$('capture-status').textContent=error.message;$('capture-search').disabled=false;$('capture-advanced').open=true;captureAdvancedLabel();}}
+ }catch(error){if(request===captureRequest&&captureDialog.open){$('capture-status').textContent=error.message;$('capture-advanced').open=true;captureAdvancedLabel();}}
 }
 function openCapture(node='',hint='',ends=null){
  captureLab=activeId;captureNode=node;captureHint=hint;captureDrawing=undefined;captureMapInterfaces=[];captureMapCapture={};
  if($('details-dialog').open)$('details-dialog').close();
- $('capture-search').value='';$('capture-scope').value='lab';$('capture-advanced').open=false;
+ $('capture-scope').value='lab';$('capture-advanced').open=false;
  // A link opens on its first endpoint; the endpoint buttons switch to the other side.
  if(ends&&!node&&ends[0]?.node){captureNode=ends[0].node;captureHint=ends[0].interface;}
  const endpoint=ends?.find(ep=>ep.node&&ep.node===captureNode);
  $('capture-context').textContent=endpoint?`Link endpoint: ${endpoint.label}: ${endpoint.interface}`:captureNode?`Device: ${captureNode}${captureHint?' · port '+captureHint:''}`:ends?'Choose which end of the link to capture on.':current()?.name?`Lab ${current().name} — choose a device below`:'Choose a device below';
  $('capture-endpoints').innerHTML=ends?ends.map((ep,i)=>`<button type="button" class="button secondary" data-capture-end="${i}">${esc(ep.label)}: ${esc(ep.interface)}</button>`).join(''):'';
- $('capture-endpoints').onclick=ends?event=>{const button=event.target.closest('[data-capture-end]');if(!button)return;const ep=ends[Number(button.dataset.captureEnd)];captureNode=ep.node||'';captureHint=ep.interface;$('capture-context').textContent=`Link endpoint: ${ep.label}: ${ep.interface}${ep.node?'':' · this diagram node is not in the inventory — choose its target under Advanced'}`;$('capture-scope').value=ep.node?'lab':'host';$('capture-search').value='';refreshCaptureTargets();}:null;
+ $('capture-endpoints').onclick=ends?event=>{const button=event.target.closest('[data-capture-end]');if(!button)return;const ep=ends[Number(button.dataset.captureEnd)];captureNode=ep.node||'';captureHint=ep.interface;$('capture-context').textContent=`Link endpoint: ${ep.label}: ${ep.interface}${ep.node?'':' · this diagram node is not in the inventory — choose its target under Advanced'}`;$('capture-scope').value=ep.node?'lab':'host';refreshCaptureTargets();}:null;
  if(!captureDialog.open)captureDialog.showModal();
  refreshCaptureTargets();
 }

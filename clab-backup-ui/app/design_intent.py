@@ -36,6 +36,33 @@ SCHEMA = 1
 # (GRE, WireGuard) are not modules and are not accepted in this schema version.
 MODULES = ('ospf', 'bgp', 'isis', 'eigrp', 'ripv2', 'bfd', 'dhcp', 'vlan', 'vrf', 'lag', 'stp', 'gateway',
            'vxlan', 'evpn', 'mpls', 'sr', 'srv6', 'routing')
+# Modules retired from authoring (decided 2026-10-03, D10.1-D10.3 in docs/netlab-integration/DECISIONS.md): the single
+# source of truth, {module id: the student-facing reason}. They stay in MODULES so a stored design that carries them
+# still parses, validates, renders, exports, downloads and appears in its history and Git exports; what they lose is
+# authoring: Save refuses one that is new compared with the stored design (Import may store one, so a design's own
+# export can be brought back for inspection), Generate refuses a design that uses one, and Apply refuses a plan that
+# carries one. `vxlan` here is netlab's VXLAN *module* only; a containerlab
+# link of type `vxlan` in a topology file is a different thing and is untouched (design_adapter flags it as before).
+RETIRED = {
+    'eigrp': 'EIGRP is no longer offered in this manager: none of the supported device kinds (cEOS, vJunos-switch, '
+             'cJunosEvolved, XRv9k) can run it in the pinned netlab, so a plan with it could never be generated.',
+    'ripv2': 'RIP (RIPv2 and RIPng) is no longer offered in this manager: among the supported device kinds only cEOS '
+             'could run it, and it was never generated, applied or tested end to end here.',
+    'vxlan': 'VXLAN is no longer offered in this manager: it never worked end to end here (vJunos-switch refused the '
+             'generated VLAN and VXLAN configuration at its own commit check, and XRv9k cannot run it), so only one end '
+             'of a tunnel could ever be configured. VXLAN links in a containerlab topology are not affected.',
+    'evpn': 'EVPN is not available in this manager: VXLAN, its only tested transport, is no longer offered, and EVPN '
+            'over MPLS is not supported end to end (the Junos profiles in the pinned netlab support only VXLAN transport, '
+            'and no MPLS transport path has been generated or tested here).',
+}
+# How the page words each one: `retired` (gone for good) or `under_review` (unavailable until a real path exists).
+RETIRED_STATUS = {'eigrp': 'retired', 'ripv2': 'retired', 'vxlan': 'retired', 'evpn': 'under_review'}
+RETIRED_LABELS = {'eigrp': 'EIGRP', 'ripv2': 'RIP', 'vxlan': 'VXLAN', 'evpn': 'EVPN'}
+# The capability ids (design_capabilities.FEATURES) each retired module requests: what an old plan's compatibility
+# rows carry. RIP requests `ripng` too when the design has IPv6.
+RETIRED_FEATURES = {'eigrp': 'eigrp', 'ripv2': 'ripv2', 'ripng': 'ripv2', 'vxlan': 'vxlan', 'evpn': 'evpn'}
+# The modules a student may choose for a new design or add to an existing one, in MODULES order.
+AUTHORING_MODULES = tuple(m for m in MODULES if m not in RETIRED)
 # Pools the student may define. `mgmt` is never one of them: management addressing stays the manager's.
 POOLS = ('loopback', 'p2p', 'lan', 'vrf_loopback', 'router_id')
 POOL_KEYS = ('ipv4', 'ipv6', 'prefix', 'prefix6', 'start', 'allocation', 'unnumbered')
@@ -728,6 +755,105 @@ def _check_ledger(ledger, errors, outside_management=lambda value, family, path:
     rids = ledger.get('router_ids', {})
     if not isinstance(rids, dict) or any(not (_text(k) and _text(v, 40) and _address(v, 'ipv4')[0]) for k, v in rids.items()):
         errors.append({'path': 'allocations.router_ids', 'message': 'Router ids are IPv4 addresses'})
+
+
+# --- retired modules --------------------------------------------------------------------------------------
+
+def _retired_entry(path, module):
+    return {'path': path, 'module': module, 'message': RETIRED[module]}
+
+
+def retired_in(intent):
+    """Every place `intent` uses a retired module, as [{'path', 'module', 'message'}]: the design's `modules` list,
+    each device's own `modules` list, and the module's settings blocks at the global, device, link, link-end and
+    VLAN/VRF object levels. Read-only and tolerant of any shape (it runs on stored documents too); paths follow
+    validate()'s spelling (`modules`, `nodes.r1.modules`, `links.<key>.endpoints.r1.vxlan`)."""
+    found = []
+    if not isinstance(intent, dict): return found
+
+    def listed(value, path):
+        if isinstance(value, list):
+            for module in value:
+                if isinstance(module, str) and module in RETIRED and _retired_entry(path, module) not in found:
+                    found.append(_retired_entry(path, module))
+
+    def blocks(container, path):
+        if not isinstance(container, dict): return
+        for module in RETIRED:
+            if module in container: found.append(_retired_entry((path + '.' if path else '') + module, module))
+
+    def objects(container, path):
+        if isinstance(container, dict):
+            for name, body in container.items(): blocks(body, path + '.' + str(name))
+
+    listed(intent.get('modules'), 'modules')
+    blocks(intent, '')
+    objects(intent.get('vlans'), 'vlans'); objects(intent.get('vrfs'), 'vrfs')
+    nodes = intent.get('nodes')
+    if isinstance(nodes, dict):
+        for name, node in nodes.items():
+            if not isinstance(node, dict): continue
+            here = 'nodes.' + str(name)
+            listed(node.get('modules'), here + '.modules')
+            blocks(node, here)
+            objects(node.get('vlans'), here + '.vlans'); objects(node.get('vrfs'), here + '.vrfs')
+    links = intent.get('links')
+    if isinstance(links, dict):
+        for key, link in links.items():
+            if not isinstance(link, dict): continue
+            here = 'links.' + str(key)
+            blocks(link, here)
+            endpoints = link.get('endpoints')
+            if isinstance(endpoints, dict):
+                for end, body in endpoints.items(): blocks(body, here + '.endpoints.' + str(end))
+    return found
+
+
+def retired_added(candidate, stored):
+    """The retired uses of `candidate` that `stored` (the saved design, or None) does not already have, matched by
+    (path, module): what Save refuses. Keeping or removing an old use is always allowed."""
+    before = {(e['path'], e['module']) for e in retired_in(stored or {})}
+    return [e for e in retired_in(candidate) if (e['path'], e['module']) not in before]
+
+
+def retired_modules(entries):
+    """The distinct retired module ids of `retired_in()` entries, in MODULES order."""
+    used = {e['module'] for e in entries}
+    return [m for m in MODULES if m in used]
+
+
+def retired_sentence(modules):
+    """`EIGRP and VXLAN` style wording of retired module ids."""
+    labels = [RETIRED_LABELS.get(m, m) for m in modules]
+    return labels[0] if len(labels) == 1 else ', '.join(labels[:-1]) + ' and ' + labels[-1] if labels else ''
+
+
+def retired_phrase(modules):
+    """`is no longer offered` / `is not available` (EVPN, under review) / both, agreeing with the number of modules."""
+    statuses = {RETIRED_STATUS.get(m, 'retired') for m in modules}
+    verb = 'is' if len(modules) == 1 else 'are'
+    if statuses == {'under_review'}: return verb + ' not available'
+    if statuses == {'retired'}: return verb + ' no longer offered'
+    return verb + ' no longer offered or not available'
+
+
+def retired_in_generation(generation):
+    """The retired module ids a stored plan carries: its design-level `modules`, the capability ids of every
+    device's compatibility rows (a device's own module list shows up only there), and the module of every generated
+    file (what an apply would actually send). Plans generated before the retirement are covered, whatever their
+    status; malformed records are read tolerantly."""
+    used = {m for m in (generation.get('modules') or []) if isinstance(m, str) and m in RETIRED}
+    for rows in (generation.get('compatibility') or {}).values():
+        for row in rows if isinstance(rows, list) else []:
+            feature = row.get('feature') if isinstance(row, dict) else None
+            if feature in RETIRED_FEATURES: used.add(RETIRED_FEATURES[feature])
+    artifacts = generation.get('artifacts')
+    for entries in (artifacts.values() if isinstance(artifacts, dict) else []):
+        for entry in entries if isinstance(entries, list) else []:
+            module = entry.get('module') if isinstance(entry, dict) else None
+            if module in RETIRED: used.add(module)
+            elif module in RETIRED_FEATURES: used.add(RETIRED_FEATURES[module])
+    return [m for m in MODULES if m in used]
 
 
 def normalize(intent):

@@ -179,7 +179,7 @@ def main():
             without_dialog = page.evaluate('() => document.documentElement.scrollWidth')
             page.click('#tab-topology'); page.wait_for_timeout(300)
             shell_width = page.evaluate('() => document.documentElement.scrollWidth')
-            page.click('#tab-design'); page.wait_for_timeout(300)
+            page.click('#tab-advanced'); page.wait_for_selector('#design-view', state='visible', timeout=5000); page.wait_for_timeout(300)
             r.check('the Apply dialog adds no horizontal overflow beyond the shell at %dx%d' % (width, height),
                     with_dialog <= shell_width, 'with_dialog=%s without_dialog=%s shell=%s' % (with_dialog, without_dialog, shell_width))
             apply_button.click()
@@ -195,15 +195,19 @@ def main():
             if not selectable: raise Stop(3, 'none of the requested target device(s) %s can be selected for review' % (targets,))
             set_targets(page, set(selectable))
 
-            with page.expect_response(lambda resp: resp.url.endswith('/review') and resp.request.method == 'POST', timeout=185000) as review_info:
+            with page.expect_response(lambda resp: resp.url.endswith('/review') and resp.request.method == 'POST', timeout=30000) as review_info:
                 page.click('#design-apply-review-run')
             review_response = review_info.value
             if review_response.status != 200:
                 try: detail = review_response.json().get('detail', '')
                 except Exception: detail = review_response.text()
                 raise Stop(3, 'the review request failed (%s): %s' % (review_response.status, detail))
-            review = review_response.json()
-            page.wait_for_selector('#design-apply-review-step:not([hidden])', timeout=15000)
+            # The review is a job now (design_apply review jobs): the POST answers {review_job} at once, the dialog follows the
+            # job through a live log, and the former synchronous answer is the finished job's `review`.
+            job = review_response.json().get('review_job') or {}
+            r.check('the review POST answers a running job, not the review', bool(job.get('id')) and 'token' not in review_response.json(), str(sorted(review_response.json())))
+            page.wait_for_selector('#design-apply-review-step:not([hidden])', timeout=185000)
+            review = page.evaluate("async ([lab, id]) => (await fetch('/api/labs/' + lab + '/design/review-jobs/' + id)).json().then(j => j.review || {})", [lab_id, job.get('id')])
 
             for row in review.get('targets', []):
                 name = row.get('name', '')

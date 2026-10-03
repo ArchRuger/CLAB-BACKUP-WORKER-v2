@@ -4,10 +4,10 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 // Navigation state. activeId is chosen by shell.js's applyRoute() after the first /state (hash →
 // sessionStorage → Home); render() shows Home whenever it is empty. tab holds one of PANELS; legacy
 // names (inventory, git, backups, credentials, logs) are normalised by setTab() so old callers still work.
-let state={labs:[],jobs:[],platforms:{}}, activeId='', tab='topology', toastTimer, subview='', devicesTechnical=false, scrollTarget='', routeApplied=false;
-const PANELS=['topology','devices','progress','design','tools','advanced'];
-const TAB_ALIAS={inventory:'devices',git:'progress',backups:'tools',credentials:'advanced',logs:'advanced'};
-const SUBVIEW={inventory:'technical',backups:'backups-view',credentials:'credentials-view',logs:'logs-view'};
+let state={labs:[],jobs:[],platforms:{}}, activeId='', tab='topology', toastTimer, subview='', devicesTechnical=false, devicesPainted=null, scrollTarget='', routeApplied=false;
+const PANELS=['topology','devices','progress','tools','advanced'];
+const TAB_ALIAS={inventory:'devices',git:'progress',backups:'tools',credentials:'advanced',logs:'advanced',design:'advanced'};
+const SUBVIEW={inventory:'technical',backups:'backups-view',credentials:'credentials-view',logs:'logs-view',design:'experimental-design'};
 const APP_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
 const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-retry-save','banner-save-details','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
 const current=()=>state.labs.find(l=>l.id===activeId);
@@ -17,7 +17,11 @@ async function api(path,options={}){
  const headers={...(options.headers||{})};
  const response=await fetch('/api'+path,{...options,headers});
  if(!response.ok){let data;try{data=await response.json();}catch{data={detail:'The manager did not respond. Try again.'};}
- throw new Error(typeof data.detail==='string'?data.detail:'Check the form fields and try again.');}
+ // A structured detail ({message, problems:[{path,message}]}) keeps its problem list on the error for the design summary.
+ const detail=data.detail,shaped=detail&&typeof detail==='object'&&!Array.isArray(detail)?detail:null;
+ const error=new Error(typeof detail==='string'?detail:shaped&&typeof shaped.message==='string'?shaped.message:'Check the form fields and try again.');
+ if(shaped){if(Array.isArray(shaped.problems))error.problems=shaped.problems;if(Array.isArray(shaped.retired))error.retired=shaped.retired;if(typeof shaped.review_job_id==='string')error.review_job_id=shaped.review_job_id;error.detail=shaped;}
+ error.status=response.status;throw error;}
  return response;
 }
 async function json(path,method,data){return (await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
@@ -205,7 +209,7 @@ function renderLabBanner(){
  else if(lab.telemetry_retired)spec={tone:'info',icon:'info',text:retiredBannerText(lab.telemetry_retired),actions:{'banner-retired-review':{label:'Review and remove…',run:()=>{if(typeof openTelemetryRetired==='function'&&typeof opTask==='function')opTask(null,()=>openTelemetryRetired(lab.id));}}}};
  setBanner('lab-banner',spec);
 }
-function renderNodes(){const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();const nodes=lab.nodes.filter(n=>(n.name+' '+n.address+' '+platformLabel(n.platform)).toLowerCase().includes(term));
+function renderNodes(){const lab=current();if(!lab||!devicesTechnical)return;const term=$('search').value.toLowerCase();const nodes=lab.nodes.filter(n=>(n.name+' '+n.address+' '+platformLabel(n.platform)).toLowerCase().includes(term));
  const markup=nodes.map(n=>{const h=nodeHealth(n.name);return `<tr><td><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''} aria-label="Include ${esc(n.name)} in backups"></td><td><button class="node-name" data-details="${esc(n.name)}">${esc(n.short_name||n.name)}</button><span class="endpoint">${esc(n.address)}:${n.port}</span></td><td><span class="badge platform">${esc(platformLabel(n.platform))}</span><span class="secondary-text">${esc(profileName(lab,n))}</span></td><td>${h?.ssh?badge(h.ssh.status):'<span class="status-neutral">Not checked</span>'}<span class="timestamp">${h?.ssh?.at?esc(utcDisplay(h.ssh.at)):'No check yet'}</span></td><td>${h?.backup?badge(h.backup.status):'<span class="status-neutral">No backup yet</span>'}<span class="timestamp">${h?.backup?.at?esc(utcDisplay(h.backup.at)):''}</span></td><td><div class="node-actions">${nodeActions(n)}</div></td></tr>`;}).join('')||'<tr><td colspan="6" class="table-empty">No devices match. Try another name, address or platform.</td></tr>';setMarkup($('nodes'),markup);
 }
 // The per-device actions of the Devices view (its technical table and the device panel): Open CLI,
@@ -235,8 +239,9 @@ function deviceRow(n,rail){
 function renderDeviceList(){
  const lab=current();if(!lab)return;const term=$('search').value.toLowerCase();
  const nodes=lab.nodes.filter(n=>(n.name+' '+n.address+' '+platformLabel(n.platform)).toLowerCase().includes(term));
- setMarkup($('device-list'),nodes.map(n=>deviceRow(n,false)).join('')||(lab.nodes.length?'<li class="table-empty">No devices match. Try another name, address or platform.</li>':'<li class="table-empty">This lab has no devices yet.</li>'));
+ if(!devicesTechnical)setMarkup($('device-list'),nodes.map(n=>deviceRow(n,false)).join('')||(lab.nodes.length?'<li class="table-empty">No devices match. Try another name, address or platform.</li>':'<li class="table-empty">This lab has no devices yet.</li>'));
  setMarkup($('topology-devices'),lab.nodes.map(n=>deviceRow(n,true)).join('')||'<li class="table-empty">This lab has no devices yet.</li>');
+ devicesPainted=devicesTechnical;
 }
 function renderProfiles(){const lab=current();$('profiles').innerHTML=lab.profiles.length?lab.profiles.map(p=>`<article class="profile-card"><span class="badge">${esc(platformLabel(p.platform))}</span><h3>${esc(p.label)}</h3><p>${esc(p.username)}</p><span class="profile-type">${p.auth==='key'?'SSH private key':'Password'}</span>${lab.defaults[p.platform]===p.id?'<small>Default for this network OS</small>':''}</article>`).join(''):'<div class="blank-state"><h2>No login credentials yet</h2><p>Add one profile per network OS.<br>Credentials found in the lab files work automatically.</p></div>';}
 function jobMarkup(j,opened){
@@ -265,11 +270,17 @@ function utcDisplay(value){const date=new Date(value);return Number.isNaN(date.g
 function showTab(value){
  setTab(value);
  for(const name of PANELS){const el=$(name+'-view');if(el)el.hidden=name!==tab;}
+ // One presentation at a time: the cards or the table replace each other (hidden, so the other is not focusable), and the newly shown one is painted.
  if($('inventory-view'))$('inventory-view').hidden=!devicesTechnical;
- if($('devices-technical')&&typeof $('devices-technical').setAttribute==='function')$('devices-technical').setAttribute('aria-pressed',String(devicesTechnical));
+ if($('device-list'))$('device-list').hidden=devicesTechnical;
+ if(devicesPainted!==devicesTechnical&&current()){renderNodes();renderDeviceList();}
+ if($('devices-technical')&&typeof $('devices-technical').setAttribute==='function'){$('devices-technical').setAttribute('aria-pressed',String(devicesTechnical));$('devices-technical').textContent=devicesTechnical?'Standard view':'Technical view';}
  document.querySelectorAll('[data-tab]').forEach(b=>{const active=b.dataset.tab===tab;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;if(active&&typeof b.scrollIntoView==='function'&&($('lab-tabs')?.scrollWidth||0)>($('lab-tabs')?.clientWidth||0))b.scrollIntoView({block:'nearest',inline:'nearest'});});
  if(tab==='topology'&&typeof refreshMap==='function')refreshMap();
  if(tab==='progress'&&typeof gitShowRepository==='function')gitShowRepository();
+ // Old #view=design links land on Advanced with Network design (Experimental) opened; nothing restores a Design tab.
+ if(scrollTarget==='experimental-design'&&$(scrollTarget)&&!$(scrollTarget).open)$(scrollTarget).open=true;
+ if(typeof renderNetworkDesign==='function')renderNetworkDesign();
  if(scrollTarget){const target=$(scrollTarget);if(target&&typeof target.scrollIntoView==='function')target.scrollIntoView({block:'start'});scrollTarget='';}
 }
 function tabKeydown(e){

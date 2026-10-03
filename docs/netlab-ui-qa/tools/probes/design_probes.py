@@ -77,6 +77,24 @@ class Ctx:
         return node.input_value() if node.count() else ''
 
 
+def reload_design(page):
+    """Reload the page on the Network design view: the route is now #view=advanced and the Experimental
+    <details> starts closed on every load, so reopen it (that is also what loads the design)."""
+    page.reload()
+    page.wait_for_selector('#experimental-design', timeout=15000)
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+
+
+def open_design(page, timeout=15000):
+    """Advanced > Experimental > Network design: the Design tab is gone, so click #tab-advanced, open
+    #experimental-design (closed by default) and wait for the #design-view region to be visible."""
+    page.click('#tab-advanced')
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+    page.wait_for_selector('#design-view', state='visible', timeout=timeout)
+
+
 def wait_http(url, seconds=60):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -191,7 +209,7 @@ def probe1(ctx, page, base, labs):
     ctx.check(n, 'baseline with vrf_loopback/router_id pools and extra lan pool keys parses with no problems', ctx.text('#design-problems').strip() == '', ctx.text('#design-problems'))
     save(page)
     ctx.check(n, 'baseline saves without problems', ctx.text('#design-problems').strip() == '', ctx.text('#design-problems'))
-    page.reload()
+    reload_design(page)
     goto_design(page, base, lab_id)
     advanced_after_save = ctx.val('#design-advanced')
     ctx.check(n, 'a reload shows the extra pools were actually stored (not just accepted client-side)',
@@ -217,7 +235,7 @@ def probe1(ctx, page, base, labs):
     ctx.check(n, 'no warning is shown that data was dropped', problems_now.strip() == '', problems_now)
 
     save(page)
-    page.reload()
+    reload_design(page)
     goto_design(page, base, lab_id)
     advanced_after_reload = ctx.val('#design-advanced')
     ctx.check(n, 'the loss is permanent: gone again after Save + reload', 'vrf_loopback' not in advanced_after_reload and 'router_id' not in advanced_after_reload, advanced_after_reload[:400])
@@ -243,7 +261,7 @@ def probe2(ctx, page, base, labs):
     set_advanced(page, baseline)
     save(page)
     ctx.check(n, 'a two-reflector design (r1 and r2 both bgp.rr=true) saves without problems', ctx.text('#design-problems').strip() == '', ctx.text('#design-problems'))
-    page.reload()
+    reload_design(page)
     goto_design(page, base, lab_id)
     advanced0 = ctx.val('#design-advanced')
     both_present = advanced0.count('"rr": true') == 2
@@ -432,7 +450,7 @@ def probe5(ctx, page, base, labs):
     # Scope to the lab card's own "Open lab" button: [data-lab] alone also matches the (hidden)
     # lab-switcher sidebar entry sharing the same id.
     page.click('article.lab-card[data-lab-id="%s"] [data-lab="%s"]' % (b_id, b_id))
-    page.click('#tab-design')
+    open_design(page)
     page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
     ctx.shot('P5-01-lab-b-immediately-after-switch')
     b_state_immediate = ctx.text('#design-state')
@@ -443,9 +461,9 @@ def probe5(ctx, page, base, labs):
     b_state_after = ctx.text('#design-state')
     b_area_after = ctx.val('#design-ospf-area')
     b_advanced_after = ctx.val('#design-advanced')
-    still_on_b = page.locator('#tab-design[aria-selected="true"]').count() == 1
+    still_on_b = page.locator('#tab-advanced[aria-selected="true"]').count() == 1 and page.locator('#experimental-design[open]').count() == 1
     contaminated = ('9.9.9.9' in b_area_after) or ('LAB-A-DISTINCTIVE' in b_advanced_after)
-    ctx.check(n, 'CONFIRMED-target: lab A\'s delayed Save response overwrote what is shown under lab B\'s Design tab', contaminated, 'still_on_design_tab=%s state=%r area=%r advanced=%s' % (still_on_b, b_state_after, b_area_after, b_advanced_after[:300]))
+    ctx.check(n, 'CONFIRMED-target: lab A\'s delayed Save response overwrote what is shown under lab B\'s Network design view', contaminated, 'still_on_advanced_experimental_design=%s state=%r area=%r advanced=%s' % (still_on_b, b_state_after, b_area_after, b_advanced_after[:300]))
     page.unroute('**/api/labs/%s/design' % a_id, delay_put)
 
     # Verify server-side lab B truly has no design (the contamination, if any, is a client-side render bug).
@@ -489,7 +507,7 @@ def probe6(ctx, page, base, labs):
             route.continue_()
     page.route(delayed_pattern, delay_g1)
 
-    page.reload()   # triggers a fresh designLoad(); since G1 is still "newest succeeded" this refetches
+    reload_design(page)   # triggers a fresh designLoad(); since G1 is still "newest succeeded" this refetches
                     # G1's plan through the now-delayed route, in flight for the next ~10s.
     page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
 
@@ -614,7 +632,7 @@ def probe8(ctx, page, base, labs, context):
             return orig.call(this, k, v);
           }; })();
     """)
-    page.reload()
+    reload_design(page)
     goto_design(page, base, lab_id)
     page.fill('#design-ospf-area', '1.1.1.1')
     page.locator('#design-ospf-area').dispatch_event('change')
@@ -628,7 +646,7 @@ def probe8(ctx, page, base, labs, context):
     # reloaded there is nothing left to recover, so the moment to look is before the reload.
     ctx.check(n, 'CONFIRMED-target: no message tells the student the edit could not be kept in this browser (a plain "Unsaved changes" with no warning)', 'could not be kept' not in detail_before_reload, detail_before_reload)
 
-    page.reload()
+    reload_design(page)
     goto_design(page, base, lab_id)
     ctx.shot('P8-02-after-reload-storage-had-failed')
     area_after_reload = ctx.val('#design-ospf-area')
@@ -642,7 +660,7 @@ def probe8(ctx, page, base, labs, context):
         const write = window.__origSetItem || Storage.prototype.setItem;
         write.call(localStorage, 'clab.design.draft.' + labId, JSON.stringify({revision: 'not-the-current-revision', intent: {schema:1, label:'stale-draft', families:{ipv4:true,ipv6:true}, addressing:{}, modules:[], nodes:{}, links:{}, vlans:{}, vrfs:{}, interfaces:{}, allocations:{}}}));
     }""", lab_id)
-    page.reload()
+    reload_design(page)
     goto_design(page, base, lab_id)
     ctx.shot('P8-03-stale-draft-discard-message-for-contrast')
     detail_stale = ctx.text('#design-detail')
@@ -672,17 +690,17 @@ def probe9(ctx, page, base, labs):
     g1_id = generation_id_from_download(page)
     ctx.note(n, 'G1 (succeeded, ospf-only) id = %s' % g1_id)
 
-    # Make it fail: an unsupported protocol (eigrp on arista_ceos), the same proven path check_design_ui.py uses.
-    page.click('[name="design-module"][value="eigrp"]')
+    # Make it fail: an unsupported protocol (srv6 on arista_ceos, since EIGRP is retired from authoring), the same proven path check_design_ui.py uses.
+    page.click('[name="design-module"][value="srv6"]')
     save(page)
     page.click('#design-generate')
     wait_state(page, 'failed', timeout=60000)
     g2_errors = ctx.text('#design-plan-errors')
-    ctx.check(n, 'the failed generation (G2) names the device and the unsupported protocol', 'eigrp' in g2_errors, g2_errors[:300])
+    ctx.check(n, 'the failed generation (G2) names the device and the unsupported protocol', 'srv6' in g2_errors, g2_errors[:300])
     ctx.shot('P9-01-g2-failed')
 
     # Fix it and generate again successfully: G3.
-    page.click('[name="design-module"][value="eigrp"]')
+    page.click('[name="design-module"][value="srv6"]')
     save(page)
     page.click('#design-generate')
     wait_state(page, 'Generating', timeout=8000)
@@ -801,7 +819,7 @@ def probe10(ctx, page, base, labs):
     # "snap back" but a PERSISTENT, invisible-to-the-user mismatch: Save reports success, #design-problems
     # stays empty, and the checkbox keeps showing unchecked even though the module it controls is still on.
     ctx.check(n, 'CONFIRMED-target: after Save succeeds, the checkbox still visually shows unchecked (setMarkup\'s string-equality cache skips the DOM update) even though the saved intent still has the vrf module on — a persistent, invisible desync, not a visible revert', not vrf_checked_after_save and '"vrf"' in advanced_after_save, 'checkbox_checked=%s advanced=%s' % (vrf_checked_after_save, advanced_after_save[:300]))
-    page.reload()
+    reload_design(page)
     goto_design(page, base, lab_id)
     vrf_checked_after_reload = page.locator('input[name="design-module"][value="vrf"]').is_checked()
     ctx.shot('P10-06-vrf-checkbox-corrects-itself-only-after-a-full-reload')

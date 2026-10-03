@@ -966,8 +966,6 @@ def check_d_capture(pw, r):
     p.click('#capture-open')
     p.wait_for_selector('#capture-dialog[open]', timeout=10000)
     p.wait_for_timeout(800)
-    p.click('#capture-search')
-    p.fill('#capture-search', 'ceos')
     p.wait_for_timeout(500)
     options = p.eval_on_selector_all('#capture-target option', 'els => els.map(e => ({value: e.value, text: e.textContent}))')
     ceos_opt = next((o for o in options if 'ceos' in (o['text'] or '').lower()), None)

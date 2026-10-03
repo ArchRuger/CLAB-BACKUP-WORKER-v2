@@ -575,7 +575,8 @@ test('designApplyRenderReview unticks the acknowledgement and recomputes Apply o
  const oneTarget=()=>({name:'r1',kind:'arista_ceos',eligible:true,reachable:true,ready:true,no_op:false,
   counts:{added:0,removed:0,stale:0,conflicts:0,expected:0,removals:0,kept_manual:0},diff:[],expected:[],
   removals:[],kept_manual:[],protected:[],compatibility:[],conflicts:[]});
- c.json=async()=>({targets:[oneTarget()],applicable:['r1'],takeover:[]});
+ // The review is a job now: the POST answers {review_job}; a finished job carries the former synchronous answer as `review`.
+ c.json=async()=>({review_job:{id:'j1',status:'done',started:'2026-10-03T10:00:00Z',finished:'2026-10-03T10:00:05Z',server_time:1791021605,targets:[{name:'r1',stage:'done',timeline:{}}],review:{targets:[oneTarget()],applicable:['r1'],takeover:[]}}});
  await c.designApplyRunReview();
  c.$('design-apply-ack').checked=true;c.designApplyUpdateRunButton();
  assert.equal(c.$('design-apply-run').disabled,false,'acknowledged and applicable: Apply is enabled');
@@ -989,7 +990,7 @@ test('U-07: removing a row gives focus to the table\'s Add button',()=>{
 // --- QA-015 (stress finding R1): an older design answer that lands after a newer one is dropped ------------
 test('QA-015: two overlapping loads of one lab, the older answer arriving last, leave the newer generation shown',async()=>{
  const held=[];
- const api=async url=>({json:()=>/\/generations\//.test(url)?Promise.resolve({plan:{files:[]}}):new Promise(resolve=>held.push(resolve))});
+ const api=async url=>({json:()=>/\/review-jobs/.test(url)?Promise.resolve([]):/\/generations\//.test(url)?Promise.resolve({plan:{files:[]}}):new Promise(resolve=>held.push(resolve))});
  const c=ctx({api});
  const first=c.designLoad('lab-1'),second=c.designLoad('lab-1');
  await new Promise(r=>setImmediate(r));
@@ -1027,4 +1028,317 @@ test('U-21: designKeptModulesNotice names the modules kept on and why, and stays
  assert.equal(c.designKeptModulesNotice([],['vlan','routing']),'The vlan module stays on while VLANs (or links in a VLAN) are defined; remove them to turn it off. The routing module stays on while static routes are defined; remove them to turn it off.');
  assert.equal(c.designKeptModulesNotice(['ospf'],['ospf','bgp']),'','a module the form simply does not list is not "kept": only the three the intent re-adds');
  assert.equal(c.designKeptModulesNotice(undefined,['vrf']),'');
+});
+
+// --- task 8: error summary, route-reflector grid markup, Experimental placement ---------------------------
+function summaryEls(){
+ const els={};
+ const el=id=>{if(!els[id])els[id]={id,tagName:'INPUT',value:'',disabled:false,title:'',textContent:'',className:'',hidden:false,checked:false,innerHTML:'',attrs:{},focused:0,scrolled:0,
+  setAttribute(n,v){this.attrs[n]=String(v);},getAttribute(n){return n in this.attrs?this.attrs[n]:null;},removeAttribute(n){delete this.attrs[n];},
+  focus(){this.focused++;},scrollIntoView(){this.scrolled++;},querySelector:()=>null,querySelectorAll:()=>[]};return els[id];};
+ return {els,el};
+}
+test('8b: a route reflector is a checkbox beside its name in a <span>, inside a grid with its own full-width row',()=>{
+ const c=ctx();
+ const markup=c.designReflectorMarkup(['r1','a-very-long-router-name-that-keeps-going-and-going'],new Set(['r1']));
+ assert.equal((markup.match(/<label class="checkbox-label"><input type="checkbox" name="design-bgp-rr"/g)||[]).length,2);
+ assert.match(markup,/><span>r1<\/span><\/label>/);assert.match(markup,/<span>a-very-long-router-name[^<]*<\/span>/);
+ assert.match(c.designReflectorMarkup(['<b>'],new Set()),/<span>&lt;b&gt;<\/span>/,'the name is escaped');
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ assert.match(html,/<fieldset class="design-check-list design-rr-fieldset"><legend>Route reflectors<\/legend><div id="design-bgp-rr" class="design-rr-grid">/);
+ assert.match(html,/Tick every router that reflects routes; none means a full mesh\./);
+ const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
+ assert.match(css,/\.design-rr-fieldset\s*\{[^}]*flex:\s*1 1 100%/);assert.match(css,/\.design-rr-grid \.checkbox-label span\s*\{[^}]*overflow-wrap:\s*anywhere/);
+});
+test('8c: paths map to the controls that own them; unmapped paths open the Advanced editor',()=>{
+ const c=ctx();const ids=(path,message)=>JSON.parse(JSON.stringify(c.designFieldsFor(path,message))).map(f=>f.id);
+ same(ids('bgp.as'),['design-bgp-as']);same(ids('ospf.area'),['design-ospf-area']);same(ids('isis.area'),['design-isis-area']);
+ same(ids('addressing.loopback.ipv6','x'),['design-pool-loopback-ipv6']);same(ids('addressing.p2p.ipv6'),['design-pool-p2p-ipv6']);same(ids('addressing.lan.ipv4'),['design-pool-lan-ipv4']);
+ same(ids('addressing.p2p.prefix6'),['design-pool-p2p-prefix']);
+ same(ids('addressing.lan.ipv6','ipv6 is switched off in this design; remove the prefix or enable the family'),['design-pool-lan-ipv6','design-ipv6'],'the pool the path names first, the family checkbox as the other fix');
+ same(ids('nodes.r1.bgp.rr'),['design-bgp-rr']);
+ same(ids('vlans.v10.id'),['design-advanced']);same(ids(''),['design-advanced']);
+});
+test('8c: failures parse to problems: structured list, the "Fix the design first" sentence, or one error item',()=>{
+ const c=ctx();const plain=v=>JSON.parse(JSON.stringify(v));
+ same(plain(c.designProblemsFromError({message:'Fix the design first: x',problems:[{path:'bgp.as',message:'Set an AS'}]})),{kind:'problems',problems:[{path:'bgp.as',message:'Set an AS'}]});
+ same(plain(c.designProblemsFromError(new Error('Fix the design first: bgp.as: Set an AS; addressing.p2p.ipv6: ipv6 is switched off'))),{kind:'problems',problems:[{path:'bgp.as',message:'Set an AS'},{path:'addressing.p2p.ipv6',message:'ipv6 is switched off'}]});
+ same(plain(c.designProblemsFromError(new Error('The manager did not respond. Try again.'))),{kind:'error',problems:[{path:'',message:'The manager did not respond. Try again.'}]});
+ assert.equal(c.designSummaryTitle('save','problems',2),'Save design failed: 2 problems to fix');
+ assert.equal(c.designSummaryTitle('generate','problems',1),'Generate plan failed: 1 problem to fix');
+ assert.equal(c.designSummaryTitle('generate','error',1),'Generate plan failed');
+ const html=c.designSummaryMarkup({action:'save',kind:'problems',problems:[{path:'bgp.as',message:'Set <an> AS'},{path:'vlans.v1.id',message:'Bad'}]});
+ assert.match(html,/<h3 id="design-error-title">Save design failed: 2 problems to fix<\/h3>/);
+ assert.match(html,/<strong>BGP AS number<\/strong>: Set &lt;an&gt; AS <button type="button" class="text-button design-error-go" data-design-goto="design-bgp-as">/);
+ assert.match(html,/data-design-goto="design-advanced">Open the Advanced JSON editor/);
+ const err=c.designSummaryMarkup({action:'generate',kind:'error',problems:[{path:'',message:'Down'}]});
+ assert.match(err,/Try again/);assert.doesNotMatch(err,/data-design-goto/);
+});
+test('8c: a failed save shows one summary with focus, aria-invalid and one announcement; a poll render never announces; a good save clears it',async()=>{
+ const {els,el}=summaryEls();let validations=0;
+ const c=ctx({$:el,setMarkup:(e,html)=>{if(e)e.innerHTML=html;},current:()=>({id:'lab-a',name:'A'}),
+  json:async(path,method)=>{if(path.endsWith('/validate')){validations++;return validations===1?{problems:[{path:'bgp.as',message:'Give BGP an AS number.'},{path:'addressing.p2p.ipv6',message:'ipv6 is switched off in this design; remove the prefix or enable the family'}]}:{problems:[]};}
+   return {intent:{schema:1,revision:'r2',modules:[]},generations:[],problems:[],nodes:{}};}});
+ stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r1',modules:['bgp']},generations:[],problems:[],nodes:{}};
+ el('design-bgp-as').attrs['aria-describedby']='design-bgp-as-help';
+ assert.equal(await c.designSave(),false);
+ const box=el('design-error-summary');
+ assert.equal(box.hidden,false);assert.match(box.innerHTML,/Save design failed: 2 problems to fix/);assert.equal(box.focused,1,'focus moves to the summary');assert.equal(box.scrolled,1);
+ assert.equal(el('design-bgp-as').attrs['aria-invalid'],'true');assert.equal(el('design-bgp-as').attrs['aria-describedby'],'design-bgp-as-help design-error-item-0');
+ assert.equal(el('design-pool-p2p-ipv6').attrs['aria-invalid'],'true','the pool the path names carries the switched-off problem');
+ assert.match(el('design-announce').textContent,/^Save design failed: 2 problems to fix\. Give BGP an AS number\./);
+ const announced=el('design-announce').textContent;
+ assert.doesNotMatch(el('design-state-text').textContent+el('design-detail').textContent,/Give BGP an AS number/,'the header line does not repeat problems[0]');
+ assert.match(el('design-problems').innerHTML,/addressing\.p2p\.ipv6/,'the full list stays as the secondary list');
+ const live=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ assert.doesNotMatch(live,/id="design-problems"[^>]*role="alert"/);assert.match(live,/<p id="design-announce" class="sr-only" role="alert"><\/p>/);
+ c.designRenderAll();c.designRenderAll();
+ assert.equal(el('design-announce').textContent,announced);assert.equal(box.focused,1,'re-renders and polls never move focus');
+ assert.equal(await c.designSave(),true);
+ assert.equal(box.hidden,true);assert.equal(box.innerHTML,'');assert.equal(el('design-announce').textContent,'');
+ assert.equal(el('design-bgp-as').attrs['aria-invalid'],undefined);assert.equal(el('design-bgp-as').attrs['aria-describedby'],'design-bgp-as-help','the original description is restored');
+ assert.equal(el('design-pool-p2p-ipv6').attrs['aria-describedby'],undefined);
+});
+test('8c: Generate without a draft shows the backend 400 problems (structured or sentence) and a lost connection gets Try again',async()=>{
+ for(const failure of [Object.assign(new Error('Fix the design first: x'),{status:400,problems:[{path:'ospf.area',message:'Not an area'},{path:'isis.area',message:'Bad area'}]}),
+  new Error('Fix the design first: ospf.area: Not an area; isis.area: Bad area')]){
+  const {els,el}=summaryEls();
+  const c=ctx({$:el,setMarkup:(e,html)=>{if(e)e.innerHTML=html;},current:()=>({id:'lab-a'}),json:async()=>{throw failure;}});
+  stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r1',modules:['ospf']},generations:[],problems:[],nodes:{}};
+  await c.designGenerate();
+  assert.match(el('design-error-summary').innerHTML,/Generate plan failed: 2 problems to fix/);
+  assert.match(el('design-error-summary').innerHTML,/data-design-goto="design-ospf-area"/);assert.match(el('design-error-summary').innerHTML,/data-design-goto="design-isis-area"/);
+  assert.equal(el('design-ospf-area').attrs['aria-invalid'],'true');
+ }
+ const {els,el}=summaryEls();
+ const c=ctx({$:el,setMarkup:(e,html)=>{if(e)e.innerHTML=html;},current:()=>({id:'lab-a'}),json:async()=>{throw new TypeError('Failed to fetch');}});
+ stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r1',modules:[]},generations:[],problems:[],nodes:{}};
+ await c.designGenerate();
+ assert.match(el('design-error-summary').innerHTML,/Generate plan failed<\/h3><ul><li id="design-error-item-0">Failed to fetch/);assert.match(el('design-error-summary').innerHTML,/Try again/);
+ assert.equal(el('design-announce').textContent.startsWith('Generate plan failed'),true);
+});
+test('8f: the design loads only while Advanced is shown with Experimental open, stops its pollers otherwise, and never reads as cancelled',()=>{
+ const {els,el}=summaryEls();let loads=0;
+ const c=ctx({$:el,current:()=>({id:'lab-a'}),tab:'advanced',api:async()=>{loads++;return {json:async()=>({intent:null,generations:[],nodes:{}})};}});
+ const view=()=>vm.runInContext('typeof tab',c);
+ vm.runInContext("var tab='advanced'",c);
+ c.renderNetworkDesign();assert.equal(loads,0,'closed details: nothing is fetched');
+ el('experimental-design').open=true;c.renderNetworkDesign();assert.equal(loads,1,'open details on Advanced: the design loads');
+ vm.runInContext("tab='tools'",c);c.renderNetworkDesign();
+ assert.equal(c.designVisible(),false);assert.equal(vm.runInContext('designWatch',c),null,'the generation watch is stopped');
+ vm.runInContext("tab='advanced'",c);stateOf(c).labId='lab-a';stateOf(c).loading=false;c.renderNetworkDesign();assert.equal(loads,2,'returning reloads (the view may be stale)');
+ assert.equal(view(),'string');
+ const source=fs.readFileSync(path.join(__dirname,'../app/static/network-design.js'),'utf8');
+ assert.doesNotMatch(source,/tab==='design'|tools-design/);
+});
+test('8f: index.html has no Design tab or Tools card; Network design sits under Advanced › Experimental before the Danger zone, closed, labelled, as a region with a persistent warning',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ assert.doesNotMatch(html,/id="tab-design"|data-tab="design"|id="tools-design"|Design this lab/);
+ const at=html.indexOf('id="experimental-design"'),danger=html.indexOf('class="panel danger-zone"'),advanced=html.indexOf('id="advanced-view"'),tools=html.indexOf('id="tools-view"');
+ assert.ok(advanced>tools&&at>advanced&&at<danger,'inside Advanced, before the Danger zone');
+ assert.match(html,/<details id="experimental-design" class="experimental-details">/,'closed by default');
+ assert.match(html,/Experimental <span class="pill warn">Under construction \/ Under review<\/span>/);
+ assert.match(html,/<section id="design-view" class="design-region" role="region" aria-labelledby="design-head-title">/);
+ assert.doesNotMatch(html,/role="tabpanel" aria-labelledby="tab-design"/);
+ assert.match(html,/id="design-experimental-banner" class="banner warn[^"]*"[^>]*><svg[\s\S]*?under construction and under review[^<]*, and it is not part of the supported lab workflow/);
+ assert.doesNotMatch(html.slice(html.indexOf('id="design-experimental-banner"'),html.indexOf('id="design-head"')),/dismiss|close/i,'the warning cannot be dismissed');
+});
+test('8f: an old view=design route resolves to Advanced with Experimental opened, without a Design panel',()=>{
+ const elements=new Map();const element=()=>({dataset:{},value:'',innerHTML:'',open:false,hidden:false,disabled:false,listeners:{},classList:{toggle(){}},setAttribute(){},addEventListener(){},scrollIntoView(){this.scrolled=true;}});
+ const document={getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},querySelectorAll(){return [];},createElement:element,body:element()};
+ const context=vm.createContext({document,sessionStorage:{getItem(){return null;},setItem(){}},setTimeout:()=>0,clearTimeout(){},setInterval(){},URLSearchParams,URL});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),context);
+ vm.runInContext("PANELS.includes('design')",context);
+ assert.equal(vm.runInContext("PANELS.includes('design')",context),false);
+ vm.runInContext("setTab('design')",context);
+ assert.equal(vm.runInContext('tab',context),'advanced');assert.equal(vm.runInContext('scrollTarget',context),'experimental-design');
+ vm.runInContext("activeId='lab';state={labs:[{id:'lab',name:'L',nodes:[],profiles:[],defaults:{}}],jobs:[],platforms:{}};showTab('design')",context);
+ assert.equal(document.getElementById('experimental-design').open,true,'the Experimental details is opened');
+ assert.equal(document.getElementById('experimental-design').scrolled,true,'and scrolled into view');
+ assert.equal(document.getElementById('design-view').hidden,false,'showTab does not toggle the region as a panel');
+ assert.equal(vm.runInContext('tab',context),'advanced');
+});
+
+// --- 8a/8d: retired modules; 8e: the device review as a job ----------------------------------------------
+const RETIRED_VIEW={retired:{eigrp:'EIGRP is retired.',ripv2:'RIP is retired.',vxlan:'VXLAN is retired.',evpn:'EVPN is under review.'},
+ retired_status:{eigrp:'retired',ripv2:'retired',vxlan:'retired',evpn:'under_review'},retired_labels:{eigrp:'EIGRP',ripv2:'RIP',vxlan:'VXLAN',evpn:'EVPN'}};
+test('8a: a retired module the design carries is a read-only "No longer offered" row with its reason and a Remove button; it is never offered',()=>{
+ const c=ctx();const info=c.designRetiredInfo(RETIRED_VIEW);
+ const html=c.designModulesMarkup(['ospf','bgp','vxlan'],['ospf','eigrp','evpn'],info);
+ assert.equal((html.match(/name="design-module" value=/g)||[]).length,2,'the retired id in the offered list is not a choice');
+ assert.doesNotMatch(html,/value="vxlan"/);
+ assert.match(html,/name="design-module-retired" value="eigrp" checked disabled/);
+ assert.match(html,/<span class="pill warn">No longer offered<\/span>/);assert.match(html,/Unavailable — under review/,'EVPN reads as under review');
+ assert.match(html,/EIGRP is retired\./);assert.match(html,/data-design-retire-remove="eigrp"[^>]*>Remove from design/);
+ assert.doesNotMatch(c.designModulesMarkup(['ospf'],['ospf'],info),/design-retired-row/,'no row when the design does not use one');
+ assert.match(c.designModulesMarkup([],['eigrp'],c.designRetiredInfo({retired:{eigrp:'<b>x</b>'},retired_labels:{eigrp:'EIGRP'}})),/&lt;b&gt;x&lt;\/b&gt;/,'the reason is escaped');
+ assert.equal(c.designModulesMarkup(['ospf'],['ospf']).includes('checkbox'),true,'no retired info: plain list as before');
+ const notice=c.designRetiredNoticeMarkup({...RETIRED_VIEW,retired_in_design:[{path:'modules',module:'vxlan',message:'VXLAN is retired.'},{path:'links.a.vxlan',module:'vxlan',message:'x'}]});
+ assert.match(notice,/This design still uses VXLAN\./);assert.match(notice,/<code>links\.a\.vxlan<\/code>/);assert.equal(c.designRetiredNoticeMarkup({retired_in_design:[]}),'');
+});
+test('8a: designIntentFromForm keeps a retired module the base already has, unless the student removed it',()=>{
+ const c=ctx();const base={schema:1,modules:['ospf','vxlan'],links:{a:{vxlan:{vni:1}}}};
+ const keep=c.designIntentFromForm({modules:['ospf'],retiredKnown:['vxlan','eigrp']},base);
+ same(keep.modules,['ospf','vxlan']);assert.equal(keep.links.a.vxlan.vni,1);
+ same(c.designIntentFromForm({modules:['ospf'],retiredKnown:['vxlan'],retiredRemoved:['vxlan']},base).modules,['ospf']);
+ same(c.designIntentFromForm({modules:['ospf','bgp'],retiredKnown:[]},{schema:1,modules:['ospf']}).modules,['ospf','bgp'],'a retired id is only kept when the view names it retired');
+ same(c.designIntentFromForm({modules:['ospf']},base).modules,['ospf'],'without retired info nothing is invented');
+});
+test('8a: removing a retired row drops the module from the draft',()=>{
+ const {els,el}=summaryEls();const notes=[];
+ const c=ctx({$:el,notify:m=>notes.push(m),setMarkup:(e,h)=>{if(e)e.innerHTML=h;},current:()=>({id:'lab-a'})});
+ stateOf(c).labId='lab-a';stateOf(c).view={...RETIRED_VIEW,intent:{schema:1,revision:'r',modules:['ospf','eigrp']},generations:[],problems:[],nodes:{},modules:['ospf']};
+ c.designRemoveRetired('eigrp');
+ same(stateOf(c).draft.intent.modules,['ospf']);assert.match(notes[0],/Save the design/);
+});
+test('8a/8d: retired is worded, never "not supported"; an old plan row is checked against retired; Generate and Apply say why',()=>{
+ const c=ctx();const info=c.designRetiredInfo(RETIRED_VIEW);
+ assert.equal(c.designLevelWord('retired','r','retired'),'No longer offered');assert.equal(c.designLevelWord('retired','r','under_review'),'Under review');
+ assert.equal(vm.runInContext('DESIGN_LEVEL_CLASS.retired',c),'warn');
+ same(JSON.parse(JSON.stringify(c.designRowLevel({feature:'ripng',level:'verified_on_image'},info))),{level:'retired',policy:'retired'});
+ same(JSON.parse(JSON.stringify(c.designRowLevel({feature:'evpn',level:'unsupported'},info))),{level:'retired',policy:'under_review'});
+ same(JSON.parse(JSON.stringify(c.designRowLevel({feature:'ospf',level:'verified_on_image'},info))),{level:'verified_on_image',policy:''});
+ const plan={compatibility:{r1:[{feature:'ospf',level:'verified_on_image'},{feature:'evpn',level:'unsupported',engine_level:'unsupported'},{feature:'ripng',level:'retired',policy:'retired'}]}};
+ const html=c.designCompatibilityMarkup(plan,info);
+ assert.match(html,/Under review/);assert.match(html,/No longer offered/);assert.doesNotMatch(html,/Not supported/);
+ same(c.designPlanRetired({modules:['ospf','vxlan'],compatibility:{r1:[{feature:'ripng'}]}},info),['ripv2','vxlan']);
+ const view={...RETIRED_VIEW,generations:[{id:'g',status:'succeeded',modules:['ospf','vxlan']}],summary:{}};
+ const why=c.designApplyDisabledReason({deployment:{status:'Running'}},view,[]);
+ assert.match(why,/This plan uses VXLAN, which is no longer offered, so it cannot be applied to devices/);
+ assert.doesNotMatch(c.designApplyDisabledReason({deployment:{status:'Running'}},{...view,generations:[{id:'g',status:'succeeded',modules:['ospf']}]},[]),/no longer offered/);
+ const {els,el}=summaryEls();
+ const h=ctx({$:el,menuReason:()=>{}});
+ h.designRenderHeader({},{intent:{schema:1},generations:[],problems:[],engine:{available:true},retired_in_design:[{path:'modules',module:'vxlan',message:'m'}]});
+ assert.equal(el('design-generate').disabled,true);assert.match(el('design-generate').title,/no longer offered/);
+});
+test('8a: a Save/Import 400 or Generate 409 with {message,problems,retired} shows the sentence and the problems in the summary',()=>{
+ const c=ctx();const plain=v=>JSON.parse(JSON.stringify(v));
+ const err=Object.assign(new Error('RIP is no longer offered, so it cannot be added.'),{status:400,retired:['ripv2'],problems:[{path:'modules',message:'RIP is no longer offered'}]});
+ const parsed=plain(c.designProblemsFromError(err));
+ assert.equal(parsed.kind,'problems');assert.equal(parsed.lead,'RIP is no longer offered, so it cannot be added.');assert.equal(parsed.problems[0].path,'modules');
+ const html=c.designSummaryMarkup({action:'save',kind:'problems',problems:parsed.problems,lead:parsed.lead,links:true});
+ assert.match(html,/<p class="design-error-lead">RIP is no longer offered, so it cannot be added\.<\/p>/);assert.match(html,/data-design-goto="design-modules"/);
+ const only=plain(c.designProblemsFromError(Object.assign(new Error('This design uses VXLAN.'),{status:409,retired:['vxlan']})));
+ same(only.problems,[{path:'',message:'This design uses VXLAN.'}]);
+ assert.equal(plain(c.designProblemsFromError(new Error('plain'))).lead,undefined,'no lead without retired');
+});
+function reviewJob(over){
+ return {id:'j1',lab_id:'lab-a',generation_id:'g1',status:'running',started:'2026-10-03T10:00:00Z',finished:null,server_time:Date.parse('2026-10-03T10:00:23Z')/1000,
+  progress:{settled:0,total:2},targets:[{name:'ceos',kind:'arista_ceos',stage:'connecting',timeline:{queued:1791021600,connecting:1791021610}},
+  {name:'xr',kind:'cisco_xrv9k',stage:'queued',timeline:{queued:1791021600}}],...over};
+}
+test('8e: stage words, clocks and the overall line come from the contract and the server clock',()=>{
+ const c=ctx();const job=reviewJob({server_time:1791021623});
+ assert.equal(c.designReviewStageWord('staging'),'Trying the change (nothing is committed)…');assert.equal(c.designReviewStageWord('unreachable'),'Could not be reached');
+ assert.equal(c.designReviewClock(83),'1:23');assert.equal(c.designReviewClock(-4),'0:00');
+ assert.equal(c.designReviewOverall(job),'Reviewing 2 devices · 0:23');
+ assert.equal(c.designReviewOverall({...job,status:'interrupted'}),'The review was interrupted. Review again.');
+ assert.match(c.designReviewOverall({...job,status:'failed',message:'VM connection changed.'}),/The review could not finish: VM connection changed\. Review again\./);
+ assert.equal(c.designReviewOverall({...job,status:'done',finished:'2026-10-03T10:00:31Z'}),'Review finished · 0:31');
+ const row=c.designReviewRowMarkup({name:'xr',kind:'k',stage:'unreachable',message:'The device could not be reached over SSH.',timeline:{queued:5,settled:9}},job);
+ assert.match(row,/Could not be reached/);assert.match(row,/The device could not be reached over SSH\./);assert.match(row,/0:04/);
+ assert.match(c.designReviewRowMarkup(job.targets[0],job),/Connecting…/);assert.match(c.designReviewRowMarkup(job.targets[0],job),/0:13/,'elapsed in the current stage');
+ assert.match(c.designReviewMarkup({targets:[{name:'<x>',stage:'queued',timeline:{}}]}),/&lt;x&gt;/);
+});
+test('8e: the live region announces stage changes and the final result, not every poll',()=>{
+ const c=ctx();const first=reviewJob();const prev=c.designReviewStages(first);
+ assert.equal(c.designReviewAnnouncement(first,prev),'','an unchanged poll says nothing');
+ const next=reviewJob({targets:[{...first.targets[0],stage:'reading_config'},first.targets[1]]});
+ assert.equal(c.designReviewAnnouncement(next,prev),'ceos: Reading the current configuration…');
+ assert.match(c.designReviewAnnouncement({...next,status:'done',finished:'2026-10-03T10:00:40Z'},prev),/^Review finished/);
+ assert.equal(c.designReviewAnnouncement(first,{}),'','the first sight of a device is not announced');
+});
+function reviewHarness(opts){
+ opts=opts||{};
+ const {els,el}=summaryEls();const timers=[];const calls=[];let seqNo=0;
+ const replies=opts.replies||[];
+ const c=ctx({$:el,setMarkup:(e,h)=>{if(e)e.innerHTML=h;},current:()=>({id:'lab-a',name:'A'}),
+  setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout:id=>{if(id)timers[id-1]=null;},
+  json:async(path,method,body)=>{calls.push(['json',path,method,body]);const r=opts.post?await opts.post(body,calls):{review_job:reviewJob()};return r;},
+  api:async path=>{calls.push(['api',path]);const r=await opts.get(path,calls);return {json:async()=>r};}});
+ c.document.querySelectorAll=sel=>sel==='[name="design-apply-target"]:checked'?[{value:'ceos'},{value:'xr'}]:[];
+ vm.runInContext("designApplyState.labId='lab-a';designApplyState.generationId='g1'",c);
+ const tick=async()=>{const fn=timers.shift();if(fn)await fn();else await new Promise(r=>setImmediate(r));};
+ return {c,els,el,timers,calls,tick};
+}
+test('8e: Review starts a job, shows the live log, follows it every ~1.5 s and hands job.review to the review step once done',async()=>{
+ const stages=['connecting','reading_config','staging','done'];let n=0;
+ const review={token:'tok',expires_in:600,generation_id:'g1',applicable:['ceos'],takeover:[],targets:[{name:'ceos',kind:'arista_ceos',eligible:true,reachable:true,ready:true,no_op:true,counts:{},compatibility:[]}]};
+ const h=reviewHarness({get:async path=>{n++;const done=n>=3;return reviewJob({status:done?'done':'running',targets:[{name:'ceos',kind:'arista_ceos',stage:done?'done':stages[n],timeline:{queued:1791021600,settled:done?1791021620:undefined}}],review:done?review:undefined});}});
+ await h.c.designApplyRunReview();
+ const post=h.calls.find(x=>x[0]==='json');
+ assert.match(post[1],/\/design\/generations\/g1\/review$/);assert.match(post[3].request_id,/^[0-9a-f]{32}$/);same(post[3].targets,['ceos','xr']);
+ assert.equal(h.el('design-apply-reviewing-step').hidden,false,'the live log step is shown');
+ assert.equal(h.el('design-apply-review-run').disabled,true);assert.match(h.el('design-apply-review-run').textContent,/Reviewing 2 devices…/);
+ assert.match(h.el('design-review-overall').textContent,/^Reviewing 2 devices · 0:23/);assert.match(h.el('design-review-body').innerHTML,/Connecting…/);
+ await h.tick();assert.match(h.el('design-review-body').innerHTML,/Reading the current configuration…/);
+ assert.match(h.el('design-review-live').textContent,/ceos: Reading the current configuration…/);
+ await h.tick();await h.tick();
+ assert.equal(stateOf(h.c).labId,'','designState untouched');
+ assert.equal(vm.runInContext('designApplyState.review.token',h.c),'tok','job.review is the review, token included');
+ assert.equal(h.el('design-apply-review-step').hidden,false);assert.equal(h.el('design-apply-reviewing-step').hidden,true);
+ assert.equal(h.el('design-apply-review-run').disabled,false,'the button is free again once the job settled');
+ assert.doesNotMatch(h.el('design-review-body').innerHTML+h.el('design-review-overall').textContent+h.el('design-review-error').textContent,/cancel/i);
+});
+test('8e: a request id is fresh per click, and reused only to retry a lost answer',async()=>{
+ let fail=true;const bodies=[];
+ const h=reviewHarness({post:async body=>{bodies.push(body.request_id);if(fail&&bodies.length<=2)throw new TypeError('Failed to fetch');return {review_job:reviewJob({status:'failed',message:'x'})};},get:async()=>reviewJob()});
+ await h.c.designApplyRunReview();assert.equal(h.el('design-apply-choose-error').textContent,'Failed to fetch');assert.equal(h.el('design-apply-review-run').disabled,false,'a failed start frees the button');
+ await h.c.designApplyRunReview();
+ assert.equal(bodies[0],bodies[1],'the retry after a lost answer reuses the id');
+ fail=false;await h.c.designApplyRunReview();await h.c.designApplyRunReview();
+ assert.equal(bodies[2],bodies[1],'a third attempt after another lost answer still retries the same request');
+ assert.notEqual(bodies[3],bodies[2],'a fresh click after an answer is a new request');
+});
+test('8e: a 409 with review_job_id attaches to that job instead of starting another',async()=>{
+ const h=reviewHarness({post:async()=>{throw Object.assign(new Error('A review of this lab is already running.'),{status:409,review_job_id:'jobX'});},get:async path=>reviewJob({id:'jobX'})});
+ await h.c.designApplyRunReview();
+ assert.equal(vm.runInContext('designApplyState.reviewJobId',h.c),'jobX');assert.equal(h.calls.filter(x=>x[0]==='json').length,1);
+ assert.ok(h.calls.some(x=>x[0]==='api'&&/review-jobs\/jobX$/.test(x[1])));assert.equal(h.el('design-apply-reviewing-step').hidden,false);
+});
+test('8e: failed, interrupted, unreachable devices and a 404 read truthfully, with Review again',async()=>{
+ const failedDevice=reviewJob({status:'done',finished:'2026-10-03T10:00:30Z',review:{token:'t',applicable:[],targets:[]},targets:[{name:'ceos',kind:'k',stage:'unreachable',message:'The device could not be reached over SSH.',timeline:{queued:1,settled:4}},{name:'xr',kind:'k',stage:'failed',message:'The device did not finish the review in time.',reason_code:'timeout',timeline:{queued:1,settled:540}}]});
+ const a=reviewHarness({get:async()=>failedDevice,post:async()=>({review_job:reviewJob()})});
+ await a.c.designApplyRunReview();await a.tick();
+ assert.match(a.el('design-review-body').innerHTML+a.el('design-apply-review-body').innerHTML,/could not be reached over SSH/);
+ const b=reviewHarness({post:async()=>({review_job:reviewJob()}),get:async()=>reviewJob({status:'interrupted'})});
+ await b.c.designApplyRunReview();await b.tick();
+ assert.equal(b.el('design-review-overall').textContent,'The review was interrupted. Review again.');assert.equal(b.el('design-review-again').hidden,false);assert.equal(b.el('design-apply-review-run').disabled,false);
+ const c2=reviewHarness({post:async()=>({review_job:reviewJob()}),get:async()=>{throw Object.assign(new Error('gone'),{status:404});}});
+ await c2.c.designApplyRunReview();await c2.tick();
+ assert.equal(c2.el('design-review-error').textContent,'The review is no longer available; review again.');assert.equal(c2.el('design-review-again').hidden,false);
+ assert.equal(c2.el('design-apply-review-run').disabled,false);
+});
+test('8e: closing the dialog stops following without saying cancelled; the plan card shows the running review and Show reattaches; a late answer never lands in another dialog',async()=>{
+ let release;const gate=new Promise(r=>{release=r;});
+ const h=reviewHarness({post:async()=>({review_job:reviewJob()}),get:async path=>{await gate;return reviewJob();}});
+ await h.c.designApplyRunReview();
+ assert.equal(h.el('design-review-running').hidden,false);assert.match(h.el('design-review-running').innerHTML,/Review running… <button[^>]*data-design-review-show="j1"/);
+ const pending=h.tick();            // a poll is in flight
+ h.c.designApplyClose();            // the dialog closes: following stops, a quiet watch keeps the plan card honest
+ vm.runInContext("designApplyState.labId='lab-b';designApplyState.reviewJobId='other'",h.c);   // a different dialog opens
+ release();await pending;
+ assert.equal(vm.runInContext('designApplyState.reviewJob===null||designApplyState.reviewJob.id==="j1"',h.c),true);
+ assert.doesNotMatch(h.el('design-review-overall').textContent+h.el('design-review-error').textContent+h.el('design-review-running').innerHTML,/cancel/i);
+ assert.equal(vm.runInContext('designApplyState.reviewJobId',h.c),'other','the late answer did not touch the other dialog');
+ const src=fs.readFileSync(path.join(__dirname,'../app/static/network-design.js'),'utf8');
+ assert.doesNotMatch(src.slice(src.indexOf('const DESIGN_REVIEW_STAGE_WORDS'),src.indexOf('function designApplyRequestId')),/cancel/i);
+});
+test('8e: after a reload a running review is found on the plan card, and reopening Apply attaches to it',async()=>{
+ const h=reviewHarness({get:async path=>/review-jobs$/.test(path)?[reviewJob()]:reviewJob()});
+ vm.runInContext("designState.labId='lab-a'",h.c);
+ await h.c.designReviewDiscover('lab-a');
+ assert.equal(h.el('design-review-running').hidden,false);
+ assert.ok(h.timers.length>=1,'a quiet watch follows it with the dialog closed');
+ await h.c.designReviewReattach('lab-a','j1');
+ assert.equal(vm.runInContext('designApplyState.reviewJobId',h.c),'j1');assert.equal(h.el('design-apply-reviewing-step').hidden,false);
+});
+test('8e/8a: api() keeps problems, retired and review_job_id from an object detail and shows its message',async()=>{
+ const context=vm.createContext({document:{getElementById:()=>({dataset:{},listeners:{},classList:{toggle(){}},addEventListener(){},setAttribute(){},scrollIntoView(){}}),querySelectorAll:()=>[],createElement:()=>({dataset:{},addEventListener(){},setAttribute(){}}),body:{}},fetch:async()=>({ok:false,status:409,json:async()=>({detail:{message:'A review is running.',review_job_id:'abc',problems:[{path:'p',message:'m'}],retired:['vxlan']}})}),URLSearchParams,URL,sessionStorage:{getItem(){return null;},setItem(){}},setTimeout:()=>0,clearTimeout(){},setInterval(){}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),context);
+ const error=await vm.runInContext("api('/x').then(()=>null,e=>e)",context);
+ assert.equal(error.message,'A review is running.');assert.equal(error.review_job_id,'abc');assert.equal(error.status,409);
+ assert.equal(error.problems[0].path,'p');assert.equal(error.retired[0],'vxlan');
 });
