@@ -104,7 +104,10 @@ After loading it, launch it with `deploy/compose.image.yml` as described in the
 Host networking shares the VM's network namespace. The UI binds directly to port
 8081, and the manager can reach node addresses that are reachable from the VM.
 There is no `ports:` mapping and no dependency on a lab Docker network's lifecycle.
-If needed, set `UI_BIND`/`UI_PORT` in `clab-backup-ui/.env` before the launcher runs (`sudo` does not pass shell variables on). Do not run
+If needed, set `UI_BIND`/`UI_PORT` in `clab-backup-ui/.env` before the launcher runs (`sudo` does not pass shell variables on). To open the
+manager by a DNS name such as `manager.example.edu` (an IP address, `localhost`, a single-label name and a `.local` name need nothing), add
+`UI_ALLOWED_HOSTS=<names>` (comma-separated, names only) to the same file, or to `deploy/image.env` for a prepared release image: any other
+name is refused. See [Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name). Do not run
 another application on the same listening address/port. Node routing, firewall and
 SSH readiness still apply; deployment status is not proof of a successful NOS login.
 
@@ -192,7 +195,8 @@ Docker-run-to-Compose upgrades and troubleshooting. Manual import remains availa
 Choose **Manager ▾ › Import lab files…** and upload the original `.clab.yaml`. Optionally include
 its `.annotations.json`. The YAML supplies the lab name, node identities/kinds,
 prefix and links; annotations supply layout and styling. The importer handles
-literal node/default/kind settings and both normal and empty container prefixes.
+literal node/default/kind settings and the container prefixes containerlab offers: the default
+`clab`, a custom one, an empty one (bare node names) and `__lab-name` (`<lab>-<node>`).
 It does not execute YAML, deployment commands, startup configuration or bindings.
 YAML anchors and unresolved variable-based identity/address fields are rejected;
 provide a resolved literal definition for those topologies.

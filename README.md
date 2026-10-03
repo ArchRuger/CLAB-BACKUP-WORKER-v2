@@ -187,7 +187,8 @@ python3 -m venv "$HOME/projects/clab-manager/clab-backup-ui/.venv"
 `python3 deploy/verify-release.py` checks that every file carrying the release
 number agrees with `clab-backup-ui/VERSION` and that the guides name only the current
 release; `python3 deploy/set-release.py NEW` moves every marker for the next release.
-The CI workflow runs the checks, the test suites and real browser-capture
+The CI workflow runs the release and link checks, the script syntax checks, the installer,
+application and browser test suites and real browser-capture
 smoke tests on every push. Release rules, the documentation conventions and
 the version-bump checklist are in
 [docs/REPOSITORY-MAINTENANCE.md](docs/REPOSITORY-MAINTENANCE.md); each release's

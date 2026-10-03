@@ -419,7 +419,10 @@ the lock clears, or after 900 seconds, whichever comes first. It optionally paus
 the `apt-daily` / `apt-daily-upgrade` **timers** for the wait — only preventing a
 *future* scheduled run from starting, never touching the `unattended-upgrades`
 *service*, never killing a process and never deleting a lock file — and always
-restores exactly the timers it paused, including when you cancel with Ctrl+C.
+restores exactly the timers it paused, including when you cancel with Ctrl+C or the
+terminal hangs up (a dropped SSH session) or the process is terminated. Only a kill that
+no process can catch (`SIGKILL`) leaves them stopped, and they start again at the next
+boot.
 Before showing the menu again, it re-checks the lock: if it is already free, the
 step just retries. The printed command also works standalone, from any terminal on
 the VM:
@@ -430,7 +433,7 @@ sudo python3 "$HOME/projects/clab-manager/deploy/apt_lock.py" --show   # who hol
 ```
 
 It exits 0 once released, 1 on a timeout (`--timeout SECONDS`, default 900), and
-130 on Ctrl+C.
+130 when cancelled (Ctrl+C, hangup or terminate).
 
 **After a snapshot rollback.** Rolling a VM back to a snapshot taken shortly after the
 Ubuntu installation restores a system whose own `unattended-upgrades` run has not
@@ -440,6 +443,17 @@ Ubuntu lets the running upgrade finish before it shuts down), then start the ins
 again. Every step the installer completed is kept, as with choice 3. The installer and
 `apt_lock.py` only give that advice: neither restarts the VM, stops the service, kills
 the process or deletes a lock file.
+
+## One installer at a time
+
+A VM runs one changing installer at a time, plain or full-screen, from any account: a second one
+stops and says another installer run is active. The lock is the file
+`/run/lock/clab-node-manager-installer.lock` (`/tmp` when `/run/lock` is not writable), which the
+installer never follows as a symbolic link. If something other than a regular file occupies that
+name, or it cannot be opened, the installer changes nothing and prints the exact
+`sudo rm -f <path>` command that clears it; run that and start the installer again. It is not
+APT's lock (see [Recovering from a package lock](#recovering-from-a-package-lock)).
+Details: [installer lock](installer-tui/README.md#the-installer-lock).
 
 ## lazydocker
 

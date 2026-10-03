@@ -13,7 +13,10 @@ Related: [GIT-PROGRESS.md](GIT-PROGRESS.md) (save locations and *Apply to runnin
 
 *Apply to running lab* maps a saved state to a running node by **exact node name and platform**,
 and the node name the manager stores is the full container name, `clab-<labname>-<node>`. So the
-identity of every saved state is `clab-<labname>-<node>` per node. Two rules follow:
+identity of every saved state is `clab-<labname>-<node>` per node. (That is containerlab's default
+`prefix`; a topology that sets `prefix: __lab-name` has containers named `<labname>-<node>` and
+one that sets `prefix: ""` has the bare node name, and the manager stores whichever name
+containerlab gives.) Two rules follow:
 
 1. **Ship the exact topology.** Build your saved states on the same topology file the student
    deploys — same containerlab `name:` and same node names. If your build box uses
