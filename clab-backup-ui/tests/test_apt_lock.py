@@ -2,7 +2,9 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import signal
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -166,6 +168,109 @@ class WaitForReleaseTests(unittest.TestCase):
                                            pause_timers=True, runner=runner)
         self.assertFalse(ok)
         self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+
+    def test_pause_timers_restores_when_interrupted_while_stopping_them(self):
+        started = []
+        stops = []
+
+        def runner(args, **kwargs):
+            if args[1] == 'is-active':
+                return subprocess.CompletedProcess(args, 0, stdout='active\n')
+            if args[1] == 'stop':
+                stops.append(args[2])
+                if len(stops) == 2:
+                    raise KeyboardInterrupt   # a hangup between the first and second stop
+            if args[1] == 'start':
+                started.append(args[2])
+            return subprocess.CompletedProcess(args, 0, stdout='')
+
+        holder = [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+        with patch.object(apt_lock, 'holders', return_value=holder):
+            ok = apt_lock.wait_for_release(timeout_seconds=300, poll_seconds=1, report=lambda *_: None,
+                                           pause_timers=True, runner=runner)
+        self.assertFalse(ok)
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+
+    def test_a_signal_while_the_timers_are_restored_does_not_leave_one_stopped(self):
+        started = []
+
+        def runner(args, **kwargs):
+            if args[1] == 'is-active':
+                return subprocess.CompletedProcess(args, 0, stdout='active\n')
+            if args[1] == 'start':
+                if not started:
+                    os.kill(os.getpid(), signal.SIGTERM)   # a hangup arrives as the first timer is started
+                started.append(args[2])
+            return subprocess.CompletedProcess(args, 0, stdout='')
+
+        holder = [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+        previous = signal.signal(signal.SIGTERM, apt_lock._hangup_as_interrupt)
+        self.addCleanup(signal.signal, signal.SIGHUP, signal.getsignal(signal.SIGHUP))
+        self.addCleanup(signal.signal, signal.SIGTERM, previous)
+        with patch.object(apt_lock, 'holders', side_effect=[holder, []]), patch.object(apt_lock.time, 'sleep'):
+            try:
+                apt_lock.wait_for_release(timeout_seconds=300, poll_seconds=1, report=lambda *_: None,
+                                          pause_timers=True, runner=runner)
+            except KeyboardInterrupt:
+                pass   # the held signal is delivered once every timer is back
+        self.assertEqual(started, ['apt-daily.timer', 'apt-daily-upgrade.timer'])
+
+
+DRIVER = '''
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('apt_lock', sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+m.holders = lambda *a, **k: [{'pid': 1, 'comm': 'apt-get', 'cmdline': '', 'path': '/var/lib/dpkg/lock'}]
+sys.exit(m.main(['--wait', '--pause-timers', '--timeout', '120']))
+'''
+FAKE_SYSTEMCTL = '''#!/bin/sh
+echo "$1 $2" >> "$SYSTEMCTL_LOG"
+[ "$1" = is-active ] && echo active
+exit 0
+'''
+
+
+class SignalTests(unittest.TestCase):
+    """The real command, ended the way an SSH hangup or a plain `kill` ends it: the timers come back."""
+
+    def run_and_signal(self, signum):
+        with tempfile.TemporaryDirectory() as root:
+            bin_dir = Path(root) / 'bin'
+            bin_dir.mkdir()
+            fake = bin_dir / 'systemctl'
+            fake.write_text(FAKE_SYSTEMCTL)
+            fake.chmod(0o755)
+            log = Path(root) / 'calls.log'
+            env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'], SYSTEMCTL_LOG=str(log))
+            child = subprocess.Popen([sys.executable, '-u', '-c', DRIVER, str(Path(apt_lock.__file__))], env=env,
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            try:
+                for line in child.stdout:
+                    if line.startswith('Waiting for pid'):
+                        break
+                child.send_signal(signum)
+                output, _ = child.communicate(timeout=20)
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.communicate()
+            calls = log.read_text().split('\n') if log.exists() else []
+            return child.returncode, output, [call for call in calls if call.startswith(('stop', 'start'))]
+
+    def test_sigterm_restores_the_paused_timers(self):
+        code, output, calls = self.run_and_signal(signal.SIGTERM)
+        self.assertEqual(calls, ['stop apt-daily.timer', 'stop apt-daily-upgrade.timer',
+                                 'start apt-daily.timer', 'start apt-daily-upgrade.timer'], output)
+        self.assertEqual(code, 130, output)
+
+    def test_sighup_restores_the_paused_timers(self):
+        code, output, calls = self.run_and_signal(signal.SIGHUP)
+        self.assertEqual(calls, ['stop apt-daily.timer', 'stop apt-daily-upgrade.timer',
+                                 'start apt-daily.timer', 'start apt-daily-upgrade.timer'], output)
+        self.assertEqual(code, 130, output)
 
 
 class FormatDurationTests(unittest.TestCase):

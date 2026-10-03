@@ -373,6 +373,108 @@ class InstallerLockTests(IsolatedCase):
         again = core.InstallerLock(self.path).acquire()
         again.release()
 
+    def test_planted_symlink_is_refused_with_an_actionable_message_and_never_followed(self):
+        victim = self.tmp / 'victim'
+        victim.write_text('precious')
+        self.path.symlink_to(victim)
+        with patch.object(core, 'running_as_root', return_value=False), self.assertRaises(OSError) as caught:
+            core.InstallerLock(self.path).acquire()
+        self.assertIsInstance(caught.exception, core.LockUnusable)
+        self.assertIn(str(self.path), str(caught.exception))
+        self.assertIn(f'sudo rm -f {self.path}', str(caught.exception))
+        self.assertEqual(victim.read_text(), 'precious')
+
+    def test_unreadable_lock_file_is_refused_with_an_actionable_message(self):
+        self.path.write_text('')
+        self.path.chmod(0)
+        if os.geteuid() == 0:
+            self.skipTest('root opens any file')
+        with self.assertRaises(OSError) as caught:
+            core.InstallerLock(self.path).acquire()
+        self.assertIsInstance(caught.exception, core.LockUnusable)
+        self.assertIn(f'sudo rm -f {self.path}', str(caught.exception))
+        self.assertNotIn('Errno', str(caught.exception))
+
+    def test_lock_that_is_not_a_regular_file_is_refused(self):
+        os.mkfifo(self.path)
+        with patch.object(core, 'running_as_root', return_value=False), self.assertRaises(core.LockUnusable):
+            core.InstallerLock(self.path).acquire()
+
+    @unittest.skipIf(os.geteuid() == 0, 'root can open any FIFO for writing, so the read-only path is not taken')
+    def test_fifo_that_cannot_be_opened_for_writing_is_refused_instead_of_blocking(self):
+        # An account that plants a FIFO the installer may not write to: a blocking O_RDONLY open would wait
+        # for a writer forever. Run in a child with a time limit so a regression fails instead of hanging.
+        os.mkfifo(self.path, 0o444)
+        script = (
+            'import sys\nfrom pathlib import Path\nsys.path.insert(0, %r)\nfrom installer_tui import core\n'
+            'try:\n    core.InstallerLock(%r).acquire()\nexcept core.LockUnusable:\n    sys.exit(7)\n'
+            % (str(Path(core.__file__).resolve().parents[1]), str(self.path)))
+        try:
+            done = subprocess.run([sys.executable, '-c', script], timeout=15, capture_output=True)
+        except subprocess.TimeoutExpired:
+            self.fail('acquire() blocked on a FIFO')
+        self.assertEqual(done.returncode, 7, done.stderr)
+
+    def test_root_replaces_a_planted_symlink_with_a_real_lock_file(self):
+        victim = self.tmp / 'victim'
+        victim.write_text('precious')
+        self.path.symlink_to(victim)
+        with patch.object(core, 'running_as_root', return_value=True):
+            lock = core.InstallerLock(self.path).acquire()
+        try:
+            self.assertFalse(self.path.is_symlink())
+            self.assertIn(f'pid {os.getpid()}', self.path.read_text())
+            self.assertEqual(victim.read_text(), 'precious')
+            with self.assertRaises(core.Busy):
+                core.InstallerLock(self.path).acquire()
+        finally:
+            lock.release()
+
+    def test_root_takes_over_a_lock_file_owned_by_another_account(self):
+        self.path.write_text('')
+        before = self.path.stat().st_ino
+        # The file belongs to an unprivileged account (anything but uid 0): root swaps in a file it owns, so
+        # that account can neither remove it nor squat the name again.
+        with patch.object(core, 'running_as_root', return_value=True):
+            lock = core.InstallerLock(self.path).acquire()
+        try:
+            self.assertNotEqual(self.path.stat().st_ino, before)
+            self.assertEqual(os.fstat(lock.fd).st_ino, self.path.stat().st_ino)
+            with self.assertRaises(core.Busy):
+                core.InstallerLock(self.path).acquire()
+        finally:
+            lock.release()
+
+    def test_root_does_not_take_over_a_lock_file_that_is_held(self):
+        holder = self.child(CHILD_HOLD)
+        try:
+            self.assertEqual(holder.stdout.readline().strip(), 'ready')
+            before = self.path.stat().st_ino
+            with patch.object(core, 'running_as_root', return_value=True), self.assertRaises(core.Busy):
+                core.InstallerLock(self.path).acquire()
+            self.assertEqual(self.path.stat().st_ino, before, 'a held lock is never replaced')
+        finally:
+            self.stop_holder(holder)
+
+    def test_lock_file_replaced_between_open_and_flock_is_not_trusted(self):
+        # Another account (or root's take-over) swaps the file after we opened it: the lock we hold would be
+        # on an inode nobody else looks at, so acquire must start over on the current file.
+        real = core.fcntl.flock
+        swapped = []
+
+        def swap_then_flock(fd, operation):
+            if not swapped:
+                swapped.append(True)
+                self.path.unlink()
+                self.path.write_text('')
+            return real(fd, operation)
+        with patch.object(core.fcntl, 'flock', swap_then_flock):
+            lock = core.InstallerLock(self.path).acquire()
+        try:
+            self.assertEqual(os.fstat(lock.fd).st_ino, self.path.stat().st_ino)
+        finally:
+            lock.release()
+
     def test_default_path_is_a_fixed_name_and_not_apts_lock(self):
         path = core.default_lock_path()
         self.assertEqual(path.name, 'clab-node-manager-installer.lock')

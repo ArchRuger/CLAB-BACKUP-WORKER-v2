@@ -6,10 +6,13 @@ run with sudo so the /proc scan can see another account's file descriptors.
 Nothing here kills a process, deletes a lock file, or stops
 unattended-upgrades.service; `--pause-timers` only stops the daily *timers* for
 the duration of the wait (never starting a new run during it) and always
-restores exactly the ones it stopped, including on a timeout or Ctrl+C.
+restores exactly the ones it stopped, including on a timeout, Ctrl+C, a terminal
+hangup (SIGHUP, for example a dropped SSH session) and SIGTERM. Only SIGKILL, which no
+process can catch, leaves them stopped (they return at the next boot).
 """
 import argparse
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -141,13 +144,15 @@ def wait_for_release(timeout_seconds=900, poll_seconds=2, report=print, paths=DE
     tell a cancellation apart from a timeout.
     """
     paused = []
-    if pause_timers:
-        paused = active_timers(runner=runner)
-        if paused:
-            report('Pausing while waiting (future starts only; restored after the wait): ' + ', '.join(paused))
-            stop_timers(paused, runner=runner)
     deadline = time.monotonic() + max(0, timeout_seconds)
     try:
+        # Inside the try: an interruption half way through stopping the timers still restores them
+        # (starting a timer that was never stopped is harmless).
+        if pause_timers:
+            paused = active_timers(runner=runner)
+            if paused:
+                report('Pausing while waiting (future starts only; restored after the wait): ' + ', '.join(paused))
+                stop_timers(paused, runner=runner)
         while True:
             found = holders(paths, proc_root=proc_root)
             if not found:
@@ -165,7 +170,25 @@ def wait_for_release(timeout_seconds=900, poll_seconds=2, report=print, paths=DE
         return False
     finally:
         if paused:
-            start_timers(paused, runner=runner)
+            # A hangup or Ctrl+C that arrives now would cut the restore short and leave a later timer stopped:
+            # hold such signals back until every timer is started (a held one is delivered afterwards).
+            held = {signal.SIGHUP, signal.SIGTERM, signal.SIGINT}
+            masked = hasattr(signal, 'pthread_sigmask')
+            if masked:
+                signal.pthread_sigmask(signal.SIG_BLOCK, held)
+            try:
+                start_timers(paused, runner=runner)
+            finally:
+                if masked:
+                    signal.pthread_sigmask(signal.SIG_UNBLOCK, held)
+
+
+def _hangup_as_interrupt(signum, frame):
+    # The first hangup/terminate ends the wait like Ctrl+C, so the finally in wait_for_release restores the
+    # timers; a repeat must not cut that restore short.
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    raise KeyboardInterrupt
 
 
 def _describe(found):
@@ -200,8 +223,17 @@ def main(argv=None):
         print('The package lock is already released.')
         return 0
     cancelled = []
-    ok = wait_for_release(timeout_seconds=args.timeout, pause_timers=args.pause_timers,
-                          on_cancel=lambda: cancelled.append(True))
+    previous = {name: signal.signal(name, _hangup_as_interrupt) for name in (signal.SIGHUP, signal.SIGTERM)}
+    try:
+        try:
+            ok = wait_for_release(timeout_seconds=args.timeout, pause_timers=args.pause_timers,
+                                  on_cancel=lambda: cancelled.append(True))
+        except KeyboardInterrupt:
+            ok = False   # a signal held back while the timers were restored: the timers are back, the run is cancelled
+            cancelled.append(True)
+    finally:
+        for name, handler in previous.items():
+            signal.signal(name, handler)
     if cancelled:
         print('Cancelled; any paused timer was restored.')
         return 130

@@ -97,9 +97,12 @@ On your build box, once per lab:
 5. Each `snapshot` lists the files it saved and asks before it uploads, because the manager uploads a
    save only after a review; `--yes` states that review for scripted use. Answering no keeps the state
    on the lab VM only (it goes up with the next upload of the repository). Either way the lab is
-   pointed back at `work`. If an upload fails, the tool stops and says that the lab still saves to
-   `reference/<state>`: finish that save under Progress › Recent saves, then run
-   `scaffold-lab.py init <lab-slug>` again before the student saves.
+   pointed back at `work`. If the save cannot start, times out, cannot be set aside or the upload fails,
+   the tool tries to point the lab back at `work` and says what happened: either "rebound to
+   `<lab-slug>/work`", or that the lab still saves to `reference/<state>` (a save that is still pending
+   refuses the folder change). In that case finish that save under Progress › Recent saves, then run
+   `scaffold-lab.py init <lab-slug>` again before the student saves. The tool talks to the manager
+   directly and ignores `http_proxy`.
 
 The student then applies `reference/start` to begin, works in `work`, applies `reference/solution`
 to check, and applies `reference/broken-01` to practise recovery — all without a reboot and

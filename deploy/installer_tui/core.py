@@ -6,11 +6,13 @@ This module only runs a non-interactive step as a child process whose output is
 streamed as inert text, keeps the one-installer-at-a-time lock, and records a
 metadata-only summary of a run.
 """
+import errno
 import json
 import os
 from pathlib import Path
 import re
 import select
+import stat
 import subprocess
 import threading
 import time
@@ -32,6 +34,18 @@ class Busy(ValueError):
     """Another installer run holds the lock."""
 
 
+class LockUnusable(OSError):
+    """The installer lock file exists but cannot serve as the lock (planted symlink, unreadable or not a
+    regular file). Nothing was changed; the message names the file an administrator can remove."""
+
+    def __init__(self, path, why):
+        super().__init__(errno.EACCES, f'{path} cannot be used as the installer lock ({why}); '
+                         f'an administrator can remove it with: sudo rm -f {path}')
+
+    def __str__(self):
+        return self.strerror
+
+
 class InstallerLock:
     """One mutating installer run per VM, whichever account or checkout starts it.
 
@@ -40,6 +54,14 @@ class InstallerLock:
     full-screen installer passes the descriptor to its step processes so the lock
     also outlives an installer that is killed while a step is still running. It is
     not APT's lock and never touches /var/lib/dpkg.
+
+    The directory is world-writable, so another account could plant the name first. A
+    symlink is never followed. A file that cannot be opened, or is not a regular file, is
+    reported as LockUnusable with the command that removes it. A privileged run replaces such
+    a file (and takes over one an unprivileged account owns, so that account cannot remove it
+    or squat the name again), but never one somebody holds. After every flock the path is
+    checked to still name the locked file, so a swap between open and flock cannot leave two
+    installers each holding "the" lock.
     """
 
     def __init__(self, path=None):
@@ -49,25 +71,29 @@ class InstallerLock:
     def acquire(self):
         if fcntl is None:
             return self
-        flags = os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_CLOEXEC', 0)
-        try:
-            fd = os.open(self.path, flags, 0o644)
-            writable = True
+        for _ in range(5):
+            fd, writable = self._open()
+            if fd is None:
+                continue   # a privileged run removed an unusable file: open a fresh one
             try:
-                os.fchmod(fd, 0o644)   # independent of umask, so every account can open it
-            except OSError:
-                pass
-        except PermissionError:
-            # Created by another account: a read-only descriptor locks just as well.
-            fd = os.open(self.path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_CLOEXEC', 0))
-            writable = False
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            holder = _read_holder(fd)
-            os.close(fd)
-            raise Busy('Another Containerlab Node Manager installer run is active'
-                       + (f' ({holder})' if holder else '') + '. Wait for it to finish, then try again.')
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                holder = _read_holder(fd)
+                os.close(fd)
+                raise Busy('Another Containerlab Node Manager installer run is active'
+                           + (f' ({holder})' if holder else '') + '. Wait for it to finish, then try again.')
+            except BaseException:
+                os.close(fd)
+                raise
+            if running_as_root() and os.fstat(fd).st_uid != 0:
+                fd, writable = self._take_over(fd), True
+                if fd is None:
+                    continue
+            if self._names(fd):
+                break
+            os.close(fd)   # the path was swapped after we opened it: lock the file that is there now
+        else:
+            raise LockUnusable(self.path, 'it keeps being replaced')
         if writable:
             try:
                 os.ftruncate(fd, 0)
@@ -76,6 +102,64 @@ class InstallerLock:
                 pass
         self.fd = fd
         return self
+
+    def _open(self):
+        """(fd, writable) for the lock file, creating it when missing; (None, False) after a privileged run
+        removed an unusable file."""
+        extra = getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_CLOEXEC', 0) | getattr(os, 'O_NONBLOCK', 0)   # a planted FIFO must not block the open
+        try:
+            try:
+                fd, writable = os.open(self.path, os.O_RDWR | os.O_CREAT | extra, 0o644), True
+                try:
+                    os.fchmod(fd, 0o644)   # independent of umask, so every account can open it
+                except OSError:
+                    pass
+            except PermissionError:
+                # Created by another account: a read-only descriptor locks just as well.
+                fd, writable = os.open(self.path, os.O_RDONLY | extra), False
+        except OSError as error:
+            return self._unusable(error.strerror or 'it cannot be opened'), False
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            os.close(fd)
+            return self._unusable('it is not a regular file'), False
+        return fd, writable
+
+    def _unusable(self, why):
+        if running_as_root():
+            try:
+                os.unlink(self.path)
+                return None
+            except OSError as error:
+                why = error.strerror or why
+        raise LockUnusable(self.path, why)
+
+    def _take_over(self, old):
+        """We hold the flock on a file an unprivileged account owns: put a root-owned file in its place
+        (the account cannot delete it in the sticky directory) and lock that. Returns the new fd, or None
+        when the name was raced and acquire should start over."""
+        extra = getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_CLOEXEC', 0) | getattr(os, 'O_NONBLOCK', 0)   # a planted FIFO must not block the open
+        try:
+            os.unlink(self.path)
+            fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_EXCL | extra, 0o644)
+        except FileExistsError:
+            os.close(old)
+            return None
+        os.close(old)
+        try:
+            os.fchmod(fd, 0o644)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            raise Busy('Another Containerlab Node Manager installer run is active. Wait for it to finish, then try again.')
+        return fd
+
+    def _names(self, fd):
+        """Does the path still name the file this descriptor locks?"""
+        try:
+            now, mine = os.stat(self.path, follow_symlinks=False), os.fstat(fd)
+        except OSError:
+            return False
+        return (now.st_dev, now.st_ino) == (mine.st_dev, mine.st_ino)
 
     def release(self, unlock=True):
         """Unlock and close. With unlock=False only this descriptor is closed: the kernel drops the
@@ -97,6 +181,10 @@ class InstallerLock:
 
     def __exit__(self, *exc):
         self.release()
+
+
+def running_as_root():
+    return hasattr(os, 'geteuid') and os.geteuid() == 0
 
 
 def default_lock_path():

@@ -24,6 +24,19 @@ bash "$HOME/projects/clab-manager/deploy/install.sh" --plain      # the plain nu
 
 `--git` and `--advanced` keep their meaning in both modes.
 
+## The installer lock
+
+One mutating installer run per VM, plain or full-screen, from any account: an advisory `flock` on
+`/run/lock/clab-node-manager-installer.lock` (`/tmp` when `/run/lock` is not writable), shared by both
+installers through `installer_tui/core.py`. The directory is world-writable, so the lock never follows a
+symlink and refuses a file that is not a regular file or cannot be opened: the installer then changes
+nothing and prints the exact `sudo rm -f <path>` that clears it. Code that runs with root privileges (the
+lock is taken by the unprivileged installer, which refuses to run as root) removes such a file itself and
+replaces a lock file owned by an unprivileged account with a root-owned one, which that account cannot
+delete from the sticky directory; it never replaces a lock that is held. `/run/lock` is cleared at every
+boot, so on a VM with several accounts the name can still be planted before the first run after a boot: the
+result is a refusal with the removal command, never a half-run installer.
+
 ## Code
 
 | Module | Needs Textual | Role |
