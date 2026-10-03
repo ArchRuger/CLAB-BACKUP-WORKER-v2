@@ -191,6 +191,46 @@ rebuild:
 sudo bash "$HOME/projects/clab-manager/deploy/recreate-manager.sh"
 ```
 
+## Opening the manager by a name
+
+The manager has no login, so it refuses any request whose address-bar name an
+outside DNS server could control: otherwise a web page on such a name could
+re-point it at the VM (DNS rebinding) and act through a student's browser. It
+answers without any setting to:
+
+- an IP address, for example `http://192.0.2.10:8081` or `http://[fd00::10]:8081`;
+- `localhost`;
+- a single-label name such as `http://clab-vm:8081` (answered on your own
+  network, never by an internet DNS server);
+- a `.local` name such as `http://clab-vm.local:8081` (mDNS on your own network,
+  never an internet DNS server).
+
+Any other name, for example `manager.example.edu` or the name of a reverse proxy
+in front of the manager, shows *This manager does not answer to the name in the
+address bar* until it is listed in `clab-backup-ui/.env` (an installation that
+runs a prepared release image with `deploy/compose.image.yml` reads
+`deploy/image.env` instead, and the setting goes there):
+
+```text
+UI_ALLOWED_HOSTS=manager.example.edu,clab-vm.lab.example
+```
+
+Names are separated by commas, case does not matter and a port is ignored;
+write names only (no `http://`, no wildcards). Then reload the manager with
+`recreate-manager.sh` as above; it picks the right settings file for either
+installation. `X-Forwarded-Host` is never trusted: a reverse
+proxy must pass the name the browser used as the `Host` header, and that name is
+the one to list.
+
+What the default does not cover: single-label and `.local` names are answered
+by LLMNR, NetBIOS or mDNS on the network the *browser* is on, which need not be
+the VM's network (for example café or home Wi-Fi with a VPN or SSH tunnel to the
+VM). Another machine on that network can answer such a name, first with its own
+page and then with the manager's address, and the manager cannot tell that page
+from its own. Where students reach the manager from networks you do not control,
+prefer a protected path to it (an authenticated reverse proxy whose name is
+listed above) over exposing the manager's port to them directly.
+
 ## Git setup and recovery
 
 Use menu **2** whenever Git needs attention. It does not rebuild the manager.
@@ -276,7 +316,9 @@ including the `~/.vscode-server` ownership fix.
 
 The final terminal checks verify the local manager. On your workstation:
 
-1. Open `http://VM_ADDRESS:8081` (or the configured port). The VM connection
+1. Open `http://VM_ADDRESS:8081` (or the configured port), using the VM's IP
+   address; a DNS name works only as described in
+   [Opening the manager by a name](#opening-the-manager-by-a-name). The VM connection
    dialog opens on its own when no connection exists: use `clab-discovery` and the
    password created during setup. After the first successful connection saves its
    fingerprint, reopen **Manager ▾ › VM connection…** and compare it with the VM

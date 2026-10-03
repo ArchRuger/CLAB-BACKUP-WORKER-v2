@@ -471,6 +471,10 @@ class InstallationCheckTests(unittest.TestCase):
             self.assertIn('WinSCP', rendered)
             self.assertIn('NOS', rendered)
             self.assertIn('push permission', rendered)
+            # The manager refuses a DNS name it was not told about (DNS rebinding), so the workstation step says how to allow one,
+            # on both installation routes (the prepared-image route reads deploy/image.env, never clab-backup-ui/.env).
+            self.assertIn('UI_ALLOWED_HOSTS in clab-backup-ui/.env', rendered)
+            self.assertIn('deploy/image.env for a prepared release image', rendered)
             self.assertEqual(report['counts']['PASS'], statuses.count('PASS'))
 
     def test_args_require_absolute_safe_lab_folder_and_bounded_work(self):

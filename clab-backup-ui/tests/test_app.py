@@ -101,6 +101,49 @@ class AppTests(unittest.TestCase):
                 method=self.client.put if endpoint=='schedule' else self.client.post
                 result=method(f'/api/labs/{lab["id"]}/{endpoint}',headers=self.auth,json=data)
                 self.assertEqual(result.status_code,400,result.text)
+    # L-19/L-29 (audit 2026-10-03): a rejected connection edit changes nothing and logs no update.
+    def test_rejected_node_edit_changes_and_logs_nothing(self):
+        lab=self.upload(); store=self.app.state.store
+        node=next(n for n in store.lab(lab['id'])['nodes'] if n['name'].endswith('PE1'))
+        before=copy.deepcopy(store.state)
+        edit=dict(name=node['name'],address='10.0.0.5',port=2022,platform='cisco_xrv9k',short_name='core1')
+        for changes,detail in [({'endpoint_mode':'auto'},'Link a deployed lab'),({'endpoint_mode':'bogus'},'automatic or manual'),
+                               ({'short_name':'{{ core1 }}'},'Download device name')]:
+            r=self.client.put(f'/api/labs/{lab["id"]}/node',headers=self.auth,json={**edit,**changes})
+            self.assertEqual(r.status_code,400,r.text); self.assertIn(detail,r.json()['detail'])
+            self.assertEqual(store.state,before)
+            self.assertNotIn('core1',json.dumps(self.client.get('/api/state').json()))
+            self.assertEqual([e for e in store.events() if e['action']=='node.edit'],[])
+        r=self.client.put(f'/api/labs/{lab["id"]}/node',headers=self.auth,json={**edit,'endpoint_mode':'manual'})
+        self.assertEqual(r.status_code,200,r.text)
+        saved=next(n for n in r.json()['nodes'] if n['name']==node['name'])
+        self.assertEqual((saved['short_name'],saved['address'],saved['port'],saved['endpoint_mode']),('core1','10.0.0.5',2022,'manual'))
+        self.assertEqual(len([e for e in store.events() if e['action']=='node.edit']),1)
+    # L-20 (audit 2026-10-03): when the state file cannot be written, a profile, connection, schedule or
+    # inventory change is not kept in memory (where the next unrelated save would persist it) and is not logged.
+    def test_failed_save_keeps_no_change_in_memory(self):
+        lab=self.upload(); store=self.app.state.store
+        node=next(n for n in store.lab(lab['id'])['nodes'] if n['name'].endswith('PE1'))
+        requests=[
+            ('credentials.create',lambda:self.client.post(f'/api/labs/{lab["id"]}/profiles',headers=self.auth,
+                data={'label':'Junos admin','platform':'juniper_cjunosevolved','username':'admin','password':'private-password','make_default':'true'})),
+            ('node.edit',lambda:self.client.put(f'/api/labs/{lab["id"]}/node',headers=self.auth,
+                json=dict(name=node['name'],address='10.0.0.5',port=2022,platform='cisco_xrv9k',short_name='core1'))),
+            ('schedule.update',lambda:self.client.put(f'/api/labs/{lab["id"]}/schedule',headers=self.auth,json={'interval':60})),
+            ('inventory.import',lambda:self.client.post('/api/inventory',headers=self.auth,data={'name':'Renamed lab','lab_id':lab['id']},
+                files={'inventory':('ansible-inventory.yml',INVENTORY.replace(b'172.20.20.5',b'192.0.2.5'))})),
+            ('inventory.import',lambda:self.client.post('/api/inventory',headers=self.auth,data={'name':'Second lab','lab_id':''},
+                files={'inventory':('ansible-inventory.yml',INVENTORY)}))]
+        actions=lambda:[e['action'] for e in store.events(limit=2000)]   # newest first
+        for action,request in requests:
+            before=copy.deepcopy(store.state); logged=len(actions())
+            with patch.object(store,'save',side_effect=OSError('Sensitive storage diagnostic')):
+                r=request()
+            self.assertEqual(r.status_code,500,r.text); self.assertNotIn('Sensitive',r.text)
+            self.assertEqual(store.state,before,action)
+            new=actions(); self.assertNotIn(action,new[:len(new)-logged])
+        durable=json.loads(store.cipher.decrypt(store.path.read_bytes()))
+        self.assertEqual(durable['labs'],store.state['labs'])
     @unittest.skipIf(os.name=='nt', 'Ansible control-node tests require Linux')
     def test_roundtrip_actual_generated_ansible_inventory(self):
         lab=self.upload(); raw=self.app.state.store.lab(lab['id']);node=next(n for n in raw['nodes'] if n['name'].endswith('PE1'))
@@ -270,5 +313,121 @@ class AppTests(unittest.TestCase):
         nodes=parse_inventory(custom,b'{"nodes":{"router1":{"kind":"arista_ceos"}}}')
         self.assertEqual(nodes[0]['platform'],'arista_ceos')
         with self.assertRaises(ValueError): parse_inventory(b'all: &a {children: {loop: *a}}')
+
+class HostCheckTests(unittest.TestCase):
+    """DNS rebinding: a page on a name the attacker's DNS controls re-resolves to the manager, so its requests carry
+    a matching Host and Origin and Sec-Fetch-Site same-origin. Only the Host name itself can tell them apart."""
+    EVIL={'Host':'evil.example:8081','Origin':'http://evil.example:8081','Sec-Fetch-Site':'same-origin'}
+    def setUp(self, allowed=''):
+        self.tmp=tempfile.TemporaryDirectory()
+        with patch.dict('os.environ',{'UI_ALLOWED_HOSTS':allowed}): self.app=create_app(self.tmp.name)
+        self.client=TestClient(self.app)
+    def tearDown(self):
+        self.app.state.runner.close()
+        self.client.close()
+        self.tmp.cleanup()
+    def assertRefused(self, response):
+        self.assertEqual(response.status_code,403,response.text)
+        self.assertTrue(response.headers['content-type'].startswith('text/plain'))
+        self.assertIn('IP address',response.text)
+        self.assertIn('UI_ALLOWED_HOSTS',response.text)
+        # Both installation routes: the source build reads clab-backup-ui/.env, a prepared image deploy/image.env.
+        self.assertIn('clab-backup-ui/.env',response.text)
+        self.assertIn('deploy/image.env',response.text)
+        self.assertNotIn('evil',response.text)
+    def test_rebinding_pair_is_refused_on_api_mutation_and_static_pages(self):
+        self.assertRefused(self.client.get('/api/state',headers=self.EVIL))
+        self.assertRefused(self.client.get('/api/jobs/x/download',headers=self.EVIL))
+        upload=self.client.post('/api/inventory',headers=self.EVIL,data={'name':'Example lab'},files={'inventory':('ansible-inventory.yml',INVENTORY)})
+        self.assertRefused(upload)
+        self.assertEqual(self.app.state.store.state['labs'],[])
+        for path in ('/','/static/index.html','/static/app.js','/vm-connection-guide','/nothing-here'):
+            self.assertRefused(self.client.get(path,headers=self.EVIL))
+        # The same name without Origin or Sec-Fetch-Site (a plain navigation or a script outside a browser) changes nothing.
+        self.assertRefused(self.client.get('/api/state',headers={'Host':'evil.example'}))
+    def test_rebinding_pair_is_refused_on_the_terminal_websocket(self):
+        from starlette.websockets import WebSocketDisconnect
+        with self.assertRaises(WebSocketDisconnect):
+            with self.client.websocket_connect('/api/terminal',headers=self.EVIL): pass
+        # The terminal's own Origin check still answers an allowed Host as before.
+        with self.client.websocket_connect('/api/terminal',headers={'Host':'10.0.0.5:8081','Origin':'http://10.0.0.5:8081'}) as ws:
+            ws.send_json({'ticket':'invalid'})
+            with self.assertRaises(WebSocketDisconnect) as ctx: ws.receive_json()
+            self.assertEqual(ctx.exception.code,1008)
+    def test_rebinding_pair_is_refused_on_the_capture_websocket(self):
+        from unittest.mock import MagicMock
+        from starlette.websockets import WebSocketDisconnect
+        from app.capture_sessions import COOKIE
+        sessions=MagicMock()
+        sessions.headers.side_effect=OSError('relay not reached')
+        self.app.state.captures.sessions=sessions
+        cookie={'Cookie':COOKIE+'='+'d'*64}
+        with self.assertRaises(WebSocketDisconnect):
+            with self.client.websocket_connect('/api/capture/sessions/'+'c'*64+'/websockify',headers={**self.EVIL,**cookie}): pass
+        sessions.headers.assert_not_called()
+        # Control: an IP literal with its own Origin reaches the relay (which then fails on the fake service).
+        with self.assertRaises(WebSocketDisconnect):
+            with self.client.websocket_connect('/api/capture/sessions/'+'c'*64+'/websockify',headers={'Host':'10.0.0.5:8081','Origin':'http://10.0.0.5:8081',**cookie}): pass
+        sessions.headers.assert_called_once()
+    def test_names_no_outside_dns_controls_pass(self):
+        for host in ('10.0.0.5:8081','10.0.0.5','127.0.0.1:8081','[fd00::5]:8081','[::1]','localhost:8081','LOCALHOST',
+                     'testserver','clab-vm:8081','Clab-VM','clab-vm.local:8081','lab.vm.local'):
+            origin='http://'+host
+            r=self.client.get('/api/state',headers={'Host':host,'Origin':origin,'Sec-Fetch-Site':'same-origin'})
+            self.assertEqual(r.status_code,200,host)
+            self.assertEqual(self.client.get('/',headers={'Host':host}).status_code,200,host)
+        # The Origin guard is unchanged behind it: an allowed Host with a foreign Origin is still refused.
+        r=self.client.get('/api/state',headers={'Host':'10.0.0.5:8081','Origin':'http://evil.example:8081'})
+        self.assertEqual(r.status_code,403)
+        self.assertEqual(r.json()['detail'],'Use this manager from its own browser page.')
+    def test_dns_names_and_malformed_hosts_are_refused(self):
+        for host in ('evil.example','evil.example.','manager.example.edu:8081','10.0.0.5.evil.example','localhost.evil.example',
+                     'x.local.evil.example','1.2.3.999','[fd00::5','[evil.example]:8081','fd00::5','10.0.0.5:http',
+                     '10.0.0.5:123456','user@10.0.0.5','10.0.0.5/x','','*'):
+            self.assertRefused(self.client.get('/api/state',headers={'Host':host}))
+    def test_forwarded_host_changes_nothing(self):
+        self.assertRefused(self.client.get('/api/state',headers={**self.EVIL,'X-Forwarded-Host':'10.0.0.5:8081'}))
+        r=self.client.get('/api/state',headers={'Host':'10.0.0.5:8081','X-Forwarded-Host':'evil.example:8081'})
+        self.assertEqual(r.status_code,200)
+    def test_configured_names_pass(self):
+        self.tearDown()
+        self.setUp(' Manager.Example.edu:8081 , other.example,, not a name ')
+        for host in ('manager.example.edu:8081','MANAGER.EXAMPLE.EDU','manager.example.edu:443','other.example'):
+            r=self.client.get('/api/state',headers={'Host':host,'Origin':'http://'+host,'Sec-Fetch-Site':'same-origin'})
+            self.assertEqual(r.status_code,200,host)
+        self.assertRefused(self.client.get('/api/state',headers=self.EVIL))
+        self.assertRefused(self.client.get('/api/state',headers={'Host':'sub.manager.example.edu'}))
+
+class HostCheckMiddlewareTests(unittest.TestCase):
+    """The pure ASGI layer on its own: a missing or repeated Host, lifespan pass-through, WebSocket refusal."""
+    def call(self, scope_type, headers, allowed=()):
+        import asyncio
+        from app.allowed_hosts import HostCheck
+        reached=[]; sent=[]
+        async def inner(scope, receive, send): reached.append(scope['type'])
+        async def receive(): return {'type':scope_type+'.connect' if scope_type=='websocket' else 'http.request','body':b''}
+        async def send(message): sent.append(message)
+        scope={'type':scope_type,'path':'/api/state','headers':[(k.encode('latin-1'),v.encode('latin-1')) for k,v in headers]}
+        asyncio.run(HostCheck(inner,allowed=allowed)(scope,receive,send))
+        return reached,sent
+    def test_missing_repeated_and_non_ascii_hosts_are_refused(self):
+        for headers in ([],[('host','10.0.0.5'),('host','evil.example')],[('host','10.0.0.5'),('host','10.0.0.5')],[('host','réseau')]):
+            reached,sent=self.call('http',headers)
+            self.assertEqual(reached,[],headers)
+            self.assertEqual(sent[0]['status'],403,headers)
+            reached,sent=self.call('websocket',headers)
+            self.assertEqual(reached,[],headers)
+            self.assertEqual(sent,[{'type':'websocket.close','code':1008}],headers)
+    def test_allowed_host_and_lifespan_pass_through(self):
+        self.assertEqual(self.call('http',[('host','10.0.0.5:8081')])[0],['http'])
+        self.assertEqual(self.call('websocket',[('host','clab-vm')])[0],['websocket'])
+        self.assertEqual(self.call('lifespan',[])[0],['lifespan'])
+        self.assertEqual(self.call('http',[('host','manager.example.edu')],allowed=('manager.example.edu',))[0],['http'])
+    def test_configured_hosts_parsing(self):
+        from app.allowed_hosts import configured_hosts
+        self.assertEqual(configured_hosts(' Manager.Example.edu:8081 , other.example,,[fd00::5]:8081, not a name,*'),
+                         frozenset({'manager.example.edu','other.example','[fd00::5]'}))
+        self.assertEqual(configured_hosts(''),frozenset())
+        self.assertEqual(configured_hosts(None),frozenset())
 
 if __name__=='__main__': unittest.main()

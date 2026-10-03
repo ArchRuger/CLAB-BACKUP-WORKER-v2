@@ -141,6 +141,7 @@ lines.
 | Module | Responsibility |
 |---|---|
 | `app/main.py` | Application factory, security headers and CSP, inventory, credential profiles, jobs and downloads, the public view of a lab |
+| `app/allowed_hosts.py` | The outermost ASGI layer against DNS rebinding: refuses every HTTP request and WebSocket handshake whose `Host` is missing, repeated, malformed or a name outside DNS could control (IP literals, `localhost`, single-label and `.local` names pass; other names only when listed in `UI_ALLOWED_HOSTS`; `X-Forwarded-Host` is never read), before the same-origin guard in `main.py` and the WebSocket Origin checks, which all derive the manager's own origin from `Host` |
 | `app/downloads.py` | Download names, short device names, UTC timestamps, safe lookup of a job's snapshot files, ZIP and manifest assembly, legacy metadata backfill ([download names](../clab-backup-ui/NODE-FEATURES.md#backup-download-names)) |
 | `app/store.py` | Encrypted state file, atomic saves, bounded audit log, reset journal |
 | `app/discovery.py`, `app/vm_files.py`, `app/host_files.py` | VM connection, 30-second inspection loop, address reconciliation, lab file bundles and import; `host_files.py` is the helper installed on the VM |

@@ -28,6 +28,7 @@ from .git_progress import GitProgress, public_job as public_git_job
 from .restore import RestoreService, public_job as public_restore_job
 from . import __version__
 from .diagnostics import Diagnostics
+from .allowed_hosts import HostCheck, configured_hosts
 from .capture import Captures
 from .telemetry_retirement import TelemetryRetirement, migrate_retired_telemetry, public_retired_telemetry
 from .network_design import NetworkDesign, public_design
@@ -142,6 +143,14 @@ def create_app(data_dir=None):
         lab=store.lab(lab_id)
         if not lab: raise HTTPException(404,'Lab not found')
         return lab
+    def save_lab(lab, prior, change):
+        # A change the state file did not take must not stay in memory, where /api/state would show it and the
+        # next unrelated save would persist it: put the lab back (prior=None: drop the lab just added).
+        try: store.save()
+        except OSError:
+            if prior is None: store.state['labs'].remove(lab)
+            else: lab.clear(); lab.update(prior)
+            raise HTTPException(500,f'Could not save the {change}; nothing was changed. Check manager storage and retry.')
     def public_lab(lab):
         result={k:copy.deepcopy(v) for k,v in lab.items() if k not in ('nodes','profiles','monitor_host','drawing','definition_yaml','telemetry','telemetry_retired','annotations','annotations_for','network_design','network_generations','network_ownership')}
         result['profiles']=[{k:p[k] for k in ('id','label','platform','username','auth')} for p in lab['profiles']]
@@ -277,6 +286,7 @@ def create_app(data_dir=None):
         with store.lock:
             if lab_id:
                 lab=get_lab(lab_id)
+                prior=copy.deepcopy(lab)
                 old={n['name']:n for n in lab['nodes']}
                 for node in nodes:
                     previous=old.get(node['name'])
@@ -290,10 +300,11 @@ def create_app(data_dir=None):
                 lab={'id':uuid.uuid4().hex,'name':name,'nodes':nodes,'profiles':[],
                      'defaults':{},'interval':0,'next_run':None,'created':now(),'updated':now(),
                      'source':Path(inventory.filename or 'inventory.yml').name}
+                prior=None
                 store.state['labs'].append(lab)
             if lab['interval'] and any(readiness(lab,n)!='Ready' for n in lab['nodes'] if n['enabled']):
                 lab.update(interval=0,next_run=None)
-            store.save()
+            save_lab(lab,prior,'inventory')
             store.event('inventory.import',f'Imported {len(nodes)} nodes; {sum(n["enabled"] for n in nodes)} enabled',lab_id=lab['id'])
             return public_lab(lab)
     class NodeEdit(BaseModel):
@@ -315,14 +326,15 @@ def create_app(data_dir=None):
             if edit.platform and edit.platform not in PLATFORMS: raise HTTPException(400,'Unsupported NOS')
             if edit.profile_id and not any(p['id']==edit.profile_id for p in lab['profiles']):
                 raise HTTPException(400,'Credential profile not found')
-            try: endpoint=address(edit.address); ssh_port=port(edit.port)
+            # Every check runs before anything changes or is logged: a rejected edit leaves the node as it was.
+            try:
+                endpoint=address(edit.address); ssh_port=port(edit.port)
+                short_name=literal(edit.short_name.strip(),'Download device name',200) if edit.short_name is not None else None
             except ValueError as exc: raise HTTPException(400,str(exc))
-            store.event('node.edit',f'Connection updated: {endpoint}:{ssh_port}; NOS {edit.platform or "unmapped"}; enabled={edit.enabled}; profile={edit.profile_id or "default/inventory"}',lab_id=lab_id,node=node['name'])
-            if edit.short_name is not None:
-                try: node['short_name']=literal(edit.short_name.strip(),'Download device name',200)
-                except ValueError as exc: raise HTTPException(400,str(exc))
             if edit.endpoint_mode not in (None,'manual','auto'): raise HTTPException(400,'Choose automatic or manual addressing')
             if edit.endpoint_mode=='auto' and not lab.get('deployment_name'): raise HTTPException(400,'Link a deployed lab before using automatic addresses')
+            prior=copy.deepcopy(lab)
+            if short_name is not None: node['short_name']=short_name
             if edit.endpoint_mode is not None:
                 node['endpoint_mode']=edit.endpoint_mode
             elif (endpoint,ssh_port)!=(node['address'],node['port']):
@@ -331,7 +343,8 @@ def create_app(data_dir=None):
                         profile_id=edit.profile_id,enabled=edit.enabled and bool(edit.platform))
             if edit.endpoint_mode=='auto':
                 reconcile(store.state)
-            store.save()
+            save_lab(lab,prior,'connection settings')
+            store.event('node.edit',f'Connection updated: {endpoint}:{ssh_port}; NOS {edit.platform or "unmapped"}; enabled={edit.enabled}; profile={edit.profile_id or "default/inventory"}',lab_id=lab_id,node=node['name'])
             return public_lab(lab)
     @app.post('/api/labs/{lab_id}/profiles')
     async def profile(lab_id: str, label: str=Form(...), platform: str=Form(...),
@@ -366,10 +379,11 @@ def create_app(data_dir=None):
             lab=get_lab(lab_id)
             p={'id':uuid.uuid4().hex,'label':label,'platform':platform,'username':username,'auth':auth,
                'password':password if auth=='password' else '', 'private_key':key,'passphrase':passphrase,'enable_password':enable_password}
+            prior=copy.deepcopy(lab)
             lab['profiles'].append(p)
-            store.event('credentials.create',f'{platform} {auth} profile {p["id"]} created; default={make_default}; enable credential configured={bool(enable_password)}',lab_id=lab_id)
             if make_default: lab['defaults'][platform]=p['id']
-            store.save()
+            save_lab(lab,prior,'credential profile')
+            store.event('credentials.create',f'{platform} {auth} profile {p["id"]} created; default={make_default}; enable credential configured={bool(enable_password)}',lab_id=lab_id)
             return public_lab(lab)
     class Schedule(BaseModel):
         interval: int=Field(ge=0,le=10080)
@@ -381,9 +395,10 @@ def create_app(data_dir=None):
                 nodes=[n for n in lab['nodes'] if n['enabled']]
                 if not nodes or any(readiness(lab,n)!='Ready' for n in nodes):
                     raise HTTPException(400,'Complete credentials for enabled nodes before scheduling')
-            store.event('schedule.update',f'Backup interval set to {data.interval} minutes (0 means manual)',lab_id=lab_id)
+            prior=copy.deepcopy(lab)
             lab.update(interval=data.interval,next_run=time.time()+data.interval*60 if data.interval else None)
-            store.save()
+            save_lab(lab,prior,'backup schedule')
+            store.event('schedule.update',f'Backup interval set to {data.interval} minutes (0 means manual)',lab_id=lab_id)
             return public_lab(lab)
     class JobRequest(BaseModel):
         operation: str='backup'
@@ -448,4 +463,7 @@ def create_app(data_dir=None):
     app.mount('/static',StaticFiles(directory=APP/'static'),name='static')
     @app.get('/')
     def index(): return FileResponse(APP/'static/index.html')
+    # Added last, so it is the outermost layer: a Host name outside DNS could control (DNS rebinding) is refused
+    # before the guard above, any route, static file or WebSocket handler sees the request.
+    app.add_middleware(HostCheck,allowed=configured_hosts(os.environ.get('UI_ALLOWED_HOSTS')))
     return app

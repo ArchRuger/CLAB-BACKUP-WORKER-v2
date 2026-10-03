@@ -1,4 +1,5 @@
 import copy
+import errno
 from pathlib import Path
 import tempfile
 import unittest
@@ -104,6 +105,53 @@ class ManagerResetTests(unittest.TestCase):
         self.assertEqual(self.reset().status_code,200)
         self.assertFalse(self.store.reset_pending)
         self.assertEqual(Store(self.tmp.name).state['host']['password'],'host-secret')
+
+    # M-10 (audit 2026-10-03): a journal write that fails (full disk) or is cut off (power loss) leaves
+    # only the journal's own temporary file, which never moved a managed file; both remedies the UI
+    # offers, retrying Start fresh and restarting, must then work without anyone clearing it by hand.
+    def test_failed_journal_write_leaves_no_temp_file_and_retry_resets(self):
+        self.host();self.register()
+        backup=self.store.root/'backups';backup.mkdir();(backup/'old').write_text('old')
+        real_open=open
+        class FullDisk:
+            def __init__(self,stream): self.stream=stream
+            def __enter__(self): return self
+            def __exit__(self,*exc): self.stream.close()
+            def write(self,data):
+                self.stream.write(data[:16]); raise OSError(errno.ENOSPC,'No space left on device')
+        def full_disk(path,*args,**kwargs):
+            stream=real_open(path,*args,**kwargs)
+            return FullDisk(stream) if Path(path).name=='new-state.enc.tmp' else stream
+        with patch('app.store.open',side_effect=full_disk,create=True):
+            self.assertEqual(self.reset().status_code,500)
+        stage=self.store.root/'.reset-pending'
+        self.assertFalse((stage/'new-state.enc.tmp').exists())
+        self.assertTrue(backup.exists());self.assertEqual(len(self.store.state['labs']),1)
+        response=self.reset();self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(self.store.state['labs'],[])
+        self.assertFalse(stage.exists());self.assertFalse(backup.exists())
+        saved=Store(self.tmp.name)
+        self.assertEqual(saved.state['labs'],[]);self.assertEqual(saved.state['host']['password'],'host-secret')
+
+    def test_cut_off_journal_write_recovers_on_restart_and_on_retry(self):
+        self.host();self.register()
+        backup=self.store.root/'backups';backup.mkdir();(backup/'old').write_text('old')
+        stage=self.store.root/'.reset-pending'
+        stage.mkdir(mode=0o700);(stage/'new-state.enc.tmp').write_bytes(b'partial')
+        restarted=Store(self.tmp.name)
+        self.assertFalse(restarted.reset_pending)
+        self.assertEqual(len(restarted.state['labs']),1);self.assertTrue(backup.exists())
+        stage.mkdir(mode=0o700);(stage/'new-state.enc.tmp').write_bytes(b'partial')
+        self.assertEqual(self.client.get('/api/state').status_code,503)
+        response=self.reset();self.assertEqual(response.status_code,200,response.text)
+        self.assertEqual(self.store.state['labs'],[]);self.assertFalse(stage.exists());self.assertFalse(backup.exists())
+        self.assertEqual(Store(self.tmp.name).state['labs'],[])
+
+    def test_unknown_entry_in_unprepared_journal_still_needs_attention(self):
+        stage=self.store.root/'.reset-pending'
+        stage.mkdir(mode=0o700);(stage/'new-state.enc.tmp').write_bytes(b'partial');(stage/'backups').mkdir()
+        with self.assertRaisesRegex(OSError,'needs attention'): Store(self.tmp.name)
+        self.assertTrue((stage/'backups').exists());self.assertTrue((stage/'new-state.enc.tmp').exists())
 
     def test_export_current_coordinates_does_not_change_saved_layout(self):
         lab=self.register();saved=copy.deepcopy(self.store.lab(lab['id'])['drawing'])

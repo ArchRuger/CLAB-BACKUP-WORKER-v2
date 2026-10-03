@@ -231,6 +231,8 @@ Even when automated checks pass, verify these actions yourself:
 
 1. Open the manager from the workstation using the VM LAN address and configured
    port. Local HTTP success does not test the workstation firewall/network route.
+   A DNS name other than a single-label or `.local` name is refused until it is
+   listed in `UI_ALLOWED_HOSTS` ([Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name)).
 2. Log in through WinSCP as the normal Ubuntu account, upload a small file and
    download it again. For administrative SFTP, test the intended root-owned
    destination. Configuration checks do not prove a real password login.
