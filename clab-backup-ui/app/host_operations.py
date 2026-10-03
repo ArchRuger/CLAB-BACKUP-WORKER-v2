@@ -22,6 +22,11 @@ from urllib.request import Request, urlopen
 PROTOCOL = 'clab-manager-operations-v1'
 VERSION = '1.30.59'
 LIMIT = 1024 * 1024
+# `containerlab inspect --all` runs a Docker inspection per container: several labs or a busy daemon take
+# well over the short bound of the other commands. The same bounds as discovery's copy of this command
+# (host_files.INSPECT_TIMEOUT, COMMAND_LIMIT); the manager waits 180 s for a review, 1250 s for a run.
+INSPECT_TIMEOUT = 25
+INSPECT_LIMIT = 4 * LIMIT
 # Read-only image questions for the lab builder and the deploy review: which images this VM already
 # has, and whether a named image is on the VM or can be pulled from its registry. Both run the Docker
 # client with fixed argv; the only client input is an image reference checked against Docker's own
@@ -104,13 +109,13 @@ def registry_answer(code, stderr):
     return 'unknown'
 
 
-def capture(argv, cwd='/', timeout=15):
+def capture(argv, cwd='/', timeout=15, limit=LIMIT):
     # JSON inspection must not be contaminated by Containerlab's stderr log lines.
     process = subprocess.Popen(argv, cwd=cwd, env=ENV, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     timer = threading.Timer(timeout, process.kill); timer.start()
     try:
-        output = process.stdout.read(LIMIT + 1)
-        if len(output) > LIMIT: raise ValueError('Command output exceeded 1 MiB.')
+        output = process.stdout.read(limit + 1)
+        if len(output) > limit: raise ValueError('Command output exceeded %d MiB.' % (limit // LIMIT))
         code = process.wait(timeout=2)
         return code, output.decode('utf8', errors='replace')
     finally:
@@ -261,7 +266,7 @@ class HostOperations:
         except Exception: raise ValueError('The GitHub catalog is unavailable. Retry when online or select an existing VM project.')
 
     def deployed(self):
-        code, out = self.run([self.clab, 'inspect', '--all', '--format', 'json'])
+        code, out = self.run([self.clab, 'inspect', '--all', '--format', 'json'], timeout=INSPECT_TIMEOUT, limit=INSPECT_LIMIT)
         if code: raise ValueError('Could not inspect deployed labs before the operation.')
         value = json.loads(out)
         groups = {}
@@ -396,7 +401,10 @@ class HostOperations:
                                     'Links are restored only if containerlab parked them (a stop from the manager, the VS Code extension or containerlab stop); a device stopped with docker stop has already lost its links, and redeploying the lab is the way to get them back.')
                 extra = {'node': node, 'container': container}
             elif action in ('delete',):
-                if action == 'delete' and rows: raise ValueError('Destroy the deployment before deleting its source YAML.')
+                # Found by its topology path too, as revise does: a lab deployed under another name (containerlab
+                # --name, or the YAML's name edited and redeployed on the VM) is not listed under this one.
+                if rows or [r for g in groups.values() for r in g if (r.get('absLabPath') or r.get('labPath')) == str(path)]:
+                    raise ValueError('Destroy the deployment before deleting its source YAML.')
                 side = Path(str(path) + ANNOTATIONS_SUFFIX)
                 if side.is_file() and not side.is_symlink():
                     extra = {'layout': str(side)}; warnings.append('The map layout file beside it is deleted as well. A recovery copy of both is kept.')

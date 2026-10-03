@@ -38,7 +38,7 @@ from . import restore_drivers as drivers
 from . import restore_junos as junos  # noqa: F401  (tests and older callers patch the Junos driver through this name)
 from .discovery import discovery_fresh, node_available
 from .git_progress import captured_snapshot, decoded_snapshot, host_identity, resolve_version_path
-from .lab_operations import RESTORE_BUSY, operation_busy, scrub
+from .lab_operations import RESTORE_BUSY, operation_busy, restore_awaits_recheck, restore_holds_lab, scrub
 from .node_services import connect
 from .restore_compare import compare_junos, set_lines  # noqa: F401  (set_lines is part of this module's API)
 from .restore_shell import RestoreError, SessionLost
@@ -140,7 +140,8 @@ RESTORE_JOB_CAP = 200
 # A job this busy (RESTORE_BUSY) must stay findable. So must one a restart left 'interrupted'
 # (__init__): if any of its targets was IN_FLIGHT, it is still waiting for _recheck_all/
 # _recheck_interrupted to look at that node and, once every node has been looked at, to finalize
-# it; if none was, __init__ never adds it to self.unchecked, so nothing ever reaches it again and
+# it (a start stopped or killed before that leaves the node to the next start: restore_awaits_recheck);
+# if none was, __init__ never adds it to self.unchecked, so nothing ever reaches it again and
 # it stays 'interrupted' for good. Either way it never reaches one of the terminal statuses
 # _finalize() assigns, so it must stay protected regardless of age, not just until its own recheck.
 RESTORE_JOB_ACTIVE = RESTORE_BUSY + ('interrupted',)
@@ -253,15 +254,17 @@ class RestoreService:
         self.rechecks = {}            # job id -> nodes still to be read back after that restart
         with store.lock:
             for job in store.state.setdefault('restore_jobs', []):
-                if job['status'] in RESTORE_BUSY:
+                # A job an earlier restart left 'interrupted' whose node was never read back (that start was stopped,
+                # or crashed, during the recheck) is rechecked again: nothing else would ever look at that node.
+                if restore_holds_lab(job):
                     job.update(status='interrupted', finished=now(),
                                message='Manager restarted during a restore. It is checking the devices that were being '
                                        'changed; a change it had not confirmed is undone by the device itself.')
                     for target in job.get('targets', []):
-                        if target.get('status') in IN_FLIGHT:
+                        if target.get('status') in IN_FLIGHT or restore_awaits_recheck(target):
                             self.unchecked.append((job['id'], target['name']))
-                            target.update(status='interrupted', message='Restore interrupted while this node was being '
-                                          'changed. The manager is checking what is active on it now.')
+                            target.update(status='interrupted', _recheck=True, message='Restore interrupted while this '
+                                          'node was being changed. The manager is checking what is active on it now.')
                         elif target.get('status') in ('backing_up', 'pending', 'ready', 'preflight'):
                             target.update(status='interrupted', message='Restore interrupted before this node was changed.')
                             _enter_stage(job, target, 'failed', time.time())   # settled: not changed, and not rechecked
@@ -807,17 +810,49 @@ class RestoreService:
 
             self._finalize(job_id, lab_id)
         except _Fail as exc:
+            self._settle_unfinished(job_id)
             self.update(job_id, status='preflight_failed' if 'pre-restore' not in str(exc) else 'failed',
                         finished=now(), message=str(exc))
             self.event('restore.failed', str(exc), lab_id, job_id, level='error')
         except Exception as exc:
             with self.store.lock:
                 message = scrub(f'Restore interrupted: {type(exc).__name__}', self.store.state)
+            self._settle_unfinished(job_id)
             try:
                 self.update(job_id, status='needs_attention', finished=now(), message=message)
             except OSError:
                 pass
             self.event('restore.failed', message, lab_id, job_id, level='error')
+
+    def _settle_unfinished(self, job_id):
+        """A job that ends on an error gives every node without an outcome one, so that no node of a finished job keeps
+        showing a step that runs. A node never reached was not changed; a replaced node whose follow-up check did not
+        run is unverified; a node that may hold an armed change is uncertain, never failed. Outcomes stay as they are."""
+        with self.store.lock:
+            job = next((j for j in self.store.state['restore_jobs'] if j['id'] == job_id), None)
+            if job is None:
+                return   # the lab and its restore jobs were removed meanwhile
+            stamp = time.time()
+            for target in job.get('targets', []):
+                status = target.get('status')
+                if status in ('pending', 'backing_up'):
+                    target.update(status='failed', message='Configuration was not changed: the restore stopped before it '
+                                                           'reached this node.')
+                    _enter_stage(job, target, 'failed', stamp)
+                elif status == 'applied':
+                    target.setdefault('timeline', {}).setdefault('checked', stamp)
+                    target.update(status='applied_unverified', message='Configuration replaced, but the follow-up check '
+                                                                       'did not run. Re-check by hand.')
+                    _enter_stage(job, target, 'matched' if target.get('no_op') else 'replaced', stamp)
+                elif status in IN_FLIGHT:
+                    target.update(status='uncertain', message='The manager could not establish what this device is running '
+                                                              '(the restore stopped on an internal error). Check it before '
+                                                              'relying on it.')
+                    _enter_stage(job, target, 'uncertain', stamp)
+            try:
+                self.store.save()
+            except OSError:
+                pass
 
     def _stored_text(self, backup, outcome):
         from .downloads import stored_path
@@ -1052,7 +1087,12 @@ class RestoreService:
 
         Nothing is re-applied. A pending change is confirmed only when the node shows it under this
         job's own token; otherwise the node's timer is left to run and the result is read back.
+        A node not read back because the manager is stopping again is neither counted nor reported: it stays
+        'interrupted' (``restore_awaits_recheck``), the lab stays held, and the next start reads it back.
         """
+        if self.stopping.is_set():
+            return
+        looked = True
         try:
             with self.store.lock:
                 job = copy.deepcopy(self.get_job(job_id))
@@ -1072,6 +1112,9 @@ class RestoreService:
             armed = True if target.get('_handle') is not None else None
             state, detail = self._settle(node, effective_credentials(lab, node), cand, target.get('_token', ''),
                                          target.get('_handle'), armed, deadline, before, on_stage=self._stager(job_id, name))
+            if state == 'stopping':
+                looked = False
+                return
             self._record_settled(job_id, job['lab_id'], name, state, detail, armed, None)
             if state == 'applied' and detail.get('matches'):
                 self.update_target(job_id, name, status='verified', message='Checked after the manager restart: the saved '
@@ -1080,12 +1123,20 @@ class RestoreService:
                 self.update_target(job_id, name, status='applied_unverified', message='After the manager restart the pending '
                                    'change was confirmed, but the device could not be compared with the saved configuration.')
         except Exception as exc:
-            self.stage_target(job_id, name, 'uncertain', status='uncertain', message='The manager restarted during this change and could '
-                              'not check the device afterwards (' + self._scrubbed(type(exc).__name__) + '). Check it by hand.')
+            try:
+                self.stage_target(job_id, name, 'uncertain', status='uncertain', message='The manager restarted during this change and '
+                                  'could not check the device afterwards (' + self._scrubbed(type(exc).__name__) + '). Check it by hand.')
+            except Exception:
+                pass   # the job itself is gone (its lab was removed): nothing is left to report on
         finally:
             with self.store.lock:
-                self.rechecks[job_id] = self.rechecks.get(job_id, 1) - 1
-                last = self.rechecks[job_id] <= 0
+                if looked:
+                    self.rechecks[job_id] = self.rechecks.get(job_id, 1) - 1
+                job = next((j for j in self.store.state['restore_jobs'] if j['id'] == job_id), None)
+                # Finalize only once every node of the job has an outcome: a node still waiting for its read-back
+                # (this start is stopping) must never be counted as checked.
+                last = looked and self.rechecks[job_id] <= 0 and job is not None and not any(
+                    restore_awaits_recheck(t) or t.get('status') in IN_FLIGHT for t in job.get('targets', []))
             if last:
                 try:
                     # The job stops being "interrupted": its nodes were looked at, so say what they run.

@@ -11,7 +11,8 @@ session is reset to a truly empty base:
    someone else's, and this driver never confirms or aborts a session it did not start.
 3. ``configure session <name>`` then ``rollback clean-config`` — starting a session copies
    the running configuration into it, so this step is required before the paste, or the
-   paste would merge onto the old configuration instead of replacing it.
+   paste would merge onto the old configuration instead of replacing it. A ``% `` answer to the
+   reset aborts the session before anything is loaded.
 4. ``copy terminal: session-config`` with the candidate text, ended by Ctrl-D. A rejected
    line is echoed back as ``% Invalid input at line N``; the copy still ends with "Copy
    completed successfully." regardless, so the driver scans the echoed output itself for
@@ -140,7 +141,10 @@ def apply_shell(shell, candidate, confirm_minutes=5, session_name=None, enable_p
         opened = shell.run('configure session %s' % name, PROMPT_TIMEOUT)
         if REJECTED_LINE.search(opened):
             raise RestoreError('The node did not open a configuration session for the restore.')
-        shell.run('rollback clean-config', LOAD_TIMEOUT)
+        # Without the reset the session is still a copy of the running configuration and the paste would merge.
+        reset = shell.run('rollback clean-config', LOAD_TIMEOUT)
+        if REJECTED_LINE.search(reset):
+            raise RestoreError('The node did not empty the configuration session for the restore.')
         shell.send('copy terminal: session-config')
         time.sleep(0.5)
         body = candidate if candidate.endswith('\n') else candidate + '\n'
