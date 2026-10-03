@@ -560,8 +560,6 @@ def check_capture(pw, r):
 
     # Choose the ceos<->cjunosevolved link via the device+scope pickers (advanced), since the map click
     # is a topology-tab action; the Tools card dialog lets us pick the same target directly.
-    p.click('#capture-search')
-    p.fill('#capture-search', 'ceos')
     p.wait_for_timeout(500)
     options = p.eval_on_selector_all('#capture-target option', 'els => els.map(e => ({value: e.value, text: e.textContent}))')
     r.rec('C5: capture target list includes a ceos device', any('ceos' in (o['text'] or '').lower() for o in options), options)

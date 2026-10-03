@@ -164,16 +164,25 @@ function opImageLine(item){
  return item.reference+who+': not on the VM; whether it can be pulled could not be checked.';
 }
 function opImageMissing(items){return (items||[]).filter(i=>i&&i.available!==false&&!i.local&&(i.registry==='not-found'||i.registry==='invalid'));}
+// The images a student has to act on or know about: not on the VM and not pullable as far as the
+// manager could tell (not found, unusable name, registry silent, unanswered), or the whole check
+// unavailable. On the VM and pullable images need nothing, so they are not listed. Pure.
+function opImageAttention(rows){return (rows||[]).filter(i=>i&&(i.available===false||(!i.local&&i.registry!=='found')));}
 // Fills the review's image list once the manager has asked the VM; the review itself never waits for this.
+// Only images that need attention are listed; with none the section stays absent, and a failed check says so once.
 async function opReviewImages(dialog,images){
- const list=dialog.querySelector('#op-review-images');if(!list||!images.length)return;
+ const list=dialog.querySelector('#op-review-images'),status=dialog.querySelector('#op-review-images-status');if(!list||!images.length)return;
+ const section=dialog.querySelector('#op-review-images-section');
  try{
   const value=await json('/operations/image-check','POST',{references:images.slice(0,16).map(i=>i.reference)});if(!dialog.open||!list.isConnected)return;
   const byRef=new Map((value.images||[]).map(i=>[i.reference,i])),rows=images.map(i=>({...i,...(byRef.get(i.reference)||{registry:'unknown',local:false})}));
-  list.innerHTML=rows.map(r=>`<li class="${opImageMissing([r]).length?'op-image-missing':''}">${esc(opImageLine(r))}</li>`).join('');
+  const attention=opImageAttention(rows);
+  list.innerHTML=attention.map(r=>`<li class="${opImageMissing([r]).length?'op-image-missing':''}">${esc(opImageLine(r))}</li>`).join('');
+  if(section){section.hidden=!attention.length;const summary=section.querySelector('summary');if(summary)summary.textContent=`Images needing attention (${attention.length})`;}
+  if(status)status.remove();
   const missing=opImageMissing(rows),notice=dialog.querySelector('#op-review-images-notice');
   if(notice){notice.hidden=!missing.length;notice.textContent=missing.length?(missing.length===1?'One image':missing.length+' images')+' cannot be pulled on this VM: '+missing.map(m=>m.reference).join(', ')+'. The devices using it stay down after the deploy. Choose an image the VM has, or load it on the VM first.':'';}
- }catch{if(dialog.open&&list.isConnected)list.innerHTML=images.map(i=>`<li>${esc(i.reference)}: could not be checked right now.</li>`).join('');}
+ }catch{if(dialog.open&&list.isConnected&&status){status.className='op-notice';status.textContent='Images could not be checked right now; the deploy reports any image it cannot pull.';}}
 }
 async function opReview(request,opener){
  const value=await json('/operations/preview','POST',request);
@@ -192,9 +201,12 @@ async function opReview(request,opener){
  // create's optional map file (an upload's saved layout) is written next to the topology; named here
  // so the student sees exactly what lands on the VM, whether or not it replaces one already there.
  const mapLine=value.action==='create'&&typeof request.options?.annotations==='string'?`<p>Saved map: <code>${esc((value.path||'').split('/').pop()+'.annotations.json')}</code>${warnings.some(w=>/Replaces the existing map file/.test(w))?' — replaces the existing map file (a recovery copy is kept)':' will be written next to the topology'}</p>`:'';
- const commandBlock=`${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}<h4>Command run on the VM</h4><pre class="op-output">${esc((value.steps?.length?value.steps:[value.argv]).filter(a=>a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n')||label)}</pre>${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}`;
+ // Only a real command (containerlab's argv or the reviewed steps) is shown; actions without one (create, publish,
+ // revise, delete) have nothing to print, and with no devices or warnings either the section is left out.
+ const command=(value.steps?.length?value.steps:[value.argv]).filter(a=>Array.isArray(a)&&a.length).map(a=>a.map(v=>JSON.stringify(v)).join(' ')).join('\n');
+ const commandBlock=`${value.affected.length?`<h4>Devices</h4><ul>${value.affected.map(n=>`<li>${esc(n.name)} · ${esc(n.state)}</li>`).join('')}</ul>`:''}${command?`<h4>Command run on the VM</h4><pre class="op-output">${esc(command)}</pre>`:''}${technicalWarnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}`;
  const images=Array.isArray(value.images)?value.images.filter(i=>i&&typeof i.reference==='string'):[];
- const imageBlock=images.length?`<p class="op-notice" id="op-review-images-notice" hidden></p><details open class="op-images"><summary>Images (${images.length})</summary><ul id="op-review-images">${images.map(i=>`<li>${esc(i.reference)}${(i.nodes||[]).length?' ('+esc(i.nodes.join(', '))+')':''}: checking whether this VM has it…</li>`).join('')}</ul></details>`:'';
+ const imageBlock=images.length?`<p class="form-help" id="op-review-images-status" role="status" aria-live="polite">Checking images…</p><p class="op-notice" id="op-review-images-notice" hidden></p><details open class="op-images" id="op-review-images-section" hidden><summary>Images needing attention</summary><ul id="op-review-images"></ul></details>`:'';
  const dialog=opDialog('operation-review',title,`${copy.hideName?'':`<p><strong>${esc(value.name)}</strong></p><p class="op-path">${esc(value.path||'All labs on the VM')}</p>`}
  ${warnings.map(w=>`<p class="op-notice">${esc(w)}</p>`).join('')}
  <p>${esc(body)}</p>
@@ -204,7 +216,7 @@ async function opReview(request,opener){
  ${opSaveLine(lab,value)}
  ${disruptive&&!['restart','restart-node'].includes(value.action)?'<p class="op-notice">Open CLI sessions to this lab will disconnect.</p>':''}
  ${copy.readonly||copy.quiet||value.action==='deploy'?'':value.action==='restart-node'?`<p>1 device affected: ${esc(value.node_label||'')} (${esc(value.affected[0]?.name||'')}, ${esc(value.affected[0]?.state||'')}). The other devices of ${esc(value.name)} are not restarted.</p>`:`<p>${value.affected.length} running ${value.affected.length===1?'device':'devices'} affected</p>`}
- ${plain?commandBlock:`<details><summary>Technical details</summary>${commandBlock}</details>`}
+ ${plain||!commandBlock?commandBlock:`<details><summary>Technical details</summary>${commandBlock}</details>`}
  ${copy.quiet&&typeof request.options?.text==='string'?`<details ${value.diff?'':'open'}><summary>Topology that will be saved (YAML)</summary><pre class="op-output" id="op-review-yaml">${esc(request.options.text)}</pre></details>`:''}
  ${value.diff?`<details open><summary>Topology file changes</summary><pre class="op-output">${esc(value.diff)}</pre></details>`:''}
  ${plain?'':'<p class="form-help">Runs on the lab VM. If the lab changes before you confirm, this check is repeated.</p>'}

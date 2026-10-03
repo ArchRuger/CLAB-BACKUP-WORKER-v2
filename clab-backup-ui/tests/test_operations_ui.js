@@ -12,6 +12,35 @@ test('a review names each image of the topology with what the VM said: on the VM
  assert.equal(line({reference:'a:1',available:false}),'a:1: this VM has no Docker client the manager can ask; checked at deploy time.');
  assert.deepEqual(context.opImageMissing([{reference:'a',local:true,registry:'skipped'},{reference:'b',local:false,registry:'not-found'},{reference:'c',local:false,registry:'not-found',available:false},{reference:'d',local:false,registry:'invalid'}]).map(i=>i.reference),['b','d']);
 });
+test('opImageAttention keeps only images a student must act on: not local and not pullable, or no Docker client at all',()=>{
+ const refs=rows=>[...context.opImageAttention(rows)].map(i=>i.reference);
+ assert.deepEqual(refs([
+  {reference:'local',local:true,registry:'skipped'},{reference:'pullable',local:false,registry:'found'},
+  {reference:'nf',local:false,registry:'not-found'},{reference:'bad',local:false,registry:'invalid'},{reference:'down',local:false,registry:'unreachable'},
+  {reference:'unk',local:false,registry:'unknown'},{reference:'none',local:false},{reference:'nodocker',available:false},{reference:'nodocker-local',local:true,available:false},
+ ]),['nf','bad','down','unk','none','nodocker','nodocker-local']);
+ assert.deepEqual(refs([{reference:'a',local:true},{reference:'b',local:false,registry:'found'}]),[],'all clear: nothing to list');
+ assert.deepEqual(refs(null),[]);
+});
+test('the review image check lists only attention rows, removes its status line, hides the section when all is clear and says once that a failed check failed',async()=>{
+ const mk=()=>{
+  const node={list:{innerHTML:'',isConnected:true},status:{removed:false,className:'',textContent:'',remove(){this.removed=true;}},summary:{textContent:''},notice:{hidden:true,textContent:''}};
+  node.section={hidden:true,querySelector:()=>node.summary};
+  node.dialog={open:true,querySelector:sel=>({'#op-review-images':node.list,'#op-review-images-status':node.status,'#op-review-images-section':node.section,'#op-review-images-notice':node.notice})[sel]||null};
+  return node;
+ };
+ const run=async(answer)=>{const n=mk();context.json=async()=>{if(answer instanceof Error)throw answer;return answer;};
+  await context.opReviewImages(n.dialog,[{reference:'a:1',nodes:['r1']},{reference:'b:2',nodes:['r2']},{reference:'c:3',nodes:[]}]);return n;};
+ const clear=await run({images:[{reference:'a:1',local:true,registry:'skipped'},{reference:'b:2',local:false,registry:'found'},{reference:'c:3',local:true,registry:'skipped'}]});
+ assert.equal(clear.status.removed,true);assert.equal(clear.section.hidden,true,'no empty Images heading');assert.equal(clear.list.innerHTML,'');assert.equal(clear.notice.hidden,true);
+ const some=await run({images:[{reference:'a:1',local:true},{reference:'b:2',local:false,registry:'not-found'},{reference:'c:3',local:false,registry:'unreachable'}]});
+ assert.equal(some.section.hidden,false);assert.equal(some.summary.textContent,'Images needing attention (2)');
+ assert.match(some.list.innerHTML,/class="op-image-missing">b:2 \(r2\): not on the VM and no registry offers it/);assert.match(some.list.innerHTML,/c:3: not on the VM; its registry did not answer/);assert.doesNotMatch(some.list.innerHTML,/a:1/);
+ assert.match(some.notice.textContent,/One image cannot be pulled on this VM: b:2/);
+ const failed=await run(new Error('boom'));
+ assert.equal(failed.status.removed,false);assert.match(failed.status.textContent,/Images could not be checked right now; the deploy reports any image it cannot pull\./);assert.equal(failed.section.hidden,true);
+ const stale=mk();stale.dialog.open=false;context.json=async()=>({images:[]});await context.opReviewImages(stale.dialog,[{reference:'a:1'}]);assert.equal(stale.status.removed,false,'a closed dialog is left alone');
+});
 test('inspection table handles grouped JSON surrounded by CLI log lines',()=>{
  const raw='INFO inspecting\n'+JSON.stringify({training:[{name:'clab-training-r1',absLabPath:'/etc/lab.clab.yaml',kind:'cisco_xrv9k',image:'router:1',state:'running',health_status:'healthy',ipv4_address:'172.20.20.2/24',ipv6_address:'2001:db8::2/64'}]},null,2)+'\nFinished\n';
  const rows=context.opInspectionRows(raw);assert.equal(rows.length,1);
@@ -290,6 +319,7 @@ test('the create review names the map file it will write, and whether it replace
  assert.match(dialogs.at(-1).html,/Saved map: <code>training\.clab\.yaml\.annotations\.json<\/code> will be written next to the topology/);
  await c.opReview({action:'create',lab_id:'',name:'replace',path:'/srv/labs/training.clab.yaml',options:{text:'name: training\n',annotations:'{}'}});
  assert.match(dialogs.at(-1).html,/Saved map: <code>training\.clab\.yaml\.annotations\.json<\/code> — replaces the existing map file \(a recovery copy is kept\)/);
+ assert.doesNotMatch(dialogs.at(-1).html,/Command run on the VM|Technical details/,'create has no real command: no placeholder block and no empty Technical details');
  await c.opReview({action:'create',lab_id:'',name:'none',path:'/srv/labs/training.clab.yaml',options:{text:'name: training\n'}});
  assert.doesNotMatch(dialogs.at(-1).html,/Saved map:/,'no annotations option at all: no line about a map file');
 });

@@ -65,7 +65,7 @@ test('SSH action opens a separate tab with encoded node identity and no credenti
 
 test('connection state stays scoped to its lab and node rows contain no resource controls',()=>{
  const h=harness();
- vm.runInContext(`activeId='a';healthState={lab:'b',nodes:[{name:'PE1',ssh:{status:'reachable'}}]};state={labs:[{id:'a',nodes:[{name:'PE1',address:'host',port:22,platform:'arista_ceos',readiness:'Ready',ssh_ready:true,enabled:true}],profiles:[],defaults:{}}],jobs:[],platforms:{}};renderNodes();`,h.context);
+ vm.runInContext(`activeId='a';devicesTechnical=true;healthState={lab:'b',nodes:[{name:'PE1',ssh:{status:'reachable'}}]};state={labs:[{id:'a',nodes:[{name:'PE1',address:'host',port:22,platform:'arista_ceos',readiness:'Ready',ssh_ready:true,enabled:true}],profiles:[],defaults:{}}],jobs:[],platforms:{}};renderNodes();`,h.context);
  assert.equal(vm.runInContext(`nodeHealth('PE1')`,h.context),null);
  const html=h.document.getElementById('nodes').innerHTML;
  assert.match(html,/Not checked/);assert.match(html,/data-terminal=/);

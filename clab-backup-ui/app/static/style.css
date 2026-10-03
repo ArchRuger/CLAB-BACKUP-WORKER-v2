@@ -876,6 +876,23 @@ footer {
 .banner.banner-collapsed p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .banner.banner-collapsed details, .banner.banner-collapsed .banner-actions { display: none; }
 
+/* Lab page action column (desktop): the header's actions (Save progress / Connect a save location…, Lab actions)
+   and the not-running banner's buttons (Start lab and the others) start at the same left edge. Both rows are
+   grids whose last real column is --lab-action-col wide, counted from the same right edge; the banner's column
+   is shortened by what follows it in the banner (its close button, gap and padding) so the two left edges meet.
+   Narrower than 901px both rows wrap as before. Other banners (home, git, errors) are not touched. */
+@media (min-width: 901px) {
+  #lab-content { --lab-action-col: 26rem; --lab-banner-pad: 14px; --lab-banner-gap: 16px; --lab-banner-close: 28px; }
+  .lab-header { display: grid; grid-template-columns: minmax(0, 1fr) var(--lab-action-col); align-items: start; column-gap: var(--lab-banner-gap); }
+  .lab-header > div { flex: none; }
+  .lab-header-actions { justify-content: flex-start; min-width: 0; }
+  #lab-banner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: var(--lab-banner-gap); padding-right: var(--lab-banner-pad); }
+  #lab-banner:not(.banner-collapsed):has(.banner-actions > :not([hidden])) { grid-template-columns: auto minmax(0, 1fr) calc(var(--lab-action-col) - var(--lab-banner-gap) - var(--lab-banner-close) - var(--lab-banner-pad) - 1px) var(--lab-banner-close); }
+  #lab-banner > div { flex: none; }
+  #lab-banner .banner-actions { margin-left: 0; justify-content: flex-start; min-width: 0; }
+  #lab-banner .notice-close { margin-left: 0; width: var(--lab-banner-close); min-width: var(--lab-banner-close); }
+}
+
 /* dark surfaces (only #toast and the capture screen stay dark in-page): re-scope the tokens
    that light-surface rules read, so any .caption/.muted/.timestamp and any focus ring inside
    them stays legible (muted 8.84, ring 9.74 on the rail) */
@@ -2368,6 +2385,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .actions .button { flex: 1 1 auto; }
   .banner { flex-direction: column; align-items: flex-start; }
   .banner-actions { margin-left: 0; }
+  #lab-banner > div { flex: none; }   /* column direction: the 320px row basis would become a 320px-tall box */
   input[type=search] { width: 100%; }
   .table-wrap table { min-width: 730px; }
   .table-wrap thead th { position: relative; }   /* not sticky on a narrow screen, but still the containing block of its hidden header text */
