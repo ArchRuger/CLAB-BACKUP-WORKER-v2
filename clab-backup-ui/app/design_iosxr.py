@@ -23,6 +23,7 @@ import re
 import secrets
 import threading
 
+from .design_eos import NOT_REVIEWED   # the driver contract's words for a refused would-be configuration
 from .restore_iosxr import (COMMIT_TIMEOUT, CONFIG_PROMPT, LOAD_TIMEOUT, PROMPT, TRIAL_CLIENT, IosXrShell, _body_lines,
                             _is_rejected, _last_commit_was_rollback, _leave_held_configuration, _paste, _safe_abort,
                             _send, capture_shell, reach_cli, session_conflict, strip_generated_header)
@@ -111,9 +112,10 @@ def render_desired_shell(shell, candidate):
         _safe_abort(shell)
 
 
-def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False):
+def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False, accept=None):
     """The merge transaction on an already-open IosXrShell (see the module docstring). With `arm` the session is
-    left open in configuration mode and the caller keeps it (``held``)."""
+    left open in configuration mode and the caller keeps it (``held``); `accept` as in :mod:`design_eos`: asked
+    before `commit confirmed`, so a refused would-be configuration is aborted unarmed."""
     if not NAME.match(name or ''):
         raise RestoreError('The design session name is not usable.')
     reach_cli(shell)
@@ -142,6 +144,8 @@ def stage_shell(shell, candidate, removals, name, confirm_minutes=5, arm=False):
         if not arm or no_op:
             _safe_abort(shell)
             return {'before': before, 'would_be': would_be, 'diff': diff, 'no_op': no_op, 'armed': False, 'handle': {'session': name}}
+        if accept is not None and not accept(would_be):
+            raise RestoreError(NOT_REVIEWED)
         out = shell.run('commit confirmed minutes %d' % int(confirm_minutes), COMMIT_TIMEOUT)
         if NO_CHANGES in out:
             _safe_abort(shell)
@@ -177,10 +181,10 @@ def render_desired(client, candidate, **kw):
     return _with_shell(client, lambda shell: render_desired_shell(shell, candidate))
 
 
-def stage(client, candidate, removals, name, confirm_minutes=5, arm=False, **kw):
+def stage(client, candidate, removals, name, confirm_minutes=5, arm=False, accept=None, **kw):
     channel, shell = open_shell(client, IosXrShell)
     try:
-        result = stage_shell(shell, candidate, removals, name, confirm_minutes, arm)
+        result = stage_shell(shell, candidate, removals, name, confirm_minutes, arm, accept)
     except Exception:
         close_channel(channel)
         raise

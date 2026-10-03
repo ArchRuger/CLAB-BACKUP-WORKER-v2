@@ -345,6 +345,32 @@ class DesignEosDriverTests(unittest.TestCase):
         self.assertFalse(any(c.startswith('commit timer') for c in device.commands))
         self.assertIsNone(device.pending_session)
 
+    def test_stage_arm_asks_accept_with_the_would_be_before_the_commit_timer(self):
+        # The service compares the would-be configuration with the review's before anything is armed (audit L-14):
+        # a refusal aborts the session, so nothing unreviewed runs on the device for the confirmation window.
+        device = FakeDevice(session_configs=['WOULD_BE'], diff_text='+something\n', running_configs=['SAME_BEFORE'])
+        seen = []
+        def refuse(text):
+            seen.append((text, list(device.commands))); return False
+        with self.assertRaises(RestoreError) as ctx:
+            design_eos.stage(client_for(device), CANDIDATE, [], 'clabdsg-abcdabcd', confirm_minutes=5, arm=True, accept=refuse)
+        self.assertIn('differs from the reviewed one', str(ctx.exception))
+        self.assertEqual([text for text, _ in seen], ['WOULD_BE'])
+        self.assertIn('show session-config', seen[0][1], 'asked after the would-be configuration was read')
+        self.assertIn('abort', device.commands)
+        self.assertFalse(any(c.startswith('commit timer') for c in device.commands))
+        self.assertIsNone(device.pending_session)
+        # Accepted: armed as before; a review (arm=False) and a no-op never ask.
+        device = FakeDevice(session_configs=['WOULD_BE'], diff_text='+something\n', running_configs=['SAME_BEFORE'])
+        seen = []
+        result = design_eos.stage(client_for(device), CANDIDATE, [], 'clabdsg-abcdabce', confirm_minutes=5, arm=True, accept=lambda t: seen.append(t) or True)
+        self.assertTrue(result['armed'])
+        self.assertEqual(seen, ['WOULD_BE'])
+        for arm, diff in ((False, '+something\n'), (True, '')):
+            device = FakeDevice(session_configs=['WOULD_BE'], diff_text=diff); seen = []
+            design_eos.stage(client_for(device), CANDIDATE, [], 'clabdsg-abcdabcf', arm=arm, accept=lambda t: seen.append(t) or False)
+            self.assertEqual(seen, [])
+
     def test_stage_arm_no_op_does_not_arm_and_aborts(self):
         device = FakeDevice(session_configs=['WOULD_BE'], diff_text='')
         result = design_eos.stage(client_for(device), CANDIDATE, [], 'clabdsg-eeeeeeee', arm=True)

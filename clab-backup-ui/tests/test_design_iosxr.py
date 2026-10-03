@@ -475,6 +475,33 @@ class DesignIosXrDriverTests(unittest.TestCase):
         self.assertNotIn('abort', commands)
         self.assertNotIn('commit', commands)  # stage() never confirms inline
 
+    def test_stage_arm_asks_accept_with_the_would_be_before_commit_confirmed(self):
+        # The service compares the would-be configuration with the review's before anything is armed (audit L-14):
+        # a refusal aborts the exclusive session, so nothing unreviewed runs for the confirmation window.
+        device = FakeDevice(leaves=LEAVES_MIN, running_config=BEFORE_TEXT, merge_text=MERGE_DIFFERENT_TEXT, target_text=DIFF_TEXT)
+        armer = FakeClient(device, name='armer'); name = design_iosxr.session_name(); seen = []
+        def refuse(text):
+            seen.append((text, list(device.commands))); return False
+        with self.assertRaises(RestoreError) as ctx:
+            design_iosxr.stage(armer, CANDIDATE_MIN, [], name, confirm_minutes=2, arm=True, accept=refuse)
+        self.assertIn('differs from the reviewed one', str(ctx.exception))
+        self.assertEqual([text for text, _ in seen], [strip_generated_header(MERGE_DIFFERENT_TEXT)])
+        self.assertIn('show configuration merge', seen[0][1], 'asked after the would-be configuration was read')
+        self.assertFalse(any(c.startswith('commit confirmed') for c in device.commands))
+        self.assertIn('abort', device.commands)
+        self.assertNotIn(name, design_iosxr._HELD)
+        self.assertTrue(armer.channels[0].closed)
+        # Accepted: armed and held as before; a review (arm=False) and a no-op never ask.
+        device = FakeDevice(leaves=LEAVES_MIN, running_config=BEFORE_TEXT, merge_text=MERGE_DIFFERENT_TEXT, target_text=DIFF_TEXT)
+        armer = FakeClient(device, name='armer'); name = design_iosxr.session_name(); seen = []
+        result = design_iosxr.stage(armer, CANDIDATE_MIN, [], name, confirm_minutes=2, arm=True, accept=lambda t: seen.append(t) or True)
+        self.assertTrue(result['armed'] and result['held'])
+        self.assertEqual(seen, [strip_generated_header(MERGE_DIFFERENT_TEXT)])
+        for arm, merge in ((False, MERGE_DIFFERENT_TEXT), (True, NO_OP_MERGE_TEXT)):
+            device = FakeDevice(leaves=LEAVES_MIN, running_config=BEFORE_TEXT, merge_text=merge, target_text=DIFF_TEXT); seen = []
+            design_iosxr.stage(FakeClient(device), CANDIDATE_MIN, [], design_iosxr.session_name(), arm=arm, accept=lambda t: seen.append(t) or False)
+            self.assertEqual(seen, [])
+
     def test_stage_arm_rejected_commit_raises_after_abort(self):
         device = FakeDevice(leaves=LEAVES_MIN, running_config=BEFORE_TEXT,
                              merge_text=MERGE_DIFFERENT_TEXT, target_text=DIFF_TEXT,

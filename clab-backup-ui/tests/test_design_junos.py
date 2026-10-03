@@ -442,6 +442,32 @@ class DesignJunosDriverTests(unittest.TestCase):
             'exit',
         ])
 
+    def test_stage_arm_asks_accept_with_the_would_be_before_commit_check_and_commit_confirmed(self):
+        # The service compares the would-be configuration with the review's before anything is armed (audit L-14):
+        # a refusal rolls the exclusive candidate back, so nothing unreviewed runs for the confirmation window.
+        device = FakeDevice(); seen = []
+        def refuse(text):
+            seen.append((text, list(device.commands))); return False
+        with self.assertRaises(RestoreError) as ctx:
+            design_junos.stage(client_for(device), CANDIDATE, REMOVALS, 'clabdsg-abcdabcd', confirm_minutes=5, arm=True, accept=refuse)
+        self.assertIn('differs from the reviewed one', str(ctx.exception))
+        self.assertEqual(len(seen), 1)
+        self.assertIn(WOULD_BE.strip().splitlines()[0], seen[0][0])
+        self.assertIn('load merge terminal', seen[0][1], 'asked after the candidate was merged')
+        self.assertNotIn('commit check', device.commands)
+        self.assertFalse(any(c.startswith('commit confirmed') for c in device.commands))
+        self.assertIn('rollback 0', device.commands)
+        # Accepted: armed as before; a review (arm=False) and a no-op never ask.
+        device = FakeDevice(); seen = []
+        result = design_junos.stage(client_for(device), CANDIDATE, REMOVALS, 'clabdsg-abcdabce', confirm_minutes=5, arm=True, accept=lambda t: seen.append(t) or True)
+        self.assertTrue(result['armed'])
+        self.assertEqual(len(seen), 1)
+        self.assertIn('commit confirmed 5 comment clabdsg-abcdabce', device.commands)
+        for arm, compare in ((False, COMPARE), (True, '[edit]')):
+            device = FakeDevice(compare_text=compare); seen = []
+            design_junos.stage(client_for(device), CANDIDATE, [], 'clabdsg-abcdabcf', arm=arm, accept=lambda t: seen.append(t) or False)
+            self.assertEqual(seen, [])
+
     def test_stage_arm_no_op_never_sends_commit_check_or_commit_confirmed(self):
         device = FakeDevice(compare_text='[edit]')
         result = design_junos.stage(client_for(device), CANDIDATE, [], 'clabdsg-eeeeffff', arm=True)

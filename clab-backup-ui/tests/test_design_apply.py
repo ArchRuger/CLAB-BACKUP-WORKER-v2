@@ -299,7 +299,7 @@ class FakeDriver:
     def render_desired(self, client, candidate, **o):
         return CLEAN_BASE, CLEAN_BASE + candidate
 
-    def stage(self, client, candidate, removals, name, confirm_minutes=5, arm=False, **o):
+    def stage(self, client, candidate, removals, name, confirm_minutes=5, arm=False, accept=None, **o):
         self.calls.append(('stage', o.get('_key'), arm))
         dev = self._dev(o)
         if dev.reject_load:
@@ -309,6 +309,8 @@ class FakeDriver:
         diff = _diff_text(dev.running, merged)
         if not arm or no_op:
             return {'before': dev.running, 'would_be': merged, 'diff': diff, 'no_op': no_op, 'armed': False, 'handle': {'session': name}}
+        if accept is not None and not accept(merged):   # the drivers' contract: asked before anything is armed
+            raise RestoreError('The configuration the device would run differs from the reviewed one; nothing was applied.')
         if dev.lose_before_arm:
             raise SessionLost('The session to the device was lost while staging the change.')
         if dev.lose_after_arm:
@@ -948,6 +950,40 @@ class DriftTests(DesignApplyTestCase):
         self.assertFalse(self.fake.devices['ceos'].armed)
         self.assertIsNone(self.fake.devices['ceos'].pending)
 
+    def test_a_would_be_configuration_unlike_the_review_is_never_armed(self):
+        # Someone changes the device after the apply's drift snapshot and before the transaction reads its own base:
+        # the would-be configuration is not the reviewed one, so the driver is told so before it arms anything and the
+        # unreviewed merge never runs for the confirmation window (audit L-14).
+        gen_id = self.default_generation()
+        token = self.review(gen_id).json()['token']
+        dev = self.fake.devices['ceos']; real_stage = self.fake.stage; asked = []
+        def concurrent_edit(client, candidate, removals, name, confirm_minutes=5, arm=False, accept=None, **o):
+            if arm: dev.running = dev.running.replace('hostname ceos\n', 'hostname ceos\n!\nbanner motd X\n', 1)
+            def spy(text):
+                result = accept(text); asked.append(result); return result
+            return real_stage(client, candidate, removals, name, confirm_minutes, arm, accept=spy if accept else None, **o)
+        with patch.object(self.fake, 'stage', side_effect=concurrent_edit):
+            job = poll_job(self.client, self.submit_http(token).json()['id'])
+        target = next(t for t in job['targets'] if t['name'] == 'ceos')
+        self.assertEqual(asked, [False], 'the reviewed would-be digest was compared before arming')
+        self.assertEqual(target['status'], 'drifted')
+        self.assertIn('differs from the reviewed one', target['message'])
+        self.assertIn('not changed', target['message'])
+        self.assertFalse(dev.armed, 'nothing unreviewed was armed')
+        self.assertIsNone(dev.pending)
+        self.assertEqual(job['status'], 'failed')
+        with self.app.state.store.lock:
+            ledger = (self.app.state.store.lab(self.lab_id).get('network_ownership') or {}).get('ceos') or {}
+        self.assertFalse(ledger.get('statements') or ledger.get('pending'), 'nothing is owned or pending from it')
+
+        # The same apply with the device as reviewed is accepted and armed.
+        dev.running = BASELINE; asked.clear()
+        token = self.review(gen_id).json()['token']
+        with patch.object(self.fake, 'stage', side_effect=lambda *a, accept=None, **o: real_stage(*a, accept=(lambda t: asked.append(accept(t)) or asked[-1]), **o)):
+            job = poll_job(self.client, self.submit_http(token).json()['id'])
+        self.assertEqual(asked, [True])
+        self.assertEqual(next(t for t in job['targets'] if t['name'] == 'ceos')['status'], 'verified')
+
 
 # --- 8. stage and settle-path failures -------------------------------------------------------------------
 
@@ -1011,16 +1047,94 @@ class StageFailureTests(DesignApplyTestCase):
             ledger = self.app.state.store.lab(self.lab_id)['network_ownership']['ceos']
         self.assertTrue(ledger['pending'])
 
-        # The next review reads the device back and settles the pending entry (the change is not there: nothing
-        # is owned from it); the foreign change itself still refuses the review.
+        # The foreign change still refuses the next review, and while it waits for confirmation the running
+        # configuration is not settled, so the pending entry is left for a later read-back (audit L-13).
         next_review = self.review(gen_id).json()
         row = next(r for r in next_review['targets'] if r['name'] == 'ceos')
         self.assertFalse(row['ready'])
         self.assertIn('Another change is waiting for confirmation', row['reason'])
         with self.app.state.store.lock:
             ledger = self.app.state.store.lab(self.lab_id)['network_ownership']['ceos']
+        self.assertTrue(ledger['pending'], 'nothing is read back while a change waits for confirmation')
+        self.assertEqual(ledger['statements'], [])
+
+        # Once nothing waits any more, the next review reads the device back and settles the pending entry (the
+        # change is not there: nothing is owned from it).
+        dev = self.fake.devices['ceos']; dev.pending = None; dev.armed = False
+        row = next(r for r in self.review(gen_id).json()['targets'] if r['name'] == 'ceos')
+        self.assertTrue(row['ready'], row.get('reason'))
+        with self.app.state.store.lock:
+            ledger = self.app.state.store.lab(self.lab_id)['network_ownership']['ceos']
         self.assertIsNone(ledger['pending'], 'the read-back settled the entry')
         self.assertEqual(ledger['statements'], [])
+
+    def test_a_trial_of_this_manager_still_armed_is_not_read_back_as_owned(self):
+        # The settle loop can record `uncertain` while this manager's own EOS/Junos timer still runs (an unexpected
+        # error breaks it at once; neither driver can release the trial). While the timer runs the device runs the
+        # would-be configuration: reading it back then would own lines the device is about to undo (audit L-13).
+        gen_id = self.default_generation()
+        token = self._submit(gen_id)
+        dev = self.fake.devices['ceos']; real_pending = self.fake.pending; calls = []
+        def broken_once(client, **o):
+            calls.append(1)
+            if len(calls) == 1: raise ValueError('unexpected device output')
+            return real_pending(client, **o)
+        with patch.object(self.fake, 'pending', side_effect=broken_once):
+            job = poll_job(self.client, self.submit_http(token).json()['id'])
+        target = next(t for t in job['targets'] if t['name'] == 'ceos')
+        self.assertEqual(target['status'], 'uncertain')
+        self.assertTrue(dev.pending and dev.would_be_pending, 'the trial is still armed on the device')
+        row = next(r for r in self.review(gen_id).json()['targets'] if r['name'] == 'ceos')
+        self.assertFalse(row['ready'])
+        self.assertIn('Another change is waiting for confirmation', row['reason'])
+        with self.app.state.store.lock:
+            ledger = self.app.state.store.lab(self.lab_id)['network_ownership']['ceos']
+        self.assertTrue(ledger['pending'], 'the entry waits for the device to decide')
+        self.assertEqual(ledger['statements'], [], 'nothing of a trial still running is owned')
+
+        # The device's timer runs out and it undoes the trial: the next review finds the change absent.
+        dev.pending = None; dev.armed = False; dev.would_be_pending = None
+        row = next(r for r in self.review(gen_id).json()['targets'] if r['name'] == 'ceos')
+        self.assertTrue(row['ready'], row.get('reason'))
+        with self.app.state.store.lock:
+            ledger = self.app.state.store.lab(self.lab_id)['network_ownership']['ceos']
+        self.assertIsNone(ledger['pending'])
+        self.assertEqual(ledger['statements'], [], 'the undone change left nothing owned')
+
+    def _resolve_xr(self, running, added, desired):
+        """Seed an `uncertain` IOS XR ledger entry and run the review's read-back of it on `running`."""
+        with self.app.state.store.lock:
+            lab = self.app.state.store.lab(self.lab_id)
+            entry = {'statements': [], 'ancestors': [], 'generation_id': '', 'applied_at': '',
+                     'pending': {'job_id': 'old', 'added': added, 'desired': desired, 'ancestors': []}}
+            lab.setdefault('network_ownership', {})['xrv9k'] = copy.deepcopy(entry)
+            self.app.state.store.save()
+        driver = type('XrSnapshot', (), {'snapshot': staticmethod(lambda client, **o: running)})
+        owned, _ = self.app.state.design_apply._resolve_pending(self.lab_id, 'cisco_xrv9k', 'xrv9k', entry, driver, None, {})
+        with self.app.state.store.lock:
+            ledger = copy.deepcopy(self.app.state.store.lab(self.lab_id)['network_ownership']['xrv9k'])
+        return owned, ledger
+
+    def test_an_xr_pending_entry_with_typed_negations_is_owned_when_the_change_is_active(self):
+        # IOS XR's desired set carries the target buffer's typed negations, which the running configuration never
+        # shows (PROVISIONING §8 "IOS XR negations"): the read-back judges them as the absence of their positive
+        # form, the same test as the settle loop and verify() (audit M-6).
+        address = 'interface GigabitEthernet0/0/0/0 > ipv4 address 10.1.0.1 255.255.255.252'
+        added = [address, 'interface GigabitEthernet0/0/0/0 > no shutdown', 'lldp > no management enable']
+        desired = added + ['interface GigabitEthernet0/0/0/0', 'lldp']
+        active = ('hostname xrv9k\ninterface GigabitEthernet0/0/0/0\n ipv4 address 10.1.0.1 255.255.255.252\n!\nlldp\n!\nend\n')
+        owned, ledger = self._resolve_xr(active, added, desired)
+        self.assertIsNone(ledger['pending'])
+        self.assertEqual(ledger['statements'], [address], 'the active change is owned; a negation is never a running statement')
+        self.assertEqual(owned, {address})
+        for label, running in (('still shut down', active.replace(' ipv4 address 10.1.0.1 255.255.255.252\n', ' ipv4 address 10.1.0.1 255.255.255.252\n shutdown\n')),
+                               ('lldp management still on', active.replace('lldp\n', 'lldp\n management enable\n')),
+                               ('address missing', active.replace(' ipv4 address 10.1.0.1 255.255.255.252\n', ''))):
+            with self.subTest(label):
+                owned, ledger = self._resolve_xr(running, added, desired)
+                self.assertIsNone(ledger['pending'])
+                self.assertEqual(ledger['statements'], [], 'the change is not there: nothing is owned from it')
+                self.assertEqual(owned, set())
 
     def test_a_pending_entry_whose_change_is_present_becomes_owned_at_the_next_review(self):
         gen_id = self.default_generation()
@@ -1153,6 +1267,56 @@ class BusyGuardTests(DesignApplyTestCase):
             restore_service.guard_idle(self.lab_id)
         self.assertEqual(getattr(restore_caught.exception, 'status_code', None), 409)
 
+    def _reading_back(self):
+        """A job of this lab whose devices are still read back after a restart: `interrupted` with `rechecking`
+        (audit L-15). Its status is no longer in DESIGN_APPLY_BUSY, so only `rechecking` can hold the lab."""
+        store = self.app.state.store
+        other_lab_id = add_lab(self.app, name='other', definition_yaml=TWO_CEOS_TOPOLOGY)
+        with store.lock:
+            store.state.setdefault('design_jobs', []).append(
+                {'id': 'job-r', 'lab_id': self.lab_id, 'status': 'interrupted', 'rechecking': ['ceos'], 'targets': []})
+            store.save()
+        return store, other_lab_id
+
+    def test_the_read_back_after_a_restart_never_holds_another_lab_or_a_check_that_names_no_lab(self):
+        # The read-back waits out an IOS XR trial at the device's timer (up to about 31 minutes): other labs, and the
+        # callers that name no lab (background discovery, Git's idle check, a lab-operation submit), stay free.
+        store, other_lab_id = self._reading_back()
+        self.assertFalse(operation_busy(store.state, other_lab_id), 'another lab stays free')
+        self.assertFalse(operation_busy(store.state))
+        real_runner = Runner(store)
+        self.addCleanup(real_runner.close)
+        RestoreService(store, real_runner, object(), connector=fake_connect).guard_idle(other_lab_id)
+        with patch.object(real_runner.pool, 'submit'):
+            try: real_runner.submit(other_lab_id, operation='backup', source='manual')
+            except ValueError as exc:   # other guards (node readiness) may refuse; the read-back must not
+                self.assertNotIn('Wait for the lab operation', str(exc))
+
+    # Open part of audit L-15: `operation_busy` (lab_operations.py, not owned by the design-apply package) does not
+    # read `rechecking` yet, so a restore could arm its own `commit confirmed` on the lab under read-back, which the
+    # read-back then sees as a foreign pending change (`uncertain`) or, when the restored text holds the reviewed
+    # statements, as `verified`. Remove this decorator together with the lab-scoped `rechecking` clause in
+    # `operation_busy`; until then an unexpected success fails the suite.
+    @unittest.expectedFailure
+    def test_a_restore_and_a_backup_of_the_lab_under_read_back_are_refused_until_it_settles(self):
+        store, other_lab_id = self._reading_back()
+        self.assertTrue(operation_busy(store.state, self.lab_id))
+        self.assertTrue(operation_busy(store.state, self.lab_id, progress_id='some-restore'))
+        real_runner = Runner(store)
+        self.addCleanup(real_runner.close)
+        restore_service = RestoreService(store, real_runner, object(), connector=fake_connect)
+        with self.assertRaises(Exception) as restore_caught:
+            restore_service.guard_idle(self.lab_id)
+        self.assertEqual(getattr(restore_caught.exception, 'status_code', None), 409)
+        with patch.object(real_runner.pool, 'submit'):
+            with self.assertRaises(ValueError) as caught:
+                real_runner.submit(self.lab_id, operation='backup', source='manual')
+            self.assertIn('Wait for the lab operation', str(caught.exception))
+        with store.lock:
+            store.state['design_jobs'][-1].pop('rechecking')
+            store.save()
+        self.assertFalse(operation_busy(store.state, self.lab_id), 'once read back, the lab is free')
+        restore_service.guard_idle(self.lab_id)
 
 # --- 11. restart reconciliation --------------------------------------------------------------------------
 
@@ -1271,6 +1435,119 @@ class RestartReconciliationTests(unittest.TestCase):
         self.assertEqual(job['status'], 'interrupted', 'the job stays interrupted: the record says what happened')
         self.assertIn('Read back afterwards: ceos undone by the device.', job['message'])
         self.assertNotIn('is undone by the device itself', job['message'])
+
+
+class RecheckConcurrencyTests(DesignApplyTestCase):
+    """The read-back after a restart (audit L-15): an IOS XR trial nobody can confirm any more is waited out at the
+    device's own timer, up to 30 minutes. That wait must neither hold the single apply worker (a new apply on another
+    lab would sit `queued`, and a queued apply makes the Runner refuse every backup and restore on every lab) nor
+    leave the lab under read-back free for a new apply."""
+
+    def _restart_with_an_unconfirmable_trial(self, rechecking=None, deadline_in=120, **target_fields):
+        """Lab `other` has an apply in flight on its `ceos`, whose trial nobody can confirm (the IOS XR case after a
+        restart: `pending` answers True); the manager restarts and starts its read-back."""
+        other = add_lab(self.app, name='other', definition_yaml=TWO_CEOS_TOPOLOGY)
+        set_credentials(self.app, other, 'ceos', enable_password='under-recheck')
+        self.fake.register('under-recheck', BASELINE)
+        dev = self.fake.devices['under-recheck']; dev.pending = True
+        candidate, _, before, would_be, desired, added, ancestors = _interface_only_plan()
+        target = {'name': 'ceos', 'kind': KIND, 'status': 'confirming', 'stage': 'armed', 'message': 'Change armed.',
+                  'timeline': {'queued': time.time()}, '_session': 'clabdsg-22222222', '_before_digest': da.digest_of(before),
+                  '_desired': sorted(desired), '_added': sorted(added), '_stale': [], '_ancestors': sorted(ancestors),
+                  '_removed_ancestors': [], '_candidate': candidate, '_removals': [], '_would_be_digest': da.digest_of(would_be),
+                  '_armed': True, '_deadline': time.time() + deadline_in}
+        target.update(target_fields)
+        job = {'id': uuid.uuid4().hex, 'request_id': uuid.uuid4().hex, 'lab_id': other, 'lab_name': 'other', 'generation_id': 'b' * 32,
+               'created': runner_now(), 'started': runner_now(), 'status': 'confirming', 'message': 'Applying.', 'confirm_minutes': 30,
+               'host_identity': '', 'takeover': [], 'targets': [target], 'progress': {'settled': 0, 'total': 1}}
+        if rechecking is not None:   # a restart during an earlier restart's read-back
+            job.update(status='interrupted', rechecking=rechecking); target.update(status='interrupted', stage='verifying')
+        with self.app.state.store.lock:
+            self.app.state.store.state.setdefault('design_jobs', []).append(job)
+            self.app.state.store.save()
+        # The restart: a new app on the same data directory; its design service marks the job and reads it back.
+        self.app.state.design_apply.close()
+        self.app = create_app(self.tmp.name)
+        self.client = TestClient(self.app)
+        self.addCleanup(self.client.close)
+        self.addCleanup(self.app.state.design_apply.close)
+        self.addCleanup(self.app.state.network_design.close)
+        service = self.app.state.design_apply
+        service.connect = fake_connect
+        service.retry_interval = 0.05; service.recovery_grace = 0.05; service.connect_pause = 0.05
+        self.runner = FakeRunner(self.app.state.store); service.runner = self.runner
+        seed_discovery(self.app, self.lab_id)   # a new process trusts no discovery of the old one
+        service.start()
+        return other, job['id'], dev
+
+    def _job(self, job_id):
+        with self.app.state.store.lock: return copy.deepcopy(next(j for j in self.app.state.store.state['design_jobs'] if j['id'] == job_id))
+
+    def _wait(self, check, timeout=10):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if check(): return
+            time.sleep(0.05)
+        raise AssertionError('condition not reached in time')
+
+    def test_a_new_apply_on_another_lab_is_not_queued_behind_the_read_back(self):
+        other, job_id, dev = self._restart_with_an_unconfirmable_trial()
+        self._wait(lambda: self._job(job_id)['targets'][0].get('attempts', 0) >= 2)   # the read-back is waiting for the trial
+        gen_id = self.default_generation()
+        reviewed = self.review(gen_id).json()
+        self.assertIn('token', reviewed, reviewed)
+        token = reviewed['token']
+        job = poll_job(self.client, self.submit_http(token).json()['id'], timeout=10)
+        self.assertEqual(next(t for t in job['targets'] if t['name'] == 'ceos')['status'], 'verified',
+                         'the apply ran while the other lab was still being read back')
+        self.assertEqual(self._job(job_id)['targets'][0]['status'], 'interrupted', 'the read-back is still waiting for the trial')
+
+    def test_the_lab_under_read_back_is_held_until_its_devices_settle(self):
+        other, job_id, dev = self._restart_with_an_unconfirmable_trial()
+        self._wait(lambda: self._job(job_id)['targets'][0].get('attempts', 0) >= 2)
+        self.assertEqual(self._job(job_id)['status'], 'interrupted')
+        self.assertEqual(self._job(job_id).get('rechecking'), ['ceos'], 'the job records which devices are still read back')
+        with self.app.state.store.lock:
+            with self.assertRaises(da.HTTPException) as caught: self.app.state.design_apply.guard_idle(other)
+            self.assertEqual(caught.exception.status_code, 409)
+            self.assertIn('reading back', caught.exception.detail)
+            self.app.state.design_apply.guard_idle(self.lab_id)   # another lab is not held
+        # The device's timer runs out and it undoes the trial: the read-back settles and the lab is free again.
+        dev.pending = None
+        self._wait(lambda: 'Read back afterwards' in self._job(job_id)['message'])
+        job = self._job(job_id)
+        self.assertEqual(job['targets'][0]['status'], 'rolled_back')
+        self.assertNotIn('rechecking', job)
+        self.assertNotIn('rechecking', da.public_job(job))
+        with self.app.state.store.lock: self.app.state.design_apply.guard_idle(other)
+
+    def test_a_restart_during_the_read_back_reads_the_rest_back_and_never_leaves_the_lab_held(self):
+        other, job_id, dev = self._restart_with_an_unconfirmable_trial(rechecking=['ceos'], deadline_in=-120)
+        dev.pending = None; dev.running = _interface_only_plan()[1]   # the trial was confirmed before the first restart
+        self._wait(lambda: 'Read back afterwards' in self._job(job_id)['message'])
+        job = self._job(job_id)
+        self.assertEqual(job['status'], 'interrupted')
+        self.assertEqual(job['targets'][0]['status'], 'verified')
+        self.assertNotIn('rechecking', job)
+        with self.app.state.store.lock: self.app.state.design_apply.guard_idle(other)
+
+    def test_a_read_back_that_fails_inside_the_manager_leaves_the_device_uncertain_not_unchanged(self):
+        # A stored deadline the read-back cannot use (a corrupt record) makes `_recheck` raise before it reaches the
+        # device. The trial may have been confirmed before the restart, so the device is never worded "not changed":
+        # it is `uncertain` with a pending ledger entry that the next review settles, and the lab is freed.
+        other, job_id, dev = self._restart_with_an_unconfirmable_trial(rechecking=['ceos'], _deadline='not-a-time')
+        self._wait(lambda: 'Read back afterwards' in self._job(job_id)['message'])
+        job = self._job(job_id)
+        self.assertEqual(job['status'], 'interrupted')
+        self.assertEqual(job['targets'][0]['status'], 'uncertain')
+        self.assertIn('ceos outcome unknown', job['message'])
+        self.assertNotIn('not changed', job['message'])
+        self.assertNotIn('rechecking', job)
+        with self.app.state.store.lock:
+            pending = self.app.state.store.lab(other)['network_ownership']['ceos']['pending']
+            self.app.state.design_apply.guard_idle(other)
+        self.assertEqual(pending['job_id'], job_id)
+        self.assertEqual(sorted(pending['added']), sorted(_interface_only_plan()[5]))
 
 
 # --- 12. pure helper functions ------------------------------------------------------------------------
