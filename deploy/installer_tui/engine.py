@@ -200,8 +200,9 @@ class Run:
         return True
 
     def cancel_lock_wait(self):
-        """End a package-lock wait with a single SIGINT. apt_lock.py also restores its paused APT
-        timers on SIGHUP and SIGTERM, but only SIGKILL leaves them stopped, so never send that."""
+        """End a package-lock wait with a single SIGINT. apt_lock.py also starts its paused APT
+        timers again on SIGHUP and SIGTERM; SIGKILL and SIGQUIT (and a crash) leave them stopped
+        until the next boot, so never send those."""
         waiter = self._lock_waiter
         if waiter is None or waiter.process is None or waiter.process.poll() is not None:
             return False

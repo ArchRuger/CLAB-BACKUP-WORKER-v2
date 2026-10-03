@@ -174,12 +174,17 @@ def cmd_init(args):
     print('  python3 deploy/scaffold-lab.py snapshot %s %s' % (args.slug, states[0] if states else '<state>'))
 
 
-def rebind_or_say(args, lab, reference, work, reason):
+def rebind_or_say(args, lab, reference, work, reason, unsure=False):
     """A snapshot stopped after the lab was bound to `reference`: try to rebind it to `work`, then stop with
-    `reason` and the truth about where the lab saves now (a save still pending refuses the folder change)."""
+    `reason` and the truth about where the lab saves now (a save still pending refuses the folder change).
+    `unsure` is for a stop while the move to `reference` was itself under way: it may not have happened."""
     try:
         bind_to(args.manager, lab['id'], work)
     except SystemExit:
+        if unsure:
+            sys.exit('%s The lab MAY STILL SAVE TO %s. Check where it saves under Progress > Save location (finish or '
+                     'set aside any pending save under Progress > Recent saves first), then run: '
+                     'scaffold-lab.py init %s' % (reason, reference, args.slug))
         sys.exit('%s The lab STILL SAVES TO %s. Finish or set aside that save under Progress > Recent saves, '
                  'then run: scaffold-lab.py init %s' % (reason, reference, args.slug))
     sys.exit('%s The lab is rebound to %s.' % (reason, work))
@@ -194,7 +199,12 @@ def cmd_snapshot(args):
     assume_yes = bool(getattr(args, 'yes', False))
     if not assume_yes and not sys.stdin.isatty():
         die('an upload needs your review. Run this in a terminal, or pass --yes to state that you reviewed it.')
-    bind_to(args.manager, lab['id'], reference)          # register + connect the reference folder
+    try:
+        bind_to(args.manager, lab['id'], reference)      # register + connect the reference folder
+    except KeyboardInterrupt:
+        # Ctrl+C while the destination change is under way: the manager may already have pointed the lab at the
+        # reference folder, so the same handling as every later stop (a refused or failed bind still just stops).
+        rebind_or_say(args, lab, reference, work, 'scaffold-lab: stopped.', unsure=True)
     try:
         final = save_progress(args.manager, lab['id'])   # capture the running config into it
         status, where = final.get('status'), ''

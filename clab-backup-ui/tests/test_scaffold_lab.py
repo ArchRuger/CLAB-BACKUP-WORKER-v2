@@ -163,6 +163,44 @@ class ScaffoldLabTests(unittest.TestCase):
                 self.assertIn('init bgp-core', text)
                 self.assertFalse(any(path.endswith('/retry') for path in self.paths()))   # nothing was uploaded
 
+    def interrupted_bind(self, refuse_rebind):
+        # The destination change to the reference folder returns a job; Ctrl+C arrives while it is polled.
+        inner = scaffold.api
+        polls = []
+
+        def api(manager, path, method='GET', body=None):
+            if path.endswith('/git/destination') and body['prefix'].endswith('/reference/broken-01'):
+                self.calls.append((method, path, body))
+                return 200, {'binding': {}, 'job': {'id': 'bind1'}}
+            if path.endswith('/git/destination') and refuse_rebind:
+                self.calls.append((method, path, body))
+                return 409, {'detail': 'Finish pending Git saves, or choose Keep snapshot only, before changing this lab.'}
+            return inner(manager, path, method, body)
+
+        def poll(manager, job_id, timeout=300):
+            polls.append(job_id)
+            raise KeyboardInterrupt
+
+        patch.object(scaffold, 'api', api).start()
+        patch.object(scaffold, 'poll_git', poll).start()
+        with self.assertRaises(SystemExit) as stop:
+            scaffold.cmd_snapshot(args(slug='bgp-core', state='broken-01', yes=True))
+        self.assertEqual(polls, ['bind1'])
+        self.assertFalse(any(path.endswith('/git/save') for path in self.paths()))   # nothing was captured
+        return str(stop.exception)
+
+    def test_snapshot_stopped_with_ctrl_c_while_the_lab_is_pointed_at_the_reference_folder_rebinds(self):
+        text = self.interrupted_bind(refuse_rebind=False)
+        self.assertIn('stopped', text)
+        self.assertIn('rebound to bgp-core/work', text)
+        self.assertEqual(self.destinations(), ['bgp-core/reference/broken-01', 'bgp-core/work'])
+
+    def test_snapshot_stopped_with_ctrl_c_while_pointing_at_the_reference_says_where_the_lab_may_save(self):
+        text = self.interrupted_bind(refuse_rebind=True)
+        self.assertIn('stopped', text)
+        self.assertIn('MAY STILL SAVE TO bgp-core/reference/broken-01', text)
+        self.assertIn('init bgp-core', text)
+
     def test_snapshot_whose_dismiss_fails_reports_the_binding_and_rebinds_when_it_can(self):
         real = scaffold.api
 
