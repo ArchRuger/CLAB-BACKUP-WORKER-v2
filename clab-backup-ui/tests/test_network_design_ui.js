@@ -1448,8 +1448,8 @@ function applyFollowHarness(opts){
  opts=opts||{};
  const {els,el}=summaryEls();const timers=[],calls=[];let fail=opts.fail!==false;let jobStatus=opts.status||'applying';let refreshes=0;
  const c=ctx({$:el,setMarkup:(e,h)=>{if(e)e.innerHTML=h;},current:()=>({id:'lab-a',name:'A'}),
-  setTimeout:(fn,ms)=>{const n=timers.length;timers.push({fn:async()=>{timers[n]=null;return fn();},ms});return timers.length;},clearTimeout:id=>{if(id&&timers[id-1])timers[id-1]=null;},
-  api:async p=>{calls.push(p);if(fail)throw new Error('HTTP 500');return {json:async()=>({id:'j1',lab_id:'lab-a',status:jobStatus,targets:[]})};},
+  setTimeout:(fn,ms)=>{const n=timers.length;timers.push({fn:async()=>{timers[n]=null;return fn();},ms});return timers.length;},clearTimeout:id=>{if(!opts.keepTimers&&id&&timers[id-1])timers[id-1]=null;},
+  api:async p=>{calls.push(p);if(opts.hold&&/\/design\/apply\/jobs\//.test(p))await opts.hold();if(fail)throw new Error('HTTP 500');return {json:async()=>({id:'j1',lab_id:'lab-a',status:jobStatus,targets:[]})};},
   refresh:async()=>{refreshes++;}});
  c.state.design_jobs=[{id:'j1',lab_id:'lab-a',status:'applying',created:'2026-10-03T10:00:00Z'}];
  vm.runInContext("designApplyState.labId='lab-a';designApplyState.jobId='j1';designApplyState.step='progress';designApplyState.job={id:'j1',lab_id:'lab-a',status:'applying',targets:[]}",c);
@@ -1487,11 +1487,46 @@ test('L-35: after the bounded retries the dialog says following stopped and offe
  assert.doesNotMatch(h.el('design-apply-progress-body').innerHTML,/no longer being followed|data-design-apply-follow-retry/);
 });
 test('L-35: a closed dialog does not retry a failing poll',async()=>{
+ // The guard under test is the one in the catch: a request already in flight when the dialog closes
+ // and then fails must neither schedule another poll nor write an "attempt" line.
+ let rejectRequest;const pending=new Promise((_,rej)=>{rejectRequest=rej;});
+ const h=applyFollowHarness({fail:false,hold:()=>pending});
+ h.c.designApplyStartWatch('j1');
+ const first=h.timers[0];assert.ok(first,'the first poll is scheduled');
+ const running=first.fn();                              // the poll starts: its request is now pending
+ assert.equal(h.calls.length,1,'the request is in flight');
+ h.c.designApplyStopWatch();                            // the dialog closes while it is pending
+ const timersBefore=h.timers.length;
+ rejectRequest(new Error('HTTP 500'));
+ await running;
+ assert.equal(h.timers.length,timersBefore,'no new timer is scheduled by the failed in-flight poll');
+ assert.equal(h.last(),null);
+ assert.doesNotMatch(h.el('design-apply-progress-body').innerHTML,/attempt/,'and no attempt line is written for a closed dialog');
+ assert.equal(h.calls.length,1,'and nothing polls again');
+});
+test('L-35: closing the dialog before the first poll sends no request, even if the timer cannot be cancelled (the guard at the top of the poll)',async()=>{
+ const h=applyFollowHarness({keepTimers:true});
+ h.c.designApplyStartWatch('j1');
+ const t=h.timers[0];assert.ok(t,'the first poll is scheduled');
+ h.c.designApplyStopWatch();
+ await t.fn();                                          // the timer fires anyway
+ assert.equal(h.calls.length,0,'a closed dialog sends no poll');
+ assert.equal(h.last(),null,'and schedules nothing');
+});
+test('L-35: giving up also reloads the ownership list, so it is not left stale until a later successful poll',async()=>{
  const h=applyFollowHarness();
  h.c.designApplyStartWatch('j1');
- h.c.designApplyStopWatch();
- const t=h.timers[0];if(t)await t.fn();
- assert.equal(h.calls.length,0);
+ for(let i=0;i<6;i++)await h.last().fn();
+ assert.match(h.el('design-apply-progress-body').innerHTML,/no longer being followed/i);
+ assert.ok(h.calls.some(p=>/\/labs\/lab-a\/design\/ownership$/.test(p)),'the ownership list is requested when following gives up');
+});
+test('L-35: the give-up line does not claim the apply is still running (after a manager restart it is "interrupted"), and points at Check again and Last apply',async()=>{
+ const h=applyFollowHarness();
+ h.c.designApplyStartWatch('j1');
+ for(let i=0;i<6;i++)await h.last().fn();
+ const body=h.el('design-apply-progress-body').innerHTML;
+ assert.doesNotMatch(body,/keeps running|still running/i);
+ assert.match(body,/real state is on the manager/i);assert.match(body,/Check again/);assert.match(body,/Last apply line under Generated plan/);assert.doesNotMatch(body,/plan card/i);
 });
 
 test('L-36: a failed plan fetch for a succeeded plan is worded as a failure with Try again, never as "Generate a plan"',async()=>{
@@ -1506,10 +1541,20 @@ test('L-36: a failed plan fetch for a succeeded plan is worded as a failure with
  let body=el('design-plan-body').innerHTML;
  assert.doesNotMatch(body,/Generate a plan/);assert.match(body,/could not be loaded/i);assert.match(body,/HTTP 500/);
  assert.match(body,/data-design-plan-retry/);assert.match(body,/Try again/);
+ assert.match(body,/kept on the manager/i,'a failed fetch keeps its wording: the plan exists, the request failed');
  // A 200 answer without a plan (the manager could not read plan.json) is the same failure.
  fail=false;answer={plan:null};
  await c.designLoadPlan('lab-a','g');c.designRenderPlanCard(view);
  body=el('design-plan-body').innerHTML;assert.doesNotMatch(body,/Generate a plan/);assert.match(body,/data-design-plan-retry/);
+ // ...but an unreadable file is not promised to be recoverable: no "kept on the manager", Try again plus generating again.
+ assert.doesNotMatch(body,/kept on the manager/i);assert.match(body,/could not read/i);assert.match(body,/generate the plan again/i);
+ // An earlier plan opened through History > View: generating again would make a different plan, so only Try again is offered.
+ const two={intent:{schema:1,revision:'r'},problems:[],nodes:{},generations:[{id:'g0',status:'succeeded',finished:'2026-10-03T09:00:00Z',artifacts:{}},{id:'g',status:'succeeded',finished:'2026-10-03T10:00:00Z',artifacts:{}}]};
+ stateOf(c).view=two;stateOf(c).viewing='g0';
+ await c.designLoadPlan('lab-a','g0');c.designRenderPlanCard(two);
+ body=el('design-plan-body').innerHTML;assert.match(body,/could not read/i);assert.match(body,/data-design-plan-retry/);assert.doesNotMatch(body,/generate the plan again/i);
+ stateOf(c).viewing='';stateOf(c).view=view;
+ await c.designLoadPlan('lab-a','g');
  // Try again fetches the shown plan again and draws it.
  answer={plan:{devices:[{name:'r1'}],links:[]}};paths.length=0;
  await c.designPlanRetry();

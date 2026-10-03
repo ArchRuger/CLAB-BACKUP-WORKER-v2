@@ -940,17 +940,22 @@ function designPlanWanted(labId,generationId){
  const shown=designViewedGeneration(designState.view);
  return !!shown&&shown.id===generationId;
 }
-// A failed fetch, or an answer without a plan (the manager could not read plan.json), is kept as planError so the
-// card says so and offers Try again instead of the "Generate a plan" hint for a plan that exists.
+// A failed fetch, or an answer without a plan (the manager could not read plan.json), is kept as planError (the
+// whole sentence the card shows) so the card says so and offers Try again instead of the "Generate a plan" hint
+// for a plan that exists. Only a failed request says the plan is kept on the manager: for a file the manager
+// could not read, nothing is promised and generating the plan again is offered.
 async function designLoadPlan(labId,generationId){
  if(designPlanWanted(labId,generationId))designState.planLoading=true;
  try{
   const data=await(await api('/labs/'+encodeURIComponent(labId)+'/design/generations/'+encodeURIComponent(generationId))).json();
   if(designPlanWanted(labId,generationId)){
    designState.plan=data.plan||null;
-   designState.planError=data.plan?'':'The plan was generated, but its details could not be read.';
+   // Generating again makes a new plan from the current design, so it is offered only for the newest plan.
+   const shown=designViewedGeneration(designState.view),latest=designNewestGeneration(designState.view);
+   const isNewest=!!shown&&!!latest&&shown.id===latest.id;
+   designState.planError=data.plan?'':'The manager could not read the details of this plan. Try again'+(isNewest?', or generate the plan again if this persists.':'.');
   }
- }catch(error){if(designPlanWanted(labId,generationId)){designState.plan=null;designState.planError='The plan could not be loaded ('+(error&&error.message||'no answer')+').';}}
+ }catch(error){if(designPlanWanted(labId,generationId)){designState.plan=null;designState.planError='The plan could not be loaded ('+(error&&error.message||'no answer')+'). The plan itself is kept on the manager.';}}
  finally{if(designPlanWanted(labId,generationId))designState.planLoading=false;}
 }
 // Try again on the plan card: fetch the plan being shown once more.
@@ -963,7 +968,7 @@ async function designPlanRetry(){
  designRenderAll();
 }
 function designPlanFailureMarkup(message){
- return `<p class="form-error" role="alert">${esc(message)} The plan itself is kept on the manager.</p><p><button type="button" class="button secondary small" data-design-plan-retry>Try again</button></p>`;
+ return `<p class="form-error" role="alert">${esc(message)}</p><p><button type="button" class="button secondary small" data-design-plan-retry>Try again</button></p>`;
 }
 async function designLoad(labId){
  designClearSummary();
@@ -2014,7 +2019,8 @@ function designApplyStartWatch(jobId){
   }catch(error){
    // A failed poll (a lost connection, a restart, a 500) is retried a bounded number of times with the student
    // told so; after that following stops, the table says it is the last answer, and Check again polls afresh.
-   // The job itself keeps running on the manager either way.
+   // Whether the job is still running is not known here (after a manager restart it is "interrupted"): its real
+   // state is on the manager, which Check again and the Last apply line under Generated plan read.
    if(designApplyWatch!==jobId)return;
    failures++;
    const why=error&&error.message||'no answer';
@@ -2023,10 +2029,11 @@ function designApplyStartWatch(jobId){
     designApplyRenderProgress();designApplyWatchTimer=setTimeout(poll,2000);
    }else{
     designApplyStopWatch();
-    designApplyFollow={jobId,problem:'Progress is no longer being followed ('+why+'). The table below is the last answer received; the apply itself keeps running on the manager.',gaveUp:true};
+    designApplyFollow={jobId,problem:'Progress is no longer being followed ('+why+'). The table below is the last answer received; the apply\'s real state is on the manager. Use Check again, or close this and look at the Last apply line under Generated plan.',gaveUp:true};
     designApplyRenderProgress();
     try{if(typeof refresh==='function')await refresh();}catch{}
     designApplyRenderLast(designApplyState.labId);
+    designApplyLoadOwnership();
    }
   }
  };
