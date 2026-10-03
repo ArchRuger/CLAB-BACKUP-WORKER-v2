@@ -12,6 +12,14 @@ Per-request evidence: `docs/uiux-email-2026-10-03/MATRIX.md`; live record: `evid
   New files `test_design_retirement.py` and `test_design_review_jobs.py` are registered in `release-check.yml`.
 - After `set-release.py 1.30.59`: `verify-release.py` OK (source and documentation at 1.30.59); release-consistency tests OK; full Python 1767 OK (1 skipped); Node 427 pass; `node build.mjs --check` OK.
 
+- Integrated with `main` at `6ae7e24` (PR #66 — this branch at `b13f2e6` — and Worker B's installer TUI, PR #65) without
+  conflicts; B's `docs/installer-tui/PICKUP.md` release mention rewritten as history for the 1.30.59 documentation
+  check. On the merged tree: Python 2016 tests OK (2 skipped), Node 427 pass, `python3 -m unittest discover -s tests -p
+  'test_install_*.py'` (system Python) 307 OK (1 skipped), `verify-release.py` OK, link check 0 problems, editor
+  `--check` OK. B's CI proposals (`docs/installer-tui/HANDOFF.md`) are not applied here; they stay a separate change.
+- dev1 refreshed to 1.30.59 with the documented upgrade (`deploy/install.sh`, menu 1): `Manager 1.30.59: running;
+  HTTP and version checks passed.`
+
 ## Fixture browser (Playwright, `docs/redesign/tools/fixture_manager.py`, fresh data)
 
 - `docs/lab-builder/tools/uiux_email_checks.py` (tasks 1–3) pass; `post_save_checks.py` (task 5) 21/21;
