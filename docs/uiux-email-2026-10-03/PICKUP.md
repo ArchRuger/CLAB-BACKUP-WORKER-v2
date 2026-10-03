@@ -18,7 +18,24 @@
 - Disposable T7 labs (deployed directly with containerlab, outside the manager): `~/dev1-labs/t7repro`
   (ptx1, unmodified) and `~/dev1-labs/t7fix` (ptx2 with `CPTX_AUTO_CONFIG`, ptx3 also with `hostname: core-ptx`).
 
-## Ownership while agents run
+## Status (release 1.30.59)
+
+All 18 matrix rows are `done` with unit, fixture and live dev1 evidence ([MATRIX.md](MATRIX.md),
+[evidence/LIVE-ACCEPTANCE.md](evidence/LIVE-ACCEPTANCE.md)). Records: [T7-ROOT-CAUSE.md](T7-ROOT-CAUSE.md),
+[DESIGN-CONTRACT.md](DESIGN-CONTRACT.md); EVPN/retirement decisions in `docs/netlab-integration/DECISIONS.md` §10 and
+`docs/NETWORK-DESIGN.md`.
+
+- Live lab `UX-ACCEPT-01` is left running on dev1 (5 nodes, a saved IPv4 IS-IS+BGP design and plan; nothing applied).
+  The dev1 manager runs the branch build; helpers are the installed 1.30.58 ones until the 1.30.59 refresh below.
+- Open, by choice and recorded: Network design apply was not run live (reviews only); the 390 px page overflow
+  (≈428 px) predates this branch; the "newer than this workspace" note after deploy predates it.
+- Done: PR #67 CI green on `64ad1bb` (branch integrated with `main` `6ae7e24`, which already holds PR #66 = this
+  branch at `b13f2e6`, and B's PR #65); dev1 upgraded to 1.30.59 with `deploy/install.sh` (health check 55 PASS,
+  3 Git WARN because Git setup was skipped).
+- Next: merge PR #67 through the protected workflow when the maintainer approves; integrate B's CI proposals
+  (`docs/installer-tui/HANDOFF.md` §1) as a separate coordinated change; B's handoff doc proposals likewise.
+
+## Ownership during the campaign (historical)
 
 | Scope | Files |
 |---|---|

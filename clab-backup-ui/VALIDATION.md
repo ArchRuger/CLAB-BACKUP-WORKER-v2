@@ -1,3 +1,59 @@
+# Ui/Ux Changes email (UIUX-EMAIL-2026-10-03) — 1.30.59
+
+What was actually run, on dev1 (isolated development VM), 2026-10-03, branch `worker-a/uiux-email-2026-10-03`.
+Per-request evidence: `docs/uiux-email-2026-10-03/MATRIX.md`; live record: `evidence/LIVE-ACCEPTANCE.md`.
+
+## Static and unit
+
+- Baseline on `e7ffbc1` (1.30.58): Python 1721 OK (1 skipped), Node 389 pass, `verify-release.py` OK, `node build.mjs --check` OK.
+- On the final code (before the marker move): Python `unittest discover` → 1767 tests OK (1 skipped); `node --test
+  tests/*.js` → 427 pass, 0 fail; `node --check` on every `app/static/*.js`; `git diff --check` clean; `node build.mjs
+  --check` (132 files) OK; `bash -n deploy/*.sh` clean; `docs/maintenance-audit/tools/check_links.py` 0 problems.
+  New files `test_design_retirement.py` and `test_design_review_jobs.py` are registered in `release-check.yml`.
+- After `set-release.py 1.30.59`: `verify-release.py` OK (source and documentation at 1.30.59); release-consistency tests OK; full Python 1767 OK (1 skipped); Node 427 pass; `node build.mjs --check` OK.
+
+- Integrated with `main` at `6ae7e24` (PR #66 — this branch at `b13f2e6` — and Worker B's installer TUI, PR #65) without
+  conflicts; B's `docs/installer-tui/PICKUP.md` release mention rewritten as history for the 1.30.59 documentation
+  check. On the merged tree: Python 2016 tests OK (2 skipped), Node 427 pass, `python3 -m unittest discover -s tests -p
+  'test_install_*.py'` (system Python) 307 OK (1 skipped), `verify-release.py` OK, link check 0 problems, editor
+  `--check` OK. B's CI proposals (`docs/installer-tui/HANDOFF.md`) are not applied here; they stay a separate change.
+- dev1 refreshed to 1.30.59 with the documented upgrade (`deploy/install.sh`, menu 1) from the merged checkout
+  `64ad1bb`: `Manager 1.30.59: running; HTTP and version checks passed.`; manager and capture session images
+  1.30.59; `check-install.sh` 55 PASS, 3 WARN (Git helper, folder coverage, repository registry: Git setup was
+  deliberately skipped on dev1); the acceptance lab kept running through the upgrade.
+- CI: `release-check` passed on PR #67 for `64ad1bb` (push and pull_request runs, ≈7.5 min each).
+
+## Fixture browser (Playwright, `docs/redesign/tools/fixture_manager.py`, fresh data)
+
+- `docs/lab-builder/tools/uiux_email_checks.py` (tasks 1–3) pass; `post_save_checks.py` (task 5) 21/21;
+  `docs/netlab-integration/tools/check_design_ui.py` 29/29; `docs/ui-review-001/tools/check_ui006.py` pass.
+  Review-job states and an old design with retired modules were mocked with `page.route` where the fixture has no job.
+
+## Live (dev1: manager built from the branch, containerlab 0.79.0, real NOS images)
+
+- Manager installed with `deploy/install.sh` (1.30.58), then rebuilt from the branch at `34d0028`, `b13f2e6` and
+  `025f8a2` (no helper change, so the installed helpers stayed valid). Images pulled from Docker Hub as requested;
+  `N24l/ceos:4.35.0F` does not resolve (invalid reference), `n24l/ceos:4.35.0F` does.
+- Task 7, containerlab directly: `kind`+`image` only → `admin@HOSTNAME>` / `host-name HOSTNAME;`; with
+  `CPTX_AUTO_CONFIG` → `host-name ptx2;`; with `hostname: core-ptx` → `host-name core-ptx;`.
+- Student sequence on lab `UX-ACCEPT-01` (cJunosEvolved, vJunos-switch, XRv9k, cEOS, Linux): build, templates, Center
+  label, image notice, Save review, add without starting, close, My labs, alignment measured (840/1100/1260 px), Start
+  review, deploy (all NOS up in ≈13 min, 29 of 33 GB), first CLI `admin@ptx1>` / `host-name ptx1;` and unchanged
+  after Restart device, Center persisted in the map and annotations, Technical view, real capture with the Wireshark
+  viewer. All steps PASS.
+- Task 8 under Advanced → Experimental: placement, old links, retired modules (400/409 from the API, read-only rows),
+  route reflectors, error summary, real plan, reviews of ptx1+xr1 with real per-device stages, close/reopen attach,
+  paused ceos1 reported unreachable after 39 s, retry; **nothing applied**; running-config hashes of ptx1 and xr1
+  unchanged across reviews. Three defects found (IPv4-only save, reflector focus, network Try again) were fixed and
+  rechecked live on `025f8a2`.
+- Independent reviews: Opus risk review (retirement, apply boundary, review job, T7) — no high findings; five fixed.
+  Opus UI review — seven findings, fixed.
+
+## Not covered
+
+- No desktop client; no production device; Network design apply
+  was deliberately not run (reviews only).
+
 # Netlab UI/UX campaign, part 4: lab-bound design dialogs — 1.30.58
 
 What was actually run for this release. The code is the campaign's unpublished 1.30.51 of 2026-09-28 (the QA-021

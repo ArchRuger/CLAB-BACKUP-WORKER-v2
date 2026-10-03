@@ -866,6 +866,8 @@ footer {
 .banner.danger { border-left-color: var(--danger); background: var(--danger-soft); }
 .banner.ok { border-left-color: var(--ok); background: var(--ok-soft); }
 .banner-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+/* a banner whose action buttons are all hidden (the starting notice) drops the empty box, so its close button stays on the row (wide grid) and no empty gap is left (narrow column) */
+#lab-banner .banner-actions:not(:has(> :not([hidden]))) { display: none; }
 /* the generic notice close/collapse control (setBanner, app.js): always the last thing in the banner,
    never inside .banner-actions so it survives regardless of which action buttons that spec shows */
 .notice-close { flex-shrink: 0; margin-left: 4px; min-width: 28px; min-height: 28px; font-size: 18px; }

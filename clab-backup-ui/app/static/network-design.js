@@ -77,6 +77,9 @@ function designIntentFromForm(values,base){
   const current=addressing[name]&&typeof addressing[name]==='object'?addressing[name]:{};
   const given=pools[name]||{};
   const next={...current,ipv4:given.ipv4||'',ipv6:given.ipv6||''};
+  // A blank address for a family that is switched off is left out: the server's "remove the prefix or enable the
+  // family" advice must be followable. A blank one for an enabled family is sent, so the server names it.
+  for(const fam of ['ipv4','ipv6'])if(!intent.families[fam]&&!next[fam])delete next[fam];
   if(withPrefix){
    if(given.prefix===undefined)delete next.prefix;else next.prefix=designNumberOrRaw(given.prefix);
   }
@@ -308,7 +311,9 @@ function designProblemsFromError(error){
  }
  const m=/^Fix the design first:\s*([\s\S]+)$/.exec(message);
  if(m)return {kind:'problems',problems:m[1].split(/;\s+/).filter(Boolean).map(part=>{const i=part.indexOf(': ');return i>0?{path:part.slice(0,i),message:part.slice(i+2)}:{path:'',message:part};})};
- return {kind:'error',problems:[{path:'',message:message||'Something went wrong.'}]};
+ // fetch() rejects with a bare TypeError ("Failed to fetch", "NetworkError …", "Load failed") when the manager is unreachable.
+ const network=(error&&error.name==='TypeError')||/^(Failed to fetch|NetworkError|Load failed)/.test(message);
+ return {kind:'error',problems:[{path:'',message:network?'The manager could not be reached (network error). Nothing was saved or started.':message||'Something went wrong.'}]};
 }
 function designSummaryTitle(action,kind,count){
  const label=DESIGN_ACTION_LABELS[action]||DESIGN_ACTION_LABELS.save;
@@ -325,6 +330,8 @@ function designSummaryItems(summary){
  const links=summary.links!==false&&summary.kind==='problems';
  return summary.problems.map((p,i)=>({id:'design-error-item-'+i,path:p.path,message:p.message,fields:links?designFieldsFor(p.path,p.message):[]}));
 }
+// A failure that is not a validation problem (network, server) can be retried from the summary itself.
+const DESIGN_RETRY_ACTIONS=['save','generate','check'];
 function designSummaryMarkup(summary){
  const items=designSummaryItems(summary),title=designSummaryTitle(summary.action,summary.kind,items.length);
  const li=item=>{
@@ -333,7 +340,7 @@ function designSummaryMarkup(summary){
   const go=item.fields.map((f,i)=>`<button type="button" class="text-button design-error-go" data-design-goto="${esc(f.id)}">${esc(i?'or go to the '+f.label:f.advanced?'Open '+f.label:'Go to the field')}</button>`).join(' ');
   return `<li id="${esc(item.id)}">${head}${esc(item.message)} ${go}</li>`;
  };
- return `<h3 id="design-error-title">${esc(title)}</h3>${summary.lead?`<p class="design-error-lead">${esc(summary.lead)}</p>`:''}<ul>${items.map(li).join('')}</ul><p class="form-help">${esc(designSummaryHint(summary.kind,summary.links!==false))}</p>`;
+ return `<h3 id="design-error-title">${esc(title)}</h3>${summary.lead?`<p class="design-error-lead">${esc(summary.lead)}</p>`:''}<ul>${items.map(li).join('')}</ul><p class="form-help">${esc(designSummaryHint(summary.kind,summary.links!==false))}</p>${summary.kind!=='problems'&&DESIGN_RETRY_ACTIONS.includes(summary.action)?`<button type="button" class="button secondary" data-design-retry="${esc(summary.action)}">Try again</button>`:''}`;
 }
 // The modules a student may choose, then one read-only row per retired module the design still carries (ticked,
 // disabled, the backend's reason, a Remove button). A retired module is never offered as a new choice.
@@ -1023,7 +1030,9 @@ function designRenderDeviceOptions(view,values){
  if($('design-bgp-rr')){
   const names=Object.keys(nodes).filter(n=>nodes[n]&&nodes[n].included&&(roles[n]||'router')==='router').sort();
   const chosen=new Set(Array.isArray(values.bgpRr)?values.bgpRr:values.bgpRr?[values.bgpRr]:[]);
-  setMarkup($('design-bgp-rr'),designReflectorMarkup(names,chosen));
+  // Re-rendering the grid must not drop a keyboard user's place: refocus the checkbox they were on.
+  const focused=typeof document!=='undefined'&&document.activeElement&&document.activeElement.name==='design-bgp-rr'?document.activeElement.value:null;
+  if(setMarkup($('design-bgp-rr'),designReflectorMarkup(names,chosen))&&focused!==null){const again=[...$('design-bgp-rr').querySelectorAll('input[name="design-bgp-rr"]')].find(i=>i.value===focused);if(again&&typeof again.focus==='function')again.focus();}
   designSyncChecked($('design-bgp-rr'),'input[name="design-bgp-rr"]',chosen);
  }
 }
@@ -1440,7 +1449,6 @@ function designClearSummary(){
  designClearInvalid();designState.summary=null;
  const box=$('design-error-summary');
  if(box){setMarkup(box,'');box.hidden=true;}
- if($('design-announce'))$('design-announce').textContent='';
 }
 function designShowSummary(action,parsed,options){
  options=options||{};
@@ -1463,9 +1471,6 @@ function designShowSummary(action,parsed,options){
   designState.invalid.push({el,prior});
   el.setAttribute('aria-invalid','true');el.setAttribute('aria-describedby',(prior?prior+' ':'')+ids.join(' '));
  }
- const first=summary.problems[0];
- const announce=$('design-announce');
- if(announce){announce.textContent='';announce.textContent=designSummaryTitle(action,summary.kind,summary.problems.length)+(first&&first.message?'. '+first.message:'')+'.';}
  if(box){
   if(typeof box.focus==='function')box.focus();
   if(typeof box.scrollIntoView==='function')box.scrollIntoView({block:'nearest'});
@@ -1703,7 +1708,7 @@ function designApplyOpen(){
  designApplyRenderChoose();designApplyShowStep('choose');
  $('design-apply-dialog').showModal();
  // A review of this lab that is still running is picked up again, never started a second time.
- if(designReviewKnown.labId===lab.id&&designReviewKnown.status==='running')designReviewReattach(lab.id,designReviewKnown.jobId);
+ if(designReviewIsKnown(lab.id))designReviewReattach(lab.id,designReviewKnown.jobId);
 }
 function designApplyChooseSelection(){
  if(typeof document==='undefined'||typeof document.querySelectorAll!=='function')return [...designApplyState.selected];
@@ -1717,12 +1722,12 @@ const DESIGN_REVIEW_POLL_MS=1500,DESIGN_REVIEW_QUIET_MS=4000,DESIGN_REVIEW_RETRI
 function designReviewStopWatch(){clearTimeout(designReviewTimer);designReviewWatch=null;}
 function designReviewMatches(labId,jobId){return designApplyState.labId===labId&&designApplyState.reviewJobId===jobId;}
 function designApplyReviewRunning(){return !!designApplyState.starting||!!(designApplyState.reviewJob&&designApplyState.reviewJob.status==='running');}
-// The Review button stays disabled while a job runs and says how many devices; the dialog is busy for assistive technology.
+// The Review button stays disabled while a job runs and says how many devices; the button itself is aria-busy.
 function designApplyUpdateReviewButton(){
- const button=$('design-apply-review-run'),dialog=$('design-apply-dialog'),running=designApplyReviewRunning();
+ const button=$('design-apply-review-run'),running=designApplyReviewRunning();
  const count=designApplyState.reviewJob?((designApplyState.reviewJob.targets||[]).length):designApplyChooseSelection().length;
  if(button){button.disabled=running;button.textContent=running?'Reviewing '+count+(count===1?' device…':' devices…'):'Review';}
- if(dialog&&typeof dialog.setAttribute==='function'){if(running)dialog.setAttribute('aria-busy','true');else if(typeof dialog.removeAttribute==='function')dialog.removeAttribute('aria-busy');}
+ if(button&&typeof button.setAttribute==='function'){if(running)button.setAttribute('aria-busy','true');else if(typeof button.removeAttribute==='function')button.removeAttribute('aria-busy');}   // on the button only: aria-busy on the dialog would hold back its polite live log
 }
 function designReviewRender(){
  const job=designApplyState.reviewJob;
@@ -1733,14 +1738,32 @@ function designReviewRender(){
  if($('design-review-close-note'))$('design-review-close-note').hidden=settled||!!designApplyState.reviewGone;
 }
 function designReviewSay(text){if(text&&$('design-review-live')){$('design-review-live').textContent='';$('design-review-live').textContent=text;}}
+// A review is kept known while it runs and, once done, while its token is valid (600 s from the job's end, the contract's
+// expires_in): the plan card then says "Review finished" with Show. After that it is forgotten and reopening starts fresh.
+const DESIGN_REVIEW_TOKEN_MS=600000;
+let designReviewExpiryTimer=null;
+function designReviewForget(){designReviewKnown={labId:'',jobId:'',status:''};clearTimeout(designReviewExpiryTimer);designReviewExpiryTimer=null;}
+function designReviewDoneValid(){return designReviewKnown.status==='done'&&Number(designReviewKnown.until||0)>Date.now();}
+function designReviewIsKnown(labId){return designReviewKnown.labId===labId&&(designReviewKnown.status==='running'||designReviewDoneValid());}
 function designReviewRenderRunning(labId){
  const el=$('design-review-running');if(!el)return;
- const running=designReviewKnown.labId===labId&&designReviewKnown.status==='running';
- el.hidden=!running;
- if(running)setMarkup(el,'Review running… <button type="button" class="button secondary small" data-design-review-show="'+esc(designReviewKnown.jobId)+'">Show</button>');
+ if(designReviewKnown.status==='done'&&!designReviewDoneValid())designReviewForget();
+ const running=designReviewKnown.labId===labId&&designReviewKnown.status==='running',finished=designReviewKnown.labId===labId&&designReviewDoneValid();
+ el.hidden=!(running||finished);
+ if(running||finished)setMarkup(el,(running?'Review running… ':'Review finished — ')+'<button type="button" class="button secondary small" data-design-review-show="'+esc(designReviewKnown.jobId)+'">Show</button>');
 }
+// Remembers a running or done job (done with the moment its token expires); a failed or interrupted one has no token and is forgotten.
 function designReviewKnow(job){
- designReviewKnown={labId:job.lab_id||designApplyState.labId,jobId:job.id,status:job.status};
+ clearTimeout(designReviewExpiryTimer);designReviewExpiryTimer=null;
+ if(job.status!=='running'&&job.status!=='done'){designReviewForget();}
+ else{
+  const ended=Date.parse(job.finished||''),until=job.status==='done'?(Number.isFinite(ended)?ended:Date.now())+((job.review&&Number(job.review.expires_in))||600)*1000:0;
+  designReviewKnown={labId:job.lab_id||designApplyState.labId,jobId:job.id,status:job.status,until};
+  if(job.status==='done'){
+   const ms=Math.max(0,until-Date.now())+50;
+   designReviewExpiryTimer=setTimeout(()=>{if(designReviewKnown.status==='done'&&!designReviewDoneValid()){designReviewForget();const l=current();if(l)designReviewRenderRunning(l.id);}},ms);
+  }
+ }
  const lab=current();if(lab)designReviewRenderRunning(lab.id);
 }
 function designReviewAttach(job){
@@ -1782,7 +1805,7 @@ function designReviewStartWatch(labId,jobId,quiet,delay){
    if(designReviewWatch!==jobId)return;
    failures=0;
    if(quiet){
-    if(designReviewKnown.jobId===jobId){designReviewKnown.status=job.status;const lab=current();if(lab)designReviewRenderRunning(lab.id);}
+    if(designReviewKnown.jobId===jobId)designReviewKnow(job);
     if(job.status==='running')designReviewTimer=setTimeout(poll,DESIGN_REVIEW_QUIET_MS);else designReviewStopWatch();
     return;
    }
@@ -1794,7 +1817,7 @@ function designReviewStartWatch(labId,jobId,quiet,delay){
    if(designReviewWatch!==jobId)return;
    if(error&&error.status===404){
     designReviewStopWatch();
-    if(designReviewKnown.jobId===jobId)designReviewKnown={labId:'',jobId:'',status:''};
+    if(designReviewKnown.jobId===jobId)designReviewForget();
     const lab=current();if(lab)designReviewRenderRunning(lab.id);
     if(!quiet&&designReviewMatches(labId,jobId)){
      designApplyState.reviewGone=true;designApplyState.starting=false;designApplyState.reviewJob=null;designApplyUpdateReviewButton();
@@ -1823,7 +1846,7 @@ async function designReviewReattach(labId,jobId){
   designReviewAttach(job);
  }catch(error){
   if(designApplyState.labId!==labId)return;
-  if(error&&error.status===404){designReviewKnown={labId:'',jobId:'',status:''};const lab=current();if(lab)designReviewRenderRunning(lab.id);}
+  if(error&&error.status===404){designReviewForget();const lab=current();if(lab)designReviewRenderRunning(lab.id);}
   if($('design-apply-choose-error'))$('design-apply-choose-error').textContent=error&&error.status===404?DESIGN_REVIEW_UNAVAILABLE:(error&&error.message)||'';
  }
 }
@@ -1833,12 +1856,15 @@ async function designReviewDiscover(labId){
   const list=await(await api('/labs/'+encodeURIComponent(labId)+'/design/review-jobs')).json();
   const jobs=Array.isArray(list)?list:(list&&Array.isArray(list.jobs)?list.jobs:[]);
   if(designState.labId!==labId)return;
-  const running=jobs.find(j=>j&&j.status==='running');
+  // The list is newest first and holds running jobs and jobs that finished less than 600 s ago (without review or token): a
+  // running one wins, else the newest done one, whose token is still valid by that rule; GET fetches its review on Show.
+  const running=jobs.find(j=>j&&j.status==='running'),done=jobs.find(j=>j&&j.status==='done');
   if(running){
-   designReviewKnown={labId,jobId:running.id,status:'running'};designReviewRenderRunning(labId);
+   designReviewKnow({...running,lab_id:labId});
    const dialog=$('design-apply-dialog');
    if(!(dialog&&dialog.open)&&designReviewWatch!==running.id)designReviewStartWatch(labId,running.id,true);
-  }else if(designReviewKnown.labId===labId&&designReviewKnown.status==='running'){designReviewKnown={labId:'',jobId:'',status:''};designReviewRenderRunning(labId);}
+  }else if(done&&!(designReviewKnown.labId===labId&&designReviewKnown.jobId!==done.id&&designReviewKnown.status==='running')){designReviewKnow({...done,lab_id:labId});}
+  else if(designReviewKnown.labId===labId&&designReviewKnown.status==='running'){designReviewForget();designReviewRenderRunning(labId);}
  }catch{/* the plan card simply shows no running review */}
 }
 // Starts a review of `targets` (and re-reviews after a take-over change). errorId names the element that says why it did not start.
@@ -1927,6 +1953,7 @@ async function designApplySubmit(){
  try{
   const job=await json('/labs/'+encodeURIComponent(designApplyState.labId)+'/design/apply','POST',body);
   designApplyState.job=job;designApplyState.jobId=job.id;
+  designReviewForget();{const l=current();if(l)designReviewRenderRunning(l.id);}   // the token is single-use: the plan card no longer offers this review
   designApplyRenderProgress();designApplyShowStep('progress');
   designApplyStartWatch(job.id);
   if(typeof refresh==='function')await refresh();
@@ -1992,7 +2019,7 @@ function initDesignApply(){
   if(b)designApplyShowJob(b.dataset.designApplyShow);
  });
  if($('design-apply-dialog'))$('design-apply-dialog').addEventListener('close',designReviewDialogClosed);
- if($('design-review-again'))$('design-review-again').onclick=()=>{designApplyState.reviewJob=null;designApplyState.reviewJobId='';designApplyState.reviewGone=false;if($('design-review-error'))$('design-review-error').textContent='';designApplyShowStep('choose');};
+ if($('design-review-again'))$('design-review-again').onclick=()=>{designApplyState.reviewJob=null;designApplyState.reviewJobId='';designApplyState.reviewGone=false;if($('design-review-error'))$('design-review-error').textContent='';designApplyShowStep('choose');designFocus('design-apply-review-run');};
  if($('design-review-running'))$('design-review-running').addEventListener('click',e=>{if(e.target&&e.target.closest&&e.target.closest('[data-design-review-show]'))designApplyOpen();});
  if($('design-apply-dialog'))for(const b of $('design-apply-dialog').querySelectorAll('[data-design-apply-close]'))b.onclick=()=>designApplyClose();
  if($('design-advanced-details'))$('design-advanced-details').addEventListener('toggle',()=>{if($('design-advanced-details').open)designApplyLoadOwnership();});
@@ -2088,7 +2115,7 @@ function initNetworkDesign(){
  if($('design-files-body'))$('design-files-body').addEventListener('click',e=>{
   const b=e.target.closest('[data-design-view-file]');if(b)designViewFile(b.dataset.designViewFile,Number(b.dataset.designViewIndex));
  });
- if($('design-error-summary'))$('design-error-summary').addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-design-goto]');if(b)designGotoField(b.dataset.designGoto);});
+ if($('design-error-summary'))$('design-error-summary').addEventListener('click',e=>{const r=e.target&&e.target.closest&&e.target.closest('[data-design-retry]');if(r){const run={save:()=>designSave(),generate:()=>designGenerate(),check:()=>designValidate()}[r.dataset.designRetry];if(run)run();return;}const b=e.target&&e.target.closest&&e.target.closest('[data-design-goto]');if(b)designGotoField(b.dataset.designGoto);});
  if($('experimental-design'))$('experimental-design').addEventListener('toggle',()=>{if(typeof renderNetworkDesign==='function')renderNetworkDesign();});
  initDesignApply();
  initDesignExportGit();

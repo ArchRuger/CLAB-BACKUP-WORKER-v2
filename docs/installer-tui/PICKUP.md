@@ -31,7 +31,7 @@ recovery), result and help screens; terminal handoff for sudo, the first-setup l
 
 ## dev2 state left behind
 
-- Manager installed from this checkout (1.30.58 source) with the capture stack; clab-discovery has a
+- Manager installed from this checkout (source as of 1.30.58) with the capture stack; clab-discovery has a
   dev2-only password (kept outside the repository). Git setup not completed (no GitHub account here).
 - Sentinel lab `dev2-sentinel` (one alpine node) still deployed for update checks:
   `sudo containerlab destroy -t ~/scratch/sentinel/sentinel.clab.yml` removes it.
