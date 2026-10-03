@@ -1,0 +1,52 @@
+# Live acceptance on dev1 (UX-ACCEPT-01)
+
+Run 2026-10-03 against the installed manager (release 1.30.58 markers, branch code 34d0028) at
+http://127.0.0.1:8081, real data of dev1, Chromium (Playwright), viewport 1600x1000 unless stated, persistent profile.
+First-use VM trust: the connection dialog showed the setup-recorded key `SHA256:QcCZy8tG8+tp65oblOjkjPzCGrCbM5w0QHhsvuPzdMw`;
+`ssh-keyscan` of the VM's ed25519 key gave the same value, so "Save and test connection" was confirmed.
+Lab: UX-ACCEPT-01, id 22af301586f848d59bdaeb046b9c19b5 (ptx1, sw1, xr1, ceos1, host1; 6 links as in the email,
+generated interface names identical to the email's). Credentials are not recorded here. Scripts: `../tools/live_lib.py`,
+`../tools/nos_probe.py` (the step scripts were scratch). Screenshots: `live-NN-*.png` in this folder.
+
+## Results
+
+| Step | Check | Result | Facts / evidence |
+|---|---|---|---|
+| 1 | Builder: five nodes, six links | PASS | Links generated exactly: ptx1:et-0/0/0-xr1:Gi0/0/0/0, host1:eth1-sw1:ge-0/0/0, sw1:ge-0/0/1-ptx1:et-0/0/1, sw1:ge-0/0/2-xr1:Gi0/0/0/1, ceos1:eth1-xr1:Gi0/0/0/2, ceos1:eth2-ptx1:et-0/0/2. live-01, live-03 |
+| 1 T1 | Image/Version fields and YAML | PASS | ptx1 n24l/cjunosevolved + 26.2R1.7-EVO; sw1 n24l/vjunos-switch + 23.2R1.14; xr1 n24l/cisco_xrv9k + 24.3.1; ceos1 n24l/ceos + 4.35.0F; host1 ghcr.io/srl-labs/network-multitool + latest. Each `image:` line once; `CPTX_AUTO_CONFIG: "1"` once, under ptx1 only (one `env:`); `:latest` only on host1's explicit image. live-04 |
+| 1 T3 | Label Position Center on ptx1 | PASS | Option list Bottom/Top/Left/Right/Center/...; stored as labelPosition center; label centre equals icon centre (dx 0, dy 0), background rgba(0,0,0,0.94), pointer-events none. Screenshots at default, zoomed in, zoomed out: live-06, live-07, live-08. ptx1 drags (moved -120/-40 px) and a click on the label selects it (live-09). Dragging does not select the node in this editor, for any node (sw1 behaves the same); not a defect of Center |
+| 1 T2 | Single image notice | PASS | Info "Images checked: all 5 available on the VM or pullable from their registry." (role=status). Keyboard dismiss (focus Dismiss, Enter) hides it, focus moves to #builder-save (visible). ceos1 version 4.35.0F-nope gives red "Error: n24l/ceos:4.35.0F-nope is not on the VM and no registry offers it ..." (role=alert, colour rgb(143,29,23), names only that reference). Reverting gives the info line again (fresh page: info -> error -> info). One `#builder-images` element at all times. live-05, -10, -11, -13. Note: if the info line was dismissed earlier in the same page, reverting does not show it again (by design: a dismissed answer is not resurrected); the error simply disappears |
+| 2 T4a/T4b | Save review, all images present | PASS | No visible Images section (only a hidden `Images needing attention (0)` details element), no "Command run on the VM" block, YAML shown, destination /srv/containerlab-node-manager/projects/UX-ACCEPT-01/UX-ACCEPT-01.clab.yml shown. live-14 |
+| 2 T4a | Review with bad tag | PASS | Warning "One image cannot be pulled on this VM: n24l/ceos:4.35.0F-nope..." plus "Images needing attention (1)" row naming ceos1. Cancelled (Escape), reverted. live-12 |
+| 3 T5a | Add to My labs without starting | PASS | Result first offers "Add to My labs without starting" + "Deploy now"; after adding exactly "Deploy now" / "Go to My labs" and "UX-ACCEPT-01 is in My labs. It is not running". `containerlab inspect --all`: "no containers found". live-15, live-16 |
+| 3 T5b | Close with x | PASS | 0 `dialog[open]`, no non-open dialog displayed, elementFromPoint at canvas centre is inside `.react-flow`, focus on #builder-save (visible), node still drags. live-17 |
+| 3 T5b | Re-save, Go to My labs, Back/Forward | PASS | Saving again after the lab was added is the "Save topology changes" path (revise, recovery copy kept) and ends in the same two buttons. Go to My labs opened the lab (`#lab=<id>&view=topology`), lab listed once; Back/Forward: still one lab. live-19, live-20. Observation: the button opens the lab's page, not the My labs list |
+| 4 T6 | Action alignment | PASS | #git-save-progress.left = #banner-start.left = 840 / 1100 / 1260 px at 1280 / 1600 / 1920 widths (equal to 0 px). live-21-align-1280/1600/1920 |
+| 4 T4c | Start review | PASS | No Images section (hidden empty element only); real argv shown: `"/usr/bin/containerlab" "deploy" "-t" ".../UX-ACCEPT-01.clab.yml" "--name" "UX-ACCEPT-01"`. live-22 |
+| 4 | Deploy and readiness | PASS | Deployed 16:13:10; ceos1 SSH about 40 s, xr1 and sw1 docker-healthy and SSH-up about 11 min, ptx1 (cJunosEvolved) login ready about 12-13 min. All 5 containers ran; memory peaked at 29 of 33 GB used (3-4 GB available), no NOS failed. live-23 |
+| 5 T7 | First CLI, ptx1 | PASS | Manager Open CLI terminal, xterm text: `admin@ptx1>`; typed `show configuration system host-name` -> `host-name ptx1;`. SSH read-back (paramiko) identical. live-24, live-25 |
+| 5 T7 | Other prompts | PASS | sw1 `admin@sw1>`, xr1 `RP/0/RP0/CPU0:xr1#`, ceos1 `ceos1>` (live-26-cli-*) |
+| 5 T7 | Restart device (ptx1) | PASS | Context menu on the map, Restart device..., review "Restart ptx1?" (containerlab restart --node, 1 device affected), confirmed; job restart-node succeeded 16:28:16-16:28:39 "3 links restored"; container StartedAt 16:28:36. After boot SSH `show configuration system host-name` -> `host-name ptx1;`. live-27..29 |
+| 5 | Generated YAML on the VM | PASS | /srv/containerlab-node-manager/projects/UX-ACCEPT-01/UX-ACCEPT-01.clab.yml has exactly one `CPTX_AUTO_CONFIG: "1"`, under ptx1 |
+| 6 T3 | Persistence | PASS | Manager map: ptx1's label group has class `device-label-center`, label centre y 332.8 vs icon centre 333.3 (live-30). Edit map (map editor) right-click ptx1 > Device look: Label Position = Center (live-32). Annotations file on the VM: labelPosition "center" for ptx1, none for the others |
+| 7 T9 | Devices view toggle | PASS | Standard: #device-list visible, #inventory-view hidden; Technical: reverse; three round trips, exactly one visible each time, button text and aria-pressed follow. Tab walks: 18 stops (standard) and 36 stops (technical), none hidden or zero-size, none in the other presentation. live-33, live-34 |
+| 7 T9 | Search, logins, backup, details | PASS | "ceos" leaves one technical row, "sw1" leaves one standard card (live-35); Test logins: all five Login OK (live-36); Back up configuration on ceos1 succeeded (Last backup populated, listed under Tools > Backups; live-37, live-38); Details opens "ceos1 is accepting SSH logins" (live-39); inclusion checkboxes [on,on,on,on,off] before and after every toggle. Observation: starting a backup from the Devices tab switches the page to the Tools tab |
+| 8 T10 | Capture traffic from ptx1 | PASS | Opened from the map menu (the standard device cards have no Capture action; the technical table has). The chooser (inside "Advanced: capture somewhere else") has no Search field or label, no gap (live-40, live-41). Scope "Everything on the VM" lists 9 targets (live-42); Refresh interfaces works; interface eth4 ticked, Start capture, "Open Wireshark" opens the Wireshark viewer (live-43, live-45 reopened from "Your capture sessions"); End session (after a confirm) removed all sessions, 0 capture containers left (live-46). Observations: Start capture does not open the viewer itself (an Open Wireshark button appears); the disclosure heading reads "Choose a device" after the scope is changed and the disclosure collapses when the scope is switched back to "This lab" |
+| 9 8f | Advanced > Experimental | PASS | Experimental section with badge "Under construction / Under review", Network design inside as a collapsed disclosure; tab bar: Topology, Devices, Progress, Tools, Advanced (no Design). live-47 |
+| 9 8f | Old link | PASS with remark | `#lab=<id>&view=design` becomes `#lab=<id>&view=advanced`, scrolled to the Experimental section, badges visible. The disclosure stays collapsed, so the in-feature warning (#design-experimental-banner) is visible only after it is opened (live-48, live-49) |
+| 9 8f | Design form, protocols | PASS | Form loads (address families, pools, VLANs, links, static routes); text of the opened form contains no EIGRP, RIP, VXLAN or EVPN (BGP, OSPF, IS-IS, LDP, MPLS present). Design review/apply not run. live-50 |
+
+## Defects and observations
+
+No product defect that blocks an item. Items worth a decision:
+
+1. Old design link lands on a collapsed Network design disclosure (see 9 above): only the section badges show; the feature's own warning banner needs one click. Not a failure of "placement".
+2. "Topology files on the VM: newer than this workspace - use Lab actions > Sync topology from VM" (Advanced, `#vm-files-status`) shows for UX-ACCEPT-01 after the deploy although the manager record (16:12:16) is newer than the saved files (16:12:15). Possible false positive caused by the files containerlab writes into the lab folder at deploy (not isolated; live-51). Sync was not run.
+3. API readiness: `/api/state` reported `readiness: Ready` for ptx1, sw1, xr1 about 30 s after the deploy, while their SSH came up 10-13 minutes later. Not verified what the page showed then (screenshots were taken later, when it was true); worth a look in the next run (Restart device and a redeploy).
+4. Minor: Go to My labs opens the lab page; Start backup jumps to Tools; capture disclosure heading and collapse behaviour (see steps 3, 7, 8). The image notice moves the editor down by its own height when shown.
+5. Correction of the run log: one automated check of step 2 first reported FAIL because it matched a hidden `Images needing attention (0)` element; the DOM facts show it is not rendered (display none, inside `[hidden]`), so the step is PASS. One 8f check was first run with the design disclosure closed (empty text) and was repeated with it opened.
+6. Not done: the ptx1 CLI prompt after the restart was read back over SSH only, not again through the manager terminal; the lab builder was not reopened from the VM file (the map editor and the draft both show Center); Back/Forward was exercised on the lab page route only.
+
+## Lab state at the end
+
+UX-ACCEPT-01 RUNNING: ceos1, xr1 (healthy), sw1 (healthy), ptx1 (restarted, up), host1; manager reports "5/5 discovered containers running", "NOS ready - 5/5 devices accept SSH login". No capture sessions or capture containers left. Memory 29 of 33 GB used.

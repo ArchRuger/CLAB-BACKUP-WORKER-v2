@@ -353,7 +353,8 @@ function opRenderPublished(dialog,path,focus=false){
   await refresh();opRenderPublished(dialog,path);
   await opReview({action:'deploy',lab_id:id,path,name:parsed.name});
  }));
- block.querySelector('#op-published-go')?.addEventListener('click',e=>location.assign('/#lab='+encodeURIComponent(e.currentTarget.dataset.lab)));
+ // My labs is the list: drop the resume-this-lab hint opSaveWorkspace left, or / would reopen the lab page.
+ block.querySelector('#op-published-go')?.addEventListener('click',()=>{try{sessionStorage.removeItem('activeLab');}catch{}location.assign('/');});
  if(focus)block.querySelector('#op-published-status')?.focus();
 }
 async function opHistory(labId=''){
