@@ -232,10 +232,15 @@ class NetworkDesign:
             except (adapter.AdapterError, ValueError) as exc:
                 notes = [str(exc)]
         kinds = sorted({row['kind'] for row in nodes.values() if row.get('kind')})
+        # `modules` is what a student may choose (retired modules are not offered); `retired` explains each retired
+        # one and `retired_in_design` lists where the saved design still uses one (kept, readable, not generated).
         return {'has_topology': bool(text), 'topology_digest': digest(text) if text else '', 'nodes': nodes, 'links': links,
-                'notes': notes, 'kinds': kinds, 'capabilities': capabilities.matrix(kinds) if kinds else [],
+                'notes': notes, 'kinds': kinds, 'capabilities': capabilities.public_matrix(kinds) if kinds else [],
                 'catalogue': capabilities.public_catalogue(), 'engine': engine.engine_status(),
-                'modules': list(intent_schema.MODULES), 'pools': list(intent_schema.POOLS)}
+                'modules': list(intent_schema.AUTHORING_MODULES), 'pools': list(intent_schema.POOLS),
+                'retired': dict(intent_schema.RETIRED), 'retired_status': dict(intent_schema.RETIRED_STATUS),
+                'retired_labels': dict(intent_schema.RETIRED_LABELS),
+                'retired_in_design': intent_schema.retired_in(lab.get('network_design') or {})}
 
     def validation(self, lab, intent):
         text = lab.get('definition_yaml') or ''
@@ -269,7 +274,10 @@ class NetworkDesign:
             rows = []
             for feature in sorted(requested_features(intent, modules, node=name)):
                 result = capabilities.resolve(feature, row['kind'], requested_modules=modules)
-                rows.append({k: result.get(k, '') for k in ('feature', 'level', 'reason', 'evidence', 'profile')})
+                shown = capabilities.with_policy(result)   # a retired capability reads `retired`; blocking stays the engine's answer
+                entry = {k: shown.get(k, '') for k in ('feature', 'level', 'reason', 'evidence', 'profile')}
+                if 'policy' in shown: entry.update(engine_level=shown['engine_level'], policy=shown['policy'])
+                rows.append(entry)
                 if result.get('level') in ('unsupported', 'blocked_missing_prerequisite') and (modules or feature in ('ipv4', 'ipv6')) and not (row.get('role') == 'host' and not modules):
                     blocking.append(name + ': ' + feature + (' is not supported on kind ' if result.get('level') == 'unsupported' else ' is missing a prerequisite on kind ') + row['kind'] + (' (' + result['reason'] + ')' if result.get('reason') else ''))
             report[name] = rows
@@ -285,8 +293,10 @@ class NetworkDesign:
             if any(g.get('status') in DESIGN_BUSY for g in lab.get('network_generations') or []):
                 raise HTTPException(409, 'A plan is already being generated for this lab.')
             if self.store.reset_pending: raise HTTPException(409, 'Finish the storage reset first.')
+            retired = intent_schema.retired_in(intent)
+            if retired: raise HTTPException(409, retired_detail(retired))
             problems = self.validation(lab, intent)
-            if problems: raise HTTPException(400, 'Fix the design first: ' + '; '.join(p['path'] + ': ' + p['message'] for p in problems[:5]))
+            if problems: raise HTTPException(400, problems_detail(problems))
             generation = {'id': uuid.uuid4().hex, 'lab_id': lab_id, 'created': now(), 'status': 'queued', 'message': 'Waiting to generate',
                           'intent_revision': intent['revision'], 'topology_digest': digest(lab['definition_yaml']),
                           'adapter_version': ADAPTER_VERSION, 'label': intent.get('label', '')}
@@ -535,7 +545,11 @@ class NetworkDesign:
                 lab = service.lab(lab_id)
                 submitted = dict(data.intent); submitted['allocations'] = copy.deepcopy((lab.get('network_design') or {}).get('allocations') or {})
                 problems = service.validation(lab, submitted)
-                return {'problems': problems, 'valid': not problems}
+                # Retired uses are reported apart from the problems (the stored design may keep them): `new` marks one the
+                # saved design does not have, which Save refuses; Generate refuses a design with any of them.
+                added = {(e['path'], e['module']) for e in intent_schema.retired_added(submitted, lab.get('network_design'))}
+                retired = [dict(e, new=(e['path'], e['module']) in added) for e in intent_schema.retired_in(submitted)]
+                return {'problems': problems, 'valid': not problems, 'retired': retired}
 
         @app.put('/api/labs/{lab_id}/design')
         def save_design(lab_id: str, data: DesignBody):
@@ -549,6 +563,8 @@ class NetworkDesign:
                 submitted = dict(data.intent); submitted['allocations'] = copy.deepcopy((current or {}).get('allocations') or {})
                 problems = service.validation(lab, submitted)
                 if problems: raise HTTPException(400, 'Fix the design first: ' + '; '.join(p['path'] + ': ' + p['message'] for p in problems[:5]))
+                added = intent_schema.retired_added(submitted, current)
+                if added: raise HTTPException(400, retired_added_detail(added))
                 stored = intent_schema.normalize(submitted)
                 stored['updated'] = now()
                 if current and stored['revision'] == current.get('revision') and stored.get('allocations') == current.get('allocations'):
@@ -686,6 +702,8 @@ class NetworkDesign:
                 if isinstance(data, dict): data['allocations'] = copy.deepcopy((current or {}).get('allocations') or {})
                 problems = service.validation(lab, data)
                 if problems: return {'imported': False, 'problems': problems}
+                added = intent_schema.retired_added(data, current)
+                if added: raise HTTPException(400, retired_added_detail(added))
                 stored = intent_schema.normalize(data); stored['updated'] = now()
                 previous = lab.get('network_design')
                 if any(g.get('status') in DESIGN_BUSY for g in lab.get('network_generations') or []): raise HTTPException(409, 'Wait for the plan being generated to finish.')
@@ -697,6 +715,33 @@ class NetworkDesign:
                     raise HTTPException(500, 'Could not save the imported design. Try again.')
                 service.store.event('design.import', 'Network design imported (revision ' + stored['revision'] + ')', lab_id=lab_id)
                 return {'imported': True, 'problems': [], **service.view(lab)}
+
+
+def problems_detail(problems):
+    """The structured 400 of Generate: the old one-line message (kept for clients that read a string's words) and
+    every problem as {path, message} for the page's summary."""
+    return {'message': 'Fix the design first: ' + '; '.join(p['path'] + ': ' + p['message'] for p in problems[:5]),
+            'problems': [{'path': p['path'], 'message': p['message']} for p in problems]}
+
+
+def retired_added_detail(entries):
+    """The structured 400 of Save and Import when the document adds a retired module the saved design does not use."""
+    modules = intent_schema.retired_modules(entries)
+    return {'message': intent_schema.retired_sentence(modules) + ' ' + intent_schema.retired_phrase(modules) + ', so '
+            + ('it' if len(modules) == 1 else 'they') + ' cannot be added to a design. Remove '
+            + ('it' if len(modules) == 1 else 'them') + ' and save again; a design that already used '
+            + ('it' if len(modules) == 1 else 'them') + ' keeps working as it is.',
+            'problems': [{'path': e['path'], 'message': e['message']} for e in entries], 'retired': modules}
+
+
+def retired_detail(entries):
+    """The structured 409 of Generate for a design that still uses a retired module (nothing is queued)."""
+    modules = intent_schema.retired_modules(entries)
+    return {'message': 'This design uses ' + intent_schema.retired_sentence(modules) + ', which '
+            + intent_schema.retired_phrase(modules) + ', so no new plan can be generated from it. Remove '
+            + ('it' if len(modules) == 1 else 'them') + ' from the design to generate again. Earlier plans, the saved design file '
+            'and its export are kept.',
+            'problems': [{'path': e['path'], 'message': e['message']} for e in entries], 'retired': modules}
 
 
 def _write(path, text):

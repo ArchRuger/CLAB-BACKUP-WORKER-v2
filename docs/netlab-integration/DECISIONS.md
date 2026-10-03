@@ -415,3 +415,47 @@ profiles) and `evidence/live-apply-families.md` (the deployed product on `restor
   security decisions of chunk 1 refuse `plugin` by name. An allowlist of built-in plugins by exact name, with the
   capability model's per-image answer (GRE renders on `eos` only among the four; WireGuard on none), is the shape
   a later chunk would take; nothing of it is in the schema today, and the ledger says "not in the schema".
+
+## 10. Retired modules, the EVPN gate and the review job (UI/UX campaign, 2026-10-03)
+
+Evidence: `tests/test_design_retirement.py`, `tests/test_design_review_jobs.py`, `app/design_capability_data.json`
+(engine data of the pinned `networklab==26.9`), `evidence/live-apply-families.md` (E5, E6). The page-facing API is
+`docs/uiux-email-2026-10-03/DESIGN-CONTRACT.md`.
+
+- D10.1 **EIGRP, RIP (`ripv2`, with RIPng) and netlab's VXLAN module are retired from authoring.** EIGRP: none of the
+  four kinds has it in the pinned engine (Cisco IOS/NX-OS only), so a plan with it could never be generated. RIP:
+  cEOS only among the four and never generated, applied or tested end to end here. VXLAN: E5 configured cEOS but
+  vJunos-switch refused netlab's VLAN/VXLAN rendering at its own `commit check`, and XRv9k has no `vlan`/`vxlan`
+  module, so only one end of a tunnel was ever configured. A containerlab link of type `vxlan` is unrelated and keeps
+  its adapter behaviour (`test_design_adapter.py`).
+- D10.2 **Retirement keeps stored data working.** `design_intent.RETIRED` (module → reason) is the single source; the
+  modules stay in `MODULES` (and in the adapter's key lists) so stored designs parse, validate, render, export,
+  download and appear in history and Git exports; `validate()` is unchanged. Save and Import refuse only a retired
+  use that is *new* against the stored design, matched by path (`retired_added`); keeping or removing one is always
+  allowed. Generate refuses a design with any retired use (409, nothing queued). Apply review and apply submit
+  refuse a plan whose `modules` or per-device compatibility features carry one (`retired_in_generation`), which
+  covers plans generated before the retirement. Remove design, Renumber, ownership removals and restart
+  reconciliation are untouched; nothing changes a device by itself. Rejected: rejecting old designs in
+  `validate()` (the view of every old design would break), and rewriting stored designs (stored-data compatibility).
+- D10.3 **EVPN is gated as unavailable (under review), not built out over MPLS.** In netlab 26.09 the `eos` profile
+  lists EVPN transport `[vxlan, mpls, sr]`, `vjunos-switch` and `vptx` only `[vxlan]`, `iosxr` `{mpls, sr, cp_vxlan}:
+  [ibgp]` with no `vlan` module; the guided form never sets `evpn.transport`; the capability model does not check the
+  transport per device; there is no generation test and no live evidence of EVPN over MPLS; and VXLAN, the only
+  transport tested here (E5, half-working), is retired (D10.1). So the application has no usable EVPN path; it stays
+  in the schema like the retired modules (`RETIRED_STATUS['evpn'] = 'under_review'`, worded *not available*). A
+  later chunk that wants EVPN back needs a per-device transport check, an MPLS generation test on every profile
+  that claims it, and a live proof.
+- D10.4 **The capability matrix words retired capabilities as `retired`** through a policy layer
+  (`design_capabilities.with_policy`, `public_matrix`, and the `retired`/`policy` fields of the catalogue), keeping
+  the engine's answer in `engine_level`. `resolve()` stays the engine truth that generation and its tests rely on.
+- D10.5 **The device review is a job.** `POST …/review` keeps every synchronous guard and answers at once with
+  `{review_job}`; the per-device work runs on the node pool from a separate orchestrator pool (so a one-worker node
+  pool cannot deadlock) and records real stages at their call sites in `_review_one` (`connecting`,
+  `checking_pending`, `rendering`, `reading_config`, `staging`, `restaging`), then `done`, `failed` with a fixed reason
+  category, or `unreachable`. One behaviour only (no synchronous mode): the old body is the done job's `review`, and
+  `test_design_apply.py` follows the job in its `review()` helper with every claim kept. Idempotent by `request_id`;
+  a second review of a running lab is 409 with `review_job_id`; an apply submit waits (409) while a review of its lab
+  runs; no cancel route (closing the dialog is not cancel). Jobs live in memory under their own lock (taken after
+  `store.lock`, never before it), bounded to 50 and forgotten 600 s after they finish, together with their token; a
+  restart forgets them (404, review again). A device still working after 540 s is reported `timeout` and the job
+  finishes; a late worker cannot move a settled device. Job views carry stages, timestamps and fixed messages only.

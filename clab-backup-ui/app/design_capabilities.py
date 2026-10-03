@@ -27,6 +27,8 @@ unsupported with the reason ``'no netlab profile is mapped to this containerlab 
 import json
 from pathlib import Path
 
+from .design_intent import RETIRED, RETIRED_FEATURES, RETIRED_STATUS
+
 DATA_PATH = Path(__file__).parent / 'design_capability_data.json'
 
 _engine_data_cache = None
@@ -392,15 +394,35 @@ def resolve(feature_id, kind, requested_modules=None):
     }
 
 
+def with_policy(row):
+    """The product policy over one resolved row: a capability whose module was retired from authoring
+    (``design_intent.RETIRED``) reads ``level: 'retired'`` with the retirement's reason instead of what the engine
+    says, so the page never words EIGRP or VXLAN as merely "not supported" on a kind. The engine's own answer stays
+    in ``engine_level`` (and ``engine``/``engine_reason``); ``policy`` is ``'retired'`` or ``'under_review'`` (EVPN).
+    :func:`resolve` itself stays the engine truth that generation and its tests rely on."""
+    module = RETIRED_FEATURES.get(row.get('feature'))
+    if not module: return row
+    return {**row, 'engine_level': row.get('level', ''), 'level': 'retired', 'policy': RETIRED_STATUS.get(module, 'retired'),
+            'reason': RETIRED[module]}
+
+
 def matrix(kinds, feature_ids=None):
     """``resolve()`` over the cross product of ``kinds`` and ``feature_ids`` (default: all FEATURES)."""
     ids = feature_ids if feature_ids is not None else sorted(FEATURES)
     return [resolve(feature_id, kind) for kind in kinds for feature_id in ids]
 
 
+def public_matrix(kinds, feature_ids=None):
+    """:func:`matrix` with the product policy (:func:`with_policy`) applied: what the page shows."""
+    return [with_policy(row) for row in matrix(kinds, feature_ids)]
+
+
 def public_catalogue():
-    """``FEATURES`` for the UI: id, label, family and module name only, no internal attribute paths."""
-    return [
-        {'id': feature_id, 'label': feature['label'], 'family': feature['family'], 'module': feature['module']}
-        for feature_id, feature in sorted(FEATURES.items())
-    ]
+    """``FEATURES`` for the UI: id, label, family and module name only, no internal attribute paths, plus
+    ``retired`` (the reason, or ``''``) and ``policy`` for a capability retired from authoring."""
+    rows = []
+    for feature_id, feature in sorted(FEATURES.items()):
+        module = RETIRED_FEATURES.get(feature_id)
+        rows.append({'id': feature_id, 'label': feature['label'], 'family': feature['family'], 'module': feature['module'],
+                     'retired': RETIRED[module] if module else '', 'policy': RETIRED_STATUS.get(module, '') if module else ''})
+    return rows
