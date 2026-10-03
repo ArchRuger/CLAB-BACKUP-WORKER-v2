@@ -38,8 +38,12 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
   **Test login** (authenticates over SSH and asks for `show version`, or a harmless shell
   command for a device with no NOS platform; its timestamped result is a last check, not a
   continuous reachability guarantee. A login that is accepted while the CLI is still starting
-  reads *Starting* with its own message, never *Ready*; the readiness monitor keeps asking and
-  replaces it with the real answer) and
+  shows the *Starting* login-result badge with its own message, never *Login OK*. In a lab
+  linked to a VM deployment the device reads *Starting* too, the readiness monitor keeps asking
+  and replaces the result with the real answer. A lab with no VM deployment (an inventory
+  import) is not monitored: only the login result reads *Starting* and it stays until the next
+  **Test login** (its message says so), while the device itself stays available for SSH
+  whenever a login is configured) and
   **Edit connection…** (short name used in backup file names, address, port, NOS,
   profile, *Include in backups*).
 

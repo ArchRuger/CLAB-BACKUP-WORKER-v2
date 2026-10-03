@@ -309,6 +309,33 @@ class NodeTests(unittest.TestCase):
         logs = self.client.get('/api/logs', headers=self.auth).text
         self.assertNotIn('never-log-this', logs); self.assertNotIn('not yet ready', logs)
 
+    def test_booting_message_promises_a_recheck_only_for_a_lab_linked_to_a_vm_deployment(self):
+        # M-11 follow-up: ReadinessMonitor.scan() skips a lab with no deployment_name (an inventory import),
+        # so "the manager keeps checking" would be false there; the per-node route and Test logins agree.
+        from app.node_services import BOOTING_MESSAGE
+        def bulk_messages():
+            self.services.checks.clear()
+            with patch('app.node_services.paramiko.SSHClient', return_value=CliClient(b'')), patch('app.node_services.connect'):
+                self.assertEqual(self.post('/api/labs/lab/ssh-check-all', {}).status_code, 200)
+                deadline = time.monotonic() + 3
+                while (self.services.checking_all or len(self.services.checks) < 3) and time.monotonic() < deadline:
+                    time.sleep(0.01)
+            return {k[1]: v['message'] for k, v in self.services.checks.items()}
+        def single_message():
+            with patch('app.node_services.paramiko.SSHClient', return_value=CliClient(b'')), patch('app.node_services.connect'):
+                return self.post('/api/labs/lab/ssh-check', {'name': 'r1'}).json()['message']
+        self.assertFalse(self.lab.get('deployment_name'))
+        unlinked = single_message()
+        self.assertNotIn('keeps checking', unlinked)
+        self.assertNotEqual(unlinked, BOOTING_MESSAGE)
+        self.assertIn('Test login', unlinked)
+        self.assertEqual(set(bulk_messages().values()), {unlinked}, 'Test logins words it exactly as Test login does')
+        self.lab['deployment_name'] = 'clab-demo'
+        with patch('app.node_services.node_available', return_value=True):     # a linked node needs fresh discovery
+            self.assertEqual(single_message(), BOOTING_MESSAGE)
+            self.assertIn('keeps checking', BOOTING_MESSAGE)
+            self.assertEqual(set(bulk_messages().values()), {BOOTING_MESSAGE})
+
     def test_test_logins_and_test_login_give_the_same_outcome(self):
         def bulk_run(cli):
             self.services.checks.clear()
