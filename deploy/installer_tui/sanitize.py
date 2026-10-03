@@ -23,11 +23,13 @@ _ESCAPES = re.compile(
     r'|[\x90\x98\x9e\x9f][^\x9c]*\x9c?')
 # Remaining C0 (except tab), DEL, C1, and Unicode bidi/format overrides that can
 # make a line render differently from its bytes.
-_CONTROLS = re.compile('[\x00-\x08\x0a-\x1f\x7f-\x9f​-‏‪-‮⁦-⁩﻿]')
+_CONTROLS = re.compile('[\x00-\x08\x0a-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
 _SECRETS = [
     (re.compile(r'\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b'), '[token removed]'),
     (re.compile(r'(?i)\b(password|passwd|secret|token|api[_-]?key)(\s*[=:]\s*)(\S+)'), r'\1\2[removed]'),
     (re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----.*'), '[private key removed]'),
+    (re.compile(r'(?i)\b(authorization:\s*(?:bearer|basic|token))\s+\S+'), r'\1 [removed]'),
+    (re.compile(r'(\b[a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@'), r'\1[credentials removed]@'),
 ]
 
 

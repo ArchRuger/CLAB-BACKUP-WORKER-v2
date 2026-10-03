@@ -5,6 +5,12 @@ Every probe is bounded, changes nothing, and never prompts: privileged questions
 A probe that cannot answer says so ("Unavailable"); only positive evidence such as a
 missing command or data folder is reported as "Not installed". The manager's settings
 file is read for its UI_BIND, UI_PORT and CAPTURE_PROVIDER keys only.
+
+Intentional difference from the plain menu: when sudo already runs without a prompt
+(cached credentials or a NOPASSWD rule), the dashboard asks three read-only root
+questions with `sudo -n` (the clab-discovery password state, the manager container's
+state, and the Git helper's registration list via `setup-git.sh --list`). None changes
+anything; without cached credentials they report "Needs authentication" instead.
 """
 from concurrent.futures import ThreadPoolExecutor
 import grp

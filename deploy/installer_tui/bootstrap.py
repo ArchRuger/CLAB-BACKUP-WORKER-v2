@@ -176,6 +176,10 @@ def provision(env, say=print, fetcher=None, python=None):
                                  + (check.stdout.strip().splitlines() or ['no details'])[-1][:300])
         (staging / 'ready.json').write_text(json.dumps({'lock': lock_digest(), 'python': version,
                                                         'created': time.strftime('%Y-%m-%dT%H:%M:%S%z')}) + '\n')
+        if ready(env):
+            # Another setup finished first (and may be in use): keep it, discard this copy.
+            say('The full-screen installer is ready (set up by another run).')
+            return 0
         if target.exists():
             shutil.rmtree(target)
         os.rename(staging, target)

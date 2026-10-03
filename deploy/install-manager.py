@@ -396,7 +396,7 @@ def lazydocker_up_to_date(path, version, env):
     if not path.is_file():
         return False
     try:
-        result = subprocess.run([str(path), '--version'], env=env, stdout=subprocess.PIPE,
+        result = subprocess.run([str(path), '--version'], env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True, timeout=5)
     except (OSError, subprocess.SubprocessError):
         return False
@@ -813,6 +813,11 @@ def main(argv=None):
             print('Returned to menu. Existing data and completed steps are retained.')
         except tui_package().core.Busy as error:
             print(str(error))
+        except OSError as error:
+            if lock is not None:
+                raise
+            # The installer lock itself could not be opened: say so and stay in the menu.
+            print(f'The installer lock could not be opened ({error.strerror or error}). Nothing was changed.')
         finally:
             if lock is not None:
                 lock.release()

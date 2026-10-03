@@ -250,7 +250,8 @@ Input.-invalid { border: tall $slate-error; }
                    scrollbar-background: $slate-elevated; scrollbar-color: $slate-border; }
 App.-short #recovery-scroll { max-height: 5; }
 #recovery-text { color: $slate-text; height: auto; }
-#recovery-buttons { height: 1; margin: 1 0 0 0; }
+#recovery-buttons { layout: grid; grid-size: 2; grid-rows: 1; grid-gutter: 0 1; height: auto; margin: 1 0 0 0; }
+#recovery-buttons Button { width: 100%; margin: 0; padding: 0 1; }
 
 /* ---- results ---- */
 #result-panel { width: 1fr; }

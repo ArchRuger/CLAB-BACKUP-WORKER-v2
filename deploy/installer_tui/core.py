@@ -53,6 +53,10 @@ class InstallerLock:
         try:
             fd = os.open(self.path, flags, 0o644)
             writable = True
+            try:
+                os.fchmod(fd, 0o644)   # independent of umask, so every account can open it
+            except OSError:
+                pass
         except PermissionError:
             # Created by another account: a read-only descriptor locks just as well.
             fd = os.open(self.path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_CLOEXEC', 0))
@@ -73,10 +77,13 @@ class InstallerLock:
         self.fd = fd
         return self
 
-    def release(self):
+    def release(self, unlock=True):
+        """Unlock and close. With unlock=False only this descriptor is closed: the kernel drops the
+        lock when the last holder (for example a step child that inherited it) closes it."""
         if self.fd is not None:
             try:
-                fcntl.flock(self.fd, fcntl.LOCK_UN)
+                if unlock:
+                    fcntl.flock(self.fd, fcntl.LOCK_UN)
             finally:
                 os.close(self.fd)
                 self.fd = None
@@ -95,8 +102,7 @@ class InstallerLock:
 def default_lock_path():
     base = Path('/run/lock')
     if not base.is_dir() or not os.access(base, os.W_OK | os.X_OK):
-        import tempfile
-        base = Path(tempfile.gettempdir())
+        base = Path('/tmp')   # fixed, not $TMPDIR: every invocation must agree on one file
     return base / 'clab-node-manager-installer.lock'
 
 

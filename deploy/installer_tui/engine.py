@@ -175,17 +175,40 @@ class Run:
         self.stop.set(reason)
         self.bridge = NullBridge()
 
+    def interrupt_current(self):
+        """Ctrl+C for the active piped step, as the plain installer's terminal would deliver it:
+        SIGINT to the step's process group (sudo relays it to the helper). Returns False when
+        no step process is running (in-process checks, a terminal handoff, between phases).
+        The phase then fails with the helper's own status and offers the usual recovery."""
+        process = self.process
+        if process is None or process.process is None or process.process.poll() is not None:
+            return False
+        import os
+        import signal
+        try:
+            os.killpg(process.process.pid, signal.SIGINT)
+        except (ProcessLookupError, PermissionError):
+            return False
+        self.interrupted_key = self.current.key if self.current else None
+        return True
+
     def cancel_lock_wait(self):
         """End a package-lock wait with SIGINT, the one signal apt_lock.py restores its paused
         APT timers on. Never SIGTERM/SIGKILL: those would leave the timers stopped."""
         waiter = self._lock_waiter
-        if waiter is not None and waiter.process is not None and waiter.process.poll() is None:
-            import os
-            import signal
-            try:
-                os.killpg(waiter.process.pid, signal.SIGINT)
-            except (ProcessLookupError, PermissionError):
-                pass
+        if waiter is None or waiter.process is None or waiter.process.poll() is not None:
+            return False
+        if getattr(waiter, 'cancel_sent', False):
+            # Exactly one SIGINT: a second one could land while apt_lock.py restarts the timers.
+            return True
+        import os
+        import signal
+        try:
+            os.killpg(waiter.process.pid, signal.SIGINT)
+            waiter.cancel_sent = True
+        except (ProcessLookupError, PermissionError):
+            return False
+        return True
 
     # ---- reporting helpers -----------------------------------------------------------------
     def _set(self, phase, state, note=None):
@@ -230,7 +253,8 @@ class Run:
             self.current = None
             self.finished_at = time.time()
             if self.lock is not None:
-                self.lock.release()
+                # Close only: a step child that inherited the descriptor keeps the lock until it exits.
+                self.lock.release(unlock=False)
             core.write_run_record(self.env, self.record())
             self.bridge.finished(self)
 
@@ -269,9 +293,15 @@ class Run:
                 if self.hangup:
                     return False
                 choice = self._recover(step, phase, failure)
+                if self.hangup:
+                    # The terminal went away while a choice or a lock wait was pending: never
+                    # repeat the phase without the operator.
+                    return False
                 if choice == AUTH_RETRY:
-                    if self._authenticate(phase, force=True):
+                    if self._authenticate(phase, force=True) and not self.hangup:
                         break
+                    if self.hangup:
+                        return False
                     failure = Failure('auth', 'Administrator access was not confirmed.', choices=(AUTH_RETRY, RETURN))
                     continue
                 if choice == RETRY:
@@ -406,6 +436,10 @@ class Run:
         if process.saw_auth:
             return Failure('auth', 'sudo needs your password again before this step can run.', code,
                            choices=(AUTH_RETRY, RETURN))
+        if getattr(self, 'interrupted_key', None) == step.key:
+            self.interrupted_key = None
+            return Failure('command', f'Interrupted on request (exit status {code}). Completed setup and existing data '
+                                      'are retained; retry runs this phase again.', code)
         return Failure('command', f'The step stopped with exit status {code}. Completed setup and existing data '
                                   'are retained.', code)
 
@@ -490,7 +524,8 @@ class HealthRun(Run):
         def drain():
             data = process.stdout.read(4 * 1024 * 1024 + 1)
             chunks.append(data)
-            process.stdout.read()   # discard anything beyond the cap so the child never blocks
+            while process.stdout.read(65536):   # discard anything beyond the cap so the child never blocks
+                pass
 
         reader = threading.Thread(target=drain, daemon=True)
         reader.start()

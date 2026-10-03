@@ -137,18 +137,26 @@ class Header(Horizontal):
     def refresh_text(self):
         look, ctx = self.ctx.look, self.ctx
         width = max(self.size.width - 4, 40)
-        title = Text(no_wrap=True, overflow='ellipsis')
-        title.append('SLATE OPS', style=Style(color=None if look.no_color else T['slate-accent'], bold=True))
-        title.append(f'  {look.glyph("sep")}  ', style=Style(color=None if look.no_color else T['slate-border']))
-        title.append('Containerlab Node Manager setup', style=Style(color=None if look.no_color else T['slate-text'], bold=True))
-        if self.subtitle:
-            title.append(f'  {look.glyph("sep")}  ', style=Style(color=None if look.no_color else T['slate-border']))
-            title.append(self.subtitle, style=Style(color=None if look.no_color else T['slate-muted']))
         right = f'{ctx.account.pw_name}@{middle(ctx.host, 24)}'
+
+        def build(product, subtitle):
+            title = Text(no_wrap=True, overflow='ellipsis')
+            title.append('SLATE OPS', style=Style(color=None if look.no_color else T['slate-accent'], bold=True))
+            title.append(f' {look.glyph("sep")} ', style=Style(color=None if look.no_color else T['slate-border']))
+            title.append(product, style=Style(color=None if look.no_color else T['slate-text'], bold=True))
+            if subtitle:
+                title.append(f' {look.glyph("sep")} ', style=Style(color=None if look.no_color else T['slate-border']))
+                title.append(subtitle, style=Style(color=None if look.no_color else T['slate-muted']))
+            return title
+        # Account and host always stay visible: shorten the product name, then the subtitle, first.
+        for product, subtitle in (('Containerlab Node Manager setup', self.subtitle), ('Node Manager setup', self.subtitle),
+                                  ('Node Manager setup', middle(self.subtitle, 18)), ('setup', '')):
+            title = build(product, subtitle)
+            if width - title.cell_len - len(right) >= 2:
+                break
         pad = width - title.cell_len - len(right)
-        if pad >= 2:
-            title.append(' ' * pad)
-            title.append(right, style=Style(color=None if look.no_color else T['slate-muted']))
+        title.append(' ' * max(pad, 1))
+        title.append(right, style=Style(color=None if look.no_color else T['slate-muted']))
         self.query_one('#header-title', Static).update(title)
         running = ctx.status.get('manager')
         if running is not None and running.value:
@@ -171,9 +179,10 @@ class Footer(Static):
 
     def show(self, hints, look):
         text = Text(no_wrap=True, overflow='ellipsis')
+        gap = '   ' if self.app.size.width >= 100 else ' '
         for index, (key, label) in enumerate(hints):
             if index:
-                text.append('   ')
+                text.append(gap)
             text.append(f' {key} ', style=Style(color=T['slate-bg'] if not look.no_color else None,
                                                bgcolor=None if look.no_color else T['slate-dim'], bold=True,
                                                reverse=look.no_color))
@@ -470,31 +479,7 @@ class Dashboard(Chrome):
             pass
 
     def action_refresh(self):
-        if self.ctx.checking:
-            return
-        self.ctx.checking = True
-        self.refresh_status_view()
-        self.run_probes()
-
-    @work(thread=True, exclusive=True, group='probes')
-    def run_probes(self):
-        ctx = self.ctx
-        context = probes.Context(ctx.env, ctx.source, ctx.version)
-
-        def partial(result):
-            self.app.call_from_thread(self._probe_result, result)
-        results, stamp = probes.run_all(context, on_result=partial)
-        self.app.call_from_thread(self._probes_done, results, stamp)
-
-    def _probe_result(self, result):
-        self.ctx.status[result.key] = result
-        self.refresh_status_view()
-
-    def _probes_done(self, results, stamp):
-        self.ctx.status.update(results)
-        self.ctx.checked_at = stamp
-        self.ctx.checking = False
-        self.refresh_status_view()
+        self.app.refresh_status()
 
 
 # --------------------------------------------------------------------------------------------
@@ -690,7 +675,11 @@ class ReviewScreen(Chrome):
         if self.action == 'install':
             if ctx.env_state() == 'symlink':
                 parts.append(Text('The source .env is a symlink. Use a regular settings file before setup.', style=warn))
-            parts.append(bullets(install.plan_lines(ctx.env, ctx.version, ctx.options)))
+            lines = install.plan_lines(ctx.env, ctx.version, ctx.options)
+            if not ctx.options.git_now:
+                # The plain wording above is shared; the advanced "Git later" choice is made before Start here.
+                lines = lines + ['Git: not in this run (Finish; set up Git later was chosen in Advanced settings).']
+            parts.append(bullets(lines))
         else:
             parts.append(bullets([DETAILS[self.action]['changes'].format(user=ctx.env['USER'], home=ctx.env['HOME'])]))
         steps = [step for step in install.action_steps(self.action, ctx.env, ctx.version, ctx.options) if step.visible]
@@ -732,6 +721,7 @@ class ReviewScreen(Chrome):
 class RunScreen(Chrome):
     BINDINGS = [
         Binding('s', 'stop', 'stop after step'),
+        Binding('x', 'interrupt', 'interrupt step'),
         Binding('f', 'follow', 'follow'),
         Binding('o', 'view_output', 'view output'),
         Binding('a', 'all_output', 'all output', show=False),
@@ -774,7 +764,7 @@ class RunScreen(Chrome):
                     with Vertical(id='recovery'):
                         with VerticalScroll(id='recovery-scroll'):
                             yield Static(id='recovery-text')
-                        yield Horizontal(id='recovery-buttons', classes='buttons')
+                        yield Vertical(id='recovery-buttons')
                 with Vertical(id='output-panel', classes='panel') as output:
                     output.border_title = 'Output'
                     yield Log(id='output', max_lines=OUTPUT_LINES, auto_scroll=True, highlight=False)
@@ -793,7 +783,7 @@ class RunScreen(Chrome):
             if self.failure_key:
                 return [('tab', 'next'), ('enter', 'choose'), ('o', 'view output'), ('?', 'help')]
             return [('s', 'stop after step' if not self.run.stop else 'stopping…'), ('f', 'pause follow' if self.follow else 'follow'),
-                    ('o', 'view output'), ('tab', 'next pane'), ('pgup/pgdn', 'scroll'), ('?', 'help')]
+                    ('o', 'output'), ('x', 'interrupt'), ('tab', 'pane'), ('?', 'help')]
         return [('enter', 'continue'), ('o', 'view output'), ('?', 'help')]
 
     # ---- rendering -------------------------------------------------------------------------
@@ -933,9 +923,13 @@ class RunScreen(Chrome):
                 text.append(failure.holder.strip()[:1500] + '\n', style=Style(color=None if look.no_color else T['slate-muted']))
             if 'snapshot rollback' not in (failure.holder or ''):
                 text.append(install.RESTART_HINT + '\n', style=Style(color=None if look.no_color else T['slate-muted']))
-            text.append('Copyable command, in another terminal: ', style=Style(color=None if look.no_color else T['slate-dim']))
             import shlex
-            text.append(shlex.join(install.lock_wait_command()) + '\n', style=Style(color=None if look.no_color else T['slate-text']))
+            command = shlex.join(install.lock_wait_command())
+            text.append('Copyable command, in another terminal (also on one line in the output pane): ',
+                        style=Style(color=None if look.no_color else T['slate-dim']))
+            text.append(command + '\n', style=Style(color=None if look.no_color else T['slate-text']))
+            # The output pane never wraps, so the command can be selected there as one line.
+            self.add_lines(key, ['Copyable command, in another terminal: ' + command])
             text.append('The installer never stops the upgrade, kills a process or deletes a lock file.',
                         style=Style(color=None if look.no_color else T['slate-dim']))
         elif failure.kind == 'auth':
@@ -945,10 +939,10 @@ class RunScreen(Chrome):
             done = [p.label for p in self.run.phases if p.state == engine.COMPLETED]
             if done:
                 text.append('Kept: ' + ', '.join(done) + '.\n', style=Style(color=None if look.no_color else T['slate-muted']))
-            text.append('Retry repeats only this phase. The output pane shows what the step printed.',
+            text.append('Retry repeats only this phase. The output pane below shows what the step printed (o widens it).',
                         style=Style(color=None if look.no_color else T['slate-dim']))
         self.query_one('#recovery-text', Static).update(text)
-        buttons = self.query_one('#recovery-buttons', Horizontal)
+        buttons = self.query_one('#recovery-buttons')
         buttons.remove_children()
         labels = {
             engine.RETRY: 'Retry phase', engine.AUTH_RETRY: 'Authenticate, retry',
@@ -958,7 +952,6 @@ class RunScreen(Chrome):
         widgets = []
         for index, choice in enumerate(failure.choices):
             widgets.append(Button(labels[choice], id=f'choose-{choice}', classes='primary' if index == 0 else ''))
-        widgets.append(Button('Output', id='inspect'))
         buttons.mount(*widgets)
         if self.viewing not in (None, key):
             self.show_output(key)
@@ -969,7 +962,7 @@ class RunScreen(Chrome):
         self.failure_key = None
         box = self.query_one('#recovery')
         box.set_class(False, '-shown')
-        self.query_one('#recovery-buttons', Horizontal).remove_children()
+        self.query_one('#recovery-buttons').remove_children()
         self.query_one('#output', Log).focus()
         self.update_footer()
 
@@ -990,13 +983,35 @@ class RunScreen(Chrome):
         if not self.run.active:
             return
         if self.run._lock_waiter is not None:
-            self.run.cancel_lock_wait()
-            self.app.notify('Stopping the package-lock wait (APT timers are restored).', timeout=4)
+            if getattr(self.run._lock_waiter, 'cancel_sent', False):
+                self.app.notify('Already stopping the package-lock wait; its APT timers are being restored.', timeout=4)
+            elif self.run.cancel_lock_wait():
+                self.app.notify('Stopping the package-lock wait (APT timers are restored).', timeout=4)
             return
         self.run.request_stop()
         self.app.notify('The current phase finishes; no later phase starts.', title='Stop after this step', timeout=5)
         self.render_summary()
         self.update_footer()
+
+    def action_interrupt(self):
+        run = self.run
+        if not run.active or run.process is None or run.current is None:
+            self.app.notify('Nothing to interrupt: no step process is running right now.', timeout=4)
+            return
+        phase = run.current
+        risk = ('Interrupting package installation can leave packages half-configured (the next run repairs '
+                'them with dpkg). Prefer waiting unless it is clearly stuck.' if phase.key == 'prereqs' else
+                'The helper stops where it is; completed phases and existing data are kept.')
+
+        def chosen(answer):
+            if answer == 'interrupt' and run.interrupt_current():
+                self.app.notify('Ctrl+C sent to the step.', timeout=4)
+        self.app.push_screen(Dialog('Interrupt this step?',
+                                    Text(f'{phase.label} is still running. Interrupt sends it Ctrl+C, exactly as Ctrl+C '
+                                         f'does in the plain installer. {risk}\n\nThe phase is then marked failed and '
+                                         'you can retry it or return.'),
+                                    buttons=(('keep', 'Keep running', 'primary'), ('interrupt', 'Interrupt step', 'warning'))),
+                             chosen)
 
     def action_follow(self):
         self.follow = not self.follow
@@ -1104,7 +1119,14 @@ class ResultScreen(Chrome):
 # Dialogs
 # --------------------------------------------------------------------------------------------
 class Dialog(ModalScreen):
-    BINDINGS = [Binding('escape', 'close', 'close')]
+    BINDINGS = [Binding('escape', 'close', 'close'), Binding('left', 'button_left', show=False),
+                Binding('right', 'button_right', show=False)]
+
+    def action_button_left(self):
+        self.focus_previous(Button)
+
+    def action_button_right(self):
+        self.focus_next(Button)
 
     def __init__(self, title, body, buttons=(('ok', 'Close', 'primary'),)):
         super().__init__()
@@ -1138,6 +1160,7 @@ HELP = [
     ('Esc', 'Go back or close a dialog (never abandons a running phase)'),
     ('r', 'Refresh the dashboard status (read-only checks)'),
     ('s', 'Stop after the current phase (or stop a package-lock wait)'),
+    ('x', 'Interrupt the running step with Ctrl+C, after a confirmation (for a step that is stuck)'),
     ('f', 'Pause or resume following new output; the run continues either way'),
     ('o', 'View output: widen the output pane'),
     ('PgUp / PgDn / End', 'Scroll the focused output'),
@@ -1200,8 +1223,8 @@ class SlateOps(App):
             self.open_action('git')
 
     # ---- size classes ----------------------------------------------------------------------
-    def update_size_classes(self):
-        width, height = self.size
+    def update_size_classes(self, size=None):
+        width, height = size or self.size
         self.set_class(width < 80 or height < 24, '-tiny')
         self.set_class(width < 110, '-narrow')
         self.set_class(height < 32, '-short')
@@ -1215,7 +1238,8 @@ class SlateOps(App):
             pass
 
     def on_resize(self, event: events.Resize):
-        self.update_size_classes()
+        # The handler runs before App stores the new size: use the event's.
+        self.update_size_classes(event.size)
 
     # ---- navigation ------------------------------------------------------------------------
     def open_action(self, key):
@@ -1234,11 +1258,54 @@ class SlateOps(App):
         else:
             self.push_screen(ReviewScreen(key))
 
+    def refresh_status(self):
+        """Re-run the read-only probes in the background; every visible header and the dashboard
+        update as answers arrive. Called on demand (r), at start, and after every run."""
+        if self.ctx.checking:
+            return
+        self.ctx.checking = True
+        self.status_changed()
+        self._probe_worker()
+
+    @work(thread=True, exclusive=True, group='probes')
+    def _probe_worker(self):
+        ctx = self.ctx
+        context = probes.Context(ctx.env, ctx.source, ctx.version)
+
+        def partial(result):
+            try:
+                self.call_from_thread(self._probe_result, result)
+            except Exception:
+                pass
+        results, stamp = probes.run_all(context, on_result=partial)
+        try:
+            self.call_from_thread(self._probes_done, results, stamp)
+        except Exception:
+            pass
+
+    def _probe_result(self, result):
+        self.ctx.status[result.key] = result
+        self.status_changed()
+
+    def _probes_done(self, results, stamp):
+        self.ctx.status.update(results)
+        self.ctx.checked_at = stamp
+        self.ctx.checking = False
+        self.status_changed()
+
+    def status_changed(self):
+        for screen in self.screen_stack:
+            if isinstance(screen, Dashboard):
+                screen.refresh_status_view()
+            try:
+                screen.query_one(Header).refresh_text()
+            except Exception:
+                pass
+
     def back_to_dashboard(self):
         while len(self.screen_stack) > 2:
             self.pop_screen()
-        if isinstance(self.screen, Dashboard):
-            self.screen.action_refresh()
+        self.refresh_status()
 
     # ---- runs ------------------------------------------------------------------------------
     def start_run(self, action):
@@ -1306,6 +1373,8 @@ class SlateOps(App):
         if run is not None and run.action == 'health':
             self.ctx.health = getattr(run, 'report', None)
         self.ctx.last_run = run.record() if run is not None else self.ctx.last_run
+        if not self.terminal_lost:
+            self.refresh_status()
         if self.pending_quit:
             self.exit(return_code=self.exit_status(run))
             return
@@ -1326,43 +1395,47 @@ class SlateOps(App):
         if driver is None or not getattr(driver, 'can_suspend', False):
             return None
         result = None
-        with self.suspend():
-            # suspend() itself has no try/finally: nothing may escape this block, or the screen
-            # would never come back.
-            previous = None
-            try:
-                out = sys.__stdout__
-                rule = '─' * 64 if not self.ctx.look.ascii else '-' * 64
-                out.write(f'\n{rule}\nSlate Ops · {title}\n')
-                out.write('\n'.join(textwrap.wrap(notice, 78)) + f'\n{rule}\n\n')
-                out.flush()
-                # A Python-level no-op handler (not SIG_IGN): Ctrl+C still reaches the child, whose
-                # signal dispositions reset on exec, while this process survives it.
-                previous = signal.signal(signal.SIGINT, lambda *_: None)
-                try:
-                    result = work()
-                finally:
-                    signal.signal(signal.SIGINT, previous)
-                if result not in (0, None):
-                    out.write(f'\n{title} ended with exit status {result}. Press Enter to return to the installer. ')
-                    out.flush()
-                    try:
-                        sys.__stdin__.readline()
-                    except (OSError, ValueError):
-                        pass
-                else:
-                    out.write(f'\n{title}: done. Returning to the installer…\n')
-                    out.flush()
-                    time.sleep(0.4)
-            except BaseException as error:  # never leave the app suspended
-                if result is None:
-                    result = 255
-                try:
-                    sys.__stderr__.write(f'\n{title}: {type(error).__name__}\n')
-                except Exception:
-                    pass
+        # A Python-level no-op SIGINT handler (not SIG_IGN) for the whole time the terminal is in
+        # normal mode: Ctrl+C still reaches the child, whose dispositions reset on exec, while this
+        # process and its event loop survive it.
+        guard = signal.signal(signal.SIGINT, lambda *_: None)
+        try:
+            with self.suspend():
+                result = self._handoff_body(title, notice, work)
+        finally:
+            signal.signal(signal.SIGINT, guard)
         self.update_size_classes()
         self.refresh(layout=True)
+        return result
+
+    def _handoff_body(self, title, notice, work):
+        # suspend() itself has no try/finally: nothing may escape this, or the screen never returns.
+        result = None
+        try:
+            out = sys.__stdout__
+            rule = '─' * 64 if not self.ctx.look.ascii else '-' * 64
+            out.write(f'\n{rule}\nSlate Ops · {title}\n')
+            out.write('\n'.join(textwrap.wrap(notice, 78)) + f'\n{rule}\n\n')
+            out.flush()
+            result = work()
+            if result not in (0, None):
+                out.write(f'\n{title} ended with exit status {result}. Press Enter to return to the installer. ')
+                out.flush()
+                try:
+                    sys.__stdin__.readline()
+                except (OSError, ValueError):
+                    pass
+            else:
+                out.write(f'\n{title}: done. Returning to the installer…\n')
+                out.flush()
+                time.sleep(0.4)
+        except BaseException as error:  # never leave the app suspended
+            if result is None:
+                result = 255
+            try:
+                sys.__stderr__.write(f'\n{title}: {type(error).__name__}\n')
+            except Exception:
+                pass
         return result
 
     # ---- quitting --------------------------------------------------------------------------
@@ -1382,8 +1455,8 @@ class SlateOps(App):
                                          'in the background, so the installer does not offer that.\n\n'
                                          'Stop after it: the phase finishes safely, nothing later starts, and the '
                                          'installer then exits with a summary.'),
-                                    buttons=(('stop', 'Stop after this phase, then quit', 'warning'),
-                                             ('keep', 'Keep running', 'primary'))), chosen)
+                                    buttons=(('keep', 'Keep running', 'primary'),
+                                             ('stop', 'Stop after this phase, then quit', 'warning'))), chosen)
             return
         self.exit(return_code=self.exit_status(run) if run is not None else 0)
 
@@ -1445,13 +1518,14 @@ class SlateOps(App):
             report = getattr(run, 'report', None) or {}
             counts = report.get('counts') or {}
             state = {0: 'Ready', 1: 'Failed', 2: 'Attention'}.get(report.get('exit_code'), 'Unavailable')
-            rows.append(('Health report', state, report.get('overall', '') + '  ' +
-                         ' · '.join(f'{counts.get(k, 0)} {k}' for k in ('PASS', 'WARN', 'FAIL', 'SKIP', 'INFO'))))
-            for check in report.get('checks', []):
-                if check.get('status') in ('FAIL', 'WARN', 'SKIP', 'PASS'):
-                    rows.append((str(check.get('title', ''))[:60], check.get('status'),
-                                 str(check.get('detail', '')) + ('  Next: ' + str(check['fix']) if check.get('fix') and
-                                                                 check.get('status') in ('FAIL', 'WARN', 'SKIP') else '')))
+            rows.append(('Health report', state, ' · '.join(f'{counts.get(k, 0)} {k}' for k in ('FAIL', 'WARN', 'SKIP', 'PASS', 'INFO'))
+                         + '  (problems first)'))
+            order = {'FAIL': 0, 'WARN': 1, 'SKIP': 2, 'PASS': 3}
+            checks = [c for c in report.get('checks', []) if isinstance(c, dict) and c.get('status') in order]
+            for check in sorted(checks, key=lambda c: order[c.get('status')]):
+                rows.append((str(check.get('title', ''))[:60], check.get('status'),
+                             str(check.get('detail', '')) + ('  Next: ' + str(check['fix']) if check.get('fix') and
+                                                             check.get('status') in ('FAIL', 'WARN', 'SKIP') else '')))
             return rows
         verify = by_key.get('verify')
         if run.action == 'install':
@@ -1585,13 +1659,36 @@ class Bridge:
         self.alive = True
         self.decisions = queue.Queue()
 
+    FAILED = object()
+
     def _call(self, method, *args):
+        """Run `method` on the event loop and wait for it, but never forever: the wait is polled
+        and abandoned once the screen is gone. Returns Bridge.FAILED if it could not run."""
         if not self.alive:
-            return None
+            return self.FAILED
+        loop = getattr(self.app, '_loop', None)
+        if loop is None or loop.is_closed():
+            return self.FAILED
+        import asyncio
+        import concurrent.futures
+
+        async def invoke():
+            # The same context Textual's own call_from_thread sets (active app and message pump).
+            with self.app._context():
+                return method(*args)
         try:
-            return self.app.call_from_thread(method, *args)
-        except Exception:
-            return None
+            future = asyncio.run_coroutine_threadsafe(invoke(), loop)
+        except RuntimeError:
+            return self.FAILED
+        while True:
+            try:
+                return future.result(timeout=0.5)
+            except concurrent.futures.TimeoutError:
+                if not self.alive or loop.is_closed() or not self.app.is_running:
+                    future.cancel()
+                    return self.FAILED
+            except Exception:
+                return self.FAILED
 
     def phase_changed(self, phase):
         self._call(self.app.on_bridge_phase, phase.key)
@@ -1605,12 +1702,16 @@ class Bridge:
     def handoff(self, title, notice, work):
         if not self.alive:
             return None
-        return self._call(self.app.handoff, title, notice, work)
+        result = self._call(self.app.handoff, title, notice, work)
+        return None if result is self.FAILED else result
 
     def recover(self, phase, failure):
         while not self.decisions.empty():
             self.decisions.get_nowait()
-        self._call(self.app.on_bridge_recover, phase.key, failure)
+        if self.app.pending_quit:
+            return engine.RETURN   # quitting after this phase: do not wait for a choice
+        if self._call(self.app.on_bridge_recover, phase.key, failure) is self.FAILED:
+            return engine.RETURN   # the choice could not be shown: never leave the run waiting
         while self.alive:
             try:
                 return self.decisions.get(timeout=0.5)
@@ -1666,7 +1767,11 @@ def main(argv=None):
             print('Finishing the current phase safely before exiting; nothing later starts…', flush=True)
         except OSError:
             pass
-        run.thread.join()
+        guard = signal.signal(signal.SIGINT, lambda *_: None)   # Ctrl+C here must not lose the record
+        try:
+            run.thread.join()
+        finally:
+            signal.signal(signal.SIGINT, guard)
     if crashed is not None and not app.started_any_run:
         try:
             sys.stderr.write(f'The full-screen installer could not continue ({type(crashed).__name__}: {crashed}). '
@@ -1686,4 +1791,6 @@ def main(argv=None):
         pass
     if crashed is not None or app.terminal_lost:
         return 1
-    return app.return_code if app.return_code is not None else 130
+    code = app.return_code if app.return_code is not None else 130
+    # 75 means "stopped before changing anything"; a helper's own 75 after a run must not say so.
+    return 1 if code == UNAVAILABLE_EXIT and app.started_any_run else code
