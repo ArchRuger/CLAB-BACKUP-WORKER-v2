@@ -2121,5 +2121,129 @@ class HandoffWithoutSuspendTests(SlateCase):
             self.assertIsNone(phase.code)
 
 
+# --------------------------------------------------------------------------------------------
+# Dialog footers and the focusable system status
+# --------------------------------------------------------------------------------------------
+class DialogFooterTests(SlateCase):
+    def footer_text(self, app):
+        return widget_text(app.screen.query_one('#footer'))
+
+    async def test_help_dialog_has_its_own_footer_without_the_parent_hints(self):
+        async with self.running((120, 40)) as (app, pilot):
+            await pilot.press('question_mark')
+            await pilot.pause()
+            await pilot.pause()
+            self.assertIsInstance(app.screen, slate.Dialog)
+            footer = self.footer_text(app)
+            self.assertIn('esc', footer)
+            self.assertIn('close', footer)
+            self.assertNotIn('refresh', footer, 'the dashboard key r does not work inside the dialog')
+            self.assertNotIn('choose', footer, 'one button: nothing to choose between')
+            painted = screen_text(app).splitlines()[-1]
+            self.assertIn('close', painted, 'the dialog footer is what is painted on the last row')
+            self.assertNotIn('refresh', painted)
+
+    async def test_help_dialog_footer_offers_scrolling_when_the_body_overflows(self):
+        async with self.running((80, 24)) as (app, pilot):
+            await pilot.press('question_mark')
+            await pilot.pause()
+            await pilot.pause()
+            body = app.screen.query_one('.dialog-body')
+            if body.max_scroll_y > 0:
+                self.assertIn('scroll', self.footer_text(app))
+                await pilot.press('down', 'down')
+                await pilot.pause()
+                self.assertGreater(body.scroll_y, 0)
+            await pilot.press('escape')
+            await pilot.pause()
+            self.assertIsInstance(app.screen, slate.Dashboard)
+            self.assertIn('refresh', widget_text(app.screen.query_one('#footer')), 'the parent footer is back')
+
+    async def test_quit_dialog_footer_names_choose_select_close(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = scripted_run(ctx, states={'admin': engine.RUNNING}, alive=True)
+            await self.show_run(app, pilot, run)
+            await pilot.press('ctrl+q')
+            await pilot.pause()
+            await pilot.pause()
+            footer = self.footer_text(app)
+            for word in ('choose', 'select', 'close'):
+                self.assertIn(word, footer)
+            for parent in ('stop', 'interrupt', 'follow'):
+                self.assertNotIn(parent, footer, 'run-screen keys do not work inside the dialog')
+
+
+class StatusFocusTests(SlateCase):
+    async def focus_status(self, app, pilot):
+        await pilot.press('tab', 'tab')   # nav -> details -> status
+        await pilot.pause()
+        self.assertIsInstance(app.focused, slate.StatusTable)
+
+    async def test_tab_reaches_the_status_and_details_show_the_full_component_status(self):
+        async with self.running((80, 24)) as (app, pilot):
+            await self.focus_status(app, pilot)
+            screen = app.screen
+            self.assertEqual(widget_text(screen.query_one('#detail-title')).strip(), 'STATUS: PREREQUISITES')
+            await pilot.press('down')
+            await pilot.pause()
+            self.assertEqual(widget_text(screen.query_one('#detail-title')).strip(), 'STATUS: MANAGER')
+            body = collapse(widget_text(screen.query_one('#detail-body')))
+            manager = app.ctx.status['manager']
+            # The status row is cut at 80 columns; the Details pane shows every word.
+            self.assertIn(collapse(manager.summary), body)
+            self.assertIn(collapse(manager.detail), body)
+            self.assertIn('Install / update', body)
+            self.assertNotIn(collapse(manager.detail), collapse(widget_text(screen.query_one('#status'))))
+            self.assertIn('component', widget_text(screen.query_one('#footer')))
+
+    async def test_needs_auth_status_explains_that_no_answer_is_not_absence(self):
+        async with self.running((120, 40)) as (app, pilot):
+            await self.focus_status(app, pilot)
+            await pilot.press('down', 'down')   # VM connection account: Needs authentication (fixture)
+            await pilot.pause()
+            body = collapse(widget_text(app.screen.query_one('#detail-body')))
+            self.assertIn('not proof that the component is missing', body)
+
+    async def test_enter_on_a_status_row_reviews_the_fixing_action_without_running_it(self):
+        async with self.running((120, 40)) as (app, pilot):
+            await self.focus_status(app, pilot)
+            for _ in range(4):   # prereqs, manager, access, engineer -> git
+                await pilot.press('down')
+            await pilot.pause()
+            self.assertEqual(app.focused.current_key, 'git')
+            await pilot.press('enter')
+            await pilot.pause()
+            self.assertIsInstance(app.screen, slate.ReviewScreen)
+            self.assertEqual(app.screen.action, 'git')
+            self.assertIsNone(app.current_run)
+
+    async def test_selected_row_is_marked_only_while_the_status_has_focus(self):
+        async with self.running((120, 40)) as (app, pilot):
+            status = app.screen.query_one('#status')
+            marker = app.ctx.look.glyph('select')
+            self.assertNotIn(marker, widget_text(status))
+            await self.focus_status(app, pilot)
+            self.assertIn(marker, widget_text(status))
+            await pilot.press('tab')   # back to the nav
+            await pilot.pause()
+            self.assertNotIn(marker, widget_text(status))
+            self.assertEqual(widget_text(app.screen.query_one('#detail-title')).strip(), 'INSTALL OR UPDATE THE MANAGER')
+            self.assertEqual(app.screen.query_one('#detail-panel').border_title, 'Details')
+
+    async def test_up_wraps_and_end_jumps_to_the_last_component(self):
+        async with self.running((120, 40)) as (app, pilot):
+            await self.focus_status(app, pilot)
+            await pilot.press('up')
+            await pilot.pause()
+            self.assertEqual(app.focused.current_key, slate.probes.COMPONENTS[-1][0])
+            await pilot.press('home')
+            await pilot.pause()
+            self.assertEqual(app.focused.current_key, 'prereqs')
+            await pilot.press('end')
+            await pilot.pause()
+            self.assertEqual(app.focused.current_key, 'lazydocker')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -314,11 +314,55 @@ DETAILS = {
 }
 
 
-class StatusTable(Static):
+# Which dashboard action addresses each component's status (Enter on a status row opens it).
+FIX_ACTION = {'prereqs': 'install', 'manager': 'install', 'access': 'install', 'engineer': 'engineer',
+              'git': 'git', 'capture': 'capture', 'lazydocker': 'install'}
+
+
+class StatusTable(Static, can_focus=True):
+    """One line per component (truncated when narrow). Focusable: up/down choose a component,
+    whose complete status is shown in the Details pane; Enter reviews the action that fixes it."""
+
+    BINDINGS = [Binding('up', 'cursor(-1)', show=False), Binding('down', 'cursor(1)', show=False),
+                Binding('home', 'cursor_to(0)', show=False), Binding('end', 'cursor_to(-1)', show=False),
+                Binding('enter', 'open_fix', show=False)]
+    cursor = 0
+
+    @property
+    def current_key(self):
+        return probes.COMPONENTS[self.cursor][0]
+
+    def action_cursor(self, delta):
+        self.cursor = (self.cursor + delta) % len(probes.COMPONENTS)
+        self.changed()
+
+    def action_cursor_to(self, index):
+        self.cursor = index % len(probes.COMPONENTS)
+        self.changed()
+
+    def changed(self):
+        self.render_status(self.app.ctx)
+        self.screen.show_component(self.current_key)
+
+    def action_open_fix(self):
+        self.app.open_action(FIX_ACTION[self.current_key])
+
+    selecting = False   # set from the focus events themselves; has_focus lags inside them
+
+    def on_focus(self):
+        self.selecting = True
+        self.changed()
+
+    def on_blur(self):
+        self.selecting = False
+        self.render_status(self.app.ctx)
+
     def render_status(self, ctx):
         look = ctx.look
         narrow = self.app.size.width < 110
+        focused = self.selecting
         table = Table.grid(padding=(0, 1), expand=True)
+        table.add_column(width=1, no_wrap=True)
         table.add_column(width=15 if narrow else 22, no_wrap=True, overflow='ellipsis')
         states = [probes.CHECKING if ctx.checking and ctx.status[k].state == probes.NOT_CHECKED else ctx.status[k].state
                   for k, _ in probes.COMPONENTS]
@@ -334,7 +378,11 @@ class StatusTable(Static):
             if result.detail and state != probes.READY and not narrow:
                 summary.append(' — ' + result.detail, style=Style(color=None if look.no_color else T['slate-dim']))
             name = short.get(key, label) if narrow else label
-            table.add_row(look.text(name, 'slate-text'), look.badge(state, chip), summary)
+            selected = focused and key == self.current_key
+            marker = Text(look.glyph('select') if selected else ' ',
+                          style=Style(color=None if look.no_color else T['slate-accent'], bold=True))
+            row_style = (Style(reverse=True) if look.no_color else Style(bgcolor=T['slate-select'], bold=True)) if selected else None
+            table.add_row(marker, look.text(name, 'slate-text'), look.badge(state, chip), summary, style=row_style)
         self.update(table)
 
 
@@ -384,6 +432,9 @@ class Dashboard(Chrome):
     def hints(self):
         focused = self.focused
         arrows = '↑↓' if not self.ctx.look.ascii else 'up/dn'
+        if isinstance(focused, StatusTable) or (focused is None and self.query_one('#status', StatusTable).selecting):
+            return [(arrows, 'component'), ('enter', 'review fix'), ('tab', 'pane'), ('r', 'refresh'),
+                    ('?', 'help'), ('ctrl+q', 'quit')]
         hints = [(arrows, 'scroll' if focused is not None and focused.id == 'detail-panel' else 'select'),
                  ('enter', 'open'), ('tab', 'pane'), ('r', 'refresh'), ('?', 'help'), ('ctrl+q', 'quit')]
         return hints
@@ -414,6 +465,40 @@ class Dashboard(Chrome):
     def action_open(self):
         self.app.open_action(self.current_action())
 
+    def on_descendant_focus(self, event):
+        super().on_descendant_focus(event)
+        if event.widget.id == 'nav':
+            self.show_details(self.current_action())
+
+    def show_component(self, key):
+        """The complete status of one component in the Details pane (nothing truncated)."""
+        ctx, look = self.ctx, self.ctx.look
+        result = ctx.status.get(key)
+        panel = self.query_one('#detail-panel')
+        panel.border_title = 'Details · status'
+        self.query_one('#detail-title', Static).update(('STATUS: ' + result.label).upper())
+        grid = Table.grid(padding=(0, 2, 1, 0), expand=True)
+        grid.add_column(width=9, no_wrap=True)
+        grid.add_column(ratio=1)
+        label = Style(color=None if look.no_color else T['slate-dim'], bold=True)
+        value = Style(color=None if look.no_color else T['slate-muted'])
+        state = probes.CHECKING if ctx.checking and result.state == probes.NOT_CHECKED else result.state
+        grid.add_row(Text('State', style=label), look.badge(state))
+        grid.add_row(Text('Summary', style=label), Text(result.summary or 'No answer yet.', style=value))
+        if result.detail:
+            grid.add_row(Text('Detail', style=label), Text(result.detail, style=value))
+        checked = (f'{time.strftime("%H:%M:%S", time.localtime(ctx.checked_at))} ({ago(ctx.checked_at)}); '
+                   'r checks again' if ctx.checked_at else 'not checked yet; r checks now')
+        grid.add_row(Text('Checked', style=label), Text(checked, style=value))
+        action = FIX_ACTION[key]
+        grid.add_row(Text('Action', style=label),
+                     Text(f'{ACTION_LABELS[action]}: Enter reviews it (nothing runs before Start).', style=value))
+        if state in (probes.UNAVAILABLE, probes.NEEDS_AUTH):
+            grid.add_row(Text('Note', style=label),
+                         Text('An unanswered check is not proof that the component is missing.', style=value))
+        self.query_one('#detail-body', Static).update(grid)
+        self.update_footer()
+
     def action_noop(self):
         pass
 
@@ -421,6 +506,7 @@ class Dashboard(Chrome):
         ctx = self.ctx
         info = DETAILS[key]
         fill = {'user': ctx.env['USER'], 'home': ctx.env['HOME']}
+        self.query_one('#detail-panel').border_title = 'Details'
         self.query_one('#detail-title', Static).update(info['title'].upper())
         look = ctx.look
         grid = Table.grid(padding=(0, 2, 1, 0), expand=True)
@@ -451,8 +537,11 @@ class Dashboard(Chrome):
         stamp = ('checking now' if ctx.checking else
                  f'checked {time.strftime("%H:%M:%S", time.localtime(ctx.checked_at))} · {ago(ctx.checked_at)}'
                  if ctx.checked_at else 'not checked yet')
-        self.query_one('#status-panel').border_subtitle = stamp + ' · r refreshes'
-        self.query_one('#status', StatusTable).render_status(ctx)
+        self.query_one('#status-panel').border_subtitle = stamp + ' · r refreshes · tab here for full details'
+        status = self.query_one('#status', StatusTable)
+        status.render_status(ctx)
+        if status.selecting:
+            self.show_component(status.current_key)
         dim = Style(color=None if look.no_color else T['slate-dim'])
         value = Style(color=None if look.no_color else T['slate-muted'])
         grid = Table.grid(padding=(0, 1), expand=True)
@@ -1171,7 +1260,13 @@ class ResultScreen(Chrome):
 # --------------------------------------------------------------------------------------------
 class Dialog(ModalScreen):
     BINDINGS = [Binding('escape', 'close', 'close'), Binding('left', 'button_left', show=False),
-                Binding('right', 'button_right', show=False)]
+                Binding('right', 'button_right', show=False), Binding('up', 'scroll_body(-1)', show=False),
+                Binding('down', 'scroll_body(1)', show=False), Binding('pageup', 'scroll_body(-10)', show=False),
+                Binding('pagedown', 'scroll_body(10)', show=False)]
+
+    def action_scroll_body(self, lines):
+        body = self.query_one('.dialog-body', VerticalScroll)
+        body.scroll_relative(y=lines, animate=False)
 
     def action_button_left(self):
         self.focus_previous(Button)
@@ -1194,9 +1289,33 @@ class Dialog(ModalScreen):
             with Horizontal(classes='buttons'):
                 for key, label, kind in self.buttons:
                     yield Button(label, id=f'dialog-{key}', classes=kind)
+        # Its own key bar, drawn over the parent screen's: only keys that work in the dialog.
+        yield Footer()
 
     def on_mount(self):
         self.query(Button).first().focus()
+        self.call_after_refresh(self.update_footer)
+
+    def hints(self):
+        look = self.app.ctx.look
+        hints = []
+        if len(self.buttons) > 1:
+            hints.append(('←→' if not look.ascii else 'left/right', 'choose'))
+        hints.append(('enter', 'select'))
+        body = self.query_one('.dialog-body', VerticalScroll)
+        if body.max_scroll_y > 0:
+            hints.append(('↑↓' if not look.ascii else 'up/dn', 'scroll'))
+        hints.append(('esc', 'close'))
+        return hints
+
+    def update_footer(self):
+        try:
+            self.query_one(Footer).show(self.hints(), self.app.ctx.look)
+        except Exception:
+            pass
+
+    def on_resize(self, event):
+        self.call_after_refresh(self.update_footer)
 
     @on(Button.Pressed)
     def pressed(self, event):
@@ -1212,6 +1331,7 @@ HELP = [
     ('Enter', 'Open the selected action, choose a button, or select a phase\'s output'),
     ('Esc', 'Go back or close a dialog (never abandons a running phase)'),
     ('r', 'Refresh the dashboard status (read-only checks)'),
+    ('Tab to System status', 'Up/down choose a component: its complete status shows in Details; Enter reviews the action that fixes it'),
     ('s', 'Stop after the current phase (or stop a package-lock wait)'),
     ('x', 'Interrupt the running step with Ctrl+C, after a confirmation (for a step that is stuck)'),
     ('f', 'Pause or resume following new output; the run continues either way'),
