@@ -418,11 +418,16 @@ this needs no extra password) and retries the VM prerequisites phase as soon as
 the lock clears, or after 900 seconds, whichever comes first. It optionally pauses
 the `apt-daily` / `apt-daily-upgrade` **timers** for the wait — only preventing a
 *future* scheduled run from starting, never touching the `unattended-upgrades`
-*service*, never killing a process and never deleting a lock file — and always
-restores exactly the timers it paused, including when you cancel with Ctrl+C or the
-terminal hangs up (a dropped SSH session) or the process is terminated. Only a kill that
-no process can catch (`SIGKILL`) leaves them stopped, and they start again at the next
-boot.
+*service*, never killing a process and never deleting a lock file. It starts
+exactly the timers it paused again when the lock is released, when the wait times
+out, when you cancel with Ctrl+C, when the terminal hangs up (a dropped SSH
+session) or when the process is terminated. A single Ctrl+C, hangup or terminate
+is covered; a signal repeated without pause (a held-down Ctrl+C) can still cut the
+restore short. It cannot cover a kill that no program can catch (`SIGKILL`, which
+includes the kernel's out-of-memory kill), `SIGQUIT` (which the wait does not
+handle), a crash or power loss of the VM, or a `systemctl start` that itself
+fails: a timer left stopped that way is only stopped, not disabled, and starts
+again at the next boot.
 Before showing the menu again, it re-checks the lock: if it is already free, the
 step just retries. The printed command also works standalone, from any terminal on
 the VM:

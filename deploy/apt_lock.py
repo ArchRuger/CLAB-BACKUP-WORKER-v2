@@ -11,9 +11,10 @@ on Ctrl+C, on a terminal hangup (SIGHUP, for example a dropped SSH session) and
 on SIGTERM, even when such a signal arrives while the restore itself is running
 (the restore holds those signals back, keeps starting the remaining timers after
 an interruption and re-raises it only when all are started). Every retry is
-bounded: a call interrupted again and again is tried three times, so a signal
-sent without pause (a held-down Ctrl+C) can still defeat it, though only before
-the signals are held back. What it cannot cover: SIGKILL (also the kernel's
+bounded: a call interrupted again and again is tried up to three times, and a
+further signal that lands between two attempts still ends the restore, so a
+signal sent without pause (a held-down Ctrl+C) can still defeat it, though only
+before the signals are held back. What it cannot cover: SIGKILL (also the kernel's
 out-of-memory kill) and SIGQUIT, whose default action ends the process without
 running any Python, a power loss or a crash of the VM, and a `systemctl start`
 that itself fails (its exit status is not checked). A timer left stopped that way
@@ -200,7 +201,8 @@ def wait_for_release(timeout_seconds=900, poll_seconds=2, report=print, paths=DE
     tell a cancellation apart from a timeout. A signal that arrives after the wait
     ended, while the timers are being restored, still has every timer started
     first and is then raised as KeyboardInterrupt instead of the return value.
-    Each retry is bounded (three attempts per call, see the module notes), and
+    Each retry is bounded (up to three attempts per call, and a further signal
+    that lands between two attempts still ends the restore; see the module notes), and
     SIGKILL, SIGQUIT and a crash are not covered at all.
     """
     paused = []

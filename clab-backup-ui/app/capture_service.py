@@ -203,7 +203,8 @@ class Sessions:
             raise HTTPException(409, 'Capture target changed.')
         name = 'clab-capture-' + self.label + '-' + sid
         # Every desktop shares the capture network, so its VNC server demands a password
-        # that only this service and the owning browser get, and opens no raw VNC port:
+        # that only this service and the owning browser get (the manager's relay passes the
+        # status answer through to that browser and neither stores nor logs it), and opens no raw VNC port:
         # a process in one desktop cannot drive another. VNC uses the first 8 characters;
         # letters and digits only, as the image passes the value through a shell echo.
         password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))

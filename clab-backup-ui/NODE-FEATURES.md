@@ -45,7 +45,10 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
   **Test login** (its message says so), while the device itself stays available for SSH
   whenever a login is configured) and
   **Edit connection…** (short name used in backup file names, address, port, NOS,
-  profile, *Include in backups*).
+  profile, *Include in backups*). Every field is checked before anything changes or is
+  logged, so a rejected edit leaves the device as it was; if the manager's state file cannot
+  be written the edit answers an error (HTTP 500), nothing was changed, and it can be
+  repeated once storage is healthy.
 
 **Test logins**, beside the Devices heading on both the topology rail and the Devices
 tab, repeats **Test login** for every device of the lab at once instead of one at a
@@ -128,7 +131,9 @@ short-lived, single-use terminal ticket and checks the WebSocket origin. Device
 SSH credentials are looked up in encrypted manager storage. Closing the terminal
 tab or restarting the manager ends the connection.
 
-Only session open/close and login-check results enter action logs. Keystrokes,
+Only session open/close and login-check results enter action logs (a close is logged only
+for a session whose open was logged; a ticket that is refused or a login that fails before
+the shell starts leaves neither). Keystrokes,
 terminal output, and credentials are not recorded there. SSH host keys retain the
 existing trusted-lab policy (unknown keys are accepted). Use this on your trusted
 lab network. Use HTTPS/WSS when accessed over an untrusted network; a proxy must
