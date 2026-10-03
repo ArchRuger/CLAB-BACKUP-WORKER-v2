@@ -178,10 +178,9 @@ idempotent by `request_id`. Flow, mirroring `restore.py`:
    manager restart marks in-flight devices `interrupted` and rechecks them at start (stages `connecting`,
    `applying`, `confirming`) on a thread of its own, never the single apply worker; the job records the devices
    still to read back (`rechecking`), which holds that lab only (no review or apply of it meanwhile, other labs
-   stay free) and survives another restart; backups, restores, Git saves and lab operations of that lab are
-   not held yet (`operation_busy` does not read `rechecking`: the open part of audit L-15, pinned by an expected
-   failure in `BusyGuardTests`; the fix is a clause there that holds only the named lab, never a check that names
-   no lab such as background discovery or Git's idle check); a read-back that
+   stay free) and survives another restart; `operation_busy` reads `rechecking` for the named lab only, so
+   backups, restores and imports of that lab wait too, while checks that name no lab (background discovery,
+   Git's idle check, a lab-operation submit) are not held; a read-back that
    fails inside the manager records the device `uncertain` with a pending ledger entry, never "not changed";
 5. verification: semantic read-back (every `desired` statement present, every stale statement and every
    removed ancestor gone, ordered objects in order), the ledger written with the outcome (§3), then

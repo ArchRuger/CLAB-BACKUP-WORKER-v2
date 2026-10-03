@@ -668,7 +668,7 @@ class GitProgress:
                     generation = next((g for g in (lab or {}).get('network_generations', []) if g['id'] == job.get('generation_id')), None)
                 if not lab or not generation or self.designs is None:
                     raise ValueError('The plan of this export is gone; dismiss this export, generate the plan again and start a new one.')
-                try: snapshot = self.designs.design_snapshot(lab, generation, lab_name=job.get('lab_name'))
+                try: snapshot = self.designs.design_snapshot(lab, generation, lab_name=job.get('lab_name'), bound=job.get('snapshot_digest'))
                 except ValueError as exc:
                     if job.get('published_attempt'): raise   # the VM may hold the commit: stay pending, never failed
                     self.update(job_id, status='failed', message=str(exc), finished=now()); return

@@ -325,11 +325,9 @@ no restore artifact, so it yields no restore candidate and *Apply to running lab
 
 The manifest's `lab_name` is the lab's name when the save was started; it labels the version and names its download.
 Exports made by earlier managers say `mapping.json` there (a naming fault), and that frozen record is never
-relabelled. A save started under such a manager and not yet saved on the VM when the manager is upgraded is
-refused at its next run with *The plan changed since this export was started*; start the export again. A save that
-the old manager was already writing to the VM stays pending instead (every retry repeats the refusal, and the VM
-may already hold that save's commit): dismiss it, then start the export again. (Given a
-save's recorded digest, `design_snapshot(..., bound=)` can rebuild that older form, but the save does not pass it yet.)
+relabelled. A save started under such a manager and still pending when the manager is upgraded publishes exactly
+the files it was bound to: the save passes its recorded digest to `design_snapshot(..., bound=)`, which gives that
+older form back only when it is the bound one.
 
 ## API
 

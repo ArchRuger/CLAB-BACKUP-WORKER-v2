@@ -53,6 +53,10 @@ def operation_busy(state, lab_id=None, progress_id=None):
             any(j['status'] in DESIGN_APPLY_BUSY and j.get('id') != progress_id and
                 (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('design_jobs', [])) or
+            # The read-back after a restart (`rechecking`, up to the device's own timer) holds its own lab only:
+            # a check that names no lab (background discovery, Git's idle check) is not held by it (audit L-15).
+            any(lab_id and j.get('rechecking') and j.get('lab_id') == lab_id
+                for j in state.get('design_jobs', [])) or
             any(j['status'] in GIT_BUSY and j.get('id') != progress_id and
                 (not lab_id or not j.get('lab_id') or j['lab_id'] == lab_id)
                 for j in state.get('git_jobs', [])) or

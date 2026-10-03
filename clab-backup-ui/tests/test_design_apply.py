@@ -1292,13 +1292,9 @@ class BusyGuardTests(DesignApplyTestCase):
             except ValueError as exc:   # other guards (node readiness) may refuse; the read-back must not
                 self.assertNotIn('Wait for the lab operation', str(exc))
 
-    # Open part of audit L-15: `operation_busy` (lab_operations.py, not owned by the design-apply package) does not
-    # read `rechecking` yet, so a restore could arm its own `commit confirmed` on the lab under read-back, which the
-    # read-back then sees as a foreign pending change (`uncertain`) or, when the restored text holds the reviewed
-    # statements, as `verified`. Remove this decorator together with the lab-scoped `rechecking` clause in
-    # `operation_busy`; until then an unexpected success fails the suite.
-    @unittest.expectedFailure
     def test_a_restore_and_a_backup_of_the_lab_under_read_back_are_refused_until_it_settles(self):
+        # A restore arming its own `commit confirmed` on the lab under read-back would be read back as a foreign
+        # pending change (`uncertain`) or, when the restored text holds the reviewed statements, as `verified`.
         store, other_lab_id = self._reading_back()
         self.assertTrue(operation_busy(store.state, self.lab_id))
         self.assertTrue(operation_busy(store.state, self.lab_id, progress_id='some-restore'))

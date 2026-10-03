@@ -489,11 +489,6 @@ class ExecuteTests(DesignExportGitTestCase):
         self.assertFalse(any(r['mode'] == 'publish' for r in self.sent), self.sent)
         self.assertFalse(any(r['mode'] == 'status' for r in self.sent), self.sent)
 
-    # Expected to fail until `GitProgress.execute` (app/git_progress.py, outside this package) passes the job's recorded
-    # digest: `design_snapshot(lab, generation, lab_name=job.get('lab_name'), bound=job.get('snapshot_digest'))`. With
-    # that one-line change this test passes, Python reports an unexpected success and the run fails until this
-    # decorator is removed, so the decorator cannot outlive the fix.
-    @unittest.expectedFailure
     def test_a_save_queued_before_the_lab_name_fix_publishes_what_it_was_bound_to(self):
         # A design export queued (or left unpublished) by a manager whose manifest named every lab 'mapping.json' has its
         # digest over that form. After the upgrade it must publish exactly those bytes, not fail as "changed".
@@ -514,9 +509,6 @@ class ExecuteTests(DesignExportGitTestCase):
         self.assertEqual(self.snapshots[job_id], before_fix, 'the published set is the bound one, byte for byte')
         self.assertEqual(self.snapshots[job_id]['manifest']['lab_name'], 'mapping.json', 'frozen metadata is never relabelled')
 
-    # Same one-line change as above. Until it lands, a save the old manager was already writing to the VM ends
-    # 'export_pending' at every retry (docs/NETWORK-DESIGN.md says so: dismiss it and start the export again).
-    @unittest.expectedFailure
     def test_a_save_being_written_before_the_lab_name_fix_reconciles_with_what_it_was_bound_to(self):
         gen_id = write_generation(self.app, self.lab_id, {'ceos': [('ospf', 'router ospf 1\n')]}, intent=INTENT)
         response, _ = self.export(gen_id, checkpoint='day-1', push=False)

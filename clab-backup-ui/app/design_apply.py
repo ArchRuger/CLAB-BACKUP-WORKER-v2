@@ -159,10 +159,8 @@ class DesignApply:
                 elif job.get('status') == 'interrupted' and job.get('rechecking'):
                     # The manager stopped during an earlier restart's read-back: read the rest back now.
                     self.unchecked.extend((job['id'], name) for name in job['rechecking'])
-            # The job holds its lab against a new design review or apply (guard_idle) until each device is read back.
-            # Backups, restores, Git saves and lab operations consult `operation_busy`, which does not read
-            # `rechecking` yet (open part of audit L-15, lab_operations.py; pinned by the expected failure in
-            # test_design_apply.BusyGuardTests, lifted together with a lab-scoped clause there).
+            # The job holds its lab (guard_idle, and `operation_busy` for backups, restores, Git saves and imports of
+            # that lab) until each device is read back; other labs and checks that name no lab stay free (audit L-15).
             for job_id in dict.fromkeys(job_id for job_id, _ in self.unchecked):
                 job = self.get_job(job_id); job['rechecking'] = list(dict.fromkeys(n for j, n in self.unchecked if j == job_id))
             store.save()
