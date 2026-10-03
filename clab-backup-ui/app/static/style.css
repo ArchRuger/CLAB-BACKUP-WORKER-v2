@@ -1913,7 +1913,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 .diagram-properties input, .diagram-properties select, .diagram-properties textarea { width: 100%; min-width: 0; padding: 6px 8px; min-height: 32px; font-weight: 400; }
 .diagram-properties input[type=color] { height: 34px; padding: 2px; }
 .diagram-properties fieldset { border: 0; padding: 0; margin: 0; }
-/* The Design tab's route-reflector checklist: a labelled group inside the BGP settings, no box of its own. */
+/* The design's route-reflector checklist: a labelled group inside the BGP settings, no box of its own. */
 .design-check-list { border: 0; padding: 0; margin: 10px 0 0; }
 /* The Advanced editor fills its card; the module checklist is a grid, so a module's settings (shown right
    under the list) are never a screen away from its checkbox; a menu that would open off screen anchors left. */
@@ -1923,6 +1923,31 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
 .design-module-settings label { display: inline-flex; flex-direction: column; gap: 4px; }
 .menu-list.menu-clamped { right: auto; left: 0; }
 .design-check-list legend { font-weight: 600; padding: 0; margin-bottom: 4px; }
+/* Route reflectors: the fieldset takes its own full row of the settings flex, so the grid has a definite width;
+   each checkbox sits beside its name on one row (the generic .design-module-settings label is a column). */
+.design-module-settings > .design-rr-fieldset { flex: 1 1 100%; min-width: 0; margin: 4px 0 0; }
+.design-rr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 120px), 1fr)); gap: 4px 14px; }
+.design-module-settings .design-rr-grid .checkbox-label { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 0; padding: 4px 0; min-width: 0; }
+.design-rr-grid .checkbox-label input { flex: 0 0 auto; margin: 0; }
+.design-rr-grid .checkbox-label span { min-width: 0; overflow-wrap: anywhere; }
+.design-rr-grid > .caption { grid-column: 1 / -1; margin: 0; }
+/* Network design sits under Advanced → Experimental: a quiet, closed-by-default details with a warning banner inside. */
+.experimental-panel { border-left: 4px solid var(--warn); }
+.experimental-panel h2 .pill { vertical-align: middle; margin-left: 8px; }
+.experimental-details > summary .pill { margin-left: 6px; }
+.experimental-details > .design-region { margin-top: 12px; }
+.experimental-details .design-region > .card { background: var(--surface-2); }
+.experimental-details .design-experimental-banner { margin-bottom: 16px; }
+/* The failure summary under the action buttons: danger styling, focusable so it can take focus once per submission. */
+.design-error-summary { margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--danger); border-left-width: 4px; border-radius: var(--radius); background: var(--danger-soft); color: var(--danger-strong); font-size: 13px; }
+.design-error-summary:focus { outline: 2px solid var(--danger); outline-offset: 2px; }
+.design-error-summary[hidden] { display: none; }
+.design-error-summary h3 { margin: 0 0 6px; font-size: 14px; color: var(--danger-strong); }
+.design-error-summary ul { margin: 0; padding-left: 18px; }
+.design-error-summary li { margin: 4px 0; overflow-wrap: anywhere; color: var(--ink); }
+.design-error-summary .form-help { margin: 8px 0 0; color: var(--ink); }
+.design-error-summary .design-error-go { display: inline; color: var(--accent-strong); font-weight: 600; text-decoration: underline; }
+.design-module-settings [aria-invalid="true"], #design-form [aria-invalid="true"] { border-color: var(--danger); outline: 1px solid var(--danger); }
 .diagram-properties legend { font-size: 12px; font-weight: 600; margin-bottom: 8px; }
 .diagram-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .diagram-properties textarea { resize: vertical; }

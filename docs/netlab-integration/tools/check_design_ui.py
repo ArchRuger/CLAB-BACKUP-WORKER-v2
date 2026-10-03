@@ -94,7 +94,7 @@ def main():
             page.goto(base + '/#lab=' + lab['id'] + '&view=design')
             page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
             page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Loading")', timeout=15000)
-            r.check('Design tab opens from the route', page.locator('#tab-design[aria-selected="true"]').count() == 1)
+            r.check('the old design route opens Advanced with Experimental > Network design, and no Design tab exists', page.locator('#tab-advanced[aria-selected="true"]').count() == 1 and page.locator('#experimental-design[open]').count() == 1 and page.locator('#tab-design').count() == 0)
             r.check('a lab without a design says so', 'No design yet' in r.text('#design-state'), r.text('#design-state'))
             r.check('the devices table lists the three devices with their profiles',
                     all(name in r.text('#design-devices') for name in ('r1', 'r2', 'r3')) and 'eos' in r.text('#design-devices') and 'iosxr' in r.text('#design-devices'), r.text('#design-devices'))
@@ -201,8 +201,8 @@ def main():
             design_width = page.evaluate('() => document.documentElement.scrollWidth')
             page.click('#tab-topology'); page.wait_for_timeout(300)
             shell_width = page.evaluate('() => document.documentElement.scrollWidth')
-            page.click('#tab-design'); page.wait_for_timeout(300)
-            r.check('the Design tab adds no horizontal overflow at phone width beyond the shell', design_width <= shell_width, 'design=%s shell=%s' % (design_width, shell_width))
+            page.click('#tab-advanced'); page.wait_for_selector('#design-view', state='visible', timeout=5000); page.wait_for_timeout(300)
+            r.check('the Network design view adds no horizontal overflow at phone width beyond the shell', design_width <= shell_width, 'design=%s shell=%s' % (design_width, shell_width))
             r.shot('08-phone')
             browser.close()
         handled = [e for e in r.console if e['text'].startswith(HANDLED)]

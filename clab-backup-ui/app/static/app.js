@@ -5,9 +5,9 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 // sessionStorage → Home); render() shows Home whenever it is empty. tab holds one of PANELS; legacy
 // names (inventory, git, backups, credentials, logs) are normalised by setTab() so old callers still work.
 let state={labs:[],jobs:[],platforms:{}}, activeId='', tab='topology', toastTimer, subview='', devicesTechnical=false, devicesPainted=null, scrollTarget='', routeApplied=false;
-const PANELS=['topology','devices','progress','design','tools','advanced'];
-const TAB_ALIAS={inventory:'devices',git:'progress',backups:'tools',credentials:'advanced',logs:'advanced'};
-const SUBVIEW={inventory:'technical',backups:'backups-view',credentials:'credentials-view',logs:'logs-view'};
+const PANELS=['topology','devices','progress','tools','advanced'];
+const TAB_ALIAS={inventory:'devices',git:'progress',backups:'tools',credentials:'advanced',logs:'advanced',design:'advanced'};
+const SUBVIEW={inventory:'technical',backups:'backups-view',credentials:'credentials-view',logs:'logs-view',design:'experimental-design'};
 const APP_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
 const BANNER_BUTTONS={'lab-banner':['banner-start','banner-output','banner-restore','banner-try-again','banner-retry-save','banner-save-details','banner-credentials','banner-vm','banner-link','banner-retired-review','banner-dismiss'],'home-banner':['home-banner-output']};
 const current=()=>state.labs.find(l=>l.id===activeId);
@@ -17,7 +17,10 @@ async function api(path,options={}){
  const headers={...(options.headers||{})};
  const response=await fetch('/api'+path,{...options,headers});
  if(!response.ok){let data;try{data=await response.json();}catch{data={detail:'The manager did not respond. Try again.'};}
- throw new Error(typeof data.detail==='string'?data.detail:'Check the form fields and try again.');}
+ // A structured detail ({message, problems:[{path,message}]}) keeps its problem list on the error for the design summary.
+ const detail=data.detail,shaped=detail&&typeof detail==='object'&&!Array.isArray(detail)?detail:null;
+ const error=new Error(typeof detail==='string'?detail:shaped&&typeof shaped.message==='string'?shaped.message:'Check the form fields and try again.');
+ if(shaped&&Array.isArray(shaped.problems))error.problems=shaped.problems;error.status=response.status;throw error;}
  return response;
 }
 async function json(path,method,data){return (await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
@@ -274,6 +277,9 @@ function showTab(value){
  document.querySelectorAll('[data-tab]').forEach(b=>{const active=b.dataset.tab===tab;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;if(active&&typeof b.scrollIntoView==='function'&&($('lab-tabs')?.scrollWidth||0)>($('lab-tabs')?.clientWidth||0))b.scrollIntoView({block:'nearest',inline:'nearest'});});
  if(tab==='topology'&&typeof refreshMap==='function')refreshMap();
  if(tab==='progress'&&typeof gitShowRepository==='function')gitShowRepository();
+ // Old #view=design links land on Advanced with Network design (Experimental) opened; nothing restores a Design tab.
+ if(scrollTarget==='experimental-design'&&$(scrollTarget)&&!$(scrollTarget).open)$(scrollTarget).open=true;
+ if(typeof renderNetworkDesign==='function')renderNetworkDesign();
  if(scrollTarget){const target=$(scrollTarget);if(target&&typeof target.scrollIntoView==='function')target.scrollIntoView({block:'start'});scrollTarget='';}
 }
 function tabKeydown(e){

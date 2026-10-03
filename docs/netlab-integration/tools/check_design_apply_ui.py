@@ -179,7 +179,7 @@ def main():
             without_dialog = page.evaluate('() => document.documentElement.scrollWidth')
             page.click('#tab-topology'); page.wait_for_timeout(300)
             shell_width = page.evaluate('() => document.documentElement.scrollWidth')
-            page.click('#tab-design'); page.wait_for_timeout(300)
+            page.click('#tab-advanced'); page.wait_for_selector('#design-view', state='visible', timeout=5000); page.wait_for_timeout(300)
             r.check('the Apply dialog adds no horizontal overflow beyond the shell at %dx%d' % (width, height),
                     with_dialog <= shell_width, 'with_dialog=%s without_dialog=%s shell=%s' % (with_dialog, without_dialog, shell_width))
             apply_button.click()

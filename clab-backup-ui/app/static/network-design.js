@@ -36,7 +36,7 @@ function designStateOf(lab,view){
  const generating=!!(view.summary&&view.summary.generating)||!!(newest&&DESIGN_BUSY_GENERATION.includes(newest.status));
  // The watch gave up after its retries: the plan may still be generating, but nothing here knows, so the state says so
  // (no busy pill for something that is not being watched).
- if(generating&&view.pollGaveUp)return {key:'unknown',label:'Plan progress unknown',pill:'warn',detail:view.pollProblem||'Could not check the plan\'s progress. Reload the page, or open the Design tab again.'};
+ if(generating&&view.pollGaveUp)return {key:'unknown',label:'Plan progress unknown',pill:'warn',detail:view.pollProblem||'Could not check the plan\'s progress. Reload the page, or open Advanced → Experimental → Network design again.'};
  if(generating)return {key:'generating',label:'Generating the plan…',pill:'busy',detail:view.pollProblem||(newest&&newest.message)||'Waiting to generate.'};
  // The Advanced editor holds text that is not JSON: nothing acts on it until it parses (the last good
  // intent is not silently used behind it), and the student is told so here, not only in the problems list.
@@ -44,7 +44,7 @@ function designStateOf(lab,view){
  if(view.draft&&view.draftUnsaved)return {key:'draft',label:'Unsaved changes',pill:'danger',detail:'Your changes could not be kept in this browser (its storage is unavailable). Save the design now, or they are lost when you leave this page.'};
  if(view.draft)return {key:'draft',label:'Unsaved changes',pill:'warn',detail:'Save the design to keep these changes, or Discard changes to go back to the saved design.'};
  const problems=view.problems||[];
- if(problems.length)return {key:'problems',label:'The design has problems',pill:'danger',detail:problems[0].message||'Fix the problems below, then save again.'};
+ if(problems.length)return {key:'problems',label:'The design has problems',pill:'danger',detail:view.errorSummary?'The problems are listed in the summary below.':problems[0].message||'Fix the problems below, then save again.'};
  if(view.pollProblem)return {key:'unknown',label:'Plan progress unknown',pill:'warn',detail:view.pollProblem};
  // No saved design but earlier plans: they belong to a design that was removed, and must not read as current.
  if(!view.intent&&generations.length)return {key:'removed',label:'No design saved (earlier plans kept)',pill:'neutral',detail:'The design was removed. Its earlier plans stay under History for reference; save a new design to generate again.'};
@@ -262,6 +262,67 @@ function designFormFromIntent(intent){
 function designProblemsMarkup(problems){
  if(!problems||!problems.length)return '';
  return '<ul>'+problems.map(p=>`<li><strong>${esc(p&&p.path||'')}</strong>: ${esc(p&&p.message||'')}</li>`).join('')+'</ul>';
+}
+// --- error summary: what a failed Save design / Generate plan / Check / Import tells the student ---------
+// A validation path maps to the control that owns it (the guided form), else to the Advanced JSON editor.
+const DESIGN_POOL_LABELS={loopback:'Loopbacks',p2p:'Point-to-point links',lan:'Shared links'};
+const DESIGN_ACTION_LABELS={save:'Save design',generate:'Generate plan',check:'Check',import:'Import design file',advanced:'Advanced JSON'};
+const DESIGN_ADVANCED_FIELD={id:'design-advanced',label:'the Advanced JSON editor',advanced:true};
+// -> [{id,label,advanced?}]: the first entry is the field the path names (it gets aria-invalid); a second one is another way to fix it.
+function designFieldsFor(path,message){
+ path=String(path||'');message=String(message||'');
+ let m=/^addressing\.(loopback|p2p|lan)\.(ipv4|ipv6|prefix|prefix6)$/.exec(path);
+ if(m){
+  const family=m[2]==='ipv4'||m[2]==='ipv6'?m[2]:'',field=m[2]==='prefix6'?'prefix':m[2];
+  if(field==='prefix'&&m[1]==='loopback')return [DESIGN_ADVANCED_FIELD];
+  const pool={id:'design-pool-'+m[1]+'-'+field,label:DESIGN_POOL_LABELS[m[1]]+': '+(family?family.replace('ipv','IPv')+' pool':'allocation size')};
+  if(family&&/switched off/i.test(message))return [pool,{id:'design-'+family,label:family.replace('ipv','IPv')+' checkbox'}];
+  return [pool];
+ }
+ if(path==='bgp.as')return [{id:'design-bgp-as',label:'BGP AS number'}];
+ if(path==='ospf.area')return [{id:'design-ospf-area',label:'OSPF area'}];
+ if(path==='isis.area')return [{id:'design-isis-area',label:'IS-IS area'}];
+ if(path==='isis.type')return [{id:'design-isis-type',label:'IS-IS level'}];
+ if(path==='gateway.protocol')return [{id:'design-gateway-protocol',label:'First-hop gateway protocol'}];
+ if(path==='modules')return [{id:'design-modules',label:'Protocols and services'}];
+ if(path==='families'||/^families\./.test(path))return [{id:'design-ipv4',label:'IPv4 and IPv6 checkboxes'}];
+ if(/^nodes\.[^.]+\.bgp(\.|$)/.test(path))return [{id:'design-bgp-rr',label:'Route reflectors'}];
+ return [DESIGN_ADVANCED_FIELD];
+}
+// Splits what a failed call said into {kind,problems}: a structured list (error.problems, from detail
+// {message,problems}) wins; else the "Fix the design first: path: msg; path: msg" sentence is parsed; anything else
+// (a lost connection, a 500) is one item of kind "error".
+function designProblemsFromError(error){
+ if(error&&Array.isArray(error.problems)&&error.problems.length)return {kind:'problems',problems:error.problems.map(p=>({path:String(p&&p.path||''),message:String(p&&p.message||'')}))};
+ const message=String(error&&error.message||'');
+ const m=/^Fix the design first:\s*([\s\S]+)$/.exec(message);
+ if(m)return {kind:'problems',problems:m[1].split(/;\s+/).filter(Boolean).map(part=>{const i=part.indexOf(': ');return i>0?{path:part.slice(0,i),message:part.slice(i+2)}:{path:'',message:part};})};
+ return {kind:'error',problems:[{path:'',message:message||'Something went wrong.'}]};
+}
+function designSummaryTitle(action,kind,count){
+ const label=DESIGN_ACTION_LABELS[action]||DESIGN_ACTION_LABELS.save;
+ if(kind!=='problems')return label+' failed';
+ const words=count+' problem'+(count===1?'':'s')+' to fix';
+ return action==='check'?'Check found '+words:action==='advanced'?'The Advanced JSON is not valid':label+' failed: '+words;
+}
+function designSummaryHint(kind,links){
+ if(kind!=='problems')return 'Your entries are kept. Try again; if it keeps failing, reload the page.';
+ return links?'Your entries are kept. Correct the fields named here, then try again.':'Your entries are kept. Fix the file you imported, then import it again.';
+}
+// summary: {action,kind,problems,links}. Items carry stable ids so the controls they name can point back with aria-describedby.
+function designSummaryItems(summary){
+ const links=summary.links!==false&&summary.kind==='problems';
+ return summary.problems.map((p,i)=>({id:'design-error-item-'+i,path:p.path,message:p.message,fields:links?designFieldsFor(p.path,p.message):[]}));
+}
+function designSummaryMarkup(summary){
+ const items=designSummaryItems(summary),title=designSummaryTitle(summary.action,summary.kind,items.length);
+ const li=item=>{
+  const name=item.fields.length&&!item.fields[0].advanced?item.fields[0].label:item.path;
+  const head=name?`<strong>${esc(name)}</strong>: `:'';
+  const go=item.fields.map((f,i)=>`<button type="button" class="text-button design-error-go" data-design-goto="${esc(f.id)}">${esc(i?'or go to the '+f.label:f.advanced?'Open '+f.label:'Go to the field')}</button>`).join(' ');
+  return `<li id="${esc(item.id)}">${head}${esc(item.message)} ${go}</li>`;
+ };
+ return `<h3 id="design-error-title">${esc(title)}</h3><ul>${items.map(li).join('')}</ul><p class="form-help">${esc(designSummaryHint(summary.kind,summary.links!==false))}</p>`;
 }
 function designModulesMarkup(modules,selected){
  const chosen=new Set(selected||[]);
@@ -718,7 +779,7 @@ function designExportGitBody(values){
 // designState is the module-level cache the spec calls for: {labId,view,plan,draft,loading,error}.
 // view is the GET .../design document; plan is the plan.json of the newest succeeded generation (fetched
 // separately, since network_design.py keeps it on disk, not on the lightweight generation record).
-let designState={labId:'',view:null,plan:null,draft:null,draftDiscarded:false,loading:false,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:''};
+let designState={labId:'',view:null,plan:null,draft:null,draftDiscarded:false,loading:false,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:'',summary:null,invalid:[]};
 // Answers land in request order only by luck: every read of the design takes a sequence number when it is sent,
 // and an answer is shown only if nothing newer has been shown since (an older answer that arrives late is
 // dropped, never painted over a newer generation). A write (save, import, renumber, clear) is the newest truth
@@ -762,7 +823,8 @@ async function designLoadPlan(labId,generationId){
  }catch{if(designPlanWanted(labId,generationId))designState.plan=null;}
 }
 async function designLoad(labId){
- designState={labId,view:null,plan:null,draft:null,draftDiscarded:false,loading:true,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:designState.formLab||''};
+ designClearSummary();
+ designState={labId,view:null,plan:null,draft:null,draftDiscarded:false,loading:true,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:designState.formLab||'',summary:null,invalid:[]};
  designRenderAll();
  const seq=designViewRequest();
  try{
@@ -815,7 +877,7 @@ function designMaybeStartWatch(){
     designRenderAll();designWatchTimer=setTimeout(poll,2000*failures);
    }else{
     designStopWatch();designState.pollGaveUp=true;
-    designState.pollProblem='Could not check the plan\'s progress after '+DESIGN_POLL_RETRIES+' retries. Reload the page, or open the Design tab again, to see where it stands.';
+    designState.pollProblem='Could not check the plan\'s progress after '+DESIGN_POLL_RETRIES+' retries. Reload the page, or open Advanced → Experimental → Network design again, to see where it stands.';
     designRenderAll();
    }
   }
@@ -858,7 +920,7 @@ function designSetControlValue(id,value){if($(id))$(id).value=value;}
 function designReflectorMarkup(names,chosen){
  chosen=chosen||new Set();
  if(!(names||[]).length)return '<p class="caption">No router to choose from yet.</p>';
- return names.map(n=>`<label class="checkbox-label"><input type="checkbox" name="design-bgp-rr" value="${esc(n)}" ${chosen.has(n)?'checked':''}> ${esc(n)}</label>`).join('');
+ return names.map(n=>`<label class="checkbox-label"><input type="checkbox" name="design-bgp-rr" value="${esc(n)}" ${chosen.has(n)?'checked':''}><span>${esc(n)}</span></label>`).join('');
 }
 // setMarkup() skips an unchanged string, so a checkbox the student toggled by hand and the form then put
 // back would keep its stale look: the live `checked` property is set from the values every render.
@@ -980,17 +1042,34 @@ async function designViewGeneration(generationId){
  designRenderAll();
 }
 function designActiveView(lab){
- if(designState.labId===lab.id&&designState.view)return {...designState.view,draft:!!designState.draft,draftUnsaved:!!designState.draftUnsaved,advancedInvalid:!!designState.advancedInvalid,pollProblem:designState.pollProblem||'',pollGaveUp:!!designState.pollGaveUp};
+ if(designState.labId===lab.id&&designState.view)return {...designState.view,draft:!!designState.draft,draftUnsaved:!!designState.draftUnsaved,advancedInvalid:!!designState.advancedInvalid,pollProblem:designState.pollProblem||'',pollGaveUp:!!designState.pollGaveUp,errorSummary:!!designState.summary};
  const design=lab&&lab.design;
  if(!design)return {generations:[],problems:[],summary:{present:false}};
  return {generations:design.generation?[design.generation]:[],problems:[],summary:design};
 }
 // The single entry point, called from app.js's render() behind a typeof guard. Fetches the design once
-// per lab when the Design tab is shown; otherwise only the header reflects the /api/state summary.
+// per lab while Advanced → Experimental → Network design is open; otherwise it stops its pollers and paints nothing.
+// The design lives under Advanced → Experimental, in a <details> that starts closed. It is "visible" only on
+// the Advanced tab with that <details> open; otherwise the pollers stop (the generation or apply itself keeps
+// running on the manager, and /api/state still reports it) and the next open loads the design afresh.
+let designSuspended=false;
+function designVisible(){
+ const box=$('experimental-design');
+ return typeof tab!=='undefined'&&tab==='advanced'&&!!box&&box.open===true;
+}
+function designSuspend(){
+ designStopWatch();
+ const dialog=$('design-apply-dialog');
+ if(!(dialog&&dialog.open))designApplyStopWatch();
+ designSuspended=true;
+}
 function renderNetworkDesign(){
  const lab=current();
  if(!lab){designStopWatch();return;}
- if(typeof tab!=='undefined'&&tab==='design'&&designState.labId!==lab.id&&!designState.loading){designLoad(lab.id);return;}
+ if(!designVisible()){designSuspend();return;}
+ // Coming back after the view was closed (or the tab left) reloads, unless the only copy of an unsaved edit is in memory.
+ if(designSuspended){designSuspended=false;if(!designLeaveGuard()&&!designState.loading){designLoad(lab.id);return;}}
+ if(designState.labId!==lab.id&&!designState.loading){designLoad(lab.id);return;}
  designRenderAll();
 }
 function designRenderAll(){
@@ -1217,6 +1296,69 @@ function designAdvancedBlocked(){
  if(typeof showActionError==='function')showActionError(message);else if(typeof notify==='function')notify(message);
  return true;
 }
+// --- error summary: DOM side ---------------------------------------------------------------------------
+// One summary under the action buttons, announced once per new submission (designSummarySeq) through a
+// visually hidden live region that is set only here — never by a poll or a re-render — and focused, so a
+// keyboard or screen-reader student lands on it. Cleared by the next successful check, save or generate.
+let designSummarySeq=0;
+function designControlFor(id){
+ const el=$(id);if(!el)return null;
+ if(typeof el.tagName==='string'&&['INPUT','SELECT','TEXTAREA'].includes(el.tagName.toUpperCase()))return el;
+ return typeof el.querySelector==='function'?el.querySelector('input,select,textarea'):null;
+}
+function designClearInvalid(){
+ for(const mark of designState.invalid||[]){
+  const el=mark.el;if(!el||typeof el.removeAttribute!=='function')continue;
+  el.removeAttribute('aria-invalid');
+  if(mark.prior)el.setAttribute('aria-describedby',mark.prior);else el.removeAttribute('aria-describedby');
+ }
+ designState.invalid=[];
+}
+function designClearSummary(){
+ designClearInvalid();designState.summary=null;
+ const box=$('design-error-summary');
+ if(box){setMarkup(box,'');box.hidden=true;}
+ if($('design-announce'))$('design-announce').textContent='';
+}
+function designShowSummary(action,parsed,options){
+ options=options||{};
+ designClearInvalid();
+ const summary={action,kind:parsed.kind,problems:parsed.problems,links:options.links!==false};
+ designState.summary=summary;designSummarySeq++;
+ const box=$('design-error-summary');
+ if(box){setMarkup(box,designSummaryMarkup(summary));box.hidden=false;}
+ // aria-invalid and aria-describedby on the mapped controls (the first field an item names).
+ const described=new Map();
+ for(const item of designSummaryItems(summary)){
+  const field=item.fields[0];if(!field||field.advanced)continue;
+  const el=designControlFor(field.id);if(!el)continue;
+  if(!described.has(el))described.set(el,[]);described.get(el).push(item.id);
+ }
+ designState.invalid=[];
+ for(const [el,ids] of described){
+  if(typeof el.setAttribute!=='function')continue;
+  const prior=typeof el.getAttribute==='function'?el.getAttribute('aria-describedby')||'':'';
+  designState.invalid.push({el,prior});
+  el.setAttribute('aria-invalid','true');el.setAttribute('aria-describedby',(prior?prior+' ':'')+ids.join(' '));
+ }
+ const first=summary.problems[0];
+ const announce=$('design-announce');
+ if(announce){announce.textContent='';announce.textContent=designSummaryTitle(action,summary.kind,summary.problems.length)+(first&&first.message?'. '+first.message:'')+'.';}
+ if(box){
+  if(typeof box.focus==='function')box.focus();
+  if(typeof box.scrollIntoView==='function')box.scrollIntoView({block:'nearest'});
+ }
+ const lab=current();if(lab)designRenderHeader(lab,{...designActiveView(lab),problems:summary.kind==='problems'?summary.problems:[]});
+}
+function designGotoField(id){
+ let el=designControlFor(id)||$(id);
+ const box=$('design-advanced-details');
+ if(el&&typeof el.closest==='function'&&el.closest('[hidden]'))el=null;
+ if(!el||id==='design-advanced'){if(box)box.open=true;el=$('design-advanced');}
+ if(!el)return;
+ if(typeof el.scrollIntoView==='function')el.scrollIntoView({block:'center'});
+ if(typeof el.focus==='function')el.focus();
+}
 async function designValidate(){
  const lab=current();if(!lab||designAdvancedBlocked())return;
  const labId=lab.id,intent=designCurrentIntent(designState.view);
@@ -1224,8 +1366,9 @@ async function designValidate(){
   const result=await json('/labs/'+encodeURIComponent(labId)+'/design/validate','POST',{intent,revision:''});
   if(designState.labId!==labId)return;   // the student moved to another lab meanwhile: nothing of this lands there
   setMarkup($('design-problems'),designProblemsMarkup(result.problems||[]));
-  if(typeof notify==='function')notify((result.problems||[]).length?'The design has problems. See the list below.':'No problems found.');
- }catch(error){if(designState.labId===labId&&typeof notify==='function')notify(error.message);}
+  if((result.problems||[]).length)designShowSummary('check',{kind:'problems',problems:result.problems});
+  else{designClearSummary();designRenderHeader(lab,designActiveView(lab));if(typeof notify==='function')notify('No problems found.');}
+ }catch(error){if(designState.labId===labId)designShowSummary('check',designProblemsFromError(error));}
 }
 function designStaleMessage(message){return /changed since this page loaded|no saved design any more/i.test(String(message||''));}
 // Saves the current intent (draft or saved) for the lab that is open now. Resolves true when saved. Every
@@ -1242,14 +1385,14 @@ async function designSave(options){
   if(designState.labId!==labId)return false;
   if((check.problems||[]).length){
    setMarkup($('design-problems'),designProblemsMarkup(check.problems));
-   designRenderHeader(lab,{...designActiveView(lab),problems:check.problems});
+   designShowSummary(options.action||'save',{kind:'problems',problems:check.problems});
    return false;
   }
   const view=await json('/labs/'+encodeURIComponent(labId)+'/design','PUT',{intent,revision});
   if(!designViewWritten(labId))return false;
   designState.view=view;designState.draft=null;designState.draftDiscarded=false;designState.draftUnsaved=false;
   if(typeof clearDesignDraft==='function')clearDesignDraft(labId);
-  setMarkup($('design-problems'),'');
+  setMarkup($('design-problems'),'');designClearSummary();
   if(!options.quiet&&typeof notify==='function')notify('Design saved.');
   designRenderAll();
   return true;
@@ -1259,7 +1402,7 @@ async function designSave(options){
    if(typeof showActionError==='function')showActionError(error.message);else if(typeof notify==='function')notify(error.message);
    await designLoad(labId);return false;
   }
-  if(typeof notify==='function')notify(error.message);
+  designShowSummary(options.action||'save',designProblemsFromError(error));
   return false;
  }
 }
@@ -1269,7 +1412,7 @@ async function designGenerate(){
  const lab=current();if(!lab||designAdvancedBlocked())return;
  const labId=lab.id;
  if(designState.draft){
-  const saved=await designSave({quiet:true});
+  const saved=await designSave({quiet:true,action:'generate'});
   if(!saved||designState.labId!==labId)return;
   if(typeof notify==='function')notify('Design saved. Generating the plan…');
  }
@@ -1277,10 +1420,15 @@ async function designGenerate(){
  try{
   await json('/labs/'+encodeURIComponent(labId)+'/design/generate','POST',{revision});
   if(designState.labId!==labId)return;
-  designState.viewing=null;
+  designClearSummary();designState.viewing=null;
   await designLoad(labId);
   if(typeof refresh==='function')await refresh();
- }catch(error){if(designState.labId===labId&&typeof notify==='function')notify(error.message);}
+ }catch(error){
+  if(designState.labId!==labId)return;
+  const parsed=designProblemsFromError(error);
+  if(parsed.kind==='problems')setMarkup($('design-problems'),designProblemsMarkup(parsed.problems));
+  designShowSummary('generate',parsed);
+ }
 }
 async function designCancel(){
  const lab=current();if(!lab)return;
@@ -1348,18 +1496,18 @@ async function designImportFile(file){
   if(!designViewWritten(labId))return;
   if(!result.imported){
    setMarkup($('design-problems'),designProblemsMarkup(result.problems||[]));
-   if(typeof notify==='function')notify('The imported design has problems. See Advanced › Check below.');
+   designShowSummary('import',{kind:'problems',problems:result.problems||[]},{links:false});
    return;
   }
   designState.view=result;designState.draft=null;designState.draftDiscarded=false;designState.draftUnsaved=false;designState.advancedInvalid=false;
   if(typeof clearDesignDraft==='function')clearDesignDraft(labId);
-  setMarkup($('design-problems'),'');
+  setMarkup($('design-problems'),'');designClearSummary();
   if(typeof notify==='function')notify('Design imported.');
   designRenderAll();
  }catch(error){
   if(designState.labId!==labId)return;
-  if(designStaleMessage(error.message))await designLoad(labId);
-  if(typeof notify==='function')notify(error.message);
+  if(designStaleMessage(error.message)){await designLoad(labId);if(typeof notify==='function')notify(error.message);return;}
+  designShowSummary('import',designProblemsFromError(error),{links:false});
  }
 }
 async function designViewFile(node,index){
@@ -1610,7 +1758,7 @@ function initDesignExportGit(){
  if($('design-export-git-dialog'))for(const b of $('design-export-git-dialog').querySelectorAll('[data-design-export-git-close]'))b.onclick=()=>designExportGitClose();
 }
 
-// --- load-time wiring: only when the Design tab's static skeleton is on the page ----------------------
+// --- load-time wiring: only when the design region's static skeleton is on the page ----------------------
 function initNetworkDesign(){
  const guidedIds=['design-ipv4','design-ipv6','design-pool-loopback-ipv4','design-pool-loopback-ipv6',
   'design-pool-p2p-ipv4','design-pool-p2p-ipv6','design-pool-p2p-prefix','design-pool-lan-ipv4','design-pool-lan-ipv6',
@@ -1653,7 +1801,8 @@ function initNetworkDesign(){
  if($('design-files-body'))$('design-files-body').addEventListener('click',e=>{
   const b=e.target.closest('[data-design-view-file]');if(b)designViewFile(b.dataset.designViewFile,Number(b.dataset.designViewIndex));
  });
- if($('tools-design'))$('tools-design').onclick=()=>{if(typeof showTab==='function')showTab('design');};
+ if($('design-error-summary'))$('design-error-summary').addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-design-goto]');if(b)designGotoField(b.dataset.designGoto);});
+ if($('experimental-design'))$('experimental-design').addEventListener('toggle',()=>{if(typeof renderNetworkDesign==='function')renderNetworkDesign();});
  initDesignApply();
  initDesignExportGit();
 }

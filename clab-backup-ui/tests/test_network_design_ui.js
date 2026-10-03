@@ -1028,3 +1028,133 @@ test('U-21: designKeptModulesNotice names the modules kept on and why, and stays
  assert.equal(c.designKeptModulesNotice(['ospf'],['ospf','bgp']),'','a module the form simply does not list is not "kept": only the three the intent re-adds');
  assert.equal(c.designKeptModulesNotice(undefined,['vrf']),'');
 });
+
+// --- task 8: error summary, route-reflector grid markup, Experimental placement ---------------------------
+function summaryEls(){
+ const els={};
+ const el=id=>{if(!els[id])els[id]={id,tagName:'INPUT',value:'',disabled:false,title:'',textContent:'',className:'',hidden:false,checked:false,innerHTML:'',attrs:{},focused:0,scrolled:0,
+  setAttribute(n,v){this.attrs[n]=String(v);},getAttribute(n){return n in this.attrs?this.attrs[n]:null;},removeAttribute(n){delete this.attrs[n];},
+  focus(){this.focused++;},scrollIntoView(){this.scrolled++;},querySelector:()=>null,querySelectorAll:()=>[]};return els[id];};
+ return {els,el};
+}
+test('8b: a route reflector is a checkbox beside its name in a <span>, inside a grid with its own full-width row',()=>{
+ const c=ctx();
+ const markup=c.designReflectorMarkup(['r1','a-very-long-router-name-that-keeps-going-and-going'],new Set(['r1']));
+ assert.equal((markup.match(/<label class="checkbox-label"><input type="checkbox" name="design-bgp-rr"/g)||[]).length,2);
+ assert.match(markup,/><span>r1<\/span><\/label>/);assert.match(markup,/<span>a-very-long-router-name[^<]*<\/span>/);
+ assert.match(c.designReflectorMarkup(['<b>'],new Set()),/<span>&lt;b&gt;<\/span>/,'the name is escaped');
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ assert.match(html,/<fieldset class="design-check-list design-rr-fieldset"><legend>Route reflectors<\/legend><div id="design-bgp-rr" class="design-rr-grid">/);
+ assert.match(html,/Tick every router that reflects routes; none means a full mesh\./);
+ const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
+ assert.match(css,/\.design-rr-fieldset\s*\{[^}]*flex:\s*1 1 100%/);assert.match(css,/\.design-rr-grid \.checkbox-label span\s*\{[^}]*overflow-wrap:\s*anywhere/);
+});
+test('8c: paths map to the controls that own them; unmapped paths open the Advanced editor',()=>{
+ const c=ctx();const ids=(path,message)=>JSON.parse(JSON.stringify(c.designFieldsFor(path,message))).map(f=>f.id);
+ same(ids('bgp.as'),['design-bgp-as']);same(ids('ospf.area'),['design-ospf-area']);same(ids('isis.area'),['design-isis-area']);
+ same(ids('addressing.loopback.ipv6','x'),['design-pool-loopback-ipv6']);same(ids('addressing.p2p.ipv6'),['design-pool-p2p-ipv6']);same(ids('addressing.lan.ipv4'),['design-pool-lan-ipv4']);
+ same(ids('addressing.p2p.prefix6'),['design-pool-p2p-prefix']);
+ same(ids('addressing.lan.ipv6','ipv6 is switched off in this design; remove the prefix or enable the family'),['design-pool-lan-ipv6','design-ipv6'],'the pool the path names first, the family checkbox as the other fix');
+ same(ids('nodes.r1.bgp.rr'),['design-bgp-rr']);
+ same(ids('vlans.v10.id'),['design-advanced']);same(ids(''),['design-advanced']);
+});
+test('8c: failures parse to problems: structured list, the "Fix the design first" sentence, or one error item',()=>{
+ const c=ctx();const plain=v=>JSON.parse(JSON.stringify(v));
+ same(plain(c.designProblemsFromError({message:'Fix the design first: x',problems:[{path:'bgp.as',message:'Set an AS'}]})),{kind:'problems',problems:[{path:'bgp.as',message:'Set an AS'}]});
+ same(plain(c.designProblemsFromError(new Error('Fix the design first: bgp.as: Set an AS; addressing.p2p.ipv6: ipv6 is switched off'))),{kind:'problems',problems:[{path:'bgp.as',message:'Set an AS'},{path:'addressing.p2p.ipv6',message:'ipv6 is switched off'}]});
+ same(plain(c.designProblemsFromError(new Error('The manager did not respond. Try again.'))),{kind:'error',problems:[{path:'',message:'The manager did not respond. Try again.'}]});
+ assert.equal(c.designSummaryTitle('save','problems',2),'Save design failed: 2 problems to fix');
+ assert.equal(c.designSummaryTitle('generate','problems',1),'Generate plan failed: 1 problem to fix');
+ assert.equal(c.designSummaryTitle('generate','error',1),'Generate plan failed');
+ const html=c.designSummaryMarkup({action:'save',kind:'problems',problems:[{path:'bgp.as',message:'Set <an> AS'},{path:'vlans.v1.id',message:'Bad'}]});
+ assert.match(html,/<h3 id="design-error-title">Save design failed: 2 problems to fix<\/h3>/);
+ assert.match(html,/<strong>BGP AS number<\/strong>: Set &lt;an&gt; AS <button type="button" class="text-button design-error-go" data-design-goto="design-bgp-as">/);
+ assert.match(html,/data-design-goto="design-advanced">Open the Advanced JSON editor/);
+ const err=c.designSummaryMarkup({action:'generate',kind:'error',problems:[{path:'',message:'Down'}]});
+ assert.match(err,/Try again/);assert.doesNotMatch(err,/data-design-goto/);
+});
+test('8c: a failed save shows one summary with focus, aria-invalid and one announcement; a poll render never announces; a good save clears it',async()=>{
+ const {els,el}=summaryEls();let validations=0;
+ const c=ctx({$:el,setMarkup:(e,html)=>{if(e)e.innerHTML=html;},current:()=>({id:'lab-a',name:'A'}),
+  json:async(path,method)=>{if(path.endsWith('/validate')){validations++;return validations===1?{problems:[{path:'bgp.as',message:'Give BGP an AS number.'},{path:'addressing.p2p.ipv6',message:'ipv6 is switched off in this design; remove the prefix or enable the family'}]}:{problems:[]};}
+   return {intent:{schema:1,revision:'r2',modules:[]},generations:[],problems:[],nodes:{}};}});
+ stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r1',modules:['bgp']},generations:[],problems:[],nodes:{}};
+ el('design-bgp-as').attrs['aria-describedby']='design-bgp-as-help';
+ assert.equal(await c.designSave(),false);
+ const box=el('design-error-summary');
+ assert.equal(box.hidden,false);assert.match(box.innerHTML,/Save design failed: 2 problems to fix/);assert.equal(box.focused,1,'focus moves to the summary');assert.equal(box.scrolled,1);
+ assert.equal(el('design-bgp-as').attrs['aria-invalid'],'true');assert.equal(el('design-bgp-as').attrs['aria-describedby'],'design-bgp-as-help design-error-item-0');
+ assert.equal(el('design-pool-p2p-ipv6').attrs['aria-invalid'],'true','the pool the path names carries the switched-off problem');
+ assert.match(el('design-announce').textContent,/^Save design failed: 2 problems to fix\. Give BGP an AS number\./);
+ const announced=el('design-announce').textContent;
+ assert.doesNotMatch(el('design-state-text').textContent+el('design-detail').textContent,/Give BGP an AS number/,'the header line does not repeat problems[0]');
+ assert.match(el('design-problems').innerHTML,/addressing\.p2p\.ipv6/,'the full list stays as the secondary list');
+ const live=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ assert.doesNotMatch(live,/id="design-problems"[^>]*role="alert"/);assert.match(live,/<p id="design-announce" class="sr-only" role="alert"><\/p>/);
+ c.designRenderAll();c.designRenderAll();
+ assert.equal(el('design-announce').textContent,announced);assert.equal(box.focused,1,'re-renders and polls never move focus');
+ assert.equal(await c.designSave(),true);
+ assert.equal(box.hidden,true);assert.equal(box.innerHTML,'');assert.equal(el('design-announce').textContent,'');
+ assert.equal(el('design-bgp-as').attrs['aria-invalid'],undefined);assert.equal(el('design-bgp-as').attrs['aria-describedby'],'design-bgp-as-help','the original description is restored');
+ assert.equal(el('design-pool-p2p-ipv6').attrs['aria-describedby'],undefined);
+});
+test('8c: Generate without a draft shows the backend 400 problems (structured or sentence) and a lost connection gets Try again',async()=>{
+ for(const failure of [Object.assign(new Error('Fix the design first: x'),{status:400,problems:[{path:'ospf.area',message:'Not an area'},{path:'isis.area',message:'Bad area'}]}),
+  new Error('Fix the design first: ospf.area: Not an area; isis.area: Bad area')]){
+  const {els,el}=summaryEls();
+  const c=ctx({$:el,setMarkup:(e,html)=>{if(e)e.innerHTML=html;},current:()=>({id:'lab-a'}),json:async()=>{throw failure;}});
+  stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r1',modules:['ospf']},generations:[],problems:[],nodes:{}};
+  await c.designGenerate();
+  assert.match(el('design-error-summary').innerHTML,/Generate plan failed: 2 problems to fix/);
+  assert.match(el('design-error-summary').innerHTML,/data-design-goto="design-ospf-area"/);assert.match(el('design-error-summary').innerHTML,/data-design-goto="design-isis-area"/);
+  assert.equal(el('design-ospf-area').attrs['aria-invalid'],'true');
+ }
+ const {els,el}=summaryEls();
+ const c=ctx({$:el,setMarkup:(e,html)=>{if(e)e.innerHTML=html;},current:()=>({id:'lab-a'}),json:async()=>{throw new TypeError('Failed to fetch');}});
+ stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r1',modules:[]},generations:[],problems:[],nodes:{}};
+ await c.designGenerate();
+ assert.match(el('design-error-summary').innerHTML,/Generate plan failed<\/h3><ul><li id="design-error-item-0">Failed to fetch/);assert.match(el('design-error-summary').innerHTML,/Try again/);
+ assert.equal(el('design-announce').textContent.startsWith('Generate plan failed'),true);
+});
+test('8f: the design loads only while Advanced is shown with Experimental open, stops its pollers otherwise, and never reads as cancelled',()=>{
+ const {els,el}=summaryEls();let loads=0;
+ const c=ctx({$:el,current:()=>({id:'lab-a'}),tab:'advanced',api:async()=>{loads++;return {json:async()=>({intent:null,generations:[],nodes:{}})};}});
+ const view=()=>vm.runInContext('typeof tab',c);
+ vm.runInContext("var tab='advanced'",c);
+ c.renderNetworkDesign();assert.equal(loads,0,'closed details: nothing is fetched');
+ el('experimental-design').open=true;c.renderNetworkDesign();assert.equal(loads,1,'open details on Advanced: the design loads');
+ vm.runInContext("tab='tools'",c);c.renderNetworkDesign();
+ assert.equal(c.designVisible(),false);assert.equal(vm.runInContext('designWatch',c),null,'the generation watch is stopped');
+ vm.runInContext("tab='advanced'",c);stateOf(c).labId='lab-a';stateOf(c).loading=false;c.renderNetworkDesign();assert.equal(loads,2,'returning reloads (the view may be stale)');
+ assert.equal(view(),'string');
+ const source=fs.readFileSync(path.join(__dirname,'../app/static/network-design.js'),'utf8');
+ assert.doesNotMatch(source,/tab==='design'|tools-design/);
+});
+test('8f: index.html has no Design tab or Tools card; Network design sits under Advanced › Experimental before the Danger zone, closed, labelled, as a region with a persistent warning',()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../app/static/index.html'),'utf8');
+ assert.doesNotMatch(html,/id="tab-design"|data-tab="design"|id="tools-design"|Design this lab/);
+ const at=html.indexOf('id="experimental-design"'),danger=html.indexOf('class="panel danger-zone"'),advanced=html.indexOf('id="advanced-view"'),tools=html.indexOf('id="tools-view"');
+ assert.ok(advanced>tools&&at>advanced&&at<danger,'inside Advanced, before the Danger zone');
+ assert.match(html,/<details id="experimental-design" class="experimental-details">/,'closed by default');
+ assert.match(html,/Experimental <span class="pill warn">Under construction \/ Under review<\/span>/);
+ assert.match(html,/<section id="design-view" class="design-region" role="region" aria-labelledby="design-head-title">/);
+ assert.doesNotMatch(html,/role="tabpanel" aria-labelledby="tab-design"/);
+ assert.match(html,/id="design-experimental-banner" class="banner warn[^"]*"[^>]*><svg[\s\S]*?under construction and under review[^<]*, and it is not part of the supported lab workflow/);
+ assert.doesNotMatch(html.slice(html.indexOf('id="design-experimental-banner"'),html.indexOf('id="design-head"')),/dismiss|close/i,'the warning cannot be dismissed');
+});
+test('8f: an old view=design route resolves to Advanced with Experimental opened, without a Design panel',()=>{
+ const elements=new Map();const element=()=>({dataset:{},value:'',innerHTML:'',open:false,hidden:false,disabled:false,listeners:{},classList:{toggle(){}},setAttribute(){},addEventListener(){},scrollIntoView(){this.scrolled=true;}});
+ const document={getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);},querySelectorAll(){return [];},createElement:element,body:element()};
+ const context=vm.createContext({document,sessionStorage:{getItem(){return null;},setItem(){}},setTimeout:()=>0,clearTimeout(){},setInterval(){},URLSearchParams,URL});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/status.js'),'utf8'),context);
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/app.js'),'utf8'),context);
+ vm.runInContext("PANELS.includes('design')",context);
+ assert.equal(vm.runInContext("PANELS.includes('design')",context),false);
+ vm.runInContext("setTab('design')",context);
+ assert.equal(vm.runInContext('tab',context),'advanced');assert.equal(vm.runInContext('scrollTarget',context),'experimental-design');
+ vm.runInContext("activeId='lab';state={labs:[{id:'lab',name:'L',nodes:[],profiles:[],defaults:{}}],jobs:[],platforms:{}};showTab('design')",context);
+ assert.equal(document.getElementById('experimental-design').open,true,'the Experimental details is opened');
+ assert.equal(document.getElementById('experimental-design').scrolled,true,'and scrolled into view');
+ assert.equal(document.getElementById('design-view').hidden,false,'showTab does not toggle the region as a panel');
+ assert.equal(vm.runInContext('tab',context),'advanced');
+});
