@@ -311,7 +311,7 @@ Levels: `info`, `warning`, `error`. Actions emitted by the read code: `worker.st
 | guard | definition | HTTP result |
 |---|---|---|
 | **CSRF/origin** (`main.py:90-95`) | any `/api/*` request with `Sec-Fetch-Site: cross-site` or an `Origin` ≠ base URL | 403 "Use this manager from its own browser page." |
-| **reset pending** (`main.py:96-97`) | `.reset-pending` exists; every `/api/*` except `POST /api/manager/reset` | 503 "A storage reset needs completion. Retry Start fresh or restart the manager." |
+| **reset pending** (`main.py:96-97`) | `.reset-pending` exists; every `/api/*` except `POST /api/manager/reset` | 503 "A storage reset did not finish. Retry Start fresh to complete it. A manager restart completes only a reset that was fully prepared; otherwise the labs, credentials and backups stay as they were and Start fresh must be chosen again." (reworded by the 2026-10-03 audit fixes; it was "A storage reset needs completion. Retry Start fresh or restart the manager.") |
 | **body size** (`main.py:98-102`) | POST/PUT/PATCH/DELETE must send `Content-Length` 1..2 500 000 | 413 "Upload limit is 2.5 MB per request; content length is required." (400 on non-numeric) |
 | **validation** | pydantic failure | 422 `{"detail":"Check the request fields and upload sizes."}` |
 | `operation_busy(state, lab_id, progress_id)` (`lab_operations.py:29-37`) | any operation in `BUSY`, any git job in `GIT_BUSY`, or any restore in `RESTORE_BUSY` that belongs to this lab **or has no lab_id** (lab-less operations block everyone) | callers raise 409 "Wait for the lab operation to finish." |

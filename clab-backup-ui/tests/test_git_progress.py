@@ -1401,8 +1401,9 @@ class GitPlacesTests(GitProgressTests):
         theirs = self.refused_then_kept('b'*40)
         stored = self.progress.get_job(theirs['id'])
         self.assertTrue(stored['head_uploaded'])
+        original = copy.deepcopy(stored['destination'])   # `stored` is the live job: each case starts from the save as it was frozen
         for change in (dict(branch='dev'), dict(remote='https://example.test/other.git')):
-            self.progress.update(theirs['id'], head_uploaded=False, destination=dict(stored['destination'], **change))
+            self.progress.update(theirs['id'], head_uploaded=False, destination=dict(original, **change))
             mine = self.stored_save(self.lab['id'], 'b'*40, reviewed='2026-10-03T10:00:00+00:00')
             self.assertEqual(self.client.post('/api/git/jobs/' + mine['id'] + '/retry', json={'push': True}).status_code, 200)
             self.progress.execute(mine['id'])

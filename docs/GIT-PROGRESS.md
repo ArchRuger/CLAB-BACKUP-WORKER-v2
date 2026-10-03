@@ -234,10 +234,12 @@ below it. So the review before every upload holds across them:
   counting). The save itself stays kept; it is not shown as uploaded. The count can be too high (a
   kept save that never reached a commit, while no such upload happened yet, or one an earlier upload
   carried before the manager tracked that). It is never too low for a save that remembers its
-  checkout. A save made before 1.30.37 remembers none, so only its lab's current connection says
-  where it belongs: while that lab is disconnected the save is not counted anywhere, and if the lab
-  is connected to another repository since, it is counted there instead. Removing a lab from the
-  manager forgets its saves, kept ones included.
+  checkout and its VM, as long as the manager still reaches that VM through the same connection
+  (address, port, account and host key). A save that remembers its checkout but not its VM is taken
+  to be on its lab's current VM. A save made before 1.30.37 remembers neither, so only its lab's
+  current connection says where it belongs: while that lab is disconnected the save is not counted
+  anywhere, and if the lab is connected to another repository since, it is counted there instead.
+  Removing a lab from the manager forgets its saves, kept ones included.
 - A folder move that meets such a save is kept on the VM and uploaded later from *Recent saves*.
 
 ## Everyday buttons

@@ -265,15 +265,20 @@ function restoreStageSteps(t, now, rechecking, restartedAt) {
   const caughtDone = caught === 3 || (caught === 1 && timeline.backed_up != null);
   const readBack = 4, confirmingNow = t.stage === 'confirming' && restartedAt != null && startOf(5) != null && startOf(5) > restartedAt;
   const current = confirmingNow ? 5 : readBack;
+  // Times never span the outage: the step the restart caught ends at the restart, and a read-back step whose stamp is the run's own
+  // counts from the restart.
+  const caughtFor = i => restartedAt != null && startOf(i) != null ? restoreDuration(restartedAt - startOf(i)) : elapsed(i, false);
+  const runningFor = i => restartedAt != null && startOf(i) != null && startOf(i) < restartedAt ? restoreDuration(now - restartedAt) : elapsed(i, true);
   return restoreSteps.map((step, i) => {
    const row = { label: step.label, state: 'waiting', text: 'Waiting', elapsed: '' };
-   if (i === current) Object.assign(row, { state: 'current', elapsed: elapsed(i, true),
+   if (i === current) Object.assign(row, { state: 'current', elapsed: runningFor(i),
     text: (i === 5 ? at && at[2] : '') || restoreRecheckWords.step + (i === readBack && t.attempts > 1 ? ' (attempt ' + t.attempts + ')' : '') });
    else if (i === 3 && startOf(3) != null) Object.assign(row, { state: 'done', text: t.no_op ? 'Armed — no change needed' : 'Armed', elapsed: elapsed(i, false) });
    else if (i === readBack) Object.assign(row, { state: 'done', text: 'Done', elapsed: elapsed(i, false) });   // the read-back's pass, now confirming
    else if (i < caught || (i === caught && caughtDone)) Object.assign(row, { state: 'done', text: 'Done', elapsed: elapsed(i, false) });
-   else if (i === caught) Object.assign(row, { state: 'stopped', text: 'Interrupted by the restart', elapsed: elapsed(i, false) });
-   else if (i < current) Object.assign(row, { state: 'unreached', text: 'Not reached' });
+   else if (i === caught) Object.assign(row, { state: 'stopped', text: 'Interrupted by the restart', elapsed: caughtFor(i) });
+   // A read-back that confirms found the job's own change armed, although the restart came before the manager recorded it.
+   else if (i < current) Object.assign(row, { state: 'unreached', text: i === 3 && confirmingNow ? 'Not recorded before the restart' : 'Not reached' });
    return row;
   });
  }

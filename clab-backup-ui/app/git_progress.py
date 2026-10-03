@@ -1495,7 +1495,9 @@ class GitProgress:
                     # one so old it froze no destination at all (saves froze none before 1.30.37), whose checkout only its
                     # lab's current binding can tell: while that lab is disconnected the save is in no checkout's count,
                     # and once it is connected to another checkout it is counted there instead. Nothing the manager still
-                    # holds names that save's checkout. While another lab's save is unreviewed the upload waits.
+                    # holds names that save's checkout. A save that froze its checkout but not its VM is placed on its lab's
+                    # current VM, so it is missed too once the manager reaches that VM through another connection identity
+                    # (`made_in`). While another lab's save is unreviewed the upload waits.
                     labs = self.checkout_labs(lab_id)
                     waiting = [j for j in self.store.state['git_jobs'] if j['id'] != job['id'] and (j.get('lab_id') == lab_id or j.get('lab_id') in labs)
                                and job_pending(j) and not j.get('pushed') and j.get('target') != 'update']

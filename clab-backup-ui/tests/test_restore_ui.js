@@ -348,6 +348,13 @@ test('L-10 follow-up: a device the restart caught while applying never reads as 
   assert.equal(steps[4].text,'Reading back after the restart');
  }
  assert.doesNotMatch(c.restoreTargetRow(readBack,20,true,10),/Armed/);
+ // Times never span the outage: the caught step (entered at `connecting`, 2) ends at the restart (10), not at the read-back's first stamp (12).
+ assert.equal(plain(c.restoreStageSteps(readBack,20,true,10))[2].elapsed,'8 s');
+ // The read-back found the job's own change armed and confirms it, although the restart came before the manager recorded the arm.
+ const unrecorded=plain(c.restoreStageSteps({...readBack,stage:'confirming',timeline:{...readBack.timeline,confirming:15}},20,true,10));
+ assert.deepEqual(unrecorded.map(s=>s.state),['done','done','stopped','unreached','done','current','waiting']);
+ assert.equal(unrecorded[3].text,'Not recorded before the restart','"Not reached" would deny what the read-back just found');
+ assert.equal(unrecorded[5].text,'Confirming');
 });
 test('L-10 follow-up: a device the restart caught while confirming shows the read-back on its own row; the Confirm step stays interrupted',()=>{
  const c=ctx(),plain=v=>JSON.parse(JSON.stringify(v));
@@ -358,6 +365,8 @@ test('L-10 follow-up: a device the restart caught while confirming shows the rea
   assert.deepEqual(steps.map(s=>s.state),['done','done','done','done','current','stopped','waiting'],'stage '+stage);
   assert.equal(steps[3].text,'Armed');assert.equal(steps[4].text,'Reading back after the restart');
   assert.equal(steps[5].text,'Interrupted by the restart','not "Confirming" before the read-back has started');
+  assert.equal(steps[5].elapsed,'1 s','the caught step ends at the restart (5 → 6)');
+  assert.equal(steps[4].elapsed,'14 s','the read-back counts from the restart (6 → 20), not from the run\'s own stamp');
  }
  // Restart at 4.5: the same stamps, the confirming one is newer, so the read-back itself is confirming.
  const mine=plain(c.restoreStageSteps({name:'c',status:'interrupted',stage:'confirming',timeline:stamps},20,true,4.5));
@@ -369,6 +378,12 @@ test('L-10 follow-up: a device the restart caught while confirming shows the rea
  const {c:dc,detail}=recheckingDialog();
  return dc.restoreShowJob('j',JSON.parse(JSON.stringify(job))).then(()=>{
   assert.match(detail.innerHTML,/restore-stage--stopped"><span class="restore-stage-glyph" aria-hidden="true"><\/span><span class="restore-stage-name">Confirm<\/span> <span class="restore-stage-text">Interrupted by the restart/);
+  // The same stamps with the restart at 4.5 s: only the job's `finished`, passed through by the dialog, makes Confirm the current step.
+  const mineJob=recheckingJob({finished:'1970-01-01T00:00:04.500+00:00',targets:[{name:'c',status:'interrupted',stage:'confirming',timeline:stamps}]});
+  const {c:mc,detail:mineDetail}=recheckingDialog();
+  return mc.restoreShowJob('j',JSON.parse(JSON.stringify(mineJob))).then(()=>{
+   assert.match(mineDetail.innerHTML,/restore-stage--current"><span class="restore-stage-glyph" aria-hidden="true"><\/span><span class="restore-stage-name">Confirm<\/span> <span class="restore-stage-text">Confirming/);
+  });
  });
 });
 test('L-10 follow-up: a job read back, or stored by an older manager, opens as the finished job it is and is not followed',async()=>{
