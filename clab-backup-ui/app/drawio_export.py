@@ -70,7 +70,8 @@ def drawio(lab, layout='interactive'):
         parent, x, y = parent_for(n)
         position = n.get('labelPosition', 'bottom')
         # The editor's label positions, including the four corners (the label diagonally off the icon's corner).
-        label_style = {'top': 'verticalLabelPosition=top;verticalAlign=bottom;',
+        label_style = {'center': 'verticalLabelPosition=middle;labelPosition=center;align=center;verticalAlign=middle;',
+                       'top': 'verticalLabelPosition=top;verticalAlign=bottom;',
                        'left': 'labelPosition=left;align=right;verticalAlign=middle;',
                        'right': 'labelPosition=right;align=left;verticalAlign=middle;',
                        'top-left': 'labelPosition=left;verticalLabelPosition=top;align=right;verticalAlign=bottom;',

@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const read=name=>fs.readFileSync(path.join(__dirname,'../app/static',name),'utf8');
 // A Storage like the browser's: string values, key(i), length.
 function storage(){const map=new Map();return {getItem:k=>map.has(k)?map.get(k):null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k),key:i=>[...map.keys()][i]??null,get length(){return map.size;}};}
-function load(){const context=vm.createContext({console,crypto:require('node:crypto').webcrypto,TextEncoder,URLSearchParams,document:{getElementById:()=>null}});vm.runInContext(read('lab-builder-page.js'),context);vm.runInContext(read('operations.js'),context);
+function load(win){const context=vm.createContext({console,...(win?{window:win}:{}),crypto:require('node:crypto').webcrypto,TextEncoder,URLSearchParams,document:{getElementById:()=>null}});vm.runInContext(read('lab-builder-page.js'),context);vm.runInContext(read('operations.js'),context);
  // top-level const is not a property of the context; expose the tables the tests read
  for(const name of ['BUILDER_TEMPLATES','opLabels','opReviewCopy'])context[name]=vm.runInContext(name,context);
  return context;}
@@ -22,32 +22,97 @@ test('a new draft is a blank topology with the lab name, and the templates list 
   const t=c.BUILDER_TEMPLATES.find(x=>x.kind===kind);assert.ok(t,kind);assert.ok(t.name&&t.image,kind);
  }
 });
-test('templates take the image this site already uses for their kind',()=>{
- const c=load(),list=c.builderTemplateList({arista_ceos:['n24l/ceos:4.35.0F','ceos:old'],nokia_srlinux:['ghcr.io/nokia/srlinux']});
- assert.equal(list.find(t=>t.kind==='arista_ceos').image,'n24l/ceos:4.35.0F');assert.equal(list.find(t=>t.kind==='linux').image,c.BUILDER_TEMPLATES.find(t=>t.kind==='linux').image);
+test('the four built-in network templates carry the requested n24l images and the cJunosEvolved env; every image splits into repository and tag',()=>{
+ const c=load(),by=k=>c.BUILDER_TEMPLATES.find(t=>t.kind===k);
+ assert.equal(by('juniper_cjunosevolved').image,'n24l/cjunosevolved:26.2R1.7-EVO');assert.equal(by('juniper_vjunosswitch').image,'n24l/vjunos-switch:23.2R1.14');
+ assert.equal(by('cisco_xrv9k').image,'n24l/cisco_xrv9k:24.3.1');assert.equal(by('arista_ceos').image,'n24l/ceos:4.35.0F');
+ for(const t of c.BUILDER_TEMPLATES.filter(x=>x.pinned)){assert.match(t.image,/^n24l\/[a-z0-9_-]+:[^:\/]+$/,t.kind+' is a valid lower-case reference with a tag');}
+ // Juniper's entrypoint writes the container hostname only under CPTX_AUTO_CONFIG
+ assert.deepEqual(JSON.parse(JSON.stringify(by('juniper_cjunosevolved').env)),{CPTX_AUTO_CONFIG:'1'});
+ for(const k of ['arista_ceos','juniper_vjunosswitch','cisco_xrv9k','linux'])assert.equal(by(k).env,undefined,k+' has no env');
+});
+test('pinned built-in templates keep their default; the known-image and VM-image preference applies to the Linux host',()=>{
+ const c=load(),list=c.builderTemplateList({arista_ceos:['site/ceos:9','ceos:old'],linux:['alpine:3'],nokia_srlinux:['ghcr.io/nokia/srlinux']},['n24l/ceos:4.34.2F']);
+ assert.equal(list.find(t=>t.kind==='arista_ceos').image,'n24l/ceos:4.35.0F','a pinned kind ignores the labs\' image');
+ assert.equal(list.find(t=>t.kind==='linux').image,'alpine:3','the Linux host takes the image My labs use');
+ assert.equal(c.builderTemplateList({},['ghcr.io/srl-labs/network-multitool:v2','ghcr.io/srl-labs/network-multitool:v3']).find(t=>t.kind==='linux').image,'ghcr.io/srl-labs/network-multitool:v3','then the highest matching VM image');
+ assert.equal(c.builderTemplateList({},[]).find(t=>t.kind==='linux').image,'ghcr.io/srl-labs/network-multitool:latest');
  assert.ok(c.builderImages(list,{nokia_srlinux:['ghcr.io/nokia/srlinux']}).includes('ghcr.io/nokia/srlinux'));
 });
-test('templates prefer an image the VM has over the placeholder, the Image list offers the VM images, and the draft\'s images are read and summarised',()=>{
- const c=load(),vm=['n24l/ceos:4.34.2F','n24l/ceos:4.35.0F','n24l/vjunos-switch:23.2R1.14','ghcr.io/srl-labs/network-multitool:latest','other/thing:1'];
+test('stored templates are migrated once: only an untouched prior built-in default moves, nothing else',()=>{
+ const c=load(),plain=v=>JSON.parse(JSON.stringify(v));
+ const list=[{name:'Arista cEOS',kind:'arista_ceos',image:'ceos:4.35.0F'},{name:'Juniper cJunosEvolved',kind:'juniper_cjunosevolved',image:'cjunosevolved:26.2R1.7-EVO'},
+  {name:'Juniper cJunosEvolved ',kind:'juniper_cjunosevolved',image:'cjunosevolved:26.2R1.7-EVO'},{name:'My ceos',kind:'arista_ceos',image:'ceos:4.35.0F'},
+  {name:'Cisco XRv9k',kind:'cisco_xrv9k',image:'registry.example:5000/xr:9'},{name:'Linux host',kind:'linux',image:'ghcr.io/srl-labs/network-multitool:latest'},
+  {name:'Juniper vJunos-switch',kind:'linux',image:'vrnetlab/juniper_vjunos-switch:23.2R1.14'}];
+ const m=c.builderMigrateTemplates(list),out=plain(m.list);
+ assert.equal(m.changed,true);assert.equal(out[0].image,'n24l/ceos:4.35.0F','prior default migrates');
+ assert.deepEqual(out[1],{name:'Juniper cJunosEvolved',kind:'juniper_cjunosevolved',image:'n24l/cjunosevolved:26.2R1.7-EVO',env:{CPTX_AUTO_CONFIG:'1'}},'cJunosEvolved also gets the hostname env');
+ for(const i of [2,3,4,5,6])assert.deepEqual(out[i],list[i],'entry '+i+' (renamed, custom, other image, linux, wrong kind) is untouched');
+ const again=c.builderMigrateTemplates(out);assert.equal(again.changed,false);assert.deepEqual(plain(again.list),out,'idempotent');
+ // an env or startup-config of the user's own is never touched or added to
+ const own=[{name:'Juniper cJunosEvolved',kind:'juniper_cjunosevolved',image:'cjunosevolved:26.2R1.7-EVO',env:{X:'1'}},{name:'Juniper cJunosEvolved',kind:'juniper_cjunosevolved',image:'cjunosevolved:26.2R1.7-EVO',startupConfig:'/c.cfg'}];
+ const o=plain(c.builderMigrateTemplates(own).list);assert.deepEqual(o[0].env,{X:'1'});assert.equal(o[1].env,undefined);assert.equal(o[0].image,'n24l/cjunosevolved:26.2R1.7-EVO');
+ assert.deepEqual(plain(c.builderMigrateTemplates(null)),{list:[],changed:false});
+});
+test('templates(): the stored list is migrated once under a version marker, and a template stored later is not',()=>{
+ const s=storage(),win={localStorage:s},c=load(win);
+ s.setItem('clab-builder:templates',JSON.stringify({list:[{name:'Arista cEOS',kind:'arista_ceos',image:'ceos:4.35.0F'},{name:'Mine',kind:'linux',image:'a:1'}],defaultName:'Mine'}));
+ const first=JSON.parse(JSON.stringify(win.labBuilderPage.templates()));assert.equal(first.list[0].image,'n24l/ceos:4.35.0F');assert.equal(first.defaultName,'Mine');assert.equal(s.getItem('clab-builder:templates-version'),'2');
+ s.setItem('clab-builder:templates',JSON.stringify({list:[{name:'Arista cEOS',kind:'arista_ceos',image:'ceos:4.35.0F'}],defaultName:''}));
+ assert.equal(win.labBuilderPage.templates().list[0].image,'ceos:4.35.0F','after the marker an old-looking template is the user\'s own');
+});
+test('templates prefer an image the VM has over the placeholder (Linux), the Image list offers the VM images, and the draft\'s images are read',()=>{
+ const c=load(),vm=['n24l/ceos:4.34.2F','n24l/ceos:4.35.0F','ghcr.io/srl-labs/network-multitool:latest','other/thing:1'];
  const list=c.builderTemplateList({},vm);
- assert.equal(list.find(t=>t.kind==='arista_ceos').image,'n24l/ceos:4.35.0F','the highest tag of a matching VM image');
- assert.equal(list.find(t=>t.kind==='juniper_vjunosswitch').image,'n24l/vjunos-switch:23.2R1.14','matched by its repository name, not the placeholder\'s');
- assert.equal(list.find(t=>t.kind==='cisco_xrv9k').image,'vrnetlab/cisco_xrv9k:24.3.1','no VM image for the kind: the placeholder stays');
- assert.equal(c.builderTemplateList({arista_ceos:['site/ceos:9']},vm).find(t=>t.kind==='arista_ceos').image,'site/ceos:9','an image the labs in My labs use comes first');
- assert.equal(c.builderTemplateList({},[]).find(t=>t.kind==='arista_ceos').image,'ceos:4.35.0F');
  const plain=v=>JSON.parse(JSON.stringify(v));
  assert.ok(c.builderImages(list,{},vm).includes('other/thing:1'),'every VM image is offered in the Image list');
  assert.deepEqual(plain(c.builderYamlImages('name: x\ntopology:\n  kinds:\n    linux:\n      image: "alpine:3"\n  nodes:\n    a:\n      image: n24l/ceos:4.35.0F\n    b:\n      image: n24l/ceos:4.35.0F # same\n    c:\n      image: "{{ templated }}"\n')),['alpine:3','n24l/ceos:4.35.0F']);
  assert.deepEqual(plain(c.builderYamlImages('')),[]);
- const summary=c.builderImageSummary([{reference:'n24l/ceos:4.35.0F',local:true,registry:'skipped'},{reference:'vrnetlab/cisco_xrv9k:24.3.1',local:false,registry:'not-found'},{reference:'ghcr.io/x/y:1',local:false,registry:'found'},{reference:'r.example/z:1',local:false,registry:'unreachable'}]);
- assert.equal(summary.warn,true);
- assert.match(summary.text,/^Images: n24l\/ceos:4\.35\.0F · on the VM · vrnetlab\/cisco_xrv9k:24\.3\.1 · not on the VM and no registry offers it \(not there, or it needs a login on the VM\): a deploy fails · ghcr\.io\/x\/y:1 · not on the VM yet, a deploy pulls it from its registry · r\.example\/z:1 · not on the VM; its registry did not answer/);
- assert.equal(c.builderImageSummary([{reference:'bad name',local:false,registry:'invalid'}]).warn,true,'a name that is no reference warns too');
- assert.match(summary.text,/Pick an image this VM has \(the Image field lists them\) or load vrnetlab\/cisco_xrv9k:24\.3\.1 on the VM first\.$/);
- assert.deepEqual(plain(c.builderImageSummary([{reference:'a:1',local:true,registry:'skipped'}])),{text:'Images: a:1 · on the VM',warn:false});
- assert.deepEqual(plain(c.builderImageSummary([])),{text:'',warn:false});
- assert.equal(c.builderImageSummary([{reference:'a:1',available:false,local:null,registry:'skipped'}]).text,'Images: this VM has no Docker client the manager can ask, so they are checked at deploy time.');
- const html=read('lab-builder.html');assert.match(html,/id="builder-images"[^>]*hidden/,'the line is on the page, empty until the manager answers');
+});
+test('the image notice: concise text naming only problems, tone by severity, errors outrank successes',()=>{
+ const c=load(),plain=v=>JSON.parse(JSON.stringify(v));
+ const ok=r=>({reference:r,local:true,registry:'skipped'});
+ const fine=c.builderImageSummary([ok('a:1'),ok('b:1'),{reference:'c:1',local:false,registry:'found'},ok('d:1'),ok('e:1')]);
+ assert.deepEqual(plain(fine),{text:'Images checked: all 5 available on the VM or pullable from their registry.',tone:'info',warn:false});
+ assert.doesNotMatch(fine.text,/a:1/,'no list of successes');
+ const bad=c.builderImageSummary([ok('n24l/ceos:4.35.0F'),{reference:'vrnetlab/cisco_xrv9k:24.3.1',local:false,registry:'not-found'},{reference:'r.example/z:1',local:false,registry:'unreachable'}]);
+ assert.equal(bad.tone,'error');assert.match(bad.text,/^Error: vrnetlab\/cisco_xrv9k:24\.3\.1 is not on the VM and no registry offers it/);assert.doesNotMatch(bad.text,/ceos/,'a good image is not named');assert.match(bad.text,/Also: r\.example\/z:1: its registry did not answer/);assert.match(c.builderImageSummary([{reference:'a:1',local:false,registry:'not-found'},{reference:'b:1',local:false,registry:'not-found'}]).text,/^Error: a:1, b:1 are not on the VM and no registry offers them/);
+ assert.equal(c.builderImageSummary([{reference:'bad name',local:false,registry:'invalid'}]).tone,'error');
+ const warn=c.builderImageSummary([ok('a:1'),{reference:'r.example/z:1',local:false,registry:'unreachable'}]);assert.equal(warn.tone,'warn');assert.match(warn.text,/^Warning: r\.example\/z:1/);
+ assert.equal(c.builderImageSummary([{reference:'q:1',local:false,registry:'unknown'}]).tone,'warn');
+ assert.equal(c.builderImageSummary([ok('a:1')]).text,'Image checked: available on the VM or pullable from its registry.');
+ assert.deepEqual(plain(c.builderImageSummary([])),{text:'',tone:'info',warn:false});
+ const none=c.builderImageSummary([{reference:'a:1',available:false,local:null,registry:'skipped'}]);assert.equal(none.tone,'warn');assert.match(none.text,/^Warning: images not checked\. This VM has no Docker client/);
+ const html=read('lab-builder.html');assert.match(html,/id="builder-images"[^>]*hidden/,'the notice is on the page, empty until the manager answers');
+ assert.match(html,/<button type="button"[^>]*id="builder-images-dismiss"[^>]*aria-label="[^"]+"/,'a real button dismisses it');
+});
+test('the image notice: stale answers are dropped, a dismissed result stays dismissed, a different result shows, a failed request is shown',async()=>{
+ const c=load(),plain=v=>JSON.parse(JSON.stringify(v)),run=s=>vm.runInContext(s,c);
+ const answer=images=>({images});let pending=null;
+ c.json=()=>new Promise(r=>{pending=r;});
+ run("builderDraft={id:'d1',yaml:''}");
+ // stale seq: a second check started while the first was on its way
+ let first=c.builderImageCheck(['a:1']);const resolveFirst=pending;let second=c.builderImageCheck(['a:1']);const resolveSecond=pending;
+ resolveFirst(answer([{reference:'a:1',local:true,registry:'skipped'}]));assert.equal(await first,null,'the older answer is dropped');
+ resolveSecond(answer([{reference:'a:1',local:false,registry:'not-found'}]));const r2=await second;assert.equal(r2.summary.tone,'error');
+ // draft switch
+ let third=c.builderImageCheck(['a:1']);run("builderDraft={id:'d2',yaml:''}");pending(answer([{reference:'a:1',local:true,registry:'skipped'}]));assert.equal(await third,null,'the answer of another draft is dropped');
+ // dismissal is keyed by draft + refs + tone + text
+ run("builderDraft={id:'d1',yaml:''}");
+ const asked=async images=>{const p=c.builderImageCheck(['a:1']);pending(answer(images));return p;};
+ const bad=await asked([{reference:'a:1',local:false,registry:'not-found'}]);
+ run("builderImageDismissed="+JSON.stringify(bad.key));
+ const same=await asked([{reference:'a:1',local:false,registry:'not-found'}]);assert.equal(same.key,bad.key,'the same answer has the same key (stays dismissed)');
+ const other=await asked([{reference:'a:1',local:false,registry:'unreachable'}]);assert.notEqual(other.key,bad.key,'a different result is a new notice');
+ run("builderDraft={id:'d9',yaml:''}");assert.notEqual((await asked([{reference:'a:1',local:false,registry:'not-found'}])).key,bad.key,'another draft is not covered by the dismissal');
+ // an error in the batch is not masked by the successes beside it
+ run("builderDraft={id:'d1',yaml:''}");
+ const mixed=await asked([{reference:'a:1',local:true,registry:'skipped'},{reference:'b:1',local:false,registry:'invalid'},{reference:'c:1',local:true,registry:'skipped'}]);assert.equal(mixed.summary.tone,'error');
+ // the request itself failing is shown
+ c.json=()=>Promise.reject(new Error('The manager did not answer.'));const failed=await c.builderImageCheck(['a:1']);
+ assert.equal(failed.summary.tone,'warn');assert.match(failed.summary.text,/^Warning: the images could not be checked \(The manager did not answer\.\)/);
+ assert.equal(await c.builderImageCheck([]),null,'nothing to check');
 });
 test('a draft edited in another tab is never overwritten silently',()=>{
  const c=load(),s=storage();
@@ -355,7 +420,10 @@ test('the image is written as typed and the version is never filled in: the trac
  assert.match(code,/return ([A-Za-z_$]+)\?([A-Za-z_$]+)\?`\$\{\1\}:\$\{\2\}`:\1:""/,'the join writes image:version, or the image alone');
  // Items 5, 6 and 7: the corner options, the corner styles, the immediate apply and the map editor's device look.
  for(const label of ['"Top left"','"Top right"','"Bottom left"','"Bottom right"'])assert.ok(code.includes(label),'the Label Position select offers '+label);
- assert.match(code,/case"top-left":case"top-right":case"bottom-left":case"bottom-right":return/,'a corner is a known label position');
+ assert.match(code,/case"center":case"top-left":case"top-right":case"bottom-left":case"bottom-right":return/,'Center and a corner are known label positions');
+ assert.ok(code.includes('"Center"')&&code.includes('value:"center"'),'the Label Position select offers Center');
+ assert.match(code,/case"center":return\{\.\.\.[A-Za-z_$]+,top:"50%",left:"50%",maxWidth:"none",overflow:"visible",pointerEvents:"none"/,'a centred label sits over the icon and never takes a click');
+ assert.ok(code.includes('rgba(0, 0, 0, 0.94)'),'the default background of a centred label is near-opaque');
  assert.ok(code.includes('"Device look"')&&code.includes('__CLAB_MAP_LOOK__'),'the map editor opens the node editor for the look');
  assert.ok(code.includes('"labelPosition","direction","icon","labelBackgroundColor"'),'the choices one clicks apply at once');
  const {PATCHES,applyPatches}=await import('../lab-builder/patches.mjs');

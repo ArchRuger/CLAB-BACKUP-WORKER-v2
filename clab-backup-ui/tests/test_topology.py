@@ -85,6 +85,10 @@ class TopologyTests(unittest.TestCase):
         self.assertEqual(d['decorations'][0]['fillOpacity'],.4)
         self.assertEqual(d['decorations'][1]['fontSize'],28)
         self.assertEqual(d['decorations'][1]['fontWeight'],'bold')
+    def test_center_label_position_survives_the_import(self):
+        a=copy.deepcopy(self.annotations)
+        a['nodeAnnotations'][0].update(labelPosition='center')
+        self.assertEqual(self.parse(a)['nodes'][0]['labelPosition'],'center')
     def test_topology_export_long_key_does_not_duplicate_short_annotation(self):
         d=self.parse(topo={'nodes':{'clab-Example-r1':{'shortname':'r1'}}})
         self.assertEqual([n['id'] for n in d['nodes']],['r1'])

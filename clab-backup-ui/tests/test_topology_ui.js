@@ -19,6 +19,14 @@ test('the four corner label positions sit diagonally off the icon, anchored away
  assert.deepEqual(at('bottom'),[0,35,'middle']);assert.deepEqual(at('top'),[0,-29,'middle']);assert.deepEqual(at('left'),[-28,5,'end']);assert.deepEqual(at('right'),[28,5,'start']);
  assert.deepEqual(at('sideways'),[0,35,'middle'],'an unknown value draws at the bottom, like the editor');
 });
+test('a centred label sits over the icon, on a near-opaque background, with no clearance for any wire',()=>{
+ const svg=context.topologyNode({id:'R1',inventory_name:'clab-lab-R1',label:'R1',x:0,y:0,labelPosition:'center'});
+ assert.match(svg,/<text x="0" y="5" text-anchor="middle">R1<\/text>/);assert.match(svg,/class="device-label device-label-center"/);
+ assert.match(fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8'),/\.device-label-bg \{ fill-opacity: \.9[2-9]/,'the label box is near-opaque');
+ const clear=(dx,dy)=>{const nodes=new Map([['a',{id:'a',label:'a-long-device-name',x:0,y:0,labelPosition:'center'}],['b',{id:'b',label:'b',x:dx,y:dy}]]);return Number(/<text x="(-?[\d.]+)" y="(-?[\d.]+)"/.exec(context.topologyLink([{node:'a',interface:'e1'},{node:'b',interface:'e1'}],nodes,0,{}))[1]);};
+ assert.equal(context.topologyLabelClearance({label:'x',labelPosition:'center'},0,1),0);assert.equal(context.topologyLabelClearance({label:'x',labelPosition:'center'},1,0),0);
+ assert.equal(clear(300,0),60);
+});
 test('a preview draws a file, not a lab: no device is a button or "Not in this lab", a device only the map file names is captioned so, and the state badge is absent (item 8)',()=>{
  const inFile=context.topologyNode({id:'R1',label:'R1',x:0,y:0,in_topology:true},{},{preview:true});
  assert.doesNotMatch(inFile,/unmatched|Not in this lab|role="button"|data-map-node|device-state-dot/);assert.match(inFile,/<title>R1<\/title>/);

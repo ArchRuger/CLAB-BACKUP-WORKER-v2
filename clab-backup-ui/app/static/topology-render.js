@@ -41,21 +41,23 @@ function topologyNode(n,states={},options={}){
  const size=40,r=size/2,matched=preview?n.in_topology!==false:!!n.inventory_name,state=(matched&&!preview&&states&&states[n.inventory_name])||'neutral';
  const icon=(n.icon||'router').toLowerCase();
  const path=topologyGlyph(icon);
- // Label placement, the editor's values: bottom (default), top, left, right and the four corners, where the
+ // Label placement, the editor's values: bottom (default), top, left, right, center (over the icon) and the four corners, where the
  // label sits diagonally off the icon's corner so a link leaving the icon's side never covers the name.
  const pos=n.labelPosition||'bottom';let tx=0,ty=r+15,anchor='middle';if(pos.includes('top'))ty=-r-9;if(pos==='left'){tx=-r-8;ty=5;anchor='end';}if(pos==='right'){tx=r+8;ty=5;anchor='start';}
+ // center: the name sits over the icon (vertically centred on its middle); the default background is already near-opaque (style.css .device-label-bg).
+ if(pos==='center'){tx=0;ty=5;anchor='middle';}
  if(pos.endsWith('-left')){tx=-r+6;anchor='end';}if(pos.endsWith('-right')){tx=r-6;anchor='start';}
  const rotation={up:0,right:90,down:180,left:270}[n.direction]||0;
  const label=String(n.label??n.id??'');
  const caption=preview?'Not in the topology file':'Not in this lab';
  const title=preview?(matched?label:`${label} is in the map file but not in the topology file`):matched?`${label} — click to open, right-click for more actions`:`${label} is drawn on the map but is not one of this lab's devices`;
- return `<g class="map-device state-${esc(state)}${matched?'':' unmatched'}" transform="translate(${n.x+20} ${n.y+20})" data-map-id="${esc(n.id)}" data-label="${esc(label)}" ${matched&&!preview?`data-map-node="${esc(n.inventory_name)}" tabindex="0" role="button" aria-haspopup="menu" aria-label="${esc(label)}"`:''}><title>${esc(title)}</title><g transform="rotate(${rotation})"><rect class="device-body" x="${-r}" y="${-r}" width="${size}" height="${size}" rx="${n.iconCornerRadius??4}"${n.iconColor?` fill="${esc(n.iconColor)}"`:''}/><path d="${path}" class="device-symbol"/></g>${pos==='none'?'':`<g class="device-label"><rect class="device-label-bg"${n.labelBackgroundColor?` fill="${esc(n.labelBackgroundColor)}"`:''} rx="3"/><text x="${tx}" y="${ty}" text-anchor="${anchor}">${esc(label)}</text></g>`}${matched?'':`<text class="unmatched-label" y="${r+30}" text-anchor="middle">${caption}</text>`}${preview?'':TOPOLOGY_STATE_BADGE}</g>`;
+ return `<g class="map-device state-${esc(state)}${matched?'':' unmatched'}" transform="translate(${n.x+20} ${n.y+20})" data-map-id="${esc(n.id)}" data-label="${esc(label)}" ${matched&&!preview?`data-map-node="${esc(n.inventory_name)}" tabindex="0" role="button" aria-haspopup="menu" aria-label="${esc(label)}"`:''}><title>${esc(title)}</title><g transform="rotate(${rotation})"><rect class="device-body" x="${-r}" y="${-r}" width="${size}" height="${size}" rx="${n.iconCornerRadius??4}"${n.iconColor?` fill="${esc(n.iconColor)}"`:''}/><path d="${path}" class="device-symbol"/></g>${pos==='none'?'':`<g class="device-label${pos==='center'?' device-label-center':''}"><rect class="device-label-bg"${n.labelBackgroundColor?` fill="${esc(n.labelBackgroundColor)}"`:''} rx="3"/><text x="${tx}" y="${ty}" text-anchor="${anchor}">${esc(label)}</text></g>`}${matched?'':`<text class="unmatched-label" y="${r+30}" text-anchor="middle">${caption}</text>`}${preview?'':TOPOLOGY_STATE_BADGE}</g>`;
 }
 // How far past the icon a wire leaving a device in direction (ux,uy) has to go before its interface label
 // clears the device's own label: the label's height when it sits on that side (bottom, top), its width
 // when it sits left or right; a corner label is met only by a wire leaving diagonally towards it.
 function topologyLabelClearance(n,ux,uy){
- const pos=n.labelPosition||'bottom';if(pos==='none')return 0;
+ const pos=n.labelPosition||'bottom';if(pos==='none'||pos==='center')return 0;
  const text=String(n.label??n.id??''),width=Math.min(90,text.length*6.6+12);
  const toward={bottom:uy>.6,top:uy<-.6,left:ux<-.6,right:ux>.6}[pos];
  if(toward!==undefined)return toward?(pos==='bottom'||pos==='top'?18:width):0;

@@ -29,16 +29,44 @@ function builderNameProblem(draft){
  if(!builderName(name))return 'The lab name '+(name?'"'+name+'" ':'')+'cannot be used. Use letters, digits, dot, dash and underscore (up to 60 characters) in the editor\'s Lab settings (the gear button).';
  return '';
 }
-// image: a placeholder in the shape the kind's image usually has; match: the repository names (last path
-// component, lower case) under which this VM may hold such an image. builderTemplateList prefers, per
-// kind, an image the topologies in My labs use, then one the VM already has, then the placeholder.
+// image: the default image of the kind. For the four built-in network kinds (pinned) it is the site's
+// requested constant and always wins; for the others (the Linux host) it is a placeholder in the shape the
+// image usually has, and builderTemplateList prefers, per kind, an image the topologies in My labs use, then
+// one the VM already has, then the placeholder. match: the repository names (last path component, lower
+// case) under which this VM may hold such an image.
+// The requested names are "N24l/..." in the email; a Docker repository must be lower case, so the namespace
+// is n24l (the tags are unchanged).
 const BUILDER_TEMPLATES=[
- {name:'Arista cEOS',kind:'arista_ceos',image:'ceos:4.35.0F',match:['ceos'],baseName:'ceos',interfacePattern:'eth{n}',icon:'switch'},
- {name:'Juniper cJunosEvolved',kind:'juniper_cjunosevolved',image:'cjunosevolved:26.2R1.7-EVO',match:['cjunosevolved'],baseName:'ptx',interfacePattern:'et-0/0/{n:0}',icon:'pe'},
- {name:'Juniper vJunos-switch',kind:'juniper_vjunosswitch',image:'vrnetlab/juniper_vjunos-switch:23.2R1.14',match:['vjunos-switch','juniper_vjunos-switch','vjunosswitch'],baseName:'sw',interfacePattern:'ge-0/0/{n:0}',icon:'switch'},
- {name:'Cisco XRv9k',kind:'cisco_xrv9k',image:'vrnetlab/cisco_xrv9k:24.3.1',match:['cisco_xrv9k','xrv9k'],baseName:'xr',interfacePattern:'Gi0/0/0/{n:0}',icon:'pe'},
+ {name:'Arista cEOS',kind:'arista_ceos',image:'n24l/ceos:4.35.0F',pinned:true,match:['ceos'],baseName:'ceos',interfacePattern:'eth{n}',icon:'switch'},
+ {name:'Juniper cJunosEvolved',kind:'juniper_cjunosevolved',image:'n24l/cjunosevolved:26.2R1.7-EVO',pinned:true,env:{CPTX_AUTO_CONFIG:'1'},match:['cjunosevolved'],baseName:'ptx',interfacePattern:'et-0/0/{n:0}',icon:'pe'},
+ {name:'Juniper vJunos-switch',kind:'juniper_vjunosswitch',image:'n24l/vjunos-switch:23.2R1.14',pinned:true,match:['vjunos-switch','juniper_vjunos-switch','vjunosswitch'],baseName:'sw',interfacePattern:'ge-0/0/{n:0}',icon:'switch'},
+ {name:'Cisco XRv9k',kind:'cisco_xrv9k',image:'n24l/cisco_xrv9k:24.3.1',pinned:true,match:['cisco_xrv9k','xrv9k'],baseName:'xr',interfacePattern:'Gi0/0/0/{n:0}',icon:'pe'},
  {name:'Linux host',kind:'linux',image:'ghcr.io/srl-labs/network-multitool:latest',match:['network-multitool'],baseName:'host',interfacePattern:'eth{n}',icon:'client'},
 ];
+// cJunosEvolved env: containerlab passes this kind no hostname, and Juniper's /entrypoint.sh replaces the
+// `host-name HOSTNAME;` of its default config with the container's hostname only under CPTX_AUTO_CONFIG
+// (first boot only). The entrypoint checks it before a startup-config, so it is never added to a template or
+// node that has a startup-config of its own, and it applies to new nodes created from the template only.
+// The built-in constants before the n24l defaults. A stored template is moved to the new default once (see
+// builderMigrateTemplates) only when it is still exactly the old built-in one.
+const BUILDER_PREVIOUS_IMAGES={arista_ceos:['ceos:4.35.0F'],juniper_cjunosevolved:['cjunosevolved:26.2R1.7-EVO'],juniper_vjunosswitch:['vrnetlab/juniper_vjunos-switch:23.2R1.14'],cisco_xrv9k:['vrnetlab/cisco_xrv9k:24.3.1']};
+const BUILDER_TEMPLATES_VERSION='2';
+// list: stored device templates. Returns {list,changed}; only an entry that carries a built-in name AND its kind
+// AND one of that kind's previous built-in images gets the new default image, everything else (renamed,
+// customised, other kinds, imported) is returned untouched.
+function builderMigrateTemplates(list){
+ let changed=false;
+ const out=(Array.isArray(list)?list:[]).map(t=>{
+  const built=t&&BUILDER_TEMPLATES.find(b=>b.pinned&&b.name===t.name&&b.kind===t.kind);
+  if(built&&(BUILDER_PREVIOUS_IMAGES[built.kind]||[]).includes(t.image)){
+   changed=true;const next={...t,image:built.image};
+   if(built.env&&!t.env&&!t.startupConfig)next.env={...built.env};
+   return next;
+  }
+  return t;
+ });
+ return {list:out,changed};
+}
 // The VM image that fits a template: its repository's last path component is one of the template's match
 // names (case-insensitive); among several, the highest tag (plain string order, so 4.35.0F after 4.34.2F).
 function builderVmImageFor(template,vmImages){
@@ -47,22 +75,38 @@ function builderVmImageFor(template,vmImages){
  return fits.length?fits[fits.length-1]:'';
 }
 // known: {kind:[image,…]} from the topologies already in My labs; vmImages: the images on the VM.
-function builderTemplateList(known,vmImages){return BUILDER_TEMPLATES.map(t=>({...t,image:(known&&known[t.kind]&&known[t.kind][0])||builderVmImageFor(t,vmImages)||t.image}));}
+function builderTemplateList(known,vmImages){return BUILDER_TEMPLATES.map(t=>({...t,image:t.pinned?t.image:(known&&known[t.kind]&&known[t.kind][0])||builderVmImageFor(t,vmImages)||t.image}));}
 function builderImages(templates,known,vmImages){return [...new Set([...templates.map(t=>t.image),...Object.values(known||{}).flat(),...(vmImages||[])].filter(i=>typeof i==='string'&&i))];}
 // The images a draft's topology names (an `image:` line per device or kind; templated values left out).
 function builderYamlImages(yaml){
  const found=new Set();for(const m of String(yaml||'').matchAll(/^[ \t-]*image:[ \t]*["']?([^"'\s#]+)/gm))if(!m[1].includes('{{'))found.add(m[1]);
  return [...found].slice(0,16);
 }
-// One line under the bar from the manager's answers (POST /api/operations/image-check): which of the draft's
-// images are on the VM, which the registry would give, which neither; warn=true when a deploy would fail.
+// The one notice under the bar from the manager's answers (POST /api/operations/image-check). tone: 'info' when
+// every image is available (on the VM or pullable), 'warn' when something could not be checked, 'error' when a
+// deploy would fail (a reference no registry offers, or no usable name). Only the problematic references are named;
+// an error outranks a warning, a warning outranks the all-fine line, so a failure is never hidden by a success.
 function builderImageSummary(results){
- const list=Array.isArray(results)?results:[];if(!list.length)return {text:'',warn:false};
- if(list.some(r=>r&&r.available===false))return {text:'Images: this VM has no Docker client the manager can ask, so they are checked at deploy time.',warn:false};
- const word=r=>r.local?'on the VM':r.registry==='found'?'not on the VM yet, a deploy pulls it from its registry':r.registry==='not-found'?'not on the VM and no registry offers it (not there, or it needs a login on the VM): a deploy fails':r.registry==='invalid'?'not a usable image name: a deploy fails':r.registry==='unreachable'?'not on the VM; its registry did not answer, a deploy would try to pull it':'not on the VM; could not be checked';
- const missing=list.filter(r=>!r.local&&(r.registry==='not-found'||r.registry==='invalid'));
- return {text:'Images: '+list.map(r=>r.reference+' · '+word(r)).join(' · ')+(missing.length?' — Pick an image this VM has (the Image field lists them) or load '+missing.map(r=>r.reference).join(', ')+' on the VM first.':''),warn:missing.length>0};
+ const list=(Array.isArray(results)?results:[]).filter(r=>r&&typeof r==='object');if(!list.length)return {text:'',tone:'info',warn:false};
+ if(list.some(r=>r.available===false))return {text:'Warning: images not checked. This VM has no Docker client the manager can ask, so they are checked at deploy time.',tone:'warn',warn:true};
+ const missing=[],invalid=[],silent=[],unknown=[];
+ for(const r of list){
+  if(r.local)continue;
+  if(r.registry==='not-found')missing.push(r.reference);else if(r.registry==='invalid')invalid.push(r.reference);
+  else if(r.registry==='unreachable')silent.push(r.reference);else if(r.registry!=='found')unknown.push(r.reference);
+ }
+ const join=a=>a.join(', '),errors=[],warnings=[];
+ if(missing.length)errors.push(join(missing)+(missing.length>1?' are':' is')+' not on the VM and no registry offers '+(missing.length>1?'them':'it')+' (not there, or a login on the VM is needed)');
+ if(invalid.length)errors.push(join(invalid)+(invalid.length>1?' are not usable image names':' is not a usable image name'));
+ if(silent.length)warnings.push(join(silent)+': its registry did not answer, a deploy would try to pull '+(silent.length>1?'them':'it'));
+ if(unknown.length)warnings.push(join(unknown)+': not on the VM and could not be checked');
+ if(errors.length)return {text:'Error: '+errors.join('; ')+'. A deploy fails until the image is on the VM or another one is chosen.'+(warnings.length?' Also: '+warnings.join('; ')+'.':''),tone:'error',warn:true};
+ if(warnings.length)return {text:'Warning: '+warnings.join('; ')+'.',tone:'warn',warn:true};
+ return {text:list.length===1?'Image checked: available on the VM or pullable from its registry.':'Images checked: all '+list.length+' available on the VM or pullable from their registry.',tone:'info',warn:false};
 }
+// What is shown stays until it is dismissed or the next different result replaces it. A dismissed result is
+// remembered by draft + references + tone + text, so the same answer on a later check does not come back.
+function builderImageKey(draftId,refs,summary){return [draftId,refs.join(','),summary.tone,summary.text].join('|');}
 // A new lab always begins as a blank canvas; devices come from dragging the palette's templates
 // (BUILDER_TEMPLATES above, which also feed builderPage.templates()/images()) onto it, not from a
 // starter shape.
@@ -133,7 +177,20 @@ async function builderSaveRequest(draft,hash=builderHash){
 let builderStorageNote='';
 function builderMemoryStorage(){const m=new Map();return {get length(){return m.size;},key:i=>[...m.keys()][i]??null,getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>{m.set(k,String(v));},removeItem:k=>{m.delete(k);}};}
 const builderStore=(()=>{try{const s=window.localStorage;s.getItem(BUILDER_PREFIX+'probe');return s;}catch{builderStorageNote='This browser does not let the page store drafts (private window or blocked site data). Your work lives in this tab only: download the draft before you close or reload it.';return builderMemoryStorage();}})();
-function builderTemplatesStored(){try{const v=JSON.parse(builderStore.getItem(BUILDER_PREFIX+'templates')||'null');if(v&&Array.isArray(v.list)&&v.list.length)return v;}catch{}return null;}
+function builderTemplatesStored(){
+ try{
+  const v=JSON.parse(builderStore.getItem(BUILDER_PREFIX+'templates')||'null');
+  if(!(v&&Array.isArray(v.list)&&v.list.length))return null;
+  // Once per browser (marker): move still-default built-in templates to the n24l images.
+  if(builderStore.getItem(BUILDER_PREFIX+'templates-version')!==BUILDER_TEMPLATES_VERSION){
+   const m=builderMigrateTemplates(v.list);
+   try{if(m.changed)builderStore.setItem(BUILDER_PREFIX+'templates',JSON.stringify({...v,list:m.list}));builderStore.setItem(BUILDER_PREFIX+'templates-version',BUILDER_TEMPLATES_VERSION);}catch{return {...v,list:m.list};}
+   return {...v,list:m.list};
+  }
+  return v;
+ }catch{}
+ return null;
+}
 // The topology file a draft is, or will be, on the VM: the same derivation as the VM helper's.
 function builderVmPath(draft){if(draft.vm)return draft.vm.path;const named=builderYamlName(draft.yaml),name=builderName(named)?named:draft.name;return draft.root+'/'+name+'/'+name+'.clab.yml';}
 // A draft that is not on the VM yet carries the name its topology has (Lab settings can rename it).
@@ -209,21 +266,42 @@ function builderGo(values){
 }
 function builderUse(draft){builderDraft=builderNamed(draft);builderRenderBar();document.title=draft.name+' · Lab builder · Containerlab Node Manager';builderOpenEditor();builderImageStatus();}
 // The background image check: after every stored change (debounced) the draft's images are sent to the manager,
-// which asks the VM once per image and keeps the answers; a late answer for an older draft is dropped. The
-// editor is never waited on: a manager that cannot answer leaves the line empty.
-let builderImageTimer=null,builderImageSeq=0;
+// which asks the VM once per image and keeps the answers. The answer is dropped when the draft or the request
+// number changed while it was on its way. The editor is never waited on; a request that fails is shown too.
+let builderImageTimer=null,builderImageSeq=0,builderImageDismissed='',builderImageShown='';
+// Runs one check; resolves {key,summary} for the answer to show, or null when it is stale (or there is nothing to check).
+async function builderImageCheck(refs){
+ const draftId=builderDraft?builderDraft.id:'',seq=++builderImageSeq;
+ if(!refs.length)return null;
+ let summary;
+ try{summary=builderImageSummary((await json('/operations/image-check','POST',{references:refs})).images);}
+ catch(e){summary={text:'Warning: the images could not be checked ('+((e&&e.message)||'the manager did not answer')+'). They are checked again after the next change; a deploy still fails if an image is missing.',tone:'warn',warn:true};}
+ if(seq!==builderImageSeq||!builderDraft||builderDraft.id!==draftId)return null;
+ return summary.text?{key:builderImageKey(draftId,refs,summary),summary}:null;
+}
+function builderImageRender(result){
+ const slot=$('builder-images');if(!slot)return;
+ if(!result){builderImageShown='';slot.hidden=true;return;}
+ if(result.key===builderImageDismissed){builderImageShown='';slot.hidden=true;return;}
+ builderImageShown=result.key;slot.className='builder-images'+(result.summary.tone==='error'?' error':result.summary.tone==='warn'?' warn':'');
+ slot.setAttribute('role',result.summary.tone==='error'?'alert':'status');
+ $('builder-images-text').textContent=result.summary.text;slot.hidden=false;
+}
+function builderImageDismiss(){
+ builderImageDismissed=builderImageShown;builderImageShown='';const slot=$('builder-images');if(slot)slot.hidden=true;
+ // The button just left the page: focus goes to the next thing the student does, Save (or the YAML button when Save is off).
+ const next=!$('builder-save').disabled?$('builder-save'):$('builder-yaml');if(next&&!next.disabled)next.focus();
+}
 function builderImageStatus(){
- const line=$('builder-images');if(!line)return;
+ if(!$('builder-images'))return;
  if(builderImageTimer)clearTimeout(builderImageTimer);
  builderImageTimer=setTimeout(async()=>{
-  builderImageTimer=null;const refs=builderDraft?builderYamlImages(builderDraft.yaml):[],seq=++builderImageSeq;
-  if(!refs.length){line.textContent='';line.hidden=true;line.className='builder-images';return;}
-  try{
-   const value=await json('/operations/image-check','POST',{references:refs});if(seq!==builderImageSeq)return;
-   const summary=builderImageSummary(value.images);line.textContent=summary.text;line.hidden=!summary.text;line.className='builder-images'+(summary.warn?' warn':'');
-  }catch{if(seq===builderImageSeq){line.textContent='';line.hidden=true;line.className='builder-images';}}
+  builderImageTimer=null;const refs=builderDraft?builderYamlImages(builderDraft.yaml):[];
+  const result=await builderImageCheck(refs);
+  if(result)builderImageRender(result);else if(!refs.length)builderImageRender(null);
  },builderDraft?1200:0);
 }
+if(typeof document!=='undefined'&&document.getElementById('builder-images-dismiss'))$('builder-images-dismiss').onclick=builderImageDismiss;
 // The id of a new draft. A draft renamed in the editor keeps its first id, so that id can be taken by another name.
 function builderDraftId(name){const id='new:'+name;return draftRead(builderStore,id)?id+':'+draftToken():id;}
 function builderNewDialog(root){
