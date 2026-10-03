@@ -70,6 +70,10 @@ async def down2(app, pilot):
     await pilot.press('down', 'down')
 
 
+async def status_focus(app, pilot):
+    await pilot.press('tab', 'tab', 'down')   # nav -> details -> status, then the Manager row
+
+
 async def review(app, pilot):
     await pilot.press('enter')
 
@@ -145,6 +149,7 @@ def result_screen(partial=True):
 SCENES = [
     ('dashboard', [nothing]),
     ('dashboard-detail-focus', [down2, tab]),
+    ('dashboard-status-focus', [status_focus]),
     ('review-install', [review]),
     ('settings', [settings]),
     ('help', [helpdlg]),
