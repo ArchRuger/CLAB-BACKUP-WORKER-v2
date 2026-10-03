@@ -10,8 +10,9 @@ history itself is written by hand afterwards: a "## Changes in NEW" section at t
 docs/CHANGELOG.md and a "# <title> — NEW" section at the top of clab-backup-ui/VALIDATION.md
 and of "agent instructions.md". Finish with python3 deploy/verify-release.py.
 
-All or nothing: every marker is looked for before the first file is written; a missing one is
-reported (all of them, by file) and nothing is changed.
+Every marker is looked for and every new text is computed before the first file is written: a
+missing marker is reported (all of them, by file) and nothing is changed. The writes themselves
+are file by file, so an I/O error part-way can still leave a mixed tree; verify-release.py shows it.
 """
 import importlib.util
 from pathlib import Path
@@ -37,7 +38,7 @@ def set_release(root, new):
     old = release.read_version(root)
     if new == old:
         raise ValueError('clab-backup-ui/VERSION already contains ' + new + '.')
-    # Compute every new text first and write only when all markers were found (all or nothing).
+    # Compute every new text first and write only when all markers were found.
     planned = {}
     missing = []
     for name, pattern in release.FIELDS.items():

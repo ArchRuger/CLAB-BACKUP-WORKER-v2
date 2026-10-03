@@ -97,7 +97,8 @@ fixture after any `app/*.py` change.
 test file with `-p` (only `test_capture*.py` is a glob) and each browser test
 file in one `node --test` line. A new test file that is not appended there never runs in CI. The
 deploy-script tests (`test_install_manager.py`, `test_check_*.py`, `test_git_onboard.py`, …) run with the
-system `python3` before the venv is created, so they must stay stdlib-only.
+system `python3` before the venv is created, so they must stay stdlib-only; the installer's Textual
+tests (`test_install_tui_app.py`) run in their own venv built from `deploy/installer_tui/requirements.lock`.
 
 ## Architecture: what you only see by reading several files
 
@@ -222,7 +223,10 @@ One line each; the handoff section named in the routing table has the reasoning 
   `host_git.py` stays equivalent to the child in `deploy/setup-git.sh`.
 - There is no login: `/api/` is protected by the same-origin `guard` in `main.py` (a mutating request
   needs a body; content-length 0 is refused, so pages post `{}`); every WebSocket checks `Origin`
-  itself and terminals need a single-use ticket. Never add a route or socket outside this.
+  itself and terminals need a single-use ticket. Never add a route or socket outside this. All three
+  build "own origin" from the request's `Host`, so `allowed_hosts.HostCheck` stays the outermost ASGI
+  layer (added last in `create_app`): a `Host` that outside DNS could control is refused unless
+  `UI_ALLOWED_HOSTS` lists it (DNS rebinding), nothing bypasses it and `X-Forwarded-Host` is never read.
 - Persistent logs and job messages carry controlled metadata only: never configuration text,
   passwords, keys or raw SSH output; `Store.event()` does not scrub. SuperPuTTY password export stays
   opt-in.
