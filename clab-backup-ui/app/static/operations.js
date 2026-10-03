@@ -308,7 +308,8 @@ async function opShowJob(id,{auto=false}={}){
    const inspected=inspectAction&&job.status==='succeeded'&&rows.length;
    const emptyInspection=inspectAction&&job.status==='succeeded'&&/(^|\n)\s*(?:\[\s*\]|\{\s*\})\s*(?=\n|$)/.test(job.output||'');
    pre.hidden=!!inspected||emptyInspection;
-   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p><button class="button primary" id="op-open-published">Deploy or add this lab…</button>`:'');
+   $('op-job-result').innerHTML=(inspected?opInspectionTable(rows):emptyInspection?'<p>No labs are running on the VM.</p>':'')+(job.result?.recovery_path?`<p>A recovery copy of the ${job.action==='revise'?'previous version':'deleted file'} was kept at <code>${esc(job.result.recovery_path)}</code>.</p>`:'')+(job.result?.project_path?`<button class="button primary" id="op-open-clone">Choose a topology from the downloaded lab</button>`:'')+(opPublishedPath(job)?`<p>Saved as <code>${esc(opPublishedPath(job))}</code>. It is not running yet.</p>${opOnBuilder()?'<div id="op-published-block"></div>':'<button class="button primary" id="op-open-published">Deploy or add this lab…</button>'}`:'');
+   if(opPublishedPath(job)&&opOnBuilder())opRenderPublished(dialog,opPublishedPath(job));
    $('op-open-published')?.addEventListener('click',()=>opTask(dialog,()=>opEdit(opPublishedPath(job))));
    $('op-open-clone')?.addEventListener('click',()=>opBrowse(job.result.project_path));
    if(['queued','running'].includes(job.status))opOutputTimer=setTimeout(poll,1000);else{await refresh();if(typeof opJobDone==='function')opJobDone(job);}
@@ -318,6 +319,43 @@ async function opShowJob(id,{auto=false}={}){
 // The topology file a finished job left on the VM, to continue with "Deploy or add this lab…": the builder's
 // save names it in its result; a created file (typed or uploaded) is the job's own path.
 function opPublishedPath(job){if(!job||job.status!=='succeeded')return '';return job.result?.published_path||(job.action==='create'&&/\.ya?ml$/i.test(job.path||'')?job.path:'');}
+// The lab builder's own save result offers the next step itself (Add to My labs without starting / Deploy
+// now, then Deploy now / Go to My labs) instead of the generic Topology file dialog, which led back here.
+// Every other page keeps "Deploy or add this lab…". The builder page is the one that defines builderGo.
+function opOnBuilder(){return typeof builderGo==='function';}
+function opLabAtPath(path){return (state.labs||[]).find(l=>opPath(l)===path)||null;}
+function opPublishedMarkup(path,lab){
+ const name=lab?(lab.name||opName(lab)):'';
+ return lab
+  ?`<p class="op-notice ok" id="op-published-status" role="status" tabindex="-1">✓ ${esc(name)} is in My labs. It is not running: adding a lab never starts its devices.</p><div class="actions"><button class="button primary" id="op-published-deploy">Deploy now</button><button class="button secondary" id="op-published-go" data-lab="${esc(lab.id)}">Go to My labs</button></div>`
+  :`<p class="form-help">Add it to My labs to keep it with your other labs, or deploy it now (the deploy shows what it will do and asks you to confirm first).</p><div class="actions"><button class="button primary" id="op-published-add">Add to My labs without starting</button><button class="button secondary" id="op-published-deploy">Deploy now</button></div>`;
+}
+// One request at a time per file: a double click, or a second click while the first still runs, adds nothing twice.
+const opPublishBusy=new Set();
+function opRenderPublished(dialog,path,focus=false){
+ const block=dialog.querySelector('#op-published-block');if(!block)return;
+ const lab=opLabAtPath(path);block.innerHTML=opPublishedMarkup(path,lab);
+ const guard=fn=>async()=>{if(opPublishBusy.has(path))return;opPublishBusy.add(path);try{await opTask(dialog,fn);}finally{opPublishBusy.delete(path);}};
+ // Both the saved lab and its VM file are read fresh: a lab already in My labs for this file is reused, never imported twice.
+ const prepare=async()=>{
+  let lab=opLabAtPath(path);if(!lab){await refresh();lab=opLabAtPath(path);}
+  const source=await json('/operations/read','POST',{path}),parsed=await opParse(path,source.text);
+  return {lab,source,parsed};
+ };
+ block.querySelector('#op-published-add')?.addEventListener('click',guard(async()=>{
+  const {lab,source,parsed}=await prepare();
+  if(!lab)await opSaveWorkspace(path,source,parsed);
+  await refresh();opRenderPublished(dialog,path,true);
+ }));
+ block.querySelector('#op-published-deploy')?.addEventListener('click',guard(async()=>{
+  const {lab,source,parsed}=await prepare();
+  const id=await opSaveWorkspace(path,source,parsed,lab?.id||'');
+  await refresh();opRenderPublished(dialog,path);
+  await opReview({action:'deploy',lab_id:id,path,name:parsed.name});
+ }));
+ block.querySelector('#op-published-go')?.addEventListener('click',e=>location.assign('/#lab='+encodeURIComponent(e.currentTarget.dataset.lab)));
+ if(focus)block.querySelector('#op-published-status')?.focus();
+}
 async function opHistory(labId=''){
  const jobs=await(await api('/operations')).json();
  const lab=labId?(state.labs||[]).find(l=>l.id===labId):null;

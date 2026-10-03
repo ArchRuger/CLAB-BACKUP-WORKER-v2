@@ -1797,6 +1797,7 @@ path.capture-hit { stroke: transparent; stroke-width: 16; pointer-events: stroke
   color: var(--warn-strong);
   font-size: 13px;
 }
+.op-notice.ok { border-left-color: var(--ok); background: var(--ok-soft); color: var(--ok-strong); }
 /* in-page command output is a light code pane (dark surfaces are only #toast and terminal.html) */
 .op-output {
   white-space: pre-wrap;
@@ -2572,6 +2573,8 @@ tr.diff-ctx .diff-marker { color: var(--muted); }
   display: flex;
   flex-direction: column;
 }
+/* A closed <dialog> is display:none only by the UA sheet; display:flex above would keep it painted. */
+.dialog-viewport:not([open]) { display: none; }
 .dialog-viewport .dialog-head { flex: 0 0 auto; }
 .dialog-viewport .op-layout-map { flex: 1 1 auto; min-height: 0; width: 100%; height: 100%; }
 @media (max-width: 600px) {

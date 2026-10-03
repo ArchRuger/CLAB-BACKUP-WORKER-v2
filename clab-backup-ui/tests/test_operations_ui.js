@@ -457,3 +457,35 @@ test('U-02/U-03: an operation dialog is named by its heading and gives focus bac
  const other={focused:0,focus(){this.focused++;}};document.activeElement={};
  const d2=c.opDialog('operation-review','Again',"<p/>",other);d2.close();assert.equal(other.focused,1,'an explicit opener wins');assert.equal(opener.focused,1);
 });
+
+test('the builder page gets Add / Deploy now (then Deploy now / Go to My labs) in its save result; every other page keeps "Deploy or add this lab…"',async()=>{
+ const run=async(builder,labs)=>{
+  const elements=new Map();
+  for(const id of ['op-job-banner','op-job-output','op-job-result'])elements.set(id,{hidden:false,className:'',textContent:'',innerHTML:'',scrollTop:0,scrollHeight:0,clientHeight:0,addEventListener(){}});
+  const job={id:'j',action:'publish',name:'demo',status:'succeeded',output:'',result:{published_path:'/srv/p/demo/demo.clab.yml'}};
+  const rendered=[];
+  const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs},console,document:{getElementById:()=>null},setTimeout:()=>1,clearTimeout(){},
+   api:async()=>({json:async()=>job}),refresh:async()=>{},...(builder?{builderGo(){}}:{})});
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+  c.opDialog=()=>({open:true,classList:{toggle(){}},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]});
+  c.opRenderPublished=(d,p)=>rendered.push(p);
+  await c.opShowJob('j');
+  return {html:elements.get('op-job-result').innerHTML,rendered};
+ };
+ const main=await run(false,[]);
+ assert.match(main.html,/id="op-open-published">Deploy or add this lab…/);assert.doesNotMatch(main.html,/op-published-block/);assert.deepEqual(main.rendered,[]);
+ const builder=await run(true,[]);
+ assert.match(builder.html,/id="op-published-block"/);assert.doesNotMatch(builder.html,/op-open-published/,'the generic dialog that looped back is not offered');
+ assert.deepEqual(builder.rendered,['/srv/p/demo/demo.clab.yml']);
+});
+
+test('the builder hand-off markup: Add and Deploy now before the lab is in My labs; Deploy now and Go to My labs after, and adding never says it started anything',()=>{
+ const c=vm.createContext({$:()=>null,esc:s=>String(s),state:{labs:[]},console,document:{getElementById:()=>null}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ const before=c.opPublishedMarkup('/srv/p/d.clab.yml',null);
+ assert.match(before,/id="op-published-add">Add to My labs without starting/);assert.match(before,/id="op-published-deploy">Deploy now/);assert.doesNotMatch(before,/op-published-go/);
+ const after=c.opPublishedMarkup('/srv/p/d.clab.yml',{id:'L1',name:'demo'});
+ assert.match(after,/demo is in My labs\. It is not running/);assert.match(after,/id="op-published-deploy">Deploy now/);assert.match(after,/id="op-published-go" data-lab="L1">Go to My labs/);assert.doesNotMatch(after,/op-published-add/);
+ c.state.labs=[{id:'L1',vm_project_path:'/srv/p/d.clab.yml'},{id:'L2',vm_project_path:'/srv/p/e.clab.yml'}];
+ assert.equal(c.opLabAtPath('/srv/p/d.clab.yml').id,'L1','a lab already registered for the file is found and reused');assert.equal(c.opLabAtPath('/srv/p/none.clab.yml'),null);
+});

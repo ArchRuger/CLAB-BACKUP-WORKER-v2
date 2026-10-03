@@ -31,3 +31,4 @@
 
 - Chunk 1: T4a–c, T6, T9, T10 (manager UI). Unit + fixture browser evidence; live dev1 workflow pending.
 - Chunk 2: T1, T2, T3 and the T7 cJunosEvolved template env (lab builder). Unit + fixture browser evidence; live round trip pending.
+- Chunk 3: 8b, 8c, 8f (design UI). Chunk 4: T5 post-save flow and the closed-preview CSS root fix.
