@@ -82,7 +82,10 @@ def render_desired_shell(shell, candidate, enable_password=''):
     if REJECTED_LINE.search(opened):
         raise RestoreError('The node did not open a configuration session to render the generated configuration.')
     try:
-        shell.run('rollback clean-config', LOAD_TIMEOUT)
+        # Without the reset the session is still a copy of the running configuration: "desired" would be a merge.
+        reset = shell.run('rollback clean-config', LOAD_TIMEOUT)
+        if REJECTED_LINE.search(reset):
+            raise RestoreError('The node did not empty the configuration session to render the generated configuration.')
         clean = shell.run('show session-config', LOAD_TIMEOUT)
         _paste(shell, candidate)
         rendered = shell.run('show session-config', LOAD_TIMEOUT)

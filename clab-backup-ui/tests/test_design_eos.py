@@ -28,7 +28,7 @@ class FakeDevice:
     def __init__(self, mode='unpriv', enable_password=None, pending_session=None, orphans=(),
                  load_error=False, commit_timer_ok=True, write_memory_ok=True,
                  diff_text=DEFAULT_DIFF, running_configs=None, session_configs=None,
-                 hostname='ceos', disconnect_on_paste=False):
+                 hostname='ceos', disconnect_on_paste=False, clean_config_error=''):
         self.mode = mode
         self.enable_password = enable_password
         self.awaiting_enable_password = False
@@ -42,6 +42,7 @@ class FakeDevice:
         self.session_configs = list(session_configs) if session_configs else [DEFAULT_SESSION_CONFIG]
         self.hostname = hostname
         self.disconnect_on_paste = disconnect_on_paste
+        self.clean_config_error = clean_config_error
         self.session_name = None
         self.terminal = False
         self.loaded = ''
@@ -131,7 +132,7 @@ class FakeDevice:
             self.mode = 'session'
             return self.frame(line)
         if line == 'rollback clean-config':
-            return self.frame(line)
+            return self.frame(line, self.clean_config_error)
         if line == 'copy terminal: session-config':
             self.terminal = True
             self.loaded = ''
@@ -267,6 +268,22 @@ class DesignEosDriverTests(unittest.TestCase):
         with self.assertRaises(RestoreError):
             design_eos.render_desired(client_for(device), CANDIDATE)
         self.assertIn('abort', device.commands)
+
+    def test_render_desired_refused_session_reset_raises_before_anything_is_read_or_loaded(self):
+        # Without the reset the throwaway session is still a copy of the running configuration: the "desired"
+        # set would be the candidate merged onto the running one (the sibling of audit L-11 in restore_eos).
+        for error in ('% Invalid input', '% Error: could not roll back the session'):
+            with self.subTest(error=error):
+                device = FakeDevice(clean_config_error=error, session_configs=['RUNNING_COPY', 'MERGED'])
+                with self.assertRaises(RestoreError) as refused:
+                    design_eos.render_desired(client_for(device), CANDIDATE)
+                self.assertNotIn(error, str(refused.exception))
+                self.assertIn('did not empty', str(refused.exception))
+                self.assertNotIn('show session-config', device.commands)
+                self.assertNotIn('copy terminal: session-config', device.commands)
+                self.assertEqual(device.pastes, [])
+                self.assertEqual(device.commands[-1], 'abort')
+                self.assertIsNone(device.session_name)
 
     # --- stage(arm=False): refusals and orphan cleanup -----------------------------------
 
