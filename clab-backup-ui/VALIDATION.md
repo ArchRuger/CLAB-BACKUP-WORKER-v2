@@ -22,8 +22,18 @@ the fix changed in the merge (`git diff origin/main` outside `docs/netlab-ui-qa/
   *Remove design…* open, browser Back) rerun unchanged against a fixture of that tree (port 8198, fresh data, real
   engine, 02:03 UTC): 12 of 12, the dialog no longer stays open over the other lab and Renumber's closes on Back
   (`docs/netlab-ui-qa/evidence/design-dialogs/`).
-- Not done for 1.30.58: no image build, no deployment on the dev VM (the VM was about to be rolled back to a
-  snapshot), no live-device check, no acceptance pass 9 or 10. No tag, no image published.
+- Deployed on the dev VM on 2026-10-03 after PR #62 was merged (`044bc34`), with the documented upgrade,
+  `sudo bash deploy/start-manager.sh` from a checkout of `main` at 1.30.58 (no `--manager-only`: the capture session
+  service follows the release). Outcome, read back after the launcher exited 0: the manager container runs
+  `clab-backup:1.30.58` (started 00:27:59 UTC), the capture session service `clab-capture-service:1.30.58` (00:26:51
+  UTC), the three installed helpers report 1.30.58, `/api/state` says `1.30.58` with the three labs retained, `/` serves
+  16 assets at `?v=1.30.58` and none of another release, and the served `shell.js`, `network-design.js`, `app.js` and
+  `index.html` carry `closeLabDialogs`, `designDialogStillForLab`, the `selectLab()` call and the two `data-lab-dialog`
+  markers. `bash deploy/check-install.sh`: 65 PASS, 0 FAIL, 2 WARN (four of `restore-square`'s five nodes are not
+  running: its NOS containers have been exited since the VM's reboot about six hours earlier, before this release;
+  and the folder-coverage cap of 20), so the report ends NEEDS ATTENTION on those two.
+- Not done for 1.30.58: no live-device check (the lab's NOS nodes need a redeploy first), no acceptance pass 9 or 10.
+  No tag, no image published.
 
 # UI/UX changes 2, part 6: the topology travels with every backup — 1.30.57
 

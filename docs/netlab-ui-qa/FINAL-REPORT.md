@@ -204,5 +204,6 @@ spot-checks):
     reproduction rerun on a fixture of the fix, `evidence/design-dialogs/`) was built on 2026-09-28 as 1.30.51 and never
     published: the UI/UX changes 2 stream took over the worktree that day and shipped 1.30.52–1.30.57, leaving the fix as a
     local WIP commit. On 2026-10-02 it was merged onto 1.30.57 without a code change and cut as **release 1.30.58**
-    (PR #62; static, unit and browser suites rerun on that tree, no deployment). The gate has not restarted on it:
+    (PR #62, merged on 2026-10-03 as `044bc34`; static, unit and browser suites rerun on that tree; deployed on the dev VM
+    the same day). The gate has not restarted on it:
     **pass 9 (Sonnet)** and **pass 10 (Opus)** on 1.30.58 are the campaign's open items (`PICKUP.md`).
