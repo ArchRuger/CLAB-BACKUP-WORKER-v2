@@ -77,6 +77,9 @@ function designIntentFromForm(values,base){
   const current=addressing[name]&&typeof addressing[name]==='object'?addressing[name]:{};
   const given=pools[name]||{};
   const next={...current,ipv4:given.ipv4||'',ipv6:given.ipv6||''};
+  // A blank address for a family that is switched off is left out: the server's "remove the prefix or enable the
+  // family" advice must be followable. A blank one for an enabled family is sent, so the server names it.
+  for(const fam of ['ipv4','ipv6'])if(!intent.families[fam]&&!next[fam])delete next[fam];
   if(withPrefix){
    if(given.prefix===undefined)delete next.prefix;else next.prefix=designNumberOrRaw(given.prefix);
   }
@@ -308,7 +311,9 @@ function designProblemsFromError(error){
  }
  const m=/^Fix the design first:\s*([\s\S]+)$/.exec(message);
  if(m)return {kind:'problems',problems:m[1].split(/;\s+/).filter(Boolean).map(part=>{const i=part.indexOf(': ');return i>0?{path:part.slice(0,i),message:part.slice(i+2)}:{path:'',message:part};})};
- return {kind:'error',problems:[{path:'',message:message||'Something went wrong.'}]};
+ // fetch() rejects with a bare TypeError ("Failed to fetch", "NetworkError …", "Load failed") when the manager is unreachable.
+ const network=(error&&error.name==='TypeError')||/^(Failed to fetch|NetworkError|Load failed)/.test(message);
+ return {kind:'error',problems:[{path:'',message:network?'The manager could not be reached (network error). Nothing was saved or started.':message||'Something went wrong.'}]};
 }
 function designSummaryTitle(action,kind,count){
  const label=DESIGN_ACTION_LABELS[action]||DESIGN_ACTION_LABELS.save;
@@ -325,6 +330,8 @@ function designSummaryItems(summary){
  const links=summary.links!==false&&summary.kind==='problems';
  return summary.problems.map((p,i)=>({id:'design-error-item-'+i,path:p.path,message:p.message,fields:links?designFieldsFor(p.path,p.message):[]}));
 }
+// A failure that is not a validation problem (network, server) can be retried from the summary itself.
+const DESIGN_RETRY_ACTIONS=['save','generate','check'];
 function designSummaryMarkup(summary){
  const items=designSummaryItems(summary),title=designSummaryTitle(summary.action,summary.kind,items.length);
  const li=item=>{
@@ -333,7 +340,7 @@ function designSummaryMarkup(summary){
   const go=item.fields.map((f,i)=>`<button type="button" class="text-button design-error-go" data-design-goto="${esc(f.id)}">${esc(i?'or go to the '+f.label:f.advanced?'Open '+f.label:'Go to the field')}</button>`).join(' ');
   return `<li id="${esc(item.id)}">${head}${esc(item.message)} ${go}</li>`;
  };
- return `<h3 id="design-error-title">${esc(title)}</h3>${summary.lead?`<p class="design-error-lead">${esc(summary.lead)}</p>`:''}<ul>${items.map(li).join('')}</ul><p class="form-help">${esc(designSummaryHint(summary.kind,summary.links!==false))}</p>`;
+ return `<h3 id="design-error-title">${esc(title)}</h3>${summary.lead?`<p class="design-error-lead">${esc(summary.lead)}</p>`:''}<ul>${items.map(li).join('')}</ul><p class="form-help">${esc(designSummaryHint(summary.kind,summary.links!==false))}</p>${summary.kind!=='problems'&&DESIGN_RETRY_ACTIONS.includes(summary.action)?`<button type="button" class="button secondary" data-design-retry="${esc(summary.action)}">Try again</button>`:''}`;
 }
 // The modules a student may choose, then one read-only row per retired module the design still carries (ticked,
 // disabled, the backend's reason, a Remove button). A retired module is never offered as a new choice.
@@ -1023,7 +1030,9 @@ function designRenderDeviceOptions(view,values){
  if($('design-bgp-rr')){
   const names=Object.keys(nodes).filter(n=>nodes[n]&&nodes[n].included&&(roles[n]||'router')==='router').sort();
   const chosen=new Set(Array.isArray(values.bgpRr)?values.bgpRr:values.bgpRr?[values.bgpRr]:[]);
-  setMarkup($('design-bgp-rr'),designReflectorMarkup(names,chosen));
+  // Re-rendering the grid must not drop a keyboard user's place: refocus the checkbox they were on.
+  const focused=typeof document!=='undefined'&&document.activeElement&&document.activeElement.name==='design-bgp-rr'?document.activeElement.value:null;
+  if(setMarkup($('design-bgp-rr'),designReflectorMarkup(names,chosen))&&focused!==null){const again=[...$('design-bgp-rr').querySelectorAll('input[name="design-bgp-rr"]')].find(i=>i.value===focused);if(again&&typeof again.focus==='function')again.focus();}
   designSyncChecked($('design-bgp-rr'),'input[name="design-bgp-rr"]',chosen);
  }
 }
@@ -2106,7 +2115,7 @@ function initNetworkDesign(){
  if($('design-files-body'))$('design-files-body').addEventListener('click',e=>{
   const b=e.target.closest('[data-design-view-file]');if(b)designViewFile(b.dataset.designViewFile,Number(b.dataset.designViewIndex));
  });
- if($('design-error-summary'))$('design-error-summary').addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-design-goto]');if(b)designGotoField(b.dataset.designGoto);});
+ if($('design-error-summary'))$('design-error-summary').addEventListener('click',e=>{const r=e.target&&e.target.closest&&e.target.closest('[data-design-retry]');if(r){const run={save:()=>designSave(),generate:()=>designGenerate(),check:()=>designValidate()}[r.dataset.designRetry];if(run)run();return;}const b=e.target&&e.target.closest&&e.target.closest('[data-design-goto]');if(b)designGotoField(b.dataset.designGoto);});
  if($('experimental-design'))$('experimental-design').addEventListener('toggle',()=>{if(typeof renderNetworkDesign==='function')renderNetworkDesign();});
  initDesignApply();
  initDesignExportGit();

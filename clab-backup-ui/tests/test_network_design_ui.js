@@ -1114,7 +1114,7 @@ test('8c: Generate without a draft shows the backend 400 problems (structured or
  const c=ctx({$:el,setMarkup:(e,html)=>{if(e)e.innerHTML=html;},current:()=>({id:'lab-a'}),json:async()=>{throw new TypeError('Failed to fetch');}});
  stateOf(c).labId='lab-a';stateOf(c).view={intent:{schema:1,revision:'r1',modules:[]},generations:[],problems:[],nodes:{}};
  await c.designGenerate();
- assert.match(el('design-error-summary').innerHTML,/Generate plan failed<\/h3><ul><li id="design-error-item-0">Failed to fetch/);assert.match(el('design-error-summary').innerHTML,/Try again/);
+ assert.match(el('design-error-summary').innerHTML,/Generate plan failed<\/h3><ul><li id="design-error-item-0">The manager could not be reached \(network error\)\. Nothing was saved or started\./,'a lost connection is named in plain words, not the browser\'s "Failed to fetch"');assert.match(el('design-error-summary').innerHTML,/<button type="button" class="button secondary" data-design-retry="generate">Try again<\/button>/,'and a real Try again button re-runs Generate');
  assert.equal(el('design-error-summary').focused,1,'the failed Generate moves focus to its summary, which carries the title');
 });
 test('8f: the design loads only while Advanced is shown with Experimental open, stops its pollers otherwise, and never reads as cancelled',()=>{
@@ -1393,4 +1393,23 @@ test('8e/8a: api() keeps problems, retired and review_job_id from an object deta
  const error=await vm.runInContext("api('/x').then(()=>null,e=>e)",context);
  assert.equal(error.message,'A review is running.');assert.equal(error.review_job_id,'abc');assert.equal(error.status,409);
  assert.equal(error.problems[0].path,'p');assert.equal(error.retired[0],'vxlan');
+});
+
+test('8c: a validation problem offers no Try again button (correct the fields instead); a server error does',()=>{
+ const c=ctx({});
+ const html=c.designSummaryMarkup({action:'save',kind:'problems',problems:[{path:'bgp.as',message:'Enter the BGP AS number'}],links:true});
+ assert.doesNotMatch(html,/data-design-retry/);
+ assert.match(c.designSummaryMarkup({action:'save',kind:'error',problems:[{path:'',message:'boom'}]}),/data-design-retry="save">Try again/);
+ assert.doesNotMatch(c.designSummaryMarkup({action:'import',kind:'error',problems:[{path:'',message:'boom'}]}),/data-design-retry/,'an import is retried by choosing the file again');
+});
+test('8c: an IPv4-only design leaves blank IPv6 pools out, so the "remove the prefix or enable the family" advice can be followed',()=>{
+ const c=ctx({});
+ const blank={loopback:{ipv4:'10.255.0.0/24',ipv6:''},p2p:{ipv4:'10.1.0.0/16',ipv6:'',prefix:'31'},lan:{ipv4:'172.16.0.0/16',ipv6:'',prefix:'24'}};
+ const off=JSON.parse(JSON.stringify(c.designIntentFromForm({ipv4:true,ipv6:false,pools:blank,modules:[],devices:[]},null)));
+ for(const pool of ['loopback','p2p','lan'])assert.equal('ipv6' in off.addressing[pool],false,pool+': blank ipv6 with IPv6 off is left out');
+ assert.equal(off.addressing.loopback.ipv4,'10.255.0.0/24');
+ const on=JSON.parse(JSON.stringify(c.designIntentFromForm({ipv4:true,ipv6:true,pools:blank,modules:[],devices:[]},null)));
+ assert.equal(on.addressing.loopback.ipv6,'','IPv6 on: a blank pool is still sent so the server names it');
+ const kept=JSON.parse(JSON.stringify(c.designIntentFromForm({ipv4:true,ipv6:false,pools:{...blank,loopback:{ipv4:'10.255.0.0/24',ipv6:'2001:db8:ff::/48'}},modules:[],devices:[]},null)));
+ assert.equal(kept.addressing.loopback.ipv6,'2001:db8:ff::/48','a typed prefix is never dropped silently (the server explains the conflict)');
 });
