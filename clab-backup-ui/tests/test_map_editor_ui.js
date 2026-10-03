@@ -4,7 +4,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const read=name=>fs.readFileSync(path.join(__dirname,'../app/static/'+name),'utf8');
 function harness({hash='#lab=lab1',doc={name:'BGP lab',yaml:'name: bgp\n',annotations:'{"nodeAnnotations":[]}',revision:'r1'},put}={}){
  const elements=new Map(),calls=[],moves=[],toasts=[];
- const el=id=>{if(!elements.has(id))elements.set(id,{id,hidden:false,disabled:false,textContent:'',className:'',title:'',href:'',value:'',files:[],inert:false,open:false,onclick:null,showModal(){this.open=true;},close(){this.open=false;}});return elements.get(id);};
+ const el=id=>{if(!elements.has(id))elements.set(id,{id,hidden:false,disabled:false,textContent:'',className:'',title:'',href:'',value:'',files:[],inert:false,open:false,onclick:null,focused:0,focus(){this.focused++;},showModal(){this.open=true;},close(){this.open=false;}});return elements.get(id);};
  const context=vm.createContext({console,URLSearchParams,Blob:class{},URL:{createObjectURL:()=>'blob:x',revokeObjectURL(){}},setTimeout:()=>0,clearTimeout(){},
   document:{getElementById:el,title:'',querySelector:()=>null,createElement:()=>({click(){},remove(){}}),body:{append(){}}},
   location:{hash,assign:u=>moves.push(u),reload:()=>moves.push('reload')},
@@ -126,4 +126,11 @@ test('a link\'s own label distance is one edgeAnnotations entry found by the lin
  const gone=JSON.parse(c.mapApplyLinkOffset(JSON.stringify(added),list[0],false,''));assert.equal(gone.edgeAnnotations.length,1,'and removes one that carried nothing else');
  assert.equal(c.mapApplyLinkOffset(JSON.stringify({nodeAnnotations:[]}),list[0],false,''),JSON.stringify({nodeAnnotations:[]},null,2),'nothing to turn off adds no key');
  for(const bad of ['61','-1','2.5','x',''])assert.throws(()=>c.mapApplyLinkOffset(text,list[0],true,bad),/0 to 60/,bad);
+});
+test('L-37: when the editor goes inert the problem overlay takes focus on its Download button, so a keyboard user is not left on <body>',async()=>{
+ const h=harness(),c=h.context;await h.flush();
+ assert.equal(h.el('map-problem-download').focused,0);
+ c.mapProblem('The editor refused that edit.');
+ assert.equal(h.el('root').inert,true);assert.equal(h.el('builder-problem').hidden,false);assert.equal(h.el('builder-problem-text').textContent,'The editor refused that edit.');
+ assert.equal(h.el('map-problem-download').focused,1,'focus moves to Download this map, the way to keep unsaved edits');
 });

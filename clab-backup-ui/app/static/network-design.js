@@ -497,7 +497,7 @@ function designFilesMarkup(generation){
  if(!names.length)return '<p class="caption">This plan has no generated files.</p>';
  return names.map(name=>`<div class="design-file-group"><strong>${esc(name)}</strong><ul class="design-file-list">`+
   (artifacts[name]||[]).map((a,index)=>`<li><span>${esc(a.module||'')}</span> <span class="caption">${esc(designFileSize(a.size))}</span> `+
-   `<button type="button" class="button secondary small" data-design-view-file="${esc(name)}" data-design-view-index="${index}" aria-label="View ${esc(name)} ${esc(a.module||'')}">View</button></li>`).join('')+
+   `<button type="button" class="button secondary small" data-design-view-file="${esc(name)}" data-design-view-index="${index}" data-design-view-generation="${esc(generation.id||'')}" aria-label="View ${esc(name)} ${esc(a.module||'')}">View</button></li>`).join('')+
   '</ul></div>').join('');
 }
 function designRenumberingMarkup(list){
@@ -797,11 +797,17 @@ function designApplyTargetRow(t){
   `<td><span class="pill ${esc(designApplyPillClass(t.status))}">${esc(designApplyOutcomeWord(t.status))}</span></td>`+
   `<td>${esc(t.message||'')}${verify}${keptManual}${persistence}</td></tr>`;
 }
-function designApplyProgressMarkup(job){
+// follow: {problem,gaveUp} while the poll behind this table is failing (designApplyFollow); the table is then the last
+// state the manager answered, and the line says so instead of letting it pass for current.
+function designApplyFollowMarkup(follow){
+ if(!follow||!follow.problem)return '';
+ return `<p class="form-error" role="alert">${esc(follow.problem)}</p>`+(follow.gaveUp?'<p><button type="button" class="button secondary small" data-design-apply-follow-retry>Check again</button></p>':'');
+}
+function designApplyProgressMarkup(job,follow){
  job=job||{};
  const rows=(job.targets||[]).map(designApplyTargetRow).join('')||'<tr><td colspan="5" class="table-empty">No devices.</td></tr>';
  const progress=job.progress&&job.progress.total?`<p class="caption">${esc(job.progress.settled||0)} of ${esc(job.progress.total)} settled</p>`:'';
- return `<p class="caption">${esc(designApplyJobWord(job.status))}${job.message?' — '+esc(job.message):''}</p>${progress}`+
+ return designApplyFollowMarkup(follow)+`<p class="caption">${esc(designApplyJobWord(job.status))}${job.message?' — '+esc(job.message):''}</p>${progress}`+
   `<div class="table-wrap"><table><thead><tr><th>Device</th><th>Kind</th><th>Stage</th><th>Outcome</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 // The plan card's "last apply" line: the newest apply job of this lab, in words, with a Show button
@@ -897,7 +903,7 @@ function designExportGitBody(values){
 // designState is the module-level cache the spec calls for: {labId,view,plan,draft,loading,error}.
 // view is the GET .../design document; plan is the plan.json of the newest succeeded generation (fetched
 // separately, since network_design.py keeps it on disk, not on the lightweight generation record).
-let designState={labId:'',view:null,plan:null,draft:null,draftDiscarded:false,loading:false,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:'',summary:null,invalid:[]};
+let designState={labId:'',view:null,plan:null,draft:null,draftDiscarded:false,loading:false,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:'',summary:null,invalid:[],planError:'',planLoading:false};
 // Answers land in request order only by luck: every read of the design takes a sequence number when it is sent,
 // and an answer is shown only if nothing newer has been shown since (an older answer that arrives late is
 // dropped, never painted over a newer generation). A write (save, import, renumber, clear) is the newest truth
@@ -934,15 +940,34 @@ function designPlanWanted(labId,generationId){
  const shown=designViewedGeneration(designState.view);
  return !!shown&&shown.id===generationId;
 }
+// A failed fetch, or an answer without a plan (the manager could not read plan.json), is kept as planError so the
+// card says so and offers Try again instead of the "Generate a plan" hint for a plan that exists.
 async function designLoadPlan(labId,generationId){
+ if(designPlanWanted(labId,generationId))designState.planLoading=true;
  try{
   const data=await(await api('/labs/'+encodeURIComponent(labId)+'/design/generations/'+encodeURIComponent(generationId))).json();
-  if(designPlanWanted(labId,generationId))designState.plan=data.plan||null;
- }catch{if(designPlanWanted(labId,generationId))designState.plan=null;}
+  if(designPlanWanted(labId,generationId)){
+   designState.plan=data.plan||null;
+   designState.planError=data.plan?'':'The plan was generated, but its details could not be read.';
+  }
+ }catch(error){if(designPlanWanted(labId,generationId)){designState.plan=null;designState.planError='The plan could not be loaded ('+(error&&error.message||'no answer')+').';}}
+ finally{if(designPlanWanted(labId,generationId))designState.planLoading=false;}
+}
+// Try again on the plan card: fetch the plan being shown once more.
+async function designPlanRetry(){
+ const lab=current();if(!lab)return;
+ const shown=designViewedGeneration(designState.view);if(!shown||shown.status!=='succeeded')return;
+ designState.planError='';
+ await designLoadPlan(lab.id,shown.id);
+ if(designState.labId!==lab.id)return;
+ designRenderAll();
+}
+function designPlanFailureMarkup(message){
+ return `<p class="form-error" role="alert">${esc(message)} The plan itself is kept on the manager.</p><p><button type="button" class="button secondary small" data-design-plan-retry>Try again</button></p>`;
 }
 async function designLoad(labId){
  designClearSummary();
- designState={labId,view:null,plan:null,draft:null,draftDiscarded:false,loading:true,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:designState.formLab||'',summary:null,invalid:[]};
+ designState={labId,view:null,plan:null,draft:null,draftDiscarded:false,loading:true,error:'',viewing:null,advancedInvalid:false,pollProblem:'',draftUnsaved:false,pollGaveUp:false,formLab:designState.formLab||'',summary:null,invalid:[],planError:'',planLoading:false};
  designRenderAll();
  const seq=designViewRequest();
  try{
@@ -1142,7 +1167,7 @@ function designRenderPlanCard(view){
   $('design-plan-collisions').textContent=count?'Some link prefixes collided with pinned addresses and were reassigned automatically ('+count+(count===1?' link':' links')+').':'';
  }
  setMarkup($('design-compatibility'),designCompatibilityMarkup(newest,designRetiredInfo(view)));
- setMarkup($('design-plan-body'),newest&&newest.status==='succeeded'?designPlanMarkup(designState.plan):'<p class="caption">Generate a plan to see it here.</p>');
+ setMarkup($('design-plan-body'),newest&&newest.status==='succeeded'?(!designState.plan&&designState.planLoading?'<p class="caption">Loading the plan…</p>':!designState.plan&&designState.planError?designPlanFailureMarkup(designState.planError):designPlanMarkup(designState.plan)):'<p class="caption">Generate a plan to see it here.</p>');
  if($('design-cancel'))$('design-cancel').hidden=!(newest&&DESIGN_BUSY_GENERATION.includes(newest.status));
 }
 function designUpdateDownloadLink(lab,view){
@@ -1160,7 +1185,7 @@ async function designViewGeneration(generationId){
  const found=generations.find(g=>g.id===generationId);if(!found)return;
  const latest=designNewestGeneration(designState.view);
  designState.viewing=latest&&latest.id===generationId?null:generationId;
- designState.plan=null;
+ designState.plan=null;designState.planError='';designState.planLoading=false;
  if(found.status==='succeeded')await designLoadPlan(labId,generationId);
  if(designState.labId!==labId)return;
  designRenderAll();
@@ -1639,12 +1664,16 @@ async function designImportFile(file){
   designShowSummary('import',designProblemsFromError(error),{links:false});
  }
 }
-async function designViewFile(node,index){
- const lab=current();if(!lab)return;
- const newest=designNewestGeneration(designState.view);if(!newest||typeof opDialog!=='function')return;
+// The file belongs to the plan its row was drawn for (generationId, from the button): the plan shown may have
+// changed since, and the newest plan is not necessarily the one on screen.
+async function designViewFile(node,index,generationId){
+ const lab=current();if(!lab||typeof opDialog!=='function')return;
+ const generations=(designState.view&&designState.view.generations)||[];
+ const plan=generationId?generations.find(g=>g.id===generationId):designViewedGeneration(designState.view);
+ const planId=generationId||(plan&&plan.id);if(!planId)return;
  try{
-  const text=await(await api('/labs/'+encodeURIComponent(lab.id)+'/design/generations/'+encodeURIComponent(newest.id)+'/artifacts/'+encodeURIComponent(node)+'/'+encodeURIComponent(index))).text();
-  const entry=((newest.artifacts||{})[node]||[])[index];
+  const text=await(await api('/labs/'+encodeURIComponent(lab.id)+'/design/generations/'+encodeURIComponent(planId)+'/artifacts/'+encodeURIComponent(node)+'/'+encodeURIComponent(index))).text();
+  const entry=(((plan&&plan.artifacts)||{})[node]||[])[index];
   opDialog('design-file-dialog',(entry&&entry.module?entry.module+' · ':'')+node,`<pre class="op-output">${esc(text)}</pre>`);
  }catch(error){if(typeof notify==='function')notify(error.message);}
 }
@@ -1959,15 +1988,20 @@ async function designApplySubmit(){
   if(typeof refresh==='function')await refresh();
  }catch(error){if($('design-apply-review-error'))$('design-apply-review-error').textContent=error.message;}
 }
-function designApplyRenderProgress(){setMarkup($('design-apply-progress-body'),designApplyProgressMarkup(designApplyState.job));}
+// The follow line belongs to one job; it is dropped when another job is shown or following restarts.
+let designApplyFollow={jobId:'',problem:'',gaveUp:false};
+function designApplyRenderProgress(){setMarkup($('design-apply-progress-body'),designApplyProgressMarkup(designApplyState.job,designApplyFollow.jobId===designApplyState.jobId?designApplyFollow:null));}
 function designApplyStopWatch(){clearTimeout(designApplyWatchTimer);designApplyWatch=null;}
 function designApplyStartWatch(jobId){
  if(designApplyWatch===jobId)return;designApplyStopWatch();designApplyWatch=jobId;
+ designApplyFollow={jobId,problem:'',gaveUp:false};
+ let failures=0;
  const poll=async()=>{
   if(designApplyWatch!==jobId)return;
   try{
    const job=await(await api('/design/apply/jobs/'+encodeURIComponent(jobId))).json();
    if(designApplyWatch!==jobId)return;
+   failures=0;designApplyFollow={jobId,problem:'',gaveUp:false};
    designApplyState.job=job;
    if(designApplyState.jobId===jobId&&designApplyState.step==='progress')designApplyRenderProgress();
    if(DESIGN_APPLY_JOB_BUSY.includes(job.status)){designApplyWatchTimer=setTimeout(poll,2000);}
@@ -1977,9 +2011,31 @@ function designApplyStartWatch(jobId){
     designApplyRenderLast(job.lab_id);
     designApplyLoadOwnership();
    }
-  }catch{designApplyStopWatch();}
+  }catch(error){
+   // A failed poll (a lost connection, a restart, a 500) is retried a bounded number of times with the student
+   // told so; after that following stops, the table says it is the last answer, and Check again polls afresh.
+   // The job itself keeps running on the manager either way.
+   if(designApplyWatch!==jobId)return;
+   failures++;
+   const why=error&&error.message||'no answer';
+   if(failures<=DESIGN_POLL_RETRIES){
+    designApplyFollow={jobId,problem:'Could not check the progress (attempt '+failures+' of '+DESIGN_POLL_RETRIES+'): '+why+'. The table below is the last answer received. Trying again…',gaveUp:false};
+    designApplyRenderProgress();designApplyWatchTimer=setTimeout(poll,2000);
+   }else{
+    designApplyStopWatch();
+    designApplyFollow={jobId,problem:'Progress is no longer being followed ('+why+'). The table below is the last answer received; the apply itself keeps running on the manager.',gaveUp:true};
+    designApplyRenderProgress();
+    try{if(typeof refresh==='function')await refresh();}catch{}
+    designApplyRenderLast(designApplyState.labId);
+   }
+  }
  };
  designApplyWatchTimer=setTimeout(poll,2000);
+}
+// "Check again" in the progress step: follow the job afresh.
+function designApplyFollowRetry(){
+ const jobId=designApplyState.jobId;if(!jobId)return;
+ designApplyStopWatch();designApplyStartWatch(jobId);designApplyRenderProgress();
 }
 // The dialog was closed (button, Escape or backdrop): following stops; a running review keeps running and the plan card keeps its line.
 function designReviewDialogClosed(){
@@ -1991,7 +2047,7 @@ function designReviewDialogClosed(){
 function designApplyShowJob(jobId){
  const lab=current();if(!lab||!$('design-apply-dialog'))return;
  const job=((typeof state!=='undefined'&&state.design_jobs)||[]).find(j=>j.id===jobId)||null;
- designApplyState.labId=lab.id;designApplyState.jobId=jobId;designApplyState.job=job;
+ designApplyState.labId=lab.id;designApplyState.jobId=jobId;designApplyState.job=job;designApplyFollow={jobId:'',problem:'',gaveUp:false};
  designApplyRenderProgress();designApplyShowStep('progress');
  $('design-apply-dialog').showModal();
  if(job&&DESIGN_APPLY_JOB_BUSY.includes(job.status))designApplyStartWatch(jobId);
@@ -2010,6 +2066,7 @@ function initDesignApply(){
  if($('design-apply-back'))$('design-apply-back').onclick=()=>designApplyShowStep('choose');
  if($('design-apply-run'))$('design-apply-run').onclick=()=>designApplySubmit();
  if($('design-apply-ack'))$('design-apply-ack').addEventListener('change',designApplyUpdateRunButton);
+ if($('design-apply-dialog'))$('design-apply-dialog').addEventListener('click',e=>{if(e.target&&e.target.closest&&e.target.closest('[data-design-apply-follow-retry]'))designApplyFollowRetry();});
  if($('design-apply-review-body'))$('design-apply-review-body').addEventListener('change',e=>{
   const cb=e.target&&e.target.closest&&e.target.closest('[data-design-apply-takeover]');
   if(cb)designApplyToggleTakeover(cb.dataset.designApplyTakeover,cb.checked);
@@ -2112,8 +2169,9 @@ function initNetworkDesign(){
  });
  if($('design-renumber'))$('design-renumber').onclick=()=>{if(typeof closeMenus==='function')closeMenus();designRenumber();};
  if($('design-clear'))$('design-clear').onclick=()=>{if(typeof closeMenus==='function')closeMenus();designClearDesign();};
+ if($('design-plan-body'))$('design-plan-body').addEventListener('click',e=>{if(e.target&&e.target.closest&&e.target.closest('[data-design-plan-retry]'))designPlanRetry();});
  if($('design-files-body'))$('design-files-body').addEventListener('click',e=>{
-  const b=e.target.closest('[data-design-view-file]');if(b)designViewFile(b.dataset.designViewFile,Number(b.dataset.designViewIndex));
+  const b=e.target.closest('[data-design-view-file]');if(b)designViewFile(b.dataset.designViewFile,Number(b.dataset.designViewIndex),b.dataset.designViewGeneration);
  });
  if($('design-error-summary'))$('design-error-summary').addEventListener('click',e=>{const r=e.target&&e.target.closest&&e.target.closest('[data-design-retry]');if(r){const run={save:()=>designSave(),generate:()=>designGenerate(),check:()=>designValidate()}[r.dataset.designRetry];if(run)run();return;}const b=e.target&&e.target.closest&&e.target.closest('[data-design-goto]');if(b)designGotoField(b.dataset.designGoto);});
  if($('experimental-design'))$('experimental-design').addEventListener('toggle',()=>{if(typeof renderNetworkDesign==='function')renderNetworkDesign();});
