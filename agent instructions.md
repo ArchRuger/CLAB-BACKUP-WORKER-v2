@@ -14,7 +14,9 @@ revision from the view at confirm time again. The operation review (`operation-r
 token and names its lab and device; it was left as it is on purpose (pass 8's observation). Tests:
 `test_network_design_ui.js` "QA-021" and `test_shell_ui.js` "QA-021". (3) The campaign's gate is open: acceptance
 passes 9 (Sonnet) and 10 (Opus) on this release have not run; the live evidence in the 1.30.58 validation record
-was taken on the 1.30.51 build on 2026-09-28, and the manager on the dev VM was never deployed at 1.30.58.
+was taken on the 1.30.51 build on 2026-09-28. The dev VM runs 1.30.58 since 2026-10-03 (the full launcher: manager,
+helpers and the capture session service; health check 65 PASS); `restore-square`'s NOS nodes are exited and need a
+redeploy before a live pass.
 
 # UI/UX changes 2, part 6: the topology travels with every backup — 1.30.57
 
