@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from urllib.parse import urlsplit
 
@@ -35,6 +36,7 @@ GH = '/usr/bin/gh'
 ENGINEER = Path('/etc/clab-manager/engineer.json')
 MAX_TREE = 4000
 MAX_MOVE = 1500
+REGISTRY_WAIT = 30
 
 
 def digest(value):
@@ -192,6 +194,31 @@ def atomic_json(path, value):
         if temporary.exists(): temporary.unlink()
 
 
+@contextlib.contextmanager
+def exclusive(path, busy, wait=0):
+    """One exclusive flock on `path`, held for the block: a checkout's state/lock, or the registry's lock
+    beside git.json. With `wait` it retries that many seconds before refusing with `busy`."""
+    with path.open('a+b') as stream:
+        deadline = time.monotonic() + wait
+        while True:
+            try:
+                if os.name == 'posix':
+                    import fcntl
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                else:
+                    import msvcrt
+                    stream.seek(0); stream.write(b'0'); stream.flush(); stream.seek(0)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                break
+            except (OSError, BlockingIOError):
+                if time.monotonic() >= deadline: raise ValueError(busy) from None
+                time.sleep(0.1)
+        try: yield
+        finally:
+            if os.name == 'posix': fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+            else: stream.seek(0); msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+
+
 def sync_directory(path):
     if os.name == 'posix':
         fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
@@ -282,23 +309,8 @@ class GitRepository:
     def descriptor(self):
         return {k: self.binding[k] for k in ('id', 'label', 'owner', 'path', 'remote', 'push_url', 'branch', 'prefix', 'revision')}
 
-    @contextlib.contextmanager
     def lock(self):
-        path = no_links(self.state / 'lock', False)
-        with path.open('a+b') as stream:
-            try:
-                if os.name == 'posix':
-                    import fcntl
-                    fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                else:
-                    import msvcrt
-                    stream.seek(0); stream.write(b'0'); stream.flush(); stream.seek(0)
-                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-            except (OSError, BlockingIOError): raise ValueError('Another Git operation is already running for this repository.') from None
-            try: yield
-            finally:
-                if os.name == 'posix': fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
-                else: stream.seek(0); msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+        return exclusive(no_links(self.state / 'lock', False), 'Another Git operation is already running for this repository.')
 
     def validate(self):
         no_links(self.root); no_links(self.control)
@@ -1041,32 +1053,52 @@ def run_as_owner(binding, work):
     return result['binding']
 
 
-def store_binding(config, binding):
+def registry_lock():
+    """The one lock every root writer of git.json holds (this helper and deploy/setup-git.sh)."""
+    no_links(REGISTRY.parent, False); REGISTRY.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return exclusive(no_links(REGISTRY.with_name(REGISTRY.name + '.lock'), False),
+                     'Another Git registration is being saved on the VM. Nothing was registered; retry in a moment.', REGISTRY_WAIT)
+
+
+def save_registration(binding, retire=None, add=True):
+    """Root: save one registration (and retire a moved lab's old folder) under the registry lock, against git.json
+    as it is now. The owner's Git work before it (clone, push check) runs unlocked for minutes, and another root
+    process may save meanwhile: the copy loaded at startup is never written back.
+
+    retire is (binding_id, revision) of the folder the lab leaves; add=False only retires next to an existing
+    registration. A conflicting change saved meanwhile refuses with nothing written."""
     binding = {k: v for k, v in binding.items() if not k.startswith('_')}
-    config['repositories'] = [b for b in config['repositories'] if b['id'] != binding['id']] + [binding]
-    atomic_json(REGISTRY, config)
+    with registry_lock():
+        config = load_registry() if REGISTRY.exists() else {'repositories': []}
+        repositories = config['repositories']
+        if retire and retire[0] != binding['id']:
+            source = next((b for b in repositories if b['id'] == retire[0]), None)
+            if source and source['revision'] != retire[1]: raise ValueError('The repository binding changed. Select it again.')
+            # The lab moved away: its previous folder registration is retired so it cannot block or confuse later choices.
+            repositories = [b for b in repositories if b['id'] != retire[0]]
+        if add:
+            if any(b['id'] != binding['id'] and b['path'] == binding['path'] and (b['prefix'] == binding['prefix'] or overlapping(binding['prefix'], b['prefix']))
+                   for b in repositories):
+                raise ValueError('Another Git registration for this checkout folder was saved meanwhile. Nothing was registered; choose the folder again.')
+            repositories = [b for b in repositories if b['id'] != binding['id']] + [binding]
+        elif not any(b['id'] == binding['id'] for b in repositories): raise ValueError('The repository binding changed. Select it again.')
+        config['repositories'] = repositories
+        atomic_json(REGISTRY, config)
     return descriptor(binding)
 
 
 def register_prefix(config, req, run=run_as_owner, lookup=None):
     existing, binding = plan_prefix(config, req, lookup)
-    if existing: result = descriptor(existing)
-    else:
-        binding = run(binding, lambda: GitRepository(binding).register(None))
-        binding = {k: v for k, v in binding.items() if not k.startswith('_')}
-        config['repositories'] = [b for b in config['repositories'] if b['id'] != binding['id']] + [binding]
-        result = descriptor(binding)
-    if req.get('retire') is True and result['id'] != req.get('binding_id'):
-        # The lab moved away: its previous folder registration is retired so it cannot block or confuse later choices.
-        config['repositories'] = [b for b in config['repositories'] if b['id'] != req.get('binding_id')]
-    if not existing or req.get('retire') is True: atomic_json(REGISTRY, config)
-    return result
+    retire = (req.get('binding_id'), req.get('revision')) if req.get('retire') is True else None
+    if existing and not retire: return descriptor(existing)
+    if not existing: binding = run(binding, lambda: GitRepository(binding).register(None))
+    return save_registration(existing or binding, retire, add=not existing)
 
 
 def connect(config, req, run=run_as_owner, lookup=None):
     existing, binding, url = plan_connect(config, req, lookup)
     if existing: return descriptor(existing)
-    return store_binding(config, run(binding, lambda: GitRepository(binding).connect(url)))
+    return save_registration(run(binding, lambda: GitRepository(binding).connect(url)))
 
 
 def root_file(path):

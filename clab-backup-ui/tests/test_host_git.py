@@ -686,7 +686,9 @@ class HostGitPlacesTests(HostGitTests):
         rooted = {'repositories': [dict(self.binding, prefix='', uid=1000, gid=1000, revision='r-root')]}
         with self.assertRaisesRegex(ValueError, 'cannot overlap'): host_git.plan_prefix(rooted, dict(req, revision='r-root', prefix='bgp'), self.account)
         self.assertEqual(host_git.plan_prefix(rooted, dict(req, revision='r-root', prefix='bgp', retire=True), self.account)[1]['prefix'], 'bgp')
-        with patch.object(host_git, 'REGISTRY', self.base / 'registry.json'):
+        # The registry write reloads git.json under its lock (audit L-1): here the registry as it is now is `rooted`.
+        (self.base / 'registry.json').write_text(json.dumps(rooted))
+        with patch.object(host_git, 'REGISTRY', self.base / 'registry.json'), patch.object(host_git, 'load_registry', return_value=rooted):
             registered = host_git.register_prefix(rooted, dict(req, revision='r-root', prefix='bgp', retire=True), lambda binding, work: dict(binding, branch='main', push_url=str(self.remote), revision='r-bgp', anchor='a' * 40), lookup=self.account)
             self.assertEqual(registered['prefix'], 'bgp'); self.assertNotIn('anchor', registered)
             self.assertEqual([b['prefix'] for b in json.loads((self.base / 'registry.json').read_text())['repositories']], ['bgp'])
@@ -782,3 +784,99 @@ class HostGitPlacesTests(HostGitTests):
                    'remote': 'origin', 'branch': '', 'push_url': '', 'prefix': '', 'revision': '', '_pending': True}
         with self.assertRaisesRegex(ValueError, 'commit identity'):
             GitRepository(missing, git=self.git, allow_local=True, env=self.env).connect(str(self.remote))
+
+
+class RegistryRaceTests(unittest.TestCase):
+    """Audit L-1: git.json is read-modify-written by the root helper and by setup-git.sh while an owner's Git
+    (clone, push check) runs for minutes. A registration saved meanwhile must never be lost."""
+    URL = 'https://github.com/Owner/Course.git'
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name); self.registry = self.base / 'git.json'; self.home = self.base / 'home'
+        for target, value in (('REGISTRY', self.registry), ('load_registry', lambda: json.loads(self.registry.read_text())),
+                              ('ENGINEER', self.base / 'missing-engineer.json')):
+            patcher = patch.object(host_git, target, value); patcher.start(); self.addCleanup(patcher.stop)
+
+    def account(self, owner):
+        return SimpleNamespace(pw_name=owner, pw_uid=1000, pw_gid=1000, pw_dir=str(self.home))
+
+    def binding(self, prefix, revision=None, **extra):
+        return dict({'id': uuid.uuid4().hex, 'label': 'Course / ' + prefix, 'owner': 'ben', 'uid': 1000, 'gid': 1000, 'home': str(self.home),
+                     'path': str(self.home / 'labs' / 'Course'), 'remote': 'origin', 'prefix': prefix, 'branch': 'main',
+                     'push_url': self.URL, 'revision': revision or hashlib.sha256(prefix.encode()).hexdigest(), 'anchor': 'a' * 40}, **extra)
+
+    def write(self, *bindings): self.registry.write_text(json.dumps({'repositories': list(bindings)}))
+
+    def saved(self): return {b['prefix']: b for b in json.loads(self.registry.read_text())['repositories']}
+
+    def owner_git(self, meanwhile):
+        # The owner's Git runs unlocked; `meanwhile` is what another root process saves during it.
+        def run(binding, work):
+            meanwhile()
+            return dict(binding, branch='main', push_url=self.URL, revision='r-' + binding['prefix'], anchor='a' * 40)
+        return run
+
+    def test_a_folder_registration_keeps_what_setup_git_saved_while_the_owner_git_ran(self):
+        bgp = self.binding('bgp'); ospf = self.binding('ospf'); self.write(bgp)
+        config = host_git.load_registry()
+        result = host_git.register_prefix(config, {'binding_id': bgp['id'], 'revision': bgp['revision'], 'prefix': 'eth'},
+                                          self.owner_git(lambda: self.write(bgp, ospf)), lookup=self.account)
+        self.assertEqual(result['prefix'], 'eth')
+        self.assertEqual(sorted(self.saved()), ['bgp', 'eth', 'ospf'])
+
+    def test_a_pasted_url_connection_keeps_what_setup_git_saved_while_the_clone_ran(self):
+        bgp = self.binding('bgp'); ospf = self.binding('ospf'); self.write(bgp)
+        result = host_git.connect(host_git.load_registry(), {'url': self.URL, 'prefix': 'eth'},
+                                  self.owner_git(lambda: self.write(bgp, ospf)), lookup=self.account)
+        self.assertEqual(result['prefix'], 'eth')
+        self.assertEqual(sorted(self.saved()), ['bgp', 'eth', 'ospf'])
+
+    def test_setup_git_keeps_what_the_manager_saved_while_its_push_check_ran(self):
+        # setup-git.sh loads at start, forks the owner child, then saves through save_registration.
+        bgp = self.binding('bgp'); eth = self.binding('eth'); self.write(bgp)
+        startup = host_git.load_registry(); self.write(bgp, eth)
+        ospf = self.binding('ospf'); self.assertNotIn(ospf['id'], [b['id'] for b in startup['repositories']])
+        self.assertEqual(host_git.save_registration(dict(ospf, _pending=True))['prefix'], 'ospf')
+        self.assertEqual(sorted(self.saved()), ['bgp', 'eth', 'ospf']); self.assertNotIn('_pending', self.saved()['ospf'])
+        # Re-registering an existing folder keeps its ID and replaces only that entry.
+        self.assertEqual(host_git.save_registration(dict(bgp, label='Renamed'))['id'], bgp['id'])
+        self.assertEqual(self.saved()['bgp']['label'], 'Renamed'); self.assertEqual(sorted(self.saved()), ['bgp', 'eth', 'ospf'])
+
+    def test_a_move_does_not_retire_a_registration_that_changed_meanwhile(self):
+        root = self.binding('', revision='r-root'); self.write(root)
+        changed = dict(root, revision='r-admin')
+        with self.assertRaisesRegex(ValueError, 'binding changed'):
+            host_git.register_prefix(host_git.load_registry(), {'binding_id': root['id'], 'revision': 'r-root', 'prefix': 'bgp', 'retire': True},
+                                     self.owner_git(lambda: self.write(changed)), lookup=self.account)
+        self.assertEqual(self.saved(), {'': changed})
+        # Unchanged meanwhile, the move still retires the old folder (the behaviour before the lock).
+        self.write(root)
+        host_git.register_prefix(host_git.load_registry(), {'binding_id': root['id'], 'revision': 'r-root', 'prefix': 'bgp', 'retire': True},
+                                 self.owner_git(lambda: None), lookup=self.account)
+        self.assertEqual(sorted(self.saved()), ['bgp'])
+
+    def test_an_overlapping_folder_saved_meanwhile_refuses_the_registration_and_writes_nothing(self):
+        bgp = self.binding('bgp'); nested = self.binding('eth/core'); self.write(bgp)
+        with self.assertRaisesRegex(ValueError, 'saved meanwhile'):
+            host_git.register_prefix(host_git.load_registry(), {'binding_id': bgp['id'], 'revision': bgp['revision'], 'prefix': 'eth'},
+                                     self.owner_git(lambda: self.write(bgp, nested)), lookup=self.account)
+        self.assertEqual(sorted(self.saved()), ['bgp', 'eth/core'])
+
+    @unittest.skipUnless(os.name == 'posix', 'flock')
+    def test_the_registry_write_waits_for_the_lock_and_gives_up_with_a_clear_message(self):
+        import fcntl
+        bgp = self.binding('bgp'); self.write(bgp)
+        with open(str(self.registry) + '.lock', 'a') as held, patch.object(host_git, 'REGISTRY_WAIT', 0.3):
+            fcntl.flock(held, fcntl.LOCK_EX)
+            with self.assertRaisesRegex(ValueError, 'Another Git registration'): host_git.save_registration(self.binding('eth'))
+            self.assertEqual(sorted(self.saved()), ['bgp'])
+            fcntl.flock(held, fcntl.LOCK_UN)
+            host_git.save_registration(self.binding('eth'))
+        self.assertEqual(sorted(self.saved()), ['bgp', 'eth'])
+
+    def test_setup_git_writes_the_registry_only_under_the_shared_lock(self):
+        script = (Path(__file__).resolve().parents[2] / 'deploy' / 'setup-git.sh').read_text()
+        self.assertFalse('h.atomic_json(h.REGISTRY,registry)\n    print(' in script, 'setup-git.sh writes back the registry it loaded at start')
+        self.assertTrue('h.save_registration(binding)' in script, 'setup-git.sh must save through the locked merge')
+        self.assertTrue('with h.registry_lock():' in script, 'setup-git.sh --refresh must create the registry under the lock')

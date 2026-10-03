@@ -206,6 +206,27 @@ test('an uncertain save response retries with the same persistent request ID',as
  assert.equal(calls[0].payload.request_id,calls[1].payload.request_id);assert.match(calls[1].payload.request_id,/^[a-f0-9]{32}$/);assert.equal(calls[1].endpoint,'/labs/lab/git/save');
  await context.gitSubmitSave('lab',{target:'latest',push:true});assert.notEqual(calls[2].payload.request_id,calls[1].payload.request_id);
 });
+test('a stored request whose save already finished is never replayed: a later save with the same label captures afresh (audit L-8)',async()=>{
+ const context=makeContext(),calls=[];let fail=true,now=Date.parse('2026-10-03T10:00:00Z');
+ context.gitNow=()=>now;context.gitShowJob=async()=>{};context.gitStartWatch=()=>{};
+ context.json=async(endpoint,method,payload)=>{calls.push(payload);if(fail)throw Error('Network interrupted');return {id:payload.request_id,lab_id:'lab',created:'2026-10-03T10:00:00Z',status:'queued'};};
+ await assert.rejects(context.gitSubmitSave('lab',{target:'latest',push:true,note:'OSPF up'},undefined,{quiet:true}),/Network interrupted/);
+ const lost=calls[0].request_id;fail=false;
+ // The lost save was created, finished, reviewed and uploaded: the page now knows it as synced.
+ context.state.git_jobs=[{id:lost,lab_id:'lab',status:'synced',created:'2026-10-03T10:00:00Z'}];
+ await context.gitSubmitSave('lab',{target:'latest',push:true,note:'OSPF up'},undefined,{quiet:true});
+ assert.notEqual(calls[1].request_id,lost);assert.match(calls[1].request_id,/^[a-f0-9]{32}$/);
+ // Still running: the retry returns that same save instead of capturing twice.
+ fail=true;await assert.rejects(context.gitSubmitSave('lab',{target:'latest',push:true,note:'BGP up'},undefined,{quiet:true}));
+ const running=calls[2].request_id;fail=false;context.state.git_jobs=[{id:running,lab_id:'lab',status:'capturing'}];
+ await context.gitSubmitSave('lab',{target:'latest',push:true,note:'BGP up'},undefined,{quiet:true});assert.equal(calls[3].request_id,running);
+ // Unknown to the page but stored long ago: never replayed either.
+ fail=true;await assert.rejects(context.gitSubmitSave('lab',{target:'latest',push:true,note:'ISIS up'},undefined,{quiet:true}));
+ const old=calls[4].request_id;fail=false;now+=11*60*1000;context.state.git_jobs=[];
+ await context.gitSubmitSave('lab',{target:'latest',push:true,note:'ISIS up'},undefined,{quiet:true});assert.notEqual(calls[5].request_id,old);
+ // The payload sent is exactly the save request: no storage bookkeeping leaks onto the wire.
+ same(Object.keys(calls[5]).sort(),['allow_removed','backup_job_id','checkpoint','expected_baseline','note','push','replace_baseline','request_id','target']);
+});
 test('double-clicking Save progress dispatches one save while the first request is pending',async()=>{
  const context=makeContext();let calls=0,release;
  context.json=()=>{calls++;return new Promise(resolve=>release=resolve);};context.gitShowJob=async()=>{};
@@ -527,4 +548,45 @@ test('the review dialog for a design export says "Design export…", not "Save p
  const save={id:'s',lab_id:'lab',status:'review_pending',target:'latest',commit:'c'.repeat(40),created:'2026-09-11T12:00:00Z'};
  await context.gitReviewJob(save);
  assert.equal(dialogs.get('git-diff-dialog').title,'Review before uploading');
+});
+test('a folder move reads as moved only once it committed; one that stopped or lost its answer is retried, never worded as moved',()=>{
+ const context=makeContext(),move={id:'m',lab_id:'lab',target:'move',destination:{path:'labs/x'},created:'2026-10-03T12:00:00Z'};
+ for(const status of ['failed','export_pending','interrupted']){
+  const sentence=context.gitSaveSentence({...move,status});
+  assert.doesNotMatch(sentence,/Moved/,status);assert.equal(sentence,'Moving the saved files did not finish — retry it');
+  assert.equal(context.gitSavedAs({...move,status}),'Folder move to labs/x',status);
+ }
+ assert.doesNotMatch(context.gitSaveSentence({id:'old',target:'move',status:'failed',snapshot_path:''}),/repository root/,'an empty path no longer reads as moved to the root');
+ assert.equal(context.gitSaveSentence({...move,status:'committed',commit:'c'.repeat(40),snapshot_path:'labs/x/latest'}),'Moved to folder labs/x');
+ assert.equal(context.gitSaveSentence({...move,status:'push_pending',commit:'c'.repeat(40),snapshot_path:'labs/x/latest'}),'Moved to folder labs/x on this VM — upload needs attention');
+ assert.equal(context.gitSaveSentence({...move,status:'synced',snapshot_path:'latest'}),'Moved to folder the repository root');
+ assert.equal(context.gitSavedAs({...move,status:'synced',snapshot_path:'labs/x/latest'}),'Moved to labs/x');
+ assert.equal(context.gitUploadLabel({...move,status:'export_pending'}),'Retry the move');assert.equal(context.gitUploadLabel({...move,status:'push_pending',commit:'c'}),'Upload now');
+});
+test('a move an older release marked failed offers its retry in the job window',async()=>{
+ const context=makeContext(),elements=new Map(),dialogs=new Map();
+ const element=()=>({onclick:null,innerHTML:'',textContent:'',querySelectorAll:()=>[]});
+ for(const id of ['git-job-detail','git-job-actions'])elements.set(id,element());
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;context.closeDialogsExcept=()=>{};context.gitFocusDialog=()=>{};context.renderGitProgress=()=>{};
+ context.opDialog=id=>{const dialog={id,open:true,close(){this.open=false;},querySelector:()=>null};dialogs.set(id,dialog);return dialog;};
+ const failed={id:'m',lab_id:'lab',target:'move',status:'failed',created:'2026-10-03T12:00:00Z',destination:{path:'bgp'}};
+ await context.gitShowJob('m',failed);
+ const actions=elements.get('git-job-actions').innerHTML;
+ assert.match(actions,/data-git-job-action="push">Retry the move</);assert.match(actions,/data-git-job-action="local">Retry the move on this VM only</);
+});
+test('the review counts the saves an upload carries from every lab of the checkout and says when another lab\'s save must be reviewed first',async()=>{
+ const context=makeContext(),elements=new Map(),dialogs=new Map();
+ const element=()=>({onclick:null,innerHTML:'',listeners:{},addEventListener(name,fn){this.listeners[name]=fn;},querySelectorAll:()=>[]});
+ context.$=id=>elements.get(id)||dialogs.get(id)||null;context.opTask=async(dialog,fn)=>fn();
+ context.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],element());const dialog={id,title,html,open:true,close(){this.open=false;}};dialogs.set(id,dialog);return dialog;};
+ let answer={files:[],also_sends:2,also_sends_other_labs:1,upload_blocked:'Another lab in this repository, <b>, has a save waiting on the VM without a review.'};
+ context.json=async endpoint=>endpoint.endsWith('/compare')?answer:{};
+ const save={id:'s',lab_id:'lab',status:'review_pending',target:'latest',commit:'c'.repeat(40),created:'2026-10-03T12:00:00Z'};
+ await context.gitReviewJob(save);let html=dialogs.get('git-diff-dialog').html;
+ assert.match(html,/Uploading also sends 2 earlier saves that are still waiting on the VM, 1 of them from another lab in this repository\./);
+ assert.match(html,/id="git-review-blocked">Another lab in this repository, &lt;b&gt;, has a save/);
+ // The page's own count of this lab is the floor: an answer without the count never lowers it.
+ context.state.git_jobs=[{...save,id:'earlier',status:'committed',created:'2026-10-03T11:00:00Z'}];answer={files:[]};
+ await context.gitReviewJob(save);html=dialogs.get('git-diff-dialog').html;
+ assert.match(html,/Uploading also sends 1 earlier save that is still waiting on the VM\./);assert.doesNotMatch(html,/git-review-blocked/);
 });

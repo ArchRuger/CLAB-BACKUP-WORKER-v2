@@ -203,6 +203,22 @@ whole `latest/`, `baseline/` and `checkpoints/` layout nests under it, for examp
 manager connects to its own subfolder registration, so saving one lab never rewrites
 another lab's folder.
 
+The labs of one repository still share one branch on the VM, and an upload sends every commit
+below it. So the review before every upload holds across them:
+
+- While another lab of the repository has a save waiting on the VM without a review (or a save
+  whose answer was lost, which may hold a commit), this lab's **Save progress**, design exports,
+  a retry that commits and a folder move with its files are refused. The message names that lab
+  and its save: open it under *Progress*, review and upload it (or choose **Keep snapshot only**),
+  then try again. Saves of the waiting lab itself are not held up.
+- An upload waits the same way. Saves that an older release already stacked on top of each other
+  stay recoverable: a refused upload keeps your review, so after each lab's waiting save was
+  reviewed once, either upload goes through and settles both (the other lab's save then reads
+  *Saved to Git* as well).
+- **Review before uploading** counts every other save of the repository that the upload may carry
+  along, this lab's and other labs', and says how many belong to other labs.
+- A folder move that meets such a save is kept on the VM and uploaded later from *Recent saves*.
+
 ## Everyday buttons
 
 The lab header carries **Save progress** with a small menu (Create checkpoint…, Save on
@@ -217,6 +233,16 @@ saves*, the save window and the commit history. A cancelled or interrupted save 
 label ready to offer again the next time you save; it is only forgotten once the save is actually
 created. A save made before this label was required (or the checkpoint/baseline dialogs, which ask
 for the same label under **What changed?**) falls back to its plain status sentence and date.
+
+When the answer to a save is lost on the way back (a network interruption), saving again with
+the same label and options within ten minutes returns that same save instead of reading the
+devices twice. Once the page shows that save as finished, or after ten minutes, a new save
+always reads the devices afresh: an old save is never reported as *Saved to Git just now*.
+
+The review shows a real line-by-line diff of each changed file. A file longer than 20 000
+lines is compared over its first 20 000 lines only, and a line longer than 4 000 characters is
+shown shortened; the review then says so in the file, and never calls a file that was cut
+short *Identical*. Check such a file with **Open the full saved version** before uploading.
 
 | Action | Result |
 |---|---|
@@ -240,7 +266,7 @@ Gtel-100G-G8032/Working/latest`), frozen at the moment the save is captured — 
 different folder afterwards never rewrites an earlier save's own destination line. Beside it is one
 of four plain states: *saved on this VM*, *waiting for your review*, *uploaded to `<remote>`* or
 *verified on remote* (a save whose commit was carried along by a later upload of the same
-folder). The Details under a save keep the exact checkout path on the VM and the commit.
+folder, or of another lab of the same repository). The Details under a save keep the exact checkout path on the VM and the commit.
 
 <a id="where-this-lab-lives"></a>
 
@@ -273,7 +299,14 @@ registration IDs and folder names.
   and pushed, and the move is recorded as a *Folder move* job with the same retry and push
   handling as a save. A folder move changes no configuration, so it is uploaded on that
   confirmation (the dialog says so) and has no separate *Review before uploading* step. Earlier versions stay in Git history either way; a pending
-  save has to finish or be dismissed first.
+  save has to finish or be dismissed first. Everything that can refuse the change (a pending
+  save, a running job, a device selection that no longer matches the lab, another lab using
+  that folder) is checked before the VM retires the old registration, so a refused change
+  leaves the lab saving where it did; once the VM made the change the lab follows it, also
+  when the answer was lost. A move that stops before its commit (for example on staged
+  changes) or loses its answer reads *Moving the saved files did not finish — retry it* and
+  is retried from its save window (**Retry the move**); it is only worded as moved once it
+  committed.
 - **New folder…** creates a folder beside the existing ones. It accepts a whole nested
   path such as `Week-04/BGP/Final-State`, so a deep destination like
   `CCNP-SP/Labs/Week-04/BGP/Final-State` is created in one step; the dialog shows the
@@ -342,7 +375,7 @@ not implemented by registering two Linux owners.
 | Immutable captured configurations | Manager `backups/<lab-id>/history/<backup-job-id>`; included in a complete data archive. |
 | Exported configurations and local Git commits | Ben's registered checkout; back it up independently until all intended commits are pushed. |
 | Git credentials | Ben's external credential configuration; provision it again when rebuilding a VM. |
-| Host registration | `/etc/clab-manager/git.json`, written by guided setup and by the manager's folder and connect actions through the helper; retain the root-owned registration when backing up the VM. |
+| Host registration | `/etc/clab-manager/git.json`, written by guided setup and by the manager's folder and connect actions through the helper, each under the lock `git.json.lock` beside it and merged into the file as it is then, so writers running at the same time keep each other's registrations; retain the root-owned registration when backing up the VM. |
 | Host journal and transfer snapshots | `<checkout>/.git/clab-manager/`; retain these with the complete checkout for interrupted-save recovery. |
 
 Back up the whole manager data directory, the registered checkout and its helper

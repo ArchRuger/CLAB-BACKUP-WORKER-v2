@@ -1,6 +1,7 @@
 """Capture immutable lab snapshots and publish them through an owner-scoped VM helper."""
 import base64
 import copy
+import functools
 import hashlib
 import io
 import json
@@ -248,6 +249,22 @@ def job_pending(job):
 def pending_progress(state, lab_id=None):
     return any((not lab_id or j.get('lab_id') == lab_id) and job_pending(j)
                for j in state.get('git_jobs', []))
+
+
+def awaits_review(job):
+    """A save that holds, or may hold, a commit in the VM checkout that nobody reviewed: any pending save but a
+    folder move (no configuration change of its own) and one whose review is recorded. A save without a known
+    commit counts too: its answer may have been lost after the VM committed."""
+    return job_pending(job) and not job.get('reviewed') and job.get('target') not in ('move', 'update')
+
+
+def sibling_refusal(name, job, upload=False, reviewed=False):
+    """Why a save, move or upload waits for another lab of the same checkout, and what the student does next."""
+    label = " ('" + str(job['note']) + "')" if job.get('note') else ''
+    why = (('This upload could send it along. ' + ('Your review of this save is kept. ' if reviewed else '')) if upload else
+           'Saving here now would put a new commit on top of it, and a later upload would send it unreviewed. ')
+    return ('Another lab in this repository, ' + name + ', has a save waiting on the VM without a review' + label + '. ' + why +
+            'Open ' + name + ' › Progress, review and upload that save or choose Keep snapshot only, then ' + ('upload this one.' if upload else 'try again.'))
 
 
 GIT_JOB_CAP = 200
@@ -503,6 +520,9 @@ class GitProgress:
         # One helper call at a time from this manager: the helper takes a non-blocking lock per repository, and a page
         # reading the history while a save publishes would otherwise turn the save into "already running" (seen live).
         self.helper_lock = threading.Lock()
+        # One change of a lab's repository connection at a time: a folder change checks everything before the VM
+        # retires the old registration, and no other connection may take the new folder in between.
+        self.binding_lock = threading.Lock()
         self.pool = ThreadPoolExecutor(max_workers=1)
         with store.lock:
             for job in store.state.setdefault('git_jobs', []):
@@ -557,6 +577,30 @@ class GitProgress:
         if pending_progress(self.store.state, lab_id):
             raise HTTPException(409, 'Finish pending Git saves, or choose Keep snapshot only in Git history before continuing.')
 
+    def checkout_labs(self, lab_id):
+        """The other labs bound to a folder of this lab's VM checkout (one repository can hold several labs). Their
+        commits are in the one branch history every one of them pushes."""
+        binding = (self.store.lab(lab_id) or {}).get('git_binding') or {}
+        path = binding.get('repository', {}).get('path')
+        if not path: return {}
+        return {lab['id']: lab for lab in self.store.state['labs'] if lab['id'] != lab_id and lab.get('git_binding')
+                and lab['git_binding'].get('repository', {}).get('path') == path
+                and lab['git_binding'].get('host_identity') == binding.get('host_identity')}
+
+    def unreviewed_sibling(self, lab_id):
+        """(lab, save) of another lab of this checkout whose save still awaits its review, else (None, None).
+        The review before every upload holds per checkout: a commit made on top of such a save, and any push
+        from this checkout, would carry it. Refusing new commits while one exists stops the stacking at its
+        source; refusing uploads covers saves stacked before that rule. Neither can deadlock: an upload that
+        is refused keeps its review, so it no longer holds the other lab, and Keep snapshot only always works."""
+        labs = self.checkout_labs(lab_id)
+        held = next((j for j in self.store.state['git_jobs'] if j.get('lab_id') in labs and awaits_review(j)), None)
+        return (labs[held['lab_id']], held) if held else (None, None)
+
+    def guard_siblings(self, lab_id):
+        lab, held = self.unreviewed_sibling(lab_id)
+        if held: raise HTTPException(409, sibling_refusal(lab['name'], held))
+
     def get_job(self, job_id):
         job = next((j for j in self.store.state['git_jobs'] if j['id'] == job_id), None)
         if not job: raise HTTPException(404, 'Git save not found.')
@@ -594,7 +638,10 @@ class GitProgress:
                 self.finish(job, result)
                 return
             if job.get('target') == 'move':
-                self.update(job_id, status='exporting', message='Moving the saved folders inside the repository.')
+                # Attempted from here on: whatever stops the move (a repository that needs attention, an answer lost
+                # after the VM committed) leaves it retryable, never failed; the helper's move journal makes the
+                # retry idempotent.
+                self.update(job_id, status='exporting', published_attempt=True, message='Moving the saved folders inside the repository.')
                 status = self.invoke({'mode': 'status'}, binding)
                 if not status.get('ready'): raise ValueError(status.get('problem') or 'Repository needs attention before moving folders.')
                 request = copy.deepcopy(job['request'])
@@ -602,9 +649,16 @@ class GitProgress:
                 result = self.invoke(request, binding)
                 if result.get('commit'):
                     self.update(job_id, commit=result['commit'], changed_files=result.get('changed_files', []), snapshot_path=result.get('snapshot_path', ''))
-                if job.get('want_push') and result.get('commit') and result.get('status') != 'needs_attention' and not result.get('pushed'):
-                    self.update(job_id, status='pushing', commit=result['commit'], message='Pushing the moved folders.')
-                    result = self.invoke({'mode': 'push', 'operation_id': job_id}, binding)
+                if (job.get('retry_push', job.get('want_push')) and result.get('commit') and result.get('status') != 'needs_attention'
+                        and not result.get('pushed')):
+                    # The push would carry every commit below the move, so it waits while another lab of this
+                    # checkout has a save that was never reviewed; the move stays on the VM, uploadable later.
+                    with self.store.lock: other, held = self.unreviewed_sibling(job['lab_id'])
+                    if held:
+                        result = dict(result, message='Moved on this VM, not uploaded: ' + sibling_refusal(other['name'], held, upload=True))
+                    else:
+                        self.update(job_id, status='pushing', commit=result['commit'], message='Pushing the moved folders.')
+                        result = self.invoke({'mode': 'push', 'operation_id': job_id}, binding)
                 self.finish(job, result)
                 return
             if job.get('kind') == 'design':
@@ -729,8 +783,14 @@ class GitProgress:
                     changed_files=result.get('changed_files', []), snapshot_path=result.get('snapshot_path', ''), finished=now())
         if pushed:
             with self.store.lock:
+                # The helper names every journaled save the remote now holds. A push carries the saves of the other
+                # labs of this checkout below it too (reviewed ones only: see unreviewed_sibling); each is matched by
+                # its own lab's current binding.
+                peers = {lab_id: digest(lab['git_binding']) for lab_id, lab in self.checkout_labs(job['lab_id']).items()}
                 for previous in self.store.state['git_jobs']:
-                    if (previous['id'] in result.get('synced_operations', []) and previous.get('binding_digest') == job.get('binding_digest')
+                    same = (previous.get('binding_digest') == job.get('binding_digest') or
+                            peers.get(previous.get('lab_id'), '') == previous.get('binding_digest'))
+                    if (previous['id'] in result.get('synced_operations', []) and same
                             and previous.get('status') != 'dismissed'):
                         previous.update(status='synced', pushed=True, message='Saved commit is included in the verified remote history.', finished=now())
                 self.store.save()
@@ -872,9 +932,44 @@ class GitProgress:
             self.store.event(event, message, lab_id=lab_id)
             return binding
 
+        def retired_already(binding, prefix, exc):
+            """The answer to a folder change was lost or refused. The VM may still have made it: when the lab's
+            registration is gone and the new folder is registered, adopt that; otherwise nothing changed."""
+            try: catalog = self.repositories()['repositories']
+            except ValueError: raise HTTPException(409, str(exc))
+            if any(r.get('id') == binding['binding_id'] for r in catalog): raise HTTPException(409, str(exc))
+            made = next((r for r in catalog if r.get('path') == binding['repository'].get('path') and r.get('prefix') == prefix), None)
+            if not made: raise HTTPException(409, str(exc))
+            return made
+
+        def rebind(lab_id, repo, node_names, before, message):
+            """Point the lab at the registration that replaced its retired one. Nothing refuses here: every check
+            ran before the retire, and `binding_lock` keeps other connection changes out meanwhile."""
+            binding = dict(binding_id=repo['id'], revision=repo['revision'], repository=repo,
+                           host_identity=before, node_names=node_names, review_before_push=True)
+            with self.store.lock:
+                lab = self.store.lab(lab_id)
+                if not lab: raise HTTPException(404, 'Lab was removed.')
+                lab['git_binding'] = binding
+                try: self.store.save()
+                except OSError: raise HTTPException(500, 'The folder changed on the VM, but the manager could not store the change. Free disk space, then reopen this lab before saving.')
+            self.store.event('git.destination', message, lab_id=lab_id)
+            return binding
+
         def call(request, binding=None):
             try: return self.invoke(request, binding)
             except ValueError as exc: raise HTTPException(409, str(exc))
+
+        def one_binding_change(route):
+            """A route that points a lab at a registration runs alone (`binding_lock`): a folder change checks
+            everything before the VM retires the old registration, and nothing may take the new one meanwhile."""
+            @functools.wraps(route)
+            def alone(*args, **kwargs):
+                if not self.binding_lock.acquire(blocking=False):
+                    raise HTTPException(409, 'Another repository connection is being changed. Try again in a moment.')
+                try: return route(*args, **kwargs)
+                finally: self.binding_lock.release()
+            return alone
 
         @app.get('/api/git/repositories')
         def repositories():
@@ -897,6 +992,7 @@ class GitProgress:
             return dict(binding=binding, repository_status=status, jobs=jobs, supported_nodes=supported, unsupported_nodes=unsupported)
 
         @app.put('/api/labs/{lab_id}/git')
+        @one_binding_change
         def link(lab_id: str, data: Link):
             with self.store.lock:
                 self.idle(); self.guard_pending(lab_id)
@@ -977,14 +1073,29 @@ class GitProgress:
             return {'forgotten': prefix}
 
         @app.post('/api/labs/{lab_id}/git/destination')
+        @one_binding_change
         def destination(lab_id: str, data: Destination):
             prefix = folder_value(data.prefix)
-            with self.store.lock:
-                self.idle(); self.guard_pending(lab_id); binding = self.binding(lab_id)
-                lab = self.store.lab(lab_id); before = host_identity(self.store.state.get('host', {}))
-                if binding['host_identity'] != before: raise HTTPException(409, 'Reconnect the original VM before changing the folder.')
-                name = lab['name']; node_names = list(binding['node_names']); review = binding.get('review_before_push', False)
-                source = binding['repository'].get('prefix', '')
+
+            def refusals():
+                """Everything that can refuse the change. It runs before the VM retires the lab's registration, never
+                after: a refusal then would leave the lab bound to a registration that no longer exists."""
+                with self.store.lock:
+                    self.idle(); self.guard_pending(lab_id); binding = self.binding(lab_id)
+                    lab = self.store.lab(lab_id)
+                    if binding['host_identity'] != host_identity(self.store.state.get('host', {})):
+                        raise HTTPException(409, 'Reconnect the original VM before changing the folder.')
+                    valid = {n['name'] for n in lab['nodes'] if n.get('platform') in PLATFORMS}
+                    names = binding.get('node_names') or []
+                    if not names or len(set(names)) != len(names) or not set(names) <= valid:
+                        raise HTTPException(409, 'The devices of this lab changed since it was connected. Choose its devices again under Save settings, then change the folder.')
+                    # The move commits and uploads at once: it waits like a save for another lab's unreviewed save.
+                    if data.move_files: self.guard_siblings(lab_id)
+                    return binding, lab['name']
+
+            binding, name = refusals()
+            before = binding['host_identity']; node_names = list(binding['node_names'])
+            source = binding['repository'].get('prefix', '')
             if prefix == source: raise HTTPException(409, 'This lab already saves to that folder.')
             refuse_snapshot_conflict(binding, prefix)
             catalog = repositories()
@@ -992,15 +1103,19 @@ class GitProgress:
             for repo in catalog['repositories']:
                 if repo['path'] == binding['repository'].get('path') and repo['prefix'] == prefix and labs.get(repo['id'], {}).get('id') not in (None, lab_id):
                     raise HTTPException(409, 'This folder is already connected to another lab (' + labs[repo['id']]['name'] + '). Choose a different folder.')
-            created = call({'mode': 'register-prefix', 'prefix': prefix, 'retire': True}, binding)
+            # Once more right before the irreversible step: the helper round trips above take time.
+            if digest(refusals()[0]) != digest(binding): raise HTTPException(409, 'The repository connection changed meanwhile. Open Change folder again.')
+            try: created = self.invoke({'mode': 'register-prefix', 'prefix': prefix, 'retire': True}, binding)
+            except ValueError as exc: created = retired_already(binding, prefix, exc)
             if not isinstance(created, dict) or not created.get('id'): raise HTTPException(409, 'The VM did not return the new folder registration.')
-            new_binding = bind_lab(lab_id, created, node_names, review, before, 'git.destination', 'Lab repository folder changed to ' + (prefix or 'the repository root') + '.')
             # The folder the lab leaves is retired on the VM; keep it (and the new one) reachable while empty.
             remember_folders(binding['repository'].get('path', ''), source, prefix)
+            new_binding = rebind(lab_id, created, node_names, before, 'Lab repository folder changed to ' + (prefix or 'the repository root') + '.')
             job = None
             if data.move_files:
+                # No refusal here either: the lab already saves to the new folder, and a move that is not queued
+                # could never be asked for again (the same folder is refused). The job queues behind running work.
                 with self.store.lock:
-                    self.idle()
                     request = dict(source_prefix=source, push=False, message='Move ' + name + ' progress to ' + (prefix + '/' if prefix else 'the repository root'))
                     job = dict(id=uuid.uuid4().hex, lab_id=lab_id, lab_name=name, created=now(), status='queued', message='Folder move queued.',
                                backup_job_id='', target='move', checkpoint='', note='', pushed=False, review_before_push=False,
@@ -1014,6 +1129,7 @@ class GitProgress:
             return {'saved': True, 'binding': new_binding, 'job': job}
 
         @app.post('/api/labs/{lab_id}/git/connect')
+        @one_binding_change
         def connect(lab_id: str, data: Connect):
             if not data.acknowledge: raise HTTPException(400, 'Acknowledge that full device configurations will be committed and pushed to this repository.')
             prefix = folder_value(data.prefix)
@@ -1061,7 +1177,7 @@ class GitProgress:
                 if previous:
                     if previous.get('request_digest') != request_digest: raise HTTPException(409, 'Request ID already belongs to a different save.')
                     return public_job(previous)
-                self.idle(); binding = self.binding(lab_id)
+                self.idle(); binding = self.binding(lab_id); self.guard_siblings(lab_id)
                 lab = self.store.lab(lab_id)
                 if binding['host_identity'] != host_identity(self.store.state.get('host', {})):
                     raise HTTPException(409, 'Reconnect the original VM before saving progress.')
@@ -1117,7 +1233,7 @@ class GitProgress:
                 if previous:
                     if previous.get('request_digest') != request_digest: raise HTTPException(409, 'Request ID already belongs to a different save.')
                     return public_job(previous)
-                self.idle(); binding = self.binding(lab_id)
+                self.idle(); binding = self.binding(lab_id); self.guard_siblings(lab_id)
                 lab = self.store.lab(lab_id)
                 if binding['host_identity'] != host_identity(self.store.state.get('host', {})):
                     raise HTTPException(409, 'Reconnect the original VM before exporting.')
@@ -1147,8 +1263,11 @@ class GitProgress:
         @app.post('/api/git/jobs/{job_id}/retry')
         def retry(job_id: str, data: Retry):
             with self.store.lock:
-                self.idle(); job = self.get_job(job_id)
-                if job['status'] in ('dismissed', 'capture_incomplete', 'failed'): raise HTTPException(409, 'Start a new save for this capture outcome.')
+                self.idle(); job = self.get_job(job_id); move = job.get('target') == 'move'
+                # A folder move has no new save to start instead (its folder is the lab's own now), and its journal on
+                # the VM makes a retry idempotent: a move an older release marked failed stays retryable.
+                if job['status'] in ('dismissed', 'capture_incomplete') or (job['status'] == 'failed' and not move):
+                    raise HTTPException(409, 'Start a new save for this capture outcome.')
                 if job['status'] == 'synced' or (job['status'] == 'unchanged' and job.get('pushed')): return public_job(job)
                 if digest(self.binding(job['lab_id'])) != job['binding_digest']: raise HTTPException(409, 'Repository settings changed. Reconnect the original destination.')
                 # Uploading a save needs its review: stated with this request, or recorded by an earlier
@@ -1156,11 +1275,19 @@ class GitProgress:
                 # review yet, so its retry saves on the VM and then waits for the review. A folder move
                 # carries no configuration change and keeps its own confirmed upload.
                 push, changes = data.push, {}
-                if push and job.get('target') != 'move':
+                if push and not move:
                     if not job.get('commit'): push, changes = False, dict(review_before_push=True)
                     elif not (data.reviewed or job.get('reviewed')):
                         raise HTTPException(409, 'Review the changes of this save before uploading it.')
                     elif not job.get('reviewed'): changes = dict(reviewed=now())
+                # The same review holds across the labs of one checkout: an upload, or a retry that commits, waits
+                # while another lab's save there is unreviewed. A refused upload keeps its review, so this save no
+                # longer holds the other lab back and the two can never wait on each other.
+                if push or not job.get('commit'):
+                    other, held = self.unreviewed_sibling(job['lab_id'])
+                    if held:
+                        if changes.get('reviewed'): self.update(job_id, reviewed=changes['reviewed'])
+                        raise HTTPException(409, sibling_refusal(other['name'], held, upload=push, reviewed=push and not move))
                 self.update(job_id, status='queued', retry=True, retry_push=push, message='Retry queued; the saved capture will be reused.', **changes)
             return self.schedule(job)
 
@@ -1237,10 +1364,20 @@ class GitProgress:
                     if job['lab_id'] != lab_id: raise HTTPException(404, 'Git save not found in this lab.')
                     binding = self.binding(lab_id)
                     if digest(binding) != job.get('binding_digest'): raise HTTPException(409, 'Reconnect the original repository to review this save.')
+                    # What an upload of this save may carry along: every other save of this checkout still waiting on
+                    # the VM, this lab's and the other labs' (a save without a known commit may hold one too), so the
+                    # count in the review never under-reports. While another lab's save is unreviewed the upload waits.
+                    labs = self.checkout_labs(lab_id)
+                    waiting = [j for j in self.store.state['git_jobs'] if j['id'] != job['id'] and (j.get('lab_id') == lab_id or j.get('lab_id') in labs)
+                               and job_pending(j) and not j.get('pushed') and j.get('target') != 'update']
+                    other, held = self.unreviewed_sibling(lab_id)
                 result = call({'mode': 'compare', 'operation_id': data.job_id}, binding)
                 # The helper pairs files by name; fold a suffix-renamed file (Junos `.set` to `.cfg`)
                 # back into one changed entry before it ever reaches a person.
-                return {'files': annotated_compare(result.get('files', []))}
+                answer = {'files': annotated_compare(result.get('files', [])), 'also_sends': len(waiting),
+                          'also_sends_other_labs': sum(1 for j in waiting if j.get('lab_id') != lab_id)}
+                if held: answer['upload_blocked'] = sibling_refusal(other['name'], held, upload=True)
+                return answer
             if not re.fullmatch(r'[0-9a-f]{40,64}', data.commit): raise HTTPException(400, 'Choose a saved commit.')
             before_manifest, before = version_data(lab_id, data)
             with self.store.lock: binding = self.binding(lab_id)

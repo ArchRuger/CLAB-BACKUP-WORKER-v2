@@ -61,6 +61,29 @@ test('an identical file collapses (not open) even when it is passed to diffFileM
  assert.doesNotMatch(html,/<details class="diff-file" open>/);
  assert.match(html,/<details class="diff-file" >/);
 });
+test('a comparison that was cut short is never worded as identical, and its file stays open (audit L-7)',()=>{
+ const context=makeContext();
+ // The server's shape for a change past the line cap, and an older answer that still says identical.
+ const past={identical:false,hunks:[],added:0,removed:0,truncated:true,note:'This file is too long to compare in full: its first 20000 lines are the same, and it changes after that point. Those changes are not shown here.'};
+ for(const diff of [past,{...past,identical:true,note:undefined}]){
+  const html=context.diffMarkup(diff);
+  assert.doesNotMatch(html,/Identical|nothing changed|0 added/);
+  assert.match(html,/class="diff-note"/);
+  assert.match(context.diffFileMarkup('big.cfg','changed',diff),/<details class="diff-file" open>/);
+ }
+ assert.match(context.diffMarkup(past),/changes after that point/);
+ assert.match(context.diffMarkup({...past,identical:true,note:undefined}),/too large to show in full/);
+});
+test('a line shown shortened says so in its row and in a note, so a change past the cut is not hidden (audit L-7)',()=>{
+ const context=makeContext();
+ const cut='x'.repeat(4000);
+ const diff={identical:false,added:1,removed:1,truncated:false,hunks:[{old_start:1,old_count:1,new_start:1,new_count:1,lines:[
+  {type:'del',old:1,new:null,text:cut,shortened:true},{type:'add',old:null,new:1,text:cut,shortened:true}]}]};
+ const html=context.diffMarkup(diff);
+ assert.equal((html.match(/class="diff-cut"/g)||[]).length,2);
+ assert.match(html,/longer than 4000 characters/);
+ assert.doesNotMatch(context.diffMarkup({...diff,hunks:[{...diff.hunks[0],lines:[{type:'del',old:1,new:null,text:'a'},{type:'add',old:null,new:1,text:'b'}]}]}),/diff-cut|longer than/);
+});
 test('style.css shrinks the diff gutters at narrow widths without dropping the wide-layout rule',()=>{
  const css=fs.readFileSync(path.join(__dirname,'../app/static/style.css'),'utf8');
  assert.match(css,/\.diff-col-gutter \{ width: 44px; \}/);

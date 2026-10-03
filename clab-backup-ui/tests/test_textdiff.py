@@ -72,6 +72,37 @@ class UnifiedDiffTests(unittest.TestCase):
         self.assertTrue(result['truncated'])
         self.assertFalse(result['identical'])
 
+    def test_a_change_beyond_the_line_cap_is_never_reported_identical(self):
+        # Audit L-7: the shown prefixes match, the files do not. The review must say the comparison was cut short.
+        before = '\n'.join(f'line{n}' for n in range(50)) + '\n'
+        after = before.replace('line40\n', 'line40 changed\n')
+        result = unified(before, after, max_lines=10)
+        self.assertFalse(result['identical'])
+        self.assertTrue(result['truncated'])
+        self.assertEqual(result['hunks'], [])
+        self.assertIn('first 10 lines', result['note'])
+        self.assertIn('not shown', result['note'])
+        # Only one side longer than the cap, same prefix: still a difference, still cut short.
+        result = unified(before, before + 'extra\n', max_lines=10)
+        self.assertFalse(result['identical']); self.assertTrue(result['truncated'])
+
+    def test_large_identical_texts_are_identical_and_complete(self):
+        text = '\n'.join(f'line{n}' for n in range(50)) + '\n'
+        result = unified(text, text, max_lines=10)
+        self.assertTrue(result['identical'])
+        self.assertFalse(result['truncated'])
+
+    def test_a_shortened_line_is_marked_so_a_change_past_the_cut_is_not_hidden(self):
+        # Audit L-7 variant: lines are compared in full but shown cut at MAX_LINE_LEN.
+        before = 'a\n' + 'x' * 4500 + '\n'
+        after = 'a\n' + 'x' * 4400 + 'Y' * 100 + '\n'
+        result = unified(before, after)
+        rows = [row for hunk in result['hunks'] for row in hunk['lines'] if row['type'] in ('del', 'add')]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]['text'], rows[1]['text'])
+        self.assertTrue(all(row.get('shortened') for row in rows))
+        self.assertNotIn('shortened', result['hunks'][0]['lines'][0])  # the short context line 'a'
+
     def test_binary_content_is_reported_truncated(self):
         result = unified('a\n', 'b\x00inary\n')
         self.assertTrue(result['truncated'])

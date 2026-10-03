@@ -46,17 +46,22 @@ function gitLegacyDestinationNotice(binding){
 }
 function gitTargetPath(job){if(job.target==='move')return 'latest';return job.target==='checkpoint'?'checkpoints/'+job.checkpoint:job.target||'latest';}
 function gitTargetLabel(job){if(job.target==='move')return 'Folder move → '+((job.snapshot_path||'').replace(/\/?latest$/,'')||'repository root');return job.target==='checkpoint'?'checkpoints/'+(job.checkpoint||''):job.target||'latest';}
+// A folder move reads as moved only once it committed (synced, or kept on this VM); one that stopped before its
+// commit, or lost its answer, is retried, never worded as moved. Its folder: where the commit put the files, else
+// the folder it is moving to.
+function gitMoveDone(job){return ['synced','committed','unchanged'].includes(job.status);}
+function gitMoveFolder(job){const path=job.snapshot_path?job.snapshot_path.replace(/\/?latest$/,''):String(job.destination?.path||'');return path&&path!=='(repository root)'?path:'the repository root';}
 // Student sentence, pill and "Saved as" for one save job.
 function gitSaveSentence(job){
  if(!job)return '';const s=job.status,active=gitActiveStates.has(s);
  if(job.target==='update')return active?'Updating from the repository…':'Repository updated';
- if(job.target==='move')return active?'Moving saved files…':'Moved to folder '+((job.snapshot_path||'').replace(/\/?latest$/,'')||'the repository root');
+ if(job.target==='move'){if(active)return 'Moving saved files…';if(gitMoveDone(job))return 'Moved to folder '+gitMoveFolder(job);if(s==='push_pending')return 'Moved to folder '+gitMoveFolder(job)+' on this VM — upload needs attention';if(s==='dismissed')return gitSaveSentences.dismissed;return 'Moving the saved files did not finish — retry it';}
  if(!active&&['synced','committed','review_pending','unchanged'].includes(s)){if(job.target==='checkpoint')return `Checkpoint '${job.checkpoint||''}' saved`;if(job.target==='baseline')return 'Baseline set';}
  return gitSaveSentences[s]||gitLabel(job);
 }
 function gitSavePill(job){const s=job?.status;if(gitActiveStates.has(s))return 'busy';if(['synced','unchanged'].includes(s))return 'ok';if(['failed','capture_incomplete'].includes(s))return 'danger';if(s==='dismissed'||!s)return 'neutral';return 'warn';}
 function gitBadgeClass(job){const s=job?.status;return gitActiveStates.has(s)?'running':['synced','unchanged'].includes(s)?'good':['failed','capture_incomplete'].includes(s)?'bad':'warn';}
-function gitSavedAs(job){if(job.target==='update')return 'Repository update';if(job.target==='move')return 'Moved to '+((job.snapshot_path||'').replace(/\/?latest$/,'')||'the repository root');if(job.target==='checkpoint')return `Checkpoint '${job.checkpoint||''}'`;if(job.target==='baseline')return 'Baseline';return 'Latest';}
+function gitSavedAs(job){if(job.target==='update')return 'Repository update';if(job.target==='move')return (gitMoveDone(job)||job.status==='push_pending'?'Moved to ':'Folder move to ')+gitMoveFolder(job);if(job.target==='checkpoint')return `Checkpoint '${job.checkpoint||''}'`;if(job.target==='baseline')return 'Baseline';return 'Latest';}
 function gitUploadState(job){const s=job.status;if(job.pushed||s==='synced')return 'Uploaded';if(gitActiveStates.has(s))return 'In progress';return {committed:'Not uploaded yet',review_pending:'Waiting for your review',push_pending:'Upload needs attention',export_pending:'Not saved to the repository yet',dismissed:'Kept on this VM',unchanged:'Nothing to upload',interrupted:'Interrupted before the upload'}[s]||'—';}
 let gitPendingSelection='';
 function gitCompleteBackups(jobs,id,names){
@@ -522,18 +527,29 @@ async function gitFirstSave(id=activeId){
   await gitSubmitSave(id,{target:'latest',push:true,note},undefined,{quiet:true});gitClearLabelDraft(id);
  });
 }
+// A request whose answer was lost is retried with the same ID (the job ID), so the server returns
+// that save instead of capturing twice. It is replayed only shortly after it was sent and only while
+// the page does not already know that save as finished: otherwise a later save with the same label
+// would get the old job back and report "Saved" without reading any device (audit L-8).
+const GIT_REQUEST_REUSE_MS=10*60*1000;
+function gitNow(){return Date.now();}
+function gitReusableRequest(previous,request){
+ if(!previous||typeof previous!=='object'||!previous.request||!(gitNow()-Number(previous.sent)<=GIT_REQUEST_REUSE_MS))return null;
+ if(JSON.stringify({...previous.request,request_id:''})!==JSON.stringify({...request,request_id:''}))return null;
+ const known=[...(state.git_jobs||[]),...[...gitContexts.values()].flatMap(context=>context?.jobs||[])].find(job=>job.id===previous.request.request_id);
+ return known&&!gitActiveStates.has(known.status)?null:previous.request;
+}
 // options.quiet: no job dialog — the header, the status card and a toast carry the phases; the dialog
 // opens on its own only when the save ends needing attention.
 async function gitSubmitSave(id,values,requestId,options={}){
  if(gitSubmitting)return;
  gitSubmitting=true;renderGitProgress();
  const storageKey='git-save-request:'+id;
- // A lost response can be retried with the same request ID without capturing twice.
  let request=gitSavePayload(values,requestId||gitRequestId());
- if(!requestId){try{const previous=JSON.parse(sessionStorage.getItem(storageKey)||'null');if(previous&&JSON.stringify({...previous,request_id:''})===JSON.stringify({...request,request_id:''}))request=previous;}catch{}sessionStorage.setItem(storageKey,JSON.stringify(request));}
+ if(!requestId){try{request=gitReusableRequest(JSON.parse(sessionStorage.getItem(storageKey)||'null'),request)||request;sessionStorage.setItem(storageKey,JSON.stringify({request,sent:gitNow()}));}catch{}}
  try{
   const job=await json('/labs/'+encodeURIComponent(id)+'/git/save','POST',request);
-  if(!requestId)sessionStorage.removeItem(storageKey);
+  if(!requestId){try{sessionStorage.removeItem(storageKey);}catch{}}
   gitRememberJob(job);
   if(options.quiet){notify(values.target==='checkpoint'?'Saving checkpoint…':values.target==='baseline'?'Setting the baseline…':'Saving progress…');gitStartWatch(job,{quiet:true});}
   else await gitShowJob(job.id,job);
@@ -614,8 +630,9 @@ function gitRenderJob(job){
  if(gitDialogJob!==job.id||!$('git-job-dialog')?.open)return;
  const heading=typeof $('git-job-dialog').querySelector==='function'?$('git-job-dialog').querySelector('h2'):null;if(heading)heading.textContent=gitJobTitle(job);
  $('git-job-detail').innerHTML=gitJobMarkup(job);
- const pending=gitPendingStates.has(job.status),active=gitActiveStates.has(job.status),hasCommit=!!job.commit,review=gitNeedsReview(job);
- $('git-job-actions').innerHTML=`${job.backup_job_id?'<button class="button secondary" data-git-job-action="backup">View configuration backup</button>':''}${hasCommit&&!(pending&&review)?'<button class="button secondary" data-git-job-action="review">Review changes</button>':''}${pending?`<button class="button primary" data-git-job-action="${review?'review':'push'}">${gitUploadLabel(job)}</button>${!hasCommit?'<button class="button secondary" data-git-job-action="local">Retry save on this VM only</button>':''}<button class="button secondary" data-git-job-action="dismiss">Keep snapshot only</button>`:''}${active?'<p class="form-help" role="status">You can close this window. The save continues in the background and its result appears under Progress › Recent saves.</p>':''}`;
+ // A move an older release marked failed is retryable as well (its journal on the VM makes the retry safe).
+ const pending=gitPendingStates.has(job.status)||(job.target==='move'&&job.status==='failed'),active=gitActiveStates.has(job.status),hasCommit=!!job.commit,review=gitNeedsReview(job);
+ $('git-job-actions').innerHTML=`${job.backup_job_id?'<button class="button secondary" data-git-job-action="backup">View configuration backup</button>':''}${hasCommit&&!(pending&&review)?'<button class="button secondary" data-git-job-action="review">Review changes</button>':''}${pending?`<button class="button primary" data-git-job-action="${review?'review':'push'}">${gitUploadLabel(job)}</button>${!hasCommit?`<button class="button secondary" data-git-job-action="local">${job.target==='move'?'Retry the move on this VM only':'Retry save on this VM only'}</button>`:''}<button class="button secondary" data-git-job-action="dismiss">Keep snapshot only</button>`:''}${active?'<p class="form-help" role="status">You can close this window. The save continues in the background and its result appears under Progress › Recent saves.</p>':''}`;
  for(const button of $('git-job-actions').querySelectorAll('[data-git-job-action]'))button.onclick=()=>opTask($('git-job-dialog'),async()=>{
   const action=button.dataset.gitJobAction;
   if(action==='backup'){closeDialogsExcept();selectLab(job.lab_id);showTab('backups');const capture=[...document.querySelectorAll('.job')].find(item=>item.dataset.job===job.backup_job_id);if(capture){capture.open=true;capture.scrollIntoView({block:'center',behavior:'smooth'});const summary=capture.querySelector('summary');if(summary&&typeof summary.focus==='function')summary.focus();}return;}
@@ -628,14 +645,17 @@ function gitRenderJob(job){
 // window, by the student's own choice, and the manager refuses an upload that does not say so. A save
 // whose review already happened (its upload failed afterwards) and a folder move upload directly.
 function gitNeedsReview(job){return !!job&&!!job.commit&&!job.reviewed&&!job.pushed&&job.target!=='move';}
-function gitUploadLabel(job){return !job.commit?'Retry save, then review':gitNeedsReview(job)?'Review and upload…':'Upload now';}
+function gitUploadLabel(job){if(job.target==='move'&&!job.commit)return 'Retry the move';return !job.commit?'Retry save, then review':gitNeedsReview(job)?'Review and upload…':'Upload now';}
 async function gitReviewJob(job){
  const result=await json('/labs/'+encodeURIComponent(job.lab_id)+'/git/compare','POST',{job_id:job.id});
  const waiting=gitPendingStates.has(job.status),decide=waiting&&gitNeedsReview(job),context=gitContexts.get(job.lab_id),host=(typeof statusHost==='function'&&statusHost(gitRepository(context?.binding).push_url))||'the online repository';
- const others=decide?gitLabJobs(job.lab_id,context).filter(item=>item.id!==job.id&&item.commit&&!item.pushed&&gitPendingStates.has(item.status)).length:0;
+ // What the upload carries along: the manager counts every save of this checkout still waiting on the VM, this
+ // lab's and other labs' (also_sends); the page's own count of this lab is the floor, so it never under-reports.
+ const local=decide?gitLabJobs(job.lab_id,context).filter(item=>item.id!==job.id&&item.commit&&!item.pushed&&gitPendingStates.has(item.status)).length:0;
+ const others=decide?Math.max(local,Number(result.also_sends)||0):0,otherLabs=decide?Math.min(others,Number(result.also_sends_other_labs)||0):0,blocked=decide&&result.upload_blocked?String(result.upload_blocked):'';
  closeDialogsExcept();
  const design=job.kind==='design',title=design?(decide?'Review design export before uploading':'Review this design export'):(decide?'Review before uploading':'Review this save');
- const dialog=opDialog('git-diff-dialog',title,`<p>What this ${design?'export':'save'} changed compared with the previous one. Configuration files may contain passwords or keys.</p>${gitDestinationMarkup(job.destination,job)}${decide?`<p class="op-notice" id="git-review-decision">This ${design?'export':'save'} is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${others?` Uploading also sends ${others} earlier ${others===1?'save':'saves'} that ${others===1?'is':'are'} still waiting on the VM.`:''}</p>`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${gitFilesDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?'<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button><button class="button primary" id="git-review-push">Upload these changes</button>':waiting?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
+ const dialog=opDialog('git-diff-dialog',title,`<p>What this ${design?'export':'save'} changed compared with the previous one. Configuration files may contain passwords or keys.</p>${gitDestinationMarkup(job.destination,job)}${decide?`<p class="op-notice" id="git-review-decision">This ${design?'export':'save'} is on the lab VM only. Nothing is uploaded to ${esc(host)} unless you choose <strong>Upload these changes</strong>.${others?` Uploading also sends ${others} earlier ${others===1?'save':'saves'} that ${others===1?'is':'are'} still waiting on the VM${otherLabs?`, ${otherLabs} of them from ${otherLabs===1?'another lab':'other labs'} in this repository`:''}.`:''}</p>${blocked?`<p class="op-notice" id="git-review-blocked">${esc(blocked)}</p>`:''}`:''}<details class="caption"><summary>Details</summary><p>Commit <code>${esc(job.commit)}</code></p></details>${gitFilesDiffMarkup(result.files,'Before this save','This save')}<div class="dialog-actions"><button class="button secondary" id="git-review-files">Open the full saved version</button>${decide?'<button class="button secondary" id="git-review-cancel">Not now — keep it on the VM</button><button class="button primary" id="git-review-push">Upload these changes</button>':waiting?'<button class="button primary" id="git-review-push">Upload now</button>':''}</div>`);
  gitFocusDialog(dialog);
  $('git-review-files').onclick=()=>opTask(dialog,()=>gitViewVersion(job.lab_id,{commit:job.commit,path:job.snapshot_path?'/'+job.snapshot_path:gitSnapshotPath(context?.binding,gitTargetPath(job))}));
  if($('git-review-cancel'))$('git-review-cancel').onclick=()=>{dialog.close();notify('Not uploaded. The save stays on the lab VM; upload it from Progress › Recent saves when you are ready.');};

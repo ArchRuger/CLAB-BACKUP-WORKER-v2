@@ -375,6 +375,12 @@ the wizard. A normal checkout
 with an existing published commit is required; linked worktrees, submodules,
 bare repositories and symbolic-link paths are unsupported.
 
+This command and the manager's folder and connect actions may run at the same time. Each
+checks the checkout first (that can take minutes), then saves its registration under one
+lock (`/etc/clab-manager/git.json.lock`) into `git.json` as it is at that moment, so a
+registration saved in the meantime is kept. If the other one registered the same or an
+overlapping folder meanwhile, nothing is saved and the command says so; run it again.
+
 Back up the complete checkout including `.git`, the owner's credential recovery
 method, `/etc/clab-manager/git.json` and manager data separately. The manager data
 backup does not include the repository or the owner's Git login. Detailed save,
