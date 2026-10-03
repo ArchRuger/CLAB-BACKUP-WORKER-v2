@@ -55,7 +55,9 @@ NOT_AVAILABLE = 'Applying to this kind of device is not available yet; its gener
 # stage each device is really at. A finished job (and its token) lives REVIEW_TTL seconds; a manager restart forgets
 # every review job, so the page reviews again (the token was in memory too).
 REVIEW_JOB_CAP = 50
-REVIEW_TIMEOUT = 540   # wall-clock budget of one review job's devices; a device still working then is reported failed
+REVIEW_TIMEOUT = 540   # per device, counted from its first real step (`connecting`): still working then is `timeout`
+REVIEW_LIMIT = 3600    # safety limit of a whole job from its start: a device still waiting for a slot then is `queue_limit`
+REVIEW_POLL = 0.5      # how often the orchestrator looks at its devices' deadlines
 REVIEW_STAGES = ('queued', 'connecting', 'checking_pending', 'rendering', 'reading_config', 'staging', 'restaging',
                  'done', 'failed', 'unreachable', 'not_eligible')
 REVIEW_SETTLED = ('done', 'failed', 'unreachable', 'not_eligible')
@@ -69,6 +71,7 @@ REVIEW_REASONS = {
     'connection_lost': 'The connection to the device was lost during the review.',
     'plan_files': 'A generated file of this plan is missing or changed; generate the plan again.',
     'timeout': 'The device did not finish the review in time.',
+    'queue_limit': 'The device waited too long for a free connection slot (other reviews or applies were using them) and was not contacted.',
     'interrupted': 'The manager stopped before the review of this device finished.',
     'internal': 'The review failed inside the manager for this device.',
 }
@@ -133,10 +136,11 @@ class DesignApply:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='design-apply')
         self.node_pool = ThreadPoolExecutor(max_workers=max(1, min(8, node_workers)), thread_name_prefix='design-node')
         self.reviews = {}
-        self.review_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix='design-review')
         self.review_jobs = {}             # job id -> in-memory review job (never persisted)
         self.review_lock = threading.Lock()   # guards review_jobs; taken after store.lock, never before it
         self.review_timeout = REVIEW_TIMEOUT
+        self.review_limit = REVIEW_LIMIT
+        self.review_poll = REVIEW_POLL
         self.retry_interval = 10
         self.recovery_grace = 90
         self.connect_pause = 3
@@ -178,7 +182,6 @@ class DesignApply:
     def close(self):
         self.stopping.set()
         self.pool.shutdown(wait=False, cancel_futures=True)
-        self.review_pool.shutdown(wait=False, cancel_futures=True)
         self.node_pool.shutdown(wait=False, cancel_futures=True)
 
     # --- helpers -----------------------------------------------------------------------------------------
@@ -308,7 +311,13 @@ class DesignApply:
                    'progress': {'settled': 0, 'total': sum(1 for r in rows if r['eligible'])}, '_expires': None}
             with self.review_lock:
                 self.review_jobs[job['id']] = job
-            try: self.review_pool.submit(self._run_review, job['id'], lab, generation, rows, takeover, before_identity)
+            # One orchestrator thread per job (at most one running job per lab): it only waits, so it never queues behind
+            # another lab's review; the device work itself shares the node pool with the applies.
+            orchestrator = threading.Thread(target=self._run_review, args=(job['id'], lab, generation, rows, takeover, before_identity),
+                                            name='design-review-' + job['id'][:8], daemon=True)
+            try:
+                if self.stopping.is_set(): raise RuntimeError('stopping')
+                orchestrator.start()
             except RuntimeError:
                 self._finish_review(job['id'], 'interrupted', 'The manager is stopping. Review again after the restart.', 'interrupted')
             with self.review_lock: return {'review_job': public_review_job(job)}
@@ -418,14 +427,7 @@ class DesignApply:
                 if not row['eligible']: continue
                 try: futures[self.node_pool.submit(self._review_device, job_id, lab, generation, row, ledger.get(row['name']) or {}, row['name'] in takeover)] = row['name']
                 except RuntimeError: results[row['name']] = {'reachable': False, 'reason': REVIEW_REASONS['interrupted']}
-            done, late = wait_futures(list(futures), timeout=self.review_timeout)
-            for future in done:
-                try: results[futures[future]] = future.result()
-                except Exception: results[futures[future]] = {'reachable': False, 'reason': REVIEW_REASONS['internal']}
-            for future in late:
-                future.cancel(); name = futures[future]
-                self._review_stage(job_id, name, 'failed', 'timeout', REVIEW_REASONS['timeout'])
-                results[name] = {'reachable': False, 'reason': REVIEW_REASONS['timeout']}
+            self._await_devices(job_id, futures, results)
             if self.stopping.is_set():
                 self._finish_review(job_id, 'interrupted', 'The manager is stopping; the review did not finish. Review again after the restart.', 'interrupted'); return
             try: review = self._review_result(lab['id'], generation, rows, results, takeover, before_identity)
@@ -434,6 +436,36 @@ class DesignApply:
             self._finish_review(job_id, 'done', 'Review finished.', review=review)
         except Exception as exc:
             self._finish_review(job_id, 'failed', self._scrubbed('The review failed inside the manager (' + type(exc).__name__ + '). Review again.'))
+
+    def _review_began(self, job_id, name):
+        """When device `name` took its first real step (epoch seconds), or None while it still waits for a slot."""
+        with self.review_lock:
+            job = self.review_jobs.get(job_id)
+            target = next((t for t in (job or {}).get('targets', []) if t['name'] == name), None)
+            return (target or {}).get('timeline', {}).get('connecting')
+
+    def _await_devices(self, job_id, futures, results):
+        """Wait for the devices' workers. A device's own deadline (`review_timeout`) starts at its first real step, so
+        time spent queued for a node-pool slot (shared with applies and other labs' reviews) never counts against it and
+        such a device keeps showing `queued`. Only the job's safety limit (`review_limit`, from the job's start) ends a
+        wait for a slot: that device is reported `queue_limit` (never contacted) and its queued work is cancelled."""
+        pending = dict(futures); started = time.monotonic()
+        while pending and not self.stopping.is_set():
+            done, _ = wait_futures(list(pending), timeout=self.review_poll)
+            for future in done:
+                name = pending.pop(future)
+                try: results[name] = future.result()
+                except Exception: results[name] = {'reachable': False, 'reason': REVIEW_REASONS['internal']}
+            over = time.monotonic() - started > self.review_limit; clock = time.time()
+            for future, name in list(pending.items()):
+                began = self._review_began(job_id, name)
+                if began is not None and clock - began > self.review_timeout: code = 'timeout'
+                elif over: code = 'timeout' if began is not None else 'queue_limit'
+                else: continue
+                if not future.cancel() and code == 'queue_limit': continue   # it just took a slot: its own deadline applies now
+                pending.pop(future)
+                self._review_stage(job_id, name, 'failed', code, REVIEW_REASONS[code])
+                results[name] = {'reachable': False, 'reason': REVIEW_REASONS[code]}
 
     def _review_result(self, lab_id, generation, rows, results, takeover, before_identity):
         """The token and the review payload (the shape the synchronous review returned)."""

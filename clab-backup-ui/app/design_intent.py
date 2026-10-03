@@ -39,8 +39,9 @@ MODULES = ('ospf', 'bgp', 'isis', 'eigrp', 'ripv2', 'bfd', 'dhcp', 'vlan', 'vrf'
 # Modules retired from authoring (decided 2026-10-03, D10.1-D10.3 in docs/netlab-integration/DECISIONS.md): the single
 # source of truth, {module id: the student-facing reason}. They stay in MODULES so a stored design that carries them
 # still parses, validates, renders, exports, downloads and appears in its history and Git exports; what they lose is
-# authoring: Save and Import refuse one that is new compared with the stored design, Generate refuses a design that
-# uses one, and Apply refuses a plan that carries one. `vxlan` here is netlab's VXLAN *module* only; a containerlab
+# authoring: Save refuses one that is new compared with the stored design (Import may store one, so a design's own
+# export can be brought back for inspection), Generate refuses a design that uses one, and Apply refuses a plan that
+# carries one. `vxlan` here is netlab's VXLAN *module* only; a containerlab
 # link of type `vxlan` in a topology file is a different thing and is untouched (design_adapter flags it as before).
 RETIRED = {
     'eigrp': 'EIGRP is no longer offered in this manager: none of the supported device kinds (cEOS, vJunos-switch, '
@@ -810,7 +811,7 @@ def retired_in(intent):
 
 def retired_added(candidate, stored):
     """The retired uses of `candidate` that `stored` (the saved design, or None) does not already have, matched by
-    (path, module): what Save and Import refuse. Keeping or removing an old use is always allowed."""
+    (path, module): what Save refuses. Keeping or removing an old use is always allowed."""
     before = {(e['path'], e['module']) for e in retired_in(stored or {})}
     return [e for e in retired_in(candidate) if (e['path'], e['module']) not in before]
 
@@ -837,14 +838,21 @@ def retired_phrase(modules):
 
 
 def retired_in_generation(generation):
-    """The retired module ids a stored plan carries: its design-level `modules` and the capability ids of every
-    device's compatibility rows (a device's own module list shows up only there). Plans generated before the
-    retirement are covered, whatever their status."""
-    used = {m for m in (generation.get('modules') or []) if m in RETIRED}
+    """The retired module ids a stored plan carries: its design-level `modules`, the capability ids of every
+    device's compatibility rows (a device's own module list shows up only there), and the module of every generated
+    file (what an apply would actually send). Plans generated before the retirement are covered, whatever their
+    status; malformed records are read tolerantly."""
+    used = {m for m in (generation.get('modules') or []) if isinstance(m, str) and m in RETIRED}
     for rows in (generation.get('compatibility') or {}).values():
-        for row in rows or []:
+        for row in rows if isinstance(rows, list) else []:
             feature = row.get('feature') if isinstance(row, dict) else None
             if feature in RETIRED_FEATURES: used.add(RETIRED_FEATURES[feature])
+    artifacts = generation.get('artifacts')
+    for entries in (artifacts.values() if isinstance(artifacts, dict) else []):
+        for entry in entries if isinstance(entries, list) else []:
+            module = entry.get('module') if isinstance(entry, dict) else None
+            if module in RETIRED: used.add(module)
+            elif module in RETIRED_FEATURES: used.add(RETIRED_FEATURES[module])
     return [m for m in MODULES if m in used]
 
 

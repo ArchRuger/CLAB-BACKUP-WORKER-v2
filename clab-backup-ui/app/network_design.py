@@ -702,8 +702,9 @@ class NetworkDesign:
                 if isinstance(data, dict): data['allocations'] = copy.deepcopy((current or {}).get('allocations') or {})
                 problems = service.validation(lab, data)
                 if problems: return {'imported': False, 'problems': problems}
-                added = intent_schema.retired_added(data, current)
-                if added: raise HTTPException(400, retired_added_detail(added))
+                # Import may bring retired modules back in (a design's own export, after Remove design or on a fresh lab):
+                # the design is kept for inspection and export; Generate and Apply stay the gates that refuse it.
+                retired = intent_schema.retired_in(data)
                 stored = intent_schema.normalize(data); stored['updated'] = now()
                 previous = lab.get('network_design')
                 if any(g.get('status') in DESIGN_BUSY for g in lab.get('network_generations') or []): raise HTTPException(409, 'Wait for the plan being generated to finish.')
@@ -714,7 +715,7 @@ class NetworkDesign:
                     else: lab['network_design'] = previous
                     raise HTTPException(500, 'Could not save the imported design. Try again.')
                 service.store.event('design.import', 'Network design imported (revision ' + stored['revision'] + ')', lab_id=lab_id)
-                return {'imported': True, 'problems': [], **service.view(lab)}
+                return {'imported': True, 'problems': [], **service.view(lab), 'imported_retired': retired}
 
 
 def problems_detail(problems):
@@ -725,7 +726,7 @@ def problems_detail(problems):
 
 
 def retired_added_detail(entries):
-    """The structured 400 of Save and Import when the document adds a retired module the saved design does not use."""
+    """The structured 400 of Save when the document adds a retired module the saved design does not use."""
     modules = intent_schema.retired_modules(entries)
     return {'message': intent_schema.retired_sentence(modules) + ' ' + intent_schema.retired_phrase(modules) + ', so '
             + ('it' if len(modules) == 1 else 'they') + ' cannot be added to a design. Remove '

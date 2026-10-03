@@ -430,7 +430,7 @@ Evidence: `tests/test_design_retirement.py`, `tests/test_design_review_jobs.py`,
   its adapter behaviour (`test_design_adapter.py`).
 - D10.2 **Retirement keeps stored data working.** `design_intent.RETIRED` (module → reason) is the single source; the
   modules stay in `MODULES` (and in the adapter's key lists) so stored designs parse, validate, render, export,
-  download and appear in history and Git exports; `validate()` is unchanged. Save and Import refuse only a retired
+  download and appear in history and Git exports; `validate()` is unchanged. Save (and, until D10.6, Import) refuses only a retired
   use that is *new* against the stored design, matched by path (`retired_added`); keeping or removing one is always
   allowed. Generate refuses a design with any retired use (409, nothing queued). Apply review and apply submit
   refuse a plan whose `modules` or per-device compatibility features carry one (`retired_in_generation`), which
@@ -449,7 +449,7 @@ Evidence: `tests/test_design_retirement.py`, `tests/test_design_review_jobs.py`,
   (`design_capabilities.with_policy`, `public_matrix`, and the `retired`/`policy` fields of the catalogue), keeping
   the engine's answer in `engine_level`. `resolve()` stays the engine truth that generation and its tests rely on.
 - D10.5 **The device review is a job.** `POST …/review` keeps every synchronous guard and answers at once with
-  `{review_job}`; the per-device work runs on the node pool from a separate orchestrator pool (so a one-worker node
+  `{review_job}`; the per-device work runs on the node pool from an orchestrator of its own (a thread per job since D10.6) (so a one-worker node
   pool cannot deadlock) and records real stages at their call sites in `_review_one` (`connecting`,
   `checking_pending`, `rendering`, `reading_config`, `staging`, `restaging`), then `done`, `failed` with a fixed reason
   category, or `unreachable`. One behaviour only (no synchronous mode): the old body is the done job's `review`, and
@@ -457,5 +457,13 @@ Evidence: `tests/test_design_retirement.py`, `tests/test_design_review_jobs.py`,
   a second review of a running lab is 409 with `review_job_id`; an apply submit waits (409) while a review of its lab
   runs; no cancel route (closing the dialog is not cancel). Jobs live in memory under their own lock (taken after
   `store.lock`, never before it), bounded to 50 and forgotten 600 s after they finish, together with their token; a
-  restart forgets them (404, review again). A device still working after 540 s is reported `timeout` and the job
+  restart forgets them (404, review again). A device still working 540 s after its first real step (D10.6) is reported `timeout` and the job
   finishes; a late worker cannot move a settled device. Job views carry stages, timestamps and fixed messages only.
+- D10.6 **Review of c3bd33e (Opus), applied.** Import no longer refuses retired modules: a design's own export must
+  come back after Remove design or on a fresh lab, where every retired use was "new"; the design is stored for
+  inspection and export, the answer lists the retired uses (`imported_retired`), and Generate, the apply review and
+  apply submit stay the gates; Save still refuses adding one. `retired_in_generation` also reads each generated
+  file's module (what an apply sends). A review device's deadline (540 s) starts at its first real step, so time
+  queued on the node pool (shared with applies and other labs) never turns into a false `timeout`; a device still
+  queued at the job's safety limit (3600 s) is `queue_limit` ("not contacted", its queued work cancelled). Each job's
+  orchestrator runs on its own thread, so a fifth lab's review no longer waits behind four orchestrators.

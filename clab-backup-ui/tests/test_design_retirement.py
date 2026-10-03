@@ -88,6 +88,14 @@ class RetiredPolicyTests(unittest.TestCase):
                          ['ripv2', 'evpn'])
         self.assertEqual(di.retired_in_generation({'modules': ['ospf'], 'compatibility': {'ceos': [{'feature': 'ospfv2'}]}}), [])
 
+    def test_retired_in_generation_reads_the_generated_files_too(self):
+        """What an apply would actually send: a generated file of a retired module counts even when the plan's modules
+        and compatibility rows do not show it."""
+        generation = {'modules': ['ospf'], 'compatibility': {'ceos': [{'feature': 'ospfv2'}]},
+                      'artifacts': {'ceos': [{'module': 'normalize'}, {'module': 'initial'}, {'module': 'vxlan'}], 'r2': [{'module': 'eigrp'}]}}
+        self.assertEqual(di.retired_in_generation(generation), ['eigrp', 'vxlan'])
+        self.assertEqual(di.retired_in_generation({'artifacts': {'x': 'junk', 'y': [None, {'module': 3}]}, 'compatibility': {'z': 'junk'}}), [])
+
     def test_wording_agrees_with_status_and_number(self):
         self.assertEqual(di.retired_sentence(['eigrp', 'ripv2', 'vxlan']), 'EIGRP, RIP and VXLAN')
         self.assertEqual(di.retired_phrase(['eigrp']), 'is no longer offered')
@@ -186,18 +194,27 @@ class AuthoringRouteTests(unittest.TestCase):
         self.assertEqual(flags[('modules', 'eigrp')], True)
         self.assertEqual(flags[('modules', 'vxlan')], False)
 
-    def test_import_refuses_a_new_retired_module_and_accepts_an_old_design_kept(self):
+    def test_import_stores_retired_uses_for_inspection_and_generate_stays_the_gate(self):
+        """A design's own export must come back after Remove design or on a fresh lab, retired modules included: Import
+        stores it and lists the retired uses; Generate (and Apply) refuse it; Save still refuses adding one."""
         import yaml
         upload = yaml.safe_dump(vxlan_intent())
         response = self.client.post(self.url('/import'), files={'intent': ('d.yml', upload, 'application/yaml')}, data={'revision': ''})
-        self.assertEqual(response.status_code, 400, response.text)
-        self.assertEqual(set(response.json()['detail']['retired']), {'vxlan', 'evpn'})
-        self.assertIsNone(self.client.get(self.url()).json()['intent'])
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertTrue(body['imported'])
+        self.assertEqual({e['module'] for e in body['imported_retired']}, {'vxlan', 'evpn'})
+        self.assertEqual({e['module'] for e in body['retired_in_design']}, {'vxlan', 'evpn'})
+        revision = body['intent']['revision']
+        refused = self.client.post(self.url('/generate'), json={'revision': revision})
+        self.assertEqual(refused.status_code, 409)
+        self.assertEqual(refused.json()['detail']['retired'], ['vxlan', 'evpn'])
 
-        revision = plant_design(self.app, self.lab_id, vxlan_intent())
-        again = self.client.post(self.url('/import'), files={'intent': ('d.yml', upload, 'application/yaml')}, data={'revision': revision})
-        self.assertEqual(again.status_code, 200, again.text)
-        self.assertTrue(again.json()['imported'])
+        clean = self.client.post(self.url('/import'), files={'intent': ('d.yml', yaml.safe_dump(valid_intent()), 'application/yaml')}, data={'revision': revision})
+        self.assertEqual(clean.status_code, 200, clean.text)
+        self.assertEqual(clean.json()['imported_retired'], [])
+        grown = clean.json()['intent']; grown['modules'] = grown['modules'] + ['eigrp']
+        self.assertEqual(self.client.put(self.url(), json={'intent': grown, 'revision': clean.json()['intent']['revision']}).status_code, 400)
 
     def test_generate_refuses_a_design_with_a_retired_module_and_queues_nothing(self):
         revision = plant_design(self.app, self.lab_id, vxlan_intent())
@@ -248,6 +265,12 @@ class ApplyRefusesRetiredPlansTests(DesignApplyTestCase):
         self.assertEqual(response.status_code, 409)
         self.assertIn('EIGRP', response.json()['detail'])
         self.assertEqual(self.client.get(f'/api/labs/{self.lab_id}/design/apply/jobs').json(), [])
+
+    def test_review_refuses_a_plan_whose_generated_files_carry_a_retired_module(self):
+        gen_id = add_generation(self.app, self.lab_id, node_map('ceos'), {'ceos': [('initial', FRAGMENT), ('ripv2', 'router rip\n')]}, extra={'modules': ['ospf']})
+        response = self.review(gen_id)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('RIP', response.json()['detail'])
 
     def test_a_plan_without_retired_modules_still_reviews(self):
         gen_id = add_generation(self.app, self.lab_id, node_map('ceos'), {'ceos': [('initial', FRAGMENT)]}, extra={'modules': ['ospf']})

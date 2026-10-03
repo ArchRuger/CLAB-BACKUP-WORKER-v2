@@ -21,7 +21,7 @@ Object details used here:
 
 | Shape | Where |
 |---|---|
-| `{message, problems: [{path, message}], retired: [module id]}` | Save 400 and Import 400 (a retired module added), Generate 409 (the design uses a retired module) |
+| `{message, problems: [{path, message}], retired: [module id]}` | Save 400 (a retired module added), Generate 409 (the design uses a retired module) |
 | `{message, problems: [{path, message}]}` | Generate 400 (the design has problems) |
 | `{message, review_job_id}` | Review POST 409 (a review of this lab is already running) |
 
@@ -67,7 +67,13 @@ the engine's levels), so the page should also check `retired` against each row's
 
 - Unchanged: 200 `{imported: false, problems}` for validation problems; 400 string for an unreadable file; 409
   stale revision.
-- New: **400** `{message, problems, retired}` when the file adds a retired module compared with the saved design.
+- Import **does not refuse** retired modules, so a design's own export can come back after *Remove design* or on a
+  fresh lab. The design is stored for inspection and export; Generate, the apply review and apply submit remain the
+  gates and refuse it. The success answer `{imported: true, problems: [], …view}` carries
+  `imported_retired: [{path, module, message}]` (the retired uses of the imported file; also visible as
+  `retired_in_design` of the view). Show them as the *No longer offered* rows.
+- Save keeps refusing a retired module that is new against the stored design, so after such an import the student
+  can edit and save the design (keeping or removing the retired uses) but not add new ones.
 
 ### Validate `POST /api/labs/{id}/design/validate` (`{intent, revision}`)
 
@@ -90,7 +96,8 @@ marks a use the saved design does not have: Save would refuse it. Any entry at a
 plan's `modules` or any device's compatibility features include `eigrp`, `ripv2`, `ripng`, `vxlan` or `evpn`
 (plans generated before the retirement included), e.g. *This plan uses VXLAN, which is no longer offered, so it
 cannot be applied to devices. The plan stays viewable and downloadable; remove it from the design and generate a new
-plan to apply.* The page can predict this from the plan record (`modules`, `compatibility`) and disable *Apply to
+plan to apply.* The check reads the plan's `modules`, every device's compatibility rows and the module of every generated file
+(`artifacts.<device>[].module`, what an apply would send). The page can predict it from the plan record and disable *Apply to
 devices…* with that sentence.
 
 Untouched: reading, export, download, history, *Export plan to Git…*, *Remove design*, *Renumber*, ownership and its
@@ -162,7 +169,7 @@ Recorded at the real call sites of the review transaction, each with its epoch t
 
 | Stage | Real step | Suggested wording |
 |---|---|---|
-| `queued` | Waiting for a free connection slot (up to four devices at a time) | *Waiting* |
+| `queued` | Waiting for a free connection slot: the manager works on up to four devices at a time, shared with applies and other labs' reviews. Time spent here never counts against the device's deadline. | *Waiting for a free connection…* |
 | `connecting` | Opening SSH (up to three attempts) | *Connecting…* |
 | `checking_pending` | Settling an unknown earlier outcome if there is one, and checking for a change waiting for confirmation | *Checking for unconfirmed changes…* |
 | `rendering` | Letting the device render the generated configuration | *Preparing the configuration…* |
@@ -184,7 +191,8 @@ Recorded at the real call sites of the review transaction, each with its epoch t
 | `device_refused` | `failed` | The device refused the staged configuration during the review. |
 | `connection_lost` | `failed` | The connection to the device was lost during the review. |
 | `plan_files` | `failed` | A generated file of this plan is missing or changed; generate the plan again. |
-| `timeout` | `failed` | The device did not finish the review in time. (540 s budget per job) |
+| `timeout` | `failed` | The device did not finish the review in time. (540 s per device, counted from its `connecting` step) |
+| `queue_limit` | `failed` | The device waited too long for a free connection slot (other reviews or applies were using them) and was not contacted. (safety limit: 3600 s from the job's start; the queued work is cancelled) |
 | `interrupted` | `failed` | The manager stopped before the review of this device finished. |
 | `internal` | `failed` | The review failed inside the manager for this device. |
 | `not_eligible` | `not_eligible` | the eligibility reason |

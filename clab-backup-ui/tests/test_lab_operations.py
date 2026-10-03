@@ -880,6 +880,33 @@ class OperationAPITests(unittest.TestCase):
             self.assertEqual(publish.json()['images'], [{'reference': 'alpine:3', 'kind': 'linux', 'nodes': ['a']}, {'reference': 'ceos:4.35.0F', 'kind': 'arista_ceos', 'nodes': ['c', 'd']}, {'reference': 'site/default:1', 'kind': 'cisco_xrv9k', 'nodes': ['e']}])
             self.assertNotIn('images', self.preview('stop'), 'only the reviews that write or deploy a topology name its images')
 
+    def test_cjunosevolved_with_auto_config_and_a_startup_config_is_warned_in_the_review(self):
+        """Juniper's cJunosEvolved entrypoint checks CPTX_AUTO_CONFIG before the startup-config, so a node with both
+        boots without its startup-config. The review warns (manager-side, in `warnings`, never as a refusal); settings
+        are inherited node > group > kind > defaults and env maps merge across the levels."""
+        warn = lambda name: name + ': CPTX_AUTO_CONFIG is set, so cJunosEvolved ignores its startup-config on first boot. Remove one of them.'
+        text = ('name: cptx\ntopology:\n'
+                '  defaults:\n    env:\n      CPTX_AUTO_CONFIG: "1"\n'
+                '  kinds:\n    juniper_cjunosevolved:\n      startup-config: base.cfg\n'
+                '  groups:\n    evo:\n      kind: juniper_cjunosevolved\n'
+                '  nodes:\n'
+                '    inherited:\n      group: evo\n'                                                  # env from defaults, startup from the kind
+                '    own:\n      kind: juniper_cjunosevolved\n      startup-config: own.cfg\n      env:\n        OTHER: x\n'
+                '    cleared:\n      kind: juniper_cjunosevolved\n      env:\n        CPTX_AUTO_CONFIG: ""\n'
+                '    nostartup:\n      kind: juniper_cjunosevolved\n      startup-config: ""\n'
+                '    ceos:\n      kind: arista_ceos\n      startup-config: c.cfg\n')
+        self.assertEqual(lab_operations.cptx_startup_warnings(text), [warn('inherited'), warn('own')])
+        self.assertEqual(lab_operations.cptx_startup_warnings('not: [yaml'), [])
+        self.assertEqual(lab_operations.cptx_startup_warnings('name: t\ntopology:\n  nodes:\n    a:\n      kind: juniper_cjunosevolved\n      startup-config: a.cfg\n'), [])
+        with self.fixture():
+            publish = self.client.post('/api/operations/preview', headers=self.auth, json=dict(action='publish', options={'text': text, 'annotations': '{}'}))
+            self.assertEqual(publish.status_code, 200, publish.text)
+            self.assertIn(warn('inherited'), publish.json()['warnings'])
+            self.assertNotIn('cleanup', ' '.join(w for w in publish.json()['warnings'] if 'CPTX' in w).lower(), 'shown with the visible warnings, not the technical ones')
+            self.raw = text.encode().replace(b'name: cptx', b'name: training')
+            self.assertIn(warn('own'), self.preview()['warnings'])
+            self.assertFalse(any('CPTX' in w for w in self.preview('stop').get('warnings', [])), 'only reviews that deploy or write a topology check it')
+
     def test_known_images_come_from_the_labs_already_registered(self):
         with self.fixture():
             self.store.lab(self.lab_id)['definition_yaml']='name: t\ntopology:\n  defaults:\n    kind: arista_ceos\n  kinds:\n    arista_ceos:\n      image: site/ceos:1\n  nodes:\n    a: {}\n    b:\n      image: site/ceos:2\n    c:\n      kind: linux\n      image: "{{ templated }}"\n    d:\n      kind: linux\n      image: alpine:3\n    e: {}\n'

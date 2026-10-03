@@ -189,6 +189,60 @@ class ReviewJobFailureTests(ReviewJobTestCase):
         # The late worker does not move a settled device.
         self.assertEqual(self.get(done['id']).json()['targets'][0]['stage'], 'failed')
 
+    def saturate_node_pool(self):
+        """Occupy every node-pool worker (as another lab's apply or review would); returns the event that frees them."""
+        service = self.app.state.design_apply; free = threading.Event(); busy = []
+        for _ in range(service.node_pool._max_workers):
+            started = threading.Event(); busy.append(started)
+            service.node_pool.submit(lambda s=started: (s.set(), free.wait(10)))
+        self.addCleanup(free.set)
+        for started in busy: self.assertTrue(started.wait(5))
+        return free
+
+    def test_time_queued_for_a_slot_never_counts_against_the_device_deadline(self):
+        gen_id = self.default_generation()
+        service = self.app.state.design_apply
+        service.review_timeout = 0.2; service.review_poll = 0.02
+        free = self.saturate_node_pool()
+        job = self.start(gen_id).json()['review_job']
+        time.sleep(0.6)   # three device deadlines, all of it queued
+        waiting = self.get(job['id']).json()
+        self.assertEqual(waiting['status'], 'running')
+        self.assertEqual(waiting['targets'][0]['stage'], 'queued')
+        self.assertNotIn('connecting', waiting['targets'][0]['timeline'])
+        free.set()
+        done = poll_review_job(self.client, self.lab_id, job['id'])
+        self.assertEqual(done['status'], 'done')
+        self.assertEqual(done['targets'][0]['stage'], 'done')
+
+    def test_a_device_still_waiting_at_the_job_limit_is_reported_as_never_contacted(self):
+        gen_id = self.default_generation()
+        service = self.app.state.design_apply
+        service.review_limit = 0.3; service.review_poll = 0.02
+        calls = []
+        service.connect = lambda client, node, creds: calls.append(node)
+        free = self.saturate_node_pool()
+        done = poll_review_job(self.client, self.lab_id, self.start(gen_id).json()['review_job']['id'])
+        self.assertEqual(done['status'], 'done')
+        target = done['targets'][0]
+        self.assertEqual((target['stage'], target['reason_code']), ('failed', 'queue_limit'))
+        self.assertIn('not contacted', target['message'])
+        self.assertNotIn('connecting', target['timeline'])
+        free.set(); time.sleep(0.2)
+        self.assertEqual(calls, [], 'the queued work was cancelled, the device never contacted')
+
+    def test_each_review_job_waits_on_its_own_orchestrator_thread(self):
+        """The orchestrator of a job only waits; it runs on a thread of its own (no shared orchestrator pool), so another
+        lab's review is never stuck behind it; only the device work shares the node pool, where it shows `queued`."""
+        gen_id = self.default_generation()
+        entered, release = self.hold()
+        job = self.start(gen_id).json()['review_job']
+        self.assertTrue(entered.wait(5))
+        self.assertIn('design-review-' + job['id'][:8], {t.name for t in threading.enumerate()})
+        self.assertFalse(hasattr(self.app.state.design_apply, 'review_pool'))
+        release.set()
+        self.assertEqual(poll_review_job(self.client, self.lab_id, job['id'])['status'], 'done')
+
     def test_a_vm_connection_change_during_the_review_fails_the_job_without_a_token(self):
         gen_id = self.default_generation()
         entered, release = self.hold()

@@ -109,12 +109,13 @@ not offered by the Junos profiles). `design_intent.RETIRED` is the single source
 - They stay in the schema (`MODULES`), so a stored design that uses one still parses, validates, renders, exports,
   downloads and appears in its history and Git exports; `validate()` is unchanged, so its view shows no invented
   problems, and the context lists where it uses them (`retired_in_design`).
-- The page offers only `AUTHORING_MODULES`. *Save* and *Import* refuse (400, structured) a retired module that is
-  new compared with the saved design (by path); keeping or removing an old use is always allowed. *Check*
+- The page offers only `AUTHORING_MODULES`. *Save* refuses (400, structured) a retired module that is new compared
+  with the saved design (by path); keeping or removing an old use is always allowed. *Import* stores retired uses
+  (a design's own export comes back after *Remove design* or on a fresh lab) and lists them (`imported_retired`). *Check*
   (validate) lists retired uses apart from the problems, marking the new ones.
 - *Generate plan* refuses (409, nothing queued) a design that uses any of them; earlier plans, the design file
   and its export are kept.
-- *Apply to devices…* (review and apply) refuses (409) a plan whose modules or per-device compatibility carry one,
+- *Apply to devices…* (review and apply) refuses (409) a plan whose modules, per-device compatibility or generated files carry one,
   including plans generated before the retirement. Ownership is untouched: a new plan without the module removes
   the owned statements through the normal review and apply. Nothing changes a device by itself.
 
@@ -331,7 +332,7 @@ All routes sit behind the same-origin guard; mutating requests carry a JSON body
 | `GET /api/labs/{id}/design/generations/{gid}/artifacts/{node}/{index}` | One generated file, verified against its recorded digest |
 | `GET /api/labs/{id}/design/generations/{gid}/download` | A ZIP: the files (`nodes/<device>/<nn>-<module>.cfg`), the plan, the intent, the netlab topology, the mapping and a manifest of type `network-design-generation` (never a backup, never a restore candidate) |
 | `GET /api/labs/{id}/design/export` | The intent as `<lab>.network-intent.yml` |
-| `POST /api/labs/{id}/design/import` | An intent file (YAML or JSON, up to 512 KiB, no anchors) with the current `revision`; validated before it replaces the stored intent; 400 (structured) when it adds a retired module; the ledger in the file is ignored |
+| `POST /api/labs/{id}/design/import` | An intent file (YAML or JSON, up to 512 KiB, no anchors) with the current `revision`; validated before it replaces the stored intent; retired modules are stored and listed (`imported_retired`), Generate and Apply refuse them; the ledger in the file is ignored |
 | `POST /api/labs/{id}/design/generations/{gid}/review` | `{targets, takeover, request_id}`: starts a review job (the guards answer at once; 409 with `review_job_id` while one runs for the lab; 409 for a plan with a retired module) and returns `{review_job}` |
 | `GET /api/labs/{id}/design/review-jobs`, `GET /api/labs/{id}/design/review-jobs/{job_id}` | The lab's kept review jobs; one job: per device its stage, timeline and a fixed reason, and once done the review (per device the report of the section above and the single-use `token`). Jobs are in memory: a restart forgets them (404, review again) |
 | `POST /api/labs/{id}/design/apply` | `{token, confirm_minutes, request_id, takeover, acknowledged: true}`: the apply job; idempotent by `request_id`; 409 when the review expired, the plan changed or carries a retired module, conflicts are not taken over, a review of the lab is running or another operation is busy |
