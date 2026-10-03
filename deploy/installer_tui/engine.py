@@ -20,6 +20,7 @@ active phase finishes and no later phase starts.
 import threading
 import time
 import traceback
+from types import SimpleNamespace
 
 from . import core
 
@@ -44,6 +45,12 @@ PASSWORD_NOTICE = ('First setup: the launcher asks you to create the clab-discov
 AUTH_NOTICE = 'Administrator access: sudo asks for your password in this terminal. The dashboard returns afterwards.'
 GIT_NOTICE = ('Git setup runs in this terminal as {user} (home {home}): it asks its own questions and may show a '
               'GitHub device code. The dashboard returns when it finishes.')
+
+
+def holder_report(install, env):
+    """apt_lock.py --show, as inert text with its line structure kept (at most 40 lines)."""
+    lines = (install.lock_holder_text(env) or '').splitlines()[:40]
+    return '\n'.join(core.sanitize.clean_line(line, 400) for line in lines)
 
 
 def credentials_cached(env, cwd):
@@ -215,8 +222,10 @@ class Run:
         phase.state = state
         if note is not None:
             phase.note = note
-        if state == RUNNING and phase.started is None:
-            phase.started = time.monotonic()
+        if state == RUNNING:
+            if phase.started is None:
+                phase.started = time.monotonic()
+            phase.finished = None   # a retry is running again: its clock must move
         if state in (COMPLETED, FAILED, SKIPPED, STOPPED):
             phase.finished = time.monotonic()
         self.bridge.phase_changed(phase)
@@ -317,12 +326,12 @@ class Run:
             if choice == LOCK_CHECK:
                 if self.install.lock_free(self.env):
                     return RETRY
-                failure.holder = core.sanitize.clean_line(self.install.lock_holder_text(self.env), 4000)
+                failure.holder = holder_report(self.install, self.env)
                 continue
             if choice == LOCK_WAIT:
                 if self._lock_wait(phase):
                     return RETRY
-                failure.holder = core.sanitize.clean_line(self.install.lock_holder_text(self.env), 4000)
+                failure.holder = holder_report(self.install, self.env)
                 continue
             return choice
 
@@ -428,7 +437,7 @@ class Run:
                 phase.note = self.install.ENGINEER_RECONNECT
             return None
         if process.saw_lock:
-            holder = core.sanitize.clean_line(self.install.lock_holder_text(self.env), 4000)
+            holder = holder_report(self.install, self.env)
             if self.install.lock_free(self.env):
                 holder = ''
             return Failure('lock', 'The package manager (APT/dpkg) is locked by another process.', code,
@@ -518,7 +527,8 @@ class HealthRun(Run):
         import json
         process = subprocess.Popen(step.argv, cwd=str(self.install.SOURCE), env=self.env, stdin=subprocess.DEVNULL,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, process_group=0)
-        self.process = process
+        # The same shape as a StepProcess (`.process` is the Popen), so Interrupt step works here too.
+        self.process = SimpleNamespace(process=process)
         chunks = []
 
         def drain():
@@ -533,6 +543,8 @@ class HealthRun(Run):
             self.bridge.output(step.key, [core.sanitize.clean_line(core.sanitize.decode(raw))])
         code = process.wait()
         reader.join(timeout=30)
+        process.stdout.close()
+        process.stderr.close()
         self.process = None
         phase.code = code
         data = b''.join(chunks)

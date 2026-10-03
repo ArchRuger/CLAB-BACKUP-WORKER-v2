@@ -26,7 +26,8 @@ import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'deploy'))
@@ -256,9 +257,9 @@ class SlateCase(unittest.IsolatedAsyncioTestCase):
         return fixture.context(**kwargs)
 
     @contextlib.asynccontextmanager
-    async def running(self, size=(120, 40), ctx=None):
+    async def running(self, size=(120, 40), ctx=None, start=None):
         ctx = ctx or self.ctx()
-        app = fixture.make_app(ctx)
+        app = fixture.make_app(ctx, start)
         try:
             async with app.run_test(size=size) as pilot:
                 await pilot.pause()
@@ -557,6 +558,53 @@ class ReviewAndExitTests(SlateCase):
             self.assertEqual(app.return_code, 0)
 
 
+class StartActionTests(SlateCase):
+    async def test_start_git_opens_the_git_review_on_mount_without_running_anything(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx, start='git') as (app, pilot):
+            self.assertIsInstance(app.screen, slate.ReviewScreen)
+            self.assertEqual(app.screen.action, 'git')
+            self.assertEqual([type(screen).__name__ for screen in app.screen_stack[-2:]], ['Dashboard', 'ReviewScreen'])
+            self.assertIs(app.focused, app.screen.query_one('#start'))
+            self.assertIsNone(app.current_run)
+            self.assertFalse(app.started_any_run)
+            self.assertFalse(self.lock_path.exists(), 'opening the review takes no lock')
+            await pilot.press('escape')
+            await pilot.pause()
+            self.assertIsInstance(app.screen, slate.Dashboard)
+
+    async def test_start_advanced_opens_settings_from_install_and_then_the_review(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx, start='advanced') as (app, pilot):
+            self.assertIsInstance(app.screen, slate.Dashboard, 'the dashboard is shown first')
+            await pilot.press('enter')   # Install / update
+            await pilot.pause()
+            self.assertIsInstance(app.screen, slate.SettingsScreen)
+            self.assertTrue(app.screen.then_review)
+            self.assertIsNone(app.current_run)
+            await self.focus(app, pilot, 'review')
+            await pilot.press('enter')
+            await pilot.pause()
+            self.assertIsInstance(app.screen, slate.ReviewScreen)
+            self.assertEqual(app.screen.action, 'install')
+            self.assertTrue(ctx.advanced)
+            self.assertFalse(self.lock_path.exists())
+
+    async def test_start_advanced_leaves_the_other_actions_on_their_plain_review(self):
+        async with self.running((120, 40), start='advanced') as (app, pilot):
+            await self.open_nav(app, pilot, 1)   # Git setup / repair
+            self.assertIsInstance(app.screen, slate.ReviewScreen)
+            self.assertEqual(app.screen.action, 'git')
+
+    async def test_without_a_start_action_install_opens_the_review_directly(self):
+        async with self.running((120, 40)) as (app, pilot):
+            await pilot.press('enter')
+            await pilot.pause()
+            self.assertIsInstance(app.screen, slate.ReviewScreen)
+            self.assertEqual(app.screen.action, 'install')
+            self.assertIsNone(app.start_action)
+
+
 # --------------------------------------------------------------------------------------------
 # 4 and 6. Advanced settings
 # --------------------------------------------------------------------------------------------
@@ -722,6 +770,73 @@ class SettingsTests(SlateCase):
             # The review is still only a plan: nothing started.
             self.assertIsNone(app.current_run)
             self.assertFalse(self.lock_path.exists())
+
+    async def assert_env_rejected(self, ctx, app, pilot, value, message, typed=5):
+        await self.open_settings(app, pilot)
+        screen = app.screen
+        await self.choose(app, pilot, 'env-choice', 1)
+        await self.type_path(app, pilot, value, typed=typed)
+        await self.review(app, pilot)
+        self.assertIs(app.screen, screen, 'the form does not proceed')
+        self.assertIsInstance(app.screen, slate.SettingsScreen)
+        self.assertIn(message, widget_text(screen.query_one('#env-error')))
+        self.assertTrue(screen.query_one('#env-path', Input).has_class('-invalid'))
+        self.assertEqual(app.focused.id, 'env-path')
+        self.assertIsNone(ctx.options.env_source)
+        self.assertFalse(ctx.advanced)
+        self.assertIn(message, screen_text(app))
+        self.assertIsNone(app.current_run)
+        self.assertFalse(self.lock_path.exists())
+
+    async def test_copy_env_with_a_directory_path_shows_the_field_error_and_stays(self):
+        folder = self.root / 'old-checkout' / 'clab-backup-ui' / '.env'
+        folder.mkdir(parents=True)   # a directory named like the file
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.assert_env_rejected(ctx, app, pilot, str(folder), 'Choose a regular .env file')
+
+    async def test_copy_env_with_a_file_over_64_kib_shows_the_size_error_and_stays(self):
+        big = self.root / 'big.env'
+        big.write_bytes(b'A=' + b'x' * 65535)   # 65537 bytes: one over 64 KiB
+        self.assertEqual(big.stat().st_size, 65537)
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.assert_env_rejected(ctx, app, pilot, str(big), 'no larger than 64 KiB')
+
+    async def test_copy_env_with_exactly_64_kib_is_accepted(self):
+        edge = self.root / 'edge.env'
+        edge.write_bytes(b'A=' + b'x' * 65534)
+        self.assertEqual(edge.stat().st_size, 65536)
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.open_settings(app, pilot)
+            await self.choose(app, pilot, 'env-choice', 1)
+            await self.type_path(app, pilot, str(edge), typed=5)
+            await self.review(app, pilot)
+            self.assertIsInstance(app.screen, slate.ReviewScreen)
+            self.assertEqual(ctx.options.env_source, edge)
+
+    async def test_copy_env_with_a_symlink_is_refused_even_when_the_target_is_a_small_file(self):
+        target = self.root / 'real.env'
+        target.write_text('A=1\n')
+        link = self.root / 'link.env'
+        link.symlink_to(target)
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.assert_env_rejected(ctx, app, pilot, str(link), 'Choose a regular .env file')
+
+    async def test_a_rejected_env_file_can_be_replaced_by_a_valid_one_in_the_same_form(self):
+        big = self.root / 'big.env'
+        big.write_bytes(b'x' * 70000)
+        good = self.root / 'good.env'
+        good.write_text('UI_PORT=9090\n')
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            await self.assert_env_rejected(ctx, app, pilot, str(big), 'no larger than 64 KiB')
+            await self.type_path(app, pilot, str(good), typed=5)
+            await self.review(app, pilot)
+            self.assertIsInstance(app.screen, slate.ReviewScreen)
+            self.assertEqual(ctx.options.env_source, good)
 
     async def test_existing_env_hides_copy_controls_and_shows_retained_text(self):
         ctx = self.ctx()
@@ -1075,7 +1190,7 @@ class RunScreenTests(SlateCase):
             box = screen.query_one('#recovery')
             self.assertTrue(box.has_class('-shown'))
             self.assertTrue(box.display)
-            self.assertEqual(self.button_labels(screen), ['Retry phase', 'Return, keep work'])
+            self.assertEqual(self.button_labels(screen), ['Retry phase', 'Return, keep work', 'Inspect output'])
             buttons = list(screen.query('#recovery-buttons Button'))
             self.assertIs(app.focused, buttons[0])
             self.assertIn('Retry repeats only this phase', widget_text(screen.query_one('#recovery-text')))
@@ -1136,7 +1251,7 @@ class RunScreenTests(SlateCase):
                                      holder=holder)
             run, screen = await self.failed_screen(app, pilot, ctx, failure)
             self.assertEqual(self.button_labels(screen),
-                             ['Wait for lock', 'Retry phase', 'Check again', 'Return, keep work'])
+                             ['Wait for lock', 'Retry phase', 'Check again', 'Return, keep work', 'Inspect output'])
             self.assertEqual(app.focused.id, 'choose-lock-wait')
             box = screen.query_one('#recovery')
             self.assertTrue(box.has_class('-lock'))
@@ -1146,9 +1261,11 @@ class RunScreenTests(SlateCase):
             self.assertIn('locked by another process', text)
             self.assertIn(collapse(ctx.install.RESTART_HINT), collapse(text))
             command = shlex.join(ctx.install.lock_wait_command())
-            self.assertIn(command, text)
+            # The copyable command is pinned outside the scrolling report so it is always visible.
+            pinned = widget_text(screen.query_one('#recovery-command'))
+            self.assertIn(command, collapse(pinned))
             self.assertRegex(command, r'^sudo python3 \S+/deploy/apt_lock\.py --wait --pause-timers$')
-            self.assertNotIn('sudo -n', text)
+            self.assertNotIn('sudo -n', text + pinned)
             self.assertIn('never stops the upgrade', text)
 
     async def test_lock_wait_choice_announces_the_wait(self):
@@ -1169,7 +1286,7 @@ class RunScreenTests(SlateCase):
             failure = engine.Failure('auth', 'sudo needs your password again before this step can run.', 1,
                                      choices=(engine.AUTH_RETRY, engine.RETURN))
             run, screen = await self.failed_screen(app, pilot, ctx, failure)
-            self.assertEqual(self.button_labels(screen), ['Authenticate, retry', 'Return, keep work'])
+            self.assertEqual(self.button_labels(screen), ['Authenticate, retry', 'Return, keep work', 'Inspect output'])
             self.assertEqual(app.focused.id, 'choose-auth-retry')
             self.assertIn("sudo's own password prompt", widget_text(screen.query_one('#recovery-text')))
             self.assertEqual(screen.query_one('#recovery').border_title, 'Needs attention')
@@ -1187,6 +1304,139 @@ class RunScreenTests(SlateCase):
             await pilot.pause()
             self.assertIs(app.screen, screen)
             self.assertTrue(screen.query_one('#recovery').has_class('-shown'))
+
+    async def test_post_install_git_failure_offers_retry_finish_without_it_and_return(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            failure = engine.Failure('git', 'Git setup did not complete (exit status 2). The manager and any existing '
+                                            'checkout remain available.', 2,
+                                     choices=(engine.RETRY, engine.SKIP, engine.RETURN))
+            run, screen = await self.failed_screen(app, pilot, ctx, failure, key='git')
+            self.assertEqual(self.button_labels(screen), ['Retry phase', 'Finish without it', 'Return, keep work', 'Inspect output'])
+            self.assertEqual([b.id for b in screen.query('#recovery-buttons Button')],
+                             ['choose-retry', 'choose-skip', 'choose-return', 'inspect'])
+            self.assertEqual(app.focused.id, 'choose-retry')
+            text = widget_text(screen.query_one('#recovery-text'))
+            self.assertIn('Git setup', text)
+            self.assertIn('exit status 2', text)
+            self.assertEqual(screen.query_one('#recovery').border_title, 'Needs attention')
+            painted = screen_text(app)
+            for label in ('Retry phase', 'Finish without it', 'Return, keep work'):
+                self.assertIn(label, painted)
+            await pilot.press('right')
+            await pilot.pause()
+            self.assertEqual(app.focused.id, 'choose-skip')
+            await pilot.press('enter')
+            await pilot.pause()
+            self.assertEqual(app.bridge.decisions.get_nowait(), engine.SKIP)
+            self.assertTrue(app.bridge.decisions.empty())
+            self.assertFalse(screen.query_one('#recovery').has_class('-shown'))
+
+    async def test_x_with_no_running_step_process_only_notifies(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run, screen = await self.active_run_screen(app, pilot, ctx)
+            self.assertIsNone(run.process)
+            run.interrupt_current = Mock(return_value=True)
+            await pilot.press('x')
+            await pilot.pause()
+            self.assertIs(app.screen, screen, 'no dialog opens')
+            self.assertTrue(any('Nothing to interrupt' in note for note in notifications(app)), notifications(app))
+            run.interrupt_current.assert_not_called()
+            self.assertFalse(run.stop)
+
+    async def test_x_on_a_finished_run_also_says_there_is_nothing_to_interrupt(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run = full_install_run(ctx)
+            screen = await self.show_run(app, pilot, run)
+            await pilot.press('x')
+            await pilot.pause()
+            self.assertIs(app.screen, screen)
+            self.assertTrue(any('Nothing to interrupt' in note for note in notifications(app)), notifications(app))
+
+    async def test_x_with_a_running_step_asks_first_and_keep_running_is_the_default(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run, screen = await self.active_run_screen(app, pilot, ctx)
+            run.process = SimpleNamespace(process=SimpleNamespace(pid=0))   # a step process is "running"
+            run.interrupt_current = Mock(return_value=True)
+            await pilot.press('x')
+            await pilot.pause()
+            dialog = app.screen
+            self.assertIsInstance(dialog, slate.Dialog)
+            self.assertEqual(dialog.title_text, 'Interrupt this step?')
+            run.interrupt_current.assert_not_called()   # asking is not interrupting
+            buttons = list(dialog.query(Button))
+            self.assertEqual([b.id for b in buttons], ['dialog-keep', 'dialog-interrupt'])
+            self.assertEqual(buttons[0].label.plain, 'Keep running')
+            self.assertEqual(app.focused.id, 'dialog-keep')
+            body = collapse(widget_text(dialog.query_one('.prose')))
+            self.assertIn('VM prerequisites is still running', body)
+            self.assertIn('half-configured', body, 'the prereqs phase carries the APT warning')
+            await pilot.press('enter')   # straight Enter is the safe choice
+            await pilot.pause()
+            self.assertIs(app.screen, screen)
+            run.interrupt_current.assert_not_called()
+            self.assertFalse(any('Ctrl+C sent' in note for note in notifications(app)))
+
+    async def test_x_escape_closes_the_dialog_without_interrupting(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run, screen = await self.active_run_screen(app, pilot, ctx)
+            run.process = SimpleNamespace(process=SimpleNamespace(pid=0))
+            run.interrupt_current = Mock(return_value=True)
+            await pilot.press('x')
+            await pilot.pause()
+            await pilot.press('escape')
+            await pilot.pause()
+            self.assertIs(app.screen, screen)
+            run.interrupt_current.assert_not_called()
+
+    async def test_choosing_interrupt_calls_the_runs_interrupt_current_exactly_once(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run, screen = await self.active_run_screen(app, pilot, ctx)
+            run.process = SimpleNamespace(process=SimpleNamespace(pid=0))
+            run.interrupt_current = Mock(return_value=True)
+            await pilot.press('x')
+            await pilot.pause()
+            self.assertEqual(app.focused.id, 'dialog-keep')
+            await pilot.press('right')
+            await pilot.pause()
+            self.assertEqual(app.focused.id, 'dialog-interrupt')
+            self.assertEqual(app.focused.label.plain, 'Interrupt step')
+            await pilot.press('enter')
+            await pilot.pause()
+            self.assertIs(app.screen, screen)
+            run.interrupt_current.assert_called_once_with()
+            self.assertTrue(any('Ctrl+C sent to the step.' in note for note in notifications(app)), notifications(app))
+
+    async def test_choosing_interrupt_when_the_step_just_ended_does_not_claim_it_was_sent(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run, screen = await self.active_run_screen(app, pilot, ctx)
+            run.process = SimpleNamespace(process=SimpleNamespace(pid=0))
+            run.interrupt_current = Mock(return_value=False)   # it exited while the dialog was open
+            await pilot.press('x')
+            await pilot.pause()
+            await pilot.press('right')
+            await pilot.press('enter')
+            await pilot.pause()
+            run.interrupt_current.assert_called_once_with()
+            self.assertFalse(any('Ctrl+C sent' in note for note in notifications(app)), notifications(app))
+
+    async def test_the_interrupt_dialog_for_a_later_phase_has_the_plain_helper_wording(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            run, screen = await self.active_run_screen(
+                app, pilot, ctx, {'admin': engine.COMPLETED, 'prereqs': engine.COMPLETED, 'launch': engine.RUNNING})
+            run.process = SimpleNamespace(process=SimpleNamespace(pid=0))
+            await pilot.press('x')
+            await pilot.pause()
+            body = collapse(widget_text(app.screen.query_one('.prose')))
+            self.assertIn('The helper stops where it is; completed phases and existing data are kept.', body)
+            self.assertNotIn('half-configured', body)
 
 
 # --------------------------------------------------------------------------------------------
@@ -1246,8 +1496,9 @@ class ResultScreenTests(SlateCase):
             self.assertRegex(joined, r'(?m)^\s+Manager\s+READY\s')
             self.assertRegex(joined, r'(?m)^\s+Git\s+ATTENTION\s')
             self.assertRegex(joined, r'(?m)^\s+lazydocker\s+SKIPPED\s')
-            self.assertIn('Verified only on this VM', joined)
-            self.assertIn('network unreachable (fixture)', joined)
+            # The plain summary wraps to the terminal with hanging indents; the words are unchanged.
+            self.assertIn('Verified only on this VM', collapse(joined))
+            self.assertIn('network unreachable (fixture)', collapse(joined))
             self.assertIn('Next steps:', lines)
             for line in lines:
                 self.assertNotIn('\x1b', line)
@@ -1487,7 +1738,7 @@ class FakeRunTests(SlateCase):
             self.assertEqual(run.phase('prereqs').state, engine.COMPLETED)
             self.assertEqual(run.phase('capture').state, engine.FAILED)
             self.assertEqual((attempts(first_marker), attempts(second_marker)), (1, 1))
-            self.assertEqual(self.button_labels(screen), ['Retry phase', 'Return, keep work'])
+            self.assertEqual(self.button_labels(screen), ['Retry phase', 'Return, keep work', 'Inspect output'])
             self.assertIn('exit status 1', widget_text(screen.query_one('#recovery-text')))
             self.assertIn('Kept: VM prerequisites', widget_text(screen.query_one('#recovery-text')))
             self.assertIn('attempt 1', screen.query_one('#output', Log).lines)
@@ -1553,6 +1804,321 @@ class FakeRunTests(SlateCase):
             await pilot.press('enter')
             await pilot.pause()
             self.assertIsInstance(app.screen, slate.Dashboard)
+
+
+# --------------------------------------------------------------------------------------------
+# Exit status of a run (the code the process returns for a finished action)
+# --------------------------------------------------------------------------------------------
+class ExitStatusTests(SlateCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx_ = self.ctx()
+        self.app = fixture.make_app(self.ctx_)
+
+    def health_run(self, report='absent', outcome=None):
+        run = engine.HealthRun(self.ctx_.install, self.ctx_.env, self.ctx_.version)
+        if report != 'absent':
+            run.report = report
+        run.outcome = outcome
+        return run
+
+    def action_run(self, action, outcome, code=None):
+        run = engine.Run(self.ctx_.install, action, self.ctx_.env, self.ctx_.version, options=self.ctx_.options)
+        run.outcome = outcome
+        if code is not None:
+            run.phase(action).code = code
+        return run
+
+    def test_no_run_is_zero(self):
+        self.assertEqual(self.app.exit_status(None), 0)
+
+    def test_health_report_exit_codes_pass_through(self):
+        for code in (0, 1, 2):
+            with self.subTest(exit_code=code):
+                run = self.health_run({'schema': 'clab-manager-health-v1', 'exit_code': code},
+                                      'completed' if code == 0 else 'partial')
+                self.assertEqual(self.app.exit_status(run), code)
+
+    def test_health_without_a_usable_report_is_one(self):
+        for label, report in (('missing', None), ('never set', 'absent'), ('empty', {}), ('no code', {'counts': {}}),
+                              ('text code', {'exit_code': '2'}), ('null code', {'exit_code': None})):
+            with self.subTest(label):
+                self.assertEqual(self.app.exit_status(self.health_run(report, 'failed')), 1)
+
+    def test_git_action_returns_the_git_phase_status(self):
+        for code, outcome in ((0, 'completed'), (1, 'returned'), (2, 'returned'), (130, 'returned'), (75, 'returned')):
+            with self.subTest(code=code):
+                self.assertEqual(self.app.exit_status(self.action_run('git', outcome, code)), code)
+
+    def test_git_action_without_a_status_follows_the_outcome(self):
+        self.assertEqual(self.app.exit_status(self.action_run('git', 'completed')), 0)
+        for outcome in ('returned', 'failed', 'stopped', 'interrupted'):
+            with self.subTest(outcome=outcome):
+                self.assertEqual(self.app.exit_status(self.action_run('git', outcome)), 1)
+
+    def test_install_outcomes_map_to_zero_or_one(self):
+        expected = {'completed': 0, 'partial': 0, 'returned': 0, 'stopped': 0, 'failed': 1, 'interrupted': 1, None: 1}
+        for outcome, code in expected.items():
+            with self.subTest(outcome=outcome):
+                self.assertEqual(self.app.exit_status(self.action_run('install', outcome)), code)
+
+    def test_other_actions_use_the_outcome_mapping(self):
+        for action in ('engineer', 'capture'):
+            for outcome, code in (('completed', 0), ('returned', 0), ('failed', 1), ('interrupted', 1)):
+                with self.subTest(action=action, outcome=outcome):
+                    self.assertEqual(self.app.exit_status(self.action_run(action, outcome, code=7)), code,
+                                     'a helper status is not the installer status outside the git action')
+
+
+# --------------------------------------------------------------------------------------------
+# main(): the process return code
+# --------------------------------------------------------------------------------------------
+class FakeTTY(io.StringIO):
+    def __init__(self, tty=True):
+        super().__init__()
+        self.tty = tty
+
+    def isatty(self):
+        return self.tty
+
+
+class FakeMainRun:
+    """What main() reads from a run that is still active when the screen ends."""
+
+    def __init__(self, outcome='returned'):
+        self.joined = False
+        self.disconnected = []
+        self.hangup = core.Signal()   # falsy until the terminal is lost
+        self.outcome = outcome
+        self._active = True
+        self.thread = SimpleNamespace(join=self.join)
+
+    @property
+    def active(self):
+        return self._active
+
+    def join(self):
+        self.joined = True
+        self._active = False
+
+    def disconnect(self, reason):
+        self.disconnected.append(reason)
+        self.hangup.set(reason)
+
+
+class MainReturnCodeTests(unittest.TestCase):
+    """slate.main() with a scripted SlateOps: no terminal, no Textual app and no real install module."""
+
+    def setUp(self):
+        self.ctx = fixture.context()
+        self.apps = []
+        outer = self
+
+        class FakeSlate:
+            behavior = None
+
+            def __init__(self, ctx, start_action=None, ansi_color=None):
+                self.ctx = ctx
+                self.start_action = start_action
+                self.ansi_color = ansi_color
+                self.current_run = None
+                self.bridge = SimpleNamespace(alive=True, decisions=__import__('queue').Queue())
+                self.summary_lines = None
+                self.terminal_lost = False
+                self.started_any_run = False
+                self.pending_quit = False
+                self.return_code = None
+                outer.apps.append(self)
+
+            def run(self):
+                type(self).behavior(self)
+
+            def summary_plain(self, run):
+                return ['SUMMARY LINE']
+
+        self.Fake = FakeSlate
+        patches = [
+            patch.object(slate, 'SlateOps', FakeSlate),
+            patch.object(slate, 'load_install', lambda: self.ctx.install),
+            patch.object(slate, 'Context', lambda install, look: self.ctx),
+            patch.object(sys, '__stdin__', FakeTTY()),
+            patch.object(sys, '__stdout__', FakeTTY()),
+            patch.object(sys, '__stderr__', FakeTTY()),
+        ]
+        for item in patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+    def main(self, behavior, argv=()):
+        self.Fake.behavior = staticmethod(behavior)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = slate.main(list(argv))
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_crash_before_any_run_is_75_and_says_nothing_was_changed(self):
+        def behavior(app):
+            raise RuntimeError('screen blew up')
+        code, out, err = self.main(behavior)
+        self.assertEqual(code, 75)
+        self.assertEqual(slate.UNAVAILABLE_EXIT, 75)
+        self.assertIn('could not continue (RuntimeError: screen blew up)', err)
+        self.assertIn('Nothing was changed', err)
+        self.assertNotIn('stopped unexpectedly', out)
+
+    def test_a_crash_after_a_run_started_is_1_and_the_plain_installer_hint_is_printed(self):
+        def behavior(app):
+            app.started_any_run = True
+            raise RuntimeError('boom')
+        code, out, err = self.main(behavior)
+        self.assertEqual(code, 1)
+        self.assertIn('The installer screen stopped unexpectedly (RuntimeError)', out)
+        self.assertIn('rerun bash deploy/install.sh', out)
+        self.assertNotIn('Nothing was changed', err)
+
+    def test_return_code_75_after_a_run_is_reported_as_1(self):
+        def behavior(app):
+            app.started_any_run = True
+            app.return_code = 75   # a helper's own 75 must not read as "stopped before changing anything"
+        code, out, err = self.main(behavior)
+        self.assertEqual(code, 1)
+
+    def test_return_code_75_without_a_run_stays_75(self):
+        def behavior(app):
+            app.return_code = 75
+        self.assertEqual(self.main(behavior)[0], 75)
+
+    def test_no_return_code_means_ctrl_c_130(self):
+        def behavior(app):
+            app.return_code = None
+        self.assertEqual(self.main(behavior)[0], 130)
+        def after_run(app):
+            app.started_any_run = True
+        self.assertEqual(self.main(after_run)[0], 130)
+
+    def test_ordinary_return_codes_pass_through(self):
+        for value in (0, 1, 2, 3):
+            with self.subTest(code=value):
+                def behavior(app, value=value):
+                    app.return_code = value
+                    app.started_any_run = True
+                self.assertEqual(self.main(behavior)[0], value)
+
+    def test_a_lost_terminal_is_1_even_with_a_return_code(self):
+        def behavior(app):
+            app.terminal_lost = True
+            app.started_any_run = True
+            app.return_code = 0
+        self.assertEqual(self.main(behavior)[0], 1)
+
+    def test_the_summary_is_printed_after_the_screen_closes(self):
+        def behavior(app):
+            app.return_code = 0
+            app.summary_lines = ['Containerlab Node Manager setup: COMPLETED', '  Manager  COMPLETED']
+        code, out, err = self.main(behavior)
+        self.assertEqual(code, 0)
+        self.assertIn('Containerlab Node Manager setup: COMPLETED\n  Manager  COMPLETED', out)
+
+    def test_flags_choose_the_start_action(self):
+        def behavior(app):
+            app.return_code = 0
+        for argv, expected in (((), None), (('--git',), 'git'), (('--advanced',), 'advanced'), (('--git', '--advanced'), 'git')):
+            with self.subTest(argv=argv):
+                self.main(behavior, argv)
+                self.assertEqual(self.apps[-1].start_action, expected)
+
+    def test_without_a_terminal_on_every_stream_it_is_75_and_no_app_is_built(self):
+        for name in ('__stdin__', '__stdout__', '__stderr__'):
+            with self.subTest(stream=name), patch.object(sys, name, FakeTTY(tty=False)):
+                before = len(self.apps)
+                code, out, err = self.main(lambda app: None)
+                self.assertEqual(code, 75)
+                self.assertIn('needs an interactive terminal', err)
+                self.assertEqual(len(self.apps), before)
+
+    def test_a_run_still_active_when_the_screen_crashes_is_finished_not_abandoned(self):
+        holder = {}
+
+        def behavior(app):
+            app.started_any_run = True
+            holder['run'] = app.current_run = FakeMainRun()
+            raise RuntimeError('boom')
+        before = signal.getsignal(signal.SIGINT)
+        code, out, err = self.main(behavior)
+        run = holder['run']
+        self.assertEqual(code, 1)
+        self.assertTrue(run.joined, 'main waits for the active phase to finish')
+        self.assertEqual(run.disconnected, ['the screen stopped unexpectedly'])
+        self.assertFalse(self.apps[-1].bridge.alive)
+        self.assertEqual(self.apps[-1].bridge.decisions.get_nowait(), engine.RETURN)
+        self.assertIn('Finishing the current phase safely', out)
+        self.assertIs(signal.getsignal(signal.SIGINT), before, 'the SIGINT guard is restored')
+
+    def test_a_run_still_active_after_a_quit_is_finished_and_the_summary_printed(self):
+        holder = {}
+
+        def behavior(app):
+            app.started_any_run = True
+            app.pending_quit = True
+            holder['run'] = app.current_run = FakeMainRun()
+            app.return_code = 0
+        code, out, err = self.main(behavior)
+        run = holder['run']
+        self.assertEqual(code, 0)
+        self.assertTrue(run.joined)
+        self.assertEqual(run.disconnected, ['quit after the current phase'])
+        self.assertIn('SUMMARY LINE', out, 'a finished run is summarised on the normal terminal')
+
+
+# --------------------------------------------------------------------------------------------
+# Terminal handoff when the driver cannot suspend (headless)
+# --------------------------------------------------------------------------------------------
+class HandoffWithoutSuspendTests(SlateCase):
+    async def test_handoff_returns_none_and_never_calls_the_work(self):
+        work = Mock(return_value=0)
+        async with self.running((120, 40)) as (app, pilot):
+            self.assertFalse(getattr(app._driver, 'can_suspend', False), 'a headless driver cannot suspend')
+            before = signal.getsignal(signal.SIGINT)
+            result = app.handoff('Administrator access', 'sudo asks for your password.', work)
+            self.assertIsNone(result)
+            work.assert_not_called()
+            self.assertIs(signal.getsignal(signal.SIGINT), before, 'the SIGINT guard is only installed when suspending')
+            self.assertIsInstance(app.screen, slate.Dashboard)
+
+    async def test_handoff_without_a_driver_returns_none(self):
+        work = Mock(return_value=0)
+        app = fixture.make_app(self.ctx())
+        self.assertIsNone(app._driver)
+        self.assertIsNone(app.handoff('Git setup', 'notice', work))
+        work.assert_not_called()
+
+    async def test_the_run_threads_bridge_handoff_reports_none_without_running_the_work(self):
+        work = Mock(return_value=0)
+        async with self.running((120, 40)) as (app, pilot):
+            bridge = slate.Bridge(app)
+            # The bridge blocks its caller until the screen has answered, so it is called off the loop
+            # thread, exactly as the run thread calls it.
+            result = await asyncio.wait_for(asyncio.to_thread(bridge.handoff, 'Git setup', 'notice', work), 20)
+            self.assertIsNone(result)
+            work.assert_not_called()
+            bridge.alive = False
+            self.assertIsNone(await asyncio.to_thread(bridge.handoff, 'Git setup', 'notice', work))
+            work.assert_not_called()
+
+    async def test_an_engine_run_treats_a_failed_git_handoff_as_a_recoverable_handoff_failure(self):
+        ctx = self.ctx()
+        async with self.running((120, 40), ctx) as (app, pilot):
+            bridge = slate.Bridge(app)
+            run = engine.Run(ctx.install, 'git', ctx.env, ctx.version)
+            step = run.steps[0]
+            phase = run.phases[0]
+            run.bridge = bridge
+            with patch.object(ctx.install, 'git_setup', Mock(return_value=0)) as git_setup:
+                failure = await asyncio.wait_for(asyncio.to_thread(run._execute, step, phase), 20)
+            git_setup.assert_not_called()
+            self.assertEqual(failure.kind, 'handoff')
+            self.assertEqual(failure.choices, (engine.RETRY, engine.RETURN))
+            self.assertIsNone(phase.code)
 
 
 if __name__ == '__main__':

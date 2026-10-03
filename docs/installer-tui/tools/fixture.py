@@ -27,15 +27,24 @@ FIXTURE_STATUS = {
 }
 
 
-def context(no_color=False, ascii_only=False, status=FIXTURE_STATUS, host='fixture-vm', source=None):
+SCRUBBED_SOURCE = Path('/home/student/projects/clab-manager')
+
+
+def context(no_color=False, ascii_only=False, status=FIXTURE_STATUS, host='fixture-vm', source=None, scrub=False):
     install = slate.load_install()
+    version = install.source_version()
+    if scrub:
+        # Screenshots must not show this VM's real paths: plans and phases use install.SOURCE.
+        install.SOURCE = SCRUBBED_SOURCE
+        install.APT_LOCK_SCRIPT = SCRUBBED_SOURCE / 'deploy/apt_lock.py'
+        source = SCRUBBED_SOURCE
     look = theme.Look(no_color=no_color, ascii_only=ascii_only)
     ctx = slate.Context.__new__(slate.Context)
     ctx.install = install
     ctx.look = look
     ctx.account = SimpleNamespace(pw_name='student', pw_dir='/home/student')
     ctx.env = install.environment(ctx.account)
-    ctx.version = install.source_version()
+    ctx.version = version
     ctx.host = host
     ctx.source = source or install.SOURCE
     ctx.options = install.Options()

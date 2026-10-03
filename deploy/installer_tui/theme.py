@@ -31,6 +31,32 @@ TOKENS = {
 
 T = TOKENS
 
+# Without truecolor, Rich maps each colour to its nearest palette entry, which turns the slate
+# greys into black and pure navy and makes both selection fills identical. These are exact
+# xterm-256 entries chosen to keep the same layering (and distinct focused/unfocused selection).
+TOKENS_256 = {
+    'slate-bg': '#1C1C1C', 'slate-wash': '#262626', 'slate-panel': '#303030', 'slate-elevated': '#3A3A3A',
+    'slate-border': '#585858', 'slate-text': '#EEEEEE', 'slate-muted': '#D0D0D0', 'slate-dim': '#A8A8A8',
+    'slate-accent': '#00D7FF', 'slate-accent-soft': '#0087AF', 'slate-select': '#005F87',
+    'slate-select-blur': '#005F5F', 'slate-success': '#5FD75F', 'slate-warning': '#FFD700',
+    'slate-error': '#FF5F5F', 'slate-disabled': '#6C6C6C',
+}
+
+
+def color_system(environ):
+    """'truecolor' or 'palette', decided the way Rich decides (COLORTERM first)."""
+    if environ.get('TEXTUAL_COLOR_SYSTEM') == 'truecolor':
+        return 'truecolor'
+    if environ.get('TEXTUAL_COLOR_SYSTEM') in ('256', 'standard'):
+        return 'palette'
+    return 'truecolor' if environ.get('COLORTERM', '').lower() in ('truecolor', '24bit') else 'palette'
+
+
+def apply_palette(system):
+    """Switch the shared token table in place (before the app starts)."""
+    if system == 'palette':
+        TOKENS.update(TOKENS_256)
+
 # State word -> (badge text, colour token). Every coloured state carries its word.
 BADGES = {
     'Ready': ('READY', 'slate-success'),
@@ -202,11 +228,15 @@ Button {
     text-style: none;
 }
 Button:hover { background: $slate-border; }
-Button:focus { background: $slate-select; color: $slate-text; text-style: bold reverse; }
 Button.primary { background: $slate-accent; color: $slate-bg; text-style: bold; }
-Button.primary:hover { background: #67E8F9; }
-Button.primary:focus { background: #A5F3FC; color: $slate-bg; text-style: bold; }
 Button.warning { background: $slate-warning; color: $slate-bg; text-style: bold; }
+#recovery Button { background: $slate-border; }
+#recovery Button.primary { background: $slate-accent; color: $slate-bg; }
+/* One focus treatment for every kind, defined last: a near-white fill with an underlined label is
+   used for nothing else, so the focused button is never ambiguous next to a cyan or amber one. */
+Button:focus, Button.primary:focus, Button.warning:focus, #recovery Button:focus {
+    background: $slate-text; color: $slate-bg; text-style: bold underline;
+}
 Button:disabled { background: $slate-panel; color: $slate-disabled; text-style: none; }
 .buttons { height: 1; margin: 1 0 0 0; }
 .buttons.bar { margin: 0; padding: 0 1; height: 2; padding-top: 1; background: $slate-bg; }
@@ -229,7 +259,7 @@ Input.-invalid { border: tall $slate-error; }
 .field-error { color: $slate-error; height: auto; }
 
 /* ---- execution ---- */
-#phase-panel { width: 46; }
+#phase-panel { width: 52; }
 #phases { background: $slate-panel; height: auto; max-height: 100%; }
 #phases > ListItem { background: $slate-panel; height: 1; border-left: blank; }
 #phases Label, #nav Label { width: 1fr; }
@@ -239,9 +269,9 @@ Input.-invalid { border: tall $slate-error; }
 #activity-panel { height: auto; min-height: 5; max-height: 70%; }
 #activity { height: auto; }
 #output-panel { height: 1fr; }
-#output { background: #0B1220; color: $slate-muted; scrollbar-color: $slate-border;
+Log#output { background: #0B1220; color: $slate-muted; scrollbar-color: $slate-border;
           scrollbar-color-hover: $slate-accent; scrollbar-background: #0B1220; scrollbar-size-vertical: 1; }
-#output:focus { background: #0B1220; }
+Log#output:focus { background: #0B1220; }
 #recovery { height: auto; display: none; background: $slate-elevated; border: round $slate-error;
             border-title-color: $slate-error; padding: 0 1; margin: 1 0 0 0; }
 #recovery.-shown { display: block; }
@@ -249,6 +279,15 @@ Input.-invalid { border: tall $slate-error; }
 #recovery-scroll { height: auto; max-height: 12; background: $slate-elevated; scrollbar-size-vertical: 1;
                    scrollbar-background: $slate-elevated; scrollbar-color: $slate-border; }
 App.-short #recovery-scroll { max-height: 5; }
+#recovery-command { color: $slate-text; height: auto; margin: 1 0 0 0; }
+App.-narrow RunScreen.-recovering #phase-panel { display: none; }
+/* Short terminals: while choices are shown they get the column; Inspect output swaps the report
+   for the output pane and keeps the buttons on screen. */
+App.-short RunScreen.-recovering #output-panel { display: none; }
+App.-short RunScreen.-recovering #activity-panel { max-height: 100%; }
+App.-short RunScreen.-recovering.-inspecting #output-panel { display: block; }
+App.-short RunScreen.-inspecting #recovery-scroll, App.-short RunScreen.-inspecting #recovery-command { display: none; }
+App.-narrow RunScreen.-recovering .gap { display: none; }
 #recovery-text { color: $slate-text; height: auto; }
 #recovery-buttons { layout: grid; grid-size: 2; grid-rows: 1; grid-gutter: 0 1; height: auto; margin: 1 0 0 0; }
 #recovery-buttons Button { width: 100%; margin: 0; padding: 0 1; }
@@ -269,17 +308,20 @@ ModalScreen { background: $slate-bg 70%; align: center middle; }
     padding: 1 2;
 }
 .dialog .prose { color: $slate-text; }
+.dialog-body { height: auto; max-height: 30; background: $slate-elevated; }
+App.-short .dialog { padding: 0 1; }
+App.-short .dialog-body { max-height: 14; }
 .help-table { height: auto; color: $slate-muted; }
 
 /* ---- small terminals ---- */
 #too-small { display: none; layer: overlay; width: 100%; height: 100%; background: $slate-bg;
-             content-align: center middle; color: $slate-warning; text-style: bold; }
+             content-align: center middle; text-align: center; color: $slate-warning; text-style: bold; }
 App.-tiny #too-small { display: block; }
 App.-tiny .body { display: none; }
 App.-narrow #left-column { width: 28; }
 App.-narrow #phase-panel { width: 34; }
 App.-wide #left-column { width: 40; }
-App.-wide #phase-panel { width: 52; }
+App.-wide #phase-panel { width: 58; }
 App.-short #session-panel { display: none; }
 
 /* ---- monochrome: selection and focus by reverse video, status by words ---- */
@@ -293,5 +335,42 @@ App.-ascii .panel { border: ascii $slate-border; }
 App.-ascii .panel:focus-within, App.-ascii .panel:focus { border: ascii $slate-accent; }
 App.-ascii .dialog { border: ascii $slate-accent; }
 App.-ascii #recovery { border: ascii $slate-error; }
-App.-ascii #nav > ListItem.-highlight, App.-ascii #phases > ListItem.-highlight { border-left: none; }
+App.-ascii #nav > ListItem.-highlight, App.-ascii #phases > ListItem.-highlight { border-left: blank; text-style: bold reverse; }
+App.-ascii Input { border: ascii $slate-border; }
+App.-ascii Input:focus { border: ascii $slate-accent; }
 """
+
+
+# ---- ASCII-only terminals --------------------------------------------------------------------
+from functools import lru_cache  # noqa: E402
+
+from rich.cells import cell_len  # noqa: E402
+from rich.segment import Segment  # noqa: E402
+from textual.filter import LineFilter  # noqa: E402
+
+_ASCII = str.maketrans({
+    **{c: '-' for c in '─━┄┅┈┉╌╍═▔▁—–'}, **{c: '|' for c in '│┃┆┇┊┋╎╏║▏▕▎▍▌▐▊▋▉'},
+    **{c: '+' for c in '┌┐└┘├┤┬┴┼╭╮╯╰┏┓┗┛┣┫┳┻╋╔╗╚╝╠╣╦╩╬▛▜▙▟▗▖▝▘'},
+    **{c: '#' for c in '█▀▄■▆▇▅▃▂░▒▓'}, '·': '.', '…': '.', '•': '*', '●': '*', '○': 'o', '✓': 'x',
+    '✗': '!', '▸': '>', '▶': '>', '◀': '<', '↑': '^', '↓': 'v', '←': '<', '→': '>', '×': 'x',
+    ' ': ' ',
+})
+
+
+@lru_cache(maxsize=4096)
+def asciify(text):
+    """Single-cell replacements keep every column where it was; anything else unknown becomes '?'
+    per cell (two for a wide character)."""
+    text = text.translate(_ASCII)
+    if text.isascii():
+        return text
+    return ''.join(ch if ch.isascii() else '?' * max(cell_len(ch), 1) for ch in text)
+
+
+class AsciiFilter(LineFilter):
+    """Render-time transliteration for terminals without UTF-8: borders, glyphs, Rich's ellipsis,
+    toggle buttons and scrollbars all reach the screen as ASCII, column-for-column."""
+
+    def apply(self, segments, background):
+        return [segment if segment.control or segment.text.isascii()
+                else Segment(asciify(segment.text), segment.style, segment.control) for segment in segments]

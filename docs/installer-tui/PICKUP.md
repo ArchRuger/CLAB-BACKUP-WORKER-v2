@@ -17,7 +17,25 @@ recovery), result and help screens; terminal handoff for sudo, the first-setup l
 
 ## Checkpoints
 
-1. Baseline and shared core + painted shell (this commit series).
+1. `5ec3207` — baseline, shared plan in `install-manager.py`, stdlib core, painted shell, 273 stdlib tests.
+2. `66d2d64` — live dev2 install/update/health, process-safety review fixes, 70 headless tests, 36 PTY checks.
+3. checkpoint 3 — real dpkg-lock and sudo-expiry validation, usability review fixes, gap tests (core 165, app 110), scrubbed snapshots, parity refresh, handoff.
+
+## Evidence
+
+- [VALIDATION.md](VALIDATION.md) — every suite and live run, by evidence type.
+- [evidence/pty-check.txt](evidence/pty-check.txt) — real-terminal fixture checks.
+- [snapshots/](snapshots/) — fixture screenshots (invented account, host, paths and status).
+- [HANDOFF.md](HANDOFF.md) — CI lines, documentation proposals, helper proposal, release actions for A.
+
+## dev2 state left behind
+
+- Manager installed from this checkout (1.30.58 source) with the capture stack; clab-discovery has a
+  dev2-only password (kept outside the repository). Git setup not completed (no GitHub account here).
+- Sentinel lab `dev2-sentinel` (one alpine node) still deployed for update checks:
+  `sudo containerlab destroy -t ~/scratch/sentinel/sentinel.clab.yml` removes it.
+- Disposable account `tuiprobe` (password sudo) with its own fixture checkout and TUI venv.
+- Fixture checkouts: `~/scratch/clab-fixture`, `~/scratch/clab-pty-fixture` (fake helpers).
 
 ## Open defects / limitations
 

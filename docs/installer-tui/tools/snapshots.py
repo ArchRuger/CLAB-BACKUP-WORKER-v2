@@ -99,6 +99,8 @@ def run_screen(upto, fail=False, lock=False):
         for phase in run.phases:
             screen.render_phase(phase)
         screen.render_summary()
+        screen.update_footer()   # the stub thread now reads as active: show the running-phase keys
+        screen.query_one('#phases').index = upto   # a live run moves the highlight with the phase
         if lock:
             install = app.ctx.install
             failure = engine.Failure('lock', 'The package manager (APT/dpkg) is locked by another process.', 100,
@@ -165,7 +167,7 @@ async def main():
         if only and name not in only:
             continue
         for size in SIZES:
-            files.append(await shoot(out, name, fixture.context(), size, steps))
+            files.append(await shoot(out, name, fixture.context(scrub=True), size, steps))
     import os
     for mode, kwargs in (('nocolor', {'no_color': True}), ('ascii', {'ascii_only': True})):
         if only and 'dashboard' not in only:
@@ -173,7 +175,7 @@ async def main():
         if mode == 'nocolor':
             os.environ['NO_COLOR'] = '1'   # Textual picks its monochrome filter at construction
         try:
-            files.append(await shoot(out, f'dashboard-{mode}', fixture.context(**kwargs), (100, 30), [nothing]))
+            files.append(await shoot(out, f'dashboard-{mode}', fixture.context(scrub=True, **kwargs), (100, 30), [nothing]))
         finally:
             os.environ.pop('NO_COLOR', None)
     if png and shutil.which('rsvg-convert'):

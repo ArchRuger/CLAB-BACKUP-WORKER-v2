@@ -320,7 +320,10 @@ class StatusTable(Static):
         narrow = self.app.size.width < 110
         table = Table.grid(padding=(0, 1), expand=True)
         table.add_column(width=15 if narrow else 22, no_wrap=True, overflow='ellipsis')
-        table.add_column(width=15, no_wrap=True)
+        states = [probes.CHECKING if ctx.checking and ctx.status[k].state == probes.NOT_CHECKED else ctx.status[k].state
+                  for k, _ in probes.COMPONENTS]
+        chip = max(look.badge(state).cell_len for state in states)
+        table.add_column(width=chip, no_wrap=True)
         table.add_column(ratio=1, no_wrap=True, overflow='ellipsis')
         short = {'access': 'VM account', 'capture': 'Wireshark', 'engineer': 'VS Code access'}
         for key, label in probes.COMPONENTS:
@@ -331,7 +334,7 @@ class StatusTable(Static):
             if result.detail and state != probes.READY and not narrow:
                 summary.append(' — ' + result.detail, style=Style(color=None if look.no_color else T['slate-dim']))
             name = short.get(key, label) if narrow else label
-            table.add_row(look.text(name, 'slate-text'), look.badge(state, 15), summary)
+            table.add_row(look.text(name, 'slate-text'), look.badge(state, chip), summary)
         self.update(table)
 
 
@@ -499,7 +502,8 @@ class SettingsScreen(Chrome):
         env_state = ctx.env_state()
         yield from self.chrome()
         with Horizontal(classes='body'):
-            with VerticalScroll(id='settings-panel', classes='panel'):
+            with VerticalScroll(id='settings-panel', classes='panel') as panel:
+                panel.border_title = 'Advanced settings · Install / update'
                 yield Static('INSTALL / UPDATE CHOICES', classes='section-title -first')
                 yield Static(Text('Standard defaults are preselected. Nothing runs until you press Start on the plan.'),
                              classes='field-help')
@@ -542,6 +546,8 @@ class SettingsScreen(Chrome):
 
     def on_mount(self):
         super().on_mount()
+        for error in self.query('#env-error'):
+            error.display = False
         self.sync_enabled()
         first = self.query('RadioSet, Checkbox, Input').first()
         if first is not None:
@@ -555,8 +561,9 @@ class SettingsScreen(Chrome):
         operations = self.query_one('#operations', RadioSet).pressed_index
         engineer = self.query_one('#engineer', RadioSet)
         engineer.disabled = operations != 0
-        self.query_one('#engineer-help', Static).update(
-            Text('Only offered with reviewed lab operations enabled.' if operations != 0 else ''))
+        help_text = self.query_one('#engineer-help', Static)
+        help_text.update(Text('Only offered with reviewed lab operations enabled.' if operations != 0 else ''))
+        help_text.display = operations != 0
         try:
             copy = self.query_one('#env-choice', RadioSet).pressed_index == 1
             self.query_one('#env-path', Input).disabled = not copy
@@ -583,6 +590,7 @@ class SettingsScreen(Chrome):
                 elif path.stat().st_size > 65536:
                     error = 'Choose a regular .env file no larger than 64 KiB.'
                 self.query_one('#env-error', Static).update(Text(error))
+                self.query_one('#env-error', Static).display = bool(error)
                 self.query_one('#env-path', Input).set_class(bool(error), '-invalid')
                 if error:
                     self.query_one('#env-path', Input).focus()
@@ -650,7 +658,9 @@ class ReviewScreen(Chrome):
             self.query_one('#start', Button).disabled = True
 
     def hints(self):
-        return [('enter', 'start' if isinstance(self.focused, Button) and self.focused.id == 'start' else 'press'),
+        if not isinstance(self.focused, Button):
+            return [('↑↓' if not self.ctx.look.ascii else 'up/dn', 'scroll'), ('tab', 'buttons'), ('esc', 'cancel'), ('?', 'help')]
+        return [('enter', 'start' if self.focused.id == 'start' else 'press'),
                 ('tab', 'next'), ('esc', 'cancel'), ('?', 'help')]
 
     def plan_text(self):
@@ -664,6 +674,16 @@ class ReviewScreen(Chrome):
         bullet = look.glyph('bullet')
         dim = Style(color=None if look.no_color else T['slate-dim'])
         parts = [Text(DETAILS[self.action]['title'].upper(), style=heading)]
+        restarts = Text()
+        restarts.append('Restarts: ', style=warn if self.action in ('install', 'capture', 'engineer') else heading)
+        restarts.append(DETAILS[self.action]['disruption'],
+                        style=Style(color=None if look.no_color else T['slate-text']))
+        parts.append(restarts)
+        kept = Text()
+        kept.append('Keeps: ', style=heading)
+        kept.append(DETAILS[self.action]['keeps'], style=body)
+        parts.append(kept)
+        parts.append(Text(''))
 
         def bullets(lines, style=body, marker=bullet):
             grid = Table.grid(padding=(0, 1))
@@ -684,7 +704,7 @@ class ReviewScreen(Chrome):
             parts.append(bullets([DETAILS[self.action]['changes'].format(user=ctx.env['USER'], home=ctx.env['HOME'])]))
         steps = [step for step in install.action_steps(self.action, ctx.env, ctx.version, ctx.options) if step.visible]
         parts.append(Text('\nPHASES', style=heading))
-        grid = Table.grid(padding=(0, 1))
+        grid = Table.grid(padding=(0, 3, 0, 0))
         grid.add_column(width=3, justify='right', no_wrap=True)
         grid.add_column(no_wrap=True)
         grid.add_column(ratio=1)
@@ -695,10 +715,6 @@ class ReviewScreen(Chrome):
             grid.add_row(Text(str(number), style=dim), Text(engine.label_for(step), style=Style(color=None if look.no_color else T['slate-text'])),
                          Text(tags, style=dim))
         parts.append(grid)
-        parts.append(Text('\nKEPT', style=heading))
-        parts.append(bullets([DETAILS[self.action]['keeps']]))
-        parts.append(Text('\nRESTARTS AND INTERRUPTIONS', style=heading))
-        parts.append(bullets([DETAILS[self.action]['disruption']], style=warn if self.action in ('install', 'capture') else body))
         parts.append(Text('\nStart runs these phases. Cancel returns to the dashboard without changing anything.', style=dim))
         return Group(*parts)
 
@@ -762,8 +778,10 @@ class RunScreen(Chrome):
                     activity.border_title = 'Activity'
                     yield Static(id='activity')
                     with Vertical(id='recovery'):
-                        with VerticalScroll(id='recovery-scroll'):
+                        with VerticalScroll(id='recovery-scroll') as scroll:
+                            scroll.can_focus = False   # not a Tab stop; the buttons are
                             yield Static(id='recovery-text')
+                        yield Static(id='recovery-command')
                         yield Vertical(id='recovery-buttons')
                 with Vertical(id='output-panel', classes='panel') as output:
                     output.border_title = 'Output'
@@ -782,8 +800,11 @@ class RunScreen(Chrome):
         if self.run.active:
             if self.failure_key:
                 return [('tab', 'next'), ('enter', 'choose'), ('o', 'view output'), ('?', 'help')]
+            if self.app.size.width < 100:
+                return [('s', 'stop' if not self.run.stop else 'stopping'), ('f', 'pause' if self.follow else 'follow'),
+                        ('o', 'output'), ('x', 'interrupt'), ('?', 'help')]
             return [('s', 'stop after step' if not self.run.stop else 'stopping…'), ('f', 'pause follow' if self.follow else 'follow'),
-                    ('o', 'output'), ('x', 'interrupt'), ('tab', 'pane'), ('?', 'help')]
+                    ('o', 'output'), ('x', 'interrupt'), ('tab', 'pane'), ('?', 'help'), ('ctrl+q', 'quit')]
         return [('enter', 'continue'), ('o', 'view output'), ('?', 'help')]
 
     # ---- rendering -------------------------------------------------------------------------
@@ -884,6 +905,12 @@ class RunScreen(Chrome):
         self.render_phase(phase)
         self.render_activity()
         self.render_summary()
+        if phase.state in (engine.RUNNING, engine.WAITING, engine.FAILED):
+            # The highlighted row follows the phase in progress, so it never points at a finished one.
+            index = next((i for i, p in enumerate(self.run.phases) if p.key == key), None)
+            phases = self.query_one('#phases', ListView)
+            if index is not None and phases.index != index:
+                phases.index = index
         if phase.state == engine.RUNNING and self.failure_key == key:
             self.hide_recovery()
         if phase.state == engine.RUNNING and self.headed.get(key) != phase.attempts:
@@ -917,19 +944,20 @@ class RunScreen(Chrome):
         text = Text()
         text.append(f'{phase.label}: ', style=Style(bold=True))
         text.append(failure.message + '\n', style=Style(color=None if look.no_color else T['slate-text']))
+        command_text = Text()
         if failure.kind == 'lock':
             install = self.ctx.install
+            import shlex
+            command = shlex.join(install.lock_wait_command())
+            # Pinned outside the scrolling report so it is always visible; also one unwrapped line in
+            # the output pane for selecting.
+            command_text.append('Copyable command, in another terminal:\n', style=Style(color=None if look.no_color else T['slate-dim']))
+            command_text.append(command, style=Style(color=None if look.no_color else T['slate-text'], bold=True))
+            self.add_lines(key, ['Copyable command, in another terminal: ' + command])
             if failure.holder:
                 text.append(failure.holder.strip()[:1500] + '\n', style=Style(color=None if look.no_color else T['slate-muted']))
             if 'snapshot rollback' not in (failure.holder or ''):
                 text.append(install.RESTART_HINT + '\n', style=Style(color=None if look.no_color else T['slate-muted']))
-            import shlex
-            command = shlex.join(install.lock_wait_command())
-            text.append('Copyable command, in another terminal (also on one line in the output pane): ',
-                        style=Style(color=None if look.no_color else T['slate-dim']))
-            text.append(command + '\n', style=Style(color=None if look.no_color else T['slate-text']))
-            # The output pane never wraps, so the command can be selected there as one line.
-            self.add_lines(key, ['Copyable command, in another terminal: ' + command])
             text.append('The installer never stops the upgrade, kills a process or deletes a lock file.',
                         style=Style(color=None if look.no_color else T['slate-dim']))
         elif failure.kind == 'auth':
@@ -942,6 +970,10 @@ class RunScreen(Chrome):
             text.append('Retry repeats only this phase. The output pane below shows what the step printed (o widens it).',
                         style=Style(color=None if look.no_color else T['slate-dim']))
         self.query_one('#recovery-text', Static).update(text)
+        command_widget = self.query_one('#recovery-command', Static)
+        command_widget.update(command_text)
+        command_widget.display = bool(command_text.plain)
+        self.set_class(True, '-recovering')
         buttons = self.query_one('#recovery-buttons')
         buttons.remove_children()
         labels = {
@@ -952,16 +984,21 @@ class RunScreen(Chrome):
         widgets = []
         for index, choice in enumerate(failure.choices):
             widgets.append(Button(labels[choice], id=f'choose-{choice}', classes='primary' if index == 0 else ''))
+        widgets.append(Button('Inspect output', id='inspect'))
         buttons.mount(*widgets)
         if self.viewing not in (None, key):
             self.show_output(key)
         self.call_after_refresh(lambda: widgets[0].focus())
+        # The box shrinks the output pane after it scrolled: bring the failing lines back into view.
+        self.call_after_refresh(lambda: self.query_one('#output', Log).scroll_end(animate=False))
         self.update_footer()
 
     def hide_recovery(self):
         self.failure_key = None
         box = self.query_one('#recovery')
         box.set_class(False, '-shown')
+        self.set_class(False, '-recovering')
+        self.set_class(False, '-inspecting')
         self.query_one('#recovery-buttons').remove_children()
         self.query_one('#output', Log).focus()
         self.update_footer()
@@ -969,8 +1006,13 @@ class RunScreen(Chrome):
     @on(Button.Pressed, '#recovery-buttons Button')
     def choose(self, event):
         if event.button.id == 'inspect':
+            # Not a decision: show only the failed phase's output; the choices stay on screen.
             self.show_output(self.failure_key)
-            self.query_one('#output', Log).focus()
+            if self.app.size.height < 32:
+                self.toggle_class('-inspecting')
+                event.button.label = 'Show details' if self.has_class('-inspecting') else 'Inspect output'
+            else:
+                self.query_one('#output', Log).focus()
             return
         choice = event.button.id.removeprefix('choose-')
         if choice == engine.LOCK_WAIT:
@@ -1003,8 +1045,15 @@ class RunScreen(Chrome):
                 'them with dpkg). Prefer waiting unless it is clearly stuck.' if phase.key == 'prereqs' else
                 'The helper stops where it is; completed phases and existing data are kept.')
 
+        attempt = phase.attempts
+
         def chosen(answer):
-            if answer == 'interrupt' and run.interrupt_current():
+            if answer != 'interrupt':
+                return
+            # The dialog named one phase and attempt: never interrupt whatever runs by now instead.
+            if run.current is not phase or phase.attempts != attempt or phase.state != engine.RUNNING:
+                self.app.notify(f'{phase.label} already finished; nothing was interrupted.', timeout=5)
+            elif run.interrupt_current():
                 self.app.notify('Ctrl+C sent to the step.', timeout=4)
         self.app.push_screen(Dialog('Interrupt this step?',
                                     Text(f'{phase.label} is still running. Interrupt sends it Ctrl+C, exactly as Ctrl+C '
@@ -1030,6 +1079,8 @@ class RunScreen(Chrome):
         activity = self.query_one('#activity-panel')
         maximize = panel.display
         panel.display = not maximize
+        for gap in self.query('.gap'):
+            gap.display = not maximize
         activity.display = not maximize or self.failure_key is not None
         self.query_one('#output', Log).focus()
 
@@ -1092,7 +1143,7 @@ class ResultScreen(Chrome):
             with Horizontal(classes='buttons bar'):
                 yield Button('Finish', id='finish', classes='primary')
                 yield Button('Back to dashboard', id='dashboard')
-                yield Button('View output', id='output')
+                yield Button('View output', id='view-output')
 
     def on_mount(self):
         super().on_mount()
@@ -1110,7 +1161,7 @@ class ResultScreen(Chrome):
     def action_dashboard(self):
         self.app.back_to_dashboard()
 
-    @on(Button.Pressed, '#output')
+    @on(Button.Pressed, '#view-output')
     def action_output(self):
         self.app.pop_screen()
 
@@ -1137,7 +1188,9 @@ class Dialog(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(classes='dialog') as box:
             box.border_title = self.title_text
-            yield Static(self.body, classes='prose')
+            with VerticalScroll(classes='dialog-body') as body:
+                body.can_focus = False
+                yield Static(self.body, classes='prose')
             with Horizontal(classes='buttons'):
                 for key, label, kind in self.buttons:
                     yield Button(label, id=f'dialog-{key}', classes=kind)
@@ -1185,6 +1238,8 @@ class SlateOps(App):
 
     def __init__(self, ctx, start_action=None, ansi_color=None):
         super().__init__(ansi_color=ansi_color)
+        if ctx.look.ascii:
+            self._filters.append(theme.AsciiFilter())
         self.ctx = ctx
         self.start_action = start_action
         self.current_run = None
@@ -1560,6 +1615,12 @@ class SlateOps(App):
                 detail = 'Reconnect SSH, and in VS Code run "Remote-SSH: Kill VS Code Server on Host..." before using the extension.'
             if key == 'git' and state == engine.COMPLETED:
                 detail = 'In the manager, connect the registered checkout to your lab.'
+            if not detail and state in (engine.STOPPED, engine.NOT_STARTED, engine.PENDING):
+                stopped_at = next((p.label for p in run.phases if p.state == engine.FAILED), None)
+                detail = (f'Not started: the run ended at {stopped_at}.' if stopped_at else
+                          'Not started: the run was stopped before this phase.')
+            if not detail and state == engine.COMPLETED and key == 'capture':
+                detail = 'Edgeshark and the capture session service were set up; the manager was recreated.'
             rows.append((name, {'Completed': 'Completed', 'Failed': 'Failed'}.get(state, state), detail))
         return rows
 
@@ -1615,14 +1676,22 @@ class SlateOps(App):
                           Text(line, style=Style(color=None if look.no_color else T['slate-muted'])))
         return Group(headline, Text(''), table, heading, steps)
 
-    def summary_plain(self, run):
+    def summary_plain(self, run, columns=None):
+        """The copyable plain-text summary printed to scrollback after Finish, wrapped to the terminal
+        with hanging indents so continuation lines stay aligned."""
+        import shutil
+        columns = max(columns or shutil.get_terminal_size((100, 24)).columns, 60)
         title = 'Check installation' if run.action == 'health' else ACTION_LABELS[run.action]
-        lines = [f'Containerlab Node Manager setup — {title}: {OUTCOME_WORDS.get(run.outcome, "Stopped").upper()}']
+        lines = [f'Containerlab Node Manager setup - {title}: {OUTCOME_WORDS.get(run.outcome, "Stopped").upper()}']
         width = max((len(name) for name, _, _ in self.outcomes(run)), default=8)
         for name, state, detail in self.outcomes(run):
-            lines.append(f'  {name.ljust(width)}  {theme.BADGES.get(state, (state.upper(),))[0]:<13} {detail}'.rstrip())
+            lead = f'  {name.ljust(width)}  {theme.BADGES.get(state, (state.upper(),))[0]:<13} '
+            wrapped = textwrap.wrap(detail, max(columns - len(lead) - 1, 20)) or ['']
+            lines.append((lead + wrapped[0]).rstrip())
+            lines.extend(' ' * len(lead) + more for more in wrapped[1:])
         lines.append('Next steps:')
-        lines.extend('  - ' + line for line in self.next_steps(run))
+        for step in self.next_steps(run):
+            lines.extend(textwrap.wrap(step, columns - 1, initial_indent='  - ', subsequent_indent='    '))
         return lines
 
 
@@ -1744,6 +1813,7 @@ def main(argv=None):
     try:
         install = load_install()
         look = detect_look()
+        theme.apply_palette(theme.color_system(os.environ))
         ctx = Context(install, look)
     except (ValueError, OSError) as error:
         sys.stderr.write(f'Setup stopped: {error}\n')

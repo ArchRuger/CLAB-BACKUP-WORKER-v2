@@ -166,7 +166,8 @@ def scenario_lock():
     start_install('ptylock')
     check('lock: package-lock recovery shown', wait_for('ptylock', 'Package lock', 30))
     text = ' '.join(screen('ptylock').split())
-    check('lock: copyable wait command shown without -n', 'apt_lock.py' in text and '--pause-timers' in text
+    folded = text.replace('│ ', '').replace(' │', '').replace(' ', '')   # a long path may fold mid-word
+    check('lock: copyable wait command shown without -n', 'apt_lock.py' in folded and '--pause-timers' in text
           and 'sudo -n python3' not in text and 'Copyable command' in text)
     check('lock: offers wait, retry, check, return', all(word in text for word in ('Wait for lock', 'Retry phase', 'Check again', 'Return, keep work')))
     check('lock: one-line copyable command in the output pane', 'Copyable command, in another terminal: sudo python3' in screen('ptylock'))

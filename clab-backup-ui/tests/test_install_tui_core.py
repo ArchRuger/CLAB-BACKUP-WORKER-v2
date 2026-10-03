@@ -39,6 +39,8 @@ spec = importlib.util.spec_from_file_location('install_manager_for_tui_core', DE
 install = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(install)
 
+REAL_CREDENTIALS_CACHED = engine.credentials_cached   # EngineCase patches the module attribute
+
 LOCK_TEXT = 'E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 2230'
 
 
@@ -305,6 +307,55 @@ class InstallerLockTests(IsolatedCase):
         self.assertTrue(again.held)
         again.release()
 
+    def holder_child(self, fd):
+        """A child that inherited the lock descriptor and lives until its stdin closes."""
+        return subprocess.Popen(['sh', '-c', 'echo ready; read line'], stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE, text=True, pass_fds=(fd,))
+
+    def stop_holder(self, holder):
+        try:
+            holder.stdin.close()
+            holder.wait(timeout=20)
+        finally:
+            if holder.poll() is None:
+                holder.kill()
+                holder.wait()
+            holder.stdout.close()
+
+    def test_release_without_unlock_keeps_the_lock_while_an_inheriting_child_lives(self):
+        lock = core.InstallerLock(self.path).acquire()
+        holder = self.holder_child(lock.fd)
+        try:
+            self.assertEqual(holder.stdout.readline().strip(), 'ready')
+            lock.release(unlock=False)
+            self.assertFalse(lock.held, 'this process no longer holds a descriptor')
+            self.assertIsNone(lock.fd)
+            probe = self.child()
+            output, _ = probe.communicate(timeout=20)
+            self.assertEqual(probe.returncode, 7, 'another process is still refused while the child lives: ' + output)
+            self.assertTrue(output.startswith('BUSY'), output)
+            self.assertIn(f'pid {os.getpid()}', output, 'the holder line written by the installer is still shown')
+            with self.assertRaises(core.Busy):
+                core.InstallerLock(self.path).acquire()
+        finally:
+            self.stop_holder(holder)
+        after = self.child()
+        output, _ = after.communicate(timeout=20)
+        self.assertEqual((after.returncode, output.strip()), (0, 'ACQUIRED'), 'free once the child has exited')
+        core.InstallerLock(self.path).acquire().release()
+
+    def test_release_with_unlock_frees_the_lock_even_though_a_child_inherited_the_descriptor(self):
+        lock = core.InstallerLock(self.path).acquire()
+        holder = self.holder_child(lock.fd)
+        try:
+            self.assertEqual(holder.stdout.readline().strip(), 'ready')
+            lock.release()   # LOCK_UN acts on the shared open file description
+            probe = self.child()
+            output, _ = probe.communicate(timeout=20)
+            self.assertEqual((probe.returncode, output.strip()), (0, 'ACQUIRED'))
+        finally:
+            self.stop_holder(holder)
+
     def test_lock_created_by_another_account_falls_back_to_a_read_only_descriptor(self):
         self.path.write_text('')
         self.path.chmod(0o444)
@@ -410,6 +461,30 @@ class StepProcessTests(IsolatedCase):
         step.run()
         self.assertTrue(step.saw_lock)
         self.assertEqual(self.delivered, ['E: Could not get lock x'])
+
+    def test_a_lock_signature_split_across_two_reads_is_still_detected(self):
+        # The text arrives in two separate writes with a pause between them; the line is only
+        # complete (and matched) once it is re-joined at its newline.
+        body = ("printf 'E: Could not get lo'\n"
+                "sleep 0.2\n"
+                "printf 'ck /var/lib/dpkg/lock-frontend\\n'\n"
+                "exit 100")
+        step = self.make(body, lock_signature=install.LOCK_SIGNATURE)
+        self.assertEqual(step.run(), 100)
+        self.assertTrue(step.saw_lock)
+        self.assertEqual(self.delivered, ['E: Could not get lock /var/lib/dpkg/lock-frontend'],
+                         'the two pieces are one line, shown once')
+        held = self.make("printf 'E: Unable to acquire the dpkg fron'\nsleep 0.2\n"
+                         "printf 'tend lock (/var/lib/dpkg/lock-frontend)\\n'", lock_signature=install.LOCK_SIGNATURE)
+        held.run()
+        self.assertTrue(held.saw_lock)
+
+    def test_a_signature_split_by_a_real_newline_is_two_lines_and_not_a_match(self):
+        step = self.make("printf 'E: Could not get\\n'\nsleep 0.1\nprintf 'lock x\\n'",
+                         lock_signature=install.LOCK_SIGNATURE)
+        step.run()
+        self.assertFalse(step.saw_lock)
+        self.assertEqual(self.delivered, ['E: Could not get', 'lock x'])
 
     def test_saw_auth_on_a_sudo_password_requirement(self):
         step = self.make('echo "sudo: a password is required"; exit 1')
@@ -1583,6 +1658,41 @@ class CancelLockWaitTests(EngineCase):
         self.assertEqual(result['code'], 0)
         self.assertTrue((self.tmp / 'got-sigint').exists(), 'the waiter saw SIGINT, so it can restore the APT timers')
 
+    COUNTING_CHILD = ('import signal, sys, time, pathlib\n'
+                      'd = pathlib.Path(sys.argv[1])\n'
+                      'def handler(*args):\n'
+                      '    with open(d / "sigints", "a") as out:\n'
+                      '        out.write("SIGINT\\n")\n'
+                      'signal.signal(signal.SIGINT, handler)\n'
+                      '(d / "ready").write_text("1")\n'
+                      'end = time.time() + 1.5\n'
+                      'while time.time() < end:\n'
+                      '    time.sleep(0.02)\n')
+
+    def test_cancel_lock_wait_sends_sigint_exactly_once_even_when_called_twice(self):
+        run = self.build([])
+        waiter = core.StepProcess([sys.executable, '-c', self.COUNTING_CHILD, str(self.tmp)], self.env, str(self.tmp))
+        waiter.start()
+        try:
+            run._lock_waiter = waiter
+            self.assertTrue(wait_for(lambda: (self.tmp / 'ready').exists()))
+            self.assertTrue(run.cancel_lock_wait())
+            self.assertTrue(wait_for(lambda: (self.tmp / 'sigints').exists()))
+            self.assertTrue(run.cancel_lock_wait(), 'a second request is accepted but sends nothing')
+            time.sleep(0.2)
+            self.assertTrue(run.cancel_lock_wait())
+            self.assertIsNone(waiter.process.poll(), 'the waiter is still running (restoring its timers)')
+            result = {}
+            thread = threading.Thread(target=lambda: result.update(code=waiter.wait()), daemon=True)
+            thread.start()
+            thread.join(15)
+            self.assertFalse(thread.is_alive())
+        finally:
+            if waiter.process.poll() is None:
+                waiter.process.kill()
+        self.assertEqual((self.tmp / 'sigints').read_text().splitlines(), ['SIGINT'])
+        self.assertTrue(waiter.cancel_sent)
+
     def test_cancel_lock_wait_without_a_waiter_or_after_it_exited_is_harmless(self):
         run = self.build([])
         run.cancel_lock_wait()
@@ -1590,6 +1700,365 @@ class CancelLockWaitTests(EngineCase):
         waiter.run()
         run._lock_waiter = waiter
         run.cancel_lock_wait()
+
+
+class InterruptCurrentTests(EngineCase):
+    """Run.interrupt_current(): Ctrl+C for the active piped step, as the plain installer's terminal sends it."""
+
+    def setUp(self):
+        super().setUp()
+        import signal
+        if signal.getsignal(signal.SIGINT) is signal.SIG_IGN:   # children would inherit an ignored SIGINT
+            self.skipTest('SIGINT is ignored in this process, so a child cannot be interrupted by it')
+
+    def sleeper(self, name='long', sleep_first_n=1):
+        """Sleeps (traps nothing) on its first `sleep_first_n` runs, then finishes at once. Records the pid of
+        the foreground sleeper so the test can see the whole process group go."""
+        counter = shlex.quote(str(self.counter(name)))
+        started = shlex.quote(str(self.tmp / f'{name}.started'))
+        pidfile = shlex.quote(str(self.tmp / f'{name}.pid'))
+        return self.script(name, f'echo x >> {counter}\nn=$(wc -l < {counter})\n'
+                                 f'if [ "$n" -le {sleep_first_n} ]; then\n'
+                                 f"  sh -c 'echo $$ > {pidfile}; : > {started}; exec sleep 30'\n"
+                                 f'  exit $?\nfi\necho "{name} second run ok"')
+
+    def process_gone(self, pid):
+        try:
+            state = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[0]
+        except (OSError, IndexError):
+            return True
+        return state in ('Z', 'X')
+
+    def wait_until_running(self, run, name='long'):
+        self.assertTrue(wait_for(lambda: (self.tmp / f'{name}.started').exists()), 'the step started')
+        self.assertTrue(wait_for(lambda: run.process is not None and run.process.process is not None))
+
+    def test_interrupt_returns_false_when_no_process_is_running(self):
+        run = self.build([self.step('prereqs', self.ok_script('prereqs'))])
+        self.assertFalse(run.interrupt_current(), 'nothing started yet')
+        run.start()
+        self.join(run)
+        self.assertFalse(run.interrupt_current(), 'nothing running after the run ended')
+        self.assertEqual(run.outcome, 'completed')
+        self.assertFalse(hasattr(run, 'interrupted_key') and run.interrupted_key, 'no stale interrupt marker')
+
+    def test_interrupt_returns_false_for_an_already_exited_process(self):
+        run = self.build([])
+        quick = core.StepProcess(['sh', self.script('quick', 'exit 0')], self.env, str(self.tmp))
+        quick.run()
+        run.process = quick
+        self.assertFalse(run.interrupt_current())
+
+    def test_interrupt_sends_sigint_to_the_step_group_and_the_phase_fails_as_interrupted(self):
+        steps = [self.step('prereqs', self.sleeper('long', sleep_first_n=99))]
+        bridge = FakeBridge(recover=[engine.RETURN])
+        run = self.build(steps, bridge)
+        run.start()
+        try:
+            self.wait_until_running(run)
+            child_pid = int((self.tmp / 'long.pid').read_text())
+            step_process = run.process
+            self.assertTrue(run.interrupt_current())
+            self.join(run)
+        finally:
+            if run.process is not None and run.process.process.poll() is None:
+                run.process.process.kill()
+        phase = run.phase('prereqs')
+        self.assertEqual(phase.state, engine.FAILED)
+        self.assertNotEqual(phase.code, 0)
+        self.assertLess(phase.code, 0, 'the step died from a signal (negative status), not by exiting on its own')
+        self.assertEqual(step_process.returncode, phase.code)
+        self.assertEqual(phase.failure.kind, 'command')
+        self.assertTrue(phase.failure.message.startswith('Interrupted on request'), phase.failure.message)
+        self.assertEqual(phase.failure.choices, (engine.RETRY, engine.RETURN))
+        self.assertEqual(bridge.recovers[0][1:3], ('command', (engine.RETRY, engine.RETURN)))
+        self.assertTrue(wait_for(lambda: self.process_gone(child_pid)), 'the foreground sleeper in the group was signalled too')
+        self.assertEqual(run.outcome, 'returned')
+        self.assertEqual(self.count('long'), 1)
+        self.assertFalse(run.interrupt_current(), 'no process left to interrupt')
+
+    def test_retry_after_an_interrupt_runs_the_phase_again(self):
+        steps = [self.step('prereqs', self.sleeper('long')), self.step('launch', self.ok_script('launch'))]
+        bridge = FakeBridge(recover=[engine.RETRY])
+        run = self.build(steps, bridge)
+        run.start()
+        try:
+            self.wait_until_running(run)
+            self.assertTrue(run.interrupt_current())
+            self.join(run)
+        finally:
+            if run.process is not None and run.process.process.poll() is None:
+                run.process.process.kill()
+        self.assertEqual(self.count('long'), 2, 'the interrupted phase ran again')
+        self.assertEqual(self.count('launch'), 1)
+        self.assertEqual(run.outcome, 'completed')
+        phase = run.phase('prereqs')
+        self.assertEqual((phase.state, phase.code, phase.attempts), (engine.COMPLETED, 0, 2))
+        self.assertIsNone(phase.failure)
+        self.assertEqual(len(bridge.recovers), 1)
+        self.assertEqual(bridge.lines['prereqs'], ['long second run ok'])
+
+    def test_a_later_ordinary_failure_of_the_same_phase_is_not_reported_as_interrupted(self):
+        counter = shlex.quote(str(self.counter('flaky')))
+        started = shlex.quote(str(self.tmp / 'flaky.started'))
+        script = self.script('flaky', f'echo x >> {counter}\nn=$(wc -l < {counter})\n: > {started}\n'
+                                      f'if [ "$n" -eq 1 ]; then sleep 30; exit 0; fi\nexit 7')
+        bridge = FakeBridge(recover=[engine.RETRY, engine.RETURN])
+        run = self.build([self.step('prereqs', script)], bridge)
+        run.start()
+        try:
+            self.wait_until_running(run, 'flaky')
+            self.assertTrue(run.interrupt_current())
+            self.join(run)
+        finally:
+            if run.process is not None and run.process.process.poll() is None:
+                run.process.process.kill()
+        messages = [recover[4] for recover in bridge.recovers]
+        self.assertEqual(len(messages), 2)
+        self.assertTrue(messages[0].startswith('Interrupted on request'), messages[0])
+        self.assertTrue(messages[1].startswith('The step stopped with exit status 7'), messages[1])
+
+
+class CredentialsCachedTests(IsolatedCase):
+    def call(self, results):
+        with patch.object(core, 'run_capture', side_effect=list(results)) as capture:
+            value = REAL_CREDENTIALS_CACHED(self.env, str(self.tmp))
+        return value, capture
+
+    def test_a_renewable_timestamp_is_enough_and_sudo_true_is_not_run(self):
+        value, capture = self.call([(0, '')])
+        self.assertIs(value, True)
+        self.assertEqual(capture.call_args_list, [unittest.mock.call(['sudo', '-n', '-v'], self.env, str(self.tmp), timeout=15)])
+
+    def test_nopasswd_rule_without_a_renewable_timestamp_falls_back_to_sudo_n_true(self):
+        value, capture = self.call([(1, 'sudo: a password is required'), (0, '')])
+        self.assertIs(value, True)
+        self.assertEqual(capture.call_args_list, [
+            unittest.mock.call(['sudo', '-n', '-v'], self.env, str(self.tmp), timeout=15),
+            unittest.mock.call(['sudo', '-n', 'true'], self.env, str(self.tmp), timeout=15)])
+
+    def test_both_probes_failing_means_no_cached_credentials(self):
+        value, capture = self.call([(1, 'sudo: a password is required'), (1, 'sudo: a password is required')])
+        self.assertIs(value, False)
+        self.assertEqual([call.args[0] for call in capture.call_args_list], [['sudo', '-n', '-v'], ['sudo', '-n', 'true']])
+
+    def test_a_missing_sudo_or_a_timeout_is_not_cached_credentials(self):
+        value, _ = self.call([(None, 'timed out'), (None, '[Errno 2] No such file or directory')])
+        self.assertIs(value, False)
+
+
+class HolderReportTests(IsolatedCase):
+    def report(self, text):
+        return engine.holder_report(FakeInstall(self.tmp, [], holder=text), self.env)
+
+    def test_line_structure_is_kept_and_each_line_is_cleaned(self):
+        text = 'Package lock held by:\n  pid 2230  apt-get\x1b[31m upgrade\x1b[0m\n\x1b]0;title\x07unattended-upgr  (running)\n'
+        self.assertEqual(self.report(text), 'Package lock held by:\n  pid 2230  apt-get upgrade\nunattended-upgr  (running)')
+
+    def test_at_most_forty_lines_are_kept(self):
+        text = '\n'.join(f'line {number}' for number in range(1, 61))
+        lines = self.report(text).split('\n')
+        self.assertEqual(len(lines), 40)
+        self.assertEqual((lines[0], lines[-1]), ('line 1', 'line 40'))
+
+    def test_exactly_forty_and_fewer_lines_are_unchanged(self):
+        text = '\n'.join(f'line {number}' for number in range(1, 41))
+        self.assertEqual(self.report(text), text)
+        self.assertEqual(self.report('only one'), 'only one')
+
+    def test_blank_none_and_secret_text(self):
+        self.assertEqual(self.report(''), '')
+        self.assertEqual(self.report(None), '')
+        self.assertEqual(self.report('owner token=abc123\nnext'), 'owner token=[removed]\nnext')
+
+    def test_a_very_long_line_is_cut_at_400_characters(self):
+        out = self.report('x' * 1000 + '\nshort')
+        first, second = out.split('\n')
+        self.assertTrue(first.startswith('x' * 400))
+        self.assertIn('more characters not shown', first)
+        self.assertEqual(second, 'short')
+
+
+class HealthFakeInstall(FakeInstall):
+    """FakeInstall whose health command is a local sh script (the engine appends --json)."""
+
+    def __init__(self, source, script):
+        super().__init__(source, [])
+        self.health_script = script
+
+    def health_command(self):
+        return ['sh', self.health_script]
+
+
+def health_report_json(exit_code, counts=None, **extra):
+    report = {'schema': 'clab-manager-health-v1', 'exit_code': exit_code,
+              'counts': counts if counts is not None else {'PASS': 12, 'WARN': 2, 'FAIL': 0, 'SKIP': 1},
+              'checks': [{'id': 'docker', 'status': 'PASS', 'title': 'Docker', 'detail': 'running'},
+                         {'id': 'timers', 'status': 'WARN', 'title': 'APT timers', 'detail': 'paused'}]}
+    report.update(extra)
+    return report
+
+
+class HealthRunTests(EngineCase):
+    def health(self, body, bridge=None):
+        script = self.script('health', body)
+        self.fake = HealthFakeInstall(self.source, script)
+        self.bridge = bridge if bridge is not None else FakeBridge()
+        run = engine.HealthRun(self.fake, self.env, '1.2.3', self.bridge)
+        # A health check must never take the installer lock.
+        patcher = patch.object(core.InstallerLock, 'acquire', side_effect=AssertionError('lock taken'))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        run.start()
+        self.join(run)
+        return run
+
+    def printing(self, report, code, stderr_lines=('checking docker', 'checking timers')):
+        data = shlex.quote(json.dumps(report))
+        errs = ''.join(f'echo {shlex.quote(line)} >&2\n' for line in stderr_lines)
+        return f'{errs}printf %s {data}\nexit {code}'
+
+    def test_a_warn_report_exit_2_completes_the_phase_with_the_partial_outcome(self):
+        run = self.health(self.printing(health_report_json(2), 2))
+        phase = run.phase('health')
+        self.assertEqual(phase.state, engine.COMPLETED)
+        self.assertEqual(phase.code, 2)
+        self.assertIsNone(phase.failure)
+        self.assertEqual(run.report['schema'], 'clab-manager-health-v1')
+        self.assertEqual(run.report['exit_code'], 2)
+        self.assertEqual(len(run.report['checks']), 2)
+        self.assertIs(phase.outcome, run.report)
+        self.assertEqual(phase.note, '12 PASS, 2 WARN, 1 SKIP', 'only the non-zero counts, in report order')
+        self.assertEqual(run.outcome, 'partial')
+        self.assertEqual(self.bridge.finished_with, ['partial'])
+        self.assertEqual(self.bridge.recovers, [])
+
+    def test_the_argv_is_the_health_command_plus_json_and_no_sudo_is_added(self):
+        run = self.health(self.printing(health_report_json(0), 0, stderr_lines=()).replace(
+            'printf', 'echo "args:$*" >&2\nprintf', 1))
+        self.assertEqual(self.bridge.lines['health'], ['args:--json'])
+        self.assertEqual(run.steps[0].argv, ['sh', self.fake.health_script, '--json'])
+
+    def test_exit_code_0_report_completes(self):
+        run = self.health(self.printing(health_report_json(0, {'PASS': 15, 'WARN': 0, 'FAIL': 0, 'SKIP': 0}), 0))
+        self.assertEqual(run.outcome, 'completed')
+        self.assertEqual(run.phase('health').state, engine.COMPLETED)
+        self.assertEqual(run.phase('health').note, '15 PASS')
+        self.assertEqual(run.phase('health').code, 0)
+
+    def test_a_fail_report_exit_1_is_still_a_delivered_report(self):
+        run = self.health(self.printing(health_report_json(1, {'PASS': 3, 'FAIL': 2}), 1))
+        self.assertEqual(run.phase('health').state, engine.COMPLETED)
+        self.assertEqual(run.phase('health').note, '3 PASS, 2 FAIL')
+        self.assertEqual(run.outcome, 'partial')
+        self.assertEqual(run.report['exit_code'], 1)
+
+    def test_progress_lines_on_stderr_reach_the_bridge_cleaned(self):
+        body = ("printf 'step one \\033[31mred\\033[0m\\n' >&2\n"
+                "printf '\\033]0;title\\007step two\\n' >&2\n"
+                "echo 'token=abc123' >&2\n"
+                f"printf %s {shlex.quote(json.dumps(health_report_json(0)))}")
+        self.health(body)
+        self.assertEqual(self.bridge.lines['health'], ['step one red', 'step two', 'token=[removed]'])
+        self.assertNotIn('clab-manager-health-v1', ''.join(self.bridge.lines['health']), 'the JSON report is not shown as progress')
+
+    def test_garbage_stdout_is_a_command_failure(self):
+        bridge = FakeBridge(recover=[engine.RETURN])
+        run = self.health('echo progress >&2\necho "this is not json"\nexit 0', bridge)
+        phase = run.phase('health')
+        self.assertEqual(phase.state, engine.FAILED)
+        self.assertEqual(phase.failure.kind, 'command')
+        self.assertEqual(phase.failure.choices, (engine.RETRY, engine.RETURN))
+        self.assertIn('did not produce its structured result (exit status 0)', phase.failure.message)
+        self.assertIsNone(run.report)
+        self.assertEqual(run.outcome, 'returned')
+
+    def test_empty_stdout_wrong_schema_and_non_object_json_are_failures_too(self):
+        for name, body in (('empty', 'exit 1'),
+                           ('schema', "printf '%s' '{\"schema\": \"other\", \"exit_code\": 0}'"),
+                           ('list', "printf '%s' '[1, 2]'"),
+                           ('truncated', "printf '%s' '{\"schema\": \"clab-manager-health-v1\", \"counts\"'")):
+            with self.subTest(name):
+                run = self.health(body, FakeBridge(recover=[engine.RETURN]))
+                self.assertEqual(run.phase('health').state, engine.FAILED)
+                self.assertEqual(run.phase('health').failure.kind, 'command')
+                self.assertIsNone(run.report)
+
+    def test_a_retry_after_a_bad_report_runs_the_check_again(self):
+        counter = shlex.quote(str(self.counter('health')))
+        data = shlex.quote(json.dumps(health_report_json(0)))
+        body = f'echo x >> {counter}\nn=$(wc -l < {counter})\nif [ "$n" -lt 2 ]; then echo garbage; exit 1; fi\nprintf %s {data}'
+        run = self.health(body, FakeBridge(recover=[engine.RETRY]))
+        self.assertEqual(self.count('health'), 2)
+        self.assertEqual(run.outcome, 'completed')
+        self.assertEqual(run.phase('health').attempts, 2)
+
+    def test_more_than_4_mib_of_stdout_is_a_missing_report_and_the_child_never_blocks(self):
+        # Valid JSON, but past the 4 MiB cap: treated as missing, not parsed; the rest is drained.
+        body = ('printf %s \'{"schema": "clab-manager-health-v1", "exit_code": 0, "counts": {"PASS": 1}, "pad": "\'\n'
+                "head -c 6291456 /dev/zero | tr '\\0' a\n"
+                "printf %s '\"}'\n"
+                "echo finished >&2")
+        started = time.monotonic()
+        run = self.health(body, FakeBridge(recover=[engine.RETURN]))
+        self.assertLess(time.monotonic() - started, 25)
+        phase = run.phase('health')
+        self.assertEqual(phase.state, engine.FAILED)
+        self.assertEqual(phase.failure.kind, 'command')
+        self.assertEqual(phase.code, 0, 'the child ran to completion: its pipe was drained')
+        self.assertIsNone(run.report)
+        self.assertEqual(self.bridge.lines['health'], ['finished'])
+
+    def test_a_report_just_under_the_cap_is_accepted(self):
+        pad = 'a' * (3 * 1024 * 1024)
+        report = health_report_json(0, pad=pad)
+        path = self.tmp / 'report.json'
+        path.write_text(json.dumps(report))
+        run = self.health(f'cat {shlex.quote(str(path))}')
+        self.assertEqual(run.phase('health').state, engine.COMPLETED)
+        self.assertEqual(run.outcome, 'completed')
+
+    def test_no_installer_lock_is_taken_and_none_is_held(self):
+        run = self.health(self.printing(health_report_json(0), 0))
+        self.assertIsNone(run.lock)
+        self.assertEqual(run.outcome, 'completed')   # the patched InstallerLock.acquire would have raised
+
+    def test_without_cached_credentials_the_terminal_is_offered_sudo_v_but_the_report_still_runs(self):
+        bridge = FakeBridge(handoff=[1])   # sudo -v declined
+        with patch.object(engine, 'credentials_cached', return_value=False):
+            run = self.health(self.printing(health_report_json(2), 2), bridge)
+        self.assertEqual(bridge.handoffs, ['Administrator access'])
+        self.assertEqual(run.phase('health').state, engine.COMPLETED)
+        self.assertEqual(run.outcome, 'partial')
+
+    # Was a product bug (HealthRun stored a bare Popen; Interrupt raised AttributeError): HealthRun now
+    # stores the same shape as a StepProcess, so x / Interrupt sends SIGINT to the health check too.
+    def test_interrupt_current_during_a_health_check_does_not_crash(self):
+        import signal
+        started = self.tmp / 'health.started'
+        script = self.script('health', f': > {shlex.quote(str(started))}\nsleep 30')
+        self.fake = HealthFakeInstall(self.source, script)
+        self.bridge = FakeBridge(recover=[engine.RETURN])
+        run = engine.HealthRun(self.fake, self.env, '1.2.3', self.bridge)
+        run.start()
+        try:
+            self.assertTrue(wait_for(started.exists))
+            self.assertTrue(wait_for(lambda: run.process is not None))
+            self.assertTrue(run.interrupt_current())
+        finally:
+            if run.process is not None:
+                try:
+                    os.killpg(getattr(run.process, 'process', run.process).pid, signal.SIGKILL)
+                except OSError:
+                    pass
+            self.join(run)
+
+    def test_the_run_record_is_written_for_the_check(self):
+        run = self.health(self.printing(health_report_json(0), 0))
+        record = core.read_run_record(self.env)
+        self.assertEqual((record['action'], record['outcome']), ('health', 'completed'))
+        self.assertEqual([p['key'] for p in record['phases']], ['health'])
+        self.assertNotIn('docker', json.dumps(record), 'report contents are not persisted')
 
 
 # ---------------------------------------------------------------------------------------------
