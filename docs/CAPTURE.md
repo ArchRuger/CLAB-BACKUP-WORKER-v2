@@ -159,7 +159,7 @@ capture-folder download; upstream file-manager and terminal endpoints are not ex
 All desktops share the `clab-manager-capture` network with each other and with
 Edgeshark, and the pinned Wireshark runs Lua, so a student can run programs inside
 their own desktop. So each desktop's VNC server demands a random password created for that
-session (`VNC_PASSWORD`), which only the service and the owning browser receive, and
+session (`VNC_PASSWORD`), which only the service creates and only the owning browser is given (through the manager's same-origin relay, which does not store or log it), and
 its raw VNC port 5900 stays closed (`VNC_LISTENING_PORT=-1`): a program in one desktop
 reaches another desktop's web port, but not its screen, files or session. It can
 still reach Edgeshark's capture and discovery services, which stream and list any
@@ -169,7 +169,10 @@ own port when it listens on all addresses.
 The manager still has no user login. Cookie isolation is not account-based
 multi-user authorization. Retain the trusted management-network boundary or use
 an authenticated HTTPS reverse proxy. The proxy must support WebSocket upgrades
-for `/api/capture/sessions/*/websockify`. Do not expose Docker or ports 5001/5801.
+for `/api/capture/sessions/*/websockify`. The proxy's public name must be listed in
+`UI_ALLOWED_HOSTS` and passed to the manager as the `Host` header; see
+[Opening the manager by a name](INSTALL.md#opening-the-manager-by-a-name). Do not
+expose Docker or ports 5001/5801.
 No additional browser-facing port or iframe is needed.
 
 Manager and service both re-discover and validate selected identity/interfaces
@@ -208,8 +211,13 @@ were lost, but anything still there is handed over. Then end the old session and
 create another. A capture outage does not disable backups, topology, SSH or lab operations.
 
 The browser console logs `noVNC requires a secure context (TLS)` on every viewer
-load over plain HTTP; it is harmless here because the desktop stream uses VNC
-security type None inside the VM. A viewer that disconnects immediately while the
+load over plain HTTP: noVNC reports that the page is not served over HTTPS. It does
+not mean the desktop is open. Every desktop sets its own per-session VNC password
+(`VNC_PASSWORD`), which only the session service creates and only the owning browser is given (through the manager's same-origin relay, which does not store or log it), and
+`deploy/capture/smoke.py` checks that a desktop offers only VNC password
+authentication. Over plain HTTP the stream, like every other manager page, is not
+encrypted on its way to the browser; use an authenticated HTTPS reverse proxy (above)
+where that matters. A viewer that disconnects immediately while the
 sessions log shows `websockify ... 403` means the service could not complete the
 websockify handshake (a session service built before 1.21.1 omitted the `binary`
 subprotocol): rebuild the stack with the setup command above.

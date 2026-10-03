@@ -32,7 +32,9 @@ async function connectViewer(){
   }
   if(ended)return;
   if(!ready)throw Error('Wireshark is taking longer than expected to start. Click Reconnect viewer to try again.');
-  const {default:RFB}=await loadRFB(base+'/assets/core/rfb.js');
+  // The probe above covers only rfb.js; the relay refuses any file it imports whose hash differs from the pinned one, which rejects the import with the browser's raw wording.
+  let RFB;
+  try{RFB=(await loadRFB(base+'/assets/core/rfb.js')).default;}catch{throw Error('The Wireshark viewer could not be loaded because one of its files was refused or unavailable. Click Reconnect viewer; if this repeats, end this session and start a new capture.');}
   // Each desktop asks for its own session password, which only this browser receives.
   rfb=new RFB($('capture-screen'),(location.protocol==='https:'?'wss://':'ws://')+location.host+base+'/websockify',data.viewer_password?{credentials:{password:data.viewer_password}}:{});
   rfb.scaleViewport=true;rfb.resizeSession=true;

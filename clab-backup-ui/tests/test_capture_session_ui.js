@@ -63,6 +63,21 @@ test('the viewer answers its own desktop password challenge, which no other desk
  // A wrong or missing password is explained instead of leaving a silent blank viewer.
  vm.runInContext('rfb.listeners.credentialsrequired()',c);assert.match($('viewer-status').textContent,/password/);
 });
+test('a viewer module the relay refuses is explained with a next step, not the browser\'s raw import error',async()=>{
+ const {c,$}=harness({[base]:()=>({ok:true,body:{name:'clab-demo-r1',interfaces:['eth2'],running:true,remaining_seconds:7000,viewer_password:'Ab3x7k9Z'}}),'/assets/core/rfb.js':()=>({ok:true})});
+ await settle();
+ // rfb.js itself is served, but a dependency it imports was refused (or vanished), so the dynamic import rejects.
+ // The harness already ran connectViewer() once with the real loadRFB, so clear that outcome: only this rejection may produce the text.
+ let loads=0;c.loadRFB=async()=>{loads++;throw new TypeError('Failed to fetch dynamically imported module: http://manager'+base+'/assets/core/rfb.js');};
+ $('viewer-status').textContent='';
+ await c.connectViewer();
+ assert.equal(loads,1);
+ const text=$('viewer-status').textContent;
+ assert.doesNotMatch(text,/dynamically imported|TypeError|Failed to fetch/);
+ assert.match(text,/Wireshark viewer could not be loaded/);
+ assert.match(text,/Reconnect viewer/);
+ assert.match(text,/end this session and start a new capture/);
+});
 test('a desktop that is still starting is polled until the time limit, then Reconnect is offered',async()=>{
  for(const status of [404,503]){
   const {$,fetched}=harness({...live,'/assets/core/rfb.js':()=>({ok:false,status,body:{detail:'Viewer asset unavailable. Reopen the capture session.'}})});
