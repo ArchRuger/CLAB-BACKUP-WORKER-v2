@@ -108,6 +108,21 @@ class ReadinessTests(unittest.TestCase):
         self.assertIn('automatic NOS login test started', text)
         self.assertIn('NOS accepted SSH login', text)
 
+    def test_a_manual_login_that_found_the_cli_silent_is_probed_and_corrected_by_the_monitor(self):
+        # M-11: Test login stores 'booting' (not 'reachable') while the CLI is silent, so the monitor,
+        # which skips only 'reachable' nodes, keeps asking and replaces it with the real answer.
+        from app.node_services import BOOTING_MESSAGE
+        services = self.app.state.node_services
+        services.checks[('lab', 'clab-demo-r1')] = {'status': 'booting', 'at': 'then', 'message': BOOTING_MESSAGE}
+        with patch.object(self.app.state.runner.pool, 'submit'):
+            self.assertEqual(self.public()['nodes'][0]['nos_login']['status'], 'booting')
+            self.assertFalse(self.public()['nodes'][0]['ssh_ready'])
+            self.answers = {'clab-demo-r1': 'reachable'}
+            self.monitor.scan()
+        self.assertIn('clab-demo-r1', [p[0] for p in self.probes])
+        self.assertEqual(services.checks[('lab', 'clab-demo-r1')]['status'], 'reachable')
+        self.assertTrue(self.public()['nodes'][0]['ssh_ready'])
+
     def test_a_restarted_node_must_answer_again_and_the_login_test_repeats_once(self):
         self.answers = {n['name']: 'reachable' for n in self.lab['nodes']}
         with patch.object(self.app.state.runner.pool, 'submit'):
@@ -353,7 +368,7 @@ class ReadinessTests(unittest.TestCase):
             if item['name'] == 'clab-demo-r2':
                 raise ValueError('nope')
 
-        with patch('app.node_services.connect', side_effect=fake_connect):
+        with patch('app.node_services.connect', side_effect=fake_connect), patch('app.node_services.cli_answers', return_value=True):
             result = self.client.post('/api/labs/lab/ssh-check-all', json={})
             self.assertEqual(result.status_code, 200, result.text)
             self.assertEqual(result.json()['started'], 2)

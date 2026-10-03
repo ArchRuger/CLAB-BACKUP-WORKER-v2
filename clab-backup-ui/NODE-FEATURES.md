@@ -35,8 +35,11 @@ telemetry feature is described in [TELEMETRY.md](../docs/TELEMETRY.md).
   when the node is excluded from scheduled backups, and does not reset the lab
   schedule. The single backup queue still allows one job at a time.
 - **Details** offers latest and historical successful configuration downloads,
-  **Test login** (authenticates over SSH and asks for `show version`; its
-  timestamped result is a last check, not a continuous reachability guarantee) and
+  **Test login** (authenticates over SSH and asks for `show version`, or a harmless shell
+  command for a device with no NOS platform; its timestamped result is a last check, not a
+  continuous reachability guarantee. A login that is accepted while the CLI is still starting
+  reads *Starting* with its own message, never *Ready*; the readiness monitor keeps asking and
+  replaces it with the real answer) and
   **Edit connection…** (short name used in backup file names, address, port, NOS,
   profile, *Include in backups*).
 

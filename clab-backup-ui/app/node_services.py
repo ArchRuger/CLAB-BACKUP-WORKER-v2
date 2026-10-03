@@ -13,13 +13,42 @@ import paramiko
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from .runner import effective_credentials, now
+from .runner import CLI_ERROR, effective_credentials, now
 from .discovery import node_available
 
 BULK_CHECK_WORKERS = 4     # ssh-check-all never opens more SSH sessions than this at once
 CHECKING_MESSAGE = 'Testing the SSH login…'
-REACHABLE_MESSAGE = 'SSH authentication succeeded'
+REACHABLE_MESSAGE = 'SSH login accepted and the CLI answered'
+# The login was accepted but the CLI gave no real answer yet (a NOS accepts SSH while its CLI still starts).
+# Never ready: the readiness monitor asks again by itself and replaces this result with a real one.
+BOOTING_MESSAGE = 'SSH login accepted, but the CLI has not answered yet. The device is still starting; the manager keeps checking.'
 FAILED_MESSAGE = 'SSH login failed. Check credentials, address, port, and NOS readiness.'
+CLI_COMMAND = 'show version'
+# A node with no NOS platform (a plain Linux image, generic SSH profile or the
+# image-based defaults in inventory.py) has no NOS CLI to answer `show version`;
+# a real, harmless shell command still proves the SSH login answers a real command,
+# without faking readiness for a host that was never a NOS in the first place.
+GENERIC_CLI_COMMAND = 'echo readiness-check'
+CLI_TIMEOUT = 25
+
+
+def cli_answers(client, command=CLI_COMMAND, timeout=CLI_TIMEOUT):
+    """True when the NOS CLI returns a real answer to show version over an exec channel.
+
+    SSH can accept a login while the CLI is still starting (cEOS agents, Junos
+    daemons); an empty or not-ready reply keeps the node in booting.
+    """
+    try:
+        stdin, stdout, _ = client.exec_command(command, timeout=timeout)
+        stdin.close()
+        output = stdout.read(65536).decode('utf-8', 'replace')
+    except Exception:
+        return False
+    return bool(output.strip()) and not CLI_ERROR.search(output)
+
+
+def node_cli_command(node):
+    return CLI_COMMAND if node.get('platform') else GENERIC_CLI_COMMAND
 
 
 class NodeRequest(BaseModel):
@@ -116,6 +145,20 @@ class NodeServices:
             targets.append((node['name'], copy.deepcopy(node), copy.deepcopy(creds)))
         return targets, skipped
 
+    def login_result(self, client, node, creds):
+        """The stored outcome of one Test login, shared by the per-node route and Test logins so the two
+        always agree: 'reachable' only when the CLI answered a real command after the login (the check the
+        readiness monitor's probe makes), 'booting' when the login was accepted but the CLI is silent,
+        'failed' when the login itself did not work. Never raises."""
+        try:
+            connect(client, node, creds)
+            answered = cli_answers(client, node_cli_command(node))
+        except Exception:
+            return {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
+        if answered:
+            return {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
+        return {'status': 'booting', 'at': now(), 'message': BOOTING_MESSAGE}
+
     def run_bulk_check(self, lab_id, name, node, creds):
         """One node's login test from ssh-check-all's bounded pool; stores exactly what
         the per-node route stores, and never raises (one node's failure never stops the rest)."""
@@ -132,10 +175,7 @@ class NodeServices:
                 result = {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
             else:
                 try:
-                    connect(client, node, creds)
-                    result = {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
-                except Exception:
-                    result = {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
+                    result = self.login_result(client, node, creds)
                 finally:
                     self.release(client)
         finally:
@@ -195,10 +235,7 @@ class NodeServices:
                 client = self.reserve()
                 self.checking.add(key)
             try:
-                connect(client, node, creds)
-                result = {'status': 'reachable', 'at': now(), 'message': REACHABLE_MESSAGE}
-            except Exception:
-                result = {'status': 'failed', 'at': now(), 'message': FAILED_MESSAGE}
+                result = self.login_result(client, node, creds)
             finally:
                 self.release(client)
                 with self.lock:
@@ -253,6 +290,7 @@ class NodeServices:
             await ws.accept()
             client = None
             channel = None
+            opened = False      # terminal.close is only audited for a session whose terminal.open was
             lab_id = name = ''
             try:
                 message = await asyncio.wait_for(ws.receive_text(), 5)
@@ -273,6 +311,7 @@ class NodeServices:
                 channel = await asyncio.to_thread(client.invoke_shell, term='xterm-256color', width=100, height=30)
                 channel.settimeout(5)
                 self.store.event('terminal.open', 'Interactive SSH session opened', lab_id=lab_id, node=name)
+                opened = True
                 await ws.send_json({'type': 'status', 'message': 'Connected'})
                 started = last_input = time.monotonic()
                 while not channel.closed:
@@ -321,6 +360,7 @@ class NodeServices:
                     channel.close()
                 if client is not None:
                     self.release(client)
+                if opened:
                     self.store.event('terminal.close', 'Interactive SSH session closed', lab_id=lab_id, node=name)
                 try:
                     await ws.close()

@@ -3,6 +3,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -494,6 +495,59 @@ class RetireTelemetryTests(unittest.TestCase):
             code = retire_telemetry.main([])
         self.assertEqual(code, 1)
         self.assertIn('boom', stderr.getvalue())
+
+
+class WrapperTests(unittest.TestCase):
+    """deploy/retire-telemetry.sh itself, run in a scratch tree with stub siblings (no Docker, no root)."""
+    SCRIPT = Path(__file__).resolve().parents[2] / 'deploy/retire-telemetry.sh'
+
+    def run_wrapper(self, *options):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'deploy').mkdir(); (root / 'bin').mkdir()
+            source = self.SCRIPT.read_text()
+            guard = "[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }\n"
+            self.assertIn(guard, source)     # the only line the scratch copy drops: the test does not run as root
+            (root / 'deploy/retire-telemetry.sh').write_text(source.replace(guard, ''))
+            (root / 'deploy/verify-release.py').write_text('')
+            (root / 'deploy/retire_telemetry.py').write_text(
+                'import sys, pathlib\npathlib.Path(__file__).with_name("python.args").write_text(" ".join(sys.argv[1:]))\n')
+            (root / 'deploy/recreate-manager.sh').write_text('touch "$(dirname "$0")/recreated"\n')
+            (root / 'bin/docker').write_text('#!/bin/sh\nexit 0\n')
+            (root / 'bin/docker').chmod(0o755)
+            env = dict(os.environ, PATH=str(root / 'bin') + os.pathsep + os.environ.get('PATH', ''))
+            done = subprocess.run(['bash', str(root / 'deploy/retire-telemetry.sh'), *options], env=env,
+                                  capture_output=True, text=True, timeout=60)
+            args = (root / 'deploy/python.args')
+            return done, (args.read_text() if args.exists() else None), (root / 'deploy/recreated').exists()
+
+    def setUp(self):
+        if not Path('/usr/bin/python3').exists() or not shutil.which('bash'):
+            self.skipTest('needs /usr/bin/python3 and bash')
+
+    def test_dry_run_never_recreates_the_manager(self):
+        # L-22: --dry-run is "report only, change nothing", the manager container included.
+        done, args, recreated = self.run_wrapper('--dry-run')
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(args, '--dry-run')
+        self.assertFalse(recreated, 'a dry run must not run recreate-manager.sh')
+        done, args, recreated = self.run_wrapper('--dry-run', '--purge')
+        self.assertEqual((done.returncode, args, recreated), (0, '--dry-run --purge', False))
+
+    def test_a_real_run_still_recreates_the_manager_unless_told_not_to(self):
+        done, args, recreated = self.run_wrapper()
+        self.assertEqual((done.returncode, args, recreated), (0, '', True), done.stderr)
+        done, args, recreated = self.run_wrapper('--purge')
+        self.assertEqual((done.returncode, args, recreated), (0, '--purge', True), done.stderr)
+        done, args, recreated = self.run_wrapper('--no-recreate')
+        self.assertEqual((done.returncode, args, recreated), (0, '', False), done.stderr)
+        self.assertIn('keeps its current environment', done.stdout)
+
+    def test_an_unknown_option_is_refused_before_anything_runs(self):
+        done, args, recreated = self.run_wrapper('--bogus')
+        self.assertEqual(done.returncode, 64)
+        self.assertIsNone(args)
+        self.assertFalse(recreated)
 
 
 if __name__ == '__main__':

@@ -23,8 +23,8 @@ import paramiko
 
 from .discovery import discovery_fresh, lab_status, node_available, uptime_seconds
 from .lab_operations import operation_busy
-from .node_services import connect
-from .runner import CLI_ERROR, effective_credentials, now
+from .node_services import CLI_COMMAND, CLI_TIMEOUT, GENERIC_CLI_COMMAND, cli_answers, connect, node_cli_command   # the one CLI check, shared with Test login
+from .runner import effective_credentials, now
 
 SCAN_INTERVAL = 5
 BOOT_RETRY = 20      # a node that has not answered yet is asked again after this many seconds
@@ -35,13 +35,6 @@ REFUSALS_BEFORE_FAILED = 3   # early boot can refuse a valid login; report a fai
 # instead of the red "login failed" that would send a student to check credentials that are right (QA-019).
 LOGIN_GRACE = 900
 MAX_TEST_ATTEMPTS = 3        # automatic login tests per boot cycle before a human has to look
-CLI_COMMAND = 'show version'
-# A node with no NOS platform (a plain Linux image, generic SSH profile or the
-# image-based defaults in inventory.py) has no NOS CLI to answer `show version`;
-# a real, harmless shell command still proves the SSH login answers a real command,
-# without faking readiness for a host that was never a NOS in the first place.
-GENERIC_CLI_COMMAND = 'echo readiness-check'
-CLI_TIMEOUT = 25
 RETRY_LATER = ('already running', 'lab operation', 'manager reset')
 MISSING = object()
 MESSAGES = {
@@ -50,21 +43,6 @@ MESSAGES = {
     'failed': 'SSH login refused with the saved credentials. Assign a credential profile, then Test login.',
     'booting_login': 'Container is running; SSH answers but the saved login is not accepted yet (a NOS accepts logins only late in its boot)',
 }
-
-
-def cli_answers(client, command=CLI_COMMAND, timeout=CLI_TIMEOUT):
-    """True when the NOS CLI returns a real answer to show version over an exec channel.
-
-    SSH can accept a login while the CLI is still starting (cEOS agents, Junos
-    daemons); an empty or not-ready reply keeps the node in booting.
-    """
-    try:
-        stdin, stdout, _ = client.exec_command(command, timeout=timeout)
-        stdin.close()
-        output = stdout.read(65536).decode('utf-8', 'replace')
-    except Exception:
-        return False
-    return bool(output.strip()) and not CLI_ERROR.search(output)
 
 
 def login_state(lab, node, available, check):
@@ -306,8 +284,7 @@ class ReadinessMonitor:
         except Exception: return None
         try:
             connect(client, node, creds)
-            command = CLI_COMMAND if node.get('platform') else GENERIC_CLI_COMMAND
-            return 'reachable' if cli_answers(client, command) else 'booting'
+            return 'reachable' if cli_answers(client, node_cli_command(node)) else 'booting'
         except (paramiko.AuthenticationException, ValueError): return 'failed'
         except Exception: return 'booting'
         finally: self.services.release(client)
