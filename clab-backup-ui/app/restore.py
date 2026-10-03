@@ -189,7 +189,8 @@ def review_diff(saved, running, converged, label):
     """What the review shows for one node before anything is submitted: the saved configuration against the
     running one the probe just captured, in the comparison form (`display set` on Junos, running-config on EOS
     and IOS XR). Every line is cut at its first secret keyword (mask_line), exactly like `diff_sample`; at most
-    DIFF_MAX_LINES lines are sent. A node the comparison calls converged is `identical` with no hunks."""
+    DIFF_MAX_LINES lines are sent (the counts still cover the whole diff); textdiff's `counts_partial` is passed on
+    when its own line cap cut the texts. A node the comparison calls converged is `identical` with no hunks."""
     labels = {'old': 'Saved (' + label + ')', 'new': 'Running now'}
     if converged:
         return {'hunks': [], 'added': 0, 'removed': 0, 'truncated': False, 'identical': True, 'labels': labels}
@@ -210,7 +211,13 @@ def review_diff(saved, running, converged, label):
         hunks.append(dict(hunk, lines=[dict(line, text=mask_line(str(line.get('text', '')))) for line in lines]))
     result = {'hunks': hunks, 'added': int(diff.get('added', 0)), 'removed': int(diff.get('removed', 0)),
               'truncated': truncated, 'identical': False, 'labels': labels}   # never "identical" when not converged
-    if not hunks:
+    # textdiff cut the texts at its own line cap: its counts cover only the part compared (diff-view.js words them so).
+    if diff.get('counts_partial'): result['counts_partial'] = True
+    if not hunks and diff.get('counts_partial'):
+        # Its first lines match and the differences lie past the cap, where no line can be shown.
+        result['reason'] = ('The configurations are too long to compare in full here: the part compared matches, and the '
+                            'differences lie after it. Replacing the configuration still makes the device match the saved one.')
+    elif not hunks:
         result['reason'] = ('The comparison found differences in spacing or layout that this line view cannot show. '
                             'Replacing the configuration still makes the device match the saved one.')
     return result

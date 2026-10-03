@@ -35,8 +35,7 @@ def unified(before, after, context=3, max_lines=20000):
     difference then lies past the cap and no hunk can show it); `counts_partial: True` (additive) then
     says that `added`/`removed` cover only the part compared. A caller that cuts only the list it sends
     after counting (restore.review_diff below this function's own cap) sets `truncated` without it, and
-    diff-view.js words the two apart. restore.review_diff does not pass the flag on yet, so a text past
-    this cap reads there with the neutral wording although its counts cover the cut text. A row whose line was cut to
+    diff-view.js words the two apart. A row whose line was cut to
     MAX_LINE_LEN for display carries `shortened: True` (lines are always compared in full, so a change
     may lie in the part not shown; diff-view.js says so)."""
     before = before or ''

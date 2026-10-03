@@ -104,7 +104,7 @@ def create_app(data_dir=None):
             if request.headers.get('sec-fetch-site') == 'cross-site' or (origin and origin.rstrip('/') != str(request.base_url).rstrip('/')):
                 return JSONResponse({'detail':'Use this manager from its own browser page.'},status_code=403)
             if store.reset_pending and request.url.path != '/api/manager/reset':
-                return JSONResponse({'detail':'A storage reset needs completion. Retry Start fresh or restart the manager.'},status_code=503)
+                return JSONResponse({'detail':'A storage reset did not finish. Retry Start fresh to complete it. A manager restart completes only a reset that was fully prepared; otherwise the labs, credentials and backups stay as they were and Start fresh must be chosen again.'},status_code=503)
             if request.method in ('POST','PUT','PATCH','DELETE'):
                 try: size=int(request.headers.get('content-length','0'))
                 except ValueError: return JSONResponse({'detail':'Invalid request length'},status_code=400)
@@ -201,7 +201,7 @@ def create_app(data_dir=None):
                 if services.clients or services.checking:
                     raise HTTPException(409, 'Close SSH sessions and wait for connection checks before resetting.')
                 try: store.reset()
-                except OSError: raise HTTPException(500, 'Storage reset could not finish. Check data directory permissions and free space, then retry Start fresh or restart the manager.')
+                except OSError: raise HTTPException(500, 'Storage reset could not finish. Check data directory permissions and free space, then retry Start fresh to complete it. A manager restart completes only a reset that was fully prepared; otherwise the labs, credentials and backups stay as they were and Start fresh must be chosen again.')
                 services.checks.clear(); services.tickets.clear(); readiness_monitor.reset()
                 discovery.sources.clear(); discovery.import_previews.clear()
                 operations.previews.clear(); operations.cap_cache = None

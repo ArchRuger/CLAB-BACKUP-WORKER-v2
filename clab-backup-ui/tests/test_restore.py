@@ -345,6 +345,30 @@ class RestoreServiceTests(unittest.TestCase):
         self.assertLessEqual(sum(len(h['lines']) for h in diff['hunks']), DIFF_MAX_LINES)
         self.assertEqual(diff['added'], DIFF_MAX_LINES * 2)                 # the counts still describe the whole diff
 
+    def test_a_configuration_past_the_diff_helpers_own_cap_is_counted_only_in_the_part_shown(self):
+        # textdiff compares at most its line cap of each text; its counts then cover only that part and it says so
+        # with `counts_partial`, which the review passes on so the page words them "in the part shown" (audit L-7).
+        from app.restore import review_diff
+        cap = 20000   # textdiff.unified's default max_lines
+        saved = [f'set interfaces ge-0/0/{i} description d{i}' for i in range(cap + 50)]
+        early = saved[:5] + ['set interfaces ge-0/0/5 description changed'] + saved[6:]
+        diff = review_diff('\n'.join(saved), '\n'.join(early), False, 'Final')
+        self.assertTrue(diff['truncated'])
+        self.assertIs(diff.get('counts_partial'), True)
+        self.assertEqual((diff['added'], diff['removed']), (1, 1))
+        # Only past the cap: no line can be shown, and the reason says so instead of blaming spacing or layout.
+        late = saved[:cap + 10] + ['set interfaces ge-0/0/9999 description changed'] + saved[cap + 11:]
+        diff = review_diff('\n'.join(saved), '\n'.join(late), False, 'Final')
+        self.assertFalse(diff['identical'])
+        self.assertEqual(diff['hunks'], [])
+        self.assertIs(diff.get('counts_partial'), True)
+        self.assertNotIn('spacing or layout', diff['reason'])
+        self.assertIn('too long', diff['reason'])
+        # The review's own cut after counting (DIFF_MAX_LINES) leaves the counts whole: no flag.
+        short = review_diff('set a 1\n', 'set a 1\n' + ''.join(f'set b {i}\n' for i in range(500)), False, 'Final')
+        self.assertTrue(short['truncated'])
+        self.assertNotIn('counts_partial', short)
+
     def test_the_review_still_answers_when_the_diff_cannot_be_built(self):
         with patch('app.restore._unified', side_effect=RuntimeError('no diff helper')), \
                 patch('app.restore.junos.capture', return_value=DESIRED_SET + 'set snmp location LAB\n'):

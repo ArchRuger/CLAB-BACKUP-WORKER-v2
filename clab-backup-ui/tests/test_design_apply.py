@@ -1314,6 +1314,27 @@ class BusyGuardTests(DesignApplyTestCase):
         self.assertFalse(operation_busy(store.state, self.lab_id), 'once read back, the lab is free')
         restore_service.guard_idle(self.lab_id)
 
+    def test_the_page_sees_the_read_back_while_it_holds_the_lab_and_not_after(self):
+        # The page shows the lab as "Checking devices" from the public job's `rechecking` list (status.js): it must
+        # reach /api/state and the job routes while the read-back holds the lab, and be gone once it settled (audit L-15).
+        store, _ = self._reading_back()
+        with store.lock:
+            job = store.state['design_jobs'][-1]
+            job['targets'] = [{'name': 'ceos', 'status': 'interrupted', '_candidate': 'interface Ethernet1', '_session': 'clabdsg-1'}]
+            store.save()
+        def seen():
+            state_job = next(j for j in self.client.get('/api/state').json()['design_jobs'] if j['id'] == 'job-r')
+            return state_job, self.client.get('/api/design/apply/jobs/job-r').json(), next(
+                j for j in self.client.get(f'/api/labs/{self.lab_id}/design/apply/jobs').json() if j['id'] == 'job-r')
+        for public in seen():
+            self.assertEqual(public.get('rechecking'), ['ceos'])
+            self.assertEqual([t['name'] for t in public['targets']], ['ceos'], 'the names it lists are public already')
+            self.assertNotIn('_candidate', json.dumps(public))
+            self.assertNotIn('_session', json.dumps(public))
+        self.app.state.design_apply._rechecked('job-r', 'ceos')
+        for public in seen(): self.assertNotIn('rechecking', public)
+        with store.lock: self.assertNotIn('rechecking', store.state['design_jobs'][-1])
+
 # --- 11. restart reconciliation --------------------------------------------------------------------------
 
 def _interface_only_plan():

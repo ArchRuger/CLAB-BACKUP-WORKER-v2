@@ -47,7 +47,8 @@ JOB_CAP = 200
 REVIEW_TTL = 600
 SAMPLE = 40
 PUBLIC_JOB = ('id', 'lab_id', 'lab_name', 'generation_id', 'created', 'started', 'finished', 'status', 'message',
-              'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets', 'progress', 'takeover')
+              'confirm_minutes', 'pre_backup_job_id', 'post_backup_job_id', 'targets', 'progress', 'takeover',
+              'rechecking')   # device names still read back after a restart (public in `targets` already); popped once none is left
 NOT_AVAILABLE = 'Applying to this kind of device is not available yet; its generated files are preview and download only.'
 
 # The device review runs as an in-memory job (docs/uiux-email-2026-10-03/DESIGN-CONTRACT.md): POST .../review checks

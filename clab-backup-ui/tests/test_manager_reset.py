@@ -109,9 +109,9 @@ class ManagerResetTests(unittest.TestCase):
     # M-10 (audit 2026-10-03): a journal write that fails (full disk) or is cut off (power loss) leaves
     # only the journal's own temporary file, which never moved a managed file; both remedies the UI
     # offers, retrying Start fresh and restarting, must then work without anyone clearing it by hand.
-    def test_failed_journal_write_leaves_no_temp_file_and_retry_resets(self):
-        self.host();self.register()
-        backup=self.store.root/'backups';backup.mkdir();(backup/'old').write_text('old')
+    @staticmethod
+    def full_disk_journal():
+        """The journal's write runs out of disk space (ENOSPC) after its first bytes."""
         real_open=open
         class FullDisk:
             def __init__(self,stream): self.stream=stream
@@ -122,7 +122,12 @@ class ManagerResetTests(unittest.TestCase):
         def full_disk(path,*args,**kwargs):
             stream=real_open(path,*args,**kwargs)
             return FullDisk(stream) if Path(path).name=='new-state.enc.tmp' else stream
-        with patch('app.store.open',side_effect=full_disk,create=True):
+        return patch('app.store.open',side_effect=full_disk,create=True)
+
+    def test_failed_journal_write_leaves_no_temp_file_and_retry_resets(self):
+        self.host();self.register()
+        backup=self.store.root/'backups';backup.mkdir();(backup/'old').write_text('old')
+        with self.full_disk_journal():
             self.assertEqual(self.reset().status_code,500)
         stage=self.store.root/'.reset-pending'
         self.assertFalse((stage/'new-state.enc.tmp').exists())
@@ -132,6 +137,23 @@ class ManagerResetTests(unittest.TestCase):
         self.assertFalse(stage.exists());self.assertFalse(backup.exists())
         saved=Store(self.tmp.name)
         self.assertEqual(saved.state['labs'],[]);self.assertEqual(saved.state['host']['password'],'host-secret')
+
+    def test_the_reset_messages_never_promise_that_a_restart_wipes_a_reset_that_was_never_prepared(self):
+        # After a journal write that failed, a restart clears the journal and keeps every lab, credential and backup
+        # (Store.finish_reset): the messages offer retrying Start fresh and say what a restart alone does (audit M-10).
+        self.host();self.register()
+        backup=self.store.root/'backups';backup.mkdir();(backup/'old').write_text('old')
+        with self.full_disk_journal(): failed=self.reset()
+        self.assertEqual(failed.status_code,500)
+        pending=self.client.get('/api/state');self.assertEqual(pending.status_code,503)
+        for detail in (failed.json()['detail'],pending.json()['detail']):
+            self.assertIn('etry Start fresh',detail)
+            self.assertNotIn('or restart the manager',detail)
+            self.assertIn('restart completes only a reset that was fully prepared',detail)
+            self.assertIn('the labs, credentials and backups stay as they were',detail)
+        restarted=Store(self.tmp.name)   # what the messages say a restart does here
+        self.assertFalse(restarted.reset_pending)
+        self.assertEqual(len(restarted.state['labs']),1);self.assertTrue(backup.exists())
 
     def test_cut_off_journal_write_recovers_on_restart_and_on_retry(self):
         self.host();self.register()
