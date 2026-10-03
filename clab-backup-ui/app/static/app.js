@@ -20,7 +20,8 @@ async function api(path,options={}){
  // A structured detail ({message, problems:[{path,message}]}) keeps its problem list on the error for the design summary.
  const detail=data.detail,shaped=detail&&typeof detail==='object'&&!Array.isArray(detail)?detail:null;
  const error=new Error(typeof detail==='string'?detail:shaped&&typeof shaped.message==='string'?shaped.message:'Check the form fields and try again.');
- if(shaped&&Array.isArray(shaped.problems))error.problems=shaped.problems;error.status=response.status;throw error;}
+ if(shaped){if(Array.isArray(shaped.problems))error.problems=shaped.problems;if(Array.isArray(shaped.retired))error.retired=shaped.retired;if(typeof shaped.review_job_id==='string')error.review_job_id=shaped.review_job_id;error.detail=shaped;}
+ error.status=response.status;throw error;}
  return response;
 }
 async function json(path,method,data){return (await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}

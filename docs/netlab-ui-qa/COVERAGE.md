@@ -1,4 +1,6 @@
-# Network design (Design tab) coverage inventory
+# Network design (Advanced › Experimental › Network design) coverage inventory
+
+> UIUX-EMAIL 2026-10-03: the Design tab and the Tools card are gone. Network design lives under Advanced > Experimental (a closed `<details id="experimental-design">`), as a `role=region`; old `view=design` links land there. The NAV and A11Y rows below claim that placement; every other row still applies inside the region. Retired modules (EIGRP, RIP, VXLAN; EVPN under review) show as read-only "No longer offered" rows, and the device review is a job with a live log (see `docs/uiux-email-2026-10-03/DESIGN-CONTRACT.md`).
 
 Every row was executed against the real application (fixture manager, real pinned `netlab==26.9` engine, no VM) on 2026-09-27 16:53 UTC, Chromium 153.0.8010.12; see `## Results` below and the `Result` column in the Rows table. `coverage.json` is the full record
 (one object per row: id, surface, control, preconditions, states, intent, expected behaviour,
@@ -31,7 +33,7 @@ Three independent sources, compared:
      are session scratch output, not committed alongside this report; every fact drawn from them is
      restated in the rows below and in `coverage.json`'s per-row `notes`.
 3. **Navigation**: every entry route (tab click, hash route `#lab=<id>&view=design`, the Tools tab
-   shortcut `#tools-design`, arrow-key tab roving, browser back/forward) and exit (another tab,
+   shortcut (removed 2026-10-03; now Advanced > Experimental), arrow-key tab roving, browser back/forward) and exit (another tab,
    lab switch, reload) traced from `shell.js`, `app.js` and `network-design.js`.
 
 ## Counts
@@ -67,8 +69,8 @@ confirmed only in source/tests (not reached live -- see "Not reached live" notes
 - **Source vs. DOM**: every control this recon could reach without a VM was found in both the
   source and the live DOM capture, with matching selectors/ids. Nothing was found rendered that
   has no source (the app has no dead markup discovered here).
-- **DOM vs. navigation**: the Design tab is reachable by tab click, hash deep link, and the Tools
-  tab shortcut; all three were driven live. Arrow-key roving and browser back/forward are source-
+- **DOM vs. navigation**: Network design is reachable by Advanced > Experimental (tab click then the details) and by the old hash deep link; there is no Design tab and no Tools
+  shortcut; the entry points were driven live. Arrow-key roving and browser back/forward are source-
   and-test only in this recon (generic shell behaviour, not design-specific).
 - **What could not be reached without a VM or a second session**: the Apply job's settle states
   beyond "unreachable" (no real SSH endpoint behind the fixture); the Export-to-Git submit itself
@@ -148,10 +150,10 @@ mark whether the control was found in Source / DOM / Navigation tracing.
 
 | ID | Surface | Control | States | Expected visible | Backend | Tests | S | D | N | Result |
 |---|---|---|---|---|---|---|---|---|---|---|
-| ND-NAV-001 | Lab tabs bar (#lab-tabs) | Design tab button #tab-design (role=tab, aria-controls=design-view) | inactive (aria-selected=false, tabindex=-1), active (aria-s… | Panel #design-view unhidden, #tools-view etc. hidden; showTab('design… | client-side only: setTab/showTab (app.js:254-262); no reque… | test_shell_ui.js (tab route round-trip, generic); check_des… | x | x | x | PASS |
-| ND-NAV-002 | Hash route | Deep link `#lab=<id>&view=design` | fresh load, reload with a route already set, back/forward t… | On load, shell.js applies the route and calls showTab('design') (shel… | GET /api/labs/{id}/design (network_design.py:528) | check_design_ui.py: page.goto(base+'/#lab='+id+'&view=desig… | x | x | x | PASS |
-| ND-NAV-003 | Tools tab (#tools-view) | Shortcut button #tools-design ("Design this lab…") | default | onclick calls showTab('design') (network-design.js:1388) | none | check_design_ui.py does not exercise this path directly; no… | x | x | x | PASS |
-| ND-NAV-004 | Lab tabs bar | Arrow-key / Home / End tab navigation reaching #tab-design | keyboard-focused | tabKeydown (app.js:264-269) moves focus and calls showTab | none | no dedicated design-tab keyboard test found (generic tab-ba… | x |  |  | PASS |
+| ND-NAV-001 | Lab tabs bar (#lab-tabs) | There is no Design tab: #tab-advanced is the only tab that leads to Network design | inactive (aria-selected=false, tabindex=-1), active (aria-selected=true, tabindex=0) | #design-view is a role=region inside #advanced-view (under Experimental, closed by default), hidden whenever another tab is shown; showTab never toggles it as a panel | client-side only: setTab/showTab (app.js) | test_network_design_ui.js ("8f: index.html has no Design tab…"), coverage_run.py ND-NAV-001 | x | x | x | PASS |
+| ND-NAV-002 | Hash route | Old deep link `#lab=<id>&view=design` | fresh load, reload (the route is rewritten to view=advanced and the Experimental details starts closed, so the tool reopens it), back/forward | TAB_ALIAS maps design to advanced with the experimental-design subview: Advanced opens with Experimental > Network design open, scrolled into view, warning visible; no top-level tab is restored | GET /api/labs/{id}/design (network_design.py) once the details is open | check_design_ui.py, coverage_run.py ND-NAV-002, test_network_design_ui.js ("8f: an old view=design route…") | x | x | x | PASS |
+| ND-NAV-003 | Tools tab (#tools-view) | No Network design card or shortcut (#tools-design is gone); Advanced > Experimental > Network design is the entry | default | Network design is not a recommended student action; the Experimental details is closed by default and labelled Under construction / Under review | none | test_network_design_ui.js, coverage_run.py ND-NAV-003 | x | x | x | PASS |
+| ND-NAV-004 | Lab tabs bar | Arrow-key / Home / End tab navigation reaching #tab-advanced (the home of Network design; there is no #tab-design) | keyboard-focused | tabKeydown (app.js) moves focus and calls showTab | none | coverage_run.py ND-NAV-004 (ArrowRight x4 from Topology), usability_scan.py keyboard step | x |  |  | PASS |
 | ND-NAV-005 | Leaving the tab | Switching to another tab (#tab-topology etc.) while a plan is generat… | generation continues in background while #design-view is hi… | designMaybeStartWatch (network-design.js:703-726) is lab-scoped, not … | GET /api/labs/{id}/design (poll) | — | x |  |  | PASS |
 | ND-NAV-006 | Lab switch | Selecting a different lab while the Design tab is active (selectLab) | switches to lab B's design, or resets to "topology" per sel… | selectLab(id, view) (app.js:33) defaults view to 'topology' unless a … | GET /api/labs/{id}/design for the new lab | — | x |  |  | PASS |
 | ND-NAV-007 | Design tab exit | Design watch teardown / draft handling on leaving the app or reloadin… | reload, close tab | writeDesignDraft persists the draft to browser storage keyed by lab i… | none (client storage only) | test_network_design_ui.js:388 "the design draft is written,… | x | x |  | PASS |
@@ -256,21 +258,21 @@ mark whether the control was found in Source / DOM / Navigation tracing.
 | ND-ERROR-001 | Guided form | Pool overlapping the lab's management network is refused with the exa… | #design-problems shows "addressing.<pool>.<family>: … manag… | design_intent.py pool-overlap-with-management check | POST validate / PUT save both 400 with the same {path,messa… | test_design_intent.py:175 test_pool_overlapping_management_… | x | x |  | PASS |
 | ND-ERROR-002 | Server | Unknown top-level intent key is refused | 400 with the key named | design_intent.py allowlist | validate/save/import all 400 | test_network_design.py:191 test_invalid_intent_with_unknown… | x |  |  | PASS |
 | ND-ERROR-003 | Save/Renumber/Clear/Import | Stale-revision conflict (409) refuses every mutating route the same w… | 409 with a reload-first message | network_design.py:545-546 (save), 572 (clear), 588 (renumber), 684-68… | various 409s | test_network_design.py:247,298; test_network_design.py:978 | x |  |  | PASS |
-| ND-ERROR-004 | Plan card | Generation errors list shows the device and the exact reason (not a g… | e.g. "eigrp on cEOS ... arista_ceos" | network_design.py compatibility()/_generate() (261-276,370-434) | errors[] recorded on the generation | test_network_design.py:541 test_an_unsupported_module_fails… | x |  |  | PASS |
+| ND-ERROR-004 | Plan card | Generation errors list shows the device and the exact reason (not a g… | e.g. "srv6 on cEOS ... arista_ceos" (EIGRP is retired from authoring, so SRv6 is the unsupported protocol the tools use) | network_design.py compatibility()/_generate() (261-276,370-434) | errors[] recorded on the generation | test_network_design.py:541 test_an_unsupported_module_fails… | x |  |  | PASS |
 | ND-ERROR-005 | Apply choose step | "Choose at least one device." on empty Review | #design-apply-choose-error populated | network-design.js:1200 | client + server (Review model min_length=1) both refuse | — | x | x |  | PASS |
 | ND-ERROR-006 | Apply review step | "Connectivity: <ExceptionType>" per unreachable device | visible as the device's "reason" text in place of a diff | design_apply.py review()/work() catches any exception and records it … | part of the review response | test_design_apply.py:595 test_device_without_credentials_is… | x | x |  | PASS |
 | ND-ERROR-007 | Apply run | "Changed since the review" per device at Apply time | that device fails with this exact reason; others proceed | docs/NETWORK-DESIGN.md "Apply" step 3 | per-target status failed with this message | test_design_apply.py:907 test_drift_between_review_and_appl… | x |  |  | BLOCKED |
 | ND-ERROR-008 | Export Git dialog | "Use a checkpoint name containing letters, numbers, hyphens or unders… | inline error, submit refused before any request | network-design.js:1328-1331 | server re-checks the identical pattern (git_progress.py:108… | test_network_design_ui.js:617; test_design_export_git.py:347 | x |  |  | PASS |
 | ND-ERROR-009 | Advanced editor | "This is not valid JSON: <parser message>" / "The design must be a JS… | #design-problems shows the client-side message; the draft i… | designOnAdvancedChange (network-design.js:947-951) | none (pure client-side JSON.parse) | test_network_design_ui.js (advanced-editor coverage is impl… | x |  |  | PASS |
 | ND-ERROR-010 | Import flow | Import failure keeps the previous design untouched and shows problems… | imported:false | network_design.py:687-688 | response body only, no store mutation | test_network_design.py:728,739,747 | x |  |  | PASS |
-| ND-A11Y-001 | Tab bar | role=tab / aria-selected / aria-controls / roving tabindex on #tab-de… | inactive, active | index.html:108; app.js:259 sets aria-selected/tabIndex on every tab b… | none | — | x | x |  | PASS |
-| ND-A11Y-002 | Design panel | role=tabpanel + aria-labelledby="tab-design" on #design-view | hidden, visible | index.html:150 | none | — | x | x |  | PASS |
+| ND-A11Y-001 | Tab bar | role=tab / aria-selected / aria-controls / roving tabindex on the five tabs (#tab-design no longer exists) | inactive, active | index.html; app.js showTab sets aria-selected/tabIndex on every tab button | none | coverage_run.py ND-A11Y-001 | x | x |  | PASS |
+| ND-A11Y-002 | Design region | role=region + aria-labelledby="design-head-title" on #design-view, inside #advanced-view (no longer a tabpanel labelled by a tab) | hidden (details closed), visible | index.html (Advanced > Experimental) | none | coverage_run.py ND-A11Y-002, test_network_design_ui.js | x | x |  | PASS |
 | ND-A11Y-003 | Status line | role=status on #design-state (live region) | every STATE value | index.html:154 | none | — | x | x |  | PASS |
 | ND-A11Y-004 | Problems / error lines | role=alert on #design-problems, #design-plan-errors, #design-apply-ch… | populated | index.html:207,223,248,257,275 | none | — | x | x |  | PASS |
 | ND-A11Y-005 | Dialogs | Native <dialog> with aria-labelledby + a labelled close icon-button (… | open | index.html:243-244,265-266 (Apply, Export-Git); network-design.js:107… | none | — | x | x |  | PASS |
 | ND-A11Y-006 | Compatibility table | scope="row" row headers, <caption>-equivalent via a semantic <table>/… | populated | network-design.js:429 (`<th scope="row">`) | none | — | x | x |  | PASS |
 | ND-A11Y-007 | Checkbox rows | .checkbox-label wrapping pattern (label wraps its input) used through… | every checkbox in the tab | network-design.js:177 (index.html), :223,250,257,481,521 (markup func… | none | — | x | x |  | PASS |
-| ND-A11Y-008 | Narrow viewport (390×844) | Design tab adds no horizontal overflow beyond what the shell chrome a… | default | no dedicated CSS rule found in source for this; behavioural, checked … | none | check_design_ui.py: "the Design tab adds no horizontal over… | x | x |  | PASS |
+| ND-A11Y-008 | Narrow viewport (390×844) | Network design view adds no horizontal overflow beyond what the shell chrome a… | default | no dedicated CSS rule found in source for this; behavioural, checked … | none | check_design_ui.py: "the Network design view adds no horizontal over… | x | x |  | PASS |
 
 ## State transitions
 

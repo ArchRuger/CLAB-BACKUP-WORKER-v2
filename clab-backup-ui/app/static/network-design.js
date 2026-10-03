@@ -13,8 +13,8 @@ const DESIGN_MODULE_LABELS={ospf:'OSPF',bgp:'BGP',isis:'IS-IS',eigrp:'EIGRP',rip
 const DESIGN_BUSY_GENERATION=['queued','running'];
 const DESIGN_POLL_RETRIES=5;
 const DESIGN_LEVEL_WORDS={verified_on_image:'Verified on this image',generated_not_live_tested:'Generated, not yet tested live',
- unsupported:'Not supported',blocked_missing_prerequisite:'Needs a prerequisite module'};
-const DESIGN_LEVEL_CLASS={verified_on_image:'ok',generated_not_live_tested:'neutral',unsupported:'danger',blocked_missing_prerequisite:'warn'};
+ unsupported:'Not supported',blocked_missing_prerequisite:'Needs a prerequisite module',retired:'No longer offered'};
+const DESIGN_LEVEL_CLASS={verified_on_image:'ok',generated_not_live_tested:'neutral',unsupported:'danger',blocked_missing_prerequisite:'warn',retired:'warn'};
 // The shape of design_intent.empty_intent(): dual stack, the manager's default pools, nothing chosen yet.
 const DESIGN_DEFAULT_INTENT={schema:1,label:'',families:{ipv4:true,ipv6:true},
  addressing:{loopback:{ipv4:'10.255.0.0/24',ipv6:'2001:db8:ff::/48'},p2p:{ipv4:'10.1.0.0/16',ipv6:'2001:db8:1::/48',prefix:31},
@@ -84,7 +84,11 @@ function designIntentFromForm(values,base){
  };
  addressing.loopback=pool('loopback',false);addressing.p2p=pool('p2p',true);addressing.lan=pool('lan',true);
  intent.addressing=addressing;
- const modules=[...new Set(values.modules||[])];
+ // A retired module the base intent already carries is kept (never silently dropped, like bgpRrKnown) unless
+ // the student removed it (values.retiredRemoved); the form only controls the modules it offers.
+ const retiredKnown=new Set(values.retiredKnown||[]),retiredGone=new Set(values.retiredRemoved||[]);
+ const keptRetired=((base&&base.modules)||[]).filter(m=>retiredKnown.has(m)&&!retiredGone.has(m));
+ const modules=[...new Set([...(values.modules||[]),...keptRetired])];
  intent.modules=modules;
  const has=id=>modules.includes(id);
  if(has('ospf'))intent.ospf={...(intent.ospf&&typeof intent.ospf==='object'?intent.ospf:{}),area:values.ospfArea||'0.0.0.0'};
@@ -293,8 +297,15 @@ function designFieldsFor(path,message){
 // {message,problems}) wins; else the "Fix the design first: path: msg; path: msg" sentence is parsed; anything else
 // (a lost connection, a 500) is one item of kind "error".
 function designProblemsFromError(error){
- if(error&&Array.isArray(error.problems)&&error.problems.length)return {kind:'problems',problems:error.problems.map(p=>({path:String(p&&p.path||''),message:String(p&&p.message||'')}))};
  const message=String(error&&error.message||'');
+ const retired=Array.isArray(error&&error.retired)&&error.retired.length;
+ // A retired-module refusal ({message,problems,retired}): the sentence leads, the problems are the items.
+ if(retired&&!(Array.isArray(error.problems)&&error.problems.length))return {kind:'problems',problems:[{path:'',message}]};
+ if(error&&Array.isArray(error.problems)&&error.problems.length){
+  const parsed={kind:'problems',problems:error.problems.map(p=>({path:String(p&&p.path||''),message:String(p&&p.message||'')}))};
+  if(retired&&message)parsed.lead=message;
+  return parsed;
+ }
  const m=/^Fix the design first:\s*([\s\S]+)$/.exec(message);
  if(m)return {kind:'problems',problems:m[1].split(/;\s+/).filter(Boolean).map(part=>{const i=part.indexOf(': ');return i>0?{path:part.slice(0,i),message:part.slice(i+2)}:{path:'',message:part};})};
  return {kind:'error',problems:[{path:'',message:message||'Something went wrong.'}]};
@@ -322,11 +333,30 @@ function designSummaryMarkup(summary){
   const go=item.fields.map((f,i)=>`<button type="button" class="text-button design-error-go" data-design-goto="${esc(f.id)}">${esc(i?'or go to the '+f.label:f.advanced?'Open '+f.label:'Go to the field')}</button>`).join(' ');
   return `<li id="${esc(item.id)}">${head}${esc(item.message)} ${go}</li>`;
  };
- return `<h3 id="design-error-title">${esc(title)}</h3><ul>${items.map(li).join('')}</ul><p class="form-help">${esc(designSummaryHint(summary.kind,summary.links!==false))}</p>`;
+ return `<h3 id="design-error-title">${esc(title)}</h3>${summary.lead?`<p class="design-error-lead">${esc(summary.lead)}</p>`:''}<ul>${items.map(li).join('')}</ul><p class="form-help">${esc(designSummaryHint(summary.kind,summary.links!==false))}</p>`;
 }
-function designModulesMarkup(modules,selected){
- const chosen=new Set(selected||[]);
- return (modules||[]).map(id=>`<label class="checkbox-label"><input type="checkbox" name="design-module" value="${esc(id)}" ${chosen.has(id)?'checked':''}> ${esc(designModuleLabel(id))}</label>`).join('');
+// The modules a student may choose, then one read-only row per retired module the design still carries (ticked,
+// disabled, the backend's reason, a Remove button). A retired module is never offered as a new choice.
+function designModulesMarkup(modules,selected,info){
+ const chosen=new Set(selected||[]),reasons=(info&&info.reasons)||{};
+ const offered=(modules||[]).filter(id=>!Object.prototype.hasOwnProperty.call(reasons,id));
+ const boxes=offered.map(id=>`<label class="checkbox-label"><input type="checkbox" name="design-module" value="${esc(id)}" ${chosen.has(id)?'checked':''}> ${esc(designModuleLabel(id))}</label>`).join('');
+ const rows=[...chosen].filter(id=>Object.prototype.hasOwnProperty.call(reasons,id)).sort().map(id=>{
+  const label=(info.labels&&info.labels[id])||designModuleLabel(id);
+  return `<div class="design-retired-row"><label class="checkbox-label"><input type="checkbox" name="design-module-retired" value="${esc(id)}" checked disabled> <span>${esc(label)}</span> <span class="pill warn">${esc(designRetiredWord(id,info))}</span></label>`+
+   `<p class="form-help">${esc(reasons[id])}</p><button type="button" class="button secondary small" data-design-retire-remove="${esc(id)}" aria-label="Remove ${esc(label)} from the design">Remove from design</button></div>`;
+ }).join('');
+ return boxes+rows;
+}
+// Where the saved design still uses a retired module (view.retired_in_design: [{path,module,message}]).
+function designRetiredNoticeMarkup(view){
+ const used=(view&&view.retired_in_design)||[];
+ if(!used.length)return '';
+ const info=designRetiredInfo(view);
+ const ids=[...new Set(used.map(u=>u.module))];
+ const names=ids.map(id=>(info.labels&&info.labels[id])||designModuleLabel(id));
+ return `<p><strong>This design still uses ${esc(names.join(', '))}.</strong> It stays readable and downloadable, but no new plan can be generated from it until you remove ${ids.length===1?'it':'them'}. Earlier plans are kept.</p>`+
+  `<details><summary>Where it is used (${used.length})</summary><ul>${used.map(u=>`<li><code>${esc(u.path||'')}</code>: ${esc(u.message||'')}</li>`).join('')}</ul></details>`;
 }
 function designRoleOptions(current){
  return ['router','host','exclude'].map(r=>`<option value="${r}" ${r===(current||'router')?'selected':''}>${r==='router'?'Router':r==='host'?'Host':'Exclude'}</option>`).join('');
@@ -516,13 +546,37 @@ function designPlanMarkup(plan){
  const links=(plan.links||[]).map(designLinkRow).join('')||'<tr><td colspan="5" class="table-empty">No links</td></tr>';
  return `<div class="design-plan-devices">${devices}</div><h4>Links</h4><div class="table-wrap"><table><thead><tr><th>Index</th><th>Type</th><th>Prefix IPv4</th><th>Prefix IPv6</th><th>Ends</th></tr></thead><tbody>${links}</tbody></table></div>`;
 }
-function designLevelWord(level,reason){
+// The retired authoring modules (design_intent.RETIRED): the view carries {retired:{id:reason}, retired_status:{id:'retired'|'under_review'},
+// retired_labels}. EVPN is "under review", never "retired".
+const DESIGN_RETIRED_FEATURE={ripng:'ripv2'};
+function designRetiredInfo(view){
+ view=view||{};
+ return {reasons:view.retired&&typeof view.retired==='object'?view.retired:{},status:view.retired_status||{},labels:view.retired_labels||{}};
+}
+function designRetiredWord(id,info){return info&&info.status&&info.status[id]==='under_review'?'Unavailable — under review':'No longer offered';}
+// A compatibility row's level and policy; a row of an old plan whose feature is retired reads as retired too.
+function designRowLevel(row,info){
+ row=row||{};
+ if(row.level==='retired')return {level:'retired',policy:row.policy||''};
+ const id=DESIGN_RETIRED_FEATURE[row.feature]||row.feature;
+ if(info&&info.reasons&&Object.prototype.hasOwnProperty.call(info.reasons,id))return {level:'retired',policy:(info.status&&info.status[id])||'retired'};
+ return {level:row.level,policy:row.policy||''};
+}
+// The retired module ids a plan still carries (generation.modules plus the features of its compatibility rows).
+function designPlanRetired(generation,info){
+ const reasons=(info&&info.reasons)||{},found=new Set();
+ for(const m of (generation&&generation.modules)||[])if(Object.prototype.hasOwnProperty.call(reasons,m))found.add(m);
+ for(const rows of Object.values((generation&&generation.compatibility)||{}))for(const r of rows||[]){const id=DESIGN_RETIRED_FEATURE[r&&r.feature]||(r&&r.feature);if(Object.prototype.hasOwnProperty.call(reasons,id))found.add(id);}
+ return [...found].sort();
+}
+function designLevelWord(level,reason,policy){
+ if(level==='retired')return policy==='under_review'?'Under review':'No longer offered';
  if(level==='blocked_missing_prerequisite')return reason?'Needs '+reason.replace(/^'[^']*' requires /,''):'Needs a prerequisite module';
  return DESIGN_LEVEL_WORDS[level]||String(level||'');
 }
 // One row per device, one column per requested feature across every device, from generation.compatibility
 // (design_capabilities.resolve() output): {feature,level,reason,evidence,profile}.
-function designCompatibilityMarkup(generation){
+function designCompatibilityMarkup(generation,info){
  const compat=(generation&&generation.compatibility)||{};
  const names=Object.keys(compat);
  if(!names.length)return '<p class="caption">No compatibility information yet.</p>';
@@ -532,8 +586,8 @@ function designCompatibilityMarkup(generation){
   const byFeature={};for(const r of compat[name]||[])byFeature[r.feature]=r;
   const cells=features.map(f=>{
    const r=byFeature[f];if(!r)return '<td>—</td>';
-   const cls=DESIGN_LEVEL_CLASS[r.level]||'neutral';
-   return `<td><span class="pill ${esc(cls)}" title="${esc(r.reason||'')}">${esc(designLevelWord(r.level,r.reason))}</span></td>`;
+   const row=designRowLevel(r,info),cls=DESIGN_LEVEL_CLASS[row.level]||'neutral';
+   return `<td><span class="pill ${esc(cls)}" title="${esc(row.level==='retired'&&info&&info.reasons&&info.reasons[DESIGN_RETIRED_FEATURE[r.feature]||r.feature]||r.reason||'')}">${esc(designLevelWord(row.level,r.reason,row.policy))}</span></td>`;
   }).join('');
   return `<tr><th scope="row">${esc(name)}</th>${cells}</tr>`;
  }).join('');
@@ -592,10 +646,10 @@ function designApplyChooseMarkup(nodes,selected){
  }).join('');
 }
 // The compatibility rows of one device, reusing designLevelWord/DESIGN_LEVEL_CLASS from the plan card.
-function designApplyCompatMarkup(compatibility){
+function designApplyCompatMarkup(compatibility,info){
  const rows=compatibility||[];
  if(!rows.length)return '';
- return '<ul class="design-apply-compat">'+rows.map(r=>`<li><span class="pill ${esc(DESIGN_LEVEL_CLASS[r.level]||'neutral')}" title="${esc(r.reason||'')}">${esc(r.feature||'')}: ${esc(designLevelWord(r.level,r.reason))}</span></li>`).join('')+'</ul>';
+ return '<ul class="design-apply-compat">'+rows.map(r=>{const row=designRowLevel(r,info);return `<li><span class="pill ${esc(DESIGN_LEVEL_CLASS[row.level]||'neutral')}" title="${esc(r.reason||'')}">${esc(r.feature||'')}: ${esc(designLevelWord(row.level,r.reason,row.policy))}</span></li>`;}).join('')+'</ul>';
 }
 // design_apply.py's masked() caps added/removed/stale/conflicts/expected/removals/kept_manual samples at
 // SAMPLE=40 while counts[...] keeps the real total; when the sample is shorter than its count, whichever
@@ -607,10 +661,10 @@ function designApplyMoreLine(shown,count){
 // One device's review block: eligibility/reachability/readiness reason when not ready, the counts line,
 // protected settings, diff, expected changes, removal commands, conflicts (with the take-over choice)
 // and kept-manual containers. `takeover` is the Set of device names the student chose to take over.
-function designApplyDeviceMarkup(target,takeover){
+function designApplyDeviceMarkup(target,takeover,info){
  target=target||{};takeover=takeover||new Set();
  const heading=`<h4>${esc(target.name||'')} <span class="caption">${esc(target.kind||'')}</span></h4>`;
- const compat=designApplyCompatMarkup(target.compatibility);
+ const compat=designApplyCompatMarkup(target.compatibility,info);
  if(!target.eligible)return `<article class="design-apply-device">${heading}<p class="form-help">${esc(target.reason||'This device is not part of the plan.')}</p>${compat}</article>`;
  if(!target.reachable||!target.ready)return `<article class="design-apply-device">${heading}<p class="form-help">${esc(designApplyReasonText(target.reason||'This device could not be reviewed.'))}</p>${compat}</article>`;
  if(target.no_op)return `<article class="design-apply-device">${heading}<p class="form-help">Already matches the plan.</p>${compat}</article>`;
@@ -632,9 +686,9 @@ function designApplyDeviceMarkup(target,takeover){
  const keptManual=(target.kept_manual||[]).length?`<details><summary>Kept — manual configuration underneath (${target.kept_manual.length})</summary><ul>${target.kept_manual.map(k=>`<li class="mono">${esc(k)}</li>`).join('')}</ul>${designApplyMoreLine(target.kept_manual.length,counts.kept_manual)}</details>`:'';
  return `<article class="design-apply-device">${heading}<p class="caption">${esc(countsLine)}</p>${takingOver}${protectedList}<h5>Differences</h5>${diffPre}${expectedList}${removalsList}${conflictsBlock}${keptManual}${compat}</article>`;
 }
-function designApplyReviewMarkup(review,takeover){
+function designApplyReviewMarkup(review,takeover,info){
  if(!review||!review.targets||!review.targets.length)return '<p class="caption">Choose at least one device to review.</p>';
- return `<h3 id="design-apply-review-title" tabindex="-1">Review of ${review.targets.length===1?'one device':review.targets.length+' devices'}</h3>`+designApplyReviewSummary(review)+review.targets.map(t=>designApplyDeviceMarkup(t,takeover)).join('');
+ return `<h3 id="design-apply-review-title" tabindex="-1">Review of ${review.targets.length===1?'one device':review.targets.length+' devices'}</h3>`+designApplyReviewSummary(review)+review.targets.map(t=>designApplyDeviceMarkup(t,takeover,info)).join('');
 }
 // Why Apply is off right now, under the button (never a silent disabled button).
 function designApplyRunReason(review,takeover,acknowledged){
@@ -654,6 +708,61 @@ function designApplyCanSubmit(review,takeover,acknowledged){
  takeover=takeover||new Set();
  return !(review.targets||[]).some(t=>t.ready&&(t.counts&&t.counts.conflicts)&&!takeover.has(t.name));
 }
+// --- the device review as a job (design_apply.py review jobs): stages in student wording, elapsed times, one line per device ---
+const DESIGN_REVIEW_STAGE_WORDS={queued:'Waiting',connecting:'Connecting…',checking_pending:'Checking for unconfirmed changes…',rendering:'Preparing the configuration…',
+ reading_config:'Reading the current configuration…',staging:'Trying the change (nothing is committed)…',restaging:'Trying again with the take-over…',
+ done:'Reviewed',failed:'Not reviewed',unreachable:'Could not be reached',not_eligible:'Not part of the review'};
+const DESIGN_REVIEW_FINAL=['done','failed','unreachable','not_eligible'];
+const DESIGN_REVIEW_UNAVAILABLE='The review is no longer available; review again.';
+function designReviewStageWord(stage){return DESIGN_REVIEW_STAGE_WORDS[stage]||String(stage||'');}
+function designReviewClock(seconds){seconds=Math.max(0,Math.floor(Number(seconds)||0));return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');}
+// Seconds since the job started (to its end when finished), from the server's own clock so a skewed browser clock cannot lie.
+function designReviewElapsed(job){
+ job=job||{};
+ const start=Date.parse(job.started||'')/1000;if(!Number.isFinite(start))return 0;
+ const end=job.finished?Date.parse(job.finished)/1000:Number(job.server_time);
+ return Number.isFinite(end)?Math.max(0,end-start):0;
+}
+// A device's own time: from queued to settled when it is final, else since its current stage began.
+function designReviewTargetElapsed(target,job){
+ const t=(target&&target.timeline)||{},now=Number(job&&job.server_time);
+ if(DESIGN_REVIEW_FINAL.includes(target&&target.stage)){
+  if(Number.isFinite(t.settled)&&Number.isFinite(t.queued))return Math.max(0,t.settled-t.queued);
+  return null;
+ }
+ const since=t[target&&target.stage];
+ return Number.isFinite(since)&&Number.isFinite(now)?Math.max(0,now-since):null;
+}
+function designReviewOverall(job){
+ job=job||{};
+ const total=(job.progress&&job.progress.total)||(job.targets||[]).length,settled=(job.progress&&job.progress.settled)||0;
+ const clock=designReviewClock(designReviewElapsed(job));
+ if(job.status==='running')return 'Reviewing '+total+(total===1?' device':' devices')+' · '+clock+(settled?' · '+settled+' of '+total+' finished':'');
+ if(job.status==='done')return 'Review finished · '+clock;
+ if(job.status==='interrupted')return 'The review was interrupted. Review again.';
+ const why=job.message?String(job.message).trim():'';
+ return 'The review could not finish'+(why?': '+why:'.')+(/review again/i.test(why)?'':' Review again.');
+}
+function designReviewRowMarkup(target,job){
+ target=target||{};
+ const elapsed=designReviewTargetElapsed(target,job);
+ const cls=target.stage==='done'?'ok':target.stage==='failed'||target.stage==='unreachable'?'danger':target.stage==='not_eligible'?'neutral':'busy';
+ const reason=(target.stage==='failed'||target.stage==='unreachable'||target.stage==='not_eligible')&&target.message?`<small class="design-review-reason">${esc(target.message)}</small>`:'';
+ return `<tr data-design-review-device="${esc(target.name||'')}"><td><strong>${esc(target.name||'')}</strong> <span class="caption">${esc(target.kind||'')}</span></td>`+
+  `<td><span class="pill ${cls}">${esc(designReviewStageWord(target.stage))}</span>${reason}</td><td>${elapsed===null?'':esc(designReviewClock(elapsed))}</td></tr>`;
+}
+function designReviewMarkup(job){
+ const rows=((job&&job.targets)||[]).map(t=>designReviewRowMarkup(t,job)).join('')||'<tr><td colspan="3" class="table-empty">No devices.</td></tr>';
+ return `<div class="table-wrap"><table class="design-review-log"><thead><tr><th>Device</th><th>Step</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+// What the polite live region says after a poll: only devices whose stage changed since the last poll, or the final result.
+function designReviewAnnouncement(job,previous){
+ job=job||{};previous=previous||{};
+ if(job.status&&job.status!=='running')return designReviewOverall(job);
+ const changed=(job.targets||[]).filter(t=>previous[t.name]!==undefined&&previous[t.name]!==t.stage).map(t=>t.name+': '+designReviewStageWord(t.stage));
+ return changed.join('; ');
+}
+function designReviewStages(job){const map={};for(const t of (job&&job.targets)||[])map[t.name]=t.stage;return map;}
 function designApplyRequestId(){
  const bytes=new Uint8Array(16);
  if(typeof crypto!=='undefined'&&crypto&&typeof crypto.getRandomValues==='function')crypto.getRandomValues(bytes);
@@ -724,6 +833,8 @@ function designApplyDisabledReason(lab,view,jobs){
  if(engine&&engine.available===false)return engine.diagnostic||engine.reason||'The design engine is not available on this manager.';
  const newest=designNewestGeneration(view);
  if(!newest||newest.status!=='succeeded')return 'Generate a plan first.';
+ const info=designRetiredInfo(view),gone=designPlanRetired(newest,info);
+ if(gone.length)return 'This plan uses '+gone.map(id=>(info.labels&&info.labels[id])||designModuleLabel(id)).join(', ')+', which '+(gone.every(id=>info.status[id]==='under_review')?'is not available':'is no longer offered')+', so it cannot be applied to devices. The plan stays viewable and downloadable; remove it from the design and generate a new plan to apply.';
  if(view.summary&&view.summary.stale)return 'Generate the plan again: the design or the topology changed since this plan.';
  const status=(lab&&lab.deployment&&lab.deployment.status)||'Unlinked';
  if(status==='Unlinked')return 'This lab is not matched to a running lab.';
@@ -836,6 +947,7 @@ async function designLoad(labId){
   if(newest&&newest.status==='succeeded')await designLoadPlan(labId,newest.id);
   if(designState.labId!==labId)return;
   designRenderAll();designMaybeStartWatch();
+  designReviewDiscover(labId);
  }catch(error){
   if(designState.labId!==labId)return;
   designState.loading=false;designState.error=error.message;designRenderAll();
@@ -947,7 +1059,8 @@ function designRenderForm(view){
   designSetControlValue('design-pool-lan-ipv4',values.pools.lan.ipv4);
   designSetControlValue('design-pool-lan-ipv6',values.pools.lan.ipv6);
   designSetControlValue('design-pool-lan-prefix',values.pools.lan.prefix);
-  setMarkup($('design-modules'),designModulesMarkup((view&&view.modules)||[],values.modules));
+  setMarkup($('design-modules'),designModulesMarkup((view&&view.modules)||[],values.modules,designRetiredInfo(view)));
+  if($('design-retired-notice')){const note=designRetiredNoticeMarkup(view);setMarkup($('design-retired-notice'),note);$('design-retired-notice').hidden=!note;}
   designSyncChecked($('design-modules'),'input[name="design-module"]',new Set(values.modules));
   designSetControlValue('design-ospf-area',values.ospfArea);
   designSetControlValue('design-bgp-as',values.bgpAs);
@@ -975,11 +1088,13 @@ function designRenderHeader(lab,view){
  if($('design-engine')){$('design-engine').hidden=engineOk;if($('design-engine-text'))$('design-engine-text').textContent=(engine&&engine.diagnostic)||'';}
  if($('design-generate')){
   const busy=st.key==='generating',noTopology=view&&view.has_topology===false,nothing=!(view&&view.intent)&&!(view&&view.draft);
-  $('design-generate').disabled=busy||!engineOk||noTopology||nothing;
+  const usedRetired=((view&&view.retired_in_design)||[]).length>0&&!(view&&view.draft);
+  $('design-generate').disabled=busy||!engineOk||noTopology||nothing||usedRetired;
   $('design-generate').title=!engineOk?((engine&&engine.diagnostic)||'The design engine is not available.')
    :busy?'A plan is already being generated for this lab.'
    :noTopology?'This lab has no topology file yet.'
-   :nothing?'Choose settings below and save the design first.':'';
+   :nothing?'Choose settings below and save the design first.'
+   :usedRetired?'This design still uses a module that is no longer offered. Remove it under Design settings, save, then generate.':'';
   menuReasonSafe($('design-generate'),$('design-generate').disabled?$('design-generate').title:'');
  }
  // The More menu explains itself like Generate plan, Apply to devices… and Export plan to Git… do: the
@@ -1017,7 +1132,7 @@ function designRenderPlanCard(view){
   $('design-plan-collisions').hidden=!count;
   $('design-plan-collisions').textContent=count?'Some link prefixes collided with pinned addresses and were reassigned automatically ('+count+(count===1?' link':' links')+').':'';
  }
- setMarkup($('design-compatibility'),designCompatibilityMarkup(newest));
+ setMarkup($('design-compatibility'),designCompatibilityMarkup(newest,designRetiredInfo(view)));
  setMarkup($('design-plan-body'),newest&&newest.status==='succeeded'?designPlanMarkup(designState.plan):'<p class="caption">Generate a plan to see it here.</p>');
  if($('design-cancel'))$('design-cancel').hidden=!(newest&&DESIGN_BUSY_GENERATION.includes(newest.status));
 }
@@ -1060,7 +1175,7 @@ function designVisible(){
 function designSuspend(){
  designStopWatch();
  const dialog=$('design-apply-dialog');
- if(!(dialog&&dialog.open))designApplyStopWatch();
+ if(!(dialog&&dialog.open)){designApplyStopWatch();designReviewStopWatch();}
  designSuspended=true;
 }
 function renderNetworkDesign(){
@@ -1158,7 +1273,7 @@ function designReadFormValues(){
    p2p:{ipv4:designVal('design-pool-p2p-ipv4'),ipv6:designVal('design-pool-p2p-ipv6'),prefix:designVal('design-pool-p2p-prefix')},
    lan:{ipv4:designVal('design-pool-lan-ipv4'),ipv6:designVal('design-pool-lan-ipv6'),prefix:designVal('design-pool-lan-prefix')}
   },
-  modules,
+  modules,retiredKnown:Object.keys((designState.view&&designState.view.retired)||{}),
   ospfArea:designVal('design-ospf-area'),bgpAs:designVal('design-bgp-as'),bgpRr:designCheckedValues('design-bgp-rr','design-bgp-rr'),bgpRrKnown:designCheckedValues('design-bgp-rr','design-bgp-rr',true),
   isisArea:designVal('design-isis-area'),isisType:designVal('design-isis-type'),gatewayProtocol:designVal('design-gateway-protocol'),
   devices,
@@ -1227,6 +1342,13 @@ function designOnAdvancedChange(){
 // guided-change pipeline as usual and drops it then if it is still empty.
 function designNextName(existing,prefix){
  existing=existing||{};let n=1;while(existing[prefix+n]!==undefined)n++;return prefix+n;
+}
+// Remove from design on a retired row: only the module entry goes; where it is still used (the notice lists the paths) is
+// removed under Advanced, and Save says so if anything remains.
+function designRemoveRetired(id){
+ const intent=designCurrentIntent(designState.view);
+ designApplyIntentPatch({modules:(intent.modules||[]).filter(m=>m!==id)});
+ if(typeof notify==='function')notify('Removed from the design. Save the design to keep this change.');
 }
 function designApplyIntentPatch(patch){
  const lab=current();if(!lab)return;
@@ -1323,7 +1445,7 @@ function designClearSummary(){
 function designShowSummary(action,parsed,options){
  options=options||{};
  designClearInvalid();
- const summary={action,kind:parsed.kind,problems:parsed.problems,links:options.links!==false};
+ const summary={action,kind:parsed.kind,problems:parsed.problems,links:options.links!==false,lead:parsed.lead||''};
  designState.summary=summary;designSummarySeq++;
  const box=$('design-error-summary');
  if(box){setMarkup(box,designSummaryMarkup(summary));box.hidden=false;}
@@ -1366,7 +1488,9 @@ async function designValidate(){
   const result=await json('/labs/'+encodeURIComponent(labId)+'/design/validate','POST',{intent,revision:''});
   if(designState.labId!==labId)return;   // the student moved to another lab meanwhile: nothing of this lands there
   setMarkup($('design-problems'),designProblemsMarkup(result.problems||[]));
-  if((result.problems||[]).length)designShowSummary('check',{kind:'problems',problems:result.problems});
+  // validate also lists where a retired module is used ({path,module,message,new}): Generate refuses any of them.
+  const found=[...(result.problems||[]),...(result.retired||[]).map(r=>({path:String(r.path||''),message:String(r.message||'')}))];
+  if(found.length)designShowSummary('check',{kind:'problems',problems:found});
   else{designClearSummary();designRenderHeader(lab,designActiveView(lab));if(typeof notify==='function')notify('No problems found.');}
  }catch(error){if(designState.labId===labId)designShowSummary('check',designProblemsFromError(error));}
 }
@@ -1525,7 +1649,7 @@ async function designViewFile(node,index){
 // applied generation being superseded by a new one): {labId,step,generationId,nodes,selected,takeover,
 // review,requestId,jobId,job}. requestId is generated once per dialog open so a retry after a network
 // error resubmits the same idempotent request.
-let designApplyState={labId:'',step:'choose',generationId:'',nodes:{},selected:new Set(),takeover:new Set(),review:null,requestId:'',jobId:'',job:null};
+let designApplyState={labId:'',step:'choose',generationId:'',nodes:{},selected:new Set(),takeover:new Set(),review:null,requestId:'',jobId:'',job:null,reviewJobId:'',reviewJob:null,reviewStages:{},starting:false};
 let designApplyWatch=null,designApplyWatchTimer=null;
 function designApplyJobsOf(labId){return ((typeof state!=='undefined'&&state.design_jobs)||[]).filter(j=>j.lab_id===labId);}
 function designApplyNewestJob(labId){const jobs=designApplyJobsOf(labId);return jobs.length?jobs[jobs.length-1]:null;}
@@ -1539,6 +1663,7 @@ function designRenderApplyButton(lab,view){
  $('design-apply').title=reason;
  if(typeof $('design-apply').setAttribute==='function')$('design-apply').setAttribute('aria-describedby','design-apply-reason');
  designApplyRenderLast(lab.id);
+ designReviewRenderRunning(lab.id);
 }
 function designRenderExportGitButton(lab,view){
  if(!$('design-export-git'))return;
@@ -1560,6 +1685,8 @@ function designApplyShowStep(step){
  if($('design-apply-choose-step'))$('design-apply-choose-step').hidden=step!=='choose';
  if($('design-apply-review-step'))$('design-apply-review-step').hidden=step!=='review';
  if($('design-apply-progress-step'))$('design-apply-progress-step').hidden=step!=='progress';
+ if($('design-apply-reviewing-step'))$('design-apply-reviewing-step').hidden=step!=='reviewing';
+ designApplyUpdateReviewButton();
 }
 function designApplyRenderChoose(){setMarkup($('design-apply-choose-body'),designApplyChooseMarkup(designApplyState.nodes,designApplyState.selected));}
 function designApplyOpen(){
@@ -1568,38 +1695,192 @@ function designApplyOpen(){
  if(!newest||newest.status!=='succeeded')return;
  const nodes=view.nodes||{};
  designApplyState={labId:lab.id,step:'choose',generationId:newest.id,nodes,selected:designApplyDefaultSelection(nodes),
-  takeover:new Set(),review:null,requestId:designApplyRequestId(),jobId:'',job:null};
+  takeover:new Set(),review:null,requestId:designApplyRequestId(),jobId:'',job:null,reviewJobId:'',reviewJob:null,reviewStages:{},starting:false};
  if($('design-apply-choose-error'))$('design-apply-choose-error').textContent='';
  if($('design-apply-review-error'))$('design-apply-review-error').textContent='';
  if($('design-apply-ack'))$('design-apply-ack').checked=false;
  if($('design-apply-minutes'))$('design-apply-minutes').value=5;
  designApplyRenderChoose();designApplyShowStep('choose');
  $('design-apply-dialog').showModal();
+ // A review of this lab that is still running is picked up again, never started a second time.
+ if(designReviewKnown.labId===lab.id&&designReviewKnown.status==='running')designReviewReattach(lab.id,designReviewKnown.jobId);
 }
 function designApplyChooseSelection(){
  if(typeof document==='undefined'||typeof document.querySelectorAll!=='function')return [...designApplyState.selected];
  return [...document.querySelectorAll('[name="design-apply-target"]:checked')].map(i=>i.value);
+}
+// The review is a job: POST returns {review_job} at once, and the dialog follows GET .../review-jobs/{id} (about every
+// 1.5 s) until it settles. Closing the dialog only stops following; nothing here cancels or says it cancelled.
+let designReviewWatch=null,designReviewTimer=null,designReviewSeq=0;
+let designReviewKnown={labId:'',jobId:'',status:''},designReviewRequest={sig:'',id:'',retry:false};
+const DESIGN_REVIEW_POLL_MS=1500,DESIGN_REVIEW_QUIET_MS=4000,DESIGN_REVIEW_RETRIES=5;
+function designReviewStopWatch(){clearTimeout(designReviewTimer);designReviewWatch=null;}
+function designReviewMatches(labId,jobId){return designApplyState.labId===labId&&designApplyState.reviewJobId===jobId;}
+function designApplyReviewRunning(){return !!designApplyState.starting||!!(designApplyState.reviewJob&&designApplyState.reviewJob.status==='running');}
+// The Review button stays disabled while a job runs and says how many devices; the dialog is busy for assistive technology.
+function designApplyUpdateReviewButton(){
+ const button=$('design-apply-review-run'),dialog=$('design-apply-dialog'),running=designApplyReviewRunning();
+ const count=designApplyState.reviewJob?((designApplyState.reviewJob.targets||[]).length):designApplyChooseSelection().length;
+ if(button){button.disabled=running;button.textContent=running?'Reviewing '+count+(count===1?' device…':' devices…'):'Review';}
+ if(dialog&&typeof dialog.setAttribute==='function'){if(running)dialog.setAttribute('aria-busy','true');else if(typeof dialog.removeAttribute==='function')dialog.removeAttribute('aria-busy');}
+}
+function designReviewRender(){
+ const job=designApplyState.reviewJob;
+ if($('design-review-overall'))$('design-review-overall').textContent=designReviewOverall(job);
+ setMarkup($('design-review-body'),designReviewMarkup(job));
+ const settled=!!job&&job.status!=='running';
+ if($('design-review-again'))$('design-review-again').hidden=!(settled&&job.status!=='done')&&!designApplyState.reviewGone;
+ if($('design-review-close-note'))$('design-review-close-note').hidden=settled||!!designApplyState.reviewGone;
+}
+function designReviewSay(text){if(text&&$('design-review-live')){$('design-review-live').textContent='';$('design-review-live').textContent=text;}}
+function designReviewRenderRunning(labId){
+ const el=$('design-review-running');if(!el)return;
+ const running=designReviewKnown.labId===labId&&designReviewKnown.status==='running';
+ el.hidden=!running;
+ if(running)setMarkup(el,'Review running… <button type="button" class="button secondary small" data-design-review-show="'+esc(designReviewKnown.jobId)+'">Show</button>');
+}
+function designReviewKnow(job){
+ designReviewKnown={labId:job.lab_id||designApplyState.labId,jobId:job.id,status:job.status};
+ const lab=current();if(lab)designReviewRenderRunning(lab.id);
+}
+function designReviewAttach(job){
+ designApplyState.reviewJobId=job.id;designApplyState.reviewJob=job;designApplyState.reviewStages=designReviewStages(job);designApplyState.reviewGone=false;designApplyState.starting=false;
+ designReviewKnow(job);
+ if($('design-review-error'))$('design-review-error').textContent='';
+ designApplyShowStep('reviewing');designReviewRender();
+ const dialog=$('design-apply-dialog');if(dialog&&'scrollTop' in dialog)dialog.scrollTop=0;
+ designFocus('design-review-title');
+ if(job.status==='running')designReviewStartWatch(designApplyState.labId,job.id,false);
+ else if(job.status==='done'&&!job.review)designReviewStartWatch(designApplyState.labId,job.id,false,0);
+ else designReviewSettled(job);
+}
+function designReviewApplyJob(job){
+ const say=designReviewAnnouncement(job,designApplyState.reviewStages);
+ designApplyState.reviewJob=job;designApplyState.reviewStages=designReviewStages(job);
+ designReviewKnow(job);designReviewRender();designReviewSay(say);
+}
+// A job that ended: done hands its review (with the token) to the review step exactly as the old synchronous answer was
+// used; failed and interrupted keep the dialog on the log with their sentence and Review again.
+function designReviewSettled(job){
+ designApplyUpdateReviewButton();
+ if(job.status!=='done'){designReviewRender();return;}
+ const review=job.review;
+ if(!review){if($('design-review-error'))$('design-review-error').textContent=DESIGN_REVIEW_UNAVAILABLE;designApplyState.reviewGone=true;designReviewRender();return;}
+ designApplyState.review=review;designApplyState.takeover=new Set(review.takeover||[]);
+ designApplyRenderReview();designApplyShowStep('review');
+ const dialog=$('design-apply-dialog');if(dialog&&'scrollTop' in dialog)dialog.scrollTop=0;
+ designFocus('design-apply-review-title');
+}
+// quiet=true follows a job with the dialog closed (the plan card's "Review running…" line), slower and without painting the dialog.
+function designReviewStartWatch(labId,jobId,quiet,delay){
+ designReviewStopWatch();designReviewWatch=jobId;
+ let failures=0;
+ const poll=async()=>{
+  if(designReviewWatch!==jobId)return;
+  try{
+   const job=await(await api('/labs/'+encodeURIComponent(labId)+'/design/review-jobs/'+encodeURIComponent(jobId))).json();
+   if(designReviewWatch!==jobId)return;
+   failures=0;
+   if(quiet){
+    if(designReviewKnown.jobId===jobId){designReviewKnown.status=job.status;const lab=current();if(lab)designReviewRenderRunning(lab.id);}
+    if(job.status==='running')designReviewTimer=setTimeout(poll,DESIGN_REVIEW_QUIET_MS);else designReviewStopWatch();
+    return;
+   }
+   if(!designReviewMatches(labId,jobId)){designReviewStopWatch();return;}   // a reopened or different dialog: this answer is not for it
+   designReviewApplyJob(job);
+   if(job.status==='running')designReviewTimer=setTimeout(poll,DESIGN_REVIEW_POLL_MS);
+   else{designReviewStopWatch();designReviewSettled(job);}
+  }catch(error){
+   if(designReviewWatch!==jobId)return;
+   if(error&&error.status===404){
+    designReviewStopWatch();
+    if(designReviewKnown.jobId===jobId)designReviewKnown={labId:'',jobId:'',status:''};
+    const lab=current();if(lab)designReviewRenderRunning(lab.id);
+    if(!quiet&&designReviewMatches(labId,jobId)){
+     designApplyState.reviewGone=true;designApplyState.starting=false;designApplyState.reviewJob=null;designApplyUpdateReviewButton();
+     if($('design-review-error'))$('design-review-error').textContent=DESIGN_REVIEW_UNAVAILABLE;
+     if($('design-review-overall'))$('design-review-overall').textContent='';
+     setMarkup($('design-review-body'),'');designReviewRender();
+    }
+    return;
+   }
+   failures++;
+   if(failures>=DESIGN_REVIEW_RETRIES){
+    designReviewStopWatch();
+    if(!quiet&&designReviewMatches(labId,jobId)&&$('design-review-error'))$('design-review-error').textContent='Could not check the review\'s progress. Close this window and open Apply to devices again to look again; the review itself keeps running.';
+    return;
+   }
+   designReviewTimer=setTimeout(poll,DESIGN_REVIEW_POLL_MS*failures);
+  }
+ };
+ designReviewTimer=setTimeout(poll,delay===undefined?(quiet?DESIGN_REVIEW_QUIET_MS:DESIGN_REVIEW_POLL_MS):delay);
+}
+// Reopening Apply while a review runs: fetch the job once and attach to it.
+async function designReviewReattach(labId,jobId){
+ try{
+  const job=await(await api('/labs/'+encodeURIComponent(labId)+'/design/review-jobs/'+encodeURIComponent(jobId))).json();
+  if(designApplyState.labId!==labId||designApplyState.reviewJobId)return;
+  designReviewAttach(job);
+ }catch(error){
+  if(designApplyState.labId!==labId)return;
+  if(error&&error.status===404){designReviewKnown={labId:'',jobId:'',status:''};const lab=current();if(lab)designReviewRenderRunning(lab.id);}
+  if($('design-apply-choose-error'))$('design-apply-choose-error').textContent=error&&error.status===404?DESIGN_REVIEW_UNAVAILABLE:(error&&error.message)||'';
+ }
+}
+// After a load: a review of this lab that a reload (or another window) left running is found and shown on the plan card.
+async function designReviewDiscover(labId){
+ try{
+  const list=await(await api('/labs/'+encodeURIComponent(labId)+'/design/review-jobs')).json();
+  const jobs=Array.isArray(list)?list:(list&&Array.isArray(list.jobs)?list.jobs:[]);
+  if(designState.labId!==labId)return;
+  const running=jobs.find(j=>j&&j.status==='running');
+  if(running){
+   designReviewKnown={labId,jobId:running.id,status:'running'};designReviewRenderRunning(labId);
+   const dialog=$('design-apply-dialog');
+   if(!(dialog&&dialog.open)&&designReviewWatch!==running.id)designReviewStartWatch(labId,running.id,true);
+  }else if(designReviewKnown.labId===labId&&designReviewKnown.status==='running'){designReviewKnown={labId:'',jobId:'',status:''};designReviewRenderRunning(labId);}
+ }catch{/* the plan card simply shows no running review */}
+}
+// Starts a review of `targets` (and re-reviews after a take-over change). errorId names the element that says why it did not start.
+async function designApplyReviewFlow(targets,takeover,errorId){
+ const labId=designApplyState.labId,generationId=designApplyState.generationId;
+ const seq=++designReviewSeq;
+ const sig=JSON.stringify([labId,generationId,targets,takeover]);
+ // A new click is a new request; only a retry after a lost answer (no HTTP status) reuses its id, so the server returns the same job.
+ const id=designReviewRequest.sig===sig&&designReviewRequest.retry?designReviewRequest.id:designApplyRequestId();
+ designReviewRequest={sig,id,retry:false};
+ designApplyState.starting=true;designApplyState.reviewJob=null;designApplyState.reviewJobId='';designApplyUpdateReviewButton();
+ const fail=message=>{if($(errorId))$(errorId).textContent=message;};
+ try{
+  let job;
+  try{job=(await json('/labs/'+encodeURIComponent(labId)+'/design/generations/'+encodeURIComponent(generationId)+'/review','POST',{targets,takeover,request_id:id})).review_job;}
+  catch(error){
+   // A review of this lab already runs: follow that one.
+   if(error&&error.status===409&&error.review_job_id){
+    if(seq!==designReviewSeq||designApplyState.labId!==labId)return;
+    const running=await(await api('/labs/'+encodeURIComponent(labId)+'/design/review-jobs/'+encodeURIComponent(error.review_job_id))).json();
+    if(seq!==designReviewSeq||designApplyState.labId!==labId)return;
+    designReviewAttach(running);return;
+   }
+   throw error;
+  }
+  if(seq!==designReviewSeq||designApplyState.labId!==labId)return;   // a late answer never lands in a reopened or other dialog
+  if(!job)throw new Error('The manager did not start the review. Try again.');
+  designReviewAttach(job);
+ }catch(error){
+  if(seq!==designReviewSeq||designApplyState.labId!==labId)return;
+  if(!(error&&error.status))designReviewRequest.retry=true;
+  designApplyState.starting=false;designApplyUpdateReviewButton();
+  fail(error.message);
+ }
 }
 async function designApplyRunReview(){
  const targets=designApplyChooseSelection();
  designApplyState.selected=new Set(targets);
  if($('design-apply-choose-error'))$('design-apply-choose-error').textContent='';
  if(!targets.length){if($('design-apply-choose-error'))$('design-apply-choose-error').textContent='Choose at least one device.';return;}
- // The review connects to every chosen device (up to a minute for many of them): the button says so and
- // cannot be clicked again meanwhile, and the dialog is marked busy for assistive technology.
- const button=$('design-apply-review-run'),dialog=$('design-apply-dialog'),label=button?button.textContent:'';
- if(button){button.disabled=true;button.textContent='Reviewing '+targets.length+(targets.length===1?' device…':' devices…');}
- if(dialog&&typeof dialog.setAttribute==='function')dialog.setAttribute('aria-busy','true');
- try{
-  const review=await json('/labs/'+encodeURIComponent(designApplyState.labId)+'/design/generations/'+encodeURIComponent(designApplyState.generationId)+'/review',
-   'POST',{targets,takeover:[...designApplyState.takeover].filter(n=>targets.includes(n))});
-  designApplyState.review=review;designApplyState.takeover=new Set(review.takeover||[]);
-  designApplyRenderReview();designApplyShowStep('review');
-  // The step starts at its top, on its own heading, not wherever the previous step was scrolled to.
-  if(dialog&&'scrollTop' in dialog)dialog.scrollTop=0;
-  designFocus('design-apply-review-title');
- }catch(error){if($('design-apply-choose-error'))$('design-apply-choose-error').textContent=error.message;}
- finally{if(button){button.disabled=false;button.textContent=label||'Review';}if(dialog&&typeof dialog.removeAttribute==='function')dialog.removeAttribute('aria-busy');}
+ if(designApplyReviewRunning())return;
+ await designApplyReviewFlow(targets,[...designApplyState.takeover].filter(n=>targets.includes(n)).sort(),'design-apply-choose-error');
 }
 // A device's reason in the review, in words: the server's exception names are kept in the details.
 function designApplyReasonText(reason){
@@ -1621,7 +1902,7 @@ function designApplyReviewSummary(review){
 // content the student has not acknowledged yet, so the checkbox — the dialog's only other clearing
 // point is designApplyOpen — is unticked again and the Apply button recomputed from that.
 function designApplyRenderReview(){
- setMarkup($('design-apply-review-body'),designApplyReviewMarkup(designApplyState.review,designApplyState.takeover));
+ setMarkup($('design-apply-review-body'),designApplyReviewMarkup(designApplyState.review,designApplyState.takeover,designRetiredInfo(designState.view)));
  if($('design-apply-ack'))$('design-apply-ack').checked=false;
  designApplyUpdateRunButton();
 }
@@ -1633,13 +1914,9 @@ function designApplyUpdateRunButton(){
 // A conflict's take-over checkbox: the token binds the take-over list, so the review must run again.
 async function designApplyToggleTakeover(name,checked){
  if(checked)designApplyState.takeover.add(name);else designApplyState.takeover.delete(name);
+ if(designApplyReviewRunning())return;
  const targets=(designApplyState.review&&designApplyState.review.targets||[]).map(t=>t.name);
- try{
-  const review=await json('/labs/'+encodeURIComponent(designApplyState.labId)+'/design/generations/'+encodeURIComponent(designApplyState.generationId)+'/review',
-   'POST',{targets,takeover:[...designApplyState.takeover]});
-  designApplyState.review=review;designApplyState.takeover=new Set(review.takeover||[]);
-  designApplyRenderReview();
- }catch(error){if($('design-apply-review-error'))$('design-apply-review-error').textContent=error.message;}
+ await designApplyReviewFlow(targets,[...designApplyState.takeover].sort(),'design-apply-review-error');
 }
 async function designApplySubmit(){
  if($('design-apply-review-error'))$('design-apply-review-error').textContent='';
@@ -1677,6 +1954,12 @@ function designApplyStartWatch(jobId){
  };
  designApplyWatchTimer=setTimeout(poll,2000);
 }
+// The dialog was closed (button, Escape or backdrop): following stops; a running review keeps running and the plan card keeps its line.
+function designReviewDialogClosed(){
+ designReviewStopWatch();
+ const lab=current();
+ if(lab&&designReviewKnown.labId===lab.id&&designReviewKnown.status==='running')designReviewStartWatch(lab.id,designReviewKnown.jobId,true);
+}
 // Reopens the dialog on a past (or still-running) job's progress step, from the plan card's "Show".
 function designApplyShowJob(jobId){
  const lab=current();if(!lab||!$('design-apply-dialog'))return;
@@ -1686,7 +1969,7 @@ function designApplyShowJob(jobId){
  $('design-apply-dialog').showModal();
  if(job&&DESIGN_APPLY_JOB_BUSY.includes(job.status))designApplyStartWatch(jobId);
 }
-function designApplyClose(){designApplyStopWatch();if($('design-apply-dialog')&&typeof $('design-apply-dialog').close==='function')$('design-apply-dialog').close();}
+function designApplyClose(){designApplyStopWatch();designReviewDialogClosed();if($('design-apply-dialog')&&typeof $('design-apply-dialog').close==='function')$('design-apply-dialog').close();}
 async function designApplyLoadOwnership(){
  const lab=current();if(!lab||!$('design-ownership'))return;
  try{
@@ -1708,6 +1991,9 @@ function initDesignApply(){
   const b=e.target&&e.target.closest&&e.target.closest('[data-design-apply-show]');
   if(b)designApplyShowJob(b.dataset.designApplyShow);
  });
+ if($('design-apply-dialog'))$('design-apply-dialog').addEventListener('close',designReviewDialogClosed);
+ if($('design-review-again'))$('design-review-again').onclick=()=>{designApplyState.reviewJob=null;designApplyState.reviewJobId='';designApplyState.reviewGone=false;if($('design-review-error'))$('design-review-error').textContent='';designApplyShowStep('choose');};
+ if($('design-review-running'))$('design-review-running').addEventListener('click',e=>{if(e.target&&e.target.closest&&e.target.closest('[data-design-review-show]'))designApplyOpen();});
  if($('design-apply-dialog'))for(const b of $('design-apply-dialog').querySelectorAll('[data-design-apply-close]'))b.onclick=()=>designApplyClose();
  if($('design-advanced-details'))$('design-advanced-details').addEventListener('toggle',()=>{if($('design-advanced-details').open)designApplyLoadOwnership();});
 }
@@ -1765,6 +2051,7 @@ function initNetworkDesign(){
   'design-pool-lan-prefix','design-ospf-area','design-bgp-as','design-bgp-rr','design-isis-area','design-isis-type','design-gateway-protocol'];
  for(const id of guidedIds)if($(id))$(id).addEventListener('change',designOnGuidedChange);
  if($('design-modules'))$('design-modules').addEventListener('change',designOnGuidedChange);
+ if($('design-modules'))$('design-modules').addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('[data-design-retire-remove]');if(b)designRemoveRetired(b.dataset.designRetireRemove);});
  if($('design-devices'))$('design-devices').addEventListener('change',e=>{if(e.target&&e.target.dataset&&e.target.dataset.designRole!==undefined)designOnGuidedChange();});
  if($('design-vrfs')){
   $('design-vrfs').addEventListener('change',e=>{if(e.target&&e.target.dataset&&e.target.dataset.designVrfField!==undefined)designOnGuidedChange();});

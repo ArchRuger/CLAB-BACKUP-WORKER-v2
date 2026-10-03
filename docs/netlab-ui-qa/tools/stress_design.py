@@ -257,8 +257,26 @@ def spa_switch_to_design(page, lab_id, lab_name, expect_device=None, timeout=150
     page.wait_for_selector('#lab-switcher[open]', timeout=timeout)
     page.click('#labs [data-lab="%s"]' % lab_id)
     page.wait_for_function('(n) => document.getElementById("title")?.textContent === n', arg=lab_name, timeout=timeout)
-    page.click('#tab-design')
+    open_design(page)
     wait_design_ready(page, timeout=timeout, expect_device=expect_device)
+
+
+def reload_design(page):
+    """Reload the page on the Network design view: the route is now #view=advanced and the Experimental
+    <details> starts closed on every load, so reopen it (that is also what loads the design)."""
+    page.reload()
+    page.wait_for_selector('#experimental-design', timeout=15000)
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+
+
+def open_design(page, timeout=15000):
+    """Advanced > Experimental > Network design: the Design tab is gone, so click #tab-advanced, open
+    #experimental-design (closed by default) and wait for the #design-view region to be visible."""
+    page.click('#tab-advanced')
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+    page.wait_for_selector('#design-view', state='visible', timeout=timeout)
 
 
 def set_bgp_marker(page, as_number, ospf_area=None):
@@ -354,7 +372,7 @@ def download_zip(page, rec, step='download_zip'):
 
 def do_reload(page, rec, step='reload', expect_device=None):
     with rec.timed(step):
-        page.reload()
+        reload_design(page)
         wait_design_ready(page, expect_device=expect_device)
 
 
@@ -688,7 +706,7 @@ def act_tab_switch(page, rec, ctx):
     target = ctx['rng'].choice(['topology', 'devices', 'progress', 'tools', 'advanced'])
     page.click('#tab-%s' % target)
     page.wait_for_timeout(80)
-    page.click('#tab-design')
+    open_design(page)
     wait_design_ready(page, expect_device=ctx['cfg']['marker_device'])
 
 
@@ -772,7 +790,7 @@ def act_clear_cancel(page, rec, ctx):
 
 
 def act_reload(page, rec, ctx):
-    page.reload()
+    reload_design(page)
     wait_design_ready(page, expect_device=ctx['cfg']['marker_device'])
 
 

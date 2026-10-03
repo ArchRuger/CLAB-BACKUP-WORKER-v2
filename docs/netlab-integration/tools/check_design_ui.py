@@ -58,6 +58,15 @@ class Run:
         self.page.wait_for_function('(w) => (document.getElementById("design-state")?.textContent || "").includes(w)', arg=words, timeout=timeout)
 
 
+def reload_design(page):
+    """Reload the page on the Network design view: the route is now #view=advanced and the Experimental
+    <details> starts closed on every load, so reopen it (that is also what loads the design)."""
+    page.reload()
+    page.wait_for_selector('#experimental-design', timeout=15000)
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+
+
 def wait_http(url, seconds=60):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -171,19 +180,19 @@ def main():
             r.shot('05-file')
             page.keyboard.press('Escape')
             # An unsupported protocol is refused before the engine runs.
-            page.locator('input[name="design-module"][value="eigrp"]').check()
+            page.locator('input[name="design-module"][value="srv6"]').check()
             page.click('#design-save')
             page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Unsaved")', timeout=10000)
             page.click('#design-generate')
             r.wait_state('failed', timeout=60000)
             errors = r.text('#design-plan-errors')
-            r.check('EIGRP on cEOS fails the plan with the device and the reason named', 'eigrp' in errors and ('r1' in errors or 'r2' in errors) and 'arista_ceos' in errors, errors[:300])
+            r.check('SRv6 on cEOS fails the plan with the device and the reason named', 'srv6' in errors and ('r1' in errors or 'r2' in errors) and 'arista_ceos' in errors, errors[:300])
             r.shot('06-unsupported')
-            page.locator('input[name="design-module"][value="eigrp"]').uncheck()
+            page.locator('input[name="design-module"][value="srv6"]').uncheck()
             page.click('#design-save')
             page.wait_for_function('() => !(document.getElementById("design-state")?.textContent || "").includes("Unsaved")', timeout=10000)
             # Reload keeps the design; the export link is there; the history lists both plans.
-            page.reload()
+            reload_design(page)
             page.wait_for_selector('#design-view:not([hidden])', timeout=15000)
             page.wait_for_function('() => (document.getElementById("design-advanced")?.value || "").includes("65010")', timeout=15000)
             r.check('a reload keeps the saved design', '65010' in page.locator('#design-advanced').input_value())

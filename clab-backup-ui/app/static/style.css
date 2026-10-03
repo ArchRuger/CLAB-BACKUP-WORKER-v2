@@ -2595,3 +2595,14 @@ tr.diff-ctx .diff-marker { color: var(--muted); }
 .design-apply-owned { margin: 6px 0; }
 #design-apply-choose-body .checkbox-label { align-items: flex-start; padding: 4px 0; }
 #design-apply-choose-body .checkbox-label small { display: block; color: var(--muted); }
+
+/* Retired modules a saved design still carries: a read-only row under the services grid, with the reason and a Remove button. */
+.design-retired-row { grid-column: 1 / -1; padding: 8px 12px; margin: 4px 0; border-left: 3px solid var(--warn); border-radius: 0 var(--radius) var(--radius) 0; background: var(--warn-soft); }
+.design-retired-row .checkbox-label { margin: 0; }
+.design-retired-row .form-help { margin: 4px 0 8px 26px; color: var(--ink); }
+#design-retired-notice { margin: 10px 0; }
+#design-retired-notice details { margin-top: 4px; }
+/* The device review's live log: one row per device, the step in a pill and the fixed reason beneath it. */
+.design-review-log td, .design-review-log th { vertical-align: top; }
+.design-review-log .design-review-reason { display: block; margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
+#design-review-running { margin-top: 6px; }

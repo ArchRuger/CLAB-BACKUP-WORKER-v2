@@ -207,6 +207,7 @@
             <tr><td>Shared links</td><td><input id="design-pool-lan-ipv4" placeholder="172.16.0.0/16"></td><td><input id="design-pool-lan-ipv6" placeholder="2001:db8:2::/48"></td><td><input id="design-pool-lan-prefix" type="number" min="1" max="127" aria-label="Shared links: allocation size (prefix length)" value="24"></td></tr>
           </tbody></table></div>
           <h3>Protocols and services</h3>
+          <div id="design-retired-notice" class="banner warn" hidden></div>
           <div id="design-modules" class="design-module-list"></div>
           <div id="design-ospf-settings" class="design-module-settings" hidden><label for="design-ospf-area">OSPF area</label><input id="design-ospf-area" placeholder="0.0.0.0"></div>
           <div id="design-bgp-settings" class="design-module-settings" hidden><label for="design-bgp-as">BGP AS number</label><input id="design-bgp-as" type="number" min="1" max="4294967295" placeholder="65000"><fieldset class="design-check-list design-rr-fieldset"><legend>Route reflectors</legend><div id="design-bgp-rr" class="design-rr-grid"></div><p class="form-help">Tick every router that reflects routes; none means a full mesh.</p></fieldset></div>
@@ -257,6 +258,7 @@
         <p class="caption" id="design-apply-reason" data-proxy-reason="design-apply" hidden></p>
         <p class="caption" id="design-export-git-reason" data-proxy-reason="design-export-git" hidden></p>
         <p class="caption" id="design-apply-last" role="status" hidden></p>
+          <p class="caption" id="design-review-running" hidden></p>
       </section>
       <section id="design-files" class="card" aria-labelledby="design-files-title">
         <h2 id="design-files-title">Generated files</h2>
@@ -272,6 +274,16 @@
           <div id="design-apply-choose-body"></div>
           <p class="form-error" role="alert" id="design-apply-choose-error"></p>
           <div class="dialog-actions"><button type="button" class="button secondary" data-design-apply-close>Cancel</button><button type="button" class="button primary" id="design-apply-review-run">Review</button></div>
+        </div>
+        <div id="design-apply-reviewing-step" hidden>
+          <h3 id="design-review-title" tabindex="-1">Reviewing devices</h3>
+          <p id="design-review-overall" class="caption"></p>
+          <p class="form-help">Each device is contacted and the change is tried inside its own transaction, then aborted. Nothing is applied.</p>
+          <div id="design-review-body"></div>
+          <p id="design-review-live" class="sr-only" role="status" aria-live="polite"></p>
+          <p class="form-error" id="design-review-error"></p>
+          <div class="dialog-actions"><button type="button" class="button secondary" data-design-apply-close>Close</button><button type="button" class="button primary" id="design-review-again" hidden>Review again</button></div>
+          <p class="caption" id="design-review-close-note">Closing this window does not stop the review. It keeps running; reopen Apply to devices to see it.</p>
         </div>
         <div id="design-apply-review-step" hidden>
           <div id="design-apply-review-body"></div>

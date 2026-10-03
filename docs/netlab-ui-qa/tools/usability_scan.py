@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Usability, keyboard, visual and accessibility scan: the Design tab and Restart device.
+"""Usability, keyboard, visual and accessibility scan: Network design (Advanced > Experimental) and Restart device.
 
 Two targets, two rules:
 
-* The **Design tab** on the fixture manager (`docs/redesign/tools/fixture_manager.py`: the real app on
+* **Network design** (Advanced > Experimental) on the fixture manager (`docs/redesign/tools/fixture_manager.py`: the real app on
   scratch state with the real netlab engine, no VM). With `--start-fixture` this tool starts its own fixture
   on `--port` with a fresh data directory under `--data-root` for every browser and stops it afterwards.
   Everything is allowed there, including saving and generating.
@@ -134,6 +134,15 @@ def open_design(page, base, lab):
     page.wait_for_timeout(600)
 
 
+def open_design_via_advanced(page, timeout=15000):
+    """Advanced > Experimental > Network design: the Design tab is gone, so click #tab-advanced, open
+    #experimental-design (closed by default) and wait for the #design-view region to be visible."""
+    page.click('#tab-advanced')
+    if not page.evaluate("() => document.getElementById('experimental-design').open"):
+        page.click('#experimental-design > summary')
+    page.wait_for_selector('#design-view', state='visible', timeout=timeout)
+
+
 def unfocus(page):
     page.locator('#design-view h2').first.click()
     page.wait_for_timeout(200)
@@ -212,10 +221,11 @@ def design_journey(s, page, base, full):
         s.axe(page, 'design-plan-ready', '#design-view')
     # 5. Keyboard: the tab list reaches Design.
     page.locator('#tab-topology').focus()
-    for _ in range(3):
+    for _ in range(4):
         page.keyboard.press('ArrowRight')
         page.wait_for_timeout(150)
-    s.key('Design tab (#tab-design)', 'focus Topology tab, ArrowRight x3', 'tab-design' in s.active(page), page.locator('#tab-design[aria-selected="true"]').count() == 1, 'n/a', s.active(page))
+    s.key('Advanced tab (hosts Experimental > Network design; there is no Design tab)', 'focus Topology tab, ArrowRight x4', 'tab-advanced' in s.active(page), page.locator('#tab-advanced[aria-selected="true"]').count() == 1 and page.locator('#tab-design').count() == 0, 'n/a', s.active(page))
+    open_design_via_advanced(page)
     page.wait_for_timeout(1500)
     unfocus(page)
     # 6. More menu by keyboard.
