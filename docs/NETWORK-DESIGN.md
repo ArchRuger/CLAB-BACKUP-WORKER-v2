@@ -64,6 +64,11 @@ Every generation decides identities explicitly and records them:
   link owns, the manager assigns the first free prefix of the same size from the same pool and runs
   the engine a second time (`passes: 2` and `collision_fixes` in the generation); a plan that still
   overlaps fails instead of being shown.
+- Every access link of a VLAN, and a trunk whose native VLAN it is, carries that VLAN's subnet: netlab copies
+  the VLAN prefix onto the link and overrides any prefix pinned there. Such links are one segment, never a
+  collision (two hosts on one VLAN plan normally). A pin cannot move a VLAN link, so when a VLAN subnet lands
+  on a plain link the plain link is the one moved; when it lands on a fixed prefix (pinned, or explicit in
+  the design) the plan fails at once and names the VLAN and the link.
 - The adapter emits devices (routers first, then hosts, by name) and links (by key) in a sorted
   order, so the same semantic input yields byte-identical generated files whatever the order of the
   containerlab file.
@@ -177,7 +182,9 @@ was applied live, and what the limit is. As of this release, on the four accepta
 Two rules of the intent that the families rely on: a device's own `modules` list *replaces* the design's list
 for that device (netlab's rule), which is how a device that cannot carry a module is left out of it while the
 others keep it; and `links.<key>.lag.members` names the other member links of an aggregation carried by that
-link (the member ports are then netlab's, by index, and never links of their own).
+link (the member ports are then netlab's, by index, and never links of their own). A member link is never a
+bundle itself and belongs to one aggregation only: validation refuses a cycle, a chain or a link claimed by two
+bundles, and a design stored before that check fails to plan rather than leave those ports out.
 
 ## Generation
 
@@ -195,7 +202,9 @@ netlab topology, resolve compatibility, run the engine, fix collisions with a se
 overlaps, write the artifacts, the plan (`plan.json`: devices, interfaces with their containerlab
 port, addresses, neighbours, protocol settings, BGP sessions, links) and the provenance
 (`intent.json`, `topology.yml`, `mapping.json`, `transformed.json`), then record the generation.
-A generation can be cancelled; a manager restart marks a running one `interrupted`. The plans of a
+A generation can be cancelled; a manager restart marks a running one `interrupted`. A plan is reported
+generated only once its record is saved: if that save fails (a full disk), the plan is reported failed, its files
+are removed and the allocation ledger stays as it was. The plans of a
 removed lab are removed with it, *Start fresh* takes them along with the backups, and every stored
 file is private to the manager user; engine lines kept in a record never carry a directory path. Generation needs
 no deployment: a lab that is only built can be planned. It configures nothing: no device
@@ -313,6 +322,14 @@ generated artifacts (`kind: network-design`). The rules of a save apply unchange
 repository, the job saves on the VM first and stops for the mandatory review, the upload is the reviewed retry, one
 save at a time. A design export is never a backup and never a restore source: its manifest carries no device rows and
 no restore artifact, so it yields no restore candidate and *Apply to running lab* never offers it.
+
+The manifest's `lab_name` is the lab's name when the save was started; it labels the version and names its download.
+Exports made by earlier managers say `mapping.json` there (a naming fault), and that frozen record is never
+relabelled. A save started under such a manager and not yet saved on the VM when the manager is upgraded is
+refused at its next run with *The plan changed since this export was started*; start the export again. A save that
+the old manager was already writing to the VM stays pending instead (every retry repeats the refusal, and the VM
+may already hold that save's commit): dismiss it, then start the export again. (Given a
+save's recorded digest, `design_snapshot(..., bound=)` can rebuild that older form, but the save does not pass it yet.)
 
 ## API
 

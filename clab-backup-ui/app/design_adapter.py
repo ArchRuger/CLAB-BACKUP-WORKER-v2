@@ -246,7 +246,14 @@ def build(definition_yaml, lab_nodes, intent, profile_for, pins=None):
     for key, settings in (intent.get('links') or {}).items():
         members = ((settings or {}).get('lag') or {}).get('members') if isinstance((settings or {}).get('lag'), dict) else None
         if isinstance(members, list):
-            for member in members: lag_members[member] = key
+            for member in members:
+                # Validation refuses both; a design stored before it did must not plan with these links silently missing.
+                if member in lag_members and lag_members[member] != key: raise AdapterError('Link ' + str(member) + ' is a member of two aggregations (' + lag_members[member] + ' and ' + key + '); a link belongs to one.')
+                lag_members[member] = key
+    for member, key in lag_members.items():
+        own = ((intent.get('links') or {}).get(member) or {}).get('lag')
+        if isinstance(own, dict) and isinstance(own.get('members'), list):
+            raise AdapterError('Link ' + str(member) + ' is a member of the aggregation carried by ' + key + ' and carries an aggregation of its own; a member cannot be a bundle.')
     member_ports = {}; bundles = []
 
     def port_index(nos_name):
@@ -339,13 +346,39 @@ def link_prefixes(transformed, link_keys):
     return {key: {family: str(network) for family, network in families.items()} for key, families in _link_prefixes(transformed, link_keys).items()}
 
 
+def _vlan_segment(link):
+    """The VLAN whose subnet a transformed link carries: its access or native VLAN, set on the link or on one
+    of its ends. netlab copies that VLAN's prefix onto the link and overwrites any prefix given there."""
+    if not isinstance(link, dict): return None
+    for body in [link.get('vlan')] + [i.get('vlan') for i in (link.get('interfaces') or [])[:64] if isinstance(i, dict)]:
+        if not isinstance(body, dict): continue
+        for key in ('access', 'native'):
+            if isinstance(body.get(key), str) and body[key]: return body[key]
+    return None
+
+
+def _link_segments(transformed, link_keys):
+    """{link_key: vlan name} for the transformed links that carry a VLAN's subnet."""
+    result = {}
+    for index, link in enumerate(transformed.get('links') or []):
+        if index >= len(link_keys): break
+        name = _vlan_segment(link)
+        if name: result[link_keys[index]] = name
+    return result
+
+
 def collisions(transformed, link_keys, ledger):
     """The links the engine allocated on top of something already taken: netlab's pool allocator does
     not skip statically assigned prefixes, so an unpinned link can receive a prefix a pinned link owns.
     Returns [{'key', 'family', 'prefix', 'with'}] for every unpinned link whose new prefix overlaps a
-    pinned link prefix or another link's prefix; pinned links themselves are never reported."""
+    pinned link prefix or another link's prefix; pinned links themselves are never reported.
+    Links of one VLAN carrying its subnet are one segment, never a collision. A VLAN link's prefix is the
+    engine's (a pin cannot move it), so a plain link that overlaps it is the one reported; a VLAN link is
+    reported, with 'vlan' naming its VLAN, only against a prefix that cannot move either."""
     pinned = (ledger or {}).get('links') or {}
     current = _link_prefixes(transformed, link_keys)
+    segments = _link_segments(transformed, link_keys)
+    fixed = lambda key, family: family in (pinned.get(key) or {}) or key in segments
     found = []
     for key, families in current.items():
         for family, network in families.items():
@@ -353,8 +386,12 @@ def collisions(transformed, link_keys, ledger):
             for other_key, other_families in current.items():
                 other = other_families.get(family)
                 if other_key == key or other is None or not other.overlaps(network): continue
-                if family in (pinned.get(other_key) or {}) or other_key < key:
-                    found.append({'key': key, 'family': family, 'prefix': str(network), 'with': other_key}); break
+                if segments.get(key) and segments.get(key) == segments.get(other_key) and other == network: continue
+                if key in segments and not fixed(other_key, family): continue   # the plain link moves, not the VLAN link
+                if family in (pinned.get(other_key) or {}) or (other_key in segments) != (key in segments) or other_key < key:
+                    entry = {'key': key, 'family': family, 'prefix': str(network), 'with': other_key}
+                    if key in segments: entry['vlan'] = segments[key]
+                    found.append(entry); break
     return found
 
 
@@ -373,13 +410,14 @@ def fix_collisions(transformed, link_keys, ledger, pools, avoid=()):
     """Explicit prefixes that resolve collisions(): for each colliding link and family, the first subnet of
     the same size in the same pool that overlaps nothing already used (pinned prefixes, the other links'
     prefixes, the loopback pool, `avoid` networks and the prefixes chosen here). Returns
-    {link_key: {family: 'prefix'}}; a link whose pool cannot be found or is exhausted is left out."""
+    {link_key: {family: 'prefix'}}; a link whose pool cannot be found or is exhausted is left out, and so is a
+    VLAN link ('vlan' in its collision): the engine gives it the VLAN's subnet whatever is pinned on it."""
     current = _link_prefixes(transformed, link_keys)
     colliding = collisions(transformed, link_keys, ledger)
     used = list(avoid)
     for key, families in current.items():
         for family, network in families.items():
-            if not any(c['key'] == key and c['family'] == family for c in colliding): used.append(network)
+            if not any(c['key'] == key and c['family'] == family and not c.get('vlan') for c in colliding): used.append(network)
     for entry in ((ledger or {}).get('links') or {}).values():
         for value in (entry or {}).values():
             try: used.append(ipaddress.ip_network(value, strict=False))
@@ -391,6 +429,7 @@ def fix_collisions(transformed, link_keys, ledger, pools, avoid=()):
                 except (KeyError, ValueError, TypeError): pass
     chosen = {}
     for entry in colliding:
+        if entry.get('vlan'): continue
         network = current[entry['key']][entry['family']]
         _, pool = _pool_of(network, pools)
         if pool is None: continue
@@ -410,8 +449,8 @@ def overlaps(transformed, avoid=()):
     for index, link in enumerate(transformed.get('links') or []):
         prefix = link.get('prefix') if isinstance(link, dict) and isinstance(link.get('prefix'), dict) else {}
         label = 'link ' + str(link.get('linkindex', index + 1))
-        access = (link.get('vlan') or {}).get('access') if isinstance(link, dict) and isinstance(link.get('vlan'), dict) else None
-        if isinstance(access, str) and access: segment[label] = 'vlan ' + access
+        vlan = _vlan_segment(link)
+        if vlan: segment[label] = 'vlan ' + vlan
         for family in ('ipv4', 'ipv6'):
             try: items.append((family, label, ipaddress.ip_network(prefix[family], strict=False)))
             except (KeyError, ValueError, TypeError): pass
@@ -432,7 +471,7 @@ def overlaps(transformed, avoid=()):
     found = []
     for i, (family, a, na) in enumerate(items):
         for family_b, b, nb in items[i + 1:] + guarded:   # plan items against each other and against the guarded networks, never guarded against guarded
-            if segment.get(a) and segment.get(a) == segment.get(b): continue   # two access ports of the same VLAN share its subnet
+            if segment.get(a) and segment.get(a) == segment.get(b) and na == nb: continue   # two access (or native) ports of the same VLAN share its subnet
             if family == family_b and na.version == nb.version and na.overlaps(nb): found.append({'family': family, 'a': a, 'b': b})
     for family, a, na in hosts:
         for family_b, b, nb in guarded:

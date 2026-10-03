@@ -231,6 +231,26 @@ class SaveDesignTests(unittest.TestCase):
         self.assertEqual(validate.json()['valid'], False)
         self.assertTrue(validate.json()['problems'])
 
+    def test_malformed_families_or_device_modules_are_a_readable_400_never_a_500(self):
+        import yaml
+        for field, intent in (('families', dict(valid_intent(), families='x')), ('families', dict(valid_intent(), families=None)),
+                              ('nodes.ceos.modules', dict(valid_intent(), nodes={'ceos': {'modules': [['ospf']]}})),
+                              ('nodes.ceos.modules', dict(valid_intent(), nodes={'ceos': {'modules': [{}]}}))):
+            with self.subTest(field=field, value=intent['families'] if field == 'families' else intent['nodes']):
+                saved = self.client.put(f'/api/labs/{self.lab_id}/design', json={'intent': intent, 'revision': ''})
+                self.assertEqual(saved.status_code, 400, saved.text)
+                self.assertIn('Fix the design first', saved.json()['detail'])
+                self.assertIn(field, saved.json()['detail'])
+                checked = self.client.post(f'/api/labs/{self.lab_id}/design/validate', json={'intent': intent})
+                self.assertEqual(checked.status_code, 200, checked.text)
+                self.assertFalse(checked.json()['valid'])
+                self.assertIn(field, [p['path'] for p in checked.json()['problems']])
+                imported = self.client.post(f'/api/labs/{self.lab_id}/design/import', files={'intent': ('x.yml', yaml.safe_dump(intent).encode(), 'application/yaml')})
+                self.assertEqual(imported.status_code, 200, imported.text)
+                self.assertFalse(imported.json()['imported'])
+                self.assertIn(field, [p['path'] for p in imported.json()['problems']])
+        self.assertIsNone(self.client.get(f'/api/labs/{self.lab_id}/design').json()['intent'])
+
     def test_saving_a_valid_intent_succeeds_and_is_stripped_from_public_state(self):
         response = self.client.put(f'/api/labs/{self.lab_id}/design', json={'intent': valid_intent(), 'revision': ''})
         self.assertEqual(response.status_code, 200)
@@ -534,6 +554,80 @@ class RealEngineGenerationTests(unittest.TestCase):
             self.assertNotIn('netlab up', joined)
 
 
+VLAN_TOPOLOGY = '''name: vlan-pair
+topology:
+  nodes:
+    sw: {kind: arista_ceos, image: n24l/ceos:4.35.0F, mgmt-ipv4: 172.20.20.101}
+    r2: {kind: arista_ceos, image: n24l/ceos:4.35.0F, mgmt-ipv4: 172.20.20.102}
+    h1: {kind: linux, image: ghcr.io/srl-labs/network-multitool:latest, mgmt-ipv4: 172.20.20.105}
+    h2: {kind: linux, image: ghcr.io/srl-labs/network-multitool:latest, mgmt-ipv4: 172.20.20.106}
+  links:
+    - endpoints: ["h1:eth1", "sw:eth1"]
+    - endpoints: ["h2:eth1", "sw:eth2"]
+    - endpoints: ["sw:eth3", "r2:eth1"]
+'''
+
+
+@unittest.skipUnless(HAS_NETLAB, SKIP_REASON)
+class VlanSegmentGenerationTests(unittest.TestCase):
+    """Audit 2026-10-03 M-7, against the pinned engine: two hosts on one routed VLAN share its subnet (netlab copies
+    the VLAN prefix onto every access link), which is one segment and not a collision; a link prefix that really
+    lands on the VLAN subnet is still refused."""
+    H1, H2, CORE = 'h1:eth1--sw:eth1', 'h2:eth1--sw:eth2', 'r2:eth1--sw:eth3'
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.app = create_app(self.tmp.name)
+        self.client = TestClient(self.app)
+        self.client.__enter__()
+        self.addCleanup(self.client.__exit__, None, None, None)
+        self.addCleanup(self.app.state.network_design.close)
+        self.lab_id = add_lab(self.app, name='vlan-pair', definition_yaml=VLAN_TOPOLOGY)
+
+    def intent(self, core=None):
+        intent = intent_schema.empty_intent()
+        intent['modules'] = ['vlan', 'ospf']
+        intent['vlans'] = {'red': {'id': 100, 'mode': 'irb'}}
+        intent['links'] = {self.H1: {'vlan': {'access': 'red'}}, self.H2: {'vlan': {'access': 'red'}}}
+        if core: intent['links'][self.CORE] = core
+        return intent
+
+    def generate(self, intent=None):
+        """Saves `intent` and generates it; without one, generates the saved design again."""
+        if intent is not None:
+            saved = self.client.put(f'/api/labs/{self.lab_id}/design', json={'intent': intent, 'revision': ''})
+            self.assertEqual(saved.status_code, 200, saved.text)
+            self.revision = saved.json()['intent']['revision']
+        response = self.client.post(f'/api/labs/{self.lab_id}/design/generate', json={'revision': self.revision})
+        self.assertEqual(response.status_code, 200, response.text)
+        return poll_generation(self.client, self.lab_id, response.json()['id'])
+
+    def test_two_access_links_of_one_routed_vlan_generate_and_regenerate(self):
+        first = self.generate(self.intent())
+        self.assertEqual(first['status'], 'succeeded', (first.get('message'), first.get('errors')))
+        self.assertEqual(first['passes'], 1, 'nothing to fix: the shared VLAN subnet is not a collision')
+        self.assertEqual(first['collision_fixes'], {})
+        links = first['ledger']['links']
+        self.assertEqual(links[self.H1], links[self.H2], 'both hosts are on the VLAN subnet')
+        self.assertEqual(links[self.H1]['ipv4'], '172.16.0.0/24')
+        self.assertNotEqual(links[self.CORE], links[self.H1])
+        second = self.generate()   # now with both VLAN links pinned in the ledger
+        self.assertEqual(second['status'], 'succeeded', (second.get('message'), second.get('errors')))
+        self.assertEqual(second['ledger'], first['ledger'])
+        self.assertEqual(second['renumbering'], [])
+
+    def test_a_link_prefix_on_the_vlan_subnet_is_still_reported(self):
+        # The engine gives VLAN red the first /24 of the default lan pool (the test above records it in the ledger).
+        record = self.generate(self.intent(core={'prefix': {'ipv4': '172.16.0.0/30'}}))
+        self.assertEqual(record['status'], 'failed')
+        self.assertEqual(record['passes'], 1, 'a pin cannot move a VLAN link prefix, so no second pass is tried')
+        self.assertIn('VLAN', record['message'])
+        joined = ' | '.join(record['errors'])
+        self.assertIn(self.CORE, joined)
+        self.assertIn('red', joined)
+
+
 @unittest.skipUnless(HAS_NETLAB, SKIP_REASON)
 class GenerationFailureTests(unittest.TestCase):
     """Behaviour 11: an unsupported module blocks every device before the engine runs, and excluding
@@ -643,6 +737,62 @@ class ReconciliationTests(unittest.TestCase):
                 self.assertEqual(generation['message'], 'Plan generated')
             finally:
                 service.close()
+
+
+class UnsavedPlanTests(unittest.TestCase):
+    """A plan whose finished record cannot be saved is not reported generated: the in-memory record would say
+    `succeeded` and move the ledger while the saved one still says `running` (interrupted at the next start)."""
+
+    def test_a_plan_whose_record_cannot_be_saved_fails_and_keeps_the_ledger(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Store(tmp)
+            intent = intent_schema.normalize(valid_intent()); intent['allocations'] = {'node_ids': {'ceos': 7}}
+            store.state['labs'] = [{'id': 'a' * 32, 'name': 'x', 'network_design': intent,
+                                    'network_generations': [{'id': 'b' * 32, 'lab_id': 'a' * 32, 'status': 'queued', 'intent_revision': intent['revision']}]}]
+            store.save()
+            service = NetworkDesign(store)
+            self.addCleanup(service.close)
+            folder = service.root / ('a' * 32) / ('b' * 32); folder.mkdir(parents=True); (folder / 'plan.json').write_text('{}')
+            store.lab('a' * 32)['network_generations'][0]['status'] = 'queued'   # the constructor marked it interrupted
+            result = dict(status='succeeded', finished='2026-10-03T00:00:00+00:00', message='Plan generated', ledger={'node_ids': {'ceos': 1}},
+                          artifacts={'ceos': [{'module': 'ospf', 'size': 1, 'sha256': '0' * 64}]}, errors=[], duration=1.0)
+            real_save = store.save
+
+            def full_disk():   # every save that would persist a generated plan fails, like a full disk would
+                if any(g.get('status') == 'succeeded' for lab in store.state['labs'] for g in lab.get('network_generations') or []):
+                    raise OSError(28, 'No space left on device')
+                real_save()
+            with patch.object(store, 'save', side_effect=full_disk), patch.object(service, '_generate', return_value=result):
+                service.execute('a' * 32, 'b' * 32, {'intent': intent})
+            generation = store.lab('a' * 32)['network_generations'][0]
+            self.assertEqual(generation['status'], 'failed', generation)
+            self.assertIn('could not be saved', generation['message'])
+            self.assertNotIn('artifacts', generation)
+            self.assertNotIn('ledger', generation)
+            self.assertEqual(store.lab('a' * 32)['network_design']['allocations'], {'node_ids': {'ceos': 7}}, 'the ledger is not moved by an unsaved plan')
+            self.assertFalse(folder.exists(), 'the files of an unsaved plan are removed')
+            self.assertTrue(any(e['action'] == 'design.generated' and e['level'] == 'error' for e in store.events(job_id='b' * 32)))
+            self.assertFalse(any('succeeded' in e['message'] for e in store.events(job_id='b' * 32)))
+            persisted = json.loads(store.cipher.decrypt(store.path.read_bytes()))
+            self.assertEqual(persisted['labs'][0]['network_generations'][0]['status'], 'failed', 'the outcome is saved once the disk takes it')
+
+    def test_a_saved_plan_is_reported_generated(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Store(tmp)
+            intent = intent_schema.normalize(valid_intent())
+            store.state['labs'] = [{'id': 'a' * 32, 'name': 'x', 'network_design': intent,
+                                    'network_generations': [{'id': 'b' * 32, 'lab_id': 'a' * 32, 'status': 'succeeded'}]}]
+            service = NetworkDesign(store)
+            self.addCleanup(service.close)
+            store.lab('a' * 32)['network_generations'][0]['status'] = 'running'
+            result = dict(status='succeeded', finished='2026-10-03T00:00:00+00:00', message='Plan generated', ledger={'node_ids': {'ceos': 1}}, errors=[])
+            self.assertEqual(service._finish('a' * 32, 'b' * 32, intent['revision'], result), 'succeeded')
+            self.assertEqual(store.lab('a' * 32)['network_design']['allocations'], {'node_ids': {'ceos': 1}})
+            persisted = json.loads(store.cipher.decrypt(store.path.read_bytes()))['labs'][0]   # what a restart would read back
+            self.assertEqual(persisted['network_generations'][0]['status'], 'succeeded')
+            self.assertEqual(persisted['network_design']['allocations'], {'node_ids': {'ceos': 1}}, 'the ledger is saved with the plan')
 
 
 class GenerationCapUnitTests(unittest.TestCase):
