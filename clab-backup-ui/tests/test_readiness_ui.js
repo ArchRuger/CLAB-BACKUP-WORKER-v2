@@ -134,3 +134,14 @@ test('U-09: the device panel says in words why Restart device… or Back up conf
  h.context.captureStatusLine=()=>'Packet capture is not set up on this VM.';assert.equal(h.context.nodeActionNotes(n),'Packet capture is not set up on this VM.');
  assert.match(vm.runInContext('nodeActions({name:"clab-x-r1",short_name:"r1",ssh_ready:true})',h.context),/aria-label="Details for r1"/,'Details is named after the device, not its container (U-19)');
 });
+
+test('adding a lab by files survives blocked sessionStorage in the fallback branch without the router',async()=>{
+ const blocked={getItem(){throw new Error('SecurityError');},setItem(){throw new Error('SecurityError');},removeItem(){throw new Error('SecurityError');}};
+ const h=managementHarness({labs:[],discovery:{configured:true,connected:true,host:{enabled:true}}});
+ h.context.sessionStorage=blocked;h.context.FormData=class{};h.context.notify=()=>{};
+ h.context.api=async()=>({json:async()=>({id:'made'})});
+ let running;h.context.withForm=(form,fn)=>{running=fn();};
+ const setup=h.element('setup-form');
+ setup.onsubmit({preventDefault(){},currentTarget:{},target:{}});await running;
+ assert.equal(h.context.activeId,'made','the new lab is open although the id could not be stored');
+});

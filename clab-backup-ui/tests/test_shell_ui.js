@@ -395,3 +395,94 @@ test('U-08: a menu that would open past the left edge anchors to its button inst
  h.managerButton.dispatch('click');assert.equal(list.hidden,true);
  list.getBoundingClientRect=()=>({left:120});h.managerButton.dispatch('click');assert.equal(classes.has('menu-clamped'),false,'room on the left: the usual right-aligned list');
 });
+
+// M-14: the generic x of a notice must not hide a later, different failure that shares its headline.
+function noticeLab(){return {id:'lab',name:'Lab',nodes:[],profiles:[],defaults:{},deployment:{status:'Running'}};}
+function setLabState(context,lab,extra={}){
+ vm.runInContext(`activeId='lab';state=${JSON.stringify({labs:[lab],jobs:[],operations:[],restore_jobs:[],git_jobs:[],platforms:{},loaded:true,...extra})};`,context);
+}
+test('M-14: closing an action-error notice with the x does not hide the next failure that has the same generic headline',()=>{
+ const h=menuHarness();setLabState(h.context,noticeLab());
+ const banner=h.$('lab-banner'),close=h.$('lab-banner-close');
+ assert.equal(h.context.showActionError('Host said no (first)'),true);
+ assert.equal(banner.hidden,false);assert.equal(h.$('lab-banner-detail-text').textContent,'Host said no (first)');
+ close.onclick();assert.equal(banner.hidden,true,'the student closed the first failure');
+ assert.equal(h.context.actionError(),null,'closing the error clears it, so lower-priority notices are no longer shadowed by it');
+ assert.equal(h.context.showActionError('Host said no (second)'),true);
+ assert.equal(banner.hidden,false,'a later, different failure with the same generic headline is shown');
+ assert.equal(h.$('lab-banner-detail-text').textContent,'Host said no (second)');
+});
+
+test('M-14: after the x on an action error the notices underneath it (a failed operation) are not hidden by the stale error',()=>{
+ const h=menuHarness();
+ const failed={id:'op-1',lab_id:'lab',action:'deploy',status:'failed',created:'2026-09-16T11:00:00Z',finished:'2026-09-16T11:01:00Z',message:'boom'};
+ setLabState(h.context,{...noticeLab(),deployment:{status:'Not deployed'}},{operations:[failed]});
+ h.context.showActionError('Something broke');
+ h.$('lab-banner-close').onclick();
+ assert.equal(h.$('lab-banner').hidden,false,'the failed-operation notice is visible at once, not after the next poll');
+ assert.equal(h.$('lab-banner-text').textContent,'Starting lab did not finish.');
+});
+
+test('M-14: closing the failed-operation notice hides that job only; a later failure of the same kind reopens it',()=>{
+ const h=menuHarness();
+ const job=(id,at)=>({id,lab_id:'lab',action:'deploy',status:'failed',created:at,finished:at,message:'boom '+id});
+ const lab={...noticeLab(),deployment:{status:'Not deployed'}};
+ setLabState(h.context,lab,{operations:[job('op-1','2026-09-16T11:00:00Z')]});
+ h.context.renderLabBanner();
+ const banner=h.$('lab-banner');
+ assert.equal(banner.hidden,false);
+ h.$('lab-banner-close').onclick();assert.equal(banner.hidden,true);
+ h.context.renderLabBanner();assert.equal(banner.hidden,true,'the same job stays closed across the next poll');
+ setLabState(h.context,lab,{operations:[job('op-2','2026-09-16T12:00:00Z'),job('op-1','2026-09-16T11:00:00Z')]});
+ h.context.renderLabBanner();
+ assert.equal(banner.hidden,false,'a new failed job with the identical headline is a new notice');
+ assert.equal(h.$('lab-banner-detail-text').textContent,'boom op-2');
+});
+
+// M-15: the same dismissal path that covers failed jobs covers restores that ended needs_attention or partial.
+test('M-15: dismissedSet() includes needs_attention and partial restore jobs the student dismissed, and the banner offers Dismiss and Details',()=>{
+ const h=menuHarness();
+ const restore=(id,status)=>({id,lab_id:'lab',status,created:'2026-09-16T11:30:00Z',finished:'2026-09-16T11:30:00Z',message:'1/2 node(s) verified'});
+ setLabState(h.context,noticeLab(),{restore_jobs:[restore('rs-1','needs_attention'),restore('rs-2','partial'),restore('rs-3','succeeded')]});
+ vm.runInContext(`isDismissed=id=>['rs-1','rs-2','rs-3'].includes(id);`,h.context);
+ assert.deepEqual([...h.context.dismissedSet()].sort(),['rs-1','rs-2'],'succeeded jobs are never in the set');
+ vm.runInContext(`isDismissed=()=>false;`,h.context);
+ setLabState(h.context,noticeLab(),{restore_jobs:[restore('rs-1','needs_attention')]});
+ h.context.renderLabBanner();
+ assert.equal(h.$('lab-banner').hidden,false);assert.match(h.$('lab-banner-text').textContent,/needs a check on some devices/);
+ assert.equal(h.$('banner-dismiss').hidden,false);assert.equal(h.$('banner-restore').hidden,false);assert.equal(h.$('banner-restore').textContent,'Details');
+ assert.equal(h.$('lab-banner').className,'banner warn','needs attention after a replaced configuration is a warning, not an error');
+});
+
+// L-31: Try again repeats the request the student confirmed, options included.
+test('L-31: Try again on a failed destroy repeats it with the confirmed --cleanup option',()=>{
+ const h=menuHarness();
+ const failed={id:'op-1',lab_id:'lab',action:'destroy',status:'failed',created:'2026-09-16T11:00:00Z',finished:'2026-09-16T11:01:00Z'};
+ setLabState(h.context,noticeLab(),{operations:[failed]});
+ vm.runInContext(`var retried=null;opReview=async r=>{retried=r;};`,h.context);
+ h.context.rememberJobRequest('op-1',{lab_id:'lab',action:'destroy',options:{cleanup:true}});
+ h.context.renderLabBanner();
+ const retry=h.$('banner-try-again');
+ assert.equal(retry.hidden,false);assert.equal(retry.textContent,'Try again');
+ retry.onclick();
+ assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext('retried',h.context))),{lab_id:'lab',action:'destroy',options:{cleanup:true}});
+});
+
+test('L-31: without a stored request a destroy retries with the default options; an action whose options or text are unknown offers the operations dialog instead of a weaker repeat',()=>{
+ const h=menuHarness();
+ const make=action=>({id:'op-'+action,lab_id:'lab',action,status:'failed',created:'2026-09-16T11:00:00Z',finished:'2026-09-16T11:01:00Z'});
+ vm.runInContext(`var retried=null,opened=null;opReview=async r=>{retried=r;};openLabOperations=id=>{opened=id;};`,h.context);
+ setLabState(h.context,noticeLab(),{operations:[make('destroy')]});
+ h.context.renderLabBanner();h.$('banner-try-again').onclick();
+ assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext('retried',h.context))),{lab_id:'lab',action:'destroy',options:{cleanup:true}});
+ vm.runInContext('retried=null',h.context);
+ for(const action of ['deploy','redeploy','create','revise']){
+  setLabState(h.context,noticeLab(),{operations:[make(action)]});
+  h.context.renderLabBanner();
+  assert.equal(h.$('banner-try-again').textContent,'Open lab operations',action+': the original options are unknown, so nothing is guessed');
+  h.$('banner-try-again').onclick();
+  assert.equal(vm.runInContext('opened',h.context),'lab');assert.equal(vm.runInContext('retried',h.context),null,'no weaker request is sent for '+action);
+ }
+ setLabState(h.context,noticeLab(),{operations:[make('stop')]});
+ h.context.renderLabBanner();assert.equal(h.$('banner-try-again').textContent,'Try again','an action without options retries as it was');
+});

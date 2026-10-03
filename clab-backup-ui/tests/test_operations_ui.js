@@ -301,6 +301,28 @@ test('the deploy review shows the command directly and drops the trust warning a
  assert.match(destroyHtml,/<details><summary>Technical details<\/summary>/,'other reviews still fold the command away');
 });
 
+test('L-31: confirming a review remembers the confirmed request by job id, and opRetryRequest hands it back for Try again',async()=>{
+ const elements=new Map(),el=()=>({value:'',onclick:null,addEventListener(){},querySelector:()=>({textContent:''}),querySelectorAll:()=>[],hidden:false});
+ const remembered=[];
+ const c=vm.createContext({$:id=>elements.get(id)||null,esc:s=>String(s),state:{labs:[],operations:[],git_jobs:[]},activeId:'',console,
+  document:{body:{insertAdjacentHTML(){}},querySelectorAll:()=>[],getElementById:()=>null,createElement:()=>el()},
+  location:{pathname:'/'},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},setTimeout:()=>0,clearTimeout(){},notify(){},refresh:async()=>{},current:()=>null,busy:()=>false,
+  rememberJobRequest:(id,request)=>{remembered.push([id,request]);return true;},
+  json:async(endpoint)=>endpoint==='/operations/preview'?{action:'destroy',name:'demo',path:'/etc/containerlab/demo.clab.yaml',token:'a'.repeat(32),warnings:[],affected:[],argv:[],steps:[],diff:''}:{id:'job-9',action:'destroy'}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),c);
+ c.opDialog=(id,title,html)=>{for(const m of html.matchAll(/ id="([\w-]+)"/g))elements.set(m[1],el());return {id,open:true,close(){this.open=false;},querySelector:()=>({textContent:''}),querySelectorAll:()=>[]};};
+ await c.opReview({action:'destroy',lab_id:'lab',options:{cleanup:true}});
+ await elements.get('op-confirm').onclick();
+ assert.equal(remembered.length,1);assert.equal(remembered[0][0],'job-9');
+ assert.deepEqual(JSON.parse(JSON.stringify(remembered[0][1])),{action:'destroy',lab_id:'lab',options:{cleanup:true}},'the options the student confirmed, not the defaults');
+ // With a stored request the retry is that request; without one only options-free actions are repeated from their name.
+ c.jobRequest=id=>id==='job-9'?remembered[0][1]:null;
+ assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'job-9',action:'destroy'},'lab'))),{action:'destroy',lab_id:'lab',options:{cleanup:true}});
+ assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'x',action:'destroy'},'lab'))),{lab_id:'lab',action:'destroy',options:{cleanup:true}});
+ assert.deepEqual(JSON.parse(JSON.stringify(c.opRetryRequest({id:'x',action:'restart-node',node:'clab-a-r1'},'lab'))),{lab_id:'lab',action:'restart-node',node:'clab-a-r1',options:{}});
+ for(const action of ['deploy','redeploy','create','revise','publish','clone'])assert.equal(c.opRetryRequest({id:'x',action},'lab'),null,action+' is never repeated from its name alone');
+});
+
 test('the create review names the map file it will write, and whether it replaces one already there',async()=>{
  const elements=new Map(),el=()=>({value:'',onclick:null,addEventListener(){},querySelector:()=>({textContent:''}),querySelectorAll:()=>[],hidden:false});
  const dialogs=[];
@@ -488,4 +510,20 @@ test('the builder hand-off markup: Add and Deploy now before the lab is in My la
  assert.match(after,/demo is in My labs\. It is not running/);assert.match(after,/id="op-published-deploy">Deploy now/);assert.match(after,/id="op-published-go" data-lab="L1">Go to My labs/);assert.doesNotMatch(after,/op-published-add/);
  c.state.labs=[{id:'L1',vm_project_path:'/srv/p/d.clab.yml'},{id:'L2',vm_project_path:'/srv/p/e.clab.yml'}];
  assert.equal(c.opLabAtPath('/srv/p/d.clab.yml').id,'L1','a lab already registered for the file is found and reused');assert.equal(c.opLabAtPath('/srv/p/none.clab.yml'),null);
+});
+
+test('deploy lab still opens the saved workspace when sessionStorage is blocked',async()=>{
+ const page=vm.createContext({$:()=>null,esc:String,state:{labs:[{id:'old',deployment_name:'ceos-pair',vm_project_path:'/etc/containerlab/ceos-pair/ceos-pair.clab.yaml'}]},activeId:'',
+  sessionStorage:{setItem(){throw new Error('SecurityError');},getItem(){throw new Error('SecurityError');}},
+  api:async()=>({json:async()=>({id:'new'})}),json:async()=>({})});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../app/static/operations.js'),'utf8'),page);
+ assert.equal(await page.opSaveWorkspace('/etc/containerlab/ceos-pair/ceos-pair.clab.yaml',{text:'name: x\n'},{name:'ceos-pair'}),'old');
+ assert.equal(page.activeId,'old','the lab is open although the id could not be remembered for a reload');
+});
+
+test('no manager script writes or clears the remembered lab in sessionStorage without a guard (L-32)',()=>{
+ for(const file of ['app.js','operations.js','management.js']){
+  const source=fs.readFileSync(path.join(__dirname,'../app/static',file),'utf8');
+  assert.doesNotMatch(source,/(?<!try\{)sessionStorage\.(setItem|removeItem)\('activeLab'/,file+': blocked site data throws SecurityError; shell.js shellSet/shellRemove or a try/catch must wrap the call');
+ }
 });

@@ -143,7 +143,10 @@ async function refreshMap(force=false){
  const labId=activeId,request=++mapRequest;if(!labId)return;
  if(mapLab!==labId){mapLab=labId;mapKey='';mapStage('loading');$('map-status').textContent='';}
  try{const drawing=await(await api('/labs/'+labId+'/topology')).json();if(request!==mapRequest||activeId!==labId)return;
- const key=labId+JSON.stringify(drawing);if(!force&&key===mapKey)return;mapKey=key;closeNodeMenu();
+ const key=labId+JSON.stringify(drawing);if(!force&&key===mapKey)return;
+ // A hidden panel (a map imported or saved from another tab, or a tab switched during the fetch) cannot be measured: getBBox() answers an empty box. Leave the key unset so showTab() renders and measures on the next visit.
+ if($('topology-view')?.hidden){mapKey='';return;}
+ mapKey=key;closeNodeMenu();
  if(!drawing){map.innerHTML='';$('map-status').textContent='';mapStage('empty');return;}
  mapStage('map');
  const caption=mapCaption(drawing);$('map-status').textContent=caption.text;

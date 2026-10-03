@@ -13,6 +13,10 @@ const STATUS_OPERATION_FAILED=['failed','interrupted'];
 const STATUS_GIT_BUSY=['queued','capturing','exporting','pushing'];
 const STATUS_RESTORE_BUSY=['queued','preflight','backing_up','applying','confirming','verifying'];
 const STATUS_RESTORE_FAILED=['failed','preflight_failed','interrupted'];
+// Finished, but the lab-level state needs a human look: a device whose state could not be established
+// (needs_attention, which also covers a run that stopped on an unexpected error, so the wording does not claim it finished) or only some devices replaced (partial). Not "did not finish", so they get their own headline.
+const STATUS_RESTORE_ATTENTION=['needs_attention','partial'];
+const STATUS_RESTORE_ATTENTION_DETAIL={needs_attention:'Replacing configuration needs a check on some devices.',partial:'Replacing configuration finished on some devices only.'};
 const STATUS_BADGE_LABELS={reachable:'Login OK',unreachable:'Login failed',succeeded:'Succeeded',failed:'Failed',interrupted:'Interrupted',partial:'Partly succeeded',queued:'Queued',running:'Running',Ready:'Ready'};
 function plural(count,word,pluralWord){const n=Number(count)||0;return n+' '+(n===1?word:(pluralWord||word+'s'));}
 // Restart device names its one device when the job is at hand ("Restarting ceos"); the table's word otherwise.
@@ -56,7 +60,7 @@ function labFailure(lab,ctx={}){
  const dismissed=ctx.dismissed,isDismissed=id=>!!dismissed&&(typeof dismissed.has==='function'?dismissed.has(id):Array.isArray(dismissed)&&dismissed.includes(id));
  const done=[];
  for(const j of ctx.operations||[])if(j.lab_id===lab?.id&&!STATUS_OPERATION_BUSY.includes(j.status))done.push({job:j,failed:STATUS_OPERATION_FAILED.includes(j.status),label:operationLabel(j.action)});
- for(const j of ctx.restore_jobs||[])if(j.lab_id===lab?.id&&!STATUS_RESTORE_BUSY.includes(j.status))done.push({job:j,failed:STATUS_RESTORE_FAILED.includes(j.status),label:'Replacing configuration'});
+ for(const j of ctx.restore_jobs||[])if(j.lab_id===lab?.id&&!STATUS_RESTORE_BUSY.includes(j.status))done.push({job:j,failed:STATUS_RESTORE_FAILED.includes(j.status)||STATUS_RESTORE_ATTENTION.includes(j.status),label:'Replacing configuration',...(STATUS_RESTORE_ATTENTION.includes(j.status)?{detail:STATUS_RESTORE_ATTENTION_DETAIL[j.status],pill:'warn'}:{})});
  const newest=done.sort((a,b)=>statusJobTime(b.job)-statusJobTime(a.job))[0];
  return newest&&newest.failed&&!isDismissed(newest.job.id)?newest:null;
 }
@@ -72,7 +76,7 @@ function labState(lab,ctx={}){
  if(activity.operation)return {key:'working',label:operationLabel(activity.operation.action,activity.operation),detail:activity.operation.message||'Running on the lab VM.',ready,total,pill:'busy',job:activity.operation};
  if(activity.restore)return {key:'working',label:'Replacing configuration',detail:activity.restore.message||'Applying a saved configuration.',ready,total,pill:'busy',job:activity.restore};
  const failure=labFailure(lab,ctx);
- if(failure)return {key:'attention',label:'Needs attention',detail:`${failure.label} did not finish.`,ready,total,pill:'danger',job:failure.job};
+ if(failure)return {key:'attention',label:'Needs attention',detail:failure.detail||`${failure.label} did not finish.`,ready,total,pill:failure.pill||'danger',job:failure.job};
  const status=lab.deployment?.status||'Unlinked';
  if(status==='Unlinked')return {key:'unlinked',label:'Not matched to a running lab',detail:'The manager cannot tell which lab on the VM this is.',ready,total,pill:'neutral'};
  if(status==='Unknown')return {key:'unknown',label:'Status unknown',detail:ctx.discovery?.configured===false?'Connect the lab VM to see whether this lab is running.':'The lab VM cannot be reached right now, so this status may be out of date.',ready,total,pill:'neutral'};

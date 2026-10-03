@@ -39,6 +39,20 @@ function opCommand(action,label=opLabels[action],options={}){
 // The helper refuses the flag on a containerlab without it, so the flag is only sent when the
 // installed command is known to have it or the capabilities could not be read at all.
 function opDestroyOptions(caps=opCaps){return caps?.actions?.destroy?.cleanup===false?{}:{cleanup:true};}
+// Try again on a failed operation (the lab banner, app.js) repeats the request the student confirmed: the manager's job
+// record carries no options, so opReview remembers the request by job id (shell.js rememberJobRequest). When none is known
+// (a job from an earlier session), only an action with nothing to choose is repeated from its name: destroy with the
+// default options, the lifecycle actions with none. deploy and redeploy may have been the clear-the-folder variant, and
+// create, revise, publish and clone need text that is gone, so for those this returns null and the banner offers the dialog.
+const opPlainRetry=['start','stop','restart','apply','inspect','inspect-all','save','delete'];
+function opRetryRequest(job,labId){
+ const stored=typeof jobRequest==='function'?jobRequest(job?.id):null;
+ if(stored&&stored.action===job.action)return {...stored,lab_id:labId,...(job.node&&!stored.node?{node:job.node}:{})};
+ if(job?.action==='destroy')return {lab_id:labId,action:'destroy',options:opDestroyOptions()};
+ if(job?.action==='restart-node'&&job.node)return {lab_id:labId,action:'restart-node',node:job.node,options:{}};
+ if(opPlainRetry.includes(job?.action))return {lab_id:labId,action:job.action,options:{}};
+ return null;
+}
 // Hide from Home takes the lab off the Home list and nothing else: the words say what stays (the lab, its
 // devices, backups, saved progress and settings; the VM untouched) and the two ways back. Pure.
 function opHideHelp(lab){
@@ -227,6 +241,7 @@ async function opReview(request,opener){
  if($('op-save-first'))$('op-save-first').onclick=()=>{dialog.close();opTask(null,gitSaveProgress);};
  $('op-confirm').onclick=()=>opTask(dialog,async()=>{
   const job=await json('/operations/confirm','POST',{token:value.token});dialog.close();
+  if(typeof rememberJobRequest==='function')rememberJobRequest(job.id,{...request,lab_id:request.lab_id||labId});
   if(typeof opJobStarted==='function')opJobStarted(job);
   // The file has been chosen and the operation runs: the file dialogs are done, and the folder browser
   // must not stay open over the lab page that now reports how the operation goes.
@@ -390,7 +405,7 @@ async function opSaveWorkspace(path,source,parsed,labId=''){
  let id=labId||(state.labs||[]).find(l=>l.deployment_name===parsed.name||opPath(l)===path)?.id||'';
  if(!id)id=(await(await api('/lab-definitions',{method:'POST',body:opWorkspaceForm(path,source,parsed)})).json()).id;
  await json('/labs/'+id+'/operations-settings','PUT',{path});
- activeId=id;sessionStorage.setItem('activeLab',id);
+ activeId=id;try{sessionStorage.setItem('activeLab',id);}catch{/* blocked site data: the open lab is carried by activeId */}
  // On the main page the lab becomes the open lab through the router (history entry, Continue card).
  if(typeof selectLab==='function'&&typeof render==='function')selectLab(id);
  return id;
@@ -484,7 +499,7 @@ async function opEdit(path,labId='',newPath='',upload=null){
   $('op-add-confirm-button').onclick=()=>opTask(confirm,async()=>{
    let id=labId;
    if(!id){const lab=await(await api('/lab-definitions',{method:'POST',body:opWorkspaceForm(path,source,parsed)})).json();id=lab.id;}
-   await json('/labs/'+id+'/operations-settings','PUT',{path});activeId=id;sessionStorage.setItem('activeLab',id);confirm.close();dialog.close();await refresh();if(typeof selectLab==='function')selectLab(id);notify(parsed.name+' added to My labs.');
+   await json('/labs/'+id+'/operations-settings','PUT',{path});activeId=id;try{sessionStorage.setItem('activeLab',id);}catch{/* blocked site data: the open lab is carried by activeId */}confirm.close();dialog.close();await refresh();if(typeof selectLab==='function')selectLab(id);notify(parsed.name+' added to My labs.');
   });
  }));
  $('op-deploy-project')?.addEventListener('click',()=>opTask(dialog,async()=>{

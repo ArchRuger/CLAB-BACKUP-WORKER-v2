@@ -219,3 +219,18 @@ test('Restart device in the menu follows the shared eligibility and its reason; 
  assert.deepEqual(cls(nodes[2]),['state-working']);assert.equal(nodes[2].getAttribute('aria-label'),'R3 · Restarting');
  assert.match(nodes[2].title.textContent,/R3 · Restarting\. R3 is restarting on the VM\./);
 });
+
+test('a map fetched while the Topology panel is hidden is not measured or cached, so the next visit renders and measures it (L-30)',async()=>{
+ const drawing={schema:3,has_links_source:true,skipped_links:0,nodes:[{id:'a',inventory_name:'r1',label:'R1',x:0,y:0}],links:[],decorations:[],settings:{}};
+ const h=harness({lab:lab(),drawing});const $=h.$;
+ let measured=0;h.context.measureTopology=()=>{measured++;return [0,0,100,50];};
+ $('topology-view').hidden=true;
+ await h.context.refreshMap(true);
+ assert.equal(measured,0,'a display:none SVG has no layout: getBBox() would answer an empty box');
+ assert.equal($('topology-map').innerHTML,'','nothing is drawn into a panel nobody can see');
+ $('topology-view').hidden=false;
+ await h.context.refreshMap();
+ assert.equal(measured,1,'showTab() calls refreshMap() on the next visit, which now measures the visible map');
+ assert.equal($('topology-map').innerHTML,'<g data-nodes="1"></g>');assert.equal($('topology-map').attrs.viewBox,'0 0 100 50');
+ await h.context.refreshMap();assert.equal(measured,1,'once measured, an unchanged drawing is still not re-rendered');
+});

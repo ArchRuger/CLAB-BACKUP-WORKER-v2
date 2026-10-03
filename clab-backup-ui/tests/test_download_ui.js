@@ -86,3 +86,118 @@ test('rejected backup-selection edit restores the checkbox',async()=>{
  await h.document.getElementById('nodes').listeners.change({target});
  assert.equal(target.checked,false);
 });
+
+// L-32: blocked site data (sessionStorage throws) must not break opening a lab.
+test('selectLab still opens the lab and paints when sessionStorage is blocked',()=>{
+ const h=harness();
+ h.context.sessionStorage={getItem(){throw new Error('SecurityError');},setItem(){throw new Error('SecurityError');},removeItem(){throw new Error('SecurityError');}};
+ vm.runInContext(`state={labs:[{id:'a'}],jobs:[],platforms:{}};painted=0;render=()=>{painted++;};selectLab('a','devices');`,h.context);
+ assert.equal(vm.runInContext('activeId',h.context),'a');assert.equal(vm.runInContext('tab',h.context),'devices');
+ assert.equal(vm.runInContext('painted',h.context),1,'render() ran after the blocked write');
+});
+
+// L-33: refresh() applies /state responses in request order.
+function stateFetch(h){
+ const pending=[];
+ h.context.fetch=url=>new Promise((resolve,reject)=>pending.push({url,resolve:body=>resolve({ok:true,status:200,headers:{get:()=>''},json:async()=>body}),reject}));
+ return pending;
+}
+const labIds=h=>JSON.parse(vm.runInContext('JSON.stringify(state.labs.map(l=>l.id))',h.context));
+test('a slow older poll cannot overwrite the newer refresh or send the student Home',async()=>{
+ const h=harness();vm.runInContext(`render=()=>{};`,h.context);
+ const pending=stateFetch(h);
+ const poll=vm.runInContext('refresh()',h.context),action=vm.runInContext('refresh()',h.context);
+ pending[1].resolve({labs:[{id:'new'}],jobs:[],platforms:{}});await action;
+ vm.runInContext(`activeId='new'`,h.context);
+ pending[0].resolve({labs:[],jobs:[],platforms:{}});await poll;
+ assert.equal(vm.runInContext('activeId',h.context),'new','the stale response did not reset the open lab');
+ assert.deepEqual(labIds(h),['new']);
+});
+test('responses that arrive in order are each applied, and a failed newer refresh does not block an older answer',async()=>{
+ const h=harness();vm.runInContext(`render=()=>{};`,h.context);
+ const pending=stateFetch(h);
+ const first=vm.runInContext('refresh()',h.context),second=vm.runInContext('refresh()',h.context);
+ pending[0].resolve({labs:[{id:'a'}],jobs:[],platforms:{}});await first;
+ assert.deepEqual(labIds(h),['a']);
+ pending[1].resolve({labs:[{id:'a'},{id:'b'}],jobs:[],platforms:{}});await second;
+ assert.deepEqual(labIds(h),['a','b']);
+ const older=vm.runInContext('refresh()',h.context),newer=vm.runInContext('refresh()',h.context);
+ pending[3].reject(new Error('down'));await assert.rejects(newer,/down/);
+ pending[2].resolve({labs:[{id:'c'}],jobs:[],platforms:{}});await older;
+ assert.deepEqual(labIds(h),['c'],'nothing newer was applied, so the older answer is still the best state');
+});
+
+// L-34: polled lists are rebuilt only when their content changed, and keep focus when they are.
+function listHarness(){
+ const h=harness();
+ const focusable=new Map(),log={writes:0,focused:[]};
+ const container=h.document.getElementById('jobs');
+ let html='';
+ Object.defineProperty(container,'innerHTML',{get:()=>html,set:v=>{html=v;log.writes++;}});
+ container.contains=el=>!!el&&el.inside===true;
+ container.querySelector=selector=>{log.selector=selector;return focusable.get(selector)||null;};
+ return {h,container,focusable,log};
+}
+const backupJob=(id,extra={})=>({id,lab_id:'lab',status:'succeeded',operation:'backup',started:'2026-09-10T01:02:03Z',archive_name:'Lab.zip',nodes:[{name:'SW1',status:'succeeded',download_name:'CEOS_SW1.conf',captured_at:'2026-09-10T01:04:00Z'}],...extra});
+test('renderJobs does not rebuild the backup list when nothing changed, so a poll never destroys the Download buttons',()=>{
+ const {h,log}=listHarness();
+ vm.runInContext(`state={labs:[{id:'lab'}],jobs:[${JSON.stringify(backupJob('j1'))}]};activeId='lab';renderJobs();renderJobs();renderJobs();`,h.context);
+ assert.equal(log.writes,1,'three identical polls write the markup once');
+ vm.runInContext(`state.jobs.push(${JSON.stringify(backupJob('j2'))});renderJobs();`,h.context);
+ assert.equal(log.writes,2,'a new job does rebuild');
+});
+test('opening a backup row is not a change: the list is not rebuilt, and an opened row stays open when it is',()=>{
+ const {h,log,container}=listHarness();
+ vm.runInContext(`state={labs:[{id:'lab'}],jobs:[${JSON.stringify(backupJob('j1'))}]};activeId='lab';renderJobs();`,h.context);
+ h.document.querySelectorAll=selector=>selector==='.job[open]'?[{dataset:{job:'j1'}}]:[];
+ vm.runInContext('renderJobs();',h.context);
+ assert.equal(log.writes,1,'the student opening a row (read back from the DOM) does not rebuild the list under their keyboard');
+ vm.runInContext(`state.jobs.push(${JSON.stringify(backupJob('j2'))});renderJobs();`,h.context);
+ assert.match(container.innerHTML,/data-job="j1" open/,'when the list is rebuilt for a real change the opened row stays open');
+ assert.doesNotMatch(container.innerHTML,/data-job="j2" open/);
+});
+test('a rebuild hands keyboard focus back to the same Download button',()=>{
+ const {h,focusable,log}=listHarness();
+ vm.runInContext(`state={labs:[{id:'lab'}],jobs:[${JSON.stringify(backupJob('j1'))}]};activeId='lab';renderJobs();`,h.context);
+ const focused={dataset:{download:'j1',nodeIndex:'0'},inside:true},replacement={focus(options){log.focused.push(options);}};
+ h.document.activeElement=focused;focusable.set('[data-download="j1"][data-node-index="0"]',replacement);
+ vm.runInContext(`state.jobs.push(${JSON.stringify(backupJob('j2'))});renderJobs();`,h.context);
+ assert.equal(log.selector,'[data-download="j1"][data-node-index="0"]');assert.equal(JSON.stringify(log.focused),'[{"preventScroll":true}]','focus returns to the rebuilt control without scrolling');
+});
+test('the device drawer history is not rebuilt by an unchanged poll',()=>{
+ const h=harness();
+ const history=h.document.getElementById('node-history');let writes=0,html='';
+ Object.defineProperty(history,'innerHTML',{get:()=>html,set:v=>{html=v;writes++;}});
+ vm.runInContext(`state={labs:[{id:'lab',nodes:[{name:'SW1',address:'a',port:22,platform:'arista_ceos',enabled:true}],profiles:[],defaults:{}}],jobs:[${JSON.stringify(backupJob('j1'))}],platforms:{}};activeId='lab';detailName='SW1';renderDetails();renderDetails();renderDetails();`,h.context);
+ assert.equal(writes,1);assert.match(html,/data-download="j1"/);
+});
+test('a download in flight is not started a second time from a rebuilt button',async()=>{
+ const h=harness();h.context.disposition='attachment; filename="x.conf"';
+ let release,started=0;const gate=new Promise(r=>release=r);const base=h.context.fetch;
+ h.context.fetch=async url=>{started++;await gate;return base(url);};
+ const make=()=>({disabled:false,dataset:{download:'job1',nodeIndex:'0',filename:'x.conf'},hasAttribute:()=>true});
+ const first=make(),replacement=make(),click=button=>h.document.getElementById('jobs').listeners.click({target:{closest:s=>s==='[data-download]'?button:null}});
+ const one=click(first),two=click(replacement);
+ await new Promise(r=>setImmediate(r));
+ assert.equal(started,1,'the rebuilt button of a download already running starts nothing');assert.equal(replacement.disabled,false);
+ release();await Promise.all([one,two]);
+ assert.deepEqual(h.requests,['/api/jobs/job1/nodes/0/download'],'one request only');
+ await click(make());
+ assert.equal(h.requests.length,2,'after it finished the same download can be requested again');
+});
+test('L-34: a list rebuilt while a download runs gives the same download a disabled button, which is enabled again when it finishes',async()=>{
+ const {h}=listHarness();h.context.disposition='attachment; filename="x.conf"';
+ let release;const gate=new Promise(r=>release=r);const base=h.context.fetch;
+ h.context.fetch=async url=>{await gate;return base(url);};
+ vm.runInContext(`state={labs:[{id:'lab'}],jobs:[${JSON.stringify(backupJob('job1'))}]};activeId='lab';renderJobs();`,h.context);
+ const first={disabled:false,dataset:{download:'job1',nodeIndex:'0',filename:'x.conf'},hasAttribute:()=>true};
+ const replacement={disabled:false,dataset:{download:'job1',nodeIndex:'0',filename:'x.conf'}};
+ const other={disabled:false,dataset:{download:'job1',filename:'Lab.zip'}};
+ h.document.querySelectorAll=selector=>selector==='[data-download]'?[replacement,other]:[];
+ const running=h.document.getElementById('jobs').listeners.click({target:{closest:s=>s==='[data-download]'?first:null}});
+ vm.runInContext(`state.jobs.push(${JSON.stringify(backupJob('j2'))});renderJobs();`,h.context);
+ assert.equal(replacement.disabled,true,'the rebuilt button of the running download is disabled');
+ assert.equal(other.disabled,false,'a different download of the same job stays available');
+ release();await running;
+ assert.equal(replacement.disabled,false,'the live button is enabled again once the download ends');
+});

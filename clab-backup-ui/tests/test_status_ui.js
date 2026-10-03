@@ -195,3 +195,21 @@ test('a device that Restart device is running for reads Restarting, and the lab 
  assert.equal(ls.key,'working');assert.equal(ls.label,'Restarting R1');assert.equal(ls.job,job);assert.equal(ls.pill,'busy');assert.equal(ls.detail,'Executing on the VM');
  assert.doesNotMatch(JSON.stringify([restarting,ls]),/container|docker/i);
 });
+
+test('M-15: a restore that ends needs_attention or partial reaches the lab level with its own headline, and can be dismissed',()=>{
+ const c=makeContext();
+ const job=(id,status,at)=>({id,lab_id:'lab',status,created:at,finished:at});
+ const attention=c.labState(running,{restore_jobs:[job('rs-1','needs_attention','2026-09-16T11:30:00Z')]});
+ assert.equal(attention.key,'attention');assert.equal(attention.label,'Needs attention');assert.equal(attention.job.id,'rs-1');
+ assert.match(attention.detail,/needs a check on some devices/);assert.doesNotMatch(attention.detail,/did not finish/);
+ const partial=c.labState(running,{restore_jobs:[job('rs-2','partial','2026-09-16T11:30:00Z')]});
+ assert.equal(partial.key,'attention');assert.match(partial.detail,/some devices only/);assert.notEqual(partial.detail,attention.detail);
+ for(const state of [attention,partial])assert.ok(PILLS.includes(state.pill));
+ assert.equal(c.labState(running,{restore_jobs:[job('rs-1','needs_attention','2026-09-16T11:30:00Z')],dismissed:new Set(['rs-1'])}).label,'Running','dismissing it shows the plain lab state again');
+ const oldFailure={id:'op-1',lab_id:'lab',action:'deploy',status:'failed',created:'2026-09-16T11:00:00Z',finished:'2026-09-16T11:01:00Z'};
+ const both=c.labState(running,{operations:[oldFailure],restore_jobs:[job('rs-3','needs_attention','2026-09-16T11:30:00Z')]});
+ assert.equal(both.job.id,'rs-3','the newest outcome is shown');
+ const afterDismiss=c.labState(running,{operations:[oldFailure],restore_jobs:[job('rs-3','needs_attention','2026-09-16T11:30:00Z')],dismissed:new Set(['rs-3'])});
+ assert.equal(afterDismiss.label,'Running','a dismissed newest job stays dismissed (the older failure is not resurrected)');
+ assert.equal(c.labState(running,{restore_jobs:[job('rs-4','dismissed','2026-09-16T11:30:00Z')]}).label,'Running');
+});

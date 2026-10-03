@@ -4,7 +4,7 @@
 // in the node harnesses that have none of them. app.js globals (state, activeId, tab, detailName,
 // selectLab, showTab, openDetails, render, renderLabBanner, notify) are read at call time, never at load.
 const SHELL_ROUTE_KEYS=['lab','view','device'];
-let shellSessionConsumed=false, shellApplying=false, shellMenuCount=0, shellActionError=null;
+let shellSessionConsumed=false, shellApplying=false, shellMenuCount=0, shellActionError=null, shellActionSeq=0;
 const shellEl=id=>document.getElementById(id);
 // Storage is optional: private windows, blocked site data and thumbnail captures all throw or return
 // nothing, and the page must render either way.
@@ -145,6 +145,23 @@ function dismissJob(jobId){return !!jobId&&shellSet('localStorage','clab.dismiss
 // reopens next visit rather than staying hidden forever, and closing one never touches a job record.
 function noticeDismissed(key){return !!key&&!!shellGet('sessionStorage','clab.notice.'+key);}
 function dismissNotice(key){return !!key&&shellSet('sessionStorage','clab.notice.'+key,'1');}
+// sessionStorage: the request the student confirmed for a lab operation (action, options, path, node), by the
+// job id the manager answered with, so Try again on a failed job repeats exactly that request (the manager's
+// job record carries no options). Memory first; sessionStorage keeps it across a reload for small requests only.
+const shellJobRequests=new Map();
+function rememberJobRequest(jobId,request){
+ if(!jobId||!request||typeof request!=='object')return false;
+ const copy={};for(const k of ['lab_id','action','path','name','node','options'])if(request[k]!==undefined)copy[k]=request[k];
+ shellJobRequests.set(jobId,copy);
+ let text='';try{text=JSON.stringify(copy);}catch{return false;}
+ return text.length<=4000&&shellSet('sessionStorage','clab.request.'+jobId,text);
+}
+function jobRequest(jobId){
+ if(!jobId)return null;
+ if(shellJobRequests.has(jobId))return shellJobRequests.get(jobId);
+ const raw=shellGet('sessionStorage','clab.request.'+jobId);if(!raw)return null;
+ try{const value=JSON.parse(raw);return value&&typeof value==='object'&&typeof value.action==='string'?value:null;}catch{return null;}
+}
 // localStorage: the Network design page's unsaved draft for one lab ({revision, intent}), so a reload
 // or an accidental tab close does not lose guided or advanced edits that were never saved. network-design.js
 // drops a stored draft itself once its revision no longer matches the saved design.
@@ -175,7 +192,7 @@ if(typeof window!=='undefined'&&typeof window.addEventListener==='function')wind
 function showActionError(message){
  const text=String(message||'Something went wrong.'),lab=typeof activeId==='string'?activeId:'';
  if(!lab||!shellEl('lab-banner')||typeof renderLabBanner!=='function'){if(typeof notify==='function')notify(text);return false;}
- shellActionError={lab,message:text,sentence:shellErrorSentence(text),at:Date.now()};
+ shellActionError={lab,message:text,sentence:shellErrorSentence(text),at:Date.now(),seq:++shellActionSeq};
  renderLabBanner();return true;
 }
 function actionError(){return shellActionError;}

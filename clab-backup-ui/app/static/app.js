@@ -27,14 +27,35 @@ async function api(path,options={}){
 async function json(path,method,data){return (await api(path,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})).json();}
 // Only touch innerHTML when the markup changed: lists re-render on the 4 s poll and must not steal focus.
 function setMarkup(el,html){if(!el)return false;if(el._markup===html)return false;el.innerHTML=html;el._markup=html;return true;}
+// The control to hand focus back to after a polled list is rebuilt: a download or log button, or a job summary.
+function listFocusSelector(el){
+ const a=typeof document!=='undefined'?document.activeElement:null;if(!a||!a.dataset||typeof el.contains!=='function'||!el.contains(a))return '';
+ const d=a.dataset,q=v=>String(v).replace(/["\\]/g,'\\$&');
+ if(d.download!==undefined)return `[data-download="${q(d.download)}"]${d.nodeIndex!==undefined?`[data-node-index="${q(d.nodeIndex)}"]`:':not([data-node-index])'}`;
+ if(d.logs!==undefined)return `[data-logs="${q(d.logs)}"]`;
+ if(a.tagName==='SUMMARY'&&a.parentElement)return a.parentElement.id==='login-checks'?'#login-checks > summary':a.parentElement.dataset&&a.parentElement.dataset.job?`.job[data-job="${q(a.parentElement.dataset.job)}"] > summary`:'';
+ return '';
+}
+// Like setMarkup for a list whose markup also reflects DOM state (opened rows): `key` is the state-free form compared with the last build, `build()` the full markup, made only when the key changed.
+// A rebuild keeps the focused control focused and the scroll position, so a poll never steals either.
+function setListMarkup(el,key,build){
+ if(!el||el._listKey===key)return false;
+ const selector=listFocusSelector(el),top=el.scrollTop;
+ el.innerHTML=build();el._listKey=key;
+ if(selector&&typeof el.querySelector==='function'){const next=el.querySelector(selector);if(next&&typeof next.focus==='function')next.focus({preventScroll:true});}
+ if(top)el.scrollTop=top;
+ return true;
+}
 // Disabled menu items and tool rows show why as visible text (a title on a disabled button is unreachable).
 function menuReason(el,text){if(!el||typeof el.querySelector!=='function')return;const small=el.querySelector('.menu-reason');if(!small)return;small.textContent=text||'';small.hidden=!text;}
 // Action logs live on the Advanced tab; the 4 s poll refreshes them only while that section is on screen.
 function logsVisible(){if(tab!=='advanced')return false;const view=$('logs-view');if(!view||typeof view.getBoundingClientRect!=='function'||typeof innerHeight==='undefined')return true;const box=view.getBoundingClientRect();return box.bottom>0&&box.top<innerHeight;}
-async function refresh(){const response=await api('/state');state=await response.json();state.loaded=true;if(activeId&&!current())activeId='';if(!routeApplied){routeApplied=true;if(typeof applyRoute==='function')applyRoute();}render();if(logsVisible())await refreshLogs();}
+// Responses are applied in request order: a slow older poll must not overwrite the state a newer refresh() already applied (it would drop a just-added lab and send the student Home).
+let refreshRequest=0, refreshApplied=0;
+async function refresh(){const request=++refreshRequest;const response=await api('/state');const data=await response.json();if(request<refreshApplied)return;refreshApplied=request;state=data;state.loaded=true;if(activeId&&!current())activeId='';if(!routeApplied){routeApplied=true;if(typeof applyRoute==='function')applyRoute();}render();if(logsVisible())await refreshLogs();}
 function setTab(value){const legacy=TAB_ALIAS[value];if(legacy){if(value==='inventory')devicesTechnical=true;else scrollTarget=SUBVIEW[value]||'';subview=value;value=legacy;}else subview='';tab=PANELS.includes(value)?value:'topology';}
 function syncRoute(push=false){if(!routeApplied||typeof writeRoute!=='function'||typeof currentRoute!=='function')return;writeRoute(currentRoute(),{push});}
-function selectLab(id,view='topology'){if(typeof closeLabDialogs==='function')closeLabDialogs();else if($('details-dialog').open)$('details-dialog').close();activeId=id;setTab(view);sessionStorage.setItem('activeLab',id);$('search').value='';$('log-job').value='';if(typeof rememberOpened==='function')rememberOpened(id);if(typeof closeMenus==='function')closeMenus();if(typeof writeRoute==='function')writeRoute({lab:id,view:tab},{push:true});render();}
+function selectLab(id,view='topology'){if(typeof closeLabDialogs==='function')closeLabDialogs();else if($('details-dialog').open)$('details-dialog').close();activeId=id;setTab(view);try{sessionStorage.setItem('activeLab',id);}catch{/* blocked site data: the route and the page state still carry the open lab */}$('search').value='';$('log-job').value='';if(typeof rememberOpened==='function')rememberOpened(id);if(typeof closeMenus==='function')closeMenus();if(typeof writeRoute==='function')writeRoute({lab:id,view:tab},{push:true});render();}
 function platformLabel(kind){return state.platforms[kind]?.label||(kind==='ssh'?'Generic SSH / Linux':'Unmapped');}
 function badge(status){const type=['Ready','succeeded','reachable'].includes(status)?'good':['failed','unreachable','interrupted'].includes(status)?'bad':['queued','running'].includes(status)?'running':'warn';const label=typeof badgeLabel==='function'?badgeLabel(status):status;return `<span class="badge ${type}" title="${esc(status)}">${esc(label)}</span>`;}
 function profileName(lab,node){const id=node.profile_id||lab.defaults[node.platform||'ssh'];return lab.profiles.find(p=>p.id===id)?.label||(node.inventory_credentials?'From inventory':node.credential_source==='default'?'Containerlab default login':'Not configured');}
@@ -54,7 +75,7 @@ function retiredBannerText(retired){
 }
 // Vocabulary helpers shared by the header, the lab switcher and home.js. labContext adds the dismissed
 // operation ids so a failed job the student already dismissed stops reading as "Needs attention".
-function dismissedSet(){const ids=new Set();if(typeof isDismissed!=='function')return ids;for(const j of [...(state.operations||[]),...(state.restore_jobs||[])])if(j.id&&['failed','interrupted','preflight_failed'].includes(j.status)&&isDismissed(j.id))ids.add(j.id);return ids;}
+function dismissedSet(){const ids=new Set();if(typeof isDismissed!=='function')return ids;for(const j of [...(state.operations||[]),...(state.restore_jobs||[])])if(j.id&&['failed','interrupted','preflight_failed','needs_attention','partial'].includes(j.status)&&isDismissed(j.id))ids.add(j.id);return ids;}
 function labContext(){return {...state,dismissed:dismissedSet()};}
 function labStateOf(lab){return typeof labState==='function'?labState(lab,labContext()):{key:'',label:lab.deployment?.status||'Not matched to a running lab',pill:'neutral',detail:''};}
 function readyLine(lab,ls){const total=(lab.nodes||[]).length,ready=(lab.nodes||[]).filter(n=>n.ssh_ready).length;if(ls.key==='stopped')return 'Not running';if(['unlinked','unknown'].includes(ls.key))return '';return `${ready} of ${total} devices ready`;}
@@ -126,14 +147,17 @@ function activateProxy(mirror){const owner=$(mirror.dataset.proxy);if(!owner||ow
 // Notices: a running operation (spec.running, e.g. "Lab operation running…", "Replacing configuration…",
 // "Lab is starting…") never disappears — the student must still see something is happening — so its close
 // control only collapses it to a one-line pill; every other notice can be hidden outright. Either way the
-// key is the lab (or "home" for the home banner) plus the banner id plus a digest of the headline alone,
-// never the detail (which can change every poll for a running job): the same headline stays collapsed or
-// hidden across rerenders, and a materially different headline is shown again in full. noticeCollapsed is
+// key is the lab (or "home" for the home banner) plus the banner id plus a digest of the headline (and of
+// spec.identity when the notice names one failure), never the detail (which can change every poll for a running
+// job): the same headline stays collapsed or hidden across rerenders, and a materially different headline is
+// shown again in full. A notice with an onClose handler is closed for good by its owner and is not remembered. noticeCollapsed is
 // in-memory only (a page reload always starts expanded); noticeDismissed/dismissNotice (shell.js) persist
 // a hide in sessionStorage.
 let noticeCollapsed={};
 function noticeDigest(text){let hash=0;const s=String(text||'');for(let i=0;i<s.length;i++)hash=(hash*31+s.charCodeAt(i))>>>0;return hash.toString(36);}
-function noticeKey(id,spec){return (id==='home-banner'?'home':(typeof activeId==='string'?activeId:''))+'.'+id+'.'+noticeDigest(spec.text);}
+// spec.identity names which failure a notice is about (a job id, an action-error counter): two different failures
+// share one generic headline, and closing the first must not hide the second.
+function noticeKey(id,spec){return (id==='home-banner'?'home':(typeof activeId==='string'?activeId:''))+'.'+id+'.'+noticeDigest(spec.text)+(spec.identity?'.'+noticeDigest(spec.identity):'');}
 // The situational banner: static children only (text, hidden, className), never innerHTML, so an open
 // menu or a focused button survives the 4 s poll. One case at a time, in priority order.
 function setBanner(id,spec={}){
@@ -160,8 +184,10 @@ function setBanner(id,spec={}){
    if(banner.classList)banner.classList.toggle('banner-collapsed',next);
    if(typeof close.setAttribute==='function')close.setAttribute('aria-label',next?'Show this notice':'Collapse this notice');
   }):(()=>{
-   if(typeof dismissNotice==='function')dismissNotice(key);
+   // A notice that owns its state (spec.onClose) is closed by clearing that state; nothing needs remembering.
+   if(!spec.onClose&&typeof dismissNotice==='function')dismissNotice(key);
    banner.hidden=true;if(banner.classList)banner.classList.remove('banner-collapsed');
+   if(spec.onClose)spec.onClose();
   });
  }
 }
@@ -184,21 +210,28 @@ function renderLabBanner(){
  const startLabel=()=>{const b=$('lab-start');const span=b&&typeof b.querySelector==='function'?b.querySelector('span'):null;return (span?span.textContent:b?.textContent)?.trim()||'Start lab';};
  const start=()=>({'banner-start':{label:startLabel(),run:startLab,disabled:!!$('lab-start')?.disabled,title:$('lab-start')?.title||''}});
  let spec={};
- if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
+ if(err&&err.lab===lab.id)spec={tone:'danger',icon:'alert',text:err.sentence,detail:err.message,identity:'error.'+(err.seq||err.at),onClose:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();},actions:{'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissActionError==='function')dismissActionError();renderLabBanner();}}}};
  else if(runningOp)spec={tone:'info',icon:'clock',running:true,text:(typeof operationLabel==='function'?operationLabel(runningOp.action,runningOp):'Lab operation')+'…',detail:runningOp.message||'',actions:{'banner-output':{label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(runningOp.id);}}}};
  else if(runningRestore)spec={tone:'info',icon:'clock',running:true,text:'Replacing configuration…',detail:runningRestore.message||'',actions:{'banner-restore':{label:'View progress',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(runningRestore.id);}}}};
  else if(ls.key==='attention'&&ls.job){
   const job=ls.job,isRestore=restores.includes(job),actions={'banner-dismiss':{label:'Dismiss',run:()=>{if(typeof dismissJob==='function')dismissJob(job.id);render();}}};
   if(isRestore)actions['banner-restore']={label:'Details',run:()=>{if(typeof restoreShowJob==='function')restoreShowJob(job.id);}};
-  else{actions['banner-output']={label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(job.id);}};actions['banner-try-again']={label:'Try again',run:()=>{if(typeof opReview==='function'&&typeof opTask==='function')opTask(null,()=>opReview({lab_id:lab.id,action:job.action,options:job.options||{},...(job.node?{node:job.node}:{})}));}};}
-  spec={tone:'danger',icon:'alert',text:ls.detail,detail:job.message||'',actions};
+  else{
+   actions['banner-output']={label:'View output',run:()=>{if(typeof opShowJob==='function')opShowJob(job.id);}};
+   // Try again repeats the request the student confirmed (operations.js opRetryRequest); when that is not known and a guess
+   // would be a weaker command, the button opens the operations dialog instead.
+   const retry=typeof opRetryRequest==='function'?opRetryRequest(job,lab.id):null;
+   if(retry)actions['banner-try-again']={label:'Try again',run:()=>{if(typeof opReview==='function'&&typeof opTask==='function')opTask(null,()=>opReview(retry));}};
+   else if(typeof openLabOperations==='function')actions['banner-try-again']={label:'Open lab operations',run:()=>{if(typeof opTask==='function')opTask(null,()=>openLabOperations(lab.id));else openLabOperations(lab.id);}};
+  }
+  spec={tone:ls.pill==='warn'?'warn':'danger',icon:'alert',text:ls.detail,detail:job.message||'',identity:'job.'+job.id,actions};
  }
  else if(ps&&ps.problem)spec={tone:'warn',icon:'alert',text:'Saving to Git is not possible right now.',detail:ps.problem,actions:{'banner-save-details':{label:'Save location settings',run:()=>{if(typeof gitOpenRepository==='function')gitOpenRepository();}}}};
  else if(ps&&['attention','failed','interrupted'].includes(ps.key)){
   const actions={};
   if(ps.key==='attention')actions['banner-retry-save']={label:'Retry',run:()=>{if(typeof gitPushPending==='function'&&typeof opTask==='function')opTask(null,()=>gitPushPending(lab.id));}};
   if(ps.job)actions['banner-save-details']={label:'Details',run:()=>{if(typeof gitShowJob==='function'&&typeof opTask==='function')opTask(null,()=>gitShowJob(ps.job.id));}};
-  spec={tone:ps.key==='attention'?'warn':'danger',icon:'alert',text:ps.detail,detail:ps.job?.message||'',actions};
+  spec={tone:ps.key==='attention'?'warn':'danger',icon:'alert',text:ps.detail,detail:ps.job?.message||'',identity:ps.job?'save.'+ps.job.id:'',actions};
  }
  else if(ls.key==='attention')spec={tone:'danger',icon:'alert',text:ls.detail,actions:lab.deployment?.status==='Partially running'?start():{'banner-credentials':{label:'Check credentials',run:()=>showTab('credentials')}}};
  else if(credentials)spec={tone:'warn',icon:'alert',text:`${credentials} ${credentials===1?'device needs':'devices need'} login credentials before you can open ${credentials===1?'its':'their'} CLI.`,actions:{'banner-credentials':{label:'Add credentials',run:()=>openProfile()}}};
@@ -260,9 +293,12 @@ function jobMarkup(j,opened){
 // Tools › Configuration backups lists backup jobs; the automatic login checks sit under a collapsed group
 // below them so the card reads as backups while every job (and its action-log link) stays reachable.
 function renderJobs(){
- const lab=current();const opened=new Set([...document.querySelectorAll('.job[open]')].map(e=>e.dataset.job));
- const jobs=state.jobs.filter(j=>j.lab_id===lab.id),backups=jobs.filter(j=>j.operation!=='test'),checks=jobs.filter(j=>j.operation==='test'),checksOpen=!!$('login-checks')?.open;
- $('jobs').innerHTML=(backups.length?backups.map(j=>jobMarkup(j,opened)).join(''):'<div class="blank-state"><h2>No backups yet</h2><p>Back up now saves a copy of every device\'s configuration on this VM.</p></div>')+(checks.length?`<details class="job-group" id="login-checks" ${checksOpen?'open':''}><summary>Login checks (${checks.length})</summary>${checks.map(j=>jobMarkup(j,opened)).join('')}</details>`:'');
+ const lab=current();
+ const jobs=state.jobs.filter(j=>j.lab_id===lab.id),backups=jobs.filter(j=>j.operation!=='test'),checks=jobs.filter(j=>j.operation==='test');
+ const markup=(opened,checksOpen)=>(backups.length?backups.map(j=>jobMarkup(j,opened)).join(''):'<div class="blank-state"><h2>No backups yet</h2><p>Back up now saves a copy of every device\'s configuration on this VM.</p></div>')+(checks.length?`<details class="job-group" id="login-checks" ${checksOpen?'open':''}><summary>Login checks (${checks.length})</summary>${checks.map(j=>jobMarkup(j,opened)).join('')}</details>`:'');
+ // Which rows are open is the student's (read back from the DOM), so it stays out of the comparison: opening a row is not a change.
+ setListMarkup($('jobs'),markup(new Set(),false),()=>markup(new Set([...document.querySelectorAll('.job[open]')].map(e=>e.dataset.job)),!!$('login-checks')?.open));
+ syncDownloadButtons();
 }
 function utcDisplay(value){const date=new Date(value);return Number.isNaN(date.getTime())?'Unknown time':date.toISOString().replace('T',' ').slice(0,19)+' UTC';}
 // Five real panels; the legacy sections stay visible inside them except the technical table, which
@@ -339,18 +375,26 @@ function attachmentName(response,fallback){
  const plain=disposition.match(/filename="([^"]+)"/i);
  return plain?plain[1]:fallback;
 }
+// Downloads in flight, by job and device: a poll that rebuilt the list gives the same download a fresh, enabled button, which must not start it twice.
+const downloadsActive=new Set();
+// Every Download button on screen follows the set: a rebuilt button of a running download is disabled, and enabled again when it ends.
+function syncDownloadButtons(){
+ if(typeof document.querySelectorAll!=='function')return;
+ for(const button of document.querySelectorAll('[data-download]'))if(button.dataset)button.disabled=downloadsActive.has(button.dataset.download+'/'+(button.dataset.nodeIndex??''));
+}
 async function handleDownload(e){
  const logButton=e.target.closest('[data-logs]');
  if(logButton){$('log-job').value=logButton.dataset.logs;$('log-level').value='';$('log-node').value='';showTab('logs');syncRoute(true);await refreshLogs();return;}
  const button=e.target.closest('[data-download]');if(!button||button.disabled)return;
- button.disabled=true;
+ const active=button.dataset.download+'/'+(button.dataset.nodeIndex??'');if(downloadsActive.has(active))return;
+ downloadsActive.add(active);button.disabled=true;
  try{
  const node=button.hasAttribute('data-node-index')?'/nodes/'+button.dataset.nodeIndex:'';
  const response=await api('/jobs/'+encodeURIComponent(button.dataset.download)+node+'/download');
  const blob=await response.blob();const url=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=url;a.download=attachmentName(response,button.dataset.filename);document.body.appendChild(a);a.click();a.remove();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
- }catch(error){notify(error.message);}finally{button.disabled=false;}
+ }catch(error){notify(error.message);}finally{downloadsActive.delete(active);button.disabled=false;syncDownloadButtons();}
 }
 $('jobs').addEventListener('click',handleDownload);
 
@@ -393,7 +437,9 @@ function renderDetails(){
  setMarkup($('details-advanced-body'),`<dl class="health-grid"><dt>Included in backups</dt><dd><label class="checkbox-label"><input type="checkbox" data-enable="${esc(n.name)}" ${n.enabled?'checked':''} ${!n.platform?'disabled title="Choose a network OS first (Edit connection)"':''}> Include ${esc(n.short_name||n.name)} in backups</label></dd><dt>Can be backed up</dt><dd>${n.readiness==='Ready'?'Yes':'No'+(n.readiness?' — '+esc(readinessWord(n.readiness)):'')}</dd></dl>`);
  const backups=state.jobs.filter(j=>j.lab_id===activeId&&j.operation==='backup'&&!['queued','running'].includes(j.status));
  const entries=backups.flatMap(j=>j.nodes.map((node,index)=>({j,node,index}))).filter(x=>x.node.name===n.name&&x.node.status==='succeeded'&&x.node.download_name);
- $('node-history').innerHTML=entries.length?entries.map(({j,node,index},i)=>`<div class="device-download"><div><strong>${i===0?'Latest successful backup':'Backup'}</strong><small>${esc(utcDisplay(node.captured_at||j.finished||j.created))}</small><code>${esc(node.download_name)}</code></div><button class="button secondary" data-download="${esc(j.id)}" data-node-index="${index}" data-filename="${esc(node.download_name)}">Download configuration</button></div>`).join(''):'<p>No configuration backups for this device yet. Back up configuration creates one.</p>';
+ const historyHtml=entries.length?entries.map(({j,node,index},i)=>`<div class="device-download"><div><strong>${i===0?'Latest successful backup':'Backup'}</strong><small>${esc(utcDisplay(node.captured_at||j.finished||j.created))}</small><code>${esc(node.download_name)}</code></div><button class="button secondary" data-download="${esc(j.id)}" data-node-index="${index}" data-filename="${esc(node.download_name)}">Download configuration</button></div>`).join(''):'<p>No configuration backups for this device yet. Back up configuration creates one.</p>';
+ setListMarkup($('node-history'),historyHtml,()=>historyHtml);
+ syncDownloadButtons();
 }
 $('node-history').addEventListener('click',handleDownload);
 $('details-prev').onclick=()=>stepDetails(-1);$('details-next').onclick=()=>stepDetails(1);
