@@ -4,6 +4,24 @@ Release notes for every published version, newest first. Links point to the
 guides in this folder; validation evidence for recent releases is in
 [clab-backup-ui/VALIDATION.md](../clab-backup-ui/VALIDATION.md).
 
+## Changes in 1.30.58
+
+The fix the netlab campaign built on 2026-09-28 as its unpublished 1.30.51 (set aside while the UI/UX changes 2
+stream shipped 1.30.52–1.30.57 from the same worktree) lands on top of 1.30.57 under the next free number. The
+code is the one the campaign's reviewer retested; only the release markers and the records moved.
+
+- The Design tab's *Remove design* and *Renumber* dialogs belong to the lab they were opened from (QA-021, found by
+  acceptance pass 8 on 1.30.50, `docs/netlab-ui-qa/acceptance/PASS-8-opus.md`). Until now a dialog opened in one
+  lab stayed open when the browser went Back to another lab, and confirming it acted on the first lab while the
+  second was shown: when both labs held the same design (the revision hashes the content), *Remove design*
+  silently deleted the first lab's design. Now moving to another lab or Home closes the device drawer and every
+  dialog that speaks for a lab (the two design dialogs, the Apply and Export reviews), the two dialogs send the lab
+  id and design revision captured when they opened, and a confirmation that still arrives after a lab change is
+  refused with "The page moved to another lab while this dialog was open. Nothing was changed; open it again from
+  that lab."
+- Records: acceptance passes 7 (Sonnet, clean) and 8 (Opus, the finding above) on 1.30.50; the campaign's final
+  report and pickup file say where the gate stands (passes 9 and 10 on this release are still to run).
+
 ## Changes in 1.30.57
 
 *UI/UX changes 2*, item 10: the topology and map travel with every backup, so a configuration is never divorced

@@ -1,3 +1,21 @@
+# Netlab UI/UX campaign, part 4: lab-bound design dialogs — 1.30.58
+
+Read `docs/netlab-ui-qa/PICKUP.md` first, then `FINAL-REPORT.md`. This is the campaign's 1.30.51 of 2026-09-28,
+never published: it was set aside as a WIP commit while the UI/UX changes 2 stream shipped 1.30.52–1.30.57, then
+merged onto 1.30.57 on 2026-10-02 (`git merge origin/main`, the markers from main, no code change) and cut as 1.30.58.
+What the next agent must preserve beyond the sections below: (1) `closeLabDialogs()` in `shell.js` closes the device
+drawer and every open `dialog[data-lab-dialog]` and is called by `selectLab()` (`app.js`, which the router's
+`applyRoute()` reaches on the browser's Back) and `goHome()`; a new dialog that speaks for one lab (its text names or
+acts on that lab) carries `data-lab-dialog` (static ones in `index.html`, dynamic ones through `designMarkLabDialog`).
+(2) The Design tab's *Remove design* and *Renumber* capture the lab id and design revision when they open and refuse
+to act once `designDialogStillForLab(labId)` is false (QA-021: two labs can share a revision, it hashes the content,
+so the revision alone never protects the other lab); keep the message `DESIGN_DIALOG_MOVED`, and never read the
+revision from the view at confirm time again. The operation review (`operation-review`) is bound to its lab by its
+token and names its lab and device; it was left as it is on purpose (pass 8's observation). Tests:
+`test_network_design_ui.js` "QA-021" and `test_shell_ui.js` "QA-021". (3) The campaign's gate is open: acceptance
+passes 9 (Sonnet) and 10 (Opus) on this release have not run; the live evidence in the 1.30.58 validation record
+was taken on the 1.30.51 build on 2026-09-28, and the manager on the dev VM was never deployed at 1.30.58.
+
 # UI/UX changes 2, part 6: the topology travels with every backup — 1.30.57
 
 Read `docs/ui-ux-changes-2/PICKUP.md` first. What the next agent must preserve: (1) `runner.embed_topology` runs after

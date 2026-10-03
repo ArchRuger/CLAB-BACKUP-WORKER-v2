@@ -1,7 +1,7 @@
 # Relentless netlab UI/UX QA campaign and Restart device: final report
 
 Campaign of 2026-09-27 on `claude/netlab-integration`, from release 1.30.47 (`3194ec4`) through **release 1.30.48**
-(`b4329d3`, PR #56, merged 18:12 UTC), **1.30.49** (`14c2f05`, PR #57, merged 21:55 UTC) **1.30.50** (`1e12f37`, PR #58, merged 00:11 UTC on 2026-09-28) to **release 1.30.51** (this build, the fix of the last acceptance finding). The assignment was the owner's `CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md`
+(`b4329d3`, PR #56, merged 18:12 UTC), **1.30.49** (`14c2f05`, PR #57, merged 21:55 UTC) **1.30.50** (`1e12f37`, PR #58, merged 00:11 UTC on 2026-09-28) to the fix of the last acceptance finding, built on 2026-09-28 as 1.30.51 and released on 2026-10-02 as **1.30.58** (see item 11). The assignment was the owner's `CLAB_Netlab_Relentless_UI_UX_QA_Campaign_v2.md`
 with the folded-in `CLAB_Single_Device_Restart_Addendum.md`. Companion records in this folder: `PICKUP.md`
 (state), `DEFECTS.md` (ledger), `RESTART-PARITY.md` (parity record), `EVIDENCE.md` (index), `COVERAGE.md` /
 `coverage.json` (inventory and results), `probes-report.md`, `usability-report.md`, `evidence/stress/REPORT.md`,
@@ -199,7 +199,10 @@ spot-checks):
     13/13, neighbour 20/20, previews and refusals 18/18, XRv9k 28/28 straight `booting → ready` with configuration A
     unchanged). Its observations: the Restart review stays open across Back too but is bound to its device by its token
     (not a defect), one cEOS restart job of 23 s, XRv9k `(unhealthy)` in Docker while *Ready*, tool output hygiene.
-11. **1.30.51** fixes QA-021: a lab change closes every dialog that speaks for a lab, and *Remove design* and *Renumber*
-    act only for the lab they were opened from, with its revision at open time (two unit tests; the reviewer's own
-    reproduction rerun on a fixture of the fix, `evidence/design-dialogs/`). The gate restarted on it: **pass 9 (Sonnet)**
-    and **pass 10 (Opus)**, recorded in `acceptance/PASS-9-*.md` and `PASS-10-*.md` with the evidence commit that follows.
+11. The fix of QA-021 (a lab change closes every dialog that speaks for a lab, and *Remove design* and *Renumber* act
+    only for the lab they were opened from, with its revision at open time; two unit tests; the reviewer's own
+    reproduction rerun on a fixture of the fix, `evidence/design-dialogs/`) was built on 2026-09-28 as 1.30.51 and never
+    published: the UI/UX changes 2 stream took over the worktree that day and shipped 1.30.52–1.30.57, leaving the fix as a
+    local WIP commit. On 2026-10-02 it was merged onto 1.30.57 without a code change and cut as **release 1.30.58**
+    (PR #62; static, unit and browser suites rerun on that tree, no deployment). The gate has not restarted on it:
+    **pass 9 (Sonnet)** and **pass 10 (Opus)** on 1.30.58 are the campaign's open items (`PICKUP.md`).

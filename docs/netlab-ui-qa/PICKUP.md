@@ -92,11 +92,14 @@ tooling finding (TOOL-005: the two-tabs tool crashed without a record while the 
 destroyed on the manager; every product check passed); tool revised (one guard around every step, idle wait first), retested
 13/13, committed with passes 5 and 6 as `02fd181` (**PR #59**, CI green). **Pass 7 (Sonnet, 01:09–01:33): CLEAN.** **Pass 8
 (Opus, 01:36–01:52): NOT CLEAN** on **QA-021** (P0: a *Remove design* dialog opened in one lab acted on it after the browser's
-Back to another lab with the same design revision). **Release 1.30.51** fixes it (`closeLabDialogs()` on a lab change;
-the two dialogs act only for the lab they were opened from, with its revision at open time; two browser tests; the
-reviewer's script 12/12 on a fixture of the fix). In flight when this was written: the full Python suite on 1.30.51, the
-manager rebuilt at 1.30.51, commit and push (PR #59 carries the branch), then **pass 9 (Sonnet)** and **pass 10 (Opus)** on
-1.30.51 (`acceptance/PASS-9-*.md`, `PASS-10-*.md`), then the evidence commit with `FINAL-REPORT.md` completed.
+Back to another lab with the same design revision). The fix (`closeLabDialogs()` on a lab change; the two dialogs act only
+for the lab they were opened from, with its revision at open time; two browser tests; the reviewer's script 12/12 on a
+fixture of the fix) was built on 2026-09-28 as 1.30.51 and deployed on the dev VM, but never committed: the UI/UX changes 2
+stream took over the worktree the same day and shipped 1.30.52–1.30.57 from it, leaving this work as a local WIP commit on
+this branch. On 2026-10-02 that commit was pushed, `main` (1.30.57) merged into the branch (markers from main, no code
+change) and the fix cut as **release 1.30.58** (**PR #62**); its validation record says what was run then (static, unit and
+browser suites only). **Next**: deploy 1.30.58 on the dev VM, then **pass 9 (Sonnet)** and **pass 10 (Opus)** on it
+(`acceptance/PASS-9-*.md`, `PASS-10-*.md`), then the evidence commit with `FINAL-REPORT.md` completed.
 
 Then: add the final3 neighbour rerun records to `DEFECTS.md` (QA-018, Live) and `EVIDENCE.md` in the evidence commit; `python3 deploy/verify-release.py`;
 commit the intended files only (never `git add -A`: `.claude/`, the three prompt files in the worktree root and any

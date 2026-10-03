@@ -70,7 +70,7 @@ scripts under `tools/`).
 ## Design dialogs across a lab change (`evidence/design-dialogs/`)
 
 - `qa021-retest-2026-09-28T0203.json`, `qa021-retest-T1-1-dialog-in-A.png`, `qa021-retest-T1-2-after-back-dialog-closed.png`: pass 8's
-  reproduction script (`acceptance/pass-8/tools/adversarial_transitions.py`) rerun unchanged against a fixture of the 1.30.51
+  reproduction script (`acceptance/pass-8/tools/adversarial_transitions.py`) rerun unchanged against a fixture of the 1.30.51 (the fix as built on 2026-09-28, released unchanged as 1.30.58)
   tree, 12 of 12 (QA-021 fixed: the *Remove design* dialog opened in one lab is closed by the browser's Back to another lab,
   the *Renumber* dialog likewise; the reload-mid-generation and cross-lab poll checks unchanged).
 
